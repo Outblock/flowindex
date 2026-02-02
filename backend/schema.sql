@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     -- Gas / Metadata
     gas_limit BIGINT,
     gas_used BIGINT,
-    computation_used BIGINT,
+    computation_usage BIGINT,
     status_code INT,
     execution_status VARCHAR(20), -- Success, Failure, Pending
     

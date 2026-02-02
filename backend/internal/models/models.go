@@ -55,12 +55,12 @@ type Transaction struct {
 	EVMTo    string `json:"evm_to,omitempty"`
 	EVMValue string `json:"evm_value,omitempty"`
 
-	GasLimit        uint64    `json:"gas_limit"`
-	GasUsed         uint64    `json:"gas_used"`
-	ComputationUsed uint64    `json:"computation_used"`
-	StatusCode      int       `json:"status_code"`
-	ExecutionStatus string    `json:"execution_status"` // Success, Failure, Pending
-	CreatedAt       time.Time `json:"created_at"`
+	GasLimit         uint64    `json:"gas_limit"`
+	GasUsed          uint64    `json:"gas_used"`
+	ComputationUsage uint64    `json:"computation_usage"`
+	StatusCode       int       `json:"status_code"`
+	ExecutionStatus  string    `json:"execution_status"` // Success, Failure, Pending
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 // EVMTransaction represents details from 'evm_transactions' table

@@ -109,9 +109,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				Arguments:              argsJSON,
 				Status:                 res.Status.String(),
 				GasLimit:               tx.GasLimit,
-				ComputationUsed:        res.ComputationUsed,
-				StatusCode:             res.StatusCode,
-				ExecutionStatus:        res.Status.String(), // Simplified mapping
+				ComputationUsage:       res.ComputationUsage,
+				StatusCode:             0, // Not directly available in SDK TransactionResult
+				ExecutionStatus:        res.Status.String(),
 			}
 
 			// Redundancy: Marshal Signatures and ProposalKey
