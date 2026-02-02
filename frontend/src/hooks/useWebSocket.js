@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-const WS_URL = import.meta.env.VITE_WS_URL || (
-  import.meta.env.VITE_API_URL
-    ? `${import.meta.env.VITE_API_URL.replace('http', 'ws')}/ws`
-    : 'ws://localhost:8080/ws'
-);
+const WS_URL = window.location.protocol === 'https:'
+  ? `wss://${window.location.host}/ws`
+  : `ws://${window.location.host}/ws`;
 
 export function useWebSocket() {
   const [isConnected, setIsConnected] = useState(false);
