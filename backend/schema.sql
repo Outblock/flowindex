@@ -73,13 +73,16 @@ CREATE INDEX IF NOT EXISTS idx_events_block_height ON events(block_height);
 
 -- 4. Address Roles & Activity (The "Who did what" table)
 CREATE TABLE IF NOT EXISTS address_transactions (
-    address VARCHAR(18) NOT NULL,
+    address VARCHAR(42) NOT NULL,
     transaction_id VARCHAR(64) REFERENCES transactions(id) ON DELETE CASCADE,
     block_height BIGINT,
     transaction_type VARCHAR(50), -- GENERAL, TOKEN_TRANSFER, CONTRACT_DEPLOY
     role VARCHAR(20), -- PROPOSER, PAYER, AUTHORIZER, EVENT_Subject (e.g. Receiver)
     PRIMARY KEY (address, transaction_id, role)
 );
+
+-- Patch for existing tables
+ALTER TABLE address_transactions ALTER COLUMN address TYPE VARCHAR(42);
 
 CREATE INDEX IF NOT EXISTS idx_address_transactions_address_height ON address_transactions(address, block_height DESC);
 
