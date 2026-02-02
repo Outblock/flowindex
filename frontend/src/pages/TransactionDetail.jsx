@@ -198,8 +198,8 @@ function TransactionDetail() {
 
               <div className="group">
                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Payer</p>
-                <Link to={`/accounts/${transaction.payer}`} className="text-sm text-nothing-green hover:underline break-all uppercase tracking-tight">
-                  {transaction.payer}
+                <Link to={`/accounts/${formatAddress(transaction.payer)}`} className="text-sm text-nothing-green hover:underline break-all uppercase tracking-tight">
+                  {formatAddress(transaction.payer)}
                 </Link>
               </div>
 
@@ -210,8 +210,8 @@ function TransactionDetail() {
                     Seq: {transaction.proposerSequenceNumber} • Key: {transaction.proposerKeyIndex}
                   </span>
                 </div>
-                <Link to={`/accounts/${transaction.proposer}`} className="text-sm text-zinc-300 hover:text-white break-all uppercase tracking-tight block">
-                  {transaction.proposer}
+                <Link to={`/accounts/${formatAddress(transaction.proposer)}`} className="text-sm text-zinc-300 hover:text-white break-all uppercase tracking-tight block">
+                  {formatAddress(transaction.proposer)}
                 </Link>
               </div>
 
@@ -220,8 +220,8 @@ function TransactionDetail() {
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Authorizers</p>
                   <div className="flex flex-col gap-1">
                     {transaction.authorizers.map(auth => (
-                      <Link key={auth} to={`/accounts/${auth}`} className="text-sm text-zinc-400 hover:text-white break-all uppercase tracking-tight">
-                        {auth}
+                      <Link key={auth} to={`/accounts/${formatAddress(auth)}`} className="text-sm text-zinc-400 hover:text-white break-all uppercase tracking-tight">
+                        {formatAddress(auth)}
                       </Link>
                     ))}
                   </div>
