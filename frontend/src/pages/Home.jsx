@@ -68,23 +68,23 @@ function Home() {
         ]);
 
         // Transform API response to match frontend expectations
-        const transformedTxs = (txRes.data || []).map(tx => ({
+        const transformedTxs = (txRes || []).map(tx => ({
           ...tx,
           type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING', // Default type
           payer: tx.payer_address || tx.proposer_address,
           blockHeight: tx.block_height
         }));
 
-        setBlocks(blocksRes.data);
+        setBlocks(blocksRes);
         setTransactions(transformedTxs);
         setStatus({
-          latestBlock: statusRes.data?.latestHeight,
-          totalTransactions: statusRes.data?.totalBlocks,
+          latestBlock: statusRes?.latest_height,
+          totalTransactions: statusRes?.indexed_height,
           tps: 0
         });
 
-        if (statusRes.data?.latestHeight) {
-          setPrevHeight(statusRes.data.latestHeight);
+        if (statusRes?.latest_height) {
+          setPrevHeight(statusRes.latest_height);
         }
         setLoading(false);
       } catch (error) {

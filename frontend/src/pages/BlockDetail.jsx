@@ -12,8 +12,7 @@ function BlockDetail() {
   useEffect(() => {
     const loadBlock = async () => {
       try {
-        const response = await api.getBlock(height);
-        const rawBlock = response.data;
+        const rawBlock = await api.getBlock(height);
         // Transform transactions if present
         const transformedBlock = {
           ...rawBlock,

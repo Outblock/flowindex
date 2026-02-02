@@ -3,9 +3,9 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 export const api = {
-  getBlocks: () => axios.get(`${API_URL}/blocks`),
-  getBlock: (height) => axios.get(`${API_URL}/blocks/${height}`),
-  getTransactions: () => axios.get(`${API_URL}/transactions`),
+  getBlocks: () => axios.get(`${API_URL}/blocks`).then(res => res.data),
+  getBlock: (height) => axios.get(`${API_URL}/blocks/${height}`).then(res => res.data),
+  getTransactions: () => axios.get(`${API_URL}/transactions`).then(res => res.data),
   getTransaction: (txId) => axios.get(`${API_URL}/transactions/${txId}`).then(res => res.data),
   getAccount: (address) => axios.get(`${API_URL}/accounts/${address}`).then(res => res.data),
   getAccountTransactions: (address) => axios.get(`${API_URL}/accounts/${address}/transactions`).then(res => res.data),
