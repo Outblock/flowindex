@@ -5,6 +5,7 @@ import (
 	"log"
 	"sort"
 	"sync"
+	"time"
 
 	"flowscan-clone/internal/flow"
 	"flowscan-clone/internal/models"
@@ -48,7 +49,33 @@ func NewService(client *flow.Client, repo *repository.Repository, cfg Config) *S
 	}
 }
 
-// ... Start method same ...
+// Start runs the ingestion loop
+func (s *Service) Start(ctx context.Context) error {
+	log.Printf("Starting %s Ingester in %s mode...", s.config.ServiceName, s.config.Mode)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			// Run one processing cycle
+			err := s.process(ctx)
+			if err != nil {
+				log.Printf("[%s] Error processing batch: %v", s.config.ServiceName, err)
+				time.Sleep(5 * time.Second) // Backoff on error
+				continue
+			}
+
+			// If process returns nil, it means we are up to date (live) or finished (history)
+			// For Live, we poll every few seconds.
+			// For History, if finished, we stop?
+			// Checking process() return values... it returns nil when "Done! reached 0" (Backward)
+			// or when "startHeight > latestHeight" (Forward).
+
+			// We should sleep a bit to avoid hot loop when up to date.
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
 
 func (s *Service) process(ctx context.Context) error {
 	lastIndexed, err := s.repo.GetLastIndexedHeight(ctx, s.config.ServiceName)
