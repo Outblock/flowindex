@@ -258,3 +258,43 @@ CREATE TABLE IF NOT EXISTS ft_metadata (
 
 CREATE INDEX IF NOT EXISTS idx_ft_metadata_symbol ON ft_metadata(token_symbol);
 CREATE INDEX IF NOT EXISTS idx_ft_metadata_verified ON ft_metadata(is_verified);
+
+-- 12. Collections (Flow-specific transaction grouping)
+CREATE TABLE IF NOT EXISTS collections (
+    id VARCHAR(64) PRIMARY KEY,
+    block_height BIGINT REFERENCES blocks(height) ON DELETE CASCADE,
+    guarantor_ids TEXT[], -- Array of guarantor node IDs
+    signer_ids TEXT[], -- Array of signer IDs
+    signatures JSONB, -- Array of signature objects
+    transaction_ids TEXT[], -- Array of transaction IDs in this collection
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_collections_block_height ON collections(block_height);
+
+-- 13. Execution Results (detailed execution data per block)
+CREATE TABLE IF NOT EXISTS execution_results (
+    id VARCHAR(64) PRIMARY KEY,
+    block_height BIGINT REFERENCES blocks(height) ON DELETE CASCADE,
+    previous_result_id VARCHAR(64),
+    chunk_data JSONB, -- Execution chunks
+    service_events JSONB, -- Service-level events
+    execution_data_id VARCHAR(64),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_execution_results_block_height ON execution_results(block_height);
+
+-- 14. Account Balances (historical balance snapshots)
+CREATE TABLE IF NOT EXISTS account_balances (
+    address VARCHAR(18) NOT NULL,
+    block_height BIGINT NOT NULL,
+    balance DECIMAL(78, 8), -- FLOW token balance
+    storage_used BIGINT, -- Bytes used
+    storage_capacity BIGINT, -- Bytes available
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (address, block_height)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_balances_address ON account_balances(address);
+CREATE INDEX IF NOT EXISTS idx_account_balances_block_height ON account_balances(block_height DESC);
