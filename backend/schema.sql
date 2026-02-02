@@ -49,8 +49,12 @@ CREATE TABLE IF NOT EXISTS evm_transactions (
     value DECIMAL(78, 0), -- BigInt
     data TEXT,
     gas_used BIGINT,
-    logs JSONB 
+    logs JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Patch for existing tables (Railway DB persistence)
+ALTER TABLE evm_transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 3. Events
 CREATE TABLE IF NOT EXISTS events (
