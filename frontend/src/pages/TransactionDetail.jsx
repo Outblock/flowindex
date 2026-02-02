@@ -5,30 +5,44 @@ import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, Arro
 
 function TransactionDetail() {
   const { txId } = useParams();
-  const [transaction, setTransaction] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('script');
 
   useEffect(() => {
     const loadTransaction = async () => {
       try {
         const rawTx = await api.getTransaction(txId);
         // Transform API response
+        // Note: Backend now returns consistent keys (snake_case) for both DB and RPC
         const transformedTx = {
           ...rawTx,
           type: rawTx.type || (rawTx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
-          // Handle both DB and RPC fallback naming conventions
-          payer: rawTx.payer_address || rawTx.proposer_address || rawTx.payer || 'Unknown',
+
+          // Map consistent backend keys to our UI variable names if desired, 
+          // or just ensure we use the right keys below. 
+          // Let's normalize to camelCase for internal use effectively where convenient, or stick to raw.
+          // Actually, kept it simple:
+          payer: rawTx.payer_address || rawTx.payer || 'Unknown', // Fallback just in case, but backend should send payer_address
           proposer: rawTx.proposer_address || rawTx.proposer || 'Unknown',
-          blockHeight: rawTx.block_height || rawTx.blockHeight,
-          gasLimit: rawTx.gas_limit || rawTx.gasLimit || 0,
-          gasUsed: rawTx.gas_used || rawTx.gasUsed || 0,
+          proposerKeyIndex: rawTx.proposer_key_index ?? -1,
+          proposerSequenceNumber: rawTx.proposer_sequence_number ?? -1,
+
+          blockHeight: rawTx.block_height,
+          gasLimit: rawTx.gas_limit,
+          gasUsed: rawTx.gas_used,
+
           // Ensure events array exists
           events: rawTx.events || [],
           // Ensure status exists
           status: rawTx.status || 'UNKNOWN'
         };
         setTransaction(transformedTx);
+
+        // Default tab selection
+        if (transformedTx.script) {
+          setActiveTab('script');
+        } else {
+          setActiveTab('events');
+        }
         setLoading(false);
       } catch (err) {
         console.error('Failed to fetch transaction:', err);
@@ -142,7 +156,7 @@ function TransactionDetail() {
         </div>
 
         {/* Info Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Flow Information */}
           <div className="border border-white/10 p-6 bg-nothing-dark">
             <h2 className="text-white text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-2">
@@ -179,8 +193,13 @@ function TransactionDetail() {
               </div>
 
               <div className="group">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Proposer</p>
-                <Link to={`/accounts/${transaction.proposer}`} className="text-sm text-zinc-300 hover:text-white break-all uppercase tracking-tight">
+                <div className="flex justify-between items-end mb-1">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Proposer</p>
+                  <span className="text-[9px] text-zinc-600 uppercase tracking-tight bg-white/5 px-2 py-0.5 rounded">
+                    Seq: {transaction.proposerSequenceNumber} • Key: {transaction.proposerKeyIndex}
+                  </span>
+                </div>
+                <Link to={`/accounts/${transaction.proposer}`} className="text-sm text-zinc-300 hover:text-white break-all uppercase tracking-tight block">
                   {transaction.proposer}
                 </Link>
               </div>
@@ -240,67 +259,95 @@ function TransactionDetail() {
           </div>
         </div>
 
-        {/* Script Section */}
-        {transaction.script && (
-          <div className="border border-white/10 p-6 mt-8 bg-nothing-dark relative group overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-5">
-              <Activity className="h-24 w-24" />
-            </div>
-            <h2 className="text-white text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Zap className="h-4 w-4 text-nothing-green" />
-              Cadence Script Execution
-            </h2>
-            <pre className="bg-black/50 border border-white/5 p-4 overflow-x-auto text-[10px] text-zinc-400 rounded-sm font-mono leading-relaxed">
-              <code>{transaction.script}</code>
-            </pre>
+        {/* Payload / Events Tabs */}
+        <div className="mt-12">
+          <div className="flex border-b border-white/10 mb-0">
+            <button
+              onClick={() => setActiveTab('script')}
+              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'script'
+                ? 'text-white border-b-2 border-nothing-green bg-white/5'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                }`}
+            >
+              <span className="flex items-center gap-2">
+                <Zap className={`h-4 w-4 ${activeTab === 'script' ? 'text-nothing-green' : ''}`} />
+                Cadence Script
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('events')}
+              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'events'
+                ? 'text-white border-b-2 border-nothing-green bg-white/5'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                }`}
+            >
+              <span className="flex items-center gap-2">
+                <Database className={`h-4 w-4 ${activeTab === 'events' ? 'text-nothing-green' : ''}`} />
+                Key Events ({transaction.events ? transaction.events.length : 0})
+              </span>
+            </button>
           </div>
-        )}
 
-        {/* Events */}
-        {transaction.events && transaction.events.length > 0 && (
-          <div className="border border-white/10 p-6 mt-8 bg-nothing-dark relative group overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-5">
-              <Database className="h-24 w-24" />
-            </div>
-            <h2 className="text-white text-sm uppercase tracking-widest mb-6 flex items-center gap-2">
-              <Activity className="h-4 w-4 text-nothing-green" />
-              Contract Events ({transaction.events.length})
-            </h2>
-            <div className="space-y-6">
-              {transaction.events.map((event, idx) => (
-                <div key={idx} className="relative pl-6 border-l border-white/5 hover:border-nothing-green/30 transition-all group/event">
-                  <div className="absolute left-0 top-0 -translate-x-1/2 w-2 h-2 bg-nothing-green/20 border border-nothing-green/40 rounded-full group-hover/event:bg-nothing-green group-hover/event:scale-125 transition-all"></div>
+          <div className="bg-nothing-dark border border-white/10 border-t-0 p-6 min-h-[300px]">
+            {activeTab === 'script' && (
+              <div className="font-mono">
+                {transaction.script ? (
+                  <pre className="bg-black/50 border border-white/5 p-4 overflow-x-auto text-[10px] text-zinc-400 rounded-sm leading-relaxed">
+                    <code>{transaction.script}</code>
+                  </pre>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
+                    <Zap className="h-8 w-8 mb-2 opacity-20" />
+                    <p className="text-xs uppercase tracking-widest">No Script Content Available</p>
+                  </div>
+                )}
+              </div>
+            )}
 
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
-                    <div className="flex flex-col">
-                      <p className="text-xs font-bold text-nothing-green mb-1 uppercase tracking-wider">
-                        {event.event_name || event.type.split('.').pop()}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-zinc-600 uppercase">Contract</span>
-                        <Link
-                          to={`/accounts/${event.contract_address}`}
-                          className="text-[10px] text-zinc-400 hover:text-white transition-colors underline decoration-white/10 underline-offset-2"
-                        >
-                          {event.contract_address || 'System'} {event.contract_name ? `(${event.contract_name})` : ''}
-                        </Link>
+            {activeTab === 'events' && (
+              <div className="space-y-6">
+                {transaction.events && transaction.events.length > 0 ? (
+                  transaction.events.map((event, idx) => (
+                    <div key={idx} className="relative pl-6 border-l border-white/5 hover:border-nothing-green/30 transition-all group/event">
+                      <div className="absolute left-0 top-0 -translate-x-1/2 w-2 h-2 bg-nothing-green/20 border border-nothing-green/40 rounded-full group-hover/event:bg-nothing-green group-hover/event:scale-125 transition-all"></div>
+
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
+                        <div className="flex flex-col">
+                          <p className="text-xs font-bold text-nothing-green mb-1 uppercase tracking-wider">
+                            {event.event_name || event.type.split('.').pop()}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-zinc-600 uppercase">Contract</span>
+                            <Link
+                              to={`/accounts/${event.contract_address}`}
+                              className="text-[10px] text-zinc-400 hover:text-white transition-colors underline decoration-white/10 underline-offset-2"
+                            >
+                              {event.contract_address || 'System'} {event.contract_name ? `(${event.contract_name})` : ''}
+                            </Link>
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-zinc-700 font-mono bg-white/5 px-2 py-0.5 rounded uppercase">
+                          Index #{event.event_index}
+                        </span>
+                      </div>
+
+                      <div className="bg-black/40 rounded-sm border border-white/5 p-4 group-hover/event:bg-black/60 transition-colors">
+                        <pre className="text-[11px] text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+                          {JSON.stringify(event.values || event.payload || event.data, null, 2)}
+                        </pre>
                       </div>
                     </div>
-                    <span className="text-[10px] text-zinc-700 font-mono bg-white/5 px-2 py-0.5 rounded uppercase">
-                      Index #{event.event_index}
-                    </span>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
+                    <Database className="h-8 w-8 mb-2 opacity-20" />
+                    <p className="text-xs uppercase tracking-widest">No Events Emitted</p>
                   </div>
-
-                  <div className="bg-black/40 rounded-sm border border-white/5 p-4 group-hover/event:bg-black/60 transition-colors">
-                    <pre className="text-[11px] text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
-                      {JSON.stringify(event.values || event.payload || event.data, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              ))}
-            </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
