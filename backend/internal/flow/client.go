@@ -91,6 +91,15 @@ func (c *Client) NetworkName() string {
 	return "flow" // In real implementation, derive from URL or config
 }
 
+// GetAccount fetches account details (balance, keys, contracts)
+func (c *Client) GetAccount(ctx context.Context, address flow.Address) (*flow.Account, error) {
+	acc, err := c.grpcClient.GetAccount(ctx, address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account %s: %w", address, err)
+	}
+	return acc, nil
+}
+
 // Close closes the connection
 func (c *Client) Close() error {
 	return c.grpcClient.Close()

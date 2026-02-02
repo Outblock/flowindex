@@ -186,6 +186,7 @@ func NewServer(repo *repository.Repository, client *flow.Client, port string, st
 	r.HandleFunc("/blocks/{id}", s.handleGetBlock).Methods("GET")
 	r.HandleFunc("/transactions", s.handleListTransactions).Methods("GET")
 	r.HandleFunc("/transactions/{id}", s.handleGetTransaction).Methods("GET")
+	r.HandleFunc("/accounts/{address}", s.handleGetAccount).Methods("GET")
 	r.HandleFunc("/accounts/{address}/transactions", s.handleGetAccountTransactions).Methods("GET")
 	r.HandleFunc("/accounts/{address}/token-transfers", s.handleGetAccountTokenTransfers).Methods("GET")
 	r.HandleFunc("/accounts/{address}/nft-transfers", s.handleGetAccountNFTTransfers).Methods("GET")
@@ -341,6 +342,34 @@ func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(tx)
+}
+
+func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	addrStr := vars["address"]
+
+	address := flow.HexToAddress(addrStr)
+
+	acc, err := s.client.GetAccount(r.Context(), address)
+	if err != nil {
+		http.Error(w, "Account not found or fetch failed", http.StatusNotFound)
+		return
+	}
+
+	// Transform for JSON if needed, or return raw
+	// flow.Account has fields like Balance (uint64), Keys, Contracts
+	// We might want to format Balance (which is uint64 in Cadence units usually, but SDK returns uint64? No, SDK returns flow.Account which has Balance uint64)
+	// Actually flow.Account Balance is specific. Let's return raw for now.
+
+	// Create a simplified response wrapper
+	resp := map[string]interface{}{
+		"address":   acc.Address.Hex(),
+		"balance":   acc.Balance, // Note: This is uint64, 10^8
+		"keys":      acc.Keys,
+		"contracts": acc.Contracts,
+	}
+
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Request) {
