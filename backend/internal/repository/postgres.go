@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"flowscan-clone/internal/models"
@@ -346,22 +347,56 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models.Transaction, error) {
 	var t models.Transaction
 
-	// Join with evm_transactions to get EVM details if available
+	// Normalize ID: remove 0x if present for consistent DB matching if it's an EVM hash search
+	normalizedID := strings.TrimPrefix(id, "0x")
+
+	// Search by transactions.id OR evm_transactions.evm_hash
 	query := `
-		SELECT t.id, t.block_height, t.proposer_address, t.payer_address, t.authorizers, t.script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.created_at,
+		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.proposer_key_index, t.proposer_sequence_number, 
+		       t.payer_address, t.authorizers, t.script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.created_at,
 		       COALESCE(et.evm_hash, ''), COALESCE(et.from_address, ''), COALESCE(et.to_address, ''), COALESCE(et.value, '')
 		FROM transactions t
 		LEFT JOIN evm_transactions et ON t.id = et.transaction_id
-		WHERE t.id = $1`
+		WHERE t.id = $1 OR et.evm_hash = $1 OR et.evm_hash = $2`
 
-	err := r.db.QueryRow(ctx, query, id).
-		Scan(&t.ID, &t.BlockHeight, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Script, &t.Arguments, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.CreatedAt,
+	err := r.db.QueryRow(ctx, query, id, normalizedID).
+		Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.ProposerKeyIndex, &t.ProposerSequenceNumber,
+			&t.PayerAddress, &t.Authorizers, &t.Script, &t.Arguments, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.CreatedAt,
 			&t.EVMHash, &t.EVMFrom, &t.EVMTo, &t.EVMValue)
 
 	if err != nil {
 		return nil, err
 	}
+
+	// Fetch events for this transaction separately to ensure they are always present
+	events, err := r.GetEventsByTransactionID(ctx, t.ID)
+	if err == nil {
+		t.Events = events
+	}
+
 	return &t, nil
+}
+
+func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) ([]models.Event, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT transaction_id, block_height, transaction_index, type, event_index, payload, created_at
+		FROM events
+		WHERE transaction_id = $1
+		ORDER BY event_index ASC`, txID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []models.Event
+	for rows.Next() {
+		var e models.Event
+		if err := rows.Scan(&e.TransactionID, &e.BlockHeight, &e.TransactionIndex, &e.Type, &e.EventIndex, &e.Payload, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, nil
 }
 
 func (r *Repository) GetTransactionsByAddress(ctx context.Context, address string, limit int) ([]models.Transaction, error) {

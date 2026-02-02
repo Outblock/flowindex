@@ -174,28 +174,17 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					CreatedAt:        time.Now(),
 				})
 
-				// Detect EVM Execution Event
-				if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
+				// Detect EVM Events
+				if strings.Contains(evt.Type, "EVM.") {
 					isEVM = true
 
-					// Payload structure for EVM.TransactionExecuted:
-					// { "blockHostHeight": 123, "transactionHash": "0x...", "failed": false, "vmError": null,
-					//   "gasConsumed": 21000, "deployedContractAddress": null, "returnedValue": "0x", "logs": [] }
-					// Note: The fields might vary slightly by Flow version, but typically `transactionHash` is key.
-					// We might need to look at other events like "EVM.TransactionSubmitted" for from/to if not here,
-					// but "TransactionExecuted" is the main one.
-					// Actually, Flow EVM usually emits:
-					// blockHeight, transactionHash, from, to, value, data, gasUsed, logs?
-					// Let's assume standard fields or try to extract what we can.
-
-					var evmPayload map[string]interface{}
-					if err := json.Unmarshal(payloadJSON, &evmPayload); err == nil {
-						if h, ok := evmPayload["transactionHash"].(string); ok {
-							dbTx.EVMHash = h
+					if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
+						var evmPayload map[string]interface{}
+						if err := json.Unmarshal(payloadJSON, &evmPayload); err == nil {
+							if h, ok := evmPayload["transactionHash"].(string); ok {
+								dbTx.EVMHash = h
+							}
 						}
-						// Try to find other fields if available in this event
-						// Note: Flow EVM events are evolving. We'll capture what's common.
-						// If 'from' / 'to' are missing in this event, they might be in arguments or other events.
 					}
 				}
 
