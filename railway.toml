@@ -21,6 +21,6 @@ root = "frontend"
 dockerfilePath = "Dockerfile"
 
 [services.env]
-PORT = "80"
+PORT = "8080"
 VITE_API_URL = "https://${{ backend.RAILWAY_PUBLIC_DOMAIN }}"
 RAILWAY_DOCKERFILE_PATH = "frontend/Dockerfile"
