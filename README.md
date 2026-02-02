@@ -1,97 +1,46 @@
-# Flow Scan Clone
+# FlowScan Clone
 
-A high-performance block explorer for the Flow blockchain, designed to be a reliable alternative to Flowscan.
+A modern, high-performance explorer for the Flow Blockchain, featuring rapid block ingestion, Flow-EVM support, and rich visual dashboards.
 
-## 🚀 Mission
-When Flowscan is down, we need a community-run, robust explorer that indexes the Flow network in real-time, supporting Cadence contracts and Flow's unique architecture.
+## Features
 
-## 🛠 Architecture
+-   **High-Performance Indexing**: Configurable "Forward" (Live) and "Backward" (History) ingestors with concurrent workers.
+-   **Flow-EVM Support**: First-class support for EVM transactions within Flow.
+-   **Modern UI**: "Nothing Phone" inspired aesthetics using React + TailwindCSS + Shadcn/UI.
+-   **Real-time Updates**: Live blocks and transactions via WebSocket (mocked/polled).
+-   **Deployment Ready**: Fully containerized (Docker) and Railway-compatible monorepo.
 
-### Backend (Go)
-- **Framework:** Go (using standard `net/http` and `gorilla/mux` or `fib`).
-- **Blockchain Access:** Connects to Flow Mainnet via Public RPC / Access API (gRPC or HTTP).
-- **Ingestion Engine:**
-  - **Block Listener:** Subscribes to new blocks (Block height -> Events -> Transactions).
-  - **Historical Indexer:** Batch fetches past blocks for chain replay.
-- **Database:** PostgreSQL (Primary storage for indexed data).
-- **API:** RESTful API for the frontend and public use.
+## Project Structure
 
-### Frontend (Bun + Vite + Tailwind)
-- **Framework:** React (via Vite).
-- **Styling:** Tailwind CSS.
-- **Runtime:** Bun (for speed).
-- **State Management:** React Query (TanStack Query) for data fetching.
+-   `backend/`: Go (Golang) Indexer & API Service.
+    -   Uses `pgx` for high-performance PostgreSQL interactions.
+    -   `internal/ingester`: Concurrent block processing pipeline.
+-   `frontend/`: React (Vite) + TailwindCSS.
+    -   `src/pages`: Block, Transaction, Account, Home views.
 
-### Database (PostgreSQL)
-- **Core Tables:**
-  - `blocks`: Indexed block data.
-  - `transactions`: Indexed transaction details.
-  - `accounts`: Account balances and metadata.
-  - `events`: Smart Contract events.
-  - `contracts`: Deployed Cadence code.
+## Deployment (Railway)
 
-## 📦 Tech Stack
+This project is configured for one-click deployment on Railway using the Root Build Context strategy.
 
-| Component | Technology |
-| :--- | :--- |
-| **Backend** | Go 1.21+ |
-| **Frontend** | React 18, Vite, Tailwind CSS, Bun |
-| **Database** | PostgreSQL 15 |
-| **Blockchain Node** | Flow Access Node (gRPC/HTTP) |
-| **Indexer** | Custom Go Ingestion Pipeline |
+1.  **Connect GitHub**: Link this repo to Railway.
+2.  **Services**:
+    -   **Backend**: `Dockerfile` is in `backend/` but built from Root.
+    -   **Frontend**: `Dockerfile` is in `frontend/` but built from Root.
+3.  **Variables**: configuration is handled via `railway.toml`.
 
-## 🚧 Current Status
-- [x] Project Setup (Go module, React app)
-- [x] Database Schema Design
-- [x] Flow gRPC/HTTP Client Setup
-- [x] Block Ingestion Implementation
-- [x] API Endpoints
-- [x] Frontend Scaffolding
-
-## 📚 Documentation & References
-- **Flow Official Repo:** [https://github.com/onflow](https://github.com/onflow)
-- **Flow Docs:** [https://developers.flow.com](https://developers.flow.com)
-- **Access API:** Needs to handle Blocks, Transactions, Events, and Scripts.
-- **Cadence:** We need to support decoding Cadence transactions.
-
-## 🏃‍♂️ Getting Started
+## Local Development
 
 ### Prerequisites
-- Go 1.21+
-- Bun 1.0+
-- PostgreSQL 15+
+-   Docker & Docker Compose
+-   Go 1.24+
+-   Node.js 20+
 
-### Setup
+### Run Locally
+```bash
+docker-compose up -d --build
+```
+Access Frontend at `http://localhost:5173` (or port defined in compose).
+Access Backend API at `http://localhost:8080`.
 
-1. **Clone the repo:**
-   ```bash
-   git clone https://github.com/yourusername/flowscan-clone.git
-   cd flowscan-clone
-   ```
-
-2. **Start Database:**
-   ```bash
-   # Assuming local postgres or docker
-   createdb flowscan
-   ```
-
-3. **Run Backend:**
-   ```bash
-   cd backend
-   go mod tidy
-   go run main.go
-   ```
-
-4. **Run Frontend:**
-   ```bash
-   cd frontend
-   bun install
-   bun run dev
-   ```
-
-## 🤝 Contributing
-This is a community effort. Since Flowscan is down, we need to build this **together**.
-
-## 📝 Notes
-- We are NOT forking Blockscout. Blockscout is EVM-specific.
-- This project is native to Flow (using Flow's data structures, not EVM).
+## License
+MIT

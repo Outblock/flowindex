@@ -1,0 +1,38 @@
+# System
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Node
+node_modules/
+dist/
+build/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.local
+.env.*.local
+.turbo
+coverage/
+
+# Go
+bin/
+*.exe
+*.test
+*.prof
+
+# Project Specific
+backend/config.yaml
+backend/build_error*.log
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
