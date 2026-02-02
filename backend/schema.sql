@@ -206,3 +206,55 @@ CREATE TABLE IF NOT EXISTS address_stats (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 10. NFT Metadata (Non-Fungible Tokens)
+CREATE TABLE IF NOT EXISTS nft_metadata (
+    contract_address VARCHAR(255) NOT NULL,
+    token_id VARCHAR(255) NOT NULL,
+    name TEXT,
+    description TEXT,
+    image_url TEXT,
+    animation_url TEXT,
+    external_url TEXT,
+    attributes JSONB, -- Array of {trait_type, value}
+    metadata JSONB, -- Full metadata object
+    collection_name TEXT,
+    collection_description TEXT,
+    collection_image_url TEXT,
+    creator_address VARCHAR(42),
+    owner_address VARCHAR(42), -- Current owner
+    mint_block_height BIGINT,
+    mint_transaction_id VARCHAR(64),
+    last_transfer_block_height BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (contract_address, token_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_nft_metadata_contract ON nft_metadata(contract_address);
+CREATE INDEX IF NOT EXISTS idx_nft_metadata_owner ON nft_metadata(owner_address);
+CREATE INDEX IF NOT EXISTS idx_nft_metadata_collection ON nft_metadata(collection_name);
+
+-- 11. FT Metadata (Fungible Tokens)
+CREATE TABLE IF NOT EXISTS ft_metadata (
+    contract_address VARCHAR(255) PRIMARY KEY,
+    token_name TEXT,
+    token_symbol TEXT,
+    decimals INT DEFAULT 18,
+    total_supply DECIMAL(78, 0),
+    logo_url TEXT,
+    website_url TEXT,
+    description TEXT,
+    is_verified BOOLEAN DEFAULT FALSE,
+    metadata JSONB, -- Full metadata object
+    deployer_address VARCHAR(42),
+    deploy_block_height BIGINT,
+    deploy_transaction_id VARCHAR(64),
+    holder_count BIGINT DEFAULT 0, -- Number of unique holders
+    transfer_count BIGINT DEFAULT 0, -- Total transfers
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ft_metadata_symbol ON ft_metadata(token_symbol);
+CREATE INDEX IF NOT EXISTS idx_ft_metadata_verified ON ft_metadata(is_verified);
