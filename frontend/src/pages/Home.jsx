@@ -61,34 +61,42 @@ function Home() {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const [blocksRes, txRes, statusRes] = await Promise.all([
+        // Use allSettled to prevent one failure from blocking everything
+        const [blocksResult, txResult, statusResult] = await Promise.allSettled([
           api.getBlocks(),
           api.getTransactions(),
           api.getStatus()
         ]);
 
+        const blocksRes = blocksResult.status === 'fulfilled' ? blocksResult.value : [];
+        const txRes = txResult.status === 'fulfilled' ? txResult.value : [];
+        const statusRes = statusResult.status === 'fulfilled' ? statusResult.value : null;
+
         // Transform API response to match frontend expectations
-        const transformedTxs = (txRes || []).map(tx => ({
+        const transformedTxs = Array.isArray(txRes) ? txRes.map(tx => ({
           ...tx,
-          type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING', // Default type
+          type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'), // Default type
           payer: tx.payer_address || tx.proposer_address,
           blockHeight: tx.block_height
-        }));
+        })) : [];
 
-        setBlocks(blocksRes);
+        setBlocks(Array.isArray(blocksRes) ? blocksRes : []);
         setTransactions(transformedTxs);
-        setStatus({
-          latestBlock: statusRes?.latest_height,
-          totalTransactions: statusRes?.indexed_height,
-          tps: 0
-        });
 
-        if (statusRes?.latest_height) {
-          setPrevHeight(statusRes.latest_height);
+        if (statusRes) {
+          setStatus({
+            latestBlock: statusRes.latest_height,
+            totalTransactions: statusRes.indexed_height,
+            tps: 0
+          });
+          if (statusRes.latest_height) {
+            setPrevHeight(statusRes.latest_height);
+          }
         }
-        setLoading(false);
       } catch (error) {
         console.error('Failed to fetch initial data:', error);
+      } finally {
+        // ALWAYS finish loading
         setLoading(false);
       }
     };

@@ -16,12 +16,17 @@ function TransactionDetail() {
         // Transform API response
         const transformedTx = {
           ...rawTx,
-          type: rawTx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
-          payer: rawTx.payer_address || rawTx.proposer_address,
-          proposer: rawTx.proposer_address,
-          blockHeight: rawTx.block_height,
-          gasLimit: rawTx.gas_limit,
-          gasUsed: rawTx.gas_used
+          type: rawTx.type || (rawTx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
+          // Handle both DB and RPC fallback naming conventions
+          payer: rawTx.payer_address || rawTx.proposer_address || rawTx.payer || 'Unknown',
+          proposer: rawTx.proposer_address || rawTx.proposer || 'Unknown',
+          blockHeight: rawTx.block_height || rawTx.blockHeight,
+          gasLimit: rawTx.gas_limit || rawTx.gasLimit || 0,
+          gasUsed: rawTx.gas_used || rawTx.gasUsed || 0,
+          // Ensure events array exists
+          events: rawTx.events || [],
+          // Ensure status exists
+          status: rawTx.status || 'UNKNOWN'
         };
         setTransaction(transformedTx);
         setLoading(false);
