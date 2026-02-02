@@ -60,6 +60,7 @@ type Transaction struct {
 	ComputationUsage uint64    `json:"computation_usage"`
 	StatusCode       int       `json:"status_code"`
 	ExecutionStatus  string    `json:"execution_status"` // Success, Failure, Pending
+	Events           []Event   `json:"events,omitempty"`
 	CreatedAt        time.Time `json:"created_at"`
 }
 
