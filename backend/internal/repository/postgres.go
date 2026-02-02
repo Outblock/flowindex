@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"flowscan-clone/internal/models"
@@ -20,6 +21,18 @@ func NewRepository(dbURL string) (*Repository, error) {
 	config, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse db url: %w", err)
+	}
+
+	// Apply Pool Settings
+	if maxConnStr := os.Getenv("DB_MAX_OPEN_CONNS"); maxConnStr != "" {
+		if maxConn, err := strconv.Atoi(maxConnStr); err == nil {
+			config.MaxConns = int32(maxConn)
+		}
+	}
+	if minConnStr := os.Getenv("DB_MAX_IDLE_CONNS"); minConnStr != "" {
+		if minConn, err := strconv.Atoi(minConnStr); err == nil {
+			config.MinConns = int32(minConn)
+		}
 	}
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)

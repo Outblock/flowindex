@@ -49,9 +49,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to DB: %v", err)
 	}
-	if err != nil {
-		log.Fatalf("Failed to connect to DB: %v", err)
-	}
 	defer repo.Close()
 
 	// 2a. Auto-Migration
@@ -137,17 +134,25 @@ func main() {
 
 	// Start Ingesters in background
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(1)
 
+	// Always start forward ingester
 	go func() {
 		defer wg.Done()
 		forwardIngester.Start(ctx)
 	}()
 
-	go func() {
-		defer wg.Done()
-		backwardIngester.Start(ctx)
-	}()
+	// Conditionally start backward ingester
+	enableHistory := os.Getenv("ENABLE_HISTORY_INGESTER") != "false"
+	if enableHistory {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			backwardIngester.Start(ctx)
+		}()
+	} else {
+		log.Println("History Ingester is DISABLED (ENABLE_HISTORY_INGESTER=false)")
+	}
 
 	wg.Wait()
 }
