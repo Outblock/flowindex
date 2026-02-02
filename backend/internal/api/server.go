@@ -372,19 +372,25 @@ func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[API] Could not fetch transaction result from RPC: %v", resultErr)
 		}
 
-		// Convert RPC transaction to our model format
+		// Convert RPC transaction to our model format (matching internal/models/models.go Transaction struct)
 		fallbackTx := map[string]interface{}{
 			"id":                       id,
-			"payer_address":            rpcTx.Payer.String(),
-			"proposer_address":         rpcTx.ProposalKey.Address.String(),
+			"type":                     "PENDING",                       // Default for RPC/Mempool
+			"status":                   "PENDING",                       // Default
+			"block_height":             rpcTx.ReferenceBlockID.String(), // Placeholder, or use rpcResult.BlockHeight if avail
+			"time":                     "",                              // Not available in RPC usually
+			"payer":                    rpcTx.Payer.String(),
+			"proposer":                 rpcTx.ProposalKey.Address.String(),
 			"proposer_key_index":       rpcTx.ProposalKey.KeyIndex,
 			"proposer_sequence_number": rpcTx.ProposalKey.SequenceNumber,
 			"gas_limit":                rpcTx.GasLimit,
-			"reference_block_id":       rpcTx.ReferenceBlockID.String(),
+			"gas_used":                 0, // Not available until sealed/result
+			"computation_usage":        0,
+			"script":                   string(rpcTx.Script),
 			"authorizers":              convertAddresses(rpcTx.Authorizers),
-			"status":                   "RPC",
-			"is_indexed":               false, // Flag to indicate this is from RPC
-			"source":                   "rpc", // Data source indicator
+			"event_count":              0,
+			"error_message":            "",
+			"is_indexed":               false,
 		}
 
 		// Add result data if available
@@ -392,6 +398,7 @@ func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
 			fallbackTx["status"] = rpcResult.Status.String()
 			fallbackTx["block_height"] = rpcResult.BlockHeight
 			fallbackTx["events"] = convertEvents(rpcResult.Events)
+			fallbackTx["event_count"] = len(rpcResult.Events)
 
 			// Only add error message if error is not nil
 			if rpcResult.Error != nil {
