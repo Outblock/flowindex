@@ -131,9 +131,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			aa.Address, aa.TransactionID, aa.BlockHeight, aa.Role,
 		)
 		if err != nil {
-			// Ignore dupe errors, or handle
-			// return fmt.Errorf("failed to insert addr tx: %w", err)
-			continue
+			return fmt.Errorf("failed to insert addr tx: %w", err)
 		}
 	}
 
