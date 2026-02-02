@@ -387,3 +387,33 @@ func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address strin
 	}
 	return transfers, nil
 }
+
+type DailyStat struct {
+	Date    string `json:"date"`
+	TxCount int64  `json:"tx_count"`
+}
+
+func (r *Repository) GetDailyStats(ctx context.Context) ([]DailyStat, error) {
+	query := `
+		SELECT TO_CHAR(created_at, 'YYYY-MM-DD') as date, COUNT(*) as count
+		FROM transactions
+		WHERE created_at > NOW() - INTERVAL '14 days'
+		GROUP BY date
+		ORDER BY date ASC`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []DailyStat
+	for rows.Next() {
+		var s DailyStat
+		if err := rows.Scan(&s.Date, &s.TxCount); err != nil {
+			return nil, err
+		}
+		stats = append(stats, s)
+	}
+	return stats, nil
+}

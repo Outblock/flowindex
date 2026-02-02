@@ -191,6 +191,7 @@ func NewServer(repo *repository.Repository, client *flow.Client, port string, st
 	r.HandleFunc("/accounts/{address}/transactions", s.handleGetAccountTransactions).Methods("GET")
 	r.HandleFunc("/accounts/{address}/token-transfers", s.handleGetAccountTokenTransfers).Methods("GET")
 	r.HandleFunc("/accounts/{address}/nft-transfers", s.handleGetAccountNFTTransfers).Methods("GET")
+	r.HandleFunc("/stats/daily", s.handleGetDailyStats).Methods("GET")
 
 	s.httpServer = &http.Server{
 		Addr:    ":" + port,

@@ -1,19 +1,34 @@
-import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-// Mock data for now (backend endpoint to be implemented)
-const data = [
-    { name: 'Mon', txs: 4000 },
-    { name: 'Tue', txs: 3000 },
-    { name: 'Wed', txs: 2000 },
-    { name: 'Thu', txs: 2780 },
-    { name: 'Fri', txs: 1890 },
-    { name: 'Sat', txs: 2390 },
-    { name: 'Sun', txs: 3490 },
-];
+import { api } from '../api';
 
 export function DailyStatsChart() {
+    const [data, setData] = React.useState([]);
+
+    React.useEffect(() => {
+        const loadStats = async () => {
+            try {
+                const stats = await api.getDailyStats();
+                // Map API response to chart format
+                const chartData = stats.map(s => ({
+                    name: s.date,
+                    txs: s.tx_count
+                }));
+                setData(chartData);
+            } catch (err) {
+                console.error("Failed to load daily stats:", err);
+            }
+        };
+        loadStats();
+    }, []);
+
+    if (!data.length) {
+        return (
+            <div className="bg-nothing-dark border border-white/10 p-6 h-[286px] flex items-center justify-center">
+                <p className="text-zinc-500 text-xs uppercase tracking-widest animate-pulse">Loading Statistics...</p>
+            </div>
+        );
+    }
     return (
         <div className="bg-nothing-dark border border-white/10 p-6 group hover:border-nothing-green/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-6">

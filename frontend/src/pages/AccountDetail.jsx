@@ -13,31 +13,26 @@ function AccountDetail() {
   useEffect(() => {
     const loadAccountData = async () => {
       try {
-        // For now, we'll create a mock account page since the API might not have this endpoint yet
-        // In production, you'd call: api.getAccount(address)
+        // Fetch Account Data from Real API
+        const accountRes = await api.getAccount(address);
         setAccount({
-          address: address,
-          balance: '1000.00000000',
-          createdAt: new Date().toISOString(),
-          contracts: [],
-          keys: []
+          address: accountRes.address,
+          balance: accountRes.balance, // Raw uint64 for now
+          createdAt: null, // API doesn't return this yet
+          contracts: accountRes.contracts || [],
+          keys: accountRes.keys || []
         });
 
         // Get transactions involving this account
-        const txRes = await api.getTransactions();
-        const accountTxs = (txRes.data || [])
+        const txRes = await api.getAccountTransactions(address);
+        const accountTxs = (txRes || [])
           .map(tx => ({
             ...tx,
             type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
             payer: tx.payer_address || tx.proposer_address,
             proposer: tx.proposer_address,
             blockHeight: tx.block_height
-          }))
-          .filter(tx =>
-            tx.payer === address ||
-            tx.proposer === address ||
-            (tx.authorizers && tx.authorizers.includes(address))
-          );
+          }));
         setTransactions(accountTxs);
         setLoading(false);
       } catch (err) {

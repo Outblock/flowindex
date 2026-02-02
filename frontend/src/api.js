@@ -6,6 +6,11 @@ export const api = {
   getBlocks: () => axios.get(`${API_URL}/blocks`),
   getBlock: (height) => axios.get(`${API_URL}/blocks/${height}`),
   getTransactions: () => axios.get(`${API_URL}/transactions`),
-  getTransaction: (txId) => axios.get(`${API_URL}/transactions/${txId}`),
-  getStatus: () => axios.get(`${API_URL}/status`),
+  getTransaction: (txId) => axios.get(`${API_URL}/transactions/${txId}`).then(res => res.data),
+  getAccount: (address) => axios.get(`${API_URL}/accounts/${address}`).then(res => res.data),
+  getAccountTransactions: (address) => axios.get(`${API_URL}/accounts/${address}/transactions`).then(res => res.data),
+  getAccountTokenTransfers: (address) => axios.get(`${API_URL}/accounts/${address}/token-transfers`).then(res => res.data),
+  getAccountNFTTransfers: (address) => axios.get(`${API_URL}/accounts/${address}/nft-transfers`).then(res => res.data),
+  getDailyStats: () => axios.get(`${API_URL}/stats/daily`).then(res => res.data),
+  getStatus: () => axios.get(`${API_URL}/status`).then(res => res.data),
 };
