@@ -74,6 +74,17 @@ function TransactionDetail() {
     }
   };
 
+  const formatAddress = (addr) => {
+    if (!addr) return 'Unknown';
+    // Ensure lowercase
+    let formatted = addr.toLowerCase();
+    // Add 0x prefix if missing
+    if (!formatted.startsWith('0x')) {
+      formatted = '0x' + formatted;
+    }
+    return formatted;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center font-mono">
