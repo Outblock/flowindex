@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	flowsdk "github.com/onflow/flow-go-sdk"
 )
 
 // --- WebSocket Hub ---
@@ -348,7 +349,7 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	addrStr := vars["address"]
 
-	address := flow.HexToAddress(addrStr)
+	address := flowsdk.HexToAddress(addrStr)
 
 	acc, err := s.client.GetAccount(r.Context(), address)
 	if err != nil {
