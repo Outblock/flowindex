@@ -9,14 +9,19 @@ export function DailyStatsChart() {
         const loadStats = async () => {
             try {
                 const stats = await api.getDailyStats();
-                // Map API response to chart format
-                const chartData = stats.map(s => ({
-                    name: s.date,
-                    txs: s.tx_count
-                }));
-                setData(chartData);
+                // Handle null/empty response
+                if (stats && Array.isArray(stats)) {
+                    const chartData = stats.map(s => ({
+                        name: s.date,
+                        txs: s.tx_count
+                    }));
+                    setData(chartData);
+                } else {
+                    setData([]);  // Set empty array if no data
+                }
             } catch (err) {
                 console.error("Failed to load daily stats:", err);
+                setData([]);  // Set empty array on error
             }
         };
         loadStats();
