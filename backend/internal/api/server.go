@@ -263,14 +263,21 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		progress = 0
 	}
 
+	// Get total transactions
+	totalTxs, err := s.repo.GetTotalTransactions(r.Context())
+	if err != nil {
+		totalTxs = 0
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"chain_id":       "flow",
-		"latest_height":  latestHeight,
-		"indexed_height": lastIndexed,
-		"start_height":   start,
-		"progress":       fmt.Sprintf("%.2f%%", progress),
-		"behind":         latestHeight - lastIndexed,
-		"status":         "ok",
+		"chain_id":           "flow",
+		"latest_height":      latestHeight,
+		"indexed_height":     lastIndexed,
+		"start_height":       start,
+		"total_transactions": totalTxs,
+		"progress":           fmt.Sprintf("%.2f%%", progress),
+		"behind":             latestHeight - lastIndexed,
+		"status":             "ok",
 	})
 }
 
@@ -435,4 +442,13 @@ func (s *Server) handleGetAccountNFTTransfers(w http.ResponseWriter, r *http.Req
 	}
 
 	json.NewEncoder(w).Encode(transfers)
+}
+
+func (s *Server) handleGetDailyStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := s.repo.GetDailyStats(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(stats)
 }

@@ -127,7 +127,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		_, err := tx.Exec(ctx, `
 			INSERT INTO address_transactions (address, transaction_id, block_height, role)
 			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (address, transaction_id) DO NOTHING`, // Assuming PK is (address, transaction_id)
+			ON CONFLICT (address, transaction_id, role) DO NOTHING`,
 			aa.Address, aa.TransactionID, aa.BlockHeight, aa.Role,
 		)
 		if err != nil {
@@ -414,4 +414,10 @@ func (r *Repository) GetDailyStats(ctx context.Context) ([]DailyStat, error) {
 		stats = append(stats, s)
 	}
 	return stats, nil
+}
+
+func (r *Repository) GetTotalTransactions(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM transactions").Scan(&count)
+	return count, err
 }

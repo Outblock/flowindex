@@ -1,11 +1,11 @@
+import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from '../api';
 
 export function DailyStatsChart() {
-    const [data, setData] = React.useState([]);
+    const [data, setData] = useState([]);
 
-    React.useEffect(() => {
+    useEffect(() => {
         const loadStats = async () => {
             try {
                 const stats = await api.getDailyStats();

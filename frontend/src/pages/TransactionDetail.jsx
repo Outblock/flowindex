@@ -12,8 +12,7 @@ function TransactionDetail() {
   useEffect(() => {
     const loadTransaction = async () => {
       try {
-        const response = await api.getTransaction(txId);
-        const rawTx = response.data;
+        const rawTx = await api.getTransaction(txId);
         // Transform API response
         const transformedTx = {
           ...rawTx,
