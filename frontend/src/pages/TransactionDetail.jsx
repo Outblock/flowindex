@@ -69,13 +69,21 @@ function TransactionDetail() {
   if (error || !transaction) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center font-mono">
-        <div className="border border-red-500/30 bg-nothing-dark p-8 max-w-md text-center">
-          <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-lg font-bold text-white uppercase tracking-widest mb-2">Transaction Not Found</h2>
-          <p className="text-zinc-500 text-xs mb-6">The requested transaction could not be located in the current index.</p>
-          <Link to="/" className="inline-block w-full border border-white/20 hover:bg-white/10 text-white text-xs uppercase tracking-widest py-3 transition-all">
-            Return to Dashboard
-          </Link>
+        <div className="border border-yellow-500/30 bg-nothing-dark p-8 max-w-md text-center">
+          <XCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-white uppercase tracking-widest mb-2">Transaction Not Yet Indexed</h2>
+          <p className="text-zinc-400 text-sm mb-4">This transaction exists on the blockchain but hasn't been indexed yet.</p>
+          <p className="text-zinc-500 text-xs mb-6">
+            The indexer is currently processing historical blocks. Please check back in a few minutes.
+          </p>
+          <div className="space-y-2">
+            <Link to="/" className="inline-block w-full border border-white/20 hover:bg-white/10 text-white text-xs uppercase tracking-widest py-3 transition-all">
+              Return to Dashboard
+            </Link>
+            <Link to="/stats" className="inline-block w-full border border-nothing-green/20 hover:bg-nothing-green/10 text-nothing-green text-xs uppercase tracking-widest py-3 transition-all">
+              View Indexing Progress
+            </Link>
+          </div>
         </div>
       </div>
     );
