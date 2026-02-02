@@ -33,7 +33,13 @@
   - `smart_contracts` - 智能合约
   - `address_token_balances` - 地址代币余额
   - `address_transactions` - 地址交易关系表
+  - `account_keys` - 公钥与地址映射表 (Public Key Registry) ✅
   - `indexing_checkpoints` - 索引进度检查点
+  
+**数据冗余增强 (Exhaustive Redundancy):** ✅
+- **Blocks:** 存储 `signatures`, `block_seals`, `collection_guarantees`, `parent_voter_signature`, `block_status`, `execution_result_id`.
+- **Transactions:** 存储 `proposer_key_index`, `proposer_sequence_number`, `proposal_key` (JSONB), `payload_signatures` (JSONB), `envelope_signatures` (JSONB), `computation_usage`, `status_code`, `execution_status`.
+- **Events:** 存储 `transaction_index`.
 
 **状态:** ✅ 完成，已创建并测试通过
 
@@ -135,6 +141,7 @@
 - **图表:** **Recharts** (Daily Transaction Volume)
 - **功能:**
   - 显示网络统计（最新区块、总交易数、TPS）
+  - **搜索框:** 支持按区块高度、交易 ID、地址、以及 **公钥 (Public Key)** 搜索。 ✅
   - **可视化:** 每日交易量趋势图 (Daily Stats Chart)
   - **动画:** 列表进场与重排动画 (Bounce/Slide)
   - 实时区块列表（含 txCount，如 "5 txs"）
@@ -250,15 +257,13 @@ Console Errors: WebSocket Error: Event
 
 ## 🔧 未完成功能
 
-### 1. 搜索功能 ❌
-**需求:** 支持搜索区块高度、Transaction ID、Account 地址
+### 1. 搜索功能 ✅
+**实现:** 
+- 前端添加了动态搜索框，支持自动识别输入类型。
+- 后端新增 `/keys/{publicKey}` 端点，通过 `account_keys` 表解析公钥到地址。
+- 支持高度、交易 ID、地址和公钥搜索。
 
-**实现建议:**
-- 前端添加搜索框组件
-- 后端添加 `/search?q=xxx` 端点
-- 根据输入类型自动识别（数字→区块高度，0x开头→地址/Transaction ID）
-
-**优先级:** 高
+**状态:** ✅ 完成
 
 ---
 

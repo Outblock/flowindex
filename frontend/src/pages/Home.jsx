@@ -116,6 +116,9 @@ function Home() {
     }
   };
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center font-mono">
@@ -130,9 +133,6 @@ function Home() {
       </div>
     );
   }
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
 
   const handleSearch = async (e) => {
     e.preventDefault();
