@@ -61,7 +61,7 @@ func (s *Service) Start(ctx context.Context) error {
 			err := s.process(ctx)
 			if err != nil {
 				log.Printf("[%s] Error processing batch: %v", s.config.ServiceName, err)
-				time.Sleep(5 * time.Second) // Backoff on error
+				time.Sleep(10 * time.Second) // Increased backoff on error
 				continue
 			}
 

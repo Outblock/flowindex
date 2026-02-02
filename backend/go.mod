@@ -6,7 +6,9 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/onflow/cadence v1.9.7
 	github.com/onflow/flow-go-sdk v1.9.0
+	google.golang.org/grpc v1.78.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -32,7 +34,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/onflow/atree v0.12.1 // indirect
-	github.com/onflow/cadence v1.9.7 // indirect
 	github.com/onflow/crypto v0.25.3 // indirect
 	github.com/onflow/fixed-point v0.1.1 // indirect
 	github.com/onflow/flow/protobuf/go/flow v0.4.19 // indirect
@@ -55,6 +56,5 @@ require (
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gonum.org/v1/gonum v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251222181119-0a764e51fe1b // indirect
-	google.golang.org/grpc v1.78.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

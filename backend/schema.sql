@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS blocks (
     parent_id VARCHAR(64),
     timestamp TIMESTAMPTZ,
     collection_count INT DEFAULT 0,
-    collection_count INT DEFAULT 0,
     tx_count BIGINT DEFAULT 0,
     event_count BIGINT DEFAULT 0,
     state_root_hash VARCHAR(64),
@@ -59,8 +58,14 @@ CREATE TABLE IF NOT EXISTS transactions (
     -- EVM Flag
     is_evm BOOLEAN DEFAULT FALSE,
     
+    -- Denormalized Events (Extreme Redundancy)
+    events JSONB,
+    
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure denormalized events column exists in transactions
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS events JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_transactions_block_height ON transactions(block_height);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);
@@ -87,13 +92,27 @@ CREATE TABLE IF NOT EXISTS events (
     transaction_id VARCHAR(64) REFERENCES transactions(id) ON DELETE CASCADE,
     block_height BIGINT, -- Denormalized for speed
     transaction_index INT, -- Position in block
-    type VARCHAR(512), -- e.g. A.0x...
-    event_index INT, -- Position in tx
+    type TEXT, -- e.g. A.0x...
+    event_index INTEGER, -- Position in tx
+    contract_address TEXT,
+    contract_name TEXT,
+    event_name TEXT,
     payload JSONB,
+    values JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(transaction_id, event_index)
 );
 
+-- Ensure Blockscout columns exist if table was already created
+ALTER TABLE events ADD COLUMN IF NOT EXISTS contract_address TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS contract_name TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS event_name TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS values JSONB;
+ALTER TABLE events ALTER COLUMN type TYPE TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_events_transaction_id ON events(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_events_contract_address ON events(contract_address);
+CREATE INDEX IF NOT EXISTS idx_events_contract_address_prefix ON events (contract_address varchar_pattern_ops);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
 CREATE INDEX IF NOT EXISTS idx_events_block_height ON events(block_height);
 
@@ -160,3 +179,30 @@ CREATE TABLE IF NOT EXISTS account_keys (
 
 CREATE INDEX IF NOT EXISTS idx_account_keys_public_key ON account_keys(public_key);
 CREATE INDEX IF NOT EXISTS idx_account_keys_address ON account_keys(address);
+
+-- 8. Smart Contracts
+CREATE TABLE IF NOT EXISTS smart_contracts (
+    id SERIAL PRIMARY KEY,
+    address VARCHAR(18) NOT NULL,
+    name TEXT NOT NULL,
+    code TEXT,
+    version INT DEFAULT 1,
+    transaction_id VARCHAR(64),
+    block_height BIGINT,
+    is_evm BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(address, name)
+);
+
+-- 9. Address Statistics (Blockscout-Style)
+CREATE TABLE IF NOT EXISTS address_stats (
+    address VARCHAR(42) PRIMARY KEY,
+    tx_count BIGINT DEFAULT 0,
+    token_transfer_count BIGINT DEFAULT 0,
+    nft_transfer_count BIGINT DEFAULT 0,
+    total_gas_used BIGINT DEFAULT 0,
+    last_updated_block BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);

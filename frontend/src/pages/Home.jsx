@@ -277,6 +277,87 @@ function Home() {
           </div>
         </div>
 
+        {/* Indexing Progress Bar */}
+        {status && status.start_height && status.latest_height && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="bg-nothing-dark border border-white/10 p-6"
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Database className="h-5 w-5 text-nothing-green" />
+                  <h3 className="text-sm uppercase tracking-widest text-white">Blockchain Indexing Progress</h3>
+                </div>
+                <span className="text-xs text-gray-500 uppercase tracking-wider">
+                  {status.progress || '0%'} Complete
+                </span>
+              </div>
+
+              {/* Visual Progress Bar */}
+              <div className="relative h-12 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
+                {(() => {
+                  const start = status.start_height || 0;
+                  const indexed = status.indexed_height || start;
+                  const latest = status.latest_height || indexed;
+                  const totalRange = latest - start;
+                  const indexedRange = indexed - start;
+                  const indexedPercent = totalRange > 0 ? (indexedRange / totalRange) * 100 : 0;
+
+                  return (
+                    <>
+                      {/* Indexed portion (colored) */}
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${indexedPercent}%` }}
+                        transition={{ duration: 1, ease: "easeOut" }}
+                        className="absolute left-0 top-0 h-full bg-gradient-to-r from-nothing-green/20 via-nothing-green/40 to-nothing-green/30 border-r-2 border-nothing-green/50"
+                      >
+                        <div className="absolute inset-0 bg-nothing-green/10 animate-pulse"></div>
+                      </motion.div>
+
+                      {/* Labels */}
+                      <div className="absolute inset-0 flex items-center justify-between px-4 text-xs font-mono">
+                        <span className="text-gray-400">
+                          Start: <span className="text-white">{start.toLocaleString()}</span>
+                        </span>
+                        <span className="text-nothing-green font-bold">
+                          Indexed: <span className="text-white">{indexed.toLocaleString()}</span>
+                        </span>
+                        <span className="text-gray-500">
+                          Latest: <span className="text-white">{latest.toLocaleString()}</span>
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Additional Stats */}
+              <div className="grid grid-cols-3 gap-4 text-center pt-2">
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Blocks Behind</p>
+                  <p className="text-sm font-mono text-white">{status.behind?.toLocaleString() || '0'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Blocks Indexed</p>
+                  <p className="text-sm font-mono text-nothing-green">
+                    {((status.indexed_height || 0) - (status.start_height || 0)).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Range</p>
+                  <p className="text-sm font-mono text-white">
+                    {((status.latest_height || 0) - (status.start_height || 0)).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Charts Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

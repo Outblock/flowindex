@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap } from 'lucide-react';
 
 function TransactionDetail() {
   const { txId } = useParams();
@@ -245,18 +245,44 @@ function TransactionDetail() {
 
         {/* Events */}
         {transaction.events && transaction.events.length > 0 && (
-          <div className="border border-white/10 p-6 mt-8 bg-nothing-dark">
-            <h2 className="text-white text-sm uppercase tracking-widest mb-4">Events ({transaction.events.length})</h2>
-            <div className="space-y-4">
+          <div className="border border-white/10 p-6 mt-8 bg-nothing-dark relative group overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-5">
+              <Database className="h-24 w-24" />
+            </div>
+            <h2 className="text-white text-sm uppercase tracking-widest mb-6 flex items-center gap-2">
+              <Activity className="h-4 w-4 text-nothing-green" />
+              Contract Events ({transaction.events.length})
+            </h2>
+            <div className="space-y-6">
               {transaction.events.map((event, idx) => (
-                <div key={idx} className="bg-black border border-white/5 p-4 hover:border-nothing-green/30 transition-colors">
-                  <div className="flex justify-between items-start mb-2">
-                    <p className="text-xs font-bold text-nothing-green break-all">{event.type}</p>
-                    <span className="text-[10px] text-zinc-600">Idx: {event.event_index}</span>
+                <div key={idx} className="relative pl-6 border-l border-white/5 hover:border-nothing-green/30 transition-all group/event">
+                  <div className="absolute left-0 top-0 -translate-x-1/2 w-2 h-2 bg-nothing-green/20 border border-nothing-green/40 rounded-full group-hover/event:bg-nothing-green group-hover/event:scale-125 transition-all"></div>
+
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
+                    <div className="flex flex-col">
+                      <p className="text-xs font-bold text-nothing-green mb-1 uppercase tracking-wider">
+                        {event.event_name || event.type.split('.').pop()}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-zinc-600 uppercase">Contract</span>
+                        <Link
+                          to={`/accounts/${event.contract_address}`}
+                          className="text-[10px] text-zinc-400 hover:text-white transition-colors underline decoration-white/10 underline-offset-2"
+                        >
+                          {event.contract_address || 'System'} {event.contract_name ? `(${event.contract_name})` : ''}
+                        </Link>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-zinc-700 font-mono bg-white/5 px-2 py-0.5 rounded uppercase">
+                      Index #{event.event_index}
+                    </span>
                   </div>
-                  <pre className="text-[10px] text-zinc-400 whitespace-pre-wrap break-all font-mono">
-                    {JSON.stringify(event.payload || event.data, null, 2)}
-                  </pre>
+
+                  <div className="bg-black/40 rounded-sm border border-white/5 p-4 group-hover/event:bg-black/60 transition-colors">
+                    <pre className="text-[11px] text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+                      {JSON.stringify(event.values || event.payload || event.data, null, 2)}
+                    </pre>
+                  </div>
                 </div>
               ))}
             </div>

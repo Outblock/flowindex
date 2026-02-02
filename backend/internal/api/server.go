@@ -191,6 +191,8 @@ func NewServer(repo *repository.Repository, client *flow.Client, port string, st
 	r.HandleFunc("/accounts/{address}/transactions", s.handleGetAccountTransactions).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/token-transfers", s.handleGetAccountTokenTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/nft-transfers", s.handleGetAccountNFTTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/stats", s.handleGetAddressStats).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/contract", s.handleGetContractByAddress).Methods("GET", "OPTIONS")
 	r.HandleFunc("/stats/daily", s.handleGetDailyStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/keys/{publicKey}", s.handleGetAddressByPublicKey).Methods("GET", "OPTIONS")
 
@@ -436,21 +438,40 @@ func (s *Server) handleGetAccountNFTTransfers(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	address := vars["address"]
 
-	limitStr := r.URL.Query().Get("limit")
-	limit := 20
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-
-	transfers, err := s.repo.GetNFTTransfersByAddress(r.Context(), address, limit)
+	transfers, err := s.repo.GetNFTTransfersByAddress(r.Context(), address)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	json.NewEncoder(w).Encode(transfers)
+}
+
+func (s *Server) handleGetAddressStats(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := vars["address"]
+
+	stats, err := s.repo.GetAddressStats(r.Context(), address)
+	if err != nil {
+		// If not found, it might just be a new address
+		http.Error(w, "Stats not found", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(stats)
+}
+
+func (s *Server) handleGetContractByAddress(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := vars["address"]
+
+	contract, err := s.repo.GetContractByAddress(r.Context(), address)
+	if err != nil {
+		http.Error(w, "Contract not found", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(contract)
 }
 func (s *Server) handleGetAddressByPublicKey(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)

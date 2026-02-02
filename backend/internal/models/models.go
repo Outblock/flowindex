@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Block represents the 'blocks' table
 type Block struct {
@@ -78,14 +81,18 @@ type EVMTransaction struct {
 
 // Event represents the 'events' table
 type Event struct {
-	ID               int       `json:"id"`
-	TransactionID    string    `json:"transaction_id"`
-	TransactionIndex int       `json:"transaction_index"`
-	Type             string    `json:"type"`
-	EventIndex       int       `json:"event_index"`
-	Payload          []byte    `json:"payload"` // Stored as JSONB
-	BlockHeight      uint64    `json:"block_height"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID               int             `json:"id"`
+	TransactionID    string          `json:"transaction_id"`
+	TransactionIndex int             `json:"transaction_index"`
+	Type             string          `json:"type"`
+	EventIndex       int             `json:"event_index"`
+	ContractAddress  string          `json:"contract_address,omitempty"`
+	ContractName     string          `json:"contract_name,omitempty"`
+	EventName        string          `json:"event_name,omitempty"`
+	Payload          json.RawMessage `json:"payload"`          // Stored as JSONB
+	Values           json.RawMessage `json:"values,omitempty"` // Flattened key-value pairs
+	BlockHeight      uint64          `json:"block_height"`
+	CreatedAt        time.Time       `json:"created_at"`
 }
 
 // TokenTransfer represents 'token_transfers' (Fungible & NFT)
@@ -142,4 +149,30 @@ type AccountKey struct {
 	Weight           int       `json:"weight"`
 	Revoked          bool      `json:"revoked"`
 	CreatedAt        time.Time `json:"created_at"`
+}
+
+// SmartContract represents the smart_contracts table
+type SmartContract struct {
+	ID            int       `json:"id"`
+	Address       string    `json:"address"`
+	Name          string    `json:"name"`
+	Code          string    `json:"code,omitempty"`
+	Version       int       `json:"version"`
+	TransactionID string    `json:"transaction_id"`
+	BlockHeight   uint64    `json:"block_height"`
+	IsEVM         bool      `json:"is_evm"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// AddressStats represents the address_stats table
+type AddressStats struct {
+	Address            string    `json:"address"`
+	TxCount            int64     `json:"tx_count"`
+	TokenTransferCount int64     `json:"token_transfer_count"`
+	NFTTransferCount   int64     `json:"nft_transfer_count"`
+	TotalGasUsed       uint64    `json:"total_gas_used"`
+	LastUpdatedBlock   uint64    `json:"last_updated_block"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }

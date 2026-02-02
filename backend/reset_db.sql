@@ -9,5 +9,7 @@ DROP TABLE IF EXISTS events CASCADE;
 DROP TABLE IF EXISTS evm_transactions CASCADE;
 DROP TABLE IF EXISTS transactions CASCADE;
 DROP TABLE IF EXISTS blocks CASCADE;
+DROP TABLE IF EXISTS smart_contracts CASCADE;
+DROP TABLE IF EXISTS address_stats CASCADE;
 
 -- Re-run schema.sql after this

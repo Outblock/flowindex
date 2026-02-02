@@ -76,9 +76,9 @@ func main() {
 	}
 
 	latestWorkers := getEnvInt("LATEST_WORKER_COUNT", 2)
-	historyWorkers := getEnvInt("HISTORY_WORKER_COUNT", 20)
+	historyWorkers := getEnvInt("HISTORY_WORKER_COUNT", 5)
 	latestBatch := getEnvInt("LATEST_BATCH_SIZE", 1)    // Real-time
-	historyBatch := getEnvInt("HISTORY_BATCH_SIZE", 50) // Throughput
+	historyBatch := getEnvInt("HISTORY_BATCH_SIZE", 20) // Throughput
 
 	// 3. Services
 	// Forward Ingester (Live Data)

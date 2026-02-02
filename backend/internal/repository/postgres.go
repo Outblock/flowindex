@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -114,11 +116,12 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 
 	// 2. Insert Transactions
 	for _, t := range txs {
+		eventsJSON, _ := json.Marshal(t.Events)
 		_, err := tx.Exec(ctx, `
-			INSERT INTO transactions (id, block_height, transaction_index, proposer_address, proposer_key_index, proposer_sequence_number, payer_address, authorizers, script, arguments, reference_block_id, status, error_message, proposal_key, payload_signatures, envelope_signatures, computation_used, status_code, execution_status, is_evm, gas_limit, gas_used, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+			INSERT INTO transactions (id, block_height, transaction_index, proposer_address, proposer_key_index, proposer_sequence_number, payer_address, authorizers, script, arguments, reference_block_id, status, error_message, proposal_key, payload_signatures, envelope_signatures, computation_usage, status_code, execution_status, is_evm, events, gas_limit, gas_used, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 			ON CONFLICT (id) DO NOTHING`,
-			t.ID, t.BlockHeight, t.TransactionIndex, t.ProposerAddress, t.ProposerKeyIndex, t.ProposerSequenceNumber, t.PayerAddress, t.Authorizers, t.Script, t.Arguments, t.ReferenceBlockID, t.Status, t.ErrorMessage, t.ProposalKey, t.PayloadSignatures, t.EnvelopeSignatures, t.ComputationUsage, t.StatusCode, t.ExecutionStatus, t.IsEVM, t.GasLimit, t.GasUsed, t.CreatedAt,
+			t.ID, t.BlockHeight, t.TransactionIndex, t.ProposerAddress, t.ProposerKeyIndex, t.ProposerSequenceNumber, t.PayerAddress, t.Authorizers, t.Script, t.Arguments, t.ReferenceBlockID, t.Status, t.ErrorMessage, t.ProposalKey, t.PayloadSignatures, t.EnvelopeSignatures, t.ComputationUsage, t.StatusCode, t.ExecutionStatus, t.IsEVM, eventsJSON, t.GasLimit, t.GasUsed, t.CreatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
@@ -145,10 +148,16 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// 3. Insert Events
 	for _, e := range events {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO events (transaction_id, block_height, transaction_index, type, event_index, payload, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO events (
+				transaction_id, transaction_index, type, event_index, 
+				contract_address, contract_name, event_name, 
+				payload, values, block_height, created_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 			ON CONFLICT (transaction_id, event_index) DO NOTHING`,
-			e.TransactionID, e.BlockHeight, e.TransactionIndex, e.Type, e.EventIndex, e.Payload, time.Now(),
+			e.TransactionID, e.TransactionIndex, e.Type, e.EventIndex,
+			e.ContractAddress, e.ContractName, e.EventName,
+			e.Payload, e.Values, e.BlockHeight, e.CreatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert event: %w", err)
@@ -188,7 +197,70 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 	}
 
-	// 5. Update Checkpoint
+	// 5. Update Address Stats
+	// Sort unique addresses to prevent deadlocks
+	uniqueAddresses := make(map[string]bool)
+	for _, aa := range addressActivity {
+		uniqueAddresses[aa.Address] = true
+	}
+
+	sortedAddresses := make([]string, 0, len(uniqueAddresses))
+	for addr := range uniqueAddresses {
+		sortedAddresses = append(sortedAddresses, addr)
+	}
+	sort.Strings(sortedAddresses)
+
+	for _, addr := range sortedAddresses {
+		// Find any activity for this address to get the block height
+		var blockHeight uint64
+		for _, aa := range addressActivity {
+			if aa.Address == addr {
+				blockHeight = aa.BlockHeight
+				break
+			}
+		}
+
+		_, err := tx.Exec(ctx, `
+			INSERT INTO address_stats (address, tx_count, total_gas_used, last_updated_block, updated_at)
+			VALUES ($1, 1, 0, $2, $3)
+			ON CONFLICT (address) DO UPDATE SET 
+				tx_count = address_stats.tx_count + 1,
+				last_updated_block = GREATEST(address_stats.last_updated_block, EXCLUDED.last_updated_block),
+				updated_at = EXCLUDED.updated_at`,
+			addr, blockHeight, time.Now(),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to update address stats for %s: %w", addr, err)
+		}
+	}
+
+	// 6. Track Smart Contracts
+	for _, e := range events {
+		if strings.Contains(e.Type, "AccountContractAdded") || strings.Contains(e.Type, "AccountContractUpdated") {
+			var payload map[string]interface{}
+			if err := json.Unmarshal(e.Payload, &payload); err == nil {
+				address, _ := payload["address"].(string)
+				name, _ := payload["name"].(string)
+				if address != "" && name != "" {
+					_, err := tx.Exec(ctx, `
+						INSERT INTO smart_contracts (address, name, transaction_id, block_height, updated_at)
+						VALUES ($1, $2, $3, $4, $5)
+						ON CONFLICT (address, name) DO UPDATE SET
+							transaction_id = EXCLUDED.transaction_id,
+							block_height = EXCLUDED.block_height,
+							version = smart_contracts.version + 1,
+							updated_at = EXCLUDED.updated_at`,
+						address, name, e.TransactionID, e.BlockHeight, time.Now(),
+					)
+					if err != nil {
+						return fmt.Errorf("failed to track contract %s: %w", name, err)
+					}
+				}
+			}
+		}
+	}
+
+	// 7. Update Checkpoint
 	_, err = tx.Exec(ctx, `
 		INSERT INTO indexing_checkpoints (service_name, last_height, updated_at)
 		VALUES ($1, $2, $3)
@@ -476,15 +548,12 @@ func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address str
 	return transfers, nil
 }
 
-func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address string, limit int) ([]models.NFTTransfer, error) {
-	query := `
-		SELECT nt.id, nt.transaction_id, nt.block_height, nt.token_contract_address, nt.nft_id, nt.from_address, nt.to_address, nt.created_at
-		FROM nft_transfers nt
-		WHERE nt.from_address = $1 OR nt.to_address = $1
-		ORDER BY nt.block_height DESC
-		LIMIT $2`
-
-	rows, err := r.db.Query(ctx, query, address, limit)
+func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address string) ([]models.NFTTransfer, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, transaction_id, block_height, token_contract_address, nft_id, from_address, to_address, created_at
+		FROM token_transfers
+		WHERE (from_address = $1 OR to_address = $1) AND is_nft = TRUE
+		ORDER BY block_height DESC`, address)
 	if err != nil {
 		return nil, err
 	}
@@ -493,12 +562,44 @@ func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address strin
 	var transfers []models.NFTTransfer
 	for rows.Next() {
 		var t models.NFTTransfer
-		if err := rows.Scan(&t.ID, &t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.NFTID, &t.FromAddress, &t.ToAddress, &t.CreatedAt); err != nil {
+		err := rows.Scan(&t.ID, &t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.NFTID, &t.FromAddress, &t.ToAddress, &t.CreatedAt)
+		if err != nil {
 			return nil, err
 		}
 		transfers = append(transfers, t)
 	}
 	return transfers, nil
+}
+
+// GetAddressStats retrieves pre-calculated stats for an address
+func (r *Repository) GetAddressStats(ctx context.Context, address string) (*models.AddressStats, error) {
+	var s models.AddressStats
+	err := r.db.QueryRow(ctx, `
+		SELECT address, tx_count, token_transfer_count, nft_transfer_count, total_gas_used, last_updated_block, created_at, updated_at
+		FROM address_stats
+		WHERE address = $1`, address).Scan(
+		&s.Address, &s.TxCount, &s.TokenTransferCount, &s.NFTTransferCount, &s.TotalGasUsed, &s.LastUpdatedBlock, &s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// GetContractByAddress retrieves contract metadata
+func (r *Repository) GetContractByAddress(ctx context.Context, address string) (*models.SmartContract, error) {
+	var c models.SmartContract
+	err := r.db.QueryRow(ctx, `
+		SELECT id, address, name, version, transaction_id, block_height, is_evm, created_at, updated_at
+		FROM smart_contracts
+		WHERE address = $1
+		LIMIT 1`, address).Scan(
+		&c.ID, &c.Address, &c.Name, &c.Version, &c.TransactionID, &c.BlockHeight, &c.IsEVM, &c.CreatedAt, &c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 type DailyStat struct {

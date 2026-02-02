@@ -9,6 +9,8 @@ import (
 
 	"flowscan-clone/internal/flow"
 	"flowscan-clone/internal/models"
+
+	"github.com/onflow/cadence"
 )
 
 // FetchResult holds the data for a single block height
@@ -94,7 +96,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 			// Detect EVM in Script
 			isEVM := strings.Contains(string(tx.Script), "import EVM")
-			var evmHash string
 
 			dbTx := models.Transaction{
 				ID:                     tx.ID().String(),
@@ -129,55 +130,53 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			}
 
 			// Address Activity (Participants)
-			// Proposer
-			addressActivity = append(addressActivity, models.AddressTransaction{
-				Address:         tx.ProposalKey.Address.Hex(),
-				TransactionID:   tx.ID().String(),
-				BlockHeight:     height,
-				TransactionType: "GENERAL",
-				Role:            "PROPOSER",
-			})
+			// Discovery map to deduplicate addresses within a transaction
+			discoveredAddresses := make(map[string]string) // address -> role
 
-			// Payer
-			if tx.Payer.Hex() != tx.ProposalKey.Address.Hex() {
-				addressActivity = append(addressActivity, models.AddressTransaction{
-					Address:         tx.Payer.Hex(),
-					TransactionID:   tx.ID().String(),
-					BlockHeight:     height,
-					TransactionType: "GENERAL",
-					Role:            "PAYER",
-				})
-			}
+			// Roles
+			discoveredAddresses[tx.Payer.Hex()] = "PAYER"
+			discoveredAddresses[tx.ProposalKey.Address.Hex()] = "PROPOSER"
 
 			// Authorizers
 			for _, auth := range tx.Authorizers {
-				authAddr := auth.Hex()
-				addressActivity = append(addressActivity, models.AddressTransaction{
-					Address:         authAddr,
-					TransactionID:   tx.ID().String(),
-					BlockHeight:     height,
-					TransactionType: "GENERAL",
-					Role:            "AUTHORIZER",
-				})
+				discoveredAddresses[auth.Hex()] = "AUTHORIZER"
 			}
 
 			// Process Events
 			for _, evt := range res.Events {
 				payloadJSON, _ := json.Marshal(evt.Value)
-				dbEvents = append(dbEvents, models.Event{
+				flatValues := w.flattenCadenceValue(evt.Value)
+				valuesJSON, _ := json.Marshal(flatValues)
+
+				addrStr, contractStr, eventStr := w.parseEventType(evt.Type)
+
+				dbEvent := models.Event{
 					TransactionID:    tx.ID().String(),
 					TransactionIndex: txIndex,
 					Type:             evt.Type,
 					EventIndex:       evt.EventIndex,
+					ContractAddress:  addrStr,
+					ContractName:     contractStr,
+					EventName:        eventStr,
 					Payload:          payloadJSON,
+					Values:           valuesJSON,
 					BlockHeight:      height,
 					CreatedAt:        time.Now(),
-				})
+				}
+				dbEvents = append(dbEvents, dbEvent)
+
+				// Add to denormalized events list for this transaction
+				dbTx.Events = append(dbTx.Events, dbEvent)
+
+				// Aggressive discovery: scan payload for anything that looks like an address
+				var payloadMap map[string]interface{}
+				if err := json.Unmarshal(payloadJSON, &payloadMap); err == nil {
+					w.discoverAddresses(payloadMap, discoveredAddresses)
+				}
 
 				// Detect EVM Events
 				if strings.Contains(evt.Type, "EVM.") {
 					isEVM = true
-
 					if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
 						var evmPayload map[string]interface{}
 						if err := json.Unmarshal(payloadJSON, &evmPayload); err == nil {
@@ -193,32 +192,44 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					transferData := w.parseTokenEvent(evt.Type, payloadJSON, tx.ID().String(), height)
 					if transferData != nil {
 						tokenTransfers = append(tokenTransfers, *transferData)
-
-						// Add activity for sender/receiver
 						if transferData.ToAddress != "" {
-							addressActivity = append(addressActivity, models.AddressTransaction{
-								Address:         transferData.ToAddress,
-								TransactionID:   tx.ID().String(),
-								BlockHeight:     height,
-								TransactionType: "TOKEN_TRANSFER",
-								Role:            "ASSET_RECEIVED",
-							})
+							discoveredAddresses[transferData.ToAddress] = "ASSET_RECEIVED"
 						}
 						if transferData.FromAddress != "" {
-							addressActivity = append(addressActivity, models.AddressTransaction{
-								Address:         transferData.FromAddress,
-								TransactionID:   tx.ID().String(),
-								BlockHeight:     height,
-								TransactionType: "TOKEN_TRANSFER",
-								Role:            "ASSET_SENT",
-							})
+							discoveredAddresses[transferData.FromAddress] = "ASSET_SENT"
+						}
+					}
+				}
+
+				// Detect Contract Events
+				if strings.Contains(evt.Type, "AccountContractAdded") || strings.Contains(evt.Type, "AccountContractUpdated") {
+					// The address for contract events is usually the account address, not tx.ID()
+					// We need to parse the event payload to get the actual account address.
+					// For now, we'll add a placeholder and rely on aggressive discovery to find the actual address.
+					// A more robust solution would be to parse the event payload here.
+					// Example: if payload has "address" field, use that.
+					var contractEventPayload map[string]interface{}
+					if err := json.Unmarshal(payloadJSON, &contractEventPayload); err == nil {
+						if addr, ok := contractEventPayload["address"].(string); ok {
+							trimmedAddr := strings.TrimPrefix(addr, "0x")
+							discoveredAddresses[trimmedAddr] = "CONTRACT_DEPLOYER"
 						}
 					}
 				}
 			}
 
+			// Add all discovered addresses to activity
+			for addr, role := range discoveredAddresses {
+				addressActivity = append(addressActivity, models.AddressTransaction{
+					Address:         addr,
+					TransactionID:   tx.ID().String(),
+					BlockHeight:     height,
+					TransactionType: "GENERAL",
+					Role:            role,
+				})
+			}
+
 			dbTx.IsEVM = isEVM
-			dbTx.EVMHash = evmHash
 
 			dbTxs = append(dbTxs, dbTx)
 			txIndex++
@@ -353,5 +364,96 @@ func (w *Worker) parseTokenEvent(evtType string, payloadJSON []byte, txID string
 		ToAddress:            toAddr,
 		Amount:               amount,
 		IsNFT:                false, // Default to FT for now unless specialized parser
+	}
+}
+
+// discoverAddresses recursively scans a payload for Flow and EVM addresses
+func (w *Worker) discoverAddresses(val interface{}, discovered map[string]string) {
+	switch v := val.(type) {
+	case string:
+		addr := strings.TrimPrefix(v, "0x")
+		if isAddress(addr) {
+			discovered[strings.ToLower(addr)] = "EVENT_PARTICIPANT"
+		}
+	case map[string]interface{}:
+		for _, vv := range v {
+			w.discoverAddresses(vv, discovered)
+		}
+	case []interface{}:
+		for _, vv := range v {
+			w.discoverAddresses(vv, discovered)
+		}
+	}
+}
+
+// isAddress checks if a hex string is a Flow (16 chars) or EVM (40 chars) address
+func isAddress(s string) bool {
+	s = strings.TrimPrefix(s, "0x")
+	// Only count as address if it's hex and correct length
+	if len(s) != 16 && len(s) != 40 {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+func (w *Worker) parseEventType(typeID string) (address, contract, event string) {
+	// Format: A.<address>.<contract>.<event> or flow.<event>
+	parts := strings.Split(typeID, ".")
+	if len(parts) >= 4 && parts[0] == "A" {
+		return parts[1], parts[2], parts[3]
+	}
+	if len(parts) >= 2 {
+		return "", parts[0], parts[1]
+	}
+	return "", "", typeID
+}
+
+func (w *Worker) flattenCadenceValue(v cadence.Value) interface{} {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case cadence.Event:
+		m := make(map[string]interface{})
+		fields := val.FieldsMappedByName()
+		for name, fieldVal := range fields {
+			m[name] = w.flattenCadenceValue(fieldVal)
+		}
+		return m
+	case cadence.Struct:
+		m := make(map[string]interface{})
+		fields := val.FieldsMappedByName()
+		for name, fieldVal := range fields {
+			m[name] = w.flattenCadenceValue(fieldVal)
+		}
+		return m
+	case cadence.Dictionary:
+		m := make(map[string]interface{})
+		for _, pair := range val.Pairs {
+			key := fmt.Sprintf("%v", w.flattenCadenceValue(pair.Key))
+			m[key] = w.flattenCadenceValue(pair.Value)
+		}
+		return m
+	case cadence.Array:
+		arr := make([]interface{}, len(val.Values))
+		for i, item := range val.Values {
+			arr[i] = w.flattenCadenceValue(item)
+		}
+		return arr
+	case cadence.Address:
+		return val.Hex()
+	case cadence.String:
+		return string(val)
+	case cadence.Bool:
+		return bool(val)
+	case cadence.Bytes:
+		return fmt.Sprintf("0x%x", []byte(val))
+	default:
+		return val.String()
 	}
 }

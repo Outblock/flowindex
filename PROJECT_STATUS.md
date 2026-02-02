@@ -36,6 +36,19 @@
   - `account_keys` - 公钥与地址映射表 (Public Key Registry) ✅
   - `indexing_checkpoints` - 索引进度检查点
   
+### Blockscout-Style Data Parity
+- [x] **Smart Contract Tracking**: Automated indexing of `flow.AccountContractAdded` and `Updated` events.
+- [x] **Address Statistics**: High-speed lookup table for tx counts, gas used, and token transfer counts.
+- [x] **Aggressive Address Discovery**: Recursive scanning of event payloads to index every participant.
+- [x] **Event Denormalization**: `transactions` table now contains a complete events list in JSONB for redundancy.
+- [x] **Structured Events Table**: Dedicated table for events with `contract_address`, `event_name` and flattened values.
+- [x] **Recursive Cadence Flattening**: Deep-scanning of Cadence 1.0 types (Structs, Arrays, Dictionaries) into flat JSON.
+
+### Search & Discovery Improvements
+- [x] **Public Key Search**: Search by public key to find associated accounts.
+- [x] **Dual-Hash Lookup**: Support for Flow Transaction ID and EVM Hash (prefix-agnostic).
+- [x] **Inclusive EVM Detection**: Any transaction with `EVM.` events is flagged and enriched.
+
 **数据冗余增强 (Exhaustive Redundancy):** ✅
 - **Blocks:** 存储 `signatures`, `block_seals`, `collection_guarantees`, `parent_voter_signature`, `block_status`, `execution_result_id`.
 - **Transactions:** 存储 `proposer_key_index`, `proposer_sequence_number`, `proposal_key` (JSONB), `payload_signatures` (JSONB), `envelope_signatures` (JSONB), `computation_usage`, `status_code`, `execution_status`.
