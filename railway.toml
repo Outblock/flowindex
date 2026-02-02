@@ -1,0 +1,25 @@
+
+[[services]]
+name = "backend"
+root = "backend"
+dockerfilePath = "Dockerfile"
+
+[services.env]
+PORT = "8080"
+START_BLOCK = "140900000"
+LATEST_WORKER_COUNT = "50"
+HISTORY_WORKER_COUNT = "100"
+LATEST_BATCH_SIZE = "10"
+HISTORY_BATCH_SIZE = "500"
+FLOW_ACCESS_NODE = "access-001.mainnet28.nodes.onflow.org:9000"
+DB_URL = "${{ postgresql.DATABASE_URL }}"
+RAILWAY_DOCKERFILE_PATH = "backend/Dockerfile"
+
+[[services]]
+name = "frontend"
+root = "frontend"
+dockerfilePath = "Dockerfile"
+
+[services.env]
+VITE_API_URL = "https://${{ backend.RAILWAY_PUBLIC_DOMAIN }}"
+RAILWAY_DOCKERFILE_PATH = "frontend/Dockerfile"

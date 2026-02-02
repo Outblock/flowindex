@@ -1,0 +1,25 @@
+FROM golang:1.24-bookworm AS builder
+
+WORKDIR /app
+
+# standard debian image has gcc
+
+
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+COPY backend/ .
+RUN go mod tidy
+RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o indexer main.go
+
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+COPY --from=builder /app/indexer .
+# Copy schema for potential migration on startup (optional, user does it manually now)
+COPY --from=builder /app/schema.sql .
+
+EXPOSE 8080
+
+CMD ["./indexer"]

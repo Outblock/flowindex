@@ -1,0 +1,4 @@
+database_url: postgres://stats:n0uejXPl61ci6ldCuE2gQU5Y@localhost:7433/stats?sslmode=disable
+flow_rpc_url: access.mainnet.nodes.onflow.org:9000
+api_port: 8080
+start_height: 137390146

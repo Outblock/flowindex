@@ -1,0 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --nothing-green: #00ef8b;
+    --nothing-black: #000000;
+    --nothing-dark: #0a0a0a;
+    --nothing-white: #ffffff;
+
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 3%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 3%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 155 100% 47%;
+    /* Flow Green */
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 9%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 9%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 9%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 155 100% 47%;
+    /* Flow Green Ring */
+    --radius: 0rem;
+    /* Sharp corners for Nothing look */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .bg-buffering-stripe {
+    background-image: linear-gradient(45deg,
+        rgba(255, 255, 255, 0.15) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.15) 75%,
+        transparent 75%,
+        transparent);
+    background-size: 1rem 1rem;
+  }
+
+  .animate-buffering {
+    animation: move-stripes 1s linear infinite;
+  }
+
+  @keyframes move-stripes {
+    from {
+      background-position: 0 0;
+    }
+
+    to {
+      background-position: 1rem 0;
+    }
+  }
+
+  .animate-progress-indeterminate {
+    animation: indeterminate-subtle 2s infinite linear;
+    background-image: linear-gradient(to right, transparent 0%, var(--nothing-green) 50%, transparent 100%);
+    background-size: 50% 100%;
+    background-repeat: no-repeat;
+  }
+
+  @keyframes indeterminate-subtle {
+    0% {
+      background-position: -50% 0;
+    }
+
+    100% {
+      background-position: 150% 0;
+    }
+  }
+}

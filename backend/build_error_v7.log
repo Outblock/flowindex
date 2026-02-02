@@ -1,0 +1,112 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 534B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/golang:1.24-bookworm
+#2 ...
+
+#3 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#3 DONE 1.6s
+
+#2 [internal] load metadata for docker.io/library/golang:1.24-bookworm
+#2 DONE 1.9s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [stage-1 1/4] FROM docker.io/library/debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
+#5 resolve docker.io/library/debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee 0.0s done
+#5 DONE 0.0s
+
+#6 [stage-1 2/4] WORKDIR /app
+#6 CACHED
+
+#7 [builder 1/7] FROM docker.io/library/golang:1.24-bookworm@sha256:1c64c586e1cf9dc4c394c5896ec574659c792a0840f4fa0eb54a88de146e978b
+#7 resolve docker.io/library/golang:1.24-bookworm@sha256:1c64c586e1cf9dc4c394c5896ec574659c792a0840f4fa0eb54a88de146e978b 0.0s done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 20.85kB done
+#8 DONE 0.0s
+
+#9 [builder 2/7] WORKDIR /app
+#9 CACHED
+
+#10 [builder 3/7] COPY go.mod go.sum ./
+#10 CACHED
+
+#11 [builder 4/7] RUN go mod download
+#11 CACHED
+
+#12 [builder 5/7] COPY . .
+#12 DONE 0.2s
+
+#13 [builder 6/7] RUN go mod tidy
+#13 0.393 go: downloading gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
+#13 0.791 go: downloading github.com/stretchr/objx v0.5.2
+#13 0.815 go: downloading github.com/sirupsen/logrus v1.9.3
+#13 0.816 go: downloading pgregory.net/rapid v1.1.0
+#13 0.924 go: downloading github.com/google/go-cmp v0.7.0
+#13 0.928 go: downloading github.com/leanovate/gopter v0.2.11
+#13 0.929 go: downloading golang.org/x/tools v0.39.0
+#13 0.933 go: downloading go.uber.org/goleak v1.3.0
+#13 1.059 go: downloading github.com/google/pprof v0.0.0-20250630185457-6e76a2b096b5
+#13 1.086 go: downloading lukechampine.com/blake3 v1.4.1
+#13 1.125 go: downloading go.opentelemetry.io/otel/sdk/metric v1.38.0
+#13 1.213 go: downloading github.com/zeebo/assert v1.3.0
+#13 1.242 go: downloading go.opentelemetry.io/otel/sdk v1.38.0
+#13 1.252 go: downloading go.opentelemetry.io/otel/metric v1.38.0
+#13 1.254 go: downloading go.opentelemetry.io/otel/trace v1.38.0
+#13 1.349 go: downloading github.com/zeebo/pcg v1.0.1
+#13 1.368 go: downloading github.com/go-logr/logr v1.4.3
+#13 1.368 go: downloading go.opentelemetry.io/auto/sdk v1.2.1
+#13 1.369 go: downloading github.com/go-logr/stdr v1.2.2
+#13 1.387 go: downloading github.com/google/uuid v1.6.0
+#13 1.471 go: downloading golang.org/x/mod v0.30.0
+#13 DONE 1.6s
+
+#14 [builder 7/7] RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o indexer main.go
+#14 14.58 # github.com/onflow/crypto
+#14 14.58 bls_core.c: In function 'build_tree':
+#14 14.58 bls_core.c:339:13: warning: 'new_pk' may be used uninitialized [-Wmaybe-uninitialized]
+#14 14.58   339 |   node *t = new_node(new_pk, new_sig);
+#14 14.58       |             ^~~~~~~~~~~~~~~~~~~~~~~~~
+#14 14.58 bls_core.c:288:14: note: by argument 1 of type 'const E2 *' to 'new_node' declared here
+#14 14.58   288 | static node *new_node(const E2 *pk, const E1 *sig) {
+#14 14.58       |              ^~~~~~~~
+#14 14.58 bls_core.c:339:13: warning: 'new_sig' may be used uninitialized [-Wmaybe-uninitialized]
+#14 14.58   339 |   node *t = new_node(new_pk, new_sig);
+#14 14.58       |             ^~~~~~~~~~~~~~~~~~~~~~~~~
+#14 14.58 bls_core.c:288:14: note: by argument 2 of type 'const E1 *' to 'new_node' declared here
+#14 14.58   288 | static node *new_node(const E2 *pk, const E1 *sig) {
+#14 14.58       |              ^~~~~~~~
+#14 19.72 # flowscan-clone/internal/ingester
+#14 19.72 internal/ingester/service.go:98:40: syntax error: unexpected -- at end of statement
+#14 ERROR: process "/bin/sh -c CGO_CFLAGS=\"-std=gnu99\" CGO_ENABLED=1 go build -o indexer main.go" did not complete successfully: exit code: 1
+------
+ > [builder 7/7] RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o indexer main.go:
+14.58   288 | static node *new_node(const E2 *pk, const E1 *sig) {
+14.58       |              ^~~~~~~~
+14.58 bls_core.c:339:13: warning: 'new_sig' may be used uninitialized [-Wmaybe-uninitialized]
+14.58   339 |   node *t = new_node(new_pk, new_sig);
+14.58       |             ^~~~~~~~~~~~~~~~~~~~~~~~~
+14.58 bls_core.c:288:14: note: by argument 2 of type 'const E1 *' to 'new_node' declared here
+14.58   288 | static node *new_node(const E2 *pk, const E1 *sig) {
+14.58       |              ^~~~~~~~
+19.72 # flowscan-clone/internal/ingester
+19.72 internal/ingester/service.go:98:40: syntax error: unexpected -- at end of statement
+------
+Dockerfile:13
+--------------------
+  11 |     COPY . .
+  12 |     RUN go mod tidy
+  13 | >>> RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o indexer main.go
+  14 |     
+  15 |     FROM debian:bookworm-slim
+--------------------
+ERROR: failed to solve: process "/bin/sh -c CGO_CFLAGS=\"-std=gnu99\" CGO_ENABLED=1 go build -o indexer main.go" did not complete successfully: exit code: 1
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yparrb2cn2gnsxme605tjf386

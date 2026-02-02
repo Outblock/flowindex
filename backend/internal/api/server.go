@@ -1,0 +1,407 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"strconv"
+	"sync"
+
+	"flowscan-clone/internal/flow"
+	"flowscan-clone/internal/models"
+	"flowscan-clone/internal/repository"
+
+	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
+)
+
+// --- WebSocket Hub ---
+
+type Hub struct {
+	clients    map[*Client]bool
+	broadcast  chan []byte
+	register   chan *Client
+	unregister chan *Client
+	mutex      sync.Mutex
+}
+
+type Client struct {
+	hub  *Hub
+	conn *websocket.Conn
+	send chan []byte
+}
+
+var hub = &Hub{
+	broadcast:  make(chan []byte),
+	register:   make(chan *Client),
+	unregister: make(chan *Client),
+	clients:    make(map[*Client]bool),
+}
+
+func (h *Hub) run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.mutex.Lock()
+			h.clients[client] = true
+			h.mutex.Unlock()
+		case client := <-h.unregister:
+			h.mutex.Lock()
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
+			}
+			h.mutex.Unlock()
+		case message := <-h.broadcast:
+			h.mutex.Lock()
+			for client := range h.clients {
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+			h.mutex.Unlock()
+		}
+	}
+}
+
+// --- WebSocket Server ---
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins for development
+	},
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("WebSocket upgrade error:", err)
+		return
+	}
+
+	client := &Client{
+		hub:  hub,
+		conn: conn,
+		send: make(chan []byte, 256),
+	}
+
+	hub.register <- client
+
+	// Write pump
+	go func() {
+		defer func() {
+			hub.unregister <- client
+			conn.Close()
+		}()
+		for {
+			message, ok := <-client.send
+			if !ok {
+				conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			w, err := conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+			w.Close()
+		}
+	}()
+
+	// Read pump (keep connection alive)
+	for {
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+	}
+}
+
+// --- Broadcast Helpers ---
+
+type BroadcastMessage struct {
+	Type    string      `json:"type"` // "new_block", "new_transaction"
+	Payload interface{} `json:"payload"`
+}
+
+func BroadcastNewBlock(block models.Block) {
+	msg := BroadcastMessage{
+		Type:    "new_block",
+		Payload: block,
+	}
+	data, _ := json.Marshal(msg)
+	hub.broadcast <- data
+}
+
+func BroadcastNewTransaction(tx models.Transaction) {
+	msg := BroadcastMessage{
+		Type:    "new_transaction",
+		Payload: tx,
+	}
+	data, _ := json.Marshal(msg)
+	hub.broadcast <- data
+}
+
+// --- Init ---
+
+func init() {
+	go hub.run()
+}
+
+// --- Server & Routes ---
+
+// --- Server & Routes ---
+
+type Server struct {
+	repo       *repository.Repository
+	client     *flow.Client
+	httpServer *http.Server
+	startBlock uint64
+}
+
+func NewServer(repo *repository.Repository, client *flow.Client, port string, startBlock uint64) *Server {
+	r := mux.NewRouter()
+
+	s := &Server{
+		repo:       repo,
+		client:     client,
+		startBlock: startBlock,
+	}
+
+	// Middleware
+	r.Use(commonMiddleware)
+
+	// Routes
+	r.HandleFunc("/health", s.handleHealth).Methods("GET")
+	r.HandleFunc("/status", s.handleStatus).Methods("GET")
+	r.HandleFunc("/ws", s.handleWebSocket).Methods("GET") // WebSocket Endpoint
+	r.HandleFunc("/blocks", s.handleListBlocks).Methods("GET")
+	r.HandleFunc("/blocks/{id}", s.handleGetBlock).Methods("GET")
+	r.HandleFunc("/transactions", s.handleListTransactions).Methods("GET")
+	r.HandleFunc("/transactions/{id}", s.handleGetTransaction).Methods("GET")
+	r.HandleFunc("/accounts/{address}/transactions", s.handleGetAccountTransactions).Methods("GET")
+	r.HandleFunc("/accounts/{address}/token-transfers", s.handleGetAccountTokenTransfers).Methods("GET")
+	r.HandleFunc("/accounts/{address}/nft-transfers", s.handleGetAccountNFTTransfers).Methods("GET")
+
+	s.httpServer = &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
+	}
+
+	return s
+}
+
+func (s *Server) Start() error {
+	return s.httpServer.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.httpServer.Shutdown(ctx)
+}
+
+func commonMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Access-Control-Allow-Origin", "*") // For local dev
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Handlers
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	// Get latest block height from Flow
+	latestHeight, err := s.client.GetLatestBlockHeight(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get indexed height from DB
+	lastIndexed, err := s.repo.GetLastIndexedHeight(r.Context(), "main_ingester")
+	if err != nil {
+		lastIndexed = 0
+	}
+
+	// Calculate Progress relative to StartBlock
+	progress := 0.0
+	start := s.startBlock
+
+	// Safety: If somehow indexed is less than start (e.g. old data), treat start as indexed?
+	// Or just calc as is.
+
+	totalRange := float64(latestHeight - start)
+	indexedRange := float64(lastIndexed - start)
+
+	if lastIndexed < start {
+		indexedRange = 0
+	}
+
+	if totalRange > 0 {
+		progress = (indexedRange / totalRange) * 100
+	}
+
+	// Cap at 100%
+	if progress > 100 {
+		progress = 100
+	}
+	if progress < 0 {
+		progress = 0
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"chain_id":       "flow",
+		"latest_height":  latestHeight,
+		"indexed_height": lastIndexed,
+		"start_height":   start,
+		"progress":       fmt.Sprintf("%.2f%%", progress),
+		"behind":         latestHeight - lastIndexed,
+		"status":         "ok",
+	})
+}
+
+func (s *Server) handleListBlocks(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	blocks, err := s.repo.GetRecentBlocks(r.Context(), limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(blocks)
+}
+
+func (s *Server) handleListTransactions(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	txs, err := s.repo.GetRecentTransactions(r.Context(), limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(txs)
+}
+
+func (s *Server) handleGetBlock(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	idOrHeight := vars["id"]
+
+	var block *models.Block
+	var err error
+
+	// Try parsing as height (number) first
+	if height, parseErr := strconv.ParseUint(idOrHeight, 10, 64); parseErr == nil {
+		block, err = s.repo.GetBlockByHeight(r.Context(), height)
+	} else {
+		// Otherwise treat as block ID (hash)
+		block, err = s.repo.GetBlockByID(r.Context(), idOrHeight)
+	}
+
+	if err != nil {
+		http.Error(w, "Block not found", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(block)
+}
+
+func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	tx, err := s.repo.GetTransactionByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "Transaction not found", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(tx)
+}
+
+func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := vars["address"]
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			limit = l
+		}
+	}
+
+	txs, err := s.repo.GetTransactionsByAddress(r.Context(), address, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(txs)
+}
+
+func (s *Server) handleGetAccountTokenTransfers(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := vars["address"]
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			limit = l
+		}
+	}
+
+	transfers, err := s.repo.GetTokenTransfersByAddress(r.Context(), address, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(transfers)
+}
+
+func (s *Server) handleGetAccountNFTTransfers(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := vars["address"]
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			limit = l
+		}
+	}
+
+	transfers, err := s.repo.GetNFTTransfersByAddress(r.Context(), address, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(transfers)
+}
