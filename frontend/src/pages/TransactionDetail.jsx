@@ -5,6 +5,9 @@ import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, Arro
 
 function TransactionDetail() {
   const { txId } = useParams();
+  const [transaction, setTransaction] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('script');
 
   useEffect(() => {
