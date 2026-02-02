@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     
     -- Flow Specifics
     proposer_address VARCHAR(18),
+    proposer_key_index INT,
+    proposer_sequence_number BIGINT,
     payer_address VARCHAR(18),
     authorizers TEXT[], -- Array of addresses
     

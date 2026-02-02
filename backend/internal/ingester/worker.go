@@ -44,7 +44,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 	}
 
 	collGuarantees, _ := json.Marshal(block.CollectionGuarantees)
-	blockSeals, _ := json.Marshal(block.BlockSeals)
+	blockSeals, _ := json.Marshal(block.Seals)
 	signatures, _ := json.Marshal(block.Signatures)
 
 	dbBlock := models.Block{
@@ -95,15 +95,17 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			var evmHash string
 
 			dbTx := models.Transaction{
-				ID:              tx.ID().String(),
-				BlockHeight:     height,
-				ProposerAddress: tx.ProposalKey.Address.Hex(),
-				PayerAddress:    tx.Payer.Hex(),
-				Authorizers:     authorizers,
-				Script:          string(tx.Script),
-				Arguments:       argsJSON,
-				Status:          res.Status.String(),
-				GasLimit:        tx.GasLimit,
+				ID:                     tx.ID().String(),
+				BlockHeight:            height,
+				ProposerAddress:        tx.ProposalKey.Address.Hex(),
+				ProposerKeyIndex:       tx.ProposalKey.KeyIndex,
+				ProposerSequenceNumber: tx.ProposalKey.SequenceNumber,
+				PayerAddress:           tx.Payer.Hex(),
+				Authorizers:            authorizers,
+				Script:                 string(tx.Script),
+				Arguments:              argsJSON,
+				Status:                 res.Status.String(),
+				GasLimit:               tx.GasLimit,
 			}
 
 			// Redundancy: Marshal Signatures and ProposalKey

@@ -111,10 +111,10 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// 2. Insert Transactions
 	for _, t := range txs {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO transactions (id, block_height, proposer_address, payer_address, authorizers, script, arguments, reference_block_id, status, error_message, proposal_key, payload_signatures, envelope_signatures, is_evm, gas_limit, gas_used, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			INSERT INTO transactions (id, block_height, proposer_address, proposer_key_index, proposer_sequence_number, payer_address, authorizers, script, arguments, reference_block_id, status, error_message, proposal_key, payload_signatures, envelope_signatures, is_evm, gas_limit, gas_used, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 			ON CONFLICT (id) DO NOTHING`,
-			t.ID, t.BlockHeight, t.ProposerAddress, t.PayerAddress, t.Authorizers, t.Script, t.Arguments, t.ReferenceBlockID, t.Status, t.ErrorMessage, t.ProposalKey, t.PayloadSignatures, t.EnvelopeSignatures, t.IsEVM, t.GasLimit, t.GasUsed, t.CreatedAt,
+			t.ID, t.BlockHeight, t.ProposerAddress, t.ProposerKeyIndex, t.ProposerSequenceNumber, t.PayerAddress, t.Authorizers, t.Script, t.Arguments, t.ReferenceBlockID, t.Status, t.ErrorMessage, t.ProposalKey, t.PayloadSignatures, t.EnvelopeSignatures, t.IsEVM, t.GasLimit, t.GasUsed, t.CreatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
