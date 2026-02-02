@@ -131,9 +131,99 @@ function Home() {
     );
   }
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    const query = searchQuery.trim();
+    setSearching(true);
+
+    try {
+      // 1. Check if it's a block height (number)
+      if (/^\d+$/.test(query)) {
+        window.location.href = `/blocks/${query}`;
+        return;
+      }
+
+      // 2. Check if it's an address (0x followed by hex)
+      if (/^0x[a-fA-F0-9]{16}$/.test(query) || /^[a-fA-F0-9]{16}$/.test(query)) {
+        const addr = query.startsWith('0x') ? query.slice(2) : query;
+        window.location.href = `/accounts/${addr}`;
+        return;
+      }
+
+      // 3. Check if it's a Tx ID
+      if (/^[a-fA-F0-9]{64}$/.test(query)) {
+        window.location.href = `/transactions/${query}`;
+        return;
+      }
+
+      // 4. Try resolving as Public Key
+      try {
+        const res = await api.client.get(`/keys/${query}`);
+        if (res.data && res.data.address) {
+          window.location.href = `/accounts/${res.data.address}`;
+          return;
+        }
+      } catch (err) {
+        // Not a public key or not found
+      }
+
+      alert('No results found for your query.');
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-nothing-black text-nothing-white font-mono selection:bg-nothing-green selection:text-black">
-      {/* Rest of the dashboard content... */}
+      {/* Hero Section with Search */}
+      <div className="border-b border-white/5 bg-nothing-dark/50">
+        <div className="container mx-auto px-4 py-16 text-center space-y-8">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-2"
+          >
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic">
+              Flow<span className="text-nothing-green">Scan</span>
+            </h1>
+            <p className="text-xs text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
+          </motion.div>
+
+          <motion.form
+            onSubmit={handleSearch}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="max-w-2xl mx-auto relative group"
+          >
+            <div className="absolute inset-0 bg-nothing-green/5 blur-xl group-hover:bg-nothing-green/10 transition-colors duration-500" />
+            <div className="relative flex items-center bg-nothing-dark border border-white/10 p-1 group-focus-within:border-nothing-green transition-all duration-300">
+              <Search className="h-5 w-5 ml-4 text-gray-500 group-focus-within:text-nothing-green" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by Address / Tx ID / Block / Public Key..."
+                className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-3 px-4 text-white placeholder:text-gray-600 uppercase tracking-widest outline-none"
+              />
+              <button
+                type="submit"
+                disabled={searching}
+                className="bg-nothing-green text-black text-[10px] font-bold uppercase tracking-widest px-8 py-3 hover:bg-white transition-colors duration-300 disabled:opacity-50"
+              >
+                {searching ? 'Processing...' : 'Execute Search'}
+              </button>
+            </div>
+          </motion.form>
+        </div>
+      </div>
       <div className="container mx-auto px-4 py-8 space-y-8">
         {/* Stats Section */}
         {/* Stats Section */}

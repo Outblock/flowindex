@@ -7,6 +7,15 @@ CREATE TABLE IF NOT EXISTS blocks (
     parent_id VARCHAR(64),
     timestamp TIMESTAMPTZ,
     collection_count INT DEFAULT 0,
+    tx_count BIGINT DEFAULT 0,
+    event_count BIGINT DEFAULT 0,
+    state_root_hash VARCHAR(64),
+    
+    -- Redundancy Fields
+    collection_guarantees JSONB,
+    block_seals JSONB,
+    signatures JSONB,
+    
     total_gas_used BIGINT DEFAULT 0,
     is_sealed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -24,12 +33,18 @@ CREATE TABLE IF NOT EXISTS transactions (
     -- Execution
     script TEXT,
     arguments JSONB,
+    reference_block_id VARCHAR(64),
     status VARCHAR(20), -- SEALED, EXPIRED, etc.
     error_message TEXT,
     
     -- Gas
     gas_limit BIGINT,
     gas_used BIGINT,
+    
+    -- Redundancy Fields
+    proposal_key JSONB,
+    payload_signatures JSONB,
+    envelope_signatures JSONB,
     
     -- EVM Flag
     is_evm BOOLEAN DEFAULT FALSE,
@@ -116,3 +131,16 @@ CREATE TABLE IF NOT EXISTS daily_stats (
     active_accounts BIGINT DEFAULT 0,
     new_contracts INT DEFAULT 0
 );
+
+-- 7. Public Key Registry
+CREATE TABLE IF NOT EXISTS account_keys (
+    public_key TEXT NOT NULL,
+    address VARCHAR(18) NOT NULL,
+    transaction_id VARCHAR(64),
+    block_height BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (public_key, address)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_keys_public_key ON account_keys(public_key);
+CREATE INDEX IF NOT EXISTS idx_account_keys_address ON account_keys(address);

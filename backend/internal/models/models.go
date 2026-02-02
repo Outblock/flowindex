@@ -4,16 +4,24 @@ import "time"
 
 // Block represents the 'blocks' table
 type Block struct {
-	Height          uint64        `json:"height"`
-	ID              string        `json:"id"`
-	ParentID        string        `json:"parent_id"`
-	Timestamp       time.Time     `json:"timestamp"`
-	CollectionCount int           `json:"collection_count"`
-	TotalGasUsed    uint64        `json:"total_gas_used"`
-	IsSealed        bool          `json:"is_sealed"`
-	TxCount         int           `json:"tx_count,omitempty"`     // Computed field
-	Transactions    []Transaction `json:"transactions,omitempty"` // For block details
-	CreatedAt       time.Time     `json:"created_at"`
+	Height          uint64    `json:"height"`
+	ID              string    `json:"id"`
+	ParentID        string    `json:"parent_id"`
+	Timestamp       time.Time `json:"timestamp"`
+	CollectionCount int       `json:"collection_count"`
+	TxCount         int       `json:"tx_count"`
+	EventCount      int       `json:"event_count"`
+	StateRootHash   string    `json:"state_root_hash"`
+
+	// Redundancy Fields
+	CollectionGuarantees []byte `json:"collection_guarantees,omitempty"`
+	BlockSeals           []byte `json:"block_seals,omitempty"`
+	Signatures           []byte `json:"signatures,omitempty"`
+
+	TotalGasUsed uint64        `json:"total_gas_used"`
+	IsSealed     bool          `json:"is_sealed"`
+	Transactions []Transaction `json:"transactions,omitempty"` // For block details
+	CreatedAt    time.Time     `json:"created_at"`
 }
 
 // Transaction represents the 'transactions' table
@@ -27,6 +35,12 @@ type Transaction struct {
 	Arguments       []byte   `json:"arguments,omitempty"` // Stored as JSONB
 	Status          string   `json:"status"`              // SEALED, EXPIRED, PENDING
 	ErrorMessage    string   `json:"error_message,omitempty"`
+
+	// Redundancy Fields
+	ReferenceBlockID   string `json:"reference_block_id,omitempty"`
+	ProposalKey        []byte `json:"proposal_key,omitempty"`
+	PayloadSignatures  []byte `json:"payload_signatures,omitempty"`
+	EnvelopeSignatures []byte `json:"envelope_signatures,omitempty"`
 
 	// EVM Support
 	IsEVM    bool   `json:"is_evm"`
@@ -103,4 +117,13 @@ type IndexingCheckpoint struct {
 	ServiceName string    `json:"service_name"`
 	LastHeight  uint64    `json:"last_height"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// AccountKey represents the public key to address mapping
+type AccountKey struct {
+	PublicKey     string    `json:"public_key"`
+	Address       string    `json:"address"`
+	TransactionID string    `json:"transaction_id"`
+	BlockHeight   uint64    `json:"block_height"`
+	CreatedAt     time.Time `json:"created_at"`
 }

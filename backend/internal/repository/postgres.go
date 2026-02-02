@@ -76,7 +76,7 @@ func (r *Repository) GetLastIndexedHeight(ctx context.Context, serviceName strin
 
 // SaveBatch atomicially saves a batch of blocks and all related data
 // SaveBatch saves a batch of blocks and related data atomically
-func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, serviceName string, checkpointHeight uint64) error {
+func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, accountKeys []models.AccountKey, serviceName string, checkpointHeight uint64) error {
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -90,10 +90,18 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// 1. Insert Blocks
 	for _, b := range blocks {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO blocks (height, id, parent_id, timestamp, collection_count, total_gas_used, is_sealed, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			ON CONFLICT (height) DO NOTHING`,
-			b.Height, b.ID, b.ParentID, b.Timestamp, b.CollectionCount, b.TotalGasUsed, b.IsSealed, time.Now(),
+			INSERT INTO blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, total_gas_used, is_sealed, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			ON CONFLICT (height) DO UPDATE SET
+				id = EXCLUDED.id,
+				tx_count = EXCLUDED.tx_count,
+				event_count = EXCLUDED.event_count,
+				state_root_hash = EXCLUDED.state_root_hash,
+				collection_guarantees = EXCLUDED.collection_guarantees,
+				block_seals = EXCLUDED.block_seals,
+				signatures = EXCLUDED.signatures,
+				is_sealed = EXCLUDED.is_sealed`,
+			b.Height, b.ID, b.ParentID, b.Timestamp, b.CollectionCount, b.TxCount, b.EventCount, b.StateRootHash, b.CollectionGuarantees, b.BlockSeals, b.Signatures, b.TotalGasUsed, b.IsSealed, time.Now(),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert block %d: %w", b.Height, err)
@@ -103,10 +111,10 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// 2. Insert Transactions
 	for _, t := range txs {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO transactions (id, block_height, proposer_address, payer_address, authorizers, script, arguments, status, error_message, is_evm, gas_limit, gas_used, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			INSERT INTO transactions (id, block_height, proposer_address, payer_address, authorizers, script, arguments, reference_block_id, status, error_message, proposal_key, payload_signatures, envelope_signatures, is_evm, gas_limit, gas_used, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 			ON CONFLICT (id) DO NOTHING`,
-			t.ID, t.BlockHeight, t.ProposerAddress, t.PayerAddress, t.Authorizers, t.Script, t.Arguments, t.Status, t.ErrorMessage, t.IsEVM, t.GasLimit, t.GasUsed, t.CreatedAt,
+			t.ID, t.BlockHeight, t.ProposerAddress, t.PayerAddress, t.Authorizers, t.Script, t.Arguments, t.ReferenceBlockID, t.Status, t.ErrorMessage, t.ProposalKey, t.PayloadSignatures, t.EnvelopeSignatures, t.IsEVM, t.GasLimit, t.GasUsed, t.CreatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
@@ -114,7 +122,6 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 
 		// 2a. Insert EVM Transaction details if applicable
 		if t.IsEVM {
-			// Ensure we have EVM fields. If not, they are empty strings/0.
 			evmVal := t.EVMValue
 			if evmVal == "" {
 				evmVal = "0"
@@ -131,9 +138,18 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 	}
 
-	// 3. Skip Events/TokenTransfers/AddressActivity for now to save space, or implement if schema requires.
-	// Assuming tables exist, let's skip for brevity unless critical for "Premium Nothing" UI stats.
-	// We need 'address_transactions' (AddressActivity) for Account Page history.
+	// 3. Insert Account Keys (Public Key Mapping)
+	for _, ak := range accountKeys {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO account_keys (public_key, address, transaction_id, block_height, created_at)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (public_key, address) DO NOTHING`,
+			ak.PublicKey, ak.Address, ak.TransactionID, ak.BlockHeight, time.Now(),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert account key: %w", err)
+		}
+	}
 
 	// 4. Insert Address Activity
 	for _, aa := range addressActivity {
@@ -180,6 +196,34 @@ func (r *Repository) SaveBlockOnly(ctx context.Context, block models.Block) erro
 }
 
 // --- Read Methods ---
+
+func (r *Repository) ListBlocks(ctx context.Context, limit, offset int) ([]models.Block, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, total_gas_used, is_sealed
+		FROM blocks 
+		ORDER BY height DESC 
+		LIMIT $1 OFFSET $2`,
+		limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var blocks []models.Block
+	for rows.Next() {
+		var b models.Block
+		err := rows.Scan(
+			&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TxCount,
+			&b.EventCount, &b.StateRootHash, &b.TotalGasUsed, &b.IsSealed,
+		)
+		if err != nil {
+			return nil, err
+		}
+		blocks = append(blocks, b)
+	}
+	return blocks, nil
+}
 
 func (r *Repository) GetRecentBlocks(ctx context.Context, limit int) ([]models.Block, error) {
 	query := `
@@ -433,4 +477,14 @@ func (r *Repository) GetTotalTransactions(ctx context.Context) (int64, error) {
 	var count int64
 	err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM transactions").Scan(&count)
 	return count, err
+}
+
+// GetAddressByPublicKey finds the address associated with a public key
+func (r *Repository) GetAddressByPublicKey(ctx context.Context, publicKey string) (string, error) {
+	var address string
+	err := r.db.QueryRow(ctx, "SELECT address FROM account_keys WHERE public_key = $1 LIMIT 1", publicKey).Scan(&address)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	return address, err
 }

@@ -192,6 +192,7 @@ func NewServer(repo *repository.Repository, client *flow.Client, port string, st
 	r.HandleFunc("/accounts/{address}/token-transfers", s.handleGetAccountTokenTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/nft-transfers", s.handleGetAccountNFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/stats/daily", s.handleGetDailyStats).Methods("GET", "OPTIONS")
+	r.HandleFunc("/keys/{publicKey}", s.handleGetAddressByPublicKey).Methods("GET", "OPTIONS")
 
 	s.httpServer = &http.Server{
 		Addr:    ":" + port,
@@ -450,6 +451,25 @@ func (s *Server) handleGetAccountNFTTransfers(w http.ResponseWriter, r *http.Req
 	}
 
 	json.NewEncoder(w).Encode(transfers)
+}
+func (s *Server) handleGetAddressByPublicKey(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	publicKey := vars["publicKey"]
+
+	address, err := s.repo.GetAddressByPublicKey(r.Context(), publicKey)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if address == "" {
+		http.Error(w, "Public key not found", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"address": address,
+	})
 }
 
 func (s *Server) handleGetDailyStats(w http.ResponseWriter, r *http.Request) {

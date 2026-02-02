@@ -236,6 +236,7 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 	var events []models.Event
 	var addrActivity []models.AddressTransaction
 	var tokenTransfers []models.TokenTransfer
+	var accountKeys []models.AccountKey
 
 	// Ensure sorted by height (should be already, but safety first)
 	sort.Slice(results, func(i, j int) bool {
@@ -265,8 +266,9 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 		events = append(events, res.Events...)
 		addrActivity = append(addrActivity, res.AddressActivity...)
 		tokenTransfers = append(tokenTransfers, res.TokenTransfers...)
+		accountKeys = append(accountKeys, res.AccountKeys...)
 	}
 
 	// Use the atomic batch save
-	return s.repo.SaveBatch(ctx, blocks, txs, events, addrActivity, tokenTransfers, s.config.ServiceName, checkpointHeight)
+	return s.repo.SaveBatch(ctx, blocks, txs, events, addrActivity, tokenTransfers, accountKeys, s.config.ServiceName, checkpointHeight)
 }
