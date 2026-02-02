@@ -355,13 +355,75 @@ func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// Try database first
 	tx, err := s.repo.GetTransactionByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Transaction not found", http.StatusNotFound)
+		// Fallback to RPC for unindexed transactions
+		log.Printf("[API] Transaction %s not in DB, falling back to RPC", id)
+
+		rpcTx, rpcErr := s.client.GetTransaction(r.Context(), flowsdk.HexToID(id))
+		if rpcErr != nil {
+			http.Error(w, "Transaction not found in database or on-chain", http.StatusNotFound)
+			return
+		}
+
+		rpcResult, resultErr := s.client.GetTransactionResult(r.Context(), flowsdk.HexToID(id))
+		if resultErr != nil {
+			log.Printf("[API] Could not fetch transaction result from RPC: %v", resultErr)
+		}
+
+		// Convert RPC transaction to our model format
+		fallbackTx := map[string]interface{}{
+			"id":                       id,
+			"payer_address":            rpcTx.Payer.String(),
+			"proposer_address":         rpcTx.ProposalKey.Address.String(),
+			"proposer_key_index":       rpcTx.ProposalKey.KeyIndex,
+			"proposer_sequence_number": rpcTx.ProposalKey.SequenceNumber,
+			"gas_limit":                rpcTx.GasLimit,
+			"reference_block_id":       rpcTx.ReferenceBlockID.String(),
+			"authorizers":              convertAddresses(rpcTx.Authorizers),
+			"status":                   "RPC",
+			"is_indexed":               false, // Flag to indicate this is from RPC
+			"source":                   "rpc", // Data source indicator
+		}
+
+		// Add result data if available
+		if rpcResult != nil {
+			fallbackTx["status"] = rpcResult.Status.String()
+			fallbackTx["error_message"] = rpcResult.Error.Error()
+			fallbackTx["block_height"] = rpcResult.BlockHeight
+			fallbackTx["events"] = convertEvents(rpcResult.Events)
+		}
+
+		json.NewEncoder(w).Encode(fallbackTx)
 		return
 	}
 
+	// Transaction found in database
 	json.NewEncoder(w).Encode(tx)
+}
+
+// Helper to convert Flow addresses to strings
+func convertAddresses(addrs []flowsdk.Address) []string {
+	result := make([]string, len(addrs))
+	for i, addr := range addrs {
+		result[i] = addr.String()
+	}
+	return result
+}
+
+// Helper to convert Flow events to JSON-friendly format
+func convertEvents(events []flowsdk.Event) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(events))
+	for i, event := range events {
+		result[i] = map[string]interface{}{
+			"type":              event.Type,
+			"transaction_index": event.TransactionIndex,
+			"event_index":       event.EventIndex,
+			"payload":           event.Payload,
+		}
+	}
+	return result
 }
 
 func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
