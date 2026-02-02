@@ -57,6 +57,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		CollectionGuarantees: collGuarantees,
 		BlockSeals:           blockSeals,
 		Signatures:           signatures,
+		BlockStatus:          "BLOCK_SEALED", // Default for indexed blocks
 		IsSealed:             true,
 	}
 
@@ -66,6 +67,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 	var tokenTransfers []models.TokenTransfer
 
 	// 2. Process Collections & Transactions
+	txIndex := 0
 	for _, collection := range collections {
 		for _, txID := range collection.TransactionIDs {
 			// Fetch Transaction
@@ -97,6 +99,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			dbTx := models.Transaction{
 				ID:                     tx.ID().String(),
 				BlockHeight:            height,
+				TransactionIndex:       txIndex,
 				ProposerAddress:        tx.ProposalKey.Address.Hex(),
 				ProposerKeyIndex:       tx.ProposalKey.KeyIndex,
 				ProposerSequenceNumber: tx.ProposalKey.SequenceNumber,
@@ -106,6 +109,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				Arguments:              argsJSON,
 				Status:                 res.Status.String(),
 				GasLimit:               tx.GasLimit,
+				ComputationUsed:        res.ComputationUsed,
+				StatusCode:             res.StatusCode,
+				ExecutionStatus:        res.Status.String(), // Simplified mapping
 			}
 
 			// Redundancy: Marshal Signatures and ProposalKey
@@ -160,7 +166,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				payloadJSON, _ := json.Marshal(evt.Value)
 				dbEvents = append(dbEvents, models.Event{
 					TransactionID:    tx.ID().String(),
-					TransactionIndex: res.TransactionIndex,
+					TransactionIndex: txIndex,
 					Type:             evt.Type,
 					EventIndex:       evt.EventIndex,
 					Payload:          payloadJSON,
@@ -226,6 +232,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			dbTx.EVMHash = evmHash
 
 			dbTxs = append(dbTxs, dbTx)
+			txIndex++
 		}
 	}
 
@@ -274,13 +281,29 @@ func (w *Worker) ExtractAccountKeys(events []models.Event) []models.AccountKey {
 			}
 
 			if address != "" && publicKey != "" {
-				keys = append(keys, models.AccountKey{
+				key := models.AccountKey{
 					PublicKey:     publicKey,
 					Address:       address,
 					TransactionID: evt.TransactionID,
 					BlockHeight:   evt.BlockHeight,
 					CreatedAt:     time.Now(),
-				})
+				}
+
+				// Extract more granular fields if available
+				if idx, ok := payload["keyIndex"].(float64); ok {
+					key.KeyIndex = int(idx)
+				}
+				if sa, ok := payload["signingAlgorithm"].(string); ok {
+					key.SigningAlgorithm = sa
+				}
+				if ha, ok := payload["hashingAlgorithm"].(string); ok {
+					key.HashingAlgorithm = ha
+				}
+				if w, ok := payload["weight"].(float64); ok {
+					key.Weight = int(w)
+				}
+
+				keys = append(keys, key)
 			}
 		}
 	}

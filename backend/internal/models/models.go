@@ -17,6 +17,9 @@ type Block struct {
 	CollectionGuarantees []byte `json:"collection_guarantees,omitempty"`
 	BlockSeals           []byte `json:"block_seals,omitempty"`
 	Signatures           []byte `json:"signatures,omitempty"`
+	ParentVoterSignature string `json:"parent_voter_signature,omitempty"`
+	BlockStatus          string `json:"block_status,omitempty"`
+	ExecutionResultID    string `json:"execution_result_id,omitempty"`
 
 	TotalGasUsed uint64        `json:"total_gas_used"`
 	IsSealed     bool          `json:"is_sealed"`
@@ -28,6 +31,7 @@ type Block struct {
 type Transaction struct {
 	ID                     string   `json:"id"`
 	BlockHeight            uint64   `json:"block_height"`
+	TransactionIndex       int      `json:"transaction_index"` // Position in block
 	ProposerAddress        string   `json:"proposer_address"`
 	ProposerKeyIndex       uint32   `json:"proposer_key_index"`
 	ProposerSequenceNumber uint64   `json:"proposer_sequence_number"`
@@ -51,9 +55,12 @@ type Transaction struct {
 	EVMTo    string `json:"evm_to,omitempty"`
 	EVMValue string `json:"evm_value,omitempty"`
 
-	GasLimit  uint64    `json:"gas_limit"`
-	GasUsed   uint64    `json:"gas_used"`
-	CreatedAt time.Time `json:"created_at"`
+	GasLimit        uint64    `json:"gas_limit"`
+	GasUsed         uint64    `json:"gas_used"`
+	ComputationUsed uint64    `json:"computation_used"`
+	StatusCode      int       `json:"status_code"`
+	ExecutionStatus string    `json:"execution_status"` // Success, Failure, Pending
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // EVMTransaction represents details from 'evm_transactions' table
@@ -124,9 +131,14 @@ type IndexingCheckpoint struct {
 
 // AccountKey represents the public key to address mapping
 type AccountKey struct {
-	PublicKey     string    `json:"public_key"`
-	Address       string    `json:"address"`
-	TransactionID string    `json:"transaction_id"`
-	BlockHeight   uint64    `json:"block_height"`
-	CreatedAt     time.Time `json:"created_at"`
+	PublicKey        string    `json:"public_key"`
+	Address          string    `json:"address"`
+	TransactionID    string    `json:"transaction_id"`
+	BlockHeight      uint64    `json:"block_height"`
+	KeyIndex         int       `json:"key_index"`
+	SigningAlgorithm string    `json:"signing_algorithm"`
+	HashingAlgorithm string    `json:"hashing_algorithm"`
+	Weight           int       `json:"weight"`
+	Revoked          bool      `json:"revoked"`
+	CreatedAt        time.Time `json:"created_at"`
 }

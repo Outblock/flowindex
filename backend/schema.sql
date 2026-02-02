@@ -7,14 +7,18 @@ CREATE TABLE IF NOT EXISTS blocks (
     parent_id VARCHAR(64),
     timestamp TIMESTAMPTZ,
     collection_count INT DEFAULT 0,
+    collection_count INT DEFAULT 0,
     tx_count BIGINT DEFAULT 0,
     event_count BIGINT DEFAULT 0,
     state_root_hash VARCHAR(64),
     
-    -- Redundancy Fields
+    -- Redundancy Fields (Exhaustive)
     collection_guarantees JSONB,
     block_seals JSONB,
     signatures JSONB,
+    parent_voter_signature TEXT,
+    block_status VARCHAR(20),
+    execution_result_id VARCHAR(64),
     
     total_gas_used BIGINT DEFAULT 0,
     is_sealed BOOLEAN DEFAULT FALSE,
@@ -24,8 +28,9 @@ CREATE TABLE IF NOT EXISTS blocks (
 CREATE TABLE IF NOT EXISTS transactions (
     id VARCHAR(64) PRIMARY KEY,
     block_height BIGINT REFERENCES blocks(height) ON DELETE CASCADE,
+    transaction_index INT, -- Position in block
     
-    -- Flow Specifics
+    -- Flow Specifics (Exhaustive)
     proposer_address VARCHAR(18),
     proposer_key_index INT,
     proposer_sequence_number BIGINT,
@@ -39,11 +44,14 @@ CREATE TABLE IF NOT EXISTS transactions (
     status VARCHAR(20), -- SEALED, EXPIRED, etc.
     error_message TEXT,
     
-    -- Gas
+    -- Gas / Metadata
     gas_limit BIGINT,
     gas_used BIGINT,
+    computation_used BIGINT,
+    status_code INT,
+    execution_status VARCHAR(20), -- Success, Failure, Pending
     
-    -- Redundancy Fields
+    -- Signatures (Exhaustive Redundancy)
     proposal_key JSONB,
     payload_signatures JSONB,
     envelope_signatures JSONB,
@@ -78,9 +86,9 @@ CREATE TABLE IF NOT EXISTS events (
     id SERIAL PRIMARY KEY,
     transaction_id VARCHAR(64) REFERENCES transactions(id) ON DELETE CASCADE,
     block_height BIGINT, -- Denormalized for speed
-    transaction_index INT,
+    transaction_index INT, -- Position in block
     type VARCHAR(512), -- e.g. A.0x...
-    event_index INT,
+    event_index INT, -- Position in tx
     payload JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(transaction_id, event_index)
@@ -141,6 +149,11 @@ CREATE TABLE IF NOT EXISTS account_keys (
     address VARCHAR(18) NOT NULL,
     transaction_id VARCHAR(64),
     block_height BIGINT,
+    key_index INT,
+    signing_algorithm VARCHAR(20),
+    hashing_algorithm VARCHAR(20),
+    weight INT,
+    revoked BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (public_key, address)
 );

@@ -90,8 +90,8 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// 1. Insert Blocks
 	for _, b := range blocks {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, total_gas_used, is_sealed, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			INSERT INTO blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, parent_voter_signature, block_status, execution_result_id, total_gas_used, is_sealed, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 			ON CONFLICT (height) DO UPDATE SET
 				id = EXCLUDED.id,
 				tx_count = EXCLUDED.tx_count,
@@ -100,8 +100,11 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				collection_guarantees = EXCLUDED.collection_guarantees,
 				block_seals = EXCLUDED.block_seals,
 				signatures = EXCLUDED.signatures,
+				parent_voter_signature = EXCLUDED.parent_voter_signature,
+				block_status = EXCLUDED.block_status,
+				execution_result_id = EXCLUDED.execution_result_id,
 				is_sealed = EXCLUDED.is_sealed`,
-			b.Height, b.ID, b.ParentID, b.Timestamp, b.CollectionCount, b.TxCount, b.EventCount, b.StateRootHash, b.CollectionGuarantees, b.BlockSeals, b.Signatures, b.TotalGasUsed, b.IsSealed, time.Now(),
+			b.Height, b.ID, b.ParentID, b.Timestamp, b.CollectionCount, b.TxCount, b.EventCount, b.StateRootHash, b.CollectionGuarantees, b.BlockSeals, b.Signatures, b.ParentVoterSignature, b.BlockStatus, b.ExecutionResultID, b.TotalGasUsed, b.IsSealed, time.Now(),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert block %d: %w", b.Height, err)
@@ -111,10 +114,10 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// 2. Insert Transactions
 	for _, t := range txs {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO transactions (id, block_height, proposer_address, proposer_key_index, proposer_sequence_number, payer_address, authorizers, script, arguments, reference_block_id, status, error_message, proposal_key, payload_signatures, envelope_signatures, is_evm, gas_limit, gas_used, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+			INSERT INTO transactions (id, block_height, transaction_index, proposer_address, proposer_key_index, proposer_sequence_number, payer_address, authorizers, script, arguments, reference_block_id, status, error_message, proposal_key, payload_signatures, envelope_signatures, computation_used, status_code, execution_status, is_evm, gas_limit, gas_used, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
 			ON CONFLICT (id) DO NOTHING`,
-			t.ID, t.BlockHeight, t.ProposerAddress, t.ProposerKeyIndex, t.ProposerSequenceNumber, t.PayerAddress, t.Authorizers, t.Script, t.Arguments, t.ReferenceBlockID, t.Status, t.ErrorMessage, t.ProposalKey, t.PayloadSignatures, t.EnvelopeSignatures, t.IsEVM, t.GasLimit, t.GasUsed, t.CreatedAt,
+			t.ID, t.BlockHeight, t.TransactionIndex, t.ProposerAddress, t.ProposerKeyIndex, t.ProposerSequenceNumber, t.PayerAddress, t.Authorizers, t.Script, t.Arguments, t.ReferenceBlockID, t.Status, t.ErrorMessage, t.ProposalKey, t.PayloadSignatures, t.EnvelopeSignatures, t.ComputationUsed, t.StatusCode, t.ExecutionStatus, t.IsEVM, t.GasLimit, t.GasUsed, t.CreatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
@@ -154,10 +157,17 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// 4. Insert Account Keys (Public Key Mapping)
 	for _, ak := range accountKeys {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO account_keys (public_key, address, transaction_id, block_height, created_at)
-			VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (public_key, address) DO NOTHING`,
-			ak.PublicKey, ak.Address, ak.TransactionID, ak.BlockHeight, time.Now(),
+			INSERT INTO account_keys (public_key, address, transaction_id, block_height, key_index, signing_algorithm, hashing_algorithm, weight, revoked, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (public_key, address) DO UPDATE SET
+				transaction_id = EXCLUDED.transaction_id,
+				block_height = EXCLUDED.block_height,
+				key_index = EXCLUDED.key_index,
+				signing_algorithm = EXCLUDED.signing_algorithm,
+				hashing_algorithm = EXCLUDED.hashing_algorithm,
+				weight = EXCLUDED.weight,
+				revoked = EXCLUDED.revoked`,
+			ak.PublicKey, ak.Address, ak.TransactionID, ak.BlockHeight, ak.KeyIndex, ak.SigningAlgorithm, ak.HashingAlgorithm, ak.Weight, ak.Revoked, time.Now(),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert account key: %w", err)
