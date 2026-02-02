@@ -379,8 +379,8 @@ func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
 			"status":                   "PENDING",                       // Default
 			"block_height":             rpcTx.ReferenceBlockID.String(), // Placeholder, or use rpcResult.BlockHeight if avail
 			"time":                     "",                              // Not available in RPC usually
-			"payer":                    rpcTx.Payer.String(),
-			"proposer":                 rpcTx.ProposalKey.Address.String(),
+			"payer_address":            rpcTx.Payer.String(),
+			"proposer_address":         rpcTx.ProposalKey.Address.String(),
 			"proposer_key_index":       rpcTx.ProposalKey.KeyIndex,
 			"proposer_sequence_number": rpcTx.ProposalKey.SequenceNumber,
 			"gas_limit":                rpcTx.GasLimit,
