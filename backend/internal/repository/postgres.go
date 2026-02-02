@@ -102,11 +102,15 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		// 2a. Insert EVM Transaction details if applicable
 		if t.IsEVM {
 			// Ensure we have EVM fields. If not, they are empty strings/0.
+			evmVal := t.EVMValue
+			if evmVal == "" {
+				evmVal = "0"
+			}
 			_, err := tx.Exec(ctx, `
 				INSERT INTO evm_transactions (transaction_id, evm_hash, from_address, to_address, value, created_at)
 				VALUES ($1, $2, $3, $4, $5, $6)
 				ON CONFLICT (transaction_id) DO NOTHING`,
-				t.ID, t.EVMHash, t.EVMFrom, t.EVMTo, t.EVMValue, t.CreatedAt,
+				t.ID, t.EVMHash, t.EVMFrom, t.EVMTo, evmVal, t.CreatedAt,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert evm tx %s: %w", t.ID, err)
