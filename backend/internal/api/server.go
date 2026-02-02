@@ -390,9 +390,13 @@ func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
 		// Add result data if available
 		if rpcResult != nil {
 			fallbackTx["status"] = rpcResult.Status.String()
-			fallbackTx["error_message"] = rpcResult.Error.Error()
 			fallbackTx["block_height"] = rpcResult.BlockHeight
 			fallbackTx["events"] = convertEvents(rpcResult.Events)
+
+			// Only add error message if error is not nil
+			if rpcResult.Error != nil {
+				fallbackTx["error_message"] = rpcResult.Error.Error()
+			}
 		}
 
 		json.NewEncoder(w).Encode(fallbackTx)
