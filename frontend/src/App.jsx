@@ -3,6 +3,7 @@ import Home from './pages/Home';
 import BlockDetail from './pages/BlockDetail';
 import TransactionDetail from './pages/TransactionDetail';
 import AccountDetail from './pages/AccountDetail';
+import Stats from './pages/Stats';
 import { IndexingStatus } from './components/IndexingStatus';
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
         <Route path="/blocks/:height" element={<BlockDetail />} />
         <Route path="/transactions/:txId" element={<TransactionDetail />} />
         <Route path="/accounts/:address" element={<AccountDetail />} />
+        <Route path="/stats" element={<Stats />} />
       </Routes>
     </div>
   );
