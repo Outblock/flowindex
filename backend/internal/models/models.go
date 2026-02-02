@@ -29,7 +29,7 @@ type Transaction struct {
 	ID                     string   `json:"id"`
 	BlockHeight            uint64   `json:"block_height"`
 	ProposerAddress        string   `json:"proposer_address"`
-	ProposerKeyIndex       int      `json:"proposer_key_index"`
+	ProposerKeyIndex       uint32   `json:"proposer_key_index"`
 	ProposerSequenceNumber uint64   `json:"proposer_sequence_number"`
 	PayerAddress           string   `json:"payer_address"`
 	Authorizers            []string `json:"authorizers"` // Stored as TEXT[] in DB
@@ -70,13 +70,14 @@ type EVMTransaction struct {
 
 // Event represents the 'events' table
 type Event struct {
-	ID            int       `json:"id"`
-	TransactionID string    `json:"transaction_id"`
-	Type          string    `json:"type"`
-	EventIndex    int       `json:"event_index"`
-	Payload       []byte    `json:"payload"` // Stored as JSONB
-	BlockHeight   uint64    `json:"block_height"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID               int       `json:"id"`
+	TransactionID    string    `json:"transaction_id"`
+	TransactionIndex int       `json:"transaction_index"`
+	Type             string    `json:"type"`
+	EventIndex       int       `json:"event_index"`
+	Payload          []byte    `json:"payload"` // Stored as JSONB
+	BlockHeight      uint64    `json:"block_height"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 // TokenTransfer represents 'token_transfers' (Fungible & NFT)

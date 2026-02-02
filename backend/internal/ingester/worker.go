@@ -156,16 +156,17 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			}
 
 			// Process Events
-			for i, evt := range res.Events {
+			for _, evt := range res.Events {
 				payloadJSON, _ := json.Marshal(evt.Value)
-				dbEvent := models.Event{
-					TransactionID: tx.ID().String(),
-					Type:          evt.Type,
-					EventIndex:    i,
-					Payload:       payloadJSON,
-					BlockHeight:   height,
-				}
-				dbEvents = append(dbEvents, dbEvent)
+				dbEvents = append(dbEvents, models.Event{
+					TransactionID:    tx.ID().String(),
+					TransactionIndex: res.TransactionIndex,
+					Type:             evt.Type,
+					EventIndex:       evt.EventIndex,
+					Payload:          payloadJSON,
+					BlockHeight:      height,
+					CreatedAt:        time.Now(),
+				})
 
 				// Detect EVM Execution Event
 				if strings.Contains(evt.Type, "EVM.TransactionExecuted") {

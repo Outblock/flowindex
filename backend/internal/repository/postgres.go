@@ -138,7 +138,20 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 	}
 
-	// 3. Insert Account Keys (Public Key Mapping)
+	// 3. Insert Events
+	for _, e := range events {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO events (transaction_id, block_height, transaction_index, type, event_index, payload, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (transaction_id, event_index) DO NOTHING`,
+			e.TransactionID, e.BlockHeight, e.TransactionIndex, e.Type, e.EventIndex, e.Payload, time.Now(),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert event: %w", err)
+		}
+	}
+
+	// 4. Insert Account Keys (Public Key Mapping)
 	for _, ak := range accountKeys {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO account_keys (public_key, address, transaction_id, block_height, created_at)

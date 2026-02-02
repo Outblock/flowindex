@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS events (
     id SERIAL PRIMARY KEY,
     transaction_id VARCHAR(64) REFERENCES transactions(id) ON DELETE CASCADE,
     block_height BIGINT, -- Denormalized for speed
+    transaction_index INT,
     type VARCHAR(512), -- e.g. A.0x...
     event_index INT,
     payload JSONB,
