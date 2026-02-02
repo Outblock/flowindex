@@ -12,7 +12,7 @@ HISTORY_WORKER_COUNT = "100"
 LATEST_BATCH_SIZE = "10"
 HISTORY_BATCH_SIZE = "500"
 FLOW_ACCESS_NODE = "access-001.mainnet28.nodes.onflow.org:9000"
-DB_URL = "${{ DATABASE_URL }}"
+DB_URL = "${{ Postgres.DATABASE_URL }}"
 RAILWAY_DOCKERFILE_PATH = "backend/Dockerfile"
 
 [[services]]
