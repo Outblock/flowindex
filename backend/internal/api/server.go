@@ -180,18 +180,18 @@ func NewServer(repo *repository.Repository, client *flow.Client, port string, st
 	r.Use(commonMiddleware)
 
 	// Routes
-	r.HandleFunc("/health", s.handleHealth).Methods("GET")
-	r.HandleFunc("/status", s.handleStatus).Methods("GET")
-	r.HandleFunc("/ws", s.handleWebSocket).Methods("GET") // WebSocket Endpoint
-	r.HandleFunc("/blocks", s.handleListBlocks).Methods("GET")
-	r.HandleFunc("/blocks/{id}", s.handleGetBlock).Methods("GET")
-	r.HandleFunc("/transactions", s.handleListTransactions).Methods("GET")
-	r.HandleFunc("/transactions/{id}", s.handleGetTransaction).Methods("GET")
-	r.HandleFunc("/accounts/{address}", s.handleGetAccount).Methods("GET")
-	r.HandleFunc("/accounts/{address}/transactions", s.handleGetAccountTransactions).Methods("GET")
-	r.HandleFunc("/accounts/{address}/token-transfers", s.handleGetAccountTokenTransfers).Methods("GET")
-	r.HandleFunc("/accounts/{address}/nft-transfers", s.handleGetAccountNFTTransfers).Methods("GET")
-	r.HandleFunc("/stats/daily", s.handleGetDailyStats).Methods("GET")
+	r.HandleFunc("/health", s.handleHealth).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status", s.handleStatus).Methods("GET", "OPTIONS")
+	r.HandleFunc("/ws", s.handleWebSocket).Methods("GET", "OPTIONS") // WebSocket Endpoint
+	r.HandleFunc("/blocks", s.handleListBlocks).Methods("GET", "OPTIONS")
+	r.HandleFunc("/blocks/{id}", s.handleGetBlock).Methods("GET", "OPTIONS")
+	r.HandleFunc("/transactions", s.handleListTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/transactions/{id}", s.handleGetTransaction).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}", s.handleGetAccount).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/transactions", s.handleGetAccountTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/token-transfers", s.handleGetAccountTokenTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/nft-transfers", s.handleGetAccountNFTTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/stats/daily", s.handleGetDailyStats).Methods("GET", "OPTIONS")
 
 	s.httpServer = &http.Server{
 		Addr:    ":" + port,
@@ -211,8 +211,16 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 func commonMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Content-Type", "application/json")
-		w.Header().Add("Access-Control-Allow-Origin", "*") // For local dev
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		next.ServeHTTP(w, r)
 	})
 }
