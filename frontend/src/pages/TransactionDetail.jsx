@@ -330,10 +330,10 @@ function TransactionDetail() {
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] text-zinc-600 uppercase">Contract</span>
                             <Link
-                              to={`/accounts/${event.contract_address}`}
+                              to={`/accounts/${formatAddress(event.contract_address)}`}
                               className="text-[10px] text-zinc-400 hover:text-white transition-colors underline decoration-white/10 underline-offset-2"
                             >
-                              {event.contract_address || 'System'} {event.contract_name ? `(${event.contract_name})` : ''}
+                              {formatAddress(event.contract_address) || 'System'} {event.contract_name ? `(${event.contract_name})` : ''}
                             </Link>
                           </div>
                         </div>
