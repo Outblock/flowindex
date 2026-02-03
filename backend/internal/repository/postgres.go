@@ -645,9 +645,28 @@ func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, err
 }
 
 func (r *Repository) GetTotalTransactions(ctx context.Context) (int64, error) {
+	// Use estimate for speed if needed, but exact count for now
 	var count int64
 	err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM transactions").Scan(&count)
 	return count, err
+}
+
+// GetBlockRange returns min height, max height, and total count of blocks
+func (r *Repository) GetBlockRange(ctx context.Context) (uint64, uint64, int64, error) {
+	var minH, maxH uint64
+	var count int64
+	// Use coalesce(..., 0) to handle empty table
+	err := r.db.QueryRow(ctx, `
+		SELECT 
+			COALESCE(MIN(height), 0), 
+			COALESCE(MAX(height), 0), 
+			COUNT(*) 
+		FROM blocks
+	`).Scan(&minH, &maxH, &count)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return minH, maxH, count, nil
 }
 
 // GetAddressByPublicKey finds the address associated with a public key

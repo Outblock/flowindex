@@ -61,7 +61,7 @@ export default function Stats() {
                     <p className="text-gray-400">Real-time indexing progress and system health monitoring</p>
                 </motion.div>
 
-                {/* Indexing Progress Section */}
+                {/* Main Indexing Progress (Live) */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -71,7 +71,7 @@ export default function Stats() {
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center space-x-3">
                             <Database className="h-6 w-6 text-nothing-green" />
-                            <h2 className="text-2xl font-bold text-white uppercase tracking-wide">Blockchain Indexing</h2>
+                            <h2 className="text-2xl font-bold text-white uppercase tracking-wide">Live Indexing (Forward)</h2>
                         </div>
                         <span className="text-3xl font-bold text-nothing-pink">
                             {progressPercent.toFixed(2)}%
@@ -92,7 +92,7 @@ export default function Stats() {
                         {/* Height Labels */}
                         <div className="absolute inset-0 flex items-center justify-between px-4 text-xs font-mono">
                             <span className="text-gray-400">Start: {startHeight.toLocaleString()}</span>
-                            <span className="text-nothing-green font-bold">Indexed: {indexedHeight.toLocaleString()}</span>
+                            <span className="text-nothing-green font-bold">Current: {indexedHeight.toLocaleString()}</span>
                             <span className="text-gray-400">Latest: {latestHeight.toLocaleString()}</span>
                         </div>
                     </div>

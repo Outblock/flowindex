@@ -244,18 +244,30 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get indexed height from DB
+	// Get indexed height from DB (Forward Tip)
 	lastIndexed, err := s.repo.GetLastIndexedHeight(r.Context(), "main_ingester")
 	if err != nil {
 		lastIndexed = 0
 	}
 
+	// Get history height from DB (Backward Tip)
+	historyIndexed, err := s.repo.GetLastIndexedHeight(r.Context(), "history_ingester")
+	if err != nil {
+		historyIndexed = 0
+	}
+	// If historyIngester never ran, it returns 0. If it ran, it returns the lowest block processed.
+
+	// Get Real Block Range (Min/Max/Count in DB)
+	minH, maxH, totalBlocks, err := s.repo.GetBlockRange(r.Context())
+	if err != nil {
+		minH = 0
+		maxH = 0
+		totalBlocks = 0
+	}
+
 	// Calculate Progress relative to StartBlock
 	progress := 0.0
 	start := s.startBlock
-
-	// Safety: If somehow indexed is less than start (e.g. old data), treat start as indexed?
-	// Or just calc as is.
 
 	totalRange := float64(latestHeight - start)
 	indexedRange := float64(lastIndexed - start)
@@ -285,7 +297,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"chain_id":           "flow",
 		"latest_height":      latestHeight,
-		"indexed_height":     lastIndexed,
+		"indexed_height":     lastIndexed,    // Main Ingester Tip
+		"history_height":     historyIndexed, // History Ingester Tip (Lowest)
+		"min_height":         minH,           // Absolute Min in DB
+		"max_height":         maxH,           // Absolute Max in DB
+		"total_blocks":       totalBlocks,    // Count
 		"start_height":       start,
 		"total_transactions": totalTxs,
 		"progress":           fmt.Sprintf("%.2f%%", progress),
