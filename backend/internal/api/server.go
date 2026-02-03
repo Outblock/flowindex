@@ -167,6 +167,11 @@ type Server struct {
 	client     *flow.Client
 	httpServer *http.Server
 	startBlock uint64
+	statusCache struct {
+		mu        sync.Mutex
+		payload   []byte
+		expiresAt time.Time
+	}
 }
 
 func NewServer(repo *repository.Repository, client *flow.Client, port string, startBlock uint64) *Server {
@@ -238,6 +243,16 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	now := time.Now()
+	s.statusCache.mu.Lock()
+	if now.Before(s.statusCache.expiresAt) && len(s.statusCache.payload) > 0 {
+		cached := append([]byte(nil), s.statusCache.payload...)
+		s.statusCache.mu.Unlock()
+		w.Write(cached)
+		return
+	}
+	s.statusCache.mu.Unlock()
+
 	// Get indexed height from DB (Forward Tip)
 	lastIndexed, err := s.repo.GetLastIndexedHeight(r.Context(), "main_ingester")
 	if err != nil {
@@ -300,20 +315,33 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		totalTxs = 0
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	resp := map[string]interface{}{
 		"chain_id":           "flow",
 		"latest_height":      latestHeight,
 		"indexed_height":     lastIndexed,    // Main Ingester Tip
 		"history_height":     historyIndexed, // History Ingester Tip (Lowest)
 		"min_height":         minH,           // Absolute Min in DB
 		"max_height":         maxH,           // Absolute Max in DB
-		"total_blocks":       totalBlocks,    // Count
+		"total_blocks":       totalBlocks,    // Count (estimate)
 		"start_height":       start,
 		"total_transactions": totalTxs,
 		"progress":           fmt.Sprintf("%.2f%%", progress),
 		"behind":             latestHeight - lastIndexed,
 		"status":             "ok",
-	})
+	}
+
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.statusCache.mu.Lock()
+	s.statusCache.payload = payload
+	s.statusCache.expiresAt = time.Now().Add(3 * time.Second)
+	s.statusCache.mu.Unlock()
+
+	w.Write(payload)
 }
 
 func (s *Server) handleListBlocks(w http.ResponseWriter, r *http.Request) {
