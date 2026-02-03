@@ -304,21 +304,23 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 		return results[i].Height < results[j].Height
 	})
 
+	broadcastRealtime := s.config.Mode == "forward"
+
 	for _, res := range results {
 		if res == nil || res.Block == nil {
 			continue
 		}
 
 		// Trigger Callbacks (Real-time updates)
-		// Only trigger callbacks if we are in Forward mode (Live)
-		// Or maybe even backward? Users might want to see history fill up.
-		// For now, let's trigger always.
-		if s.config.OnNewBlock != nil {
-			s.config.OnNewBlock(*res.Block)
-		}
-		if s.config.OnNewTransaction != nil {
-			for _, tx := range res.Transactions {
-				s.config.OnNewTransaction(tx)
+		// Only trigger for forward mode to avoid expensive broadcasts during history backfill.
+		if broadcastRealtime {
+			if s.config.OnNewBlock != nil {
+				s.config.OnNewBlock(*res.Block)
+			}
+			if s.config.OnNewTransaction != nil {
+				for _, tx := range res.Transactions {
+					s.config.OnNewTransaction(tx)
+				}
 			}
 		}
 
