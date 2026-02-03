@@ -321,15 +321,15 @@ func (r *Repository) ListBlocks(ctx context.Context, limit, offset int) ([]model
 	return blocks, nil
 }
 
-func (r *Repository) GetRecentBlocks(ctx context.Context, limit int) ([]models.Block, error) {
+func (r *Repository) GetRecentBlocks(ctx context.Context, limit, offset int) ([]models.Block, error) {
 	query := `
 		SELECT b.height, b.id, b.parent_id, b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at,
 			   COALESCE((SELECT COUNT(*) FROM transactions t WHERE t.block_height = b.height), 0) as tx_count
 		FROM blocks b 
 		ORDER BY b.height DESC 
-		LIMIT $1`
+		LIMIT $1 OFFSET $2`
 
-	rows, err := r.db.Query(ctx, query, limit)
+	rows, err := r.db.Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -471,16 +471,16 @@ func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) 
 	return events, nil
 }
 
-func (r *Repository) GetTransactionsByAddress(ctx context.Context, address string, limit int) ([]models.Transaction, error) {
+func (r *Repository) GetTransactionsByAddress(ctx context.Context, address string, limit, offset int) ([]models.Transaction, error) {
 	query := `
 		SELECT t.id, t.block_height, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.created_at
 		FROM address_transactions at
 		JOIN transactions t ON at.transaction_id = t.id
 		WHERE at.address = $1
 		ORDER BY at.block_height DESC
-		LIMIT $2`
+		LIMIT $2 OFFSET $3`
 
-	rows, err := r.db.Query(ctx, query, address, limit)
+	rows, err := r.db.Query(ctx, query, address, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -497,14 +497,14 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 	return txs, nil
 }
 
-func (r *Repository) GetRecentTransactions(ctx context.Context, limit int) ([]models.Transaction, error) {
+func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, error) {
 	query := `
 		SELECT t.id, t.block_height, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.error_message, t.events, t.created_at
 		FROM transactions t
 		ORDER BY t.block_height DESC
-		LIMIT $1`
+		LIMIT $1 OFFSET $2`
 
-	rows, err := r.db.Query(ctx, query, limit)
+	rows, err := r.db.Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -636,21 +636,6 @@ func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, err
 	for rows.Next() {
 		var s models.DailyStat
 		if err := rows.Scan(&s.Date, &s.TxCount, &s.ActiveAccounts, &s.NewContracts); err != nil {
-			return nil, err
-		}
-		stats = append(stats, s)
-	}
-	return stats, nil
-}
-
-		return nil, err
-	}
-	defer rows.Close()
-
-	var stats []DailyStat
-	for rows.Next() {
-		var s DailyStat
-		if err := rows.Scan(&s.Date, &s.TxCount); err != nil {
 			return nil, err
 		}
 		stats = append(stats, s)

@@ -295,15 +295,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListBlocks(w http.ResponseWriter, r *http.Request) {
-	limitStr := r.URL.Query().Get("limit")
-	limit := 20
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
-	}
+	limit, offset := parsePagination(r)
 
-	blocks, err := s.repo.GetRecentBlocks(r.Context(), limit)
+	blocks, err := s.repo.GetRecentBlocks(r.Context(), limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -313,15 +307,9 @@ func (s *Server) handleListBlocks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListTransactions(w http.ResponseWriter, r *http.Request) {
-	limitStr := r.URL.Query().Get("limit")
-	limit := 20
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
-	}
+	limit, offset := parsePagination(r)
 
-	txs, err := s.repo.GetRecentTransactions(r.Context(), limit)
+	txs, err := s.repo.GetRecentTransactions(r.Context(), limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -439,6 +427,32 @@ func convertEvents(events []flowsdk.Event) []map[string]interface{} {
 	return result
 }
 
+func parsePagination(r *http.Request) (int, int) {
+	limitStr := r.URL.Query().Get("limit")
+	pageStr := r.URL.Query().Get("page")
+	offsetStr := r.URL.Query().Get("offset")
+
+	limit := 10 // Default limit
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	offset := 0
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	} else if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			offset = (p - 1) * limit
+		}
+	}
+
+	return limit, offset
+}
+
 func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	addrStr := vars["address"]
@@ -472,15 +486,9 @@ func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Req
 	// Sanitize address (remove 0x, lowercase) matching DB format
 	address := flowsdk.HexToAddress(vars["address"]).String()
 
-	limitStr := r.URL.Query().Get("limit")
-	limit := 20
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
+	limit, offset := parsePagination(r)
 
-	txs, err := s.repo.GetTransactionsByAddress(r.Context(), address, limit)
+	txs, err := s.repo.GetTransactionsByAddress(r.Context(), address, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
