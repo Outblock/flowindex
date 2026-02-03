@@ -4,11 +4,15 @@ import { api } from '../api';
 
 export function DailyStatsChart() {
     const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const loadStats = async () => {
             try {
+                console.log("Fetching daily stats...");
                 const stats = await api.getDailyStats();
+                console.log("Daily stats response:", stats);
+
                 // Handle null/empty response
                 if (stats && Array.isArray(stats)) {
                     const chartData = stats.map(s => ({
@@ -17,20 +21,31 @@ export function DailyStatsChart() {
                     }));
                     setData(chartData);
                 } else {
+                    console.warn("Daily stats is empty or invalid format");
                     setData([]);  // Set empty array if no data
                 }
             } catch (err) {
                 console.error("Failed to load daily stats:", err);
                 setData([]);  // Set empty array on error
+            } finally {
+                setLoading(false);
             }
         };
         loadStats();
     }, []);
 
-    if (!data.length) {
+    if (loading) {
         return (
             <div className="bg-nothing-dark border border-white/10 p-6 h-[286px] flex items-center justify-center">
                 <p className="text-zinc-500 text-xs uppercase tracking-widest animate-pulse">Loading Statistics...</p>
+            </div>
+        );
+    }
+
+    if (!data.length) {
+        return (
+            <div className="bg-nothing-dark border border-white/10 p-6 h-[286px] flex items-center justify-center">
+                <p className="text-zinc-500 text-xs uppercase tracking-widest">No Transaction History Available</p>
             </div>
         );
     }
