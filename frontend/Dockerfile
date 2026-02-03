@@ -1,15 +1,15 @@
 # Build Stage
-FROM node:20-bookworm AS builder
+FROM oven/bun:1 AS builder
 
 WORKDIR /app
 
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+COPY frontend/package.json frontend/bun.lock ./
+RUN bun install
 
 COPY frontend/ .
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
-RUN npm run build
+RUN bun run build
 
 # Serve Stage
 FROM nginx:alpine
