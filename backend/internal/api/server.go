@@ -471,9 +471,12 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 	// Actually flow.Account Balance is specific. Let's return raw for now.
 
 	// Create a simplified response wrapper
+	// Balance is uint64 in atomic units (1e-8 Flow). Convert to float for JSON.
+	balanceVal := float64(acc.Balance) / 100000000.0
+
 	resp := map[string]interface{}{
 		"address":   acc.Address.Hex(),
-		"balance":   acc.Balance, // Note: This is uint64, 10^8
+		"balance":   balanceVal,
 		"keys":      acc.Keys,
 		"contracts": acc.Contracts,
 	}

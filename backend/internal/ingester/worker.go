@@ -88,7 +88,13 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			}
 
 			// Map to DB Models
-			argsJSON, _ := json.Marshal(tx.Arguments)
+			// tx.Arguments is [][]byte, where each byte slice is a JSON-CDC string.
+			// defaults json.Marshal would base64 encode them. We want the raw JSON strings in an array.
+			var argsList []json.RawMessage
+			for _, arg := range tx.Arguments {
+				argsList = append(argsList, json.RawMessage(arg))
+			}
+			argsJSON, _ := json.Marshal(argsList)
 			authorizers := make([]string, len(tx.Authorizers))
 			for i, a := range tx.Authorizers {
 				authorizers[i] = a.Hex()
