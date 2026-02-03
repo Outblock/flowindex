@@ -411,7 +411,7 @@ function TransactionDetail() {
                             </div>
                           );
 
-                        } catch (e) {
+                        } catch {
                           // Fallback to raw display
                           return <div className="text-zinc-500 text-xs">Failed to parse arguments: {String(transaction.arguments)}</div>;
                         }
