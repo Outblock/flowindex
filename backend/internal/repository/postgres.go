@@ -1011,6 +1011,39 @@ func (r *Repository) GetTotalTransactions(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+func (r *Repository) GetTotalEvents(ctx context.Context) (int64, error) {
+	estimate, err := r.estimatePartitionCount(ctx, "raw", "events_p%")
+	if err == nil && estimate > 0 {
+		return estimate, nil
+	}
+
+	var count int64
+	err = r.db.QueryRow(ctx, "SELECT COUNT(*) FROM raw.events").Scan(&count)
+	return count, err
+}
+
+func (r *Repository) GetTotalAddresses(ctx context.Context) (int64, error) {
+	estimate, err := r.estimateTableCount(ctx, "app", "address_stats")
+	if err == nil && estimate > 0 {
+		return estimate, nil
+	}
+
+	var count int64
+	err = r.db.QueryRow(ctx, "SELECT COUNT(*) FROM app.address_stats").Scan(&count)
+	return count, err
+}
+
+func (r *Repository) GetTotalContracts(ctx context.Context) (int64, error) {
+	estimate, err := r.estimateTableCount(ctx, "app", "smart_contracts")
+	if err == nil && estimate > 0 {
+		return estimate, nil
+	}
+
+	var count int64
+	err = r.db.QueryRow(ctx, "SELECT COUNT(*) FROM app.smart_contracts").Scan(&count)
+	return count, err
+}
+
 // GetBlockRange returns min height, max height, and total count of blocks
 func (r *Repository) GetBlockRange(ctx context.Context) (uint64, uint64, int64, error) {
 	var minH, maxH uint64
@@ -1046,6 +1079,41 @@ func (r *Repository) estimatePartitionCount(ctx context.Context, schema, relPatt
 		return 0, err
 	}
 	return estimate, nil
+}
+
+func (r *Repository) estimateTableCount(ctx context.Context, schema, table string) (int64, error) {
+	var estimate int64
+	err := r.db.QueryRow(ctx, `
+		SELECT COALESCE(c.reltuples, 0)::bigint
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = $1
+		  AND c.relkind = 'r'
+		  AND c.relname = $2
+	`, schema, table).Scan(&estimate)
+	if err != nil {
+		return 0, err
+	}
+	return estimate, nil
+}
+
+func (r *Repository) GetAllCheckpoints(ctx context.Context) (map[string]uint64, error) {
+	rows, err := r.db.Query(ctx, "SELECT service_name, last_height FROM app.indexing_checkpoints")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make(map[string]uint64)
+	for rows.Next() {
+		var name string
+		var height uint64
+		if err := rows.Scan(&name, &height); err != nil {
+			return nil, err
+		}
+		results[name] = height
+	}
+	return results, nil
 }
 
 // GetAddressByPublicKey finds the address associated with a public key

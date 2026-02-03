@@ -520,7 +520,7 @@ function Home() {
                           </div>
                           <div className="flex items-center space-x-4">
                             <div className="text-xs text-gray-400 font-mono bg-white/5 px-2 py-0.5 rounded-sm">
-                              {block.txCount || 0} TXs
+                              {block.tx_count ?? block.txCount ?? 0} TXs
                             </div>
                             <span className="text-[10px] text-gray-600 font-mono uppercase">
                               {block.timestamp ? new Date(block.timestamp).toLocaleTimeString() : ''}

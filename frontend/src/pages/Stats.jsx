@@ -62,6 +62,14 @@ export default function Stats() {
     const minHeight = status?.min_height || 0;
     const historyHeight = status?.history_height || minHeight;
 
+    const checkpoints = status?.checkpoints || {};
+    const workerOrder = [
+        { key: 'main_ingester', label: 'Main Ingester' },
+        { key: 'history_ingester', label: 'History Ingester' },
+        { key: 'token_worker', label: 'Token Worker' },
+        { key: 'meta_worker', label: 'Meta Worker' },
+    ];
+
     const totalRange = latestHeight - startHeight;
     const indexedRange = indexedHeight - startHeight;
     const progressPercent = totalRange > 0 ? (indexedRange / totalRange) * 100 : 0;
@@ -78,6 +86,10 @@ export default function Stats() {
     if (historySpeed > 0) {
         historyEtaSeconds = historyHeight / historySpeed;
     }
+
+    const historyTotal = startHeight > 0 ? (startHeight + 1) : 0;
+    const historyCovered = startHeight > 0 && minHeight > 0 ? (startHeight - minHeight) : 0;
+    const historyPercent = historyTotal > 0 ? (historyCovered / historyTotal) * 100 : 0;
 
     // Format ETA
     const formatDuration = (seconds) => {
@@ -217,6 +229,54 @@ export default function Stats() {
                                 {(status?.total_blocks || 0).toLocaleString()}
                             </div>
                         </div>
+                    </div>
+
+                    {/* History Progress Bar */}
+                    <div className="mt-6">
+                        <div className="flex items-center justify-between mb-2 text-xs uppercase tracking-wider text-gray-400">
+                            <span>History Progress</span>
+                            <span className="text-blue-400">{historyPercent.toFixed(2)}%</span>
+                        </div>
+                        <div className="relative h-3 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
+                            <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${historyPercent}%` }}
+                                transition={{ duration: 1, ease: "easeOut" }}
+                                className="absolute h-full bg-gradient-to-r from-blue-500/30 to-blue-400/60"
+                            />
+                        </div>
+                        <div className="mt-2 text-[10px] uppercase tracking-widest text-gray-500">
+                            Oldest in DB: {minHeight.toLocaleString()} · Target: 0
+                        </div>
+                    </div>
+                </motion.div>
+
+                {/* Worker Progress */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.18 }}
+                    className="bg-nothing-dark border border-white/10 p-8 mb-6"
+                >
+                    <div className="flex items-center space-x-3 mb-6">
+                        <Activity className="h-6 w-6 text-nothing-green" />
+                        <h2 className="text-2xl font-bold text-white uppercase tracking-wide">Worker Progress</h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        {workerOrder.map((worker) => {
+                            const height = checkpoints?.[worker.key] || 0;
+                            const behind = latestHeight > height ? (latestHeight - height) : 0;
+                            return (
+                                <div key={worker.key} className="bg-black/30 border border-white/10 p-4">
+                                    <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">{worker.label}</div>
+                                    <div className="text-xl font-bold text-white">{height.toLocaleString()}</div>
+                                    <div className="text-[10px] uppercase tracking-wider text-gray-500">
+                                        Behind: {behind.toLocaleString()}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </motion.div>
 

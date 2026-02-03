@@ -172,6 +172,11 @@ type Server struct {
 		payload   []byte
 		expiresAt time.Time
 	}
+	latestHeightCache struct {
+		mu        sync.Mutex
+		height    uint64
+		updatedAt time.Time
+	}
 }
 
 func NewServer(repo *repository.Repository, client *flow.Client, port string, startBlock uint64) *Server {
@@ -274,13 +279,42 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		totalBlocks = 0
 	}
 
+	checkpoints, err := s.repo.GetAllCheckpoints(r.Context())
+	if err != nil {
+		checkpoints = map[string]uint64{}
+	}
+
+	totalEvents, err := s.repo.GetTotalEvents(r.Context())
+	if err != nil {
+		totalEvents = 0
+	}
+	totalAddresses, err := s.repo.GetTotalAddresses(r.Context())
+	if err != nil {
+		totalAddresses = 0
+	}
+	totalContracts, err := s.repo.GetTotalContracts(r.Context())
+	if err != nil {
+		totalContracts = 0
+	}
+
 	// Get latest block height from Flow (bounded latency)
 	latestHeight := maxH
 	{
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		var cachedHeight uint64
+		s.latestHeightCache.mu.Lock()
+		cachedHeight = s.latestHeightCache.height
+		s.latestHeightCache.mu.Unlock()
+
+		ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
 		defer cancel()
 		if h, err := s.client.GetLatestBlockHeight(ctx); err == nil {
 			latestHeight = h
+			s.latestHeightCache.mu.Lock()
+			s.latestHeightCache.height = h
+			s.latestHeightCache.updatedAt = time.Now()
+			s.latestHeightCache.mu.Unlock()
+		} else if cachedHeight > 0 {
+			latestHeight = cachedHeight
 		} else if lastIndexed > latestHeight {
 			latestHeight = lastIndexed
 		}
@@ -290,8 +324,15 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	progress := 0.0
 	start := s.startBlock
 
-	totalRange := float64(latestHeight - start)
-	indexedRange := float64(lastIndexed - start)
+	totalRange := 0.0
+	if latestHeight > start {
+		totalRange = float64(latestHeight - start)
+	}
+
+	indexedRange := 0.0
+	if lastIndexed > start {
+		indexedRange = float64(lastIndexed - start)
+	}
 
 	if lastIndexed < start {
 		indexedRange = 0
@@ -315,6 +356,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		totalTxs = 0
 	}
 
+	behind := uint64(0)
+	if latestHeight > lastIndexed {
+		behind = latestHeight - lastIndexed
+	}
+
 	resp := map[string]interface{}{
 		"chain_id":           "flow",
 		"latest_height":      latestHeight,
@@ -325,8 +371,12 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"total_blocks":       totalBlocks,    // Count (estimate)
 		"start_height":       start,
 		"total_transactions": totalTxs,
+		"total_events":       totalEvents,
+		"total_addresses":    totalAddresses,
+		"total_contracts":    totalContracts,
+		"checkpoints":        checkpoints,
 		"progress":           fmt.Sprintf("%.2f%%", progress),
-		"behind":             latestHeight - lastIndexed,
+		"behind":             behind,
 		"status":             "ok",
 	}
 
