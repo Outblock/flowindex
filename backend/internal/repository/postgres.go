@@ -623,7 +623,7 @@ func (r *Repository) RefreshDailyStats(ctx context.Context) error {
 // GetDailyStats retrieves the last 14 days of stats
 func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT date, tx_count, active_accounts, new_contracts
+		SELECT date::text, tx_count, active_accounts, new_contracts
 		FROM daily_stats
 		ORDER BY date DESC
 		LIMIT 14`)

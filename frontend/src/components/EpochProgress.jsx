@@ -1,4 +1,6 @@
 import { Zap } from 'lucide-react';
+// eslint-disable-next-line
+import { motion } from 'framer-motion';
 export function EpochProgress({ epoch, progress }) {
     const radius = 40;
     const circumference = 2 * Math.PI * radius;

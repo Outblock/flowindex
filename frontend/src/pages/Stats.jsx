@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { AnimatePresence } from 'framer-motion';
+// eslint-disable-next-line
+import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Activity, HardDrive, Server } from 'lucide-react';
 import { api } from '../api';
 
