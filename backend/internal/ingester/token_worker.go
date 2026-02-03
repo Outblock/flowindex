@@ -34,8 +34,8 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	// 2. Parse Events
 	for _, evt := range events {
 		// Filter for Token events
-		if strings.Contains(evt.Type, "TokensDeposited") || strings.Contains(evt.Type, "TokensWithdrawn") {
-			transfer := w.parseTokenEvent(evt)
+		if isToken, isNFT := classifyTokenEvent(evt.Type); isToken {
+			transfer := w.parseTokenEvent(evt, isNFT)
 			if transfer != nil {
 				transfers = append(transfers, *transfer)
 			}
@@ -53,7 +53,7 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 }
 
 // parseTokenEvent parses a raw event into a TokenTransfer model
-func (w *TokenWorker) parseTokenEvent(evt models.Event) *models.TokenTransfer {
+func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.TokenTransfer {
 	fields, ok := parseCadenceEventFields(evt.Payload)
 	if !ok {
 		return nil
@@ -62,13 +62,25 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event) *models.TokenTransfer {
 	amount := extractString(fields["amount"])
 	toAddr := extractAddress(fields["to"])
 	fromAddr := extractAddress(fields["from"])
+	tokenID := extractString(fields["id"])
+	if tokenID == "" {
+		tokenID = extractString(fields["tokenId"])
+	}
 
 	contractAddr := normalizeTokenAddress(evt.ContractAddress)
 	if contractAddr == "" {
 		contractAddr = parseContractAddress(evt.Type)
 	}
 
-	if amount == "" || (toAddr == "" && fromAddr == "") {
+	if isNFT {
+		if amount == "" {
+			amount = "1"
+		}
+	} else if amount == "" {
+		return nil
+	}
+
+	if toAddr == "" && fromAddr == "" {
 		return nil
 	}
 
@@ -80,9 +92,25 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event) *models.TokenTransfer {
 		FromAddress:          fromAddr,
 		ToAddress:            toAddr,
 		Amount:               amount,
-		IsNFT:                false,
+		TokenID:              tokenID,
+		IsNFT:                isNFT,
 		Timestamp:            evt.Timestamp,
 	}
+}
+
+func classifyTokenEvent(eventType string) (bool, bool) {
+	if strings.Contains(eventType, "NonFungibleToken.") &&
+		(strings.Contains(eventType, ".Deposited") || strings.Contains(eventType, ".Withdrawn")) {
+		return true, true
+	}
+	if strings.Contains(eventType, "FungibleToken.") &&
+		(strings.Contains(eventType, ".Deposited") || strings.Contains(eventType, ".Withdrawn")) {
+		return true, false
+	}
+	if strings.Contains(eventType, ".TokensDeposited") || strings.Contains(eventType, ".TokensWithdrawn") {
+		return true, false
+	}
+	return false, false
 }
 
 func parseCadenceEventFields(payload []byte) (map[string]interface{}, bool) {
