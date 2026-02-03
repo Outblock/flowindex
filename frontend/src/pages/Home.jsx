@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Box, Activity, TrendingUp, Database, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
@@ -16,6 +16,10 @@ function Home() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState(null);
   const [networkStats, setNetworkStats] = useState(null); // New state
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const navigate = useNavigate();
 
   // Pagination State
   const [blockPage, setBlockPage] = useState(1);
@@ -145,7 +149,38 @@ function Home() {
 
   // ... (Helper functions remain same)
 
-  // ... (Search Logic remains same)
+  // Search Logic
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setSearching(true);
+    const query = searchQuery.trim();
+
+    // Simple heuristic routing
+    // 1. Block Height (numeric)
+    if (/^\d+$/.test(query)) {
+      navigate(`/blocks/${query}`);
+    }
+    // 2. Transaction ID (64 chars hex)
+    else if (/^[a-fA-F0-9]{64}$/.test(query)) {
+      navigate(`/transactions/${query}`);
+    }
+    // 3. Address (18 chars with 0x) - Flow addresses are usually 16 hex chars (8 bytes) = 18 with 0x
+    else if (/^0x[a-fA-F0-9]{16}$/.test(query)) {
+      navigate(`/accounts/${query}`);
+    }
+    // Fallback based on prefix
+    else if (query.startsWith('0x')) {
+      navigate(`/accounts/${query}`);
+    }
+    else {
+      // Default to transaction lookup for other hashes
+      navigate(`/transactions/${query}`);
+    }
+
+    setSearching(false);
+  };
 
   return (
     <div className="min-h-screen bg-nothing-black text-nothing-white font-mono selection:bg-nothing-green selection:text-black">
