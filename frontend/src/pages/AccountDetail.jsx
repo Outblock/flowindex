@@ -59,22 +59,14 @@ function AccountDetail() {
 
   useEffect(() => {
     loadTransactions(currentPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, currentPage]);
 
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
   };
 
-  const getTypeIcon = (type) => {
-    const iconClass = "h-4 w-4";
-    switch (type) {
-      case 'TRANSFER': return <ArrowRightLeft className={iconClass} />;
-      case 'CREATE_ACCOUNT': return <User className={iconClass} />;
-      case 'TOKEN_MINT': return <Coins className={iconClass} />;
-      case 'NFT_MINT': return <ImageIcon className={iconClass} />;
-      default: return <Activity className={iconClass} />;
-    }
-  };
+
 
   if (loading) {
     return (

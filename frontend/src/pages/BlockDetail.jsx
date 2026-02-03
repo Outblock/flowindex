@@ -34,26 +34,7 @@ function BlockDetail() {
     loadBlock();
   }, [height]);
 
-  const getTypeIcon = (type) => {
-    const iconClass = "h-4 w-4";
-    switch (type) {
-      case 'TRANSFER': return <ArrowRightLeft className={iconClass} />;
-      case 'CREATE_ACCOUNT': return <User className={iconClass} />;
-      case 'TOKEN_MINT': return <Coins className={iconClass} />;
-      case 'NFT_MINT': return <ImageIcon className={iconClass} />;
-      default: return <Activity className={iconClass} />;
-    }
-  };
 
-  const getTypeColor = (type) => {
-    switch (type) {
-      case 'TRANSFER': return 'border-cyan-500/50 text-cyan-400';
-      case 'CREATE_ACCOUNT': return 'border-purple-500/50 text-purple-400';
-      case 'TOKEN_MINT': return 'border-yellow-500/50 text-yellow-400';
-      case 'NFT_MINT': return 'border-pink-500/50 text-pink-400';
-      default: return 'border-slate-500/50 text-slate-400';
-    }
-  };
 
   if (loading) {
     return (

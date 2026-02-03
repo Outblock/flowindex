@@ -3,7 +3,7 @@ import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
 
 // Mock data generator for the sparkline (since we only have current price)
 // In a real app, we'd fetch historical price data
-const generateSparkline = (currentPrice, isPositive) => {
+const generateSparkline = (currentPrice) => {
     const data = [];
     let price = currentPrice;
     for (let i = 0; i < 20; i++) {
@@ -20,7 +20,7 @@ export function FlowPriceChart({ data }) {
 
     const { price, price_change_24h, market_cap } = data;
     const isPositive = price_change_24h >= 0;
-    const sparklineData = generateSparkline(price, isPositive);
+    const sparklineData = generateSparkline(price);
 
     return (
         <div className="bg-nothing-dark border border-white/10 p-6 relative overflow-hidden group hover:border-nothing-green/30 transition-all duration-300">

@@ -56,26 +56,7 @@ function TransactionDetail() {
     loadTransaction();
   }, [txId]);
 
-  const getTypeIcon = (type) => {
-    const iconClass = "h-5 w-5";
-    switch (type) {
-      case 'TRANSFER': return <ArrowRightLeft className={iconClass} />;
-      case 'CREATE_ACCOUNT': return <User className={iconClass} />;
-      case 'TOKEN_MINT': return <Coins className={iconClass} />;
-      case 'NFT_MINT': return <ImageIcon className={iconClass} />;
-      default: return <Activity className={iconClass} />;
-    }
-  };
 
-  const getTypeColor = (type) => {
-    switch (type) {
-      case 'TRANSFER': return 'from-cyan-500/20 to-cyan-600/10 border-cyan-500/50';
-      case 'CREATE_ACCOUNT': return 'from-purple-500/20 to-purple-600/10 border-purple-500/50';
-      case 'TOKEN_MINT': return 'from-yellow-500/20 to-yellow-600/10 border-yellow-500/50';
-      case 'NFT_MINT': return 'from-pink-500/20 to-pink-600/10 border-pink-500/50';
-      default: return 'from-slate-500/20 to-slate-600/10 border-slate-500/50';
-    }
-  };
 
   const formatAddress = (addr) => {
     if (!addr) return 'Unknown';
@@ -122,10 +103,7 @@ function TransactionDetail() {
     );
   }
 
-  var typeColor = 'from-zinc-500/20 to-zinc-600/10 border-zinc-500/50';
-  if (transaction && transaction.type) {
-    typeColor = getTypeColor(transaction.type);
-  }
+
 
   return (
     <div className="min-h-screen bg-black text-zinc-300 font-mono selection:bg-nothing-green selection:text-black">

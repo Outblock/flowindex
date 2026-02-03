@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { Search, Box, Activity, TrendingUp, Database, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../api';
@@ -9,11 +9,12 @@ import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
 import { NetworkStats } from '../components/NetworkStats';
 import { Pagination } from '../components/Pagination';
+import { DailyStatsChart } from '../components/DailyStatsChart';
 
 function Home() {
   const [blocks, setBlocks] = useState([]);
   const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // const [loading, setLoading] = useState(true); // Unused
   const [status, setStatus] = useState(null);
   const [networkStats, setNetworkStats] = useState(null); // New state
 
@@ -25,11 +26,9 @@ function Home() {
   const [blockPage, setBlockPage] = useState(1);
   const [txPage, setTxPage] = useState(1);
 
-  const [prevHeight, setPrevHeight] = useState(0);
   const [newBlockIds, setNewBlockIds] = useState(new Set());
   const [newTxIds, setNewTxIds] = useState(new Set());
-  const prevBlocksRef = useRef([]);
-  const prevTxRef = useRef([]);
+  // Removed unused refs and state
 
   const { isConnected, lastMessage } = useWebSocket();
 
@@ -122,11 +121,7 @@ function Home() {
 
         setNetworkStats(netStatsRes);
 
-        // ... (rest of transformation logic)
 
-
-        setBlocks(Array.isArray(blocksRes) ? blocksRes : []);
-        setTransactions(transformedTxs);
 
         if (statusRes) {
           setStatus({
@@ -135,13 +130,13 @@ function Home() {
             tps: 0
           });
           if (statusRes.latest_height) {
-            setPrevHeight(statusRes.latest_height);
+            // setPrevHeight(statusRes.latest_height);
           }
         }
       } catch (error) {
         console.error('Failed to fetch initial data:', error);
       } finally {
-        setLoading(false);
+        // setLoading(false);
       }
     };
     loadInitialData();

@@ -10,6 +10,8 @@ export function useWebSocket() {
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
 
+  const connectRef = useRef(null);
+
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
@@ -35,7 +37,9 @@ export function useWebSocket() {
       setIsConnected(false);
       // Auto-reconnect after 3 seconds
       reconnectTimeoutRef.current = setTimeout(() => {
-        connect();
+        if (connectRef.current) {
+          connectRef.current();
+        }
       }, 3000);
     };
 
@@ -44,6 +48,11 @@ export function useWebSocket() {
       ws.close();
     };
   }, []);
+
+  // Update ref
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     connect();

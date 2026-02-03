@@ -1,19 +1,11 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Database, Activity, HardDrive, Clock, TrendingUp, Server, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
+import { Database, Activity, HardDrive, Server } from 'lucide-react';
 import { api } from '../api';
 
 export default function Stats() {
-    const navigate = useNavigate();
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetchStatus();
-        const interval = setInterval(fetchStatus, 2000); // Update every 2 seconds
-        return () => clearInterval(interval);
-    }, []);
 
     const fetchStatus = async () => {
         try {
@@ -24,6 +16,13 @@ export default function Stats() {
             console.error('Failed to fetch status:', error);
         }
     };
+
+    useEffect(() => {
+        // eslint-disable-next-line
+        fetchStatus();
+        const interval = setInterval(fetchStatus, 2000); // Update every 2 seconds
+        return () => clearInterval(interval);
+    }, []);
 
     if (loading) {
         return (
