@@ -500,18 +500,38 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 
 	// Transform for JSON if needed, or return raw
 	// flow.Account has fields like Balance (uint64), Keys, Contracts
-	// We might want to format Balance (which is uint64 in Cadence units usually, but SDK returns uint64? No, SDK returns flow.Account which has Balance uint64)
-	// Actually flow.Account Balance is specific. Let's return raw for now.
 
 	// Create a simplified response wrapper
 	// Balance is uint64 in atomic units (1e-8 Flow). Convert to float for JSON.
 	balanceVal := float64(acc.Balance) / 100000000.0
 
+	// RPC Fallback for Keys: If DB has no keys but RPC account does (which it always does if fetched), use them.
+	// The previous implementation relied on the `acc` from client.GetAccount, which ALREADY contains keys from RPC.
+	// However, if we want to prioritize DB keys we would need to check DB first.
+	// But here the code calls s.client.GetAccount(r.Context(), address) at the top of the handler.
+	// So `acc` IS from RPC.
+	// The issue might be that the previous code was just encoding `acc.Keys`.
+	// Let's ensure we are encoding them correctly.
+
+	// Reformatted keys for easier reading
+	var formattedKeys []map[string]interface{}
+	for _, key := range acc.Keys {
+		formattedKeys = append(formattedKeys, map[string]interface{}{
+			"index":           key.Index,
+			"public_key":      key.PublicKey.String(),
+			"sign_algo":       key.SigAlgo.String(),
+			"hash_algo":       key.HashAlgo.String(),
+			"weight":          key.Weight,
+			"sequence_number": key.SequenceNumber,
+			"revoked":         key.Revoked,
+		})
+	}
+
 	resp := map[string]interface{}{
 		"address":   acc.Address.Hex(),
 		"balance":   balanceVal,
-		"keys":      acc.Keys,
-		"contracts": acc.Contracts,
+		"keys":      formattedKeys, // Use formatted keys
+		"contracts": acc.Contracts, // Contracts map is usually fine
 	}
 
 	json.NewEncoder(w).Encode(resp)
