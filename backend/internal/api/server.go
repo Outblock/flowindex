@@ -383,6 +383,23 @@ func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
 			"is_indexed":               false,
 		}
 
+		// Process arguments from RPC (similar to worker)
+		// rpcTx.Arguments is [][]byte, each is JSON-CDC.
+		// We want to return them as a JSON array of raw JSON objects (not base64 strings).
+		// Since we are returning a map[string]interface{}, let's try to unmarshal them into interface{} first
+		// so when we encode the map, they are encoded as JSON objects/arrays, not strings.
+		var argsList []interface{}
+		for _, argBytes := range rpcTx.Arguments {
+			var argJSON interface{}
+			if err := json.Unmarshal(argBytes, &argJSON); err == nil {
+				argsList = append(argsList, argJSON)
+			} else {
+				// If unmarshal fails, just append as string or raw
+				argsList = append(argsList, string(argBytes))
+			}
+		}
+		fallbackTx["arguments"] = argsList
+
 		// Add result data if available
 		if rpcResult != nil {
 			fallbackTx["status"] = rpcResult.Status.String()
