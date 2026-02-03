@@ -15,5 +15,6 @@ export const api = {
   getAccountTokenTransfers: (address) => axios.get(`${API_URL}/accounts/${address}/token-transfers`).then(res => res.data),
   getAccountNFTTransfers: (address) => axios.get(`${API_URL}/accounts/${address}/nft-transfers`).then(res => res.data),
   getDailyStats: () => axios.get(`${API_URL}/stats/daily`).then(res => res.data),
+  getNetworkStats: () => axios.get(`${API_URL}/stats/network`).then(res => res.data),
   getStatus: () => axios.get(`${API_URL}/status`).then(res => res.data),
 };
