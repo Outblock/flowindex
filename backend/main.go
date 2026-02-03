@@ -89,6 +89,8 @@ func main() {
 	latestBatch := getEnvInt("LATEST_BATCH_SIZE", 1)    // Real-time
 	historyBatch := getEnvInt("HISTORY_BATCH_SIZE", 20) // Throughput
 	maxReorgDepth := getEnvUint("MAX_REORG_DEPTH", 1000)
+	tokenWorkerRange := getEnvUint("TOKEN_WORKER_RANGE", 50000)
+	metaWorkerRange := getEnvUint("META_WORKER_RANGE", 50000)
 
 	// 3. Services
 	// Forward Ingester (Live Data)
@@ -129,7 +131,7 @@ func main() {
 	if enableTokenWorker {
 		tokenWorkerProcessor = ingester.NewTokenWorker(repo)
 		tokenWorker = ingester.NewAsyncWorker(tokenWorkerProcessor, repo, ingester.WorkerConfig{
-			RangeSize: 50000,
+			RangeSize: tokenWorkerRange,
 		})
 		workerTypes = append(workerTypes, tokenWorkerProcessor.Name())
 	} else {
@@ -139,7 +141,7 @@ func main() {
 	if enableMetaWorker {
 		metaWorkerProcessor = ingester.NewMetaWorker(repo)
 		metaWorker = ingester.NewAsyncWorker(metaWorkerProcessor, repo, ingester.WorkerConfig{
-			RangeSize: 50000,
+			RangeSize: metaWorkerRange,
 		})
 		workerTypes = append(workerTypes, metaWorkerProcessor.Name())
 	} else {

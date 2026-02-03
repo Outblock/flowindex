@@ -6,6 +6,7 @@ This is the final publish list of environment variables used by the backend. Rai
 
 - `DB_URL` = Postgres connection string.
 - `FLOW_ACCESS_NODE` = Flow access node, e.g. `access-001.mainnet28.nodes.onflow.org:9000`.
+- `FLOW_ACCESS_NODES` = optional comma-separated list of access nodes (overrides `FLOW_ACCESS_NODE`).
 - `PORT` = API port (Railway sets this automatically; for GCP you can set explicitly).
 - `START_BLOCK` = start height for indexing (optional but strongly recommended).
 
@@ -23,6 +24,8 @@ This is the final publish list of environment variables used by the backend. Rai
 - `ENABLE_DERIVED_WRITES` (default: false)
 - `ENABLE_TOKEN_WORKER` (default: true)
 - `ENABLE_META_WORKER` (default: true)
+- `TOKEN_WORKER_RANGE` (default: 50000)
+- `META_WORKER_RANGE` (default: 50000)
 - `ENABLE_DAILY_STATS` (default: true)
 - `ENABLE_LOOKUP_REPAIR` (default: false)
 - `LOOKUP_REPAIR_LIMIT` (default: 1000)
@@ -32,6 +35,8 @@ This is the final publish list of environment variables used by the backend. Rai
 
 - `FLOW_RPC_RPS` (default: 5)
 - `FLOW_RPC_BURST` (default: `FLOW_RPC_RPS`)
+- `FLOW_RPC_RPS_PER_NODE` (optional; multiplies by number of access nodes)
+- `FLOW_RPC_BURST_PER_NODE` (optional; multiplies by number of access nodes)
 
 ## DB Pool Tuning (optional)
 

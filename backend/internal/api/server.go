@@ -163,10 +163,10 @@ func init() {
 // --- Server & Routes ---
 
 type Server struct {
-	repo       *repository.Repository
-	client     *flow.Client
-	httpServer *http.Server
-	startBlock uint64
+	repo        *repository.Repository
+	client      *flow.Client
+	httpServer  *http.Server
+	startBlock  uint64
 	statusCache struct {
 		mu        sync.Mutex
 		payload   []byte

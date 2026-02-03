@@ -4,6 +4,8 @@
 # Core
 DB_URL=postgres://USER:PASSWORD@HOST:PORT/DBNAME?sslmode=require
 FLOW_ACCESS_NODE=access-001.mainnet28.nodes.onflow.org:9000
+# Optional multi-node (overrides FLOW_ACCESS_NODE)
+FLOW_ACCESS_NODES=access-001.mainnet28.nodes.onflow.org:9000,access-002.mainnet28.nodes.onflow.org:9000,access-003.mainnet28.nodes.onflow.org:9000
 PORT=8080
 START_BLOCK=140900000
 
@@ -18,6 +20,8 @@ ENABLE_HISTORY_INGESTER=false
 ENABLE_DERIVED_WRITES=false
 ENABLE_TOKEN_WORKER=false
 ENABLE_META_WORKER=false
+TOKEN_WORKER_RANGE=5000
+META_WORKER_RANGE=5000
 ENABLE_DAILY_STATS=false
 ENABLE_LOOKUP_REPAIR=false
 LOOKUP_REPAIR_LIMIT=1000
@@ -26,6 +30,9 @@ LOOKUP_REPAIR_INTERVAL_MIN=10
 # Flow RPC throttling
 FLOW_RPC_RPS=5
 FLOW_RPC_BURST=5
+# Optional per-node (multiplies by number of access nodes)
+FLOW_RPC_RPS_PER_NODE=0
+FLOW_RPC_BURST_PER_NODE=0
 
 # Safety
 MAX_REORG_DEPTH=1000
