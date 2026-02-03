@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Box, Activity, TrendingUp, Database, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
