@@ -176,3 +176,11 @@ type AddressStats struct {
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
+
+// DailyStat represents daily transaction statistics
+type DailyStat struct {
+	Date           string `json:"date"`
+	TxCount        int64  `json:"tx_count"`
+	ActiveAccounts int64  `json:"active_accounts"`
+	NewContracts   int    `json:"new_contracts"`
+}

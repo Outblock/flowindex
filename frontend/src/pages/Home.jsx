@@ -452,6 +452,43 @@ function Home() {
               <AnimatePresence mode='popLayout'>
                 {(transactions || []).slice(0, 10).map((tx) => {
                   const isNew = newTxIds.has(tx.id);
+                  const isSealed = tx.status === 'SEALED';
+                  const isError = !isSealed && tx.status !== 'PENDING'; // Assume anything else is error for list
+
+                  // Helper to determine Transaction Type & Details
+                  const getTxMetadata = (tx) => {
+                    let type = 'Interaction';
+                    let transferInfo = null;
+
+                    // Check Events for type inference
+                    if (tx.events && Array.isArray(tx.events)) {
+                      for (const evt of tx.events) {
+                        if (evt.type.includes('TokensDeposited')) {
+                          type = 'Transfer';
+                          if (evt.values?.value?.fields) {
+                            const amount = evt.values.value.fields.find(f => f.name === 'amount')?.value?.value;
+                            if (amount) transferInfo = `${parseFloat(amount).toFixed(2)} FLOW`;
+                          }
+                        } else if (evt.type.includes('AccountCreated')) {
+                          type = 'Create Account';
+                        } else if (evt.type.includes('AccountContractAdded')) {
+                          type = 'Deploy Contract';
+                        } else if (evt.type.includes('Mint')) {
+                          type = 'Mint';
+                        }
+                      }
+                    }
+
+                    // Fallback to script/backend provided type
+                    if (type === 'Interaction' && tx.type && tx.type !== 'PENDING' && tx.type !== 'TRANSFER') {
+                      type = tx.type;
+                    }
+
+                    return { type, transferInfo };
+                  };
+
+                  const { type: txType, transferInfo } = getTxMetadata(tx);
+
                   return (
                     <motion.div
                       layout
@@ -464,28 +501,51 @@ function Home() {
                       <Link
                         to={`/transactions/${tx.id}`}
                         className={`block border p-3 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
-                          ? 'bg-white/10 border-white/40' // Txs flash white/grey
+                          ? 'bg-white/10 border-white/40'
                           : 'bg-black/20 border-white/5'
                           }`}
                       >
                         {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-white animate-ping" />}
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-2">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              {/* Type Badge */}
-                              <span className="text-[10px] px-1.5 py-0.5 border border-white/20 bg-white/5 text-gray-300 uppercase tracking-wider rounded-sm">
-                                {tx.type}
+                            <div className="flex items-center space-x-3">
+                              <span className="text-xs text-gray-400 font-mono truncate w-24 sm:w-32">
+                                {tx.id}
                               </span>
-                              <span className="text-xs text-gray-400 font-mono truncate w-24 sm:w-auto">
-                                {tx.id?.slice(0, 16)}...
+                              <span className="text-[10px] text-gray-500 font-mono">
+                                {new Date(tx.created_at || Date.now()).toLocaleTimeString()}
                               </span>
                             </div>
-                            <span className={`text-[10px] uppercase font-bold tracking-wider ${tx.status === 'SEALED' ? 'text-nothing-green' : 'text-yellow-500'
-                              }`}>
-                              [{tx.status}]
-                            </span>
+                            {(isSealed || isError) && (
+                              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border ${isSealed ? 'border-nothing-green/50 text-nothing-green bg-nothing-green/10' : 'border-red-500/50 text-red-500 bg-red-500/10'
+                                }`}>
+                                {isSealed ? 'Sealed' : 'Error'}
+                              </span>
+                            )}
                           </div>
 
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${txType === 'Transfer' ? 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5' :
+                                  txType === 'Mint' ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5' :
+                                    'border-white/20 text-gray-300 bg-white/5'
+                                }`}>
+                                {txType}
+                              </span>
+                              {transferInfo && (
+                                <span className="text-xs text-white font-mono flex items-center space-x-1">
+                                  <ArrowRightLeft className="w-3 h-3 text-gray-500" />
+                                  <span>{transferInfo}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {tx.error_message && (
+                            <div className="text-[10px] text-red-400 font-mono truncate bg-red-900/10 px-2 py-1 border border-red-500/20">
+                              Error: {tx.error_message}
+                            </div>
+                          )}
                         </div>
                       </Link>
                     </motion.div>
