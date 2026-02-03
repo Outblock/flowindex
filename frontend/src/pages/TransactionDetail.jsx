@@ -292,12 +292,11 @@ function TransactionDetail() {
                   {transaction.script ? (
                     <div className="border border-white/5 rounded-sm overflow-hidden text-[10px]">
                       <SyntaxHighlighter
-                        language="cadence"
+                        language="swift"
                         style={vscDarkPlus}
                         customStyle={{
                           margin: 0,
                           padding: '1.5rem',
-                          background: 'rgba(0,0,0,0.5)',
                           fontSize: '11px',
                           lineHeight: '1.6',
                         }}
