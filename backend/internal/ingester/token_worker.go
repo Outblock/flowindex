@@ -44,6 +44,19 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 
 	// 3. Upsert to App DB
 	if len(transfers) > 0 {
+		minH := transfers[0].BlockHeight
+		maxH := transfers[0].BlockHeight
+		for _, t := range transfers[1:] {
+			if t.BlockHeight < minH {
+				minH = t.BlockHeight
+			}
+			if t.BlockHeight > maxH {
+				maxH = t.BlockHeight
+			}
+		}
+		if err := w.repo.EnsureAppPartitions(ctx, minH, maxH); err != nil {
+			return fmt.Errorf("failed to ensure token partitions: %w", err)
+		}
 		if err := w.repo.UpsertTokenTransfers(ctx, transfers); err != nil {
 			return fmt.Errorf("failed to upsert transfers: %w", err)
 		}
