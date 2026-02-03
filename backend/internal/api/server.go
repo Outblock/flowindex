@@ -238,13 +238,6 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	// Get latest block height from Flow
-	latestHeight, err := s.client.GetLatestBlockHeight(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	// Get indexed height from DB (Forward Tip)
 	lastIndexed, err := s.repo.GetLastIndexedHeight(r.Context(), "main_ingester")
 	if err != nil {
@@ -264,6 +257,18 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		minH = 0
 		maxH = 0
 		totalBlocks = 0
+	}
+
+	// Get latest block height from Flow (bounded latency)
+	latestHeight := maxH
+	{
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if h, err := s.client.GetLatestBlockHeight(ctx); err == nil {
+			latestHeight = h
+		} else if lastIndexed > latestHeight {
+			latestHeight = lastIndexed
+		}
 	}
 
 	// Calculate Progress relative to StartBlock

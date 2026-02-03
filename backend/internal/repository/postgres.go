@@ -445,8 +445,7 @@ func (r *Repository) ListBlocks(ctx context.Context, limit, offset int) ([]model
 
 func (r *Repository) GetRecentBlocks(ctx context.Context, limit, offset int) ([]models.Block, error) {
 	query := `
-		SELECT b.height, b.id, b.parent_id, b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at,
-			   COALESCE((SELECT COUNT(*) FROM raw.transactions t WHERE t.block_height = b.height), 0) as tx_count
+		SELECT b.height, b.id, b.parent_id, b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at, b.tx_count
 		FROM raw.blocks b 
 		ORDER BY b.height DESC 
 		LIMIT $1 OFFSET $2`
@@ -470,8 +469,7 @@ func (r *Repository) GetRecentBlocks(ctx context.Context, limit, offset int) ([]
 
 func (r *Repository) GetBlocksByCursor(ctx context.Context, limit int, cursorHeight *uint64) ([]models.Block, error) {
 	query := `
-		SELECT b.height, b.id, b.parent_id, b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at,
-			   COALESCE((SELECT COUNT(*) FROM raw.transactions t WHERE t.block_height = b.height), 0) as tx_count
+		SELECT b.height, b.id, b.parent_id, b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at, b.tx_count
 		FROM raw.blocks b
 		WHERE ($1::bigint IS NULL OR b.height < $1)
 		ORDER BY b.height DESC
@@ -733,7 +731,7 @@ func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset in
 	query := `
 		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.error_message, t.created_at
 		FROM raw.transactions t
-		ORDER BY t.block_height DESC
+		ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC
 		LIMIT $1 OFFSET $2`
 
 	rows, err := r.db.Query(ctx, query, limit, offset)
@@ -1003,28 +1001,51 @@ func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, err
 }
 
 func (r *Repository) GetTotalTransactions(ctx context.Context) (int64, error) {
-	// Use estimate for speed if needed, but exact count for now
+	estimate, err := r.estimatePartitionCount(ctx, "raw", "transactions_p%")
+	if err == nil && estimate > 0 {
+		return estimate, nil
+	}
+
 	var count int64
-	err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM raw.transactions").Scan(&count)
+	err = r.db.QueryRow(ctx, "SELECT COUNT(*) FROM raw.transactions").Scan(&count)
 	return count, err
 }
 
 // GetBlockRange returns min height, max height, and total count of blocks
 func (r *Repository) GetBlockRange(ctx context.Context) (uint64, uint64, int64, error) {
 	var minH, maxH uint64
-	var count int64
-	// Use coalesce(..., 0) to handle empty table
+	// Use coalesce(..., 0) to handle empty table for min/max.
 	err := r.db.QueryRow(ctx, `
 		SELECT 
 			COALESCE(MIN(height), 0), 
-			COALESCE(MAX(height), 0), 
-			COUNT(*) 
+			COALESCE(MAX(height), 0)
 		FROM raw.blocks
-	`).Scan(&minH, &maxH, &count)
+	`).Scan(&minH, &maxH)
 	if err != nil {
 		return 0, 0, 0, err
 	}
+
+	count, err := r.estimatePartitionCount(ctx, "raw", "blocks_p%")
+	if err != nil {
+		count = 0
+	}
 	return minH, maxH, count, nil
+}
+
+func (r *Repository) estimatePartitionCount(ctx context.Context, schema, relPattern string) (int64, error) {
+	var estimate int64
+	err := r.db.QueryRow(ctx, `
+		SELECT COALESCE(SUM(c.reltuples), 0)::bigint
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = $1
+		  AND c.relkind = 'r'
+		  AND c.relname LIKE $2
+	`, schema, relPattern).Scan(&estimate)
+	if err != nil {
+		return 0, err
+	}
+	return estimate, nil
 }
 
 // GetAddressByPublicKey finds the address associated with a public key
