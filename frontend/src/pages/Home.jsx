@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Box, Activity, TrendingUp, Database, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../api';
-import useWebSocket from '../hooks/useWebSocket';
+import { useWebSocket } from '../hooks/useWebSocket';
 import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
 import { NetworkStats } from '../components/NetworkStats';
