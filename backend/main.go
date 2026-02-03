@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 
 	"flowscan-clone/internal/api"
 	"flowscan-clone/internal/flow"
@@ -153,6 +154,32 @@ func main() {
 	} else {
 		log.Println("History Ingester is DISABLED (ENABLE_HISTORY_INGESTER=false)")
 	}
+
+	// Start Daily Stats Aggregator (Runs every 5 mins)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Run immediately
+		log.Println("Running initial Daily Stats Aggregation...")
+		if err := repo.RefreshDailyStats(ctx); err != nil {
+			log.Printf("Failed to refresh daily stats: %v", err)
+		}
+
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := repo.RefreshDailyStats(ctx); err != nil {
+					log.Printf("Failed to refresh daily stats: %v", err)
+				}
+			}
+		}
+	}()
 
 	wg.Wait()
 }

@@ -602,6 +602,47 @@ func (r *Repository) GetContractByAddress(ctx context.Context, address string) (
 	return &c, nil
 }
 
+// RefreshDailyStats aggregates transaction counts by date into daily_stats table
+func (r *Repository) RefreshDailyStats(ctx context.Context) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO daily_stats (date, tx_count)
+		SELECT 
+			DATE(created_at) as date, 
+			COUNT(*) as tx_count
+		FROM transactions 
+		GROUP BY DATE(created_at)
+		ON CONFLICT (date) DO UPDATE SET 
+			tx_count = EXCLUDED.tx_count;
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to refresh daily stats: %w", err)
+	}
+	return nil
+}
+
+// GetDailyStats retrieves the last 14 days of stats
+func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT date, tx_count, active_accounts, new_contracts
+		FROM daily_stats
+		ORDER BY date DESC
+		LIMIT 14`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []models.DailyStat
+	for rows.Next() {
+		var s models.DailyStat
+		if err := rows.Scan(&s.Date, &s.TxCount, &s.ActiveAccounts, &s.NewContracts); err != nil {
+			return nil, err
+		}
+		stats = append(stats, s)
+	}
+	return stats, nil
+}
+
 type DailyStat struct {
 	Date    string `json:"date"`
 	TxCount int64  `json:"tx_count"`
