@@ -182,22 +182,37 @@ function Home() {
     <div className="min-h-screen bg-nothing-black text-nothing-white font-mono selection:bg-nothing-green selection:text-black">
       {/* Sticky Header with Search */}
       <div className="sticky top-0 z-50 bg-nothing-dark/95 backdrop-blur-md border-b border-white/5 py-4">
-        <div className="container mx-auto px-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center space-x-2 group">
-            <Box className="h-6 w-6 text-nothing-green group-hover:rotate-12 transition-transform" />
-            <div className="flex flex-col">
-              <span className="text-xl font-black tracking-tighter text-white uppercase italic leading-none">
-                Flow<span className="text-nothing-green">Scan</span>
+        <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+
+          {/* Top Row on Mobile: Logo + Status */}
+          <div className="w-full md:w-auto flex items-center justify-between md:justify-start">
+            <Link to="/" className="flex items-center space-x-2 group">
+              <Box className="h-6 w-6 text-nothing-green group-hover:rotate-12 transition-transform" />
+              <div className="flex flex-col">
+                <span className="text-xl font-black tracking-tighter text-white uppercase italic leading-none">
+                  Flow<span className="text-nothing-green">Scan</span>
+                </span>
+              </div>
+            </Link>
+
+            {/* Mobile Status Indicator (visible only on small screens here if we want, but let's keep it next to logo or separate?) 
+                Actually, let's keep status on the right on desktop, but maybe next to logo on mobile? 
+                Let's stick to the plan: Logo | Status on top row for mobile.
+            */}
+            <div className="flex md:hidden items-center space-x-2 px-3 py-1 border rounded-sm border-white/10 bg-white/5">
+              <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-nothing-green animate-pulse' : 'bg-gray-500'}`}></div>
+              <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-nothing-green' : 'text-gray-500'}`}>
+                {isConnected ? 'Online' : 'Offline'}
               </span>
             </div>
-          </Link>
+          </div>
 
           {/* Search Bar */}
           <motion.form
             onSubmit={handleSearch}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex-1 max-w-xl mx-8 relative group"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full md:flex-1 md:max-w-xl md:mx-8 relative group"
           >
             <div className="absolute inset-0 bg-nothing-green/5 blur-md group-hover:bg-nothing-green/10 transition-colors duration-500" />
             <div className="relative flex items-center bg-black/50 border border-white/10 p-1 group-focus-within:border-nothing-green transition-all duration-300">
@@ -207,7 +222,7 @@ function Home() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="SEARCH ADDRESS / TX / BLOCK..."
-                className="flex-1 bg-transparent border-none focus:ring-0 text-xs py-2 px-3 text-white placeholder:text-gray-600 uppercase tracking-widest outline-none"
+                className="flex-1 bg-transparent border-none focus:ring-0 text-xs py-2 px-3 text-white placeholder:text-gray-600 uppercase tracking-widest outline-none w-full"
               />
               <button
                 type="submit"
@@ -219,7 +234,8 @@ function Home() {
             </div>
           </motion.form>
 
-          <div className={`flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-nothing-green/10 border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
+          {/* Desktop Status Indicator */}
+          <div className={`hidden md:flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-nothing-green/10 border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
             <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-nothing-green animate-pulse' : 'bg-gray-500'}`}></div>
             <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-nothing-green' : 'text-gray-500'}`}>
               {isConnected ? 'Online' : 'Offline'}
