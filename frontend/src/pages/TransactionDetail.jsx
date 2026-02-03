@@ -3,6 +3,12 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces } from 'lucide-react';
 
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+SyntaxHighlighter.registerLanguage('cadence', swift);
+
 function TransactionDetail() {
   const { txId } = useParams();
   const [transaction, setTransaction] = useState(null);
@@ -163,109 +169,72 @@ function TransactionDetail() {
           </div>
         )}
 
-        {/* Info Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Info Grid - Now Full Width for Flow Info */}
+        <div className="mb-8">
           {/* Flow Information */}
           <div className="border border-white/10 p-6 bg-nothing-dark">
             <h2 className="text-white text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-2">
               Cadence / Flow Information
             </h2>
 
-            <div className="space-y-6">
-              <div className="group">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Flow Transaction ID</p>
-                <code className="text-sm text-zinc-300 break-all">{transaction.id}</code>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="group">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Block Height</p>
-                  <Link
-                    to={`/blocks/${transaction.blockHeight}`}
-                    className="text-sm text-white hover:text-nothing-green transition-colors"
-                  >
-                    {transaction.blockHeight?.toLocaleString()}
-                  </Link>
-                </div>
-                <div className="group">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Computation Usage</p>
-                  <span className="text-sm text-zinc-300">{transaction.computation_usage?.toLocaleString() || 0}</span>
-                </div>
-              </div>
-
-              <div className="group">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Payer</p>
-                <Link to={`/accounts/${formatAddress(transaction.payer)}`} className="text-sm text-nothing-green hover:underline break-all uppercase tracking-tight">
-                  {formatAddress(transaction.payer)}
-                </Link>
-              </div>
-
-              <div className="group">
-                <div className="flex justify-between items-end mb-1">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Proposer</p>
-                  <span className="text-[9px] text-zinc-600 uppercase tracking-tight bg-white/5 px-2 py-0.5 rounded">
-                    Seq: {transaction.proposerSequenceNumber} • Key: {transaction.proposerKeyIndex}
-                  </span>
-                </div>
-                <Link to={`/accounts/${formatAddress(transaction.proposer)}`} className="text-sm text-zinc-300 hover:text-white break-all uppercase tracking-tight block">
-                  {formatAddress(transaction.proposer)}
-                </Link>
-              </div>
-
-              {transaction.authorizers && transaction.authorizers.length > 0 && (
-                <div className="group">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Authorizers</p>
-                  <div className="flex flex-col gap-1">
-                    {transaction.authorizers.map(auth => (
-                      <Link key={auth} to={`/accounts/${formatAddress(auth)}`} className="text-sm text-zinc-400 hover:text-white break-all uppercase tracking-tight">
-                        {formatAddress(auth)}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* EVM Summary / or Nothing if not EVM */}
-          {/* If not EVM, maybe just show empty placeholder or keep alignment */}
-          <div className={`border p-6 bg-nothing-dark transition-all duration-500 ${transaction.is_evm ? 'border-blue-500/30' : 'border-white/10 opacity-50'}`}>
-            {/* ... content remains same, just shorter summary ... */}
-            {/* Actually, keeping the EVM summary here is fine, but detailed logs might go to tab */}
-            <h2 className={`text-sm uppercase tracking-widest mb-6 border-b pb-2 ${transaction.is_evm ? 'text-blue-400 border-blue-500/20' : 'text-zinc-500 border-white/5'}`}>
-              EVM Summary
-            </h2>
-            {transaction.is_evm ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-6">
                 <div className="group">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">EVM Hash</p>
-                  <code className="text-sm text-blue-300 break-all">{transaction.evm_hash || 'N/A'}</code>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Flow Transaction ID</p>
+                  <code className="text-sm text-zinc-300 break-all">{transaction.id}</code>
                 </div>
-                <div className="group">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">From (EVM)</p>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <code className="text-sm text-zinc-300 break-all uppercase">{transaction.evm_from || 'N/A'}</code>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="group">
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Block Height</p>
+                    <Link
+                      to={`/blocks/${transaction.blockHeight}`}
+                      className="text-sm text-white hover:text-nothing-green transition-colors"
+                    >
+                      {transaction.blockHeight?.toLocaleString()}
+                    </Link>
+                  </div>
+                  <div className="group">
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Computation Usage</p>
+                    <span className="text-sm text-zinc-300">{transaction.computation_usage?.toLocaleString() || 0}</span>
                   </div>
                 </div>
+              </div>
+
+              <div className="space-y-6">
                 <div className="group">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">To (EVM)</p>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                    <code className="text-sm text-zinc-300 break-all uppercase">{transaction.evm_to || 'Contract Creation'}</code>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Payer</p>
+                  <Link to={`/accounts/${formatAddress(transaction.payer)}`} className="text-sm text-nothing-green hover:underline break-all uppercase tracking-tight">
+                    {formatAddress(transaction.payer)}
+                  </Link>
+                </div>
+
+                <div className="group">
+                  <div className="flex justify-between items-end mb-1">
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Proposer</p>
+                    <span className="text-[9px] text-zinc-600 uppercase tracking-tight bg-white/5 px-2 py-0.5 rounded">
+                      Seq: {transaction.proposerSequenceNumber} • Key: {transaction.proposerKeyIndex}
+                    </span>
                   </div>
+                  <Link to={`/accounts/${formatAddress(transaction.proposer)}`} className="text-sm text-zinc-300 hover:text-white break-all uppercase tracking-tight block">
+                    {formatAddress(transaction.proposer)}
+                  </Link>
                 </div>
-                <div className="group">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Value Transferred</p>
-                  <code className="text-sm text-white">{transaction.evm_value ? `${parseInt(transaction.evm_value, 16) / 1e18} Flow` : '0'}</code>
-                </div>
+
+                {transaction.authorizers && transaction.authorizers.length > 0 && (
+                  <div className="group">
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Authorizers</p>
+                    <div className="flex flex-col gap-1">
+                      {transaction.authorizers.map(auth => (
+                        <Link key={auth} to={`/accounts/${formatAddress(auth)}`} className="text-sm text-zinc-400 hover:text-white break-all uppercase tracking-tight">
+                          {formatAddress(auth)}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full py-12 text-center text-zinc-700">
-                <Box className="h-12 w-12 mb-2 opacity-20" />
-                <p className="text-[10px] uppercase tracking-[0.2em]">No EVM Metadata Detected</p>
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
@@ -321,9 +290,23 @@ function TransactionDetail() {
                     <Braces className="h-4 w-4" /> Cadence Script
                   </h3>
                   {transaction.script ? (
-                    <pre className="bg-black/50 border border-white/5 p-4 overflow-x-auto text-[10px] text-zinc-400 rounded-sm leading-relaxed max-h-[400px]">
-                      <code>{transaction.script}</code>
-                    </pre>
+                    <div className="border border-white/5 rounded-sm overflow-hidden text-[10px]">
+                      <SyntaxHighlighter
+                        language="cadence"
+                        style={vscDarkPlus}
+                        customStyle={{
+                          margin: 0,
+                          padding: '1.5rem',
+                          background: 'rgba(0,0,0,0.5)',
+                          fontSize: '11px',
+                          lineHeight: '1.6',
+                        }}
+                        showLineNumbers={true}
+                        lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: "#555", userSelect: "none" }}
+                      >
+                        {transaction.script}
+                      </SyntaxHighlighter>
+                    </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-24 text-zinc-600 border border-white/5 border-dashed rounded-sm">
                       <p className="text-xs uppercase tracking-widest">No Script Content Available</p>
@@ -407,43 +390,27 @@ function TransactionDetail() {
 
             {activeTab === 'evm' && transaction.is_evm && (
               <div className="space-y-6">
-                {/* EVM Logs / Detailed Data */}
-                <div className="group">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">EVM Transaction Data (Input)</p>
-                  <div className="bg-black/50 border border-blue-500/20 p-4 rounded-sm">
-                    <code className="text-[10px] text-blue-300 break-all font-mono">
-                      {/* We might need to fetch EVM specific details separately if not in transaction object purely, 
-                               but assuming standard model has it or could have it. 
-                               Currently model has basic EVM fields. If 'data' is missing from API, we can't show it yet.
-                               Let's checking `transaction` object structure.
-                               The backend `Transaction` struct doesn't have `Data` field for EVM, only `EVMTransaction` struct has it.
-                               Wait, `GetTransactionByID` uses a JOIN. 
-                               Looking at `GetTransactionByID` in postgres.go ...
-                               It scans `evm_transactions` fields but NOT `data` or `logs`.
-                               It scans: evm_hash, from_address, to_address, value. 
-                               So we don't have input data or logs here.
-                               I should stick to what we have or accept that we can't show logs yet.
-                               The user asked for "EVM Execution Details" tab.
-                               I will put the EVM specific fields here again + a note about logs being implemented later if not available.
-                           */}
-                      {transaction.evm_hash} (Input Data not fully indexed yet)
-                    </code>
-                  </div>
-                </div>
-
-                {/* Reuse the summary fields in a list view for the tab too */}
+                {/* Detailed EVM Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-black/30 p-4 border border-white/5">
-                    <span className="text-[10px] text-zinc-500 uppercase block mb-1">EVM Hash</span>
-                    <span className="text-xs text-blue-400 font-mono break-all">{transaction.evm_hash}</span>
+                  <div className="bg-black/30 p-4 border border-white/5 space-y-1">
+                    <p className="text-[10px] text-zinc-500 uppercase">EVM Hash</p>
+                    <p className="text-xs text-blue-400 font-mono break-all">{transaction.evm_hash}</p>
                   </div>
-                  <div className="bg-black/30 p-4 border border-white/5">
-                    <span className="text-[10px] text-zinc-500 uppercase block mb-1">Value</span>
-                    <span className="text-xs text-white font-mono">{transaction.evm_value ? `${parseInt(transaction.evm_value, 16) / 1e18}` : '0'} FLOW</span>
+                  <div className="bg-black/30 p-4 border border-white/5 space-y-1">
+                    <p className="text-[10px] text-zinc-500 uppercase">Value</p>
+                    <p className="text-xs text-white font-mono">{transaction.evm_value ? `${parseInt(transaction.evm_value, 16) / 1e18}` : '0'} FLOW</p>
+                  </div>
+                  <div className="bg-black/30 p-4 border border-white/5 space-y-1">
+                    <p className="text-[10px] text-zinc-500 uppercase">From</p>
+                    <p className="text-xs text-zinc-300 font-mono break-all uppercase">{transaction.evm_from || 'N/A'}</p>
+                  </div>
+                  <div className="bg-black/30 p-4 border border-white/5 space-y-1">
+                    <p className="text-[10px] text-zinc-500 uppercase">To</p>
+                    <p className="text-xs text-zinc-300 font-mono break-all uppercase">{transaction.evm_to || 'Contract Creation'}</p>
                   </div>
                 </div>
 
-                <div className="p-4 border border-white/5 bg-white/5 text-center">
+                <div className="p-4 border border-white/5 bg-white/5 text-center mt-4">
                   <p className="text-xs text-zinc-500">Further EVM logs and traces to be implemented.</p>
                 </div>
               </div>
