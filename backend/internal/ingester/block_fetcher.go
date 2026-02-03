@@ -65,8 +65,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 	var dbTxs []models.Transaction
 	var dbEvents []models.Event
-	var addressActivity []models.AddressTransaction
-	var tokenTransfers []models.TokenTransfer
 
 	// 2. Process Collections & Transactions
 	txIndex := 0
@@ -119,6 +117,8 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				ComputationUsage:       res.ComputationUsage,
 				StatusCode:             0, // Not directly available in SDK TransactionResult
 				ExecutionStatus:        res.Status.String(),
+				EventCount:             len(res.Events),
+				Timestamp:              block.Timestamp,
 			}
 
 			// Redundancy: Marshal Signatures and ProposalKey
@@ -136,23 +136,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			}
 
 			// Address Activity (Participants)
-			// Discovery map to deduplicate addresses within a transaction
-			discoveredAddresses := make(map[string]string) // address -> role
-
-			// Roles
-			discoveredAddresses[tx.Payer.Hex()] = "PAYER"
-			discoveredAddresses[tx.ProposalKey.Address.Hex()] = "PROPOSER"
-
-			// Authorizers
-			for _, auth := range tx.Authorizers {
-				discoveredAddresses[auth.Hex()] = "AUTHORIZER"
-			}
-
 			// Process Events
 			for _, evt := range res.Events {
 				payloadJSON, _ := json.Marshal(evt.Value)
-				flatValues := w.flattenCadenceValue(evt.Value)
-				valuesJSON, _ := json.Marshal(flatValues)
 
 				addrStr, contractStr, eventStr := w.parseEventType(evt.Type)
 
@@ -165,20 +151,11 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					ContractName:     contractStr,
 					EventName:        eventStr,
 					Payload:          payloadJSON,
-					Values:           valuesJSON,
 					BlockHeight:      height,
+					Timestamp:        block.Timestamp,
 					CreatedAt:        time.Now(),
 				}
 				dbEvents = append(dbEvents, dbEvent)
-
-				// Add to denormalized events list for this transaction
-				dbTx.Events = append(dbTx.Events, dbEvent)
-
-				// Aggressive discovery: scan payload for anything that looks like an address
-				var payloadMap map[string]interface{}
-				if err := json.Unmarshal(payloadJSON, &payloadMap); err == nil {
-					w.discoverAddresses(payloadMap, discoveredAddresses)
-				}
 
 				// Detect EVM Events
 				if strings.Contains(evt.Type, "EVM.") {
@@ -193,46 +170,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					}
 				}
 
-				// Detect Token Transfers
-				if strings.Contains(evt.Type, "TokensDeposited") || strings.Contains(evt.Type, "TokensWithdrawn") {
-					transferData := w.parseTokenEvent(evt.Type, payloadJSON, tx.ID().String(), height)
-					if transferData != nil {
-						tokenTransfers = append(tokenTransfers, *transferData)
-						if transferData.ToAddress != "" {
-							discoveredAddresses[transferData.ToAddress] = "ASSET_RECEIVED"
-						}
-						if transferData.FromAddress != "" {
-							discoveredAddresses[transferData.FromAddress] = "ASSET_SENT"
-						}
-					}
-				}
-
-				// Detect Contract Events
-				if strings.Contains(evt.Type, "AccountContractAdded") || strings.Contains(evt.Type, "AccountContractUpdated") {
-					// The address for contract events is usually the account address, not tx.ID()
-					// We need to parse the event payload to get the actual account address.
-					// For now, we'll add a placeholder and rely on aggressive discovery to find the actual address.
-					// A more robust solution would be to parse the event payload here.
-					// Example: if payload has "address" field, use that.
-					var contractEventPayload map[string]interface{}
-					if err := json.Unmarshal(payloadJSON, &contractEventPayload); err == nil {
-						if addr, ok := contractEventPayload["address"].(string); ok {
-							trimmedAddr := strings.TrimPrefix(addr, "0x")
-							discoveredAddresses[trimmedAddr] = "CONTRACT_DEPLOYER"
-						}
-					}
-				}
-			}
-
-			// Add all discovered addresses to activity
-			for addr, role := range discoveredAddresses {
-				addressActivity = append(addressActivity, models.AddressTransaction{
-					Address:         addr,
-					TransactionID:   tx.ID().String(),
-					BlockHeight:     height,
-					TransactionType: "GENERAL",
-					Role:            role,
-				})
 			}
 
 			dbTx.IsEVM = isEVM
@@ -248,9 +185,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 	result.Block = &dbBlock
 	result.Transactions = dbTxs
 	result.Events = dbEvents
-	result.AddressActivity = addressActivity
-	result.TokenTransfers = tokenTransfers
-	result.AccountKeys = w.ExtractAccountKeys(dbEvents)
 	return result
 }
 

@@ -8,6 +8,7 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/onflow/cadence v1.9.7
 	github.com/onflow/flow-go-sdk v1.9.0
+	golang.org/x/time v0.12.0
 	google.golang.org/grpc v1.78.0
 	gopkg.in/yaml.v3 v3.0.1
 )

@@ -18,7 +18,7 @@ WORKDIR /app
 
 COPY --from=builder /app/indexer .
 # Copy schema for potential migration on startup (optional, user does it manually now)
-COPY --from=builder /app/schema.sql .
+COPY --from=builder /app/schema_v2.sql .
 
 EXPOSE 8080
 

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -312,6 +313,32 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListBlocks(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
+	cursorParam := r.URL.Query().Get("cursor")
+
+	if cursorParam != "" {
+		cursorHeight, err := parseCursorHeight(cursorParam)
+		if err != nil {
+			http.Error(w, "invalid cursor", http.StatusBadRequest)
+			return
+		}
+
+		blocks, err := s.repo.GetBlocksByCursor(r.Context(), limit, cursorHeight)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		nextCursor := ""
+		if len(blocks) == limit {
+			nextCursor = fmt.Sprintf("%d", blocks[len(blocks)-1].Height)
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"items":       blocks,
+			"next_cursor": nextCursor,
+		})
+		return
+	}
 
 	blocks, err := s.repo.GetRecentBlocks(r.Context(), limit, offset)
 	if err != nil {
@@ -324,6 +351,33 @@ func (s *Server) handleListBlocks(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListTransactions(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
+	cursorParam := r.URL.Query().Get("cursor")
+
+	if cursorParam != "" {
+		cursor, err := parseTxCursor(cursorParam)
+		if err != nil {
+			http.Error(w, "invalid cursor", http.StatusBadRequest)
+			return
+		}
+
+		txs, err := s.repo.GetTransactionsByCursor(r.Context(), limit, cursor)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		nextCursor := ""
+		if len(txs) == limit {
+			last := txs[len(txs)-1]
+			nextCursor = fmt.Sprintf("%d:%d:%s", last.BlockHeight, last.TransactionIndex, last.ID)
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"items":       txs,
+			"next_cursor": nextCursor,
+		})
+		return
+	}
 
 	txs, err := s.repo.GetRecentTransactions(r.Context(), limit, offset)
 	if err != nil {
@@ -486,6 +540,59 @@ func parsePagination(r *http.Request) (int, int) {
 	return limit, offset
 }
 
+func parseCursorHeight(cursor string) (*uint64, error) {
+	if cursor == "" {
+		return nil, nil
+	}
+	h, err := strconv.ParseUint(cursor, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &h, nil
+}
+
+func parseTxCursor(cursor string) (*repository.TxCursor, error) {
+	if cursor == "" {
+		return nil, nil
+	}
+	parts := strings.SplitN(cursor, ":", 3)
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid cursor")
+	}
+	bh, err := strconv.ParseUint(parts[0], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	txIndex, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, err
+	}
+	id := parts[2]
+	if id == "" {
+		return nil, fmt.Errorf("invalid cursor id")
+	}
+	return &repository.TxCursor{BlockHeight: bh, TxIndex: txIndex, ID: id}, nil
+}
+
+func parseAddressTxCursor(cursor string) (*repository.AddressTxCursor, error) {
+	if cursor == "" {
+		return nil, nil
+	}
+	parts := strings.SplitN(cursor, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid cursor")
+	}
+	bh, err := strconv.ParseUint(parts[0], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	id := parts[1]
+	if id == "" {
+		return nil, fmt.Errorf("invalid cursor id")
+	}
+	return &repository.AddressTxCursor{BlockHeight: bh, TxID: id}, nil
+}
+
 func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	addrStr := vars["address"]
@@ -543,6 +650,33 @@ func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Req
 	address := flowsdk.HexToAddress(vars["address"]).String()
 
 	limit, offset := parsePagination(r)
+	cursorParam := r.URL.Query().Get("cursor")
+
+	if cursorParam != "" {
+		cursor, err := parseAddressTxCursor(cursorParam)
+		if err != nil {
+			http.Error(w, "invalid cursor", http.StatusBadRequest)
+			return
+		}
+
+		txs, err := s.repo.GetTransactionsByAddressCursor(r.Context(), address, limit, cursor)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		nextCursor := ""
+		if len(txs) == limit {
+			last := txs[len(txs)-1]
+			nextCursor = fmt.Sprintf("%d:%s", last.BlockHeight, last.ID)
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"items":       txs,
+			"next_cursor": nextCursor,
+		})
+		return
+	}
 
 	txs, err := s.repo.GetTransactionsByAddress(r.Context(), address, limit, offset)
 	if err != nil {

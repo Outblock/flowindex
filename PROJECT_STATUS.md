@@ -130,7 +130,41 @@
 - 新区块通知 (`new_block`)
 - 新交易通知 (`new_transaction`)
 
-**状态:** ✅ 完成，API 正常运行（端口 8080）
+**状态:** ✅ 完成，API 正常运行（端口 8080） (Routing updated for V2 Schema)
+
+---
+
+### 1.6 Schema V2 & Scaling (10TB+ Ready) ✅
+**目标**: 支持 10TB+ 数据存储，分离 Raw/App 读写，实现异步 Worker 架构。
+
+**已完成 (Completed):**
+- **Schema V2**: 
+    - `raw.` / `app.` 逻辑分离 (Dual-DB ready)
+    - **Partitioning**: `raw.blocks`, `raw.transactions`, `raw.events` (5M/10M range)
+    - **Atomic Lookups**: `raw.tx_lookup`, `raw.block_lookup` (用于快速 ID 查询，避免全分区扫描)
+    - **Payload Optimization**: 8KB threshold rule, `raw.scripts` offloading support.
+- **Backend Refactoring**:
+    - Repository 全面适配 V2 Schema (`raw.`/`app.` 前缀)
+    - `ON CONFLICT DO UPDATE` (Self-Healing Backfill)
+    - 严格的原子一致性写入 (Lookup + Data same tx)
+- **Async Worker Infrastructure**:
+    - **Leasing Protocol**: `app.worker_leases` (Option B: Insert-on-Claim)
+    - **Reliability**: `raw.indexing_errors` (Deduplicated error tracking)
+    - **Contiguous Checkpoints**: `app.indexing_checkpoints` + Strict Committer (No Gaps allowed)
+- **Worker Implementation**:
+    - `AsyncWorker`: 通用 Worker 框架 (Leasing, Race-Ahead Protection)
+    - `TokenWorker`: 实现 Raw Events -> App Token Transfers (Upsert)
+    - `CheckpointCommitter`: 实现 Contiguous Checkpoint 推进逻辑
+
+**进行中 (In Progress):**
+- [ ] **EVM Worker**: 迁移 EVM 解析逻辑到独立 Worker
+- [ ] **Stats Worker**: 迁移每日统计到独立 Worker
+- [ ] **Physical Split**: 数据库物理分离 (Phase 2)
+
+**已知问题 (Issues):**
+- **Race Ahead**: Worker 可能跑在 Ingester 前面 (Fix applied: Check `raw_tip` before lease)
+- **Local Ports**: 8080/8081 端口占用 (FreqUI冲突)，暂用 8084
+- **Lint Errors**: Models 缺少 Timestamp/EventIndex (Fix applied)
 
 ---
 

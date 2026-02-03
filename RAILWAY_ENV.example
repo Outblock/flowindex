@@ -1,0 +1,32 @@
+# FlowScan Railway Environment (raw-only validation)
+
+# Core
+DB_URL=postgres://USER:PASSWORD@HOST:PORT/DBNAME?sslmode=require
+FLOW_ACCESS_NODE=access-001.mainnet28.nodes.onflow.org:9000
+PORT=8080
+START_BLOCK=140900000
+
+# Ingestion
+LATEST_WORKER_COUNT=1
+LATEST_BATCH_SIZE=1
+HISTORY_WORKER_COUNT=2
+HISTORY_BATCH_SIZE=5
+ENABLE_HISTORY_INGESTER=false
+
+# Derived (keep off for raw-only)
+ENABLE_DERIVED_WRITES=false
+ENABLE_TOKEN_WORKER=false
+ENABLE_META_WORKER=false
+ENABLE_DAILY_STATS=false
+ENABLE_LOOKUP_REPAIR=false
+
+# Flow RPC throttling
+FLOW_RPC_RPS=5
+FLOW_RPC_BURST=5
+
+# Safety
+MAX_REORG_DEPTH=1000
+
+# Pool tuning (optional)
+DB_MAX_OPEN_CONNS=10
+DB_MAX_IDLE_CONNS=2

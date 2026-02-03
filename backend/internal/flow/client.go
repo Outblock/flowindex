@@ -3,10 +3,13 @@ package flow
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -18,6 +21,7 @@ type Client struct {
 	// Using the gRPC client directly usually returns an implementation of access.Client.
 	// For now, let's use the specific client to avoid interface confusion if versions mismatch.
 	grpcClient *grpc.Client
+	limiter    *rate.Limiter
 }
 
 // NewClient creates a new Flow gRPC client
@@ -30,6 +34,7 @@ func NewClient(url string) (*Client, error) {
 
 	return &Client{
 		grpcClient: c,
+		limiter:    newLimiterFromEnv(),
 	}, nil
 }
 
@@ -119,6 +124,12 @@ func (c *Client) withRetry(ctx context.Context, fn func() error) error {
 	backoff := 500 * time.Millisecond
 
 	for i := 0; i < maxRetries; i++ {
+		if c.limiter != nil {
+			if err := c.limiter.Wait(ctx); err != nil {
+				return err
+			}
+		}
+
 		err := fn()
 		if err == nil {
 			return nil
@@ -147,6 +158,27 @@ func (c *Client) withRetry(ctx context.Context, fn func() error) error {
 		}
 	}
 	return nil
+}
+
+func newLimiterFromEnv() *rate.Limiter {
+	rps := getEnvFloat("FLOW_RPC_RPS", 5)
+	if rps <= 0 {
+		return nil
+	}
+	burst := int(getEnvFloat("FLOW_RPC_BURST", rps))
+	if burst < 1 {
+		burst = 1
+	}
+	return rate.NewLimiter(rate.Limit(rps), burst)
+}
+
+func getEnvFloat(key string, defaultVal float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+			return parsed
+		}
+	}
+	return defaultVal
 }
 
 // Close closes the connection

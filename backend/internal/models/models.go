@@ -63,7 +63,9 @@ type Transaction struct {
 	ComputationUsage uint64    `json:"computation_usage"`
 	StatusCode       int       `json:"status_code"`
 	ExecutionStatus  string    `json:"execution_status"` // Success, Failure, Pending
+	EventCount       int       `json:"event_count"`
 	Events           []Event   `json:"events,omitempty"`
+	Timestamp        time.Time `json:"timestamp"`
 	CreatedAt        time.Time `json:"created_at"`
 }
 
@@ -92,6 +94,7 @@ type Event struct {
 	Payload          json.RawMessage `json:"payload"`          // Stored as JSONB
 	Values           json.RawMessage `json:"values,omitempty"` // Flattened key-value pairs
 	BlockHeight      uint64          `json:"block_height"`
+	Timestamp        time.Time       `json:"timestamp"`
 	CreatedAt        time.Time       `json:"created_at"`
 }
 
@@ -105,7 +108,9 @@ type TokenTransfer struct {
 	ToAddress            string    `json:"to_address"`
 	Amount               string    `json:"amount"`
 	TokenID              string    `json:"token_id,omitempty"` // For NFTs
+	EventIndex           int       `json:"event_index"`
 	IsNFT                bool      `json:"is_nft"`
+	Timestamp            time.Time `json:"timestamp"`
 	CreatedAt            time.Time `json:"created_at"`
 }
 

@@ -2,6 +2,7 @@ package ingester
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sort"
 	"sync"
@@ -28,6 +29,7 @@ type Config struct {
 	ServiceName      string
 	StartBlock       uint64
 	Mode             string // "forward" (default) or "backward"
+	MaxReorgDepth    uint64
 	OnNewBlock       BlockCallback
 	OnNewTransaction TxCallback
 }
@@ -41,6 +43,9 @@ func NewService(client *flow.Client, repo *repository.Repository, cfg Config) *S
 	}
 	if cfg.Mode == "" {
 		cfg.Mode = "forward"
+	}
+	if cfg.MaxReorgDepth == 0 {
+		cfg.MaxReorgDepth = 1000
 	}
 	return &Service{
 		client: client,
@@ -174,12 +179,68 @@ func (s *Service) process(ctx context.Context) error {
 		return err
 	}
 
-	// 7. Save Batch
+	// 7. Parent continuity check (forward only)
+	if s.config.Mode == "forward" {
+		if err := s.ensureContinuity(ctx, results, lastIndexed); err != nil {
+			return err
+		}
+	}
+
+	// 8. Save Batch
 	if err := s.saveBatch(ctx, results, checkpointHeight); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (s *Service) ensureContinuity(ctx context.Context, results []*FetchResult, lastIndexed uint64) error {
+	if len(results) == 0 {
+		return nil
+	}
+
+	// Ensure results sorted by height
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Height < results[j].Height
+	})
+
+	first := results[0]
+	if first == nil || first.Block == nil {
+		return nil
+	}
+
+	// Check parent against DB for the first block in batch
+	if first.Height > 0 {
+		prevHeight := first.Height - 1
+		prevID, err := s.repo.GetBlockIDByHeight(ctx, prevHeight)
+		if err == nil && prevID != "" && first.Block.ParentID != prevID {
+			return s.handleReorg(ctx, prevHeight, lastIndexed, "db-parent-mismatch")
+		}
+	}
+
+	// Check continuity within fetched batch
+	for i := 1; i < len(results); i++ {
+		prev := results[i-1]
+		cur := results[i]
+		if prev == nil || cur == nil || prev.Block == nil || cur.Block == nil {
+			continue
+		}
+		if cur.Block.ParentID != prev.Block.ID {
+			return s.handleReorg(ctx, cur.Block.Height-1, lastIndexed, "batch-parent-mismatch")
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) handleReorg(ctx context.Context, rollbackHeight, lastIndexed uint64, reason string) error {
+	if lastIndexed > rollbackHeight && (lastIndexed-rollbackHeight) > s.config.MaxReorgDepth {
+		return fmt.Errorf("reorg depth exceeds max (%s): last=%d rollback=%d", reason, lastIndexed, rollbackHeight)
+	}
+	if err := s.repo.RollbackFromHeight(ctx, rollbackHeight); err != nil {
+		return fmt.Errorf("rollback failed (%s): %w", reason, err)
+	}
+	return fmt.Errorf("reorg detected (%s): rolled back to %d", reason, rollbackHeight)
 }
 
 func (s *Service) fetchBatchParallel(ctx context.Context, start, end uint64) ([]*FetchResult, error) {

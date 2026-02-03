@@ -1,5 +1,7 @@
 # FlowScan Clone Development Plan
 
+> Legacy plan (v1). For the current Schema V2 and scaling plan, see `schemav2.md`.
+
 This plan outlines the architecture for a robust, restart-resilient Flow blockchain explorer, inspired by **Blockscout's** architecture but built natively for Flow using Go.
 
 ## 1. Architecture Overview
