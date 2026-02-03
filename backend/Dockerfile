@@ -16,6 +16,11 @@ FROM debian:bookworm-slim
 
 WORKDIR /app
 
+# TLS CA certificates for outbound HTTPS (e.g. coingecko)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /app/indexer .
 # Copy schema for potential migration on startup (optional, user does it manually now)
 COPY --from=builder /app/schema_v2.sql .
