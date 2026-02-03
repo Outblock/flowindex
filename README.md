@@ -1,46 +1,73 @@
 # FlowScan Clone
 
-A modern, high-performance explorer for the Flow Blockchain, featuring rapid block ingestion, Flow-EVM support, and rich visual dashboards.
+Flow 区块链浏览器（类似 etherscan / blockscout），聚焦高性能索引与可扩展数据架构。
 
 ## Features
 
--   **High-Performance Indexing**: Configurable "Forward" (Live) and "Backward" (History) ingestors with concurrent workers.
--   **Flow-EVM Support**: First-class support for EVM transactions within Flow.
--   **Modern UI**: "Nothing Phone" inspired aesthetics using React + TailwindCSS + Shadcn/UI.
--   **Real-time Updates**: Live blocks and transactions via WebSocket (mocked/polled).
--   **Deployment Ready**: Fully containerized (Docker) and Railway-compatible monorepo.
+- **Schema V2**: `raw.*` / `app.*` 分层 + 分区表
+- **Forward/Backward Ingesters**: 高吞吐区块抓取
+- **Async Workers**: Token/Meta 派生数据异步生成
+- **Cursor Pagination**: Blocks / Transactions / Address / Token / NFT
+- **REST + WebSocket**: 实时区块与交易推送
+- **Railway & Docker**: 可快速验证与部署
+
+> EVM 解析 Worker 目前是待办项（见 `PROJECT_STATUS.md`）。
+
+## Docs
+
+- `ARCHITECTURE.md`：架构与流程图
+- `DEPLOY_ENV.md`：最终发布环境变量清单
+- `RAILWAY_RUNBOOK.md`：Railway 验证流程
+- `PROJECT_STATUS.md`：当前状态与待办
 
 ## Project Structure
 
--   `backend/`: Go (Golang) Indexer & API Service.
-    -   Uses `pgx` for high-performance PostgreSQL interactions.
-    -   `internal/ingester`: Concurrent block processing pipeline.
--   `frontend/`: React (Vite) + TailwindCSS.
-    -   `src/pages`: Block, Transaction, Account, Home views.
-
-## Deployment (Railway)
-
-This project is configured for one-click deployment on Railway using the Root Build Context strategy.
-
-1.  **Connect GitHub**: Link this repo to Railway.
-2.  **Services**:
-    -   **Backend**: `Dockerfile` is in `backend/` but built from Root.
-    -   **Frontend**: `Dockerfile` is in `frontend/` but built from Root.
-3.  **Variables**: configuration is handled via `railway.toml`.
+- `backend/`: Go Indexer + API
+- `frontend/`: React (Vite) UI
+- `docker-compose.yml`: 本地一键启动
 
 ## Local Development
 
 ### Prerequisites
--   Docker & Docker Compose
--   Go 1.24+
--   Node.js 20+
+- Docker & Docker Compose
+- Go 1.24+
+- Node.js 20+ (或 Bun)
 
-### Run Locally
+### Run via Docker (recommended)
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
-Access Frontend at `http://localhost:5173` (or port defined in compose).
-Access Backend API at `http://localhost:8080`.
+
+- Backend: `http://localhost:8080`
+- Frontend: `http://localhost:5173`（若端口映射为 5173:8080）
+
+### Run Backend (dev)
+```bash
+cd backend
+export DB_URL="postgres://flowscan:secretpassword@localhost:5432/flowscan?sslmode=disable"
+export FLOW_ACCESS_NODE="access-001.mainnet28.nodes.onflow.org:9000"
+go run main.go
+```
+
+### Run Frontend (dev)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+注意：前端默认请求 `/api`，Vite 本地开发需要代理或 nginx 反向代理。
+
+## Deployment (Railway)
+
+- Railway 通过 Root Build Context 部署
+- 环境变量模板参考 `RAILWAY_ENV.example`
+- 详细步骤见 `RAILWAY_RUNBOOK.md`
+
+## Environment Variables
+
+完整清单：`DEPLOY_ENV.md`
 
 ## License
+
 MIT

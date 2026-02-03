@@ -123,6 +123,8 @@ type NFTTransfer struct {
 	NFTID                string    `json:"nft_id"`
 	FromAddress          string    `json:"from_address"`
 	ToAddress            string    `json:"to_address"`
+	EventIndex           int       `json:"event_index"`
+	Timestamp            time.Time `json:"timestamp"`
 	CreatedAt            time.Time `json:"created_at"`
 }
 

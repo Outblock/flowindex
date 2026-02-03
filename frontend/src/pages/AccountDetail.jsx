@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
-import { ArrowLeft, User, Activity, Box, Wallet, Key, Code, ArrowRightLeft, Coins, Image as ImageIcon, FileText } from 'lucide-react';
+import { ArrowLeft, User, Activity, Wallet, Key, Code, Coins, Image as ImageIcon, FileText } from 'lucide-react';
 import { Pagination } from '../components/Pagination';
 import NumberFlow from '@number-flow/react';
 
@@ -12,10 +12,19 @@ function AccountDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('info');
+  const [activityTab, setActivityTab] = useState('transactions');
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [txLoading, setTxLoading] = useState(false);
+  const [tokenTransfers, setTokenTransfers] = useState([]);
+  const [tokenCursor, setTokenCursor] = useState('');
+  const [tokenHasMore, setTokenHasMore] = useState(false);
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [nftTransfers, setNftTransfers] = useState([]);
+  const [nftCursor, setNftCursor] = useState('');
+  const [nftHasMore, setNftHasMore] = useState(false);
+  const [nftLoading, setNftLoading] = useState(false);
 
   useEffect(() => {
     const loadAccountInfo = async () => {
@@ -58,13 +67,70 @@ function AccountDetail() {
     }
   };
 
+  const loadTokenTransfers = async (cursorValue, append) => {
+    setTokenLoading(true);
+    try {
+      const tokenRes = await api.getAccountTokenTransfers(address, cursorValue, 20);
+      const items = tokenRes?.items ?? tokenRes ?? [];
+      const nextCursor = tokenRes?.next_cursor ?? '';
+      setTokenTransfers(prev => (append ? [...prev, ...items] : items));
+      setTokenCursor(nextCursor || '');
+      setTokenHasMore(Boolean(nextCursor));
+    } catch (err) {
+      console.error('Failed to load token transfers', err);
+    } finally {
+      setTokenLoading(false);
+    }
+  };
+
+  const loadNFTTransfers = async (cursorValue, append) => {
+    setNftLoading(true);
+    try {
+      const nftRes = await api.getAccountNFTTransfers(address, cursorValue, 20);
+      const items = nftRes?.items ?? nftRes ?? [];
+      const nextCursor = nftRes?.next_cursor ?? '';
+      setNftTransfers(prev => (append ? [...prev, ...items] : items));
+      setNftCursor(nextCursor || '');
+      setNftHasMore(Boolean(nextCursor));
+    } catch (err) {
+      console.error('Failed to load NFT transfers', err);
+    } finally {
+      setNftLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadTransactions(currentPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, currentPage]);
 
+  useEffect(() => {
+    setTokenTransfers([]);
+    setTokenCursor('');
+    setTokenHasMore(false);
+    setNftTransfers([]);
+    setNftCursor('');
+    setNftHasMore(false);
+  }, [address]);
+
+  useEffect(() => {
+    if (activityTab === 'tokens' && tokenTransfers.length === 0 && !tokenLoading) {
+      loadTokenTransfers('', false);
+    }
+    if (activityTab === 'nfts' && nftTransfers.length === 0 && !nftLoading) {
+      loadNFTTransfers('', false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activityTab, address]);
+
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
+  };
+
+  const formatShort = (value, size = 10) => {
+    if (!value) return 'N/A';
+    if (value.length <= size + 3) return value;
+    return `${value.slice(0, size)}...`;
   };
 
 
@@ -256,69 +322,275 @@ function AccountDetail() {
           </div>
         </div>
 
-        {/* Recent Transactions */}
+        {/* Activity */}
         <div className="border border-white/10 bg-nothing-dark">
-          <div className="p-6 border-b border-white/10 flex justify-between items-center">
-            <h2 className="text-white text-sm uppercase tracking-widest">Recent Activity</h2>
-            <span className="text-xs text-zinc-500">{transactions.length} Found (Page {currentPage})</span>
+          <div className="p-6 border-b border-white/10 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-white text-sm uppercase tracking-widest">Activity</h2>
+              {activityTab === 'transactions' && (
+                <span className="text-xs text-zinc-500">{transactions.length} Found (Page {currentPage})</span>
+              )}
+              {activityTab === 'tokens' && (
+                <span className="text-xs text-zinc-500">{tokenTransfers.length} Found</span>
+              )}
+              {activityTab === 'nfts' && (
+                <span className="text-xs text-zinc-500">{nftTransfers.length} Found</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActivityTab('transactions')}
+                className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors ${activityTab === 'transactions'
+                  ? 'border-nothing-green text-white bg-white/5'
+                  : 'border-white/10 text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                  }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Activity className={`h-3 w-3 ${activityTab === 'transactions' ? 'text-nothing-green' : ''}`} />
+                  Transactions
+                </span>
+              </button>
+              <button
+                onClick={() => setActivityTab('tokens')}
+                className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors ${activityTab === 'tokens'
+                  ? 'border-nothing-green text-white bg-white/5'
+                  : 'border-white/10 text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                  }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Coins className={`h-3 w-3 ${activityTab === 'tokens' ? 'text-nothing-green' : ''}`} />
+                  Tokens
+                </span>
+              </button>
+              <button
+                onClick={() => setActivityTab('nfts')}
+                className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors ${activityTab === 'nfts'
+                  ? 'border-nothing-green text-white bg-white/5'
+                  : 'border-white/10 text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                  }`}
+              >
+                <span className="flex items-center gap-2">
+                  <ImageIcon className={`h-3 w-3 ${activityTab === 'nfts' ? 'text-nothing-green' : ''}`} />
+                  NFTs
+                </span>
+              </button>
+            </div>
           </div>
 
-          <div className="overflow-x-auto min-h-[200px] relative">
-            {txLoading && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
-                <div className="w-8 h-8 border-2 border-dashed border-white rounded-full animate-spin"></div>
-              </div>
-            )}
+          {activityTab === 'transactions' && (
+            <>
+              <div className="overflow-x-auto min-h-[200px] relative">
+                {txLoading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
+                    <div className="w-8 h-8 border-2 border-dashed border-white rounded-full animate-spin"></div>
+                  </div>
+                )}
 
-            {transactions.length > 0 ? (
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-white/5 text-zinc-500 uppercase tracking-wider">
-                    <th className="p-4 font-normal">Tx Hash</th>
-                    <th className="p-4 font-normal">Type</th>
-                    <th className="p-4 font-normal">Role</th>
-                    <th className="p-4 font-normal">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {transactions.map((tx) => {
-                    const role = tx.payer === address ? 'Payer' :
-                      tx.proposer === address ? 'Proposer' : 'Authorizer';
-                    return (
-                      <tr key={tx.id} className="hover:bg-white/5 transition-colors group">
-                        <td className="p-4">
-                          <Link to={`/transactions/${tx.id}`} className="text-nothing-green hover:underline font-mono">
-                            {tx.id.slice(0, 16)}...
-                          </Link>
-                        </td>
-                        <td className="p-4">
-                          <span className="border border-white/10 px-2 py-1 rounded-sm text-zinc-300 text-[10px] uppercase">
-                            {tx.type}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className="text-[10px] uppercase text-zinc-500">{role}</span>
-                        </td>
-                        <td className="p-4">
-                          <span className={`text-[10px] uppercase ${tx.status === 'SEALED' ? 'text-zinc-400' : 'text-yellow-500'}`}>
-                            {tx.status}
-                          </span>
-                        </td>
+                {transactions.length > 0 ? (
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5 text-zinc-500 uppercase tracking-wider">
+                        <th className="p-4 font-normal">Tx Hash</th>
+                        <th className="p-4 font-normal">Type</th>
+                        <th className="p-4 font-normal">Role</th>
+                        <th className="p-4 font-normal">Status</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              !txLoading && <div className="p-8 text-center text-zinc-500 italic">No transactions found</div>
-            )}
-          </div>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {transactions.map((tx) => {
+                        const role = tx.payer === address ? 'Payer' :
+                          tx.proposer === address ? 'Proposer' : 'Authorizer';
+                        return (
+                          <tr key={tx.id} className="hover:bg-white/5 transition-colors group">
+                            <td className="p-4">
+                              <Link to={`/transactions/${tx.id}`} className="text-nothing-green hover:underline font-mono">
+                                {tx.id.slice(0, 16)}...
+                              </Link>
+                            </td>
+                            <td className="p-4">
+                              <span className="border border-white/10 px-2 py-1 rounded-sm text-zinc-300 text-[10px] uppercase">
+                                {tx.type}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className="text-[10px] uppercase text-zinc-500">{role}</span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`text-[10px] uppercase ${tx.status === 'SEALED' ? 'text-zinc-400' : 'text-yellow-500'}`}>
+                                {tx.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  !txLoading && <div className="p-8 text-center text-zinc-500 italic">No transactions found</div>
+                )}
+              </div>
 
-          <Pagination
-            currentPage={currentPage}
-            onPageChange={handlePageChange}
-            hasNext={transactions.length >= 20 || transactions.length === 10} // Depending on limit
-          />
+              <Pagination
+                currentPage={currentPage}
+                onPageChange={handlePageChange}
+                hasNext={transactions.length >= 20 || transactions.length === 10} // Depending on limit
+              />
+            </>
+          )}
+
+          {activityTab === 'tokens' && (
+            <>
+              <div className="overflow-x-auto min-h-[200px] relative">
+                {tokenLoading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
+                    <div className="w-8 h-8 border-2 border-dashed border-white rounded-full animate-spin"></div>
+                  </div>
+                )}
+
+                {tokenTransfers.length > 0 ? (
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5 text-zinc-500 uppercase tracking-wider">
+                        <th className="p-4 font-normal">Tx Hash</th>
+                        <th className="p-4 font-normal">Block</th>
+                        <th className="p-4 font-normal">Contract</th>
+                        <th className="p-4 font-normal">From</th>
+                        <th className="p-4 font-normal">To</th>
+                        <th className="p-4 font-normal">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {tokenTransfers.map((tt) => (
+                        <tr key={`${tt.transaction_id}-${tt.event_index}`} className="hover:bg-white/5 transition-colors group">
+                          <td className="p-4">
+                            <Link to={`/transactions/${tt.transaction_id}`} className="text-nothing-green hover:underline font-mono">
+                              {formatShort(tt.transaction_id, 16)}
+                            </Link>
+                          </td>
+                          <td className="p-4">
+                            <Link to={`/blocks/${tt.block_height}`} className="text-zinc-300 hover:text-white">
+                              {tt.block_height}
+                            </Link>
+                          </td>
+                          <td className="p-4 font-mono text-zinc-300">
+                            {formatShort(tt.token_contract_address, 12)}
+                          </td>
+                          <td className="p-4">
+                            {tt.from_address ? (
+                              <Link to={`/accounts/${tt.from_address}`} className="text-zinc-300 hover:text-white font-mono">
+                                {formatShort(tt.from_address, 10)}
+                              </Link>
+                            ) : (
+                              <span className="text-zinc-600">N/A</span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            {tt.to_address ? (
+                              <Link to={`/accounts/${tt.to_address}`} className="text-zinc-300 hover:text-white font-mono">
+                                {formatShort(tt.to_address, 10)}
+                              </Link>
+                            ) : (
+                              <span className="text-zinc-600">N/A</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-zinc-300">{tt.amount || '0'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  !tokenLoading && <div className="p-8 text-center text-zinc-500 italic">No token transfers found</div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-white/10 flex justify-center">
+                <button
+                  onClick={() => loadTokenTransfers(tokenCursor, true)}
+                  disabled={!tokenHasMore || tokenLoading}
+                  className="px-6 py-2 border border-white/10 bg-black/40 text-xs uppercase tracking-widest hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {tokenHasMore ? 'Load More' : 'No More Results'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {activityTab === 'nfts' && (
+            <>
+              <div className="overflow-x-auto min-h-[200px] relative">
+                {nftLoading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
+                    <div className="w-8 h-8 border-2 border-dashed border-white rounded-full animate-spin"></div>
+                  </div>
+                )}
+
+                {nftTransfers.length > 0 ? (
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5 text-zinc-500 uppercase tracking-wider">
+                        <th className="p-4 font-normal">Tx Hash</th>
+                        <th className="p-4 font-normal">Block</th>
+                        <th className="p-4 font-normal">Contract</th>
+                        <th className="p-4 font-normal">From</th>
+                        <th className="p-4 font-normal">To</th>
+                        <th className="p-4 font-normal">Token ID</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {nftTransfers.map((tt) => (
+                        <tr key={`${tt.transaction_id}-${tt.event_index}`} className="hover:bg-white/5 transition-colors group">
+                          <td className="p-4">
+                            <Link to={`/transactions/${tt.transaction_id}`} className="text-nothing-green hover:underline font-mono">
+                              {formatShort(tt.transaction_id, 16)}
+                            </Link>
+                          </td>
+                          <td className="p-4">
+                            <Link to={`/blocks/${tt.block_height}`} className="text-zinc-300 hover:text-white">
+                              {tt.block_height}
+                            </Link>
+                          </td>
+                          <td className="p-4 font-mono text-zinc-300">
+                            {formatShort(tt.token_contract_address, 12)}
+                          </td>
+                          <td className="p-4">
+                            {tt.from_address ? (
+                              <Link to={`/accounts/${tt.from_address}`} className="text-zinc-300 hover:text-white font-mono">
+                                {formatShort(tt.from_address, 10)}
+                              </Link>
+                            ) : (
+                              <span className="text-zinc-600">N/A</span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            {tt.to_address ? (
+                              <Link to={`/accounts/${tt.to_address}`} className="text-zinc-300 hover:text-white font-mono">
+                                {formatShort(tt.to_address, 10)}
+                              </Link>
+                            ) : (
+                              <span className="text-zinc-600">N/A</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-zinc-300 font-mono">{tt.nft_id || 'N/A'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  !nftLoading && <div className="p-8 text-center text-zinc-500 italic">No NFT transfers found</div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-white/10 flex justify-center">
+                <button
+                  onClick={() => loadNFTTransfers(nftCursor, true)}
+                  disabled={!nftHasMore || nftLoading}
+                  className="px-6 py-2 border border-white/10 bg-black/40 text-xs uppercase tracking-widest hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {nftHasMore ? 'Load More' : 'No More Results'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

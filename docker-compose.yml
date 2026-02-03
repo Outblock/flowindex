@@ -49,8 +49,11 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+    environment:
+      - BACKEND_API=http://backend:8080
+      - BACKEND_WS=http://backend:8080
     ports:
-      - "5173:80" # Mapping 80 inside to 5173 outside (common dev port, or 80)
+      - "5173:8080" # Nginx listens on 8080 inside the container
     depends_on:
       - backend
 

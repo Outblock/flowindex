@@ -759,6 +759,12 @@ type TxCursor struct {
 	ID          string
 }
 
+type TokenTransferCursor struct {
+	BlockHeight uint64
+	TxID        string
+	EventIndex  int
+}
+
 func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cursor *TxCursor) ([]models.Transaction, error) {
 	query := `
 		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.error_message, t.created_at
@@ -799,10 +805,10 @@ func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cur
 
 func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address string, limit int) ([]models.TokenTransfer, error) {
 	query := `
-		SELECT tt.internal_id, tt.transaction_id, tt.block_height, tt.token_contract_address, tt.from_address, tt.to_address, tt.amount, tt.created_at
+		SELECT tt.internal_id, tt.transaction_id, tt.block_height, tt.token_contract_address, tt.from_address, tt.to_address, tt.amount, tt.token_id, tt.event_index, tt.is_nft, tt.timestamp, tt.created_at
 		FROM app.token_transfers tt
 		WHERE tt.from_address = $1 OR tt.to_address = $1
-		ORDER BY tt.block_height DESC
+		ORDER BY tt.block_height DESC, tt.transaction_id DESC, tt.event_index DESC
 		LIMIT $2`
 
 	rows, err := r.db.Query(ctx, query, address, limit)
@@ -814,7 +820,44 @@ func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address str
 	var transfers []models.TokenTransfer
 	for rows.Next() {
 		var t models.TokenTransfer
-		if err := rows.Scan(&t.ID, &t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.FromAddress, &t.ToAddress, &t.Amount, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.IsNFT, &t.Timestamp, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		transfers = append(transfers, t)
+	}
+	return transfers, nil
+}
+
+func (r *Repository) GetTokenTransfersByAddressCursor(ctx context.Context, address string, limit int, cursor *TokenTransferCursor) ([]models.TokenTransfer, error) {
+	query := `
+		SELECT tt.internal_id, tt.transaction_id, tt.block_height, tt.token_contract_address, tt.from_address, tt.to_address, tt.amount, tt.token_id, tt.event_index, tt.is_nft, tt.timestamp, tt.created_at
+		FROM app.token_transfers tt
+		WHERE (tt.from_address = $1 OR tt.to_address = $1)
+		  AND ($2::bigint IS NULL OR (tt.block_height, tt.transaction_id, tt.event_index) < ($2, $3, $4))
+		ORDER BY tt.block_height DESC, tt.transaction_id DESC, tt.event_index DESC
+		LIMIT $5`
+
+	var (
+		bh interface{}
+		tx interface{}
+		ev interface{}
+	)
+	if cursor != nil {
+		bh = cursor.BlockHeight
+		tx = cursor.TxID
+		ev = cursor.EventIndex
+	}
+
+	rows, err := r.db.Query(ctx, query, address, bh, tx, ev, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transfers []models.TokenTransfer
+	for rows.Next() {
+		var t models.TokenTransfer
+		if err := rows.Scan(&t.ID, &t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.IsNFT, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		transfers = append(transfers, t)
@@ -824,10 +867,10 @@ func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address str
 
 func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address string) ([]models.NFTTransfer, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT internal_id, transaction_id, block_height, token_contract_address, token_id, from_address, to_address, created_at
+		SELECT internal_id, transaction_id, block_height, token_contract_address, token_id, from_address, to_address, event_index, timestamp, created_at
 		FROM app.token_transfers
 		WHERE (from_address = $1 OR to_address = $1) AND is_nft = TRUE
-		ORDER BY block_height DESC`, address)
+		ORDER BY block_height DESC, transaction_id DESC, event_index DESC`, address)
 	if err != nil {
 		return nil, err
 	}
@@ -836,8 +879,46 @@ func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address strin
 	var transfers []models.NFTTransfer
 	for rows.Next() {
 		var t models.NFTTransfer
-		err := rows.Scan(&t.ID, &t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.NFTID, &t.FromAddress, &t.ToAddress, &t.CreatedAt)
+		err := rows.Scan(&t.ID, &t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.NFTID, &t.FromAddress, &t.ToAddress, &t.EventIndex, &t.Timestamp, &t.CreatedAt)
 		if err != nil {
+			return nil, err
+		}
+		transfers = append(transfers, t)
+	}
+	return transfers, nil
+}
+
+func (r *Repository) GetNFTTransfersByAddressCursor(ctx context.Context, address string, limit int, cursor *TokenTransferCursor) ([]models.NFTTransfer, error) {
+	query := `
+		SELECT tt.internal_id, tt.transaction_id, tt.block_height, tt.token_contract_address, tt.token_id, tt.from_address, tt.to_address, tt.event_index, tt.timestamp, tt.created_at
+		FROM app.token_transfers tt
+		WHERE (tt.from_address = $1 OR tt.to_address = $1)
+		  AND tt.is_nft = TRUE
+		  AND ($2::bigint IS NULL OR (tt.block_height, tt.transaction_id, tt.event_index) < ($2, $3, $4))
+		ORDER BY tt.block_height DESC, tt.transaction_id DESC, tt.event_index DESC
+		LIMIT $5`
+
+	var (
+		bh interface{}
+		tx interface{}
+		ev interface{}
+	)
+	if cursor != nil {
+		bh = cursor.BlockHeight
+		tx = cursor.TxID
+		ev = cursor.EventIndex
+	}
+
+	rows, err := r.db.Query(ctx, query, address, bh, tx, ev, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transfers []models.NFTTransfer
+	for rows.Next() {
+		var t models.NFTTransfer
+		if err := rows.Scan(&t.ID, &t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.NFTID, &t.FromAddress, &t.ToAddress, &t.EventIndex, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		transfers = append(transfers, t)

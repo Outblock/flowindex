@@ -593,6 +593,29 @@ func parseAddressTxCursor(cursor string) (*repository.AddressTxCursor, error) {
 	return &repository.AddressTxCursor{BlockHeight: bh, TxID: id}, nil
 }
 
+func parseTokenTransferCursor(cursor string) (*repository.TokenTransferCursor, error) {
+	if cursor == "" {
+		return nil, nil
+	}
+	parts := strings.SplitN(cursor, ":", 3)
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid cursor")
+	}
+	bh, err := strconv.ParseUint(parts[0], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	txID := parts[1]
+	if txID == "" {
+		return nil, fmt.Errorf("invalid cursor tx id")
+	}
+	eventIndex, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return nil, err
+	}
+	return &repository.TokenTransferCursor{BlockHeight: bh, TxID: txID, EventIndex: eventIndex}, nil
+}
+
 func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	addrStr := vars["address"]
@@ -694,9 +717,38 @@ func (s *Server) handleGetAccountTokenTransfers(w http.ResponseWriter, r *http.R
 	limitStr := r.URL.Query().Get("limit")
 	limit := 20
 	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
 			limit = l
 		}
+	}
+
+	cursorParam := r.URL.Query().Get("cursor")
+	_, hasCursor := r.URL.Query()["cursor"]
+
+	if hasCursor {
+		cursor, err := parseTokenTransferCursor(cursorParam)
+		if err != nil {
+			http.Error(w, "invalid cursor", http.StatusBadRequest)
+			return
+		}
+
+		transfers, err := s.repo.GetTokenTransfersByAddressCursor(r.Context(), address, limit, cursor)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		nextCursor := ""
+		if len(transfers) == limit {
+			last := transfers[len(transfers)-1]
+			nextCursor = fmt.Sprintf("%d:%s:%d", last.BlockHeight, last.TransactionID, last.EventIndex)
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"items":       transfers,
+			"next_cursor": nextCursor,
+		})
+		return
 	}
 
 	transfers, err := s.repo.GetTokenTransfersByAddress(r.Context(), address, limit)
@@ -711,6 +763,43 @@ func (s *Server) handleGetAccountTokenTransfers(w http.ResponseWriter, r *http.R
 func (s *Server) handleGetAccountNFTTransfers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	address := flowsdk.HexToAddress(vars["address"]).String()
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	cursorParam := r.URL.Query().Get("cursor")
+	_, hasCursor := r.URL.Query()["cursor"]
+
+	if hasCursor {
+		cursor, err := parseTokenTransferCursor(cursorParam)
+		if err != nil {
+			http.Error(w, "invalid cursor", http.StatusBadRequest)
+			return
+		}
+
+		transfers, err := s.repo.GetNFTTransfersByAddressCursor(r.Context(), address, limit, cursor)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		nextCursor := ""
+		if len(transfers) == limit {
+			last := transfers[len(transfers)-1]
+			nextCursor = fmt.Sprintf("%d:%s:%d", last.BlockHeight, last.TransactionID, last.EventIndex)
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"items":       transfers,
+			"next_cursor": nextCursor,
+		})
+		return
+	}
 
 	transfers, err := s.repo.GetNFTTransfersByAddress(r.Context(), address)
 	if err != nil {

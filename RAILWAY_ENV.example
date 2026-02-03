@@ -1,4 +1,5 @@
 # FlowScan Railway Environment (raw-only validation)
+# Full publish list: see DEPLOY_ENV.md
 
 # Core
 DB_URL=postgres://USER:PASSWORD@HOST:PORT/DBNAME?sslmode=require
@@ -19,6 +20,8 @@ ENABLE_TOKEN_WORKER=false
 ENABLE_META_WORKER=false
 ENABLE_DAILY_STATS=false
 ENABLE_LOOKUP_REPAIR=false
+LOOKUP_REPAIR_LIMIT=1000
+LOOKUP_REPAIR_INTERVAL_MIN=10
 
 # Flow RPC throttling
 FLOW_RPC_RPS=5
@@ -30,3 +33,7 @@ MAX_REORG_DEPTH=1000
 # Pool tuning (optional)
 DB_MAX_OPEN_CONNS=10
 DB_MAX_IDLE_CONNS=2
+
+# Frontend (nginx reverse proxy)
+BACKEND_API=http://backend.railway.internal:8080
+BACKEND_WS=http://backend.railway.internal:8080
