@@ -8,9 +8,31 @@ export default function Stats() {
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    // State for History Speed Calculation
+    const [historySpeed, setHistorySpeed] = useState(0); // blocks per second
+    const [lastHistoryCheck, setLastHistoryCheck] = useState(null); // { time: number, height: number }
+
     const fetchStatus = async () => {
         try {
             const data = await api.getStatus();
+
+            // Calculate History Speed
+            const now = Date.now();
+            const currentHistoryHeight = data.history_height || 0;
+
+            if (lastHistoryCheck) {
+                const timeDiff = (now - lastHistoryCheck.time) / 1000; // Seconds
+                const blockDiff = lastHistoryCheck.height - currentHistoryHeight; // Should be positive (going backwards)
+
+                if (timeDiff > 0 && blockDiff >= 0) { // Only update if moving or same
+                    // Use a simple moving average or just instantaneous
+                    const instantaneousSpeed = blockDiff / timeDiff;
+                    // simple weighted average for smoothness: 0.7 * new + 0.3 * old
+                    setHistorySpeed(prev => (prev * 0.7) + (instantaneousSpeed * 0.3));
+                }
+            }
+
+            setLastHistoryCheck({ time: now, height: currentHistoryHeight });
             setStatus(data);
             setLoading(false);
         } catch (error) {
@@ -21,9 +43,9 @@ export default function Stats() {
     useEffect(() => {
         // eslint-disable-next-line
         fetchStatus();
-        const interval = setInterval(fetchStatus, 2000); // Update every 2 seconds
+        const interval = setInterval(fetchStatus, 3000); // Check every 3 seconds for better rate calc
         return () => clearInterval(interval);
-    }, []);
+    }, []); // Removed fetchStatus from dependency to avoid loop, though it's inside component so it's fine.
 
     if (loading) {
         return (
@@ -36,14 +58,37 @@ export default function Stats() {
     const startHeight = status?.start_height || 0;
     const indexedHeight = status?.indexed_height || 0;
     const latestHeight = status?.latest_height || 0;
+
+    const minHeight = status?.min_height || 0;
+    const historyHeight = status?.history_height || minHeight;
+
     const totalRange = latestHeight - startHeight;
     const indexedRange = indexedHeight - startHeight;
     const progressPercent = totalRange > 0 ? (indexedRange / totalRange) * 100 : 0;
     const blocksBehind = latestHeight - indexedHeight;
 
-    // Calculate blocks per second (estimate based on last update)
+    // Calculate blocks per second for forward sync (estimate based on blocks behind reducing or simple api provided metric if we had it)
+    // For now we only track history speed on frontend.
     const blocksPerSecond = status?.blocks_per_second || 0;
     const eta = blocksPerSecond > 0 ? Math.ceil(blocksBehind / blocksPerSecond) : 0;
+
+    // ETA for History Backfill
+    // Target is 0. Distance = historyHeight - 0
+    let historyEtaSeconds = 0;
+    if (historySpeed > 0) {
+        historyEtaSeconds = historyHeight / historySpeed;
+    }
+
+    // Format ETA
+    const formatDuration = (seconds) => {
+        if (!isFinite(seconds) || seconds === 0) return 'N/A';
+        const d = Math.floor(seconds / (3600 * 24));
+        const h = Math.floor((seconds % (3600 * 24)) / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (d > 0) return `${d}d ${h}h`;
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m ${Math.floor(seconds % 60)}s`;
+    };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-black via-nothing-darker to-black">
@@ -115,6 +160,61 @@ export default function Stats() {
                             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">ETA</div>
                             <div className="text-2xl font-bold text-gray-300">
                                 {eta > 0 ? `${Math.floor(eta / 60)}m ${eta % 60}s` : 'N/A'}
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+
+                {/* History Indexing Progress (Backward) */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className="bg-nothing-dark dashed-border border-white/10 p-8 mb-6 relative overflow-hidden"
+                >
+                    <div className="absolute top-0 right-0 p-4 opacity-5">
+                        <div className="text-6xl font-bold text-white">HISTORY</div>
+                    </div>
+                    <div className="flex items-center justify-between mb-6 relative z-10">
+                        <div className="flex items-center space-x-3">
+                            <HardDrive className="h-6 w-6 text-blue-400" />
+                            <h2 className="text-2xl font-bold text-white uppercase tracking-wide">History Backfill</h2>
+                            <div className="flex items-center space-x-2 ml-4">
+                                <span className={`flex h-2 w-2 rounded-full ${historySpeed > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></span>
+                                <span className="text-xs text-gray-400">{historySpeed > 0 ? 'SYNCING' : 'IDLE'}</span>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Oldest Block Indexed</div>
+                            <span className="text-3xl font-bold text-blue-400">
+                                {minHeight.toLocaleString()}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
+                        <div className="bg-black/30 border border-white/10 p-4">
+                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Indexed History</div>
+                            <div className="text-xl font-bold text-blue-400">
+                                {Math.max(0, startHeight - minHeight).toLocaleString()} blocks
+                            </div>
+                        </div>
+                        <div className="bg-black/30 border border-white/10 p-4">
+                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Sync Speed</div>
+                            <div className="text-xl font-bold text-white">
+                                {historySpeed.toFixed(1)} <span className="text-[10px] text-gray-500">blk/s</span>
+                            </div>
+                        </div>
+                        <div className="bg-black/30 border border-white/10 p-4">
+                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Est. Time Remaining</div>
+                            <div className="text-xl font-bold text-nothing-pink">
+                                {formatDuration(historyEtaSeconds)}
+                            </div>
+                        </div>
+                        <div className="bg-black/30 border border-white/10 p-4">
+                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Blocks in DB</div>
+                            <div className="text-xl font-bold text-nothing-green">
+                                {(status?.total_blocks || 0).toLocaleString()}
                             </div>
                         </div>
                     </div>
