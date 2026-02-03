@@ -467,7 +467,8 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	address := vars["address"]
+	// Sanitize address (remove 0x, lowercase) matching DB format
+	address := flowsdk.HexToAddress(vars["address"]).String()
 
 	limitStr := r.URL.Query().Get("limit")
 	limit := 20
@@ -488,7 +489,7 @@ func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Req
 
 func (s *Server) handleGetAccountTokenTransfers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	address := vars["address"]
+	address := flowsdk.HexToAddress(vars["address"]).String()
 
 	limitStr := r.URL.Query().Get("limit")
 	limit := 20
@@ -509,7 +510,7 @@ func (s *Server) handleGetAccountTokenTransfers(w http.ResponseWriter, r *http.R
 
 func (s *Server) handleGetAccountNFTTransfers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	address := vars["address"]
+	address := flowsdk.HexToAddress(vars["address"]).String()
 
 	transfers, err := s.repo.GetNFTTransfersByAddress(r.Context(), address)
 	if err != nil {
@@ -522,7 +523,7 @@ func (s *Server) handleGetAccountNFTTransfers(w http.ResponseWriter, r *http.Req
 
 func (s *Server) handleGetAddressStats(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	address := vars["address"]
+	address := flowsdk.HexToAddress(vars["address"]).String()
 
 	stats, err := s.repo.GetAddressStats(r.Context(), address)
 	if err != nil {
@@ -536,7 +537,7 @@ func (s *Server) handleGetAddressStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetContractByAddress(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	address := vars["address"]
+	address := flowsdk.HexToAddress(vars["address"]).String()
 
 	contract, err := s.repo.GetContractByAddress(r.Context(), address)
 	if err != nil {
