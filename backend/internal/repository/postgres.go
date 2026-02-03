@@ -625,6 +625,7 @@ func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, err
 	rows, err := r.db.Query(ctx, `
 		SELECT date::text, tx_count, active_accounts, new_contracts
 		FROM daily_stats
+		WHERE date > '2000-01-01'
 		ORDER BY date DESC
 		LIMIT 14`)
 	if err != nil {

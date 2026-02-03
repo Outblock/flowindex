@@ -180,19 +180,66 @@ function Home() {
 
   return (
     <div className="min-h-screen bg-nothing-black text-nothing-white font-mono selection:bg-nothing-green selection:text-black">
-      {/* Hero Section with Search */}
+      {/* Sticky Header with Search */}
+      <div className="sticky top-0 z-50 bg-nothing-dark/95 backdrop-blur-md border-b border-white/5 py-4">
+        <div className="container mx-auto px-4 flex items-center justify-between">
+          <Link to="/" className="flex items-center space-x-2 group">
+            <Box className="h-6 w-6 text-nothing-green group-hover:rotate-12 transition-transform" />
+            <div className="flex flex-col">
+              <span className="text-xl font-black tracking-tighter text-white uppercase italic leading-none">
+                Flow<span className="text-nothing-green">Scan</span>
+              </span>
+            </div>
+          </Link>
+
+          {/* Search Bar */}
+          <motion.form
+            onSubmit={handleSearch}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex-1 max-w-xl mx-8 relative group"
+          >
+            <div className="absolute inset-0 bg-nothing-green/5 blur-md group-hover:bg-nothing-green/10 transition-colors duration-500" />
+            <div className="relative flex items-center bg-black/50 border border-white/10 p-1 group-focus-within:border-nothing-green transition-all duration-300">
+              <Search className="h-4 w-4 ml-3 text-gray-500 group-focus-within:text-nothing-green" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="SEARCH ADDRESS / TX / BLOCK..."
+                className="flex-1 bg-transparent border-none focus:ring-0 text-xs py-2 px-3 text-white placeholder:text-gray-600 uppercase tracking-widest outline-none"
+              />
+              <button
+                type="submit"
+                disabled={searching}
+                className="bg-nothing-green text-black text-[10px] font-bold uppercase tracking-widest px-4 py-2 hover:bg-white transition-colors duration-300 disabled:opacity-50"
+              >
+                {searching ? '...' : 'GO'}
+              </button>
+            </div>
+          </motion.form>
+
+          <div className={`flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-nothing-green/10 border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-nothing-green animate-pulse' : 'bg-gray-500'}`}></div>
+            <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-nothing-green' : 'text-gray-500'}`}>
+              {isConnected ? 'Online' : 'Offline'}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="border-b border-white/5 bg-nothing-dark/50">
         <div className="container mx-auto px-4 py-12 space-y-8">
-          {/* Branding */}
+          {/* Branding / Hero Text */}
           <div className="text-center space-y-2 mb-8">
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase italic">
+              <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white uppercase italic">
                 Flow<span className="text-nothing-green">Scan</span>
               </h1>
-              <p className="text-xs text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
             </motion.div>
           </div>
 
@@ -202,7 +249,7 @@ function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+              className="grid grid-cols-1 md:grid-cols-3 gap-6"
             >
               {/* 1. Price Chart */}
               <FlowPriceChart data={networkStats} />
@@ -214,35 +261,6 @@ function Home() {
               <NetworkStats totalStaked={networkStats.total_staked} activeNodes={networkStats.active_nodes} />
             </motion.div>
           )}
-
-          {/* Search Bar */}
-          <motion.form
-            onSubmit={handleSearch}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="max-w-2xl mx-auto relative group"
-          >
-            {/* ... Search implementation unchanged ... */}
-            <div className="absolute inset-0 bg-nothing-green/5 blur-xl group-hover:bg-nothing-green/10 transition-colors duration-500" />
-            <div className="relative flex items-center bg-nothing-dark border border-white/10 p-1 group-focus-within:border-nothing-green transition-all duration-300">
-              <Search className="h-5 w-5 ml-4 text-gray-500 group-focus-within:text-nothing-green" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by Address / Tx ID / Block / Public Key..."
-                className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-3 px-4 text-white placeholder:text-gray-600 uppercase tracking-widest outline-none"
-              />
-              <button
-                type="submit"
-                disabled={searching}
-                className="bg-nothing-green text-black text-[10px] font-bold uppercase tracking-widest px-8 py-3 hover:bg-white transition-colors duration-300 disabled:opacity-50"
-              >
-                {searching ? 'Processing...' : 'Execute Search'}
-              </button>
-            </div>
-          </motion.form>
         </div>
       </div>
 
