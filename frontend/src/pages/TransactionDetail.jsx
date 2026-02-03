@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces } from 'lucide-react';
 
 function TransactionDetail() {
   const { txId } = useParams();
@@ -36,7 +36,9 @@ function TransactionDetail() {
           // Ensure events array exists
           events: rawTx.events || [],
           // Ensure status exists
-          status: rawTx.status || 'UNKNOWN'
+          status: rawTx.status || 'UNKNOWN',
+          errorMessage: rawTx.error_message, // Add error message
+          arguments: rawTx.arguments // Add arguments
         };
         setTransaction(transformedTx);
 
@@ -147,6 +149,20 @@ function TransactionDetail() {
           </div>
         </div>
 
+        {/* Error Message Section */}
+        {transaction.errorMessage && (
+          <div className="border border-red-500/30 bg-red-900/10 p-6 mb-8 flex items-start gap-4">
+            <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest mb-1">Execution Error</h3>
+              <p className="text-red-300 text-xs font-mono break-all leading-relaxed">
+                {/* Try to parse standard Flow error format if possible, otherwise display raw */}
+                {transaction.errorMessage}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Info Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Flow Information */}
@@ -211,12 +227,14 @@ function TransactionDetail() {
             </div>
           </div>
 
-          {/* EVM Execution Info (Conditional) */}
+          {/* EVM Summary / or Nothing if not EVM */}
+          {/* If not EVM, maybe just show empty placeholder or keep alignment */}
           <div className={`border p-6 bg-nothing-dark transition-all duration-500 ${transaction.is_evm ? 'border-blue-500/30' : 'border-white/10 opacity-50'}`}>
+            {/* ... content remains same, just shorter summary ... */}
+            {/* Actually, keeping the EVM summary here is fine, but detailed logs might go to tab */}
             <h2 className={`text-sm uppercase tracking-widest mb-6 border-b pb-2 ${transaction.is_evm ? 'text-blue-400 border-blue-500/20' : 'text-zinc-500 border-white/5'}`}>
-              EVM Execution Details
+              EVM Summary
             </h2>
-
             {transaction.is_evm ? (
               <div className="space-y-6">
                 <div className="group">
@@ -245,30 +263,30 @@ function TransactionDetail() {
             ) : (
               <div className="flex flex-col items-center justify-center h-full py-12 text-center text-zinc-700">
                 <Box className="h-12 w-12 mb-2 opacity-20" />
-                <p className="text-[10px] uppercase tracking-[0.2em]">No EVM MetadataDetected</p>
+                <p className="text-[10px] uppercase tracking-[0.2em]">No EVM Metadata Detected</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Payload / Events Tabs */}
+        {/* Tabs Section */}
         <div className="mt-12">
-          <div className="flex border-b border-white/10 mb-0">
+          <div className="flex border-b border-white/10 mb-0 overflow-x-auto">
             <button
               onClick={() => setActiveTab('script')}
-              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'script'
+              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'script'
                 ? 'text-white border-b-2 border-nothing-green bg-white/5'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
                 }`}
             >
               <span className="flex items-center gap-2">
                 <Zap className={`h-4 w-4 ${activeTab === 'script' ? 'text-nothing-green' : ''}`} />
-                Cadence Script
+                Script & Args
               </span>
             </button>
             <button
               onClick={() => setActiveTab('events')}
-              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'events'
+              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'events'
                 ? 'text-white border-b-2 border-nothing-green bg-white/5'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
                 }`}
@@ -278,21 +296,69 @@ function TransactionDetail() {
                 Key Events ({transaction.events ? transaction.events.length : 0})
               </span>
             </button>
+            {transaction.is_evm && (
+              <button
+                onClick={() => setActiveTab('evm')}
+                className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'evm'
+                  ? 'text-white border-b-2 border-nothing-green bg-white/5'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                  }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Layers className={`h-4 w-4 ${activeTab === 'evm' ? 'text-blue-400' : ''}`} />
+                  EVM Execution Details
+                </span>
+              </button>
+            )}
           </div>
 
           <div className="bg-nothing-dark border border-white/10 border-t-0 p-6 min-h-[300px]">
             {activeTab === 'script' && (
-              <div className="font-mono">
-                {transaction.script ? (
-                  <pre className="bg-black/50 border border-white/5 p-4 overflow-x-auto text-[10px] text-zinc-400 rounded-sm leading-relaxed">
-                    <code>{transaction.script}</code>
-                  </pre>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
-                    <Zap className="h-8 w-8 mb-2 opacity-20" />
-                    <p className="text-xs uppercase tracking-widest">No Script Content Available</p>
-                  </div>
-                )}
+              <div className="space-y-8">
+                {/* Script */}
+                <div className="font-mono">
+                  <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <Braces className="h-4 w-4" /> Cadence Script
+                  </h3>
+                  {transaction.script ? (
+                    <pre className="bg-black/50 border border-white/5 p-4 overflow-x-auto text-[10px] text-zinc-400 rounded-sm leading-relaxed max-h-[400px]">
+                      <code>{transaction.script}</code>
+                    </pre>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-24 text-zinc-600 border border-white/5 border-dashed rounded-sm">
+                      <p className="text-xs uppercase tracking-widest">No Script Content Available</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Arguments */}
+                <div className="font-mono">
+                  <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4" /> Script Arguments
+                  </h3>
+                  {transaction.arguments ? (
+                    <div className="bg-black/50 border border-white/5 p-4 rounded-sm">
+                      {/* Try to display as formatted JSON if possible, else raw string */}
+                      <pre className="text-[10px] text-nothing-green overflow-x-auto whitespace-pre-wrap break-all">
+                        {(() => {
+                          try {
+                            // If it's already an object/array
+                            if (typeof transaction.arguments === 'object') {
+                              return JSON.stringify(transaction.arguments, null, 2);
+                            }
+                            // If it's a string, try to parse
+                            return JSON.stringify(JSON.parse(transaction.arguments), null, 2);
+                          } catch {
+                            // Fallback to raw display
+                            return String(transaction.arguments);
+                          }
+                        })()}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-zinc-600 italic px-2">No arguments provided</div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -336,6 +402,50 @@ function TransactionDetail() {
                     <p className="text-xs uppercase tracking-widest">No Events Emitted</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'evm' && transaction.is_evm && (
+              <div className="space-y-6">
+                {/* EVM Logs / Detailed Data */}
+                <div className="group">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">EVM Transaction Data (Input)</p>
+                  <div className="bg-black/50 border border-blue-500/20 p-4 rounded-sm">
+                    <code className="text-[10px] text-blue-300 break-all font-mono">
+                      {/* We might need to fetch EVM specific details separately if not in transaction object purely, 
+                               but assuming standard model has it or could have it. 
+                               Currently model has basic EVM fields. If 'data' is missing from API, we can't show it yet.
+                               Let's checking `transaction` object structure.
+                               The backend `Transaction` struct doesn't have `Data` field for EVM, only `EVMTransaction` struct has it.
+                               Wait, `GetTransactionByID` uses a JOIN. 
+                               Looking at `GetTransactionByID` in postgres.go ...
+                               It scans `evm_transactions` fields but NOT `data` or `logs`.
+                               It scans: evm_hash, from_address, to_address, value. 
+                               So we don't have input data or logs here.
+                               I should stick to what we have or accept that we can't show logs yet.
+                               The user asked for "EVM Execution Details" tab.
+                               I will put the EVM specific fields here again + a note about logs being implemented later if not available.
+                           */}
+                      {transaction.evm_hash} (Input Data not fully indexed yet)
+                    </code>
+                  </div>
+                </div>
+
+                {/* Reuse the summary fields in a list view for the tab too */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-black/30 p-4 border border-white/5">
+                    <span className="text-[10px] text-zinc-500 uppercase block mb-1">EVM Hash</span>
+                    <span className="text-xs text-blue-400 font-mono break-all">{transaction.evm_hash}</span>
+                  </div>
+                  <div className="bg-black/30 p-4 border border-white/5">
+                    <span className="text-[10px] text-zinc-500 uppercase block mb-1">Value</span>
+                    <span className="text-xs text-white font-mono">{transaction.evm_value ? `${parseInt(transaction.evm_value, 16) / 1e18}` : '0'} FLOW</span>
+                  </div>
+                </div>
+
+                <div className="p-4 border border-white/5 bg-white/5 text-center">
+                  <p className="text-xs text-zinc-500">Further EVM logs and traces to be implemented.</p>
+                </div>
               </div>
             )}
           </div>

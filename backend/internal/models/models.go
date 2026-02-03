@@ -32,18 +32,18 @@ type Block struct {
 
 // Transaction represents the 'transactions' table
 type Transaction struct {
-	ID                     string   `json:"id"`
-	BlockHeight            uint64   `json:"block_height"`
-	TransactionIndex       int      `json:"transaction_index"` // Position in block
-	ProposerAddress        string   `json:"proposer_address"`
-	ProposerKeyIndex       uint32   `json:"proposer_key_index"`
-	ProposerSequenceNumber uint64   `json:"proposer_sequence_number"`
-	PayerAddress           string   `json:"payer_address"`
-	Authorizers            []string `json:"authorizers"` // Stored as TEXT[] in DB
-	Script                 string   `json:"script,omitempty"`
-	Arguments              []byte   `json:"arguments,omitempty"` // Stored as JSONB
-	Status                 string   `json:"status"`              // SEALED, EXPIRED, PENDING
-	ErrorMessage           string   `json:"error_message,omitempty"`
+	ID                     string          `json:"id"`
+	BlockHeight            uint64          `json:"block_height"`
+	TransactionIndex       int             `json:"transaction_index"` // Position in block
+	ProposerAddress        string          `json:"proposer_address"`
+	ProposerKeyIndex       uint32          `json:"proposer_key_index"`
+	ProposerSequenceNumber uint64          `json:"proposer_sequence_number"`
+	PayerAddress           string          `json:"payer_address"`
+	Authorizers            []string        `json:"authorizers"` // Stored as TEXT[] in DB
+	Script                 string          `json:"script,omitempty"`
+	Arguments              json.RawMessage `json:"arguments,omitempty"` // Stored as JSONB
+	Status                 string          `json:"status"`              // SEALED, EXPIRED, PENDING
+	ErrorMessage           string          `json:"error_message,omitempty"`
 
 	// Redundancy Fields
 	ReferenceBlockID   string `json:"reference_block_id,omitempty"`

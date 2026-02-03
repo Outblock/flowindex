@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
-import { ArrowLeft, User, Activity, Box, Wallet, Key, Code, ArrowRightLeft, Coins, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, User, Activity, Box, Wallet, Key, Code, ArrowRightLeft, Coins, Image as ImageIcon, FileText } from 'lucide-react';
 import { Pagination } from '../components/Pagination';
 import NumberFlow from '@number-flow/react';
 
@@ -11,6 +11,7 @@ function AccountDetail() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('info');
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -146,37 +147,111 @@ function AccountDetail() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Info */}
-          <div className="border border-white/10 p-6 bg-nothing-dark">
-            <h2 className="text-white text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-2">
-              Account Info
-            </h2>
-            <div className="space-y-4">
-              <div className="group">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Created At</p>
-                <p className="text-sm text-white font-mono">
-                  {account.createdAt ? new Date(account.createdAt).toLocaleString() : 'N/A'}
-                </p>
-              </div>
-            </div>
+        {/* Tabs for Account Info & Keys */}
+        <div className="mb-8">
+          <div className="flex border-b border-white/10 mb-0">
+            <button
+              onClick={() => setActiveTab('info')}
+              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'info'
+                ? 'text-white border-b-2 border-nothing-green bg-white/5'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                }`}
+            >
+              <span className="flex items-center gap-2">
+                <User className={`h-4 w-4 ${activeTab === 'info' ? 'text-nothing-green' : ''}`} />
+                Account Info
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('keys')}
+              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'keys'
+                ? 'text-white border-b-2 border-nothing-green bg-white/5'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                }`}
+            >
+              <span className="flex items-center gap-2">
+                <Key className={`h-4 w-4 ${activeTab === 'keys' ? 'text-nothing-green' : ''}`} />
+                Public Keys
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('contracts')}
+              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'contracts'
+                ? 'text-white border-b-2 border-nothing-green bg-white/5'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                }`}
+            >
+              <span className="flex items-center gap-2">
+                <FileText className={`h-4 w-4 ${activeTab === 'contracts' ? 'text-nothing-green' : ''}`} />
+                Contracts ({account.contracts ? account.contracts.length : 0})
+              </span>
+            </button>
           </div>
 
-          {/* Keys */}
-          <div className="border border-white/10 p-6 bg-nothing-dark">
-            <h2 className="text-white text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-2">
-              Public Keys
-            </h2>
-            {account.keys && account.keys.length > 0 ? (
-              <div className="space-y-2">
-                {account.keys.map((key, idx) => (
-                  <div key={idx} className="bg-black/50 border border-white/5 p-2 text-xs text-zinc-400 break-all font-mono">
-                    {key.publicKey}
-                  </div>
-                ))}
+          <div className="bg-nothing-dark border border-white/10 border-t-0 p-6 min-h-[200px]">
+            {activeTab === 'info' && (
+              <div className="space-y-4">
+                <h2 className="text-white text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-2">
+                  Account Overview
+                </h2>
+                <div className="group">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Address</p>
+                  <p className="text-sm text-white font-mono">{account.address}</p>
+                </div>
+                <div className="group">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Created At</p>
+                  <p className="text-sm text-white font-mono">
+                    {account.createdAt ? new Date(account.createdAt).toLocaleString() : 'N/A'}
+                  </p>
+                </div>
               </div>
-            ) : (
-              <p className="text-xs text-zinc-500 italic">No keys found</p>
+            )}
+
+            {activeTab === 'keys' && (
+              <div className="space-y-4">
+                <h2 className="text-white text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-2">
+                  Associated Public Keys
+                </h2>
+                {account.keys && account.keys.length > 0 ? (
+                  <div className="space-y-2">
+                    {account.keys.map((key, idx) => (
+                      <div key={idx} className="bg-black/50 border border-white/5 p-4 group">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex justify-between">
+                            <span className="text-[10px] text-zinc-500 uppercase">Index #{key.keyIndex ?? idx}</span>
+                            <span className="text-[10px] text-zinc-500 uppercase">Algorithm: {key.signingAlgorithm}</span>
+                          </div>
+                          <code className="text-xs text-zinc-400 break-all font-mono">{key.publicKey}</code>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-zinc-500 italic">No keys found</p>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'contracts' && (
+              <div className="space-y-4">
+                <h2 className="text-white text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-2">
+                  Deployed Contracts
+                </h2>
+                {account.contracts && account.contracts.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {account.contracts.map((contract, idx) => (
+                      <div key={idx} className="bg-black/50 border border-white/5 p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Code className="h-4 w-4 text-nothing-green" />
+                          <span className="text-sm text-white font-mono">{contract.name || contract}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-zinc-500 italic">No contracts deployed</p>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -242,11 +317,7 @@ function AccountDetail() {
           <Pagination
             currentPage={currentPage}
             onPageChange={handlePageChange}
-            hasNext={transactions.length >= 20 || transactions.length === 10} // Depending on limit, currently limit is passed or defaulted. 
-          // Default limit logic: Front end API wrapper doesn't pass limit, backend defaults to 10? No, 20? 
-          // In server.go I refactored limits.
-          // ParsePagination default limit is 10. `handleGetAccountTransactions` uses `parsePagination`. 
-          // So default limit is 10.
+            hasNext={transactions.length >= 20 || transactions.length === 10} // Depending on limit
           />
         </div>
       </div>
