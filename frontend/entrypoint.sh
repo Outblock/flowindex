@@ -10,9 +10,11 @@ if [ -z "$DNS_RESOLVER" ]; then
 fi
 
 # If resolver is IPv6 (contains colon), wrap in brackets for Nginx syntax
-if echo "$DNS_RESOLVER" | grep -q ":"; then
-    export DNS_RESOLVER="[$DNS_RESOLVER]"
-fi
+# Using case/esac for maximum portability (works in sh/ash/bash)
+case "$DNS_RESOLVER" in
+    *:*) export DNS_RESOLVER="[$DNS_RESOLVER]" ;;
+esac
+
 
 echo "Detected DNS Resolver: $DNS_RESOLVER"
 
