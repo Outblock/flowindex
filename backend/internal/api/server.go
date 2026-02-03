@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"flowscan-clone/internal/flow"
 	"flowscan-clone/internal/models"
@@ -194,6 +195,7 @@ func NewServer(repo *repository.Repository, client *flow.Client, port string, st
 	r.HandleFunc("/accounts/{address}/stats", s.handleGetAddressStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/contract", s.handleGetContractByAddress).Methods("GET", "OPTIONS")
 	r.HandleFunc("/stats/daily", s.handleGetDailyStats).Methods("GET", "OPTIONS")
+	r.HandleFunc("/stats/network", s.handleGetNetworkStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/keys/{publicKey}", s.handleGetAddressByPublicKey).Methods("GET", "OPTIONS")
 
 	s.httpServer = &http.Server{
@@ -574,4 +576,73 @@ func (s *Server) handleGetDailyStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(stats)
+}
+
+// NetworkStats represents the aggregated network statistics
+type NetworkStats struct {
+	Price          float64 `json:"price"`
+	PriceChange24h float64 `json:"price_change_24h"`
+	MarketCap      float64 `json:"market_cap"`
+	Epoch          int     `json:"epoch"`
+	EpochProgress  float64 `json:"epoch_progress"` // 0-100
+	TotalStaked    float64 `json:"total_staked"`
+	ActiveNodes    int     `json:"active_nodes"`
+	UpdatedAt      int64   `json:"updated_at"`
+}
+
+var (
+	cachedStats     NetworkStats
+	lastStatsUpdate int64
+	statsMutex      sync.Mutex
+)
+
+func (s *Server) handleGetNetworkStats(w http.ResponseWriter, r *http.Request) {
+	statsMutex.Lock()
+	defer statsMutex.Unlock()
+
+	// Cache for 5 minutes
+	if time.Now().Unix()-lastStatsUpdate > 300 {
+		// Update Price (CoinGecko)
+		price, change, mcap := fetchFlowPrice()
+		cachedStats.Price = price
+		cachedStats.PriceChange24h = change
+		cachedStats.MarketCap = mcap
+
+		// Mock/Calculation for Epoch (Real implementation would query chain)
+		// Assuming ~1 week epochs, arbitrary start
+		cachedStats.Epoch = 124
+		cachedStats.EpochProgress = 65.4
+		cachedStats.TotalStaked = 850000000.00
+		cachedStats.ActiveNodes = 455
+		cachedStats.UpdatedAt = time.Now().Unix()
+
+		lastStatsUpdate = time.Now().Unix()
+	}
+
+	json.NewEncoder(w).Encode(cachedStats)
+}
+
+func fetchFlowPrice() (float64, float64, float64) {
+	resp, err := http.Get("https://api.coingecko.com/api/v3/simple/price?ids=flow&vs_currencies=usd&include_24hr_change=true&include_market_cap=true")
+	if err != nil {
+		log.Printf("Error fetching flow price: %v", err)
+		return 0, 0, 0
+	}
+	defer resp.Body.Close()
+
+	var result map[string]struct {
+		USD          float64 `json:"usd"`
+		USDChange24h float64 `json:"usd_24h_change"`
+		USDMarketCap float64 `json:"usd_market_cap"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("Error decoding price response: %v", err)
+		return 0, 0, 0
+	}
+
+	if data, ok := result["flow"]; ok {
+		return data.USD, data.USDChange24h, data.USDMarketCap
+	}
+	return 0, 0, 0
 }
