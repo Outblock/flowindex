@@ -1,6 +1,14 @@
+import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Box, Activity, TrendingUp, Database, ArrowRightLeft } from 'lucide-react';
+import NumberFlow from '@number-flow/react';
+import { api } from '../api';
+import useWebSocket from '../hooks/useWebSocket';
 import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
 import { NetworkStats } from '../components/NetworkStats';
+import { Pagination } from '../components/Pagination';
 
 function Home() {
   const [blocks, setBlocks] = useState([]);
@@ -8,6 +16,11 @@ function Home() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState(null);
   const [networkStats, setNetworkStats] = useState(null); // New state
+
+  // Pagination State
+  const [blockPage, setBlockPage] = useState(1);
+  const [txPage, setTxPage] = useState(1);
+
   const [prevHeight, setPrevHeight] = useState(0);
   const [newBlockIds, setNewBlockIds] = useState(new Set());
   const [newTxIds, setNewTxIds] = useState(new Set());
@@ -16,21 +29,90 @@ function Home() {
 
   const { isConnected, lastMessage } = useWebSocket();
 
-  // ... (WebSocket useEffect remains same)
+  // Load Blocks for Page
+  const loadBlocks = async (page) => {
+    try {
+      const res = await api.getBlocks(page);
+      setBlocks(res || []);
+    } catch (err) {
+      console.error("Failed to load blocks", err);
+    }
+  };
+
+  // Load Txs for Page
+  const loadTransactions = async (page) => {
+    try {
+      const res = await api.getTransactions(page);
+      const transformedTxs = Array.isArray(res) ? res.map(tx => ({
+        ...tx,
+        type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
+        payer: tx.payer_address || tx.proposer_address,
+        blockHeight: tx.block_height
+      })) : [];
+      setTransactions(transformedTxs);
+    } catch (err) {
+      console.error("Failed to load transactions", err);
+    }
+  };
+
+  const handleBlockPageChange = (newPage) => {
+    setBlockPage(newPage);
+    loadBlocks(newPage);
+  };
+
+  const handleTxPageChange = (newPage) => {
+    setTxPage(newPage);
+    loadTransactions(newPage);
+  };
+
+  // Handle WebSocket messages (Real-time updates)
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    // Only update if on first page
+    if (blockPage === 1 && lastMessage.type === 'new_block') {
+      const newBlock = lastMessage.payload;
+      setBlocks(prev => [newBlock, ...(prev || []).slice(0, 9)]);
+      setNewBlockIds(prev => new Set(prev).add(newBlock.height));
+      setTimeout(() => setNewBlockIds(prev => {
+        const next = new Set(prev);
+        next.delete(newBlock.height);
+        return next;
+      }), 3000);
+    }
+
+    // Only update if on first page
+    if (txPage === 1 && lastMessage.type === 'new_transaction') {
+      const rawTx = lastMessage.payload;
+      const newTx = {
+        ...rawTx,
+        type: rawTx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
+        payer: rawTx.payer_address || rawTx.proposer_address,
+        blockHeight: rawTx.block_height
+      };
+      setTransactions(prev => [newTx, ...(prev || []).slice(0, 9)]);
+      setNewTxIds(prev => new Set(prev).add(newTx.id));
+      setTimeout(() => setNewTxIds(prev => {
+        const next = new Set(prev);
+        next.delete(newTx.id);
+        return next;
+      }), 3000);
+    }
+  }, [lastMessage, blockPage, txPage]);
 
   // Initial data load
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const [blocksResult, txResult, statusResult, netStatsResult] = await Promise.allSettled([
-          api.getBlocks(),
-          api.getTransactions(),
+        const [statusResult, netStatsResult] = await Promise.allSettled([
           api.getStatus(),
           api.getNetworkStats() // Fetch new stats
         ]);
 
-        const blocksRes = blocksResult.status === 'fulfilled' ? blocksResult.value : [];
-        const txRes = txResult.status === 'fulfilled' ? txResult.value : [];
+        // Call the new load functions for page 1
+        await loadBlocks(1);
+        await loadTransactions(1);
+
         const statusRes = statusResult.status === 'fulfilled' ? statusResult.value : null;
         const netStatsRes = netStatsResult.status === 'fulfilled' ? netStatsResult.value : null;
 
@@ -38,12 +120,6 @@ function Home() {
 
         // ... (rest of transformation logic)
 
-        const transformedTxs = Array.isArray(txRes) ? txRes.map(tx => ({
-          ...tx,
-          type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
-          payer: tx.payer_address || tx.proposer_address,
-          blockHeight: tx.block_height
-        })) : [];
 
         setBlocks(Array.isArray(blocksRes) ? blocksRes : []);
         setTransactions(transformedTxs);
@@ -157,7 +233,10 @@ function Home() {
             <div className="space-y-1">
               <p className="text-xs text-gray-400 uppercase tracking-widest">Latest Block</p>
               <p className="text-3xl font-bold font-mono text-white group-hover:text-nothing-green transition-colors">
-                {status?.latestBlock?.toLocaleString() || '---'}
+                <NumberFlow
+                  value={status?.latestBlock || 0}
+                  format={{ useGrouping: true }}
+                />
               </p>
             </div>
           </div>
@@ -171,7 +250,10 @@ function Home() {
             <div className="space-y-1">
               <p className="text-xs text-gray-400 uppercase tracking-widest">Total TXs</p>
               <p className="text-3xl font-bold font-mono text-white">
-                {status?.totalTransactions?.toLocaleString() || '---'}
+                <NumberFlow
+                  value={status?.totalTransactions || 0}
+                  format={{ useGrouping: true }}
+                />
               </p>
             </div>
           </div>
@@ -185,7 +267,10 @@ function Home() {
             <div className="space-y-1">
               <p className="text-xs text-gray-400 uppercase tracking-widest">Network TPS</p>
               <p className="text-3xl font-bold font-mono text-white">
-                {status?.tps?.toFixed(2) || '0.00'}
+                <NumberFlow
+                  value={status?.tps || 0}
+                  format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                />
               </p>
             </div>
           </div>
@@ -299,7 +384,7 @@ function Home() {
 
             <div className="space-y-2">
               <AnimatePresence mode='popLayout'>
-                {(blocks || []).slice(0, 10).map((block) => {
+                {(blocks || []).map((block) => {
                   const isNew = newBlockIds.has(block.height);
                   return (
                     <motion.div
@@ -338,6 +423,12 @@ function Home() {
                 })}
               </AnimatePresence>
             </div>
+
+            <Pagination
+              currentPage={blockPage}
+              onPageChange={handleBlockPageChange}
+              hasNext={blocks.length >= 10}
+            />
           </motion.div>
 
           {/* Recent Transactions */}
@@ -356,7 +447,7 @@ function Home() {
 
             <div className="space-y-2">
               <AnimatePresence mode='popLayout'>
-                {(transactions || []).slice(0, 10).map((tx) => {
+                {(transactions || []).map((tx) => {
                   const isNew = newTxIds.has(tx.id);
                   const isSealed = tx.status === 'SEALED';
                   const isError = !isSealed && tx.status !== 'PENDING'; // Assume anything else is error for list
@@ -459,6 +550,12 @@ function Home() {
                 })}
               </AnimatePresence>
             </div>
+
+            <Pagination
+              currentPage={txPage}
+              onPageChange={handleTxPageChange}
+              hasNext={transactions.length >= 10}
+            />
           </motion.div>
         </div>
       </div>

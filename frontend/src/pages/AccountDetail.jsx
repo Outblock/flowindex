@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import { ArrowLeft, User, Activity, Box, Wallet, Key, Code, ArrowRightLeft, Coins, Image as ImageIcon } from 'lucide-react';
+import { Pagination } from '../components/Pagination';
+import NumberFlow from '@number-flow/react';
 
 function AccountDetail() {
   const { address } = useParams();
@@ -10,30 +12,21 @@ function AccountDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [txLoading, setTxLoading] = useState(false);
+
   useEffect(() => {
-    const loadAccountData = async () => {
+    const loadAccountInfo = async () => {
       try {
-        // Fetch Account Data from Real API
         const accountRes = await api.getAccount(address);
         setAccount({
           address: accountRes.address,
-          balance: accountRes.balance, // Raw uint64 for now
-          createdAt: null, // API doesn't return this yet
+          balance: accountRes.balance,
+          createdAt: null,
           contracts: accountRes.contracts || [],
           keys: accountRes.keys || []
         });
-
-        // Get transactions involving this account
-        const txRes = await api.getAccountTransactions(address);
-        const accountTxs = (txRes || [])
-          .map(tx => ({
-            ...tx,
-            type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
-            payer: tx.payer_address || tx.proposer_address,
-            proposer: tx.proposer_address,
-            blockHeight: tx.block_height
-          }));
-        setTransactions(accountTxs);
         setLoading(false);
       } catch (err) {
         console.error('Failed to fetch account:', err);
@@ -41,8 +34,36 @@ function AccountDetail() {
         setLoading(false);
       }
     };
-    loadAccountData();
+    loadAccountInfo();
   }, [address]);
+
+  const loadTransactions = async (page) => {
+    setTxLoading(true);
+    try {
+      const txRes = await api.getAccountTransactions(address, page);
+      const accountTxs = (txRes || [])
+        .map(tx => ({
+          ...tx,
+          type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
+          payer: tx.payer_address || tx.proposer_address,
+          proposer: tx.proposer_address,
+          blockHeight: tx.block_height
+        }));
+      setTransactions(accountTxs);
+    } catch (err) {
+      console.error("Failed to load transactions", err);
+    } finally {
+      setTxLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTransactions(currentPage);
+  }, [address, currentPage]);
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+  };
 
   const getTypeIcon = (type) => {
     const iconClass = "h-4 w-4";
@@ -52,16 +73,6 @@ function AccountDetail() {
       case 'TOKEN_MINT': return <Coins className={iconClass} />;
       case 'NFT_MINT': return <ImageIcon className={iconClass} />;
       default: return <Activity className={iconClass} />;
-    }
-  };
-
-  const getTypeColor = (type) => {
-    switch (type) {
-      case 'TRANSFER': return 'border-cyan-500/50 text-cyan-400';
-      case 'CREATE_ACCOUNT': return 'border-purple-500/50 text-purple-400';
-      case 'TOKEN_MINT': return 'border-yellow-500/50 text-yellow-400';
-      case 'NFT_MINT': return 'border-pink-500/50 text-pink-400';
-      default: return 'border-slate-500/50 text-slate-400';
     }
   };
 
@@ -125,11 +136,17 @@ function AccountDetail() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="border border-white/10 p-6 bg-nothing-dark hover:border-nothing-green/50 transition-colors">
             <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Balance</p>
-            <p className="text-2xl font-bold text-white overflow-hidden text-ellipsis">{account.balance} <span className="text-sm text-nothing-green">FLOW</span></p>
+            <p className="text-2xl font-bold text-white overflow-hidden text-ellipsis flex items-center gap-2">
+              <NumberFlow
+                value={account.balance || 0}
+                format={{ minimumFractionDigits: 0, maximumFractionDigits: 4 }}
+              />
+              <span className="text-sm text-nothing-green">FLOW</span>
+            </p>
           </div>
           <div className="border border-white/10 p-6 bg-nothing-dark">
             <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Transactions</p>
-            <p className="text-2xl font-bold text-white">{transactions.length}</p>
+            <p className="text-2xl font-bold text-white">{transactions.length >= 10 ? '10+' : transactions.length}</p>
           </div>
           <div className="border border-white/10 p-6 bg-nothing-dark">
             <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Contracts</p>
@@ -176,10 +193,16 @@ function AccountDetail() {
         <div className="border border-white/10 bg-nothing-dark">
           <div className="p-6 border-b border-white/10 flex justify-between items-center">
             <h2 className="text-white text-sm uppercase tracking-widest">Recent Activity</h2>
-            <span className="text-xs text-zinc-500">{transactions.length} Found</span>
+            <span className="text-xs text-zinc-500">{transactions.length} Found (Page {currentPage})</span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto min-h-[200px] relative">
+            {txLoading && (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
+                <div className="w-8 h-8 border-2 border-dashed border-white rounded-full animate-spin"></div>
+              </div>
+            )}
+
             {transactions.length > 0 ? (
               <table className="w-full text-left text-xs">
                 <thead>
@@ -191,7 +214,7 @@ function AccountDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {transactions.slice(0, 20).map((tx) => {
+                  {transactions.map((tx) => {
                     const role = tx.payer === address ? 'Payer' :
                       tx.proposer === address ? 'Proposer' : 'Authorizer';
                     return (
@@ -220,9 +243,19 @@ function AccountDetail() {
                 </tbody>
               </table>
             ) : (
-              <div className="p-8 text-center text-zinc-500 italic">No transactions found</div>
+              !txLoading && <div className="p-8 text-center text-zinc-500 italic">No transactions found</div>
             )}
           </div>
+
+          <Pagination
+            currentPage={currentPage}
+            onPageChange={handlePageChange}
+            hasNext={transactions.length >= 20 || transactions.length === 10} // Depending on limit, currently limit is passed or defaulted. 
+          // Default limit logic: Front end API wrapper doesn't pass limit, backend defaults to 10? No, 20? 
+          // In server.go I refactored limits.
+          // ParsePagination default limit is 10. `handleGetAccountTransactions` uses `parsePagination`. 
+          // So default limit is 10.
+          />
         </div>
       </div>
     </div>
