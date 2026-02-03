@@ -320,22 +320,102 @@ function TransactionDetail() {
                   </h3>
                   {transaction.arguments ? (
                     <div className="bg-black/50 border border-white/5 p-4 rounded-sm">
-                      {/* Try to display as formatted JSON if possible, else raw string */}
-                      <pre className="text-[10px] text-nothing-green overflow-x-auto whitespace-pre-wrap break-all">
-                        {(() => {
-                          try {
-                            // If it's already an object/array
-                            if (typeof transaction.arguments === 'object') {
-                              return JSON.stringify(transaction.arguments, null, 2);
+                      {(() => {
+                        // Helper to decode Cadence JSON (JSON-CDC) -> JS Value
+                        const decodeCadenceValue = (val) => {
+                          if (!val || typeof val !== 'object') return val;
+
+                          // Handle basic types with 'value' field
+                          if (val.value !== undefined) {
+                            // Recursively decode inner value for containers
+                            if (val.type === 'Optional') {
+                              return val.value ? decodeCadenceValue(val.value) : null;
                             }
-                            // If it's a string, try to parse
-                            return JSON.stringify(JSON.parse(transaction.arguments), null, 2);
-                          } catch {
-                            // Fallback to raw display
-                            return String(transaction.arguments);
+                            if (val.type === 'Array') {
+                              return val.value.map(decodeCadenceValue);
+                            }
+                            if (val.type === 'Dictionary') {
+                              const dict = {};
+                              val.value.forEach(item => {
+                                const k = decodeCadenceValue(item.key);
+                                const v = decodeCadenceValue(item.value);
+                                dict[String(k)] = v;
+                              });
+                              return dict;
+                            }
+                            // Structs/Resources/Events
+                            if (val.type === 'Struct' || val.type === 'Resource' || val.type === 'Event') {
+                              const obj = {};
+                              // Sometimes fields come in 'value.fields'
+                              if (val.value && val.value.fields) {
+                                val.value.fields.forEach(f => {
+                                  obj[f.name] = decodeCadenceValue(f.value);
+                                });
+                                return obj;
+                              }
+                              // Fallback if structure differs, though standard CDC uses 'fields'
+                            }
+                            // Path
+                            if (val.type === 'Path') {
+                              return `${val.value.domain}/${val.value.identifier}`;
+                            }
+                            // Type
+                            if (val.type === 'Type') {
+                              return val.value.staticType;
+                            }
+
+                            // Primitives (String, Int, UInt, Address, Bool, etc)
+                            return val.value;
                           }
-                        })()}
-                      </pre>
+                          return val;
+                        };
+
+                        try {
+                          // Backend now returns arguments as a JSON array of JSON-CDC objects (if using the fix we just pushed)
+                          // But we need to handle both raw string (old data?) and object array (new data?).
+                          // The 'transaction.arguments' in frontend model comes from backend.
+                          // If backend provided `json.Unmarshalled` it might be an array of objects.
+
+                          let args = transaction.arguments;
+                          if (typeof args === 'string') {
+                            try {
+                              args = JSON.parse(args);
+                            } catch {
+                              // raw string fallback
+                              return <div className="text-zinc-400 text-xs">{args}</div>;
+                            }
+                          }
+
+                          if (!Array.isArray(args)) {
+                            // If it's a single object or something else
+                            return <pre className="text-[10px] text-nothing-green whitespace-pre-wrap">{JSON.stringify(args, null, 2)}</pre>;
+                          }
+
+                          // It is an array of arguments. Decode each.
+                          const decodedArgs = args.map(decodeCadenceValue);
+
+                          return (
+                            <div className="space-y-2">
+                              {decodedArgs.map((arg, idx) => (
+                                <div key={idx} className="flex flex-col gap-1 border-b border-white/5 last:border-0 pb-2 mb-2 last:mb-0 last:pb-0">
+                                  <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Argument {idx}</span>
+                                  <div className="text-xs text-zinc-300 font-mono break-all bg-white/5 p-2 rounded-sm">
+                                    {/* Display primitive directly, or stringify complex objects */}
+                                    {typeof arg === 'object' && arg !== null
+                                      ? JSON.stringify(arg, null, 2)
+                                      : String(arg)
+                                    }
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+
+                        } catch (e) {
+                          // Fallback to raw display
+                          return <div className="text-zinc-500 text-xs">Failed to parse arguments: {String(transaction.arguments)}</div>;
+                        }
+                      })()}
                     </div>
                   ) : (
                     <div className="text-xs text-zinc-600 italic px-2">No arguments provided</div>
