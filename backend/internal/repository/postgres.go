@@ -499,7 +499,7 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 
 func (r *Repository) GetRecentTransactions(ctx context.Context, limit int) ([]models.Transaction, error) {
 	query := `
-		SELECT t.id, t.block_height, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.created_at
+		SELECT t.id, t.block_height, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.error_message, t.events, t.created_at
 		FROM transactions t
 		ORDER BY t.block_height DESC
 		LIMIT $1`
@@ -513,7 +513,7 @@ func (r *Repository) GetRecentTransactions(ctx context.Context, limit int) ([]mo
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Script, &t.Status, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Script, &t.Status, &t.ErrorMessage, &t.Events, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
