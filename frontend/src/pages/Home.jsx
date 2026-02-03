@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Box, Activity, TrendingUp, Database, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../api';
