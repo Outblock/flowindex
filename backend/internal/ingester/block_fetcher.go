@@ -138,7 +138,8 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			// Address Activity (Participants)
 			// Process Events
 			for _, evt := range res.Events {
-				payloadJSON, _ := json.Marshal(evt.Value)
+				payload := w.flattenCadenceValue(evt.Value)
+				payloadJSON, _ := json.Marshal(payload)
 
 				addrStr, contractStr, eventStr := w.parseEventType(evt.Type)
 
