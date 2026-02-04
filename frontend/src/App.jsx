@@ -6,6 +6,7 @@ import AccountDetail from './pages/AccountDetail';
 import Stats from './pages/Stats';
 import { IndexingStatus } from './components/IndexingStatus';
 import Header from './components/Header';
+import Footer from './components/Footer';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
         <Route path="/accounts/:address" element={<AccountDetail />} />
         <Route path="/stats" element={<Stats />} />
       </Routes>
+      <Footer />
     </div>
   );
 }
