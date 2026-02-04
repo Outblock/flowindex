@@ -1,142 +1,183 @@
 # FlowScan Clone 架构文档
 
-**更新时间:** 2026-02-03
+**更新时间:** 2026-02-04
 
 ---
 
 ## 1. 目标与约束
 
-- **目标**：构建 Flow 区块链浏览器，支持高吞吐索引、稳定查询与可扩展派生数据。
-- **约束**：海量数据（10TB+ 级）与高并发读写，优先考虑分区与分层架构。
+- 目标: 面向 Flow 的区块链浏览器, 高吞吐索引 + 稳定查询 + 可扩展派生数据.
+- 约束: 海量数据 (10TB+) 与高并发读写, 需要分区与分层设计, 优先保证原始数据完整.
 
 ---
 
-## 2. 系统全景（数据流）
+## 2. 系统总览 (数据流)
 
 ```mermaid
 flowchart LR
-  Flow[Flow Access Node] --> Fwd[Forward Ingester]
-  Flow --> Bwd[Backward Ingester]
+  Flow["Flow Access Nodes"] --> Fwd["Forward Ingester"]
+  Flow --> Bwd["Backward Ingester"]
 
-  Fwd --> Raw[(Postgres raw.* partitions)]
+  Fwd --> Raw["Postgres raw.* (partitioned)"]
   Bwd --> Raw
 
-  Raw --> Lookup[raw.tx_lookup / raw.block_lookup]
-  Raw --> Workers[Async Workers\nToken / Meta]
+  Raw --> Lookup["raw.tx_lookup / raw.block_lookup"]
+  Raw --> Workers["Async Workers (Token / Meta / EVM)"]
+  Workers --> App["Postgres app.* (derived)"]
 
-  Workers --> App[(Postgres app.* derived)]
-
-  Raw --> API[API Server]
+  Raw --> API["API Server"]
   App --> API
 
-  API --> FE[Frontend UI]
-  API --> WS[WebSocket Stream]
+  API --> FE["Frontend UI"]
+  API --> WS["WebSocket Stream"]
 ```
-
-**说明**：
-- `raw.*` 保存完整原始数据，优先保证索引稳定与可回放。
-- `app.*` 保存派生数据（统计、地址交易、token/NFT 转账等）。
 
 ---
 
-## 3. 数据层（Raw/App 分层 + 分区）
+## 3. 数据层分层与分区
 
 ```mermaid
 flowchart TB
-  subgraph Postgres
-    subgraph raw[raw schema]
-      RBlocks[raw.blocks\npartitioned]
-      RTx[raw.transactions\npartitioned]
-      REvents[raw.events\npartitioned]
-      RTxLookup[raw.tx_lookup]
-      RBlockLookup[raw.block_lookup]
+  subgraph PG["Postgres"]
+    subgraph RAW["raw schema"]
+      RB["raw.blocks (partitioned)"]
+      RT["raw.transactions (partitioned)"]
+      RE["raw.events (partitioned)"]
+      RC["raw.collections (partitioned)"]
+      RX["raw.execution_results (partitioned)"]
+      RTL["raw.tx_lookup"]
+      RBL["raw.block_lookup"]
     end
 
-    subgraph app[app schema]
-      ATx[app.address_transactions]
-      AToken[app.token_transfers\npartitioned]
-      AStats[app.address_stats]
-      AKeys[app.account_keys]
-      AContracts[app.smart_contracts]
-      ACheck[app.indexing_checkpoints]
-      ALeases[app.worker_leases]
+    subgraph APP["app schema"]
+      AT["app.address_transactions"]
+      TT["app.token_transfers (partitioned)"]
+      EV["app.evm_transactions (partitioned)"]
+      AS["app.address_stats"]
+      AK["app.account_keys"]
+      SC["app.smart_contracts"]
+      CP["app.indexing_checkpoints"]
+      WL["app.worker_leases"]
     end
   end
 
-  RBlocks --> RTxLookup
-  RBlocks --> RBlockLookup
-  RTx --> ATx
-  REvents --> AToken
+  RB --> RBL
+  RT --> RTL
+  RE --> TT
+  RT --> AT
 ```
 
-**关键点**：
-- **分区**：`raw.blocks / raw.transactions / raw.events / app.token_transfers`
-- **Lookup**：ID 查询直接走 `raw.tx_lookup / raw.block_lookup`，避免全表扫描
-- **派生**：由 Worker 异步从 raw 生成 app
+关键点:
+- raw.* 保存完整原始数据, app.* 保存派生数据, 避免查询对 raw 压力过大.
+- 分区表使用 block_height 范围分区, 支撑 10TB+ 规模.
+- lookup 表避免跨分区扫描.
 
 ---
 
-## 4. 写入与回滚策略
+## 4. 索引与回滚策略
 
-- **Ingester** 仅写 `raw.*`，确保核心数据完整
-- **派生写入** 由 Worker 异步完成，可在流量低时启用
-- **Reorg 回滚**
-  - 使用 `MAX_REORG_DEPTH` 设置安全边界
-  - 回滚 `raw.*` 和 `app.*` 对应区块高度以上数据
+```mermaid
+sequenceDiagram
+  participant F as Forward Ingester
+  participant B as Backward Ingester
+  participant R as raw.*
+  participant A as app.*
+  participant C as Checkpoint
+
+  F->>R: 批量拉取最新区块
+  F->>C: main_ingester checkpoint
+
+  B->>R: 从 start_height 回填历史
+  B->>C: history_ingester checkpoint
+
+  Note over R,A: Async Workers 从 raw 派生 app.*
+  A->>C: token_worker/meta_worker checkpoint
+```
+
+回滚:
+- 使用 MAX_REORG_DEPTH 作为安全边界.
+- 回滚范围内 raw/app 同步清理, 避免派生数据漂移.
 
 ---
 
-## 5. API 与分页策略
+## 5. Async Worker 租约机制
 
-- **Cursor 分页优先**，避免大 offset 带来的性能问题
+```mermaid
+flowchart LR
+  W["Worker (Token/Meta/EVM)"] --> L["Acquire Lease (app.worker_leases)"]
+  L -->|成功| P["Process Range"]
+  P -->|OK| D["Complete Lease"]
+  P -->|Fail| F["Fail Lease + Log Error"]
+  D --> C["Checkpoint Committer"]
+  F --> C
+```
 
-**Cursor 格式**
+说明:
+- Lease 避免并发重复处理同一区间.
+- 失败的 lease 会被 reclaim 重试.
+- Checkpoint 只推进连续区间.
+
+---
+
+## 6. API 与分页策略
+
+```mermaid
+flowchart LR
+  Client --> API
+  API --> DB["Postgres"]
+  API --> Cache["/status cache (3s)"]
+```
+
+Cursor 分页:
 - Blocks: `height`
 - Transactions: `block_height:tx_index:tx_id`
 - Address Tx: `block_height:tx_id`
 - Token/NFT Transfers: `block_height:tx_id:event_index`
 
-**主要端点**
-- `/blocks`, `/transactions`, `/accounts/:address/transactions`
-- `/accounts/:address/token-transfers`
-- `/accounts/:address/nft-transfers`
-- `/status`, `/health`
-
 ---
 
-## 6. 部署拓扑（Railway / GCP）
+## 7. 部署拓扑 (Railway / GCP)
 
 ```mermaid
 flowchart LR
-  subgraph Railway_or_GCP
-    FE[Frontend (nginx)] --> API[Backend API]
-    API --> DB[(Postgres)]
+  subgraph Infra["Railway or GCP"]
+    FE["Frontend (nginx)"]
+    API["Backend API"]
+    DB["Postgres"]
   end
 
-  User[User Browser] --> FE
+  User["User Browser"] --> FE
+  FE --> API
+  API --> DB
 ```
 
-**说明**：
-- Railway: 前端 nginx 通过内部网络转发 `/api` 和 `/ws` 到 backend
-- GCP: 推荐将 backend 与 Postgres 分开部署，后续可物理拆分 raw/app
+说明:
+- 前端通过 nginx 反向代理 `/api` 与 `/ws`.
+- GCP 推荐拆分 raw/app 或读写分离.
 
 ---
 
-## 7. 运行开关（关键环境变量）
+## 8. 关键参数与可调项
 
-完整列表见：`DEPLOY_ENV.md`
+核心变量完整列表见: `DEPLOY_ENV.md`.
 
-核心控制项：
-- `ENABLE_DERIVED_WRITES` / `ENABLE_TOKEN_WORKER` / `ENABLE_META_WORKER`
-- `FLOW_RPC_RPS` / `FLOW_RPC_BURST`
-- `MAX_REORG_DEPTH`
+索引相关:
+- `HISTORY_WORKER_COUNT`, `HISTORY_BATCH_SIZE`
+- `LATEST_WORKER_COUNT`, `LATEST_BATCH_SIZE`
+- `FLOW_RPC_RPS_PER_NODE`, `FLOW_RPC_BURST_PER_NODE`
+
+派生相关:
+- `TOKEN_WORKER_RANGE`, `META_WORKER_RANGE`
+- `TOKEN_WORKER_CONCURRENCY`, `META_WORKER_CONCURRENCY`
+
+DB 相关:
+- `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS`
 
 ---
 
-## 8. 下一步演进建议
+## 9. 未来演进
 
-- **EVM Worker**：把 EVM 解析逻辑迁到异步 Worker
-- **Token/NFT 全局页**：增加 Token/NFT 列表与详情
-- **物理拆分**：raw/app 独立数据库
-- **Vite Proxy**：本地开发增加 `/api` 代理
-
+- EVM Worker 完整写入 `app.evm_transactions`
+- Token / NFT 全局列表与详情
+- 统计/日报数据链路
+- raw/app 物理拆分, 压缩与冷热分层

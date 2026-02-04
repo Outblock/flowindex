@@ -1,117 +1,63 @@
-# FlowScan Clone - 项目状态报告
+# FlowScan Clone - Project Status
 
-**更新时间:** 2026-02-03
+**Last Updated:** 2026-02-04
 
----
+## Executive Summary
+FlowScan v2 is operational on Railway with multi-node Flow access, cursor-based APIs, and high-throughput backfill. The system can index latest blocks and backfill history concurrently. Token/NFT transfer indexing is now consistent and backfill is running with higher concurrency. Current focus is sustained throughput and preparing for GCP migration.
 
-## 项目概览
+## Current Architecture (High Level)
+- **Ingesters**
+  - Forward (live) ingester for real-time head.
+  - Backward (history) ingester for full history backfill.
+- **Storage**
+  - `raw.*` tables for immutable chain data, range-partitioned.
+  - `app.*` tables for derived/query-friendly data.
+- **Workers**
+  - TokenWorker and MetaWorker read `raw.events` and `raw.transactions` and populate `app.*` tables.
+  - Lease-based ranges with checkpoint committer.
+- **API**
+  - Cursor pagination for blocks, transactions, address txs, token/nft transfers.
+  - Status endpoint cached to reduce load.
 
-**目标:** 构建面向 Flow 区块链的浏览器（类似 etherscan / blockscout），支持高性能索引、查询与可视化。
+## Status: What Works
+- **Schema V2** (raw/app separation, partitions) deployed.
+- **Cursor API** deployed; frontend now uses cursor for blocks/txs/account txs.
+- **TokenWorker parsing** supports FT + NFT (Deposited/Withdrawn) and writes `token_id` correctly.
+- **Multi-node access** enabled via `FLOW_ACCESS_NODES`, `FLOW_RPC_RPS_PER_NODE`.
+- **WebSocket proxy** stable in frontend nginx.
+- **Stats page** shows worker checkpoints and history progress bar.
 
-**技术栈:**
-- **Backend:** Go + PostgreSQL + Gorilla WebSocket
-- **Frontend:** React + Vite + TailwindCSS
-- **链:** Flow Blockchain
+## Recent Changes (Last 24h)
+- Cursor pagination used by frontend (no offset queries).
+- Token transfer upserts now include `token_id`, `token_contract_address`, `is_nft` updates.
+- TokenWorker concurrency is configurable.
+- Backend image includes `backfill_token_transfers` binary.
 
----
+## Current Environment Highlights (Railway)
+- **Flow Access**: 001..004 tested reachable (50 requests per node, no errors).
+- **DB Size**: ~28 GB.
+- **Largest tables**: `events_p140000000`, `transactions_p140000000`, `token_transfers_p140000000`.
+- **Checkpoints (sample)**: main ~141066xxx, history ~139712xxx, token/meta near head (after reset).
 
-## 当前架构（摘要）
+## Known Risks / Bottlenecks
+- **Raw events payload** (JSONB) is the dominant storage cost. At 10-50TB, this becomes the primary pressure.
+- **Partition size** currently 10M for `raw.events` and `app.token_transfers`. Long-term, 1-2M partitions will reduce per-partition bloat and improve VACUUM.
+- **Address/Token queries** will require additional composite indexes for large-scale read performance.
+- **History+Derived contention**: backfill + heavy derived workers may contend on I/O.
 
-- **Ingesters**: Forward/Backward 并发抓取区块数据
-- **Raw 存储**: `raw.*` 分区表保存区块/交易/事件
-- **Lookup 表**: `raw.tx_lookup` / `raw.block_lookup` 加速 ID 查询
-- **Async Workers**: Token/Meta Worker 从 raw 生成 `app.*` 派生表
-- **API**: REST + WebSocket，支持 cursor 分页
-- **Frontend**: 首页/区块/交易/账户页；账户页 Token/NFT 使用 cursor API
+## Next Steps (Technical Plan)
+1. **History backfill acceleration**
+   - Continue increasing `HISTORY_WORKER_COUNT` and `HISTORY_BATCH_SIZE` until rate limit or DB saturation.
+   - Add nodes after whitelist confirmation.
+2. **Token/NFT completeness**
+   - Run `backfill_token_transfers` in backend container for older heights if needed.
+3. **Indexing efficiency**
+   - Add composite indexes once history is 80%+ complete.
+4. **GCP migration prep**
+   - Split `raw` and `app` into separate DBs in Phase 2.
 
----
-
-## 已完成
-
-### Backend / 数据层
-- **Schema V2** 完成：`raw.` / `app.` 逻辑分离 + 分区表
-- **Lookup 表**：`raw.tx_lookup` / `raw.block_lookup` 加速 ID 查询
-- **Partition 管理**：写入时按需创建分区
-- **重组回滚**：`MAX_REORG_DEPTH` + 回滚逻辑
-- **RPC 限速**：`FLOW_RPC_RPS` / `FLOW_RPC_BURST`
-- **Lookup Repair**：可选后台修复任务
-
-### Backend / Worker
-- **TokenWorker**：JSON-CDC 解析可用，写入 `app.token_transfers`
-- **MetaWorker**：地址交易、keys、合约与统计写入
-- **Committer**：连续 checkpoint 推进
-
-### API
-- **Cursor API**：
-  - `/blocks?cursor=height`
-  - `/transactions?cursor=block:tx_index:tx_id`
-  - `/accounts/:address/transactions?cursor=block:tx_id`
-  - `/accounts/:address/token-transfers?cursor=block:tx_id:event_index`
-  - `/accounts/:address/nft-transfers?cursor=block:tx_id:event_index`
-
-### Frontend
-- 账户页新增 **Transactions / Tokens / NFTs** Tab
-- Token/NFT 列表接入 cursor API（Load More）
-
-### 文档与部署
-- `RAILWAY_RUNBOOK.md`：Railway 验证流程
-- `RAILWAY_ENV.example`：Railway 环境变量模板
-- `DEPLOY_ENV.md`：最终发布环境变量清单
-
----
-
-## 进行中 / 待办
-
-- **EVM Worker**：写入 `app.evm_transactions`
-- **Token/NFT 独立页面**：全局列表/详情页
-- **统计任务**：Daily Stats 与可视化完善
-- **Dev Proxy**：Vite 本地开发缺少 `/api` 代理（建议加 proxy 或使用 nginx frontend）
-- **物理拆分**：raw/app 数据库拆分（Phase 2）
-
----
-
-## 已知问题 / 注意事项
-
-- **`schema.sql` 已过时**，当前使用 `backend/schema_v2.sql`。
-- **派生写入默认关闭**：
-  - `ENABLE_DERIVED_WRITES=false` 时不写 `app.*` 派生表
-  - 需要启用 `ENABLE_TOKEN_WORKER` / `ENABLE_META_WORKER`
-- **前端端口 5173**
-  - Vite dev server 未配置 `/api` 代理，直接运行 `npm run dev` 将无法访问后端
-  - Docker nginx 前端需要正确映射到 8080（compose 目前映射为 `5173:80`）
-
----
-
-## 关键文档
-
-- `ARCHITECTURE.md`：当前架构 + 图
-- `DEPLOY_ENV.md`：环境变量清单
-- `RAILWAY_RUNBOOK.md`：Railway 验证流程
-
----
-
-## 简要启动（Docker）
-
-```bash
-docker compose up -d --build
-```
-
-- Backend: `http://localhost:8080`
-- Frontend: `http://localhost:5173`（如映射修正为 5173:8080）
-
----
-
-## 状态总结
-
-**完成度:** ~85%
-
-**核心能力已具备:**
-- Raw 数据高性能索引
-- 可扩展的派生 Worker 架构
-- Cursor 分页 API
-- 关键页面可用（Block/Tx/Account + Token/NFT 列表）
-
-**下一步方向清晰:**
-- EVM/统计/Token-NFT 全局页
-- 迁移与扩容至 GCP
+## Open Items
+- EVM worker (write into `app.evm_transactions`).
+- Token/NFT global list pages.
+- Long-term storage strategy for `raw.events.payload`.
 
