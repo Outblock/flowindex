@@ -1,3 +1,5 @@
+import { Github } from 'lucide-react';
+
 function Footer() {
   return (
     <footer className="border-t border-white/5 bg-nothing-dark/90">
@@ -10,9 +12,11 @@ function Footer() {
           href="https://github.com/zenabot27/flowscan-clone"
           target="_blank"
           rel="noreferrer"
-          className="text-zinc-400 hover:text-white transition-colors"
+          className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors uppercase tracking-widest"
+          aria-label="Open Source on GitHub"
         >
-          GitHub
+          <Github className="h-4 w-4" />
+          <span>Open Source</span>
         </a>
       </div>
     </footer>
@@ -20,4 +24,3 @@ function Footer() {
 }
 
 export default Footer;
-

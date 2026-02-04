@@ -5,6 +5,7 @@ import { api } from '../api';
 export function DailyStatsChart() {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [rangeDays, setRangeDays] = useState(30);
 
     useEffect(() => {
         const loadStats = async () => {
@@ -49,16 +50,31 @@ export function DailyStatsChart() {
             </div>
         );
     }
+
+    const visibleData = rangeDays >= data.length ? data : data.slice(-rangeDays);
     return (
         <div className="bg-nothing-dark border border-white/10 p-6 group hover:border-nothing-green/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-white uppercase tracking-widest">Transaction History</h2>
-                <span className="text-xs text-nothing-green border border-nothing-green/30 px-2 py-1 bg-nothing-green/10">14 DAYS</span>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setRangeDays(14)}
+                        className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${rangeDays === 14 ? 'text-nothing-green border-nothing-green/40 bg-nothing-green/10' : 'text-gray-500 border-white/10 bg-white/5 hover:text-white'}`}
+                    >
+                        14 Days
+                    </button>
+                    <button
+                        onClick={() => setRangeDays(30)}
+                        className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${rangeDays === 30 ? 'text-nothing-green border-nothing-green/40 bg-nothing-green/10' : 'text-gray-500 border-white/10 bg-white/5 hover:text-white'}`}
+                    >
+                        30 Days
+                    </button>
+                </div>
             </div>
             <div className="h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
-                        data={data}
+                        data={visibleData}
                         margin={{
                             top: 10,
                             right: 30,

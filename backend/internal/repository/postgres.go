@@ -980,12 +980,12 @@ func (r *Repository) RefreshDailyStats(ctx context.Context) error {
 	return nil
 }
 
-// GetDailyStats retrieves the last 14 days of stats
+// GetDailyStats retrieves the last 30 days of stats
 func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT date::text, tx_count, active_accounts, new_contracts
 		FROM app.daily_stats
-		WHERE date >= CURRENT_DATE - INTERVAL '13 days'
+		WHERE date >= CURRENT_DATE - INTERVAL '29 days'
 		ORDER BY date ASC`)
 	if err != nil {
 		return nil, err

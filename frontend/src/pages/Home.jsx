@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, Activity, TrendingUp, Database, ArrowRightLeft } from 'lucide-react';
+import { Box, Activity, TrendingUp } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../api';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -139,6 +139,10 @@ function Home() {
         next.delete(newTx.id);
         return next;
       }), 3000);
+      setStatusRaw(prev => prev ? {
+        ...prev,
+        total_transactions: (prev.total_transactions || 0) + 1
+      } : prev);
     }
   }, [lastMessage, blockPage, txPage]);
 
@@ -180,7 +184,7 @@ function Home() {
 
     loadInitialData();
 
-    const statusTimer = setInterval(refreshStatus, 15000);
+    const statusTimer = setInterval(refreshStatus, 10000);
     const netStatsTimer = setInterval(refreshNetworkStats, 300000);
 
     return () => {
@@ -189,13 +193,6 @@ function Home() {
       clearInterval(netStatsTimer);
     };
   }, []);
-
-  const latestHeight = statusRaw?.latest_height || 0;
-  const minHeight = statusRaw?.min_height || 0;
-  const maxHeight = statusRaw?.max_height || 0;
-  const coveredRange = maxHeight >= minHeight && maxHeight > 0 ? (maxHeight - minHeight + 1) : 0;
-  const totalHistory = latestHeight > 0 ? (latestHeight + 1) : 0;
-  const historyPercent = totalHistory > 0 ? (coveredRange / totalHistory) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-nothing-black text-nothing-white font-mono selection:bg-nothing-green selection:text-black">
@@ -213,42 +210,6 @@ function Home() {
               <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
             </motion.div>
           </div>
-
-          {/* Indexing Progress Banner */}
-          <Link
-            to="/stats"
-            className="block border border-white/10 bg-nothing-dark/80 hover:border-nothing-green/40 transition-colors"
-          >
-            <div className="p-4 md:p-5">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 border border-white/10 rounded-sm">
-                    <Database className="h-4 w-4 text-nothing-green" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-gray-400">Indexing Progress</p>
-                    <p className="text-sm text-white">
-                      {totalHistory > 0 ? `${historyPercent.toFixed(2)}% of full history` : 'Initializing...'}
-                    </p>
-                    {totalHistory > 0 && (
-                      <p className="text-[10px] uppercase tracking-wider text-gray-500">
-                        Range: {minHeight.toLocaleString()} → {maxHeight.toLocaleString()} (Latest {latestHeight.toLocaleString()})
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="h-2 w-48 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
-                    <div
-                      className="h-full bg-nothing-green"
-                      style={{ width: `${Math.min(100, historyPercent).toFixed(2)}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] uppercase tracking-widest text-nothing-green">View Details →</span>
-                </div>
-              </div>
-            </div>
-          </Link>
 
           {/* New Premium Stats Grid (Flow Pulse) */}
           {networkStats && (
@@ -336,87 +297,6 @@ function Home() {
           </div>
         </div>
 
-        {/* Indexing Progress Bar */}
-        {statusRaw && statusRaw.start_height && statusRaw.latest_height && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="bg-nothing-dark border border-white/10 p-6"
-          >
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Database className="h-5 w-5 text-nothing-green" />
-                  <h3 className="text-sm uppercase tracking-widest text-white">Blockchain Indexing Progress</h3>
-                </div>
-                <span className="text-xs text-gray-500 uppercase tracking-wider">
-                  {statusRaw.progress || '0%'} Complete
-                </span>
-              </div>
-
-              {/* Visual Progress Bar */}
-              <div className="relative h-12 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
-                {(() => {
-                  const start = statusRaw.start_height || 0;
-                  const indexed = statusRaw.indexed_height || start;
-                  const latest = statusRaw.latest_height || indexed;
-                  const totalRange = latest - start;
-                  const indexedRange = indexed - start;
-                  const indexedPercent = totalRange > 0 ? (indexedRange / totalRange) * 100 : 0;
-
-                  return (
-                    <>
-                      {/* Indexed portion (colored) */}
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${indexedPercent}%` }}
-                        transition={{ duration: 1, ease: "easeOut" }}
-                        className="absolute left-0 top-0 h-full bg-gradient-to-r from-nothing-green/20 via-nothing-green/40 to-nothing-green/30 border-r-2 border-nothing-green/50"
-                      >
-                        <div className="absolute inset-0 bg-nothing-green/10 animate-pulse"></div>
-                      </motion.div>
-
-                      {/* Labels */}
-                      <div className="absolute inset-0 flex items-center justify-between px-4 text-xs font-mono">
-                        <span className="text-gray-400">
-                          Start: <span className="text-white">{start.toLocaleString()}</span>
-                        </span>
-                        <span className="text-nothing-green font-bold">
-                          Indexed: <span className="text-white">{indexed.toLocaleString()}</span>
-                        </span>
-                        <span className="text-gray-500">
-                          Latest: <span className="text-white">{latest.toLocaleString()}</span>
-                        </span>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-
-              {/* Additional Stats */}
-              <div className="grid grid-cols-3 gap-4 text-center pt-2">
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Blocks Behind</p>
-                  <p className="text-sm font-mono text-white">{statusRaw.behind?.toLocaleString() || '0'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Blocks Indexed</p>
-                  <p className="text-sm font-mono text-nothing-green">
-                    {((statusRaw.indexed_height || 0) - (statusRaw.start_height || 0)).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Range</p>
-                  <p className="text-sm font-mono text-white">
-                    {((statusRaw.latest_height || 0) - (statusRaw.start_height || 0)).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
         {/* Charts Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -433,7 +313,7 @@ function Home() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-nothing-dark border border-white/10 p-6"
+            className="bg-nothing-dark border border-white/10 p-6 h-[520px] flex flex-col"
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
@@ -442,7 +322,7 @@ function Home() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               <AnimatePresence mode='popLayout'>
                 {(blocks || []).map((block) => {
                   const isNew = newBlockIds.has(block.height);
@@ -459,23 +339,25 @@ function Home() {
                     >
                       <Link
                         to={`/blocks/${block.height}`}
-                        className={`block border p-3 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
+                        className={`block border p-3 h-16 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
                           ? 'bg-nothing-green/10 border-nothing-green/50'
                           : 'bg-black/20 border-white/5'
                           }`}
                       >
                         {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-nothing-green animate-ping" />}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
+                        <div className="flex items-center justify-between h-full">
+                          <div className="flex flex-col">
                             <span className="text-xs text-nothing-green font-mono">#{block.height.toLocaleString()}</span>
-                            <span className="text-xs text-gray-500 font-mono hidden sm:inline-block">Id: {block.id?.slice(0, 8)}...</span>
+                            <span className="text-[10px] text-gray-500 font-mono hidden sm:inline-block">
+                              Id: {block.id?.slice(0, 12)}...
+                            </span>
                           </div>
-                          <div className="flex items-center space-x-4">
-                            <div className="text-xs text-gray-400 font-mono bg-white/5 px-2 py-0.5 rounded-sm">
+                          <div className="flex flex-col items-end">
+                            <div className="text-xs text-gray-300 font-mono bg-white/5 px-2 py-0.5 rounded-sm">
                               {block.tx_count ?? block.txCount ?? 0} TXs
                             </div>
                             <span
-                              className="text-[10px] text-gray-600 font-mono uppercase"
+                              className="text-[10px] text-gray-600 font-mono uppercase mt-1"
                               title={blockTimeAbsolute || ''}
                             >
                               {blockTimeRelative || ''}
@@ -501,7 +383,7 @@ function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-nothing-dark border border-white/10 p-6"
+            className="bg-nothing-dark border border-white/10 p-6 h-[520px] flex flex-col"
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
@@ -510,7 +392,7 @@ function Home() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               <AnimatePresence mode='popLayout'>
                 {(transactions || []).map((tx) => {
                   const isNew = newTxIds.has(tx.id);
@@ -565,34 +447,17 @@ function Home() {
                     >
                       <Link
                         to={`/transactions/${tx.id}`}
-                        className={`block border p-3 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
+                        className={`block border p-3 h-16 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
                           ? 'bg-white/10 border-white/40'
                           : 'bg-black/20 border-white/5'
                           }`}
                       >
                         {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-white animate-ping" />}
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <span className="text-xs text-gray-400 font-mono truncate w-24 sm:w-32">
-                                {tx.id}
-                              </span>
-                              <span
-                                className="text-[10px] text-gray-500 font-mono"
-                                title={txTimeAbsolute || ''}
-                              >
-                                {txTimeRelative || ''}
-                              </span>
-                            </div>
-                            {(isSealed || isError) && (
-                              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border ${isSealed ? 'border-nothing-green/50 text-nothing-green bg-nothing-green/10' : 'border-red-500/50 text-red-500 bg-red-500/10'
-                                }`}>
-                                {isSealed ? 'Sealed' : 'Error'}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between h-full">
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs text-gray-400 font-mono truncate w-40 sm:w-48">
+                              {tx.id}
+                            </span>
                             <div className="flex items-center space-x-2">
                               <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${txType === 'Transfer' ? 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5' :
                                 txType === 'Mint' ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5' :
@@ -601,19 +466,24 @@ function Home() {
                                 {txType}
                               </span>
                               {transferInfo && (
-                                <span className="text-xs text-white font-mono flex items-center space-x-1">
-                                  <ArrowRightLeft className="w-3 h-3 text-gray-500" />
-                                  <span>{transferInfo}</span>
+                                <span className="text-[10px] text-white font-mono truncate">
+                                  {transferInfo}
                                 </span>
                               )}
                             </div>
                           </div>
-
-                          {tx.error_message && (
-                            <div className="text-[10px] text-red-400 font-mono truncate bg-red-900/10 px-2 py-1 border border-red-500/20">
-                              Error: {tx.error_message}
-                            </div>
-                          )}
+                          <div className="flex flex-col items-end">
+                            <span
+                              className="text-[10px] text-gray-500 font-mono"
+                              title={txTimeAbsolute || ''}
+                            >
+                              {txTimeRelative || ''}
+                            </span>
+                            <span className={`mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border ${isError ? 'border-red-500/50 text-red-500 bg-red-500/10' : isSealed ? 'border-nothing-green/50 text-nothing-green bg-nothing-green/10' : 'border-white/20 text-gray-400 bg-white/5'
+                              }`}>
+                              {isError ? 'Error' : isSealed ? 'Sealed' : 'Pending'}
+                            </span>
+                          </div>
                         </div>
                       </Link>
                     </motion.div>
