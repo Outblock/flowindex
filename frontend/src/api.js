@@ -1,9 +1,16 @@
 import axios from 'axios';
 
-const API_URL = '/api';
-const WS_URL = window.location.protocol === 'https:'
-  ? `wss://${window.location.host}/ws`
-  : `ws://${window.location.host}/ws`;
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+const WS_BASE = (() => {
+  const explicit = import.meta.env.VITE_WS_URL;
+  if (explicit) return explicit;
+  if (API_URL.startsWith('https://')) return API_URL.replace('https://', 'wss://');
+  if (API_URL.startsWith('http://')) return API_URL.replace('http://', 'ws://');
+  return window.location.protocol === 'https:'
+    ? `wss://${window.location.host}`
+    : `ws://${window.location.host}`;
+})();
+const WS_URL = WS_BASE.endsWith('/ws') ? WS_BASE : `${WS_BASE}/ws`;
 
 export const api = {
   getBlocks: (cursor = '', limit = 10) =>

@@ -1,16 +1,30 @@
-# React + Vite
+# FlowScan Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend UI for FlowScan. Built with Vite + React.
 
-Currently, two official plugins are available:
+## Local Dev
+```bash
+bun install
+bun run dev
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Default dev server: `http://localhost:5173`
 
-## React Compiler
+The UI expects the backend on the same origin by default (`/api`, `/ws`).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Environment Variables (Frontend)
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VITE_API_URL` | `/api` | Base URL for REST API (example: `http://localhost:8080/api`) |
+| `VITE_WS_URL` | derived from `VITE_API_URL` or window host | Base URL for WebSocket (example: `ws://localhost:8080`) |
 
-## Expanding the ESLint configuration
+## Docker / Railway
+The frontend container uses Nginx to proxy `/api` and `/ws` to the backend. These env vars are used by `frontend/entrypoint.sh` and `frontend/nginx.conf`:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `BACKEND_API` | auto-detected | Backend REST base (example: `http://backend.railway.internal:8080`) |
+| `BACKEND_WS` | `BACKEND_API` | Backend WS base |
+
+If `BACKEND_API` is not set, the entrypoint will try to detect Railway and fallback to `http://backend:8080`.
+
