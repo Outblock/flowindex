@@ -200,7 +200,7 @@ function Home() {
   const coveredRange = maxHeight >= minHeight && maxHeight > 0 ? (maxHeight - minHeight + 1) : 0;
   const totalHistory = latestHeight > 0 ? (latestHeight + 1) : 0;
   const historyPercent = totalHistory > 0 ? (coveredRange / totalHistory) * 100 : 0;
-  const maxTpsEstimate = 1000;
+  const maxTpsEstimate = 3900;
   const utilization = maxTpsEstimate > 0 ? (tps / maxTpsEstimate) * 100 : 0;
 
   return (
