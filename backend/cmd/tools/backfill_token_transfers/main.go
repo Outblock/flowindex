@@ -69,93 +69,152 @@ func main() {
 
 	log.Printf("token backfill start=%d end=%d batch=%d workers=%d dry_run=%v", startHeight, endHeight, batchBlocks, workers, dryRun)
 
-	ascending := startHeight < endHeight
-
 	ctx := context.Background()
 	startTime := time.Now()
 	processed := 0
-	for batchStart, batchEnd, ok := nextBatch(startHeight, endHeight, batchBlocks, ascending); ok; batchStart, batchEnd, ok = nextBatch(batchStart, endHeight, batchBlocks, ascending) {
-		if !ascending {
-			batchStart, batchEnd = batchEnd, batchStart
-		}
+	if startHeight <= endHeight {
+		for current := startHeight; current <= endHeight; {
+			batchFrom := current
+			batchTo := current + uint64(batchBlocks) - 1
+			if batchTo > endHeight {
+				batchTo = endHeight
+			}
 
-		batchFrom := batchStart
-		batchTo := batchEnd
-		if batchFrom > batchTo {
-			batchFrom, batchTo = batchTo, batchFrom
-		}
+			log.Printf("backfill range %d -> %d", batchFrom, batchTo)
+			start := time.Now()
 
-		log.Printf("backfill range %d -> %d", batchFrom, batchTo)
-		start := time.Now()
+			txs, err := repo.GetRawTransactionsInRange(ctx, batchFrom, batchTo+1)
+			if err != nil {
+				log.Printf("failed to fetch txs: %v", err)
+				current = batchTo + 1
+				continue
+			}
+			if len(txs) == 0 {
+				processed++
+				current = batchTo + 1
+				continue
+			}
 
-		txs, err := repo.GetRawTransactionsInRange(ctx, batchFrom, batchTo+1)
-		if err != nil {
-			log.Printf("failed to fetch txs: %v", err)
-			continue
-		}
-		if len(txs) == 0 {
+			transfers, err := fetchTokenTransfers(ctx, client, txs, workers)
+			if err != nil {
+				log.Printf("failed to fetch token transfers: %v", err)
+				current = batchTo + 1
+				continue
+			}
+
+			if !dryRun && len(transfers) > 0 {
+				minH, maxH := transfers[0].BlockHeight, transfers[0].BlockHeight
+				for _, t := range transfers[1:] {
+					if t.BlockHeight < minH {
+						minH = t.BlockHeight
+					}
+					if t.BlockHeight > maxH {
+						maxH = t.BlockHeight
+					}
+				}
+				if err := repo.EnsureAppPartitions(ctx, minH, maxH); err != nil {
+					log.Printf("ensure partitions failed: %v", err)
+					current = batchTo + 1
+					continue
+				}
+				if err := repo.UpsertTokenTransfers(ctx, transfers); err != nil {
+					log.Printf("upsert token transfers failed: %v", err)
+					current = batchTo + 1
+					continue
+				}
+			}
+
 			processed++
-			continue
-		}
+			log.Printf("range done: transfers=%d elapsed=%s", len(transfers), time.Since(start).Truncate(time.Millisecond))
 
-		transfers, err := fetchTokenTransfers(ctx, client, txs, workers)
-		if err != nil {
-			log.Printf("failed to fetch token transfers: %v", err)
-			continue
-		}
-
-		if !dryRun && len(transfers) > 0 {
-			minH, maxH := transfers[0].BlockHeight, transfers[0].BlockHeight
-			for _, t := range transfers[1:] {
-				if t.BlockHeight < minH {
-					minH = t.BlockHeight
-				}
-				if t.BlockHeight > maxH {
-					maxH = t.BlockHeight
-				}
+			if batchTo == endHeight {
+				break
 			}
-			if err := repo.EnsureAppPartitions(ctx, minH, maxH); err != nil {
-				log.Printf("ensure partitions failed: %v", err)
+			current = batchTo + 1
+		}
+	} else {
+		for current := startHeight; ; {
+			batchFrom := current
+			var batchTo uint64
+			if current >= uint64(batchBlocks) {
+				batchTo = current - uint64(batchBlocks) + 1
+			} else {
+				batchTo = 0
+			}
+			if batchTo < endHeight {
+				batchTo = endHeight
+			}
+
+			log.Printf("backfill range %d -> %d", batchTo, batchFrom)
+			start := time.Now()
+
+			txs, err := repo.GetRawTransactionsInRange(ctx, batchTo, batchFrom+1)
+			if err != nil {
+				log.Printf("failed to fetch txs: %v", err)
+				if batchTo == endHeight || batchTo == 0 {
+					break
+				}
+				current = batchTo - 1
 				continue
 			}
-			if err := repo.UpsertTokenTransfers(ctx, transfers); err != nil {
-				log.Printf("upsert token transfers failed: %v", err)
+			if len(txs) == 0 {
+				processed++
+				if batchTo == endHeight || batchTo == 0 {
+					break
+				}
+				current = batchTo - 1
 				continue
 			}
-		}
 
-		processed++
-		log.Printf("range done: transfers=%d elapsed=%s", len(transfers), time.Since(start).Truncate(time.Millisecond))
+			transfers, err := fetchTokenTransfers(ctx, client, txs, workers)
+			if err != nil {
+				log.Printf("failed to fetch token transfers: %v", err)
+				if batchTo == endHeight || batchTo == 0 {
+					break
+				}
+				current = batchTo - 1
+				continue
+			}
+
+			if !dryRun && len(transfers) > 0 {
+				minH, maxH := transfers[0].BlockHeight, transfers[0].BlockHeight
+				for _, t := range transfers[1:] {
+					if t.BlockHeight < minH {
+						minH = t.BlockHeight
+					}
+					if t.BlockHeight > maxH {
+						maxH = t.BlockHeight
+					}
+				}
+				if err := repo.EnsureAppPartitions(ctx, minH, maxH); err != nil {
+					log.Printf("ensure partitions failed: %v", err)
+					if batchTo == endHeight || batchTo == 0 {
+						break
+					}
+					current = batchTo - 1
+					continue
+				}
+				if err := repo.UpsertTokenTransfers(ctx, transfers); err != nil {
+					log.Printf("upsert token transfers failed: %v", err)
+					if batchTo == endHeight || batchTo == 0 {
+						break
+					}
+					current = batchTo - 1
+					continue
+				}
+			}
+
+			processed++
+			log.Printf("range done: transfers=%d elapsed=%s", len(transfers), time.Since(start).Truncate(time.Millisecond))
+
+			if batchTo == endHeight || batchTo == 0 {
+				break
+			}
+			current = batchTo - 1
+		}
 	}
 
 	log.Printf("backfill finished batches=%d total_elapsed=%s", processed, time.Since(startTime).Truncate(time.Millisecond))
-}
-
-func nextBatch(start, end uint64, batch int, ascending bool) (uint64, uint64, bool) {
-	if ascending {
-		if start > end {
-			return 0, 0, false
-		}
-		nextEnd := start + uint64(batch) - 1
-		if nextEnd > end {
-			nextEnd = end
-		}
-		return nextEnd + 1, nextEnd, true
-	}
-
-	if start < end {
-		return 0, 0, false
-	}
-	var nextStart uint64
-	if start >= uint64(batch) {
-		nextStart = start - uint64(batch) + 1
-	} else {
-		nextStart = 0
-	}
-	if nextStart < end {
-		nextStart = end
-	}
-	return nextStart - 1, nextStart, true
 }
 
 func fetchTokenTransfers(ctx context.Context, client *flow.Client, txs []models.Transaction, workers int) ([]models.TokenTransfer, error) {
