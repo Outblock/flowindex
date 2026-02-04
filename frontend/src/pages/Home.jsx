@@ -455,7 +455,7 @@ function Home() {
                     >
                       <Link
                         to={`/blocks/${block.height}`}
-                        className={`block border p-3 h-16 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
+                        className={`block border p-4 h-20 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
                           ? 'bg-nothing-green/10 border-nothing-green/50'
                           : 'bg-black/20 border-white/5'
                           }`}
@@ -563,7 +563,7 @@ function Home() {
                     >
                       <Link
                         to={`/transactions/${tx.id}`}
-                        className={`block border p-3 h-16 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
+                        className={`block border p-4 h-20 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
                           ? 'bg-white/10 border-white/40'
                           : 'bg-black/20 border-white/5'
                           }`}
