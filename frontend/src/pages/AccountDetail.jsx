@@ -314,9 +314,14 @@ function AccountDetail() {
                     {account.keys.map((key, idx) => (
                       <div key={idx} className="bg-black/50 border border-white/5 p-4 group">
                         <div className="flex flex-col gap-2">
-                          <div className="flex justify-between">
+                          <div className="flex flex-wrap items-center gap-3">
                             <span className="text-[10px] text-zinc-500 uppercase">Index #{key.keyIndex ?? idx}</span>
-                            <span className="text-[10px] text-zinc-500 uppercase">Algorithm: {key.signingAlgorithm}</span>
+                            <span className="text-[10px] text-zinc-500 uppercase">Sign: {key.signingAlgorithm || 'N/A'}</span>
+                            <span className="text-[10px] text-zinc-500 uppercase">Hash: {key.hashingAlgorithm || 'N/A'}</span>
+                            <span className="text-[10px] text-zinc-500 uppercase">Weight: {key.weight ?? 0}</span>
+                            <span className={`text-[10px] uppercase px-2 py-0.5 border rounded-sm ${key.revoked ? 'border-red-500/40 text-red-400 bg-red-500/10' : 'border-nothing-green/30 text-nothing-green bg-nothing-green/10'}`}>
+                              {key.revoked ? 'Revoked' : 'Active'}
+                            </span>
                           </div>
                           <code className="text-xs text-zinc-400 break-all font-mono">{key.publicKey}</code>
                         </div>
