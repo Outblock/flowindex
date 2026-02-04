@@ -18,6 +18,11 @@ COPY . .
 RUN mkdir -p public
 RUN npm run build
 
+# Railway (and many container runtimes) set $HOSTNAME to the container ID.
+# Next.js standalone uses that to bind, which can end up on a loopback address.
+# Force bind to 0.0.0.0 so Railway Edge can reach the service.
+RUN find .next/standalone -name server.js -maxdepth 6 -print -exec sed -i "s/const hostname = process\\.env\\.HOSTNAME || '0\\.0\\.0\\.0'/const hostname = '0.0.0.0'/" {} +
+
 FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
