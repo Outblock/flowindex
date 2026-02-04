@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, Activity, TrendingUp } from 'lucide-react';
+import { Box, Activity, TrendingUp, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../api';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -194,6 +194,15 @@ function Home() {
     };
   }, []);
 
+  const latestHeight = statusRaw?.latest_height || 0;
+  const minHeight = statusRaw?.min_height || 0;
+  const maxHeight = statusRaw?.max_height || 0;
+  const coveredRange = maxHeight >= minHeight && maxHeight > 0 ? (maxHeight - minHeight + 1) : 0;
+  const totalHistory = latestHeight > 0 ? (latestHeight + 1) : 0;
+  const historyPercent = totalHistory > 0 ? (coveredRange / totalHistory) * 100 : 0;
+  const maxTpsEstimate = 1000;
+  const utilization = maxTpsEstimate > 0 ? (tps / maxTpsEstimate) * 100 : 0;
+
   return (
     <div className="min-h-screen bg-nothing-black text-nothing-white font-mono selection:bg-nothing-green selection:text-black">
       <div className="border-b border-white/5 bg-nothing-dark/50">
@@ -210,6 +219,42 @@ function Home() {
               <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
             </motion.div>
           </div>
+
+          {/* Indexing Progress Banner */}
+          <Link
+            to="/stats"
+            className="block border border-white/10 bg-nothing-dark/80 hover:border-nothing-green/40 transition-colors"
+          >
+            <div className="p-4 md:p-5">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 border border-white/10 rounded-sm">
+                    <Database className="h-4 w-4 text-nothing-green" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-gray-400">Indexing Progress</p>
+                    <p className="text-sm text-white">
+                      {totalHistory > 0 ? `${historyPercent.toFixed(2)}% of full history` : 'Initializing...'}
+                    </p>
+                    {totalHistory > 0 && (
+                      <p className="text-[10px] uppercase tracking-wider text-gray-500">
+                        Range: {minHeight.toLocaleString()} → {maxHeight.toLocaleString()} (Latest {latestHeight.toLocaleString()})
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-2 w-48 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
+                    <div
+                      className="h-full bg-nothing-green"
+                      style={{ width: `${Math.min(100, historyPercent).toFixed(2)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] uppercase tracking-widest text-nothing-green">View Details →</span>
+                </div>
+              </div>
+            </div>
+          </Link>
 
           {/* New Premium Stats Grid (Flow Pulse) */}
           {networkStats && (
@@ -292,6 +337,9 @@ function Home() {
                   value={tps || 0}
                   format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                 />
+              </p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest">
+                Utilization: {Math.min(100, utilization).toFixed(2)}% of {maxTpsEstimate.toLocaleString()} TPS (est.)
               </p>
             </div>
           </div>
@@ -383,7 +431,7 @@ function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-nothing-dark border border-white/10 p-6 h-[520px] flex flex-col"
+            className="bg-nothing-dark border border-white/10 p-6 h-[600px] flex flex-col"
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
