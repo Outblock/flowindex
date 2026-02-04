@@ -11,6 +11,7 @@ import { EpochProgress } from '../components/EpochProgress';
 import { NetworkStats } from '../components/NetworkStats';
 import { Pagination } from '../components/Pagination';
 import { DailyStatsChart } from '../components/DailyStatsChart';
+import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 
 function Home() {
   const [blocks, setBlocks] = useState([]);
@@ -514,6 +515,8 @@ function Home() {
               <AnimatePresence mode='popLayout'>
                 {(blocks || []).map((block) => {
                   const isNew = newBlockIds.has(block.height);
+                  const blockTimeRelative = formatRelativeTime(block.timestamp);
+                  const blockTimeAbsolute = formatAbsoluteTime(block.timestamp);
                   return (
                     <motion.div
                       layout
@@ -540,8 +543,11 @@ function Home() {
                             <div className="text-xs text-gray-400 font-mono bg-white/5 px-2 py-0.5 rounded-sm">
                               {block.tx_count ?? block.txCount ?? 0} TXs
                             </div>
-                            <span className="text-[10px] text-gray-600 font-mono uppercase">
-                              {block.timestamp ? new Date(block.timestamp).toLocaleTimeString() : ''}
+                            <span
+                              className="text-[10px] text-gray-600 font-mono uppercase"
+                              title={blockTimeAbsolute || ''}
+                            >
+                              {blockTimeRelative || ''}
                             </span>
                           </div>
                         </div>
@@ -579,6 +585,9 @@ function Home() {
                   const isNew = newTxIds.has(tx.id);
                   const isSealed = tx.status === 'SEALED';
                   const isError = !isSealed && tx.status !== 'PENDING'; // Assume anything else is error for list
+                  const txTimeSource = tx.timestamp || tx.created_at || tx.block_timestamp;
+                  const txTimeRelative = formatRelativeTime(txTimeSource);
+                  const txTimeAbsolute = formatAbsoluteTime(txTimeSource);
 
                   // Helper to determine Transaction Type & Details
                   const getTxMetadata = (tx) => {
@@ -637,8 +646,11 @@ function Home() {
                               <span className="text-xs text-gray-400 font-mono truncate w-24 sm:w-32">
                                 {tx.id}
                               </span>
-                              <span className="text-[10px] text-gray-500 font-mono">
-                                {new Date(tx.created_at || Date.now()).toLocaleTimeString()}
+                              <span
+                                className="text-[10px] text-gray-500 font-mono"
+                                title={txTimeAbsolute || ''}
+                              >
+                                {txTimeRelative || ''}
                               </span>
                             </div>
                             {(isSealed || isError) && (

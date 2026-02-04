@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import { ArrowLeft, Box, Clock, Hash, Activity, ArrowRightLeft, User, Coins, Image as ImageIcon } from 'lucide-react';
+import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 
 function BlockDetail() {
   const { height } = useParams();
@@ -62,6 +63,9 @@ function BlockDetail() {
     );
   }
 
+  const blockTimeAbsolute = formatAbsoluteTime(block.timestamp);
+  const blockTimeRelative = formatRelativeTime(block.timestamp);
+
   return (
     <div className="min-h-screen bg-black text-zinc-300 font-mono selection:bg-nothing-green selection:text-black">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -102,8 +106,13 @@ function BlockDetail() {
             <div className="text-right">
               <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Timestamp</p>
               <p className="text-sm text-white">
-                {block.timestamp ? new Date(block.timestamp).toLocaleString() : 'N/A'}
+                {blockTimeAbsolute || 'N/A'}
               </p>
+              {blockTimeRelative && (
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">
+                  {blockTimeRelative}
+                </p>
+              )}
             </div>
           </div>
         </div>

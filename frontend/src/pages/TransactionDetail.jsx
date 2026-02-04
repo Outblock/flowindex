@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces } from 'lucide-react';
+import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
@@ -111,6 +112,10 @@ function TransactionDetail() {
     );
   }
 
+  const txTimeSource = transaction.timestamp || transaction.created_at || transaction.block_timestamp;
+  const txTimeAbsolute = formatAbsoluteTime(txTimeSource);
+  const txTimeRelative = formatRelativeTime(txTimeSource);
+
 
 
   return (
@@ -182,6 +187,15 @@ function TransactionDetail() {
                 <div className="group">
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Flow Transaction ID</p>
                   <code className="text-sm text-zinc-300 break-all">{transaction.id}</code>
+                </div>
+                <div className="group">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Timestamp</p>
+                  <span className="text-sm text-zinc-300">{txTimeAbsolute || 'N/A'}</span>
+                  {txTimeRelative && (
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">
+                      {txTimeRelative}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
