@@ -8,9 +8,11 @@ export default function Stats() {
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // State for History Speed Calculation
+    // State for Speed Calculations
     const [historySpeed, setHistorySpeed] = useState(0); // blocks per second
+    const [forwardSpeed, setForwardSpeed] = useState(0); // blocks per second
     const [lastHistoryCheck, setLastHistoryCheck] = useState(null); // { time: number, height: number }
+    const [lastForwardCheck, setLastForwardCheck] = useState(null); // { time: number, height: number }
 
     const fetchStatus = async () => {
         try {
@@ -18,7 +20,9 @@ export default function Stats() {
 
             // Calculate History Speed
             const now = Date.now();
-            const currentHistoryHeight = data.history_height || 0;
+            const currentHistoryHeight = (data.history_height && data.history_height > 0)
+                ? data.history_height
+                : (data.min_height || 0);
 
             if (lastHistoryCheck) {
                 const timeDiff = (now - lastHistoryCheck.time) / 1000; // Seconds
@@ -33,6 +37,18 @@ export default function Stats() {
             }
 
             setLastHistoryCheck({ time: now, height: currentHistoryHeight });
+
+            // Calculate Forward Speed
+            const currentForwardHeight = data.indexed_height || 0;
+            if (lastForwardCheck) {
+                const timeDiff = (now - lastForwardCheck.time) / 1000;
+                const blockDiff = currentForwardHeight - lastForwardCheck.height;
+                if (timeDiff > 0 && blockDiff >= 0) {
+                    const instantaneousSpeed = blockDiff / timeDiff;
+                    setForwardSpeed(prev => (prev * 0.7) + (instantaneousSpeed * 0.3));
+                }
+            }
+            setLastForwardCheck({ time: now, height: currentForwardHeight });
             setStatus(data);
             setLoading(false);
         } catch (error) {
@@ -75,9 +91,8 @@ export default function Stats() {
     const progressPercent = totalRange > 0 ? (indexedRange / totalRange) * 100 : 0;
     const blocksBehind = latestHeight - indexedHeight;
 
-    // Calculate blocks per second for forward sync (estimate based on blocks behind reducing or simple api provided metric if we had it)
-    // For now we only track history speed on frontend.
-    const blocksPerSecond = status?.blocks_per_second || 0;
+    // Forward speed derived from status polling (backend does not provide blocks_per_second)
+    const blocksPerSecond = forwardSpeed || 0;
     const eta = blocksPerSecond > 0 ? Math.ceil(blocksBehind / blocksPerSecond) : 0;
 
     // ETA for History Backfill
