@@ -47,12 +47,21 @@ function AccountDetail() {
     const loadAccountInfo = async () => {
       try {
         const accountRes = await api.getAccount(normalizedAddress || address);
+        const normalizedKeys = (accountRes.keys || []).map((key) => ({
+          keyIndex: key.keyIndex ?? key.key_index ?? key.index,
+          publicKey: key.publicKey ?? key.public_key ?? '',
+          signingAlgorithm: key.signingAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
+          hashingAlgorithm: key.hashingAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
+          weight: key.weight ?? 0,
+          sequenceNumber: key.sequenceNumber ?? key.sequence_number ?? 0,
+          revoked: Boolean(key.revoked),
+        }));
         setAccount({
           address: normalizeAddress(accountRes.address),
           balance: accountRes.balance,
           createdAt: null,
           contracts: accountRes.contracts || [],
-          keys: accountRes.keys || []
+          keys: normalizedKeys
         });
         setLoading(false);
       } catch (err) {
