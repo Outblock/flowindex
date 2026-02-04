@@ -398,8 +398,14 @@ paths:
   /accounts/{address}/storage:
     get:
       tags: [Storage]
-      summary: Get storage overview (JSON-CDC)
-      description: Uses a FlowView-compatible Cadence script to enumerate account storage and links.
+      summary: Get storage paths overview (JSON-CDC)
+      description: |
+        Returns a read-only overview of an account's storage usage and path listings.
+
+        Notes:
+        - This endpoint does **not** read stored values (requires authorization/entitlements).
+        - Type resolution is intentionally omitted here to avoid failures when stored types reference
+          legacy (pre-Cadence-1.0) contracts.
       parameters:
         - name: address
           in: path
@@ -441,7 +447,14 @@ paths:
   /accounts/{address}/storage/item:
     get:
       tags: [Storage]
-      summary: Browse a stored resource (JSON-CDC)
+      summary: Get best-effort storage item type (JSON-CDC)
+      description: |
+        Returns best-effort type information for a given storage path.
+
+        Notes:
+        - Stored values are not readable via read-only scripts without authorization.
+        - Type resolution may fail for some paths if the stored type references legacy (pre-Cadence-1.0)
+          contract code. In that case, the API returns a JSON error object (not JSON-CDC).
       parameters:
         - name: address
           in: path
