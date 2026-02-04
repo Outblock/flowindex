@@ -106,7 +106,14 @@ func (s *Server) handleGetAccountStorageItem(w http.ResponseWriter, r *http.Requ
 		pathVal,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		// Don't hard-fail the UI for legacy Cadence contracts that can't be parsed on mainnet.
+		// The storage viewer is best-effort, and some stored types may reference pre-Cadence-1.0 code.
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"path":  path,
+			"error": err.Error(),
+			"note":  "Storage values are not readable via read-only scripts without authorization. Type resolution may fail for legacy Cadence contracts.",
+		})
 		return
 	}
 	w.Write(out)
@@ -131,41 +138,34 @@ func (s *Server) executeCadenceScript(ctx context.Context, script string, args [
 var storageIdentifierRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func cadenceStorageOverviewScript() string {
-	// NOTE:
-	// On Flow mainnet, the Cadence runtime still supports `getAuthAccount(address)` in scripts.
-	// The more modern generic form `getAuthAccount<auth(Storage) &Account>(address)` currently
-	// fails due to legacy on-chain programs that haven't migrated to Cadence 1.0 syntax.
+	// Cadence v1 account storage APIs:
+	// - https://cadence-lang.org/docs/language/accounts
+	// - https://cadence-lang.org/docs/language/account-storage
 	//
-	// So we use the compatibility surface that FlowView used historically:
-	// - getAuthAccount(address)
-	// - account.forEachStored / forEachPublic
-	//
-	// This gives us a best-effort storage/public path listing without depending on external
-	// helper contracts.
+	// We intentionally use `getAccount` (read-only) instead of `getAuthAccount` to avoid
+	// network-specific entitlement plumbing and keep this endpoint safe and reliable.
+	// NOTE: We intentionally avoid resolving types for every path here.
+	// `account.storage.type(at:)` can trigger loading/parsing legacy contract programs
+	// (pre-Cadence-1.0) and fail the entire script for some accounts.
 	return `
 		access(all) fun main(address: Address): {String: AnyStruct} {
-			let account = getAuthAccount(address)
+			let account = getAccount(address)
 
 			var storagePaths: [StoragePath] = []
-			var publicPaths: [PublicPath] = []
+			for p in account.storage.storagePaths {
+				storagePaths.append(p)
+			}
 
-			var types: {String: Type} = {}
-			account.forEachStored(fun (path: StoragePath, type: Type): Bool {
-				storagePaths.append(path)
-				types[path.toString()] = type
-				return true
-			})
-			account.forEachPublic(fun (path: PublicPath, type: Type): Bool {
-				publicPaths.append(path)
-				return true
-			})
+			var publicPaths: [PublicPath] = []
+			for p in account.storage.publicPaths {
+				publicPaths.append(p)
+			}
 
 			return {
-				"used": account.storageUsed,
-				"capacity": account.storageCapacity,
+				"used": account.storage.used,
+				"capacity": account.storage.capacity,
 				"storagePaths": storagePaths,
-				"publicPaths": publicPaths,
-				"types": types
+				"publicPaths": publicPaths
 			}
 		}
 	`
@@ -174,13 +174,12 @@ func cadenceStorageOverviewScript() string {
 func cadencePublicPathsScript() string {
 	return `
 		access(all) fun main(address: Address): [PublicPath] {
-			let account = getAuthAccount(address)
-			var publicPaths: [PublicPath] = []
-			account.forEachPublic(fun (path: PublicPath, type: Type): Bool {
-				publicPaths.append(path)
-				return true
-			})
-			return publicPaths
+			let account = getAccount(address)
+			var out: [PublicPath] = []
+			for p in account.storage.publicPaths {
+				out.append(p)
+			}
+			return out
 		}
 	`
 }
@@ -188,12 +187,13 @@ func cadencePublicPathsScript() string {
 func cadenceStorageItemScript() string {
 	return `
 		access(all) fun main(address: Address, path: String): {String: AnyStruct} {
-			let account = getAuthAccount(address)
+			let account = getAccount(address)
 			let storagePath = StoragePath(identifier: path)!
 
 			return {
 				"path": storagePath,
-				"value": account.borrow<auth &AnyResource>(from: storagePath)
+				"type": account.storage.type(at: storagePath),
+				"note": "Storage value reads require authorization (getAuthAccount / entitlements). This endpoint only returns best-effort type information."
 			}
 		}
 	`
