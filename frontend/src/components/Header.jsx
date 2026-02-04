@@ -40,22 +40,22 @@ function Header() {
 
         <form
           onSubmit={handleSearch}
-          className="w-full md:w-96 relative"
+          className="w-full md:w-[520px] lg:w-[640px] relative"
         >
-          <div className="relative">
+          <div className="relative rounded-sm bg-gradient-to-r from-nothing-green/40 via-white/10 to-nothing-green/40 p-[1px] shadow-[0_0_24px_rgba(0,239,139,0.12)] focus-within:shadow-[0_0_32px_rgba(0,239,139,0.2)]">
             <input
               type="text"
               placeholder="Search by block / tx / address"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 bg-black/30 border border-white/10 text-white text-sm placeholder-zinc-500 focus:border-nothing-green/50 focus:outline-none"
+              className="w-full px-5 py-4 bg-black/60 border border-white/10 text-white text-base placeholder-zinc-500 focus:border-nothing-green/60 focus:outline-none rounded-sm"
             />
             <button
               type="submit"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-white transition-colors"
               aria-label="Search"
             >
-              <Search className="w-4 h-4" />
+              <Search className="w-5 h-5" />
             </button>
           </div>
         </form>
@@ -65,4 +65,3 @@ function Header() {
 }
 
 export default Header;
-
