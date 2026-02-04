@@ -3,6 +3,7 @@ package ingester
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -38,154 +39,199 @@ func NewWorker(client *flow.Client) *Worker {
 func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult {
 	result := &FetchResult{Height: height}
 
-	// 1. Get Block & Collections
-	block, collections, err := w.client.GetBlockByHeight(ctx, height)
-	if err != nil {
-		result.Error = fmt.Errorf("failed to get block %d: %w", height, err)
-		return result
+	// We pin all RPC calls for a given height to the same access node so that
+	// block -> collection -> tx/result lookups stay consistent across sporks.
+	const maxPinAttempts = 12
+
+	shouldRepin := func(err error) bool {
+		var sporkErr *flow.SporkRootNotFoundError
+		if errors.As(err, &sporkErr) {
+			return true
+		}
+		var nodeErr *flow.NodeUnavailableError
+		if errors.As(err, &nodeErr) {
+			return true
+		}
+		return false
 	}
 
-	collGuarantees, _ := json.Marshal(block.CollectionGuarantees)
-	blockSeals, _ := json.Marshal(block.Seals)
-	signatures, _ := json.Marshal(block.Signatures)
+	for pinAttempt := 0; pinAttempt < maxPinAttempts; pinAttempt++ {
+		pin, err := w.client.PinByHeight(height)
+		if err != nil {
+			result.Error = fmt.Errorf("failed to pin flow client for height %d: %w", height, err)
+			return result
+		}
 
-	dbBlock := models.Block{
-		Height:               block.Height,
-		ID:                   block.ID.String(),
-		ParentID:             block.ParentID.String(),
-		Timestamp:            block.Timestamp,
-		CollectionCount:      len(block.CollectionGuarantees),
-		StateRootHash:        block.ID.String(), // Fallback
-		CollectionGuarantees: collGuarantees,
-		BlockSeals:           blockSeals,
-		Signatures:           signatures,
-		BlockStatus:          "BLOCK_SEALED", // Default for indexed blocks
-		IsSealed:             true,
-	}
-
-	var dbTxs []models.Transaction
-	var dbEvents []models.Event
-
-	// 2. Process Collections & Transactions
-	txIndex := 0
-	for _, collection := range collections {
-		for _, txID := range collection.TransactionIDs {
-			// Fetch Transaction
-			tx, err := w.client.GetTransaction(ctx, txID)
-			if err != nil {
-				// Retry or skip? For now, we error out to be safe in the pipeline
-				result.Error = fmt.Errorf("failed to get tx %s: %w", txID, err)
-				return result
+		// 1. Get Block & Collections
+		block, collections, err := pin.GetBlockByHeight(ctx, height)
+		if err != nil {
+			if shouldRepin(err) {
+				continue
 			}
+			result.Error = fmt.Errorf("failed to get block %d: %w", height, err)
+			return result
+		}
 
-			// Fetch Result (Status & Events)
-			res, err := w.client.GetTransactionResult(ctx, txID)
-			if err != nil {
-				result.Error = fmt.Errorf("failed to get tx result %s: %w", txID, err)
-				return result
-			}
+		collGuarantees, _ := json.Marshal(block.CollectionGuarantees)
+		blockSeals, _ := json.Marshal(block.Seals)
+		signatures, _ := json.Marshal(block.Signatures)
 
-			// Map to DB Models
-			// tx.Arguments is [][]byte, where each byte slice is a JSON-CDC string.
-			// defaults json.Marshal would base64 encode them. We want the raw JSON strings in an array.
-			var argsList []json.RawMessage
-			for _, arg := range tx.Arguments {
-				argsList = append(argsList, json.RawMessage(arg))
-			}
-			argsJSON, _ := json.Marshal(argsList)
-			authorizers := make([]string, len(tx.Authorizers))
-			for i, a := range tx.Authorizers {
-				authorizers[i] = a.Hex()
-			}
+		dbBlock := models.Block{
+			Height:               block.Height,
+			ID:                   block.ID.String(),
+			ParentID:             block.ParentID.String(),
+			Timestamp:            block.Timestamp,
+			CollectionCount:      len(block.CollectionGuarantees),
+			StateRootHash:        block.ID.String(), // Fallback
+			CollectionGuarantees: collGuarantees,
+			BlockSeals:           blockSeals,
+			Signatures:           signatures,
+			BlockStatus:          "BLOCK_SEALED", // Default for indexed blocks
+			IsSealed:             true,
+		}
 
-			// Detect EVM in Script
-			isEVM := strings.Contains(string(tx.Script), "import EVM")
+		var dbTxs []models.Transaction
+		var dbEvents []models.Event
 
-			dbTx := models.Transaction{
-				ID:                     tx.ID().String(),
-				BlockHeight:            height,
-				TransactionIndex:       txIndex,
-				ProposerAddress:        tx.ProposalKey.Address.Hex(),
-				ProposerKeyIndex:       tx.ProposalKey.KeyIndex,
-				ProposerSequenceNumber: tx.ProposalKey.SequenceNumber,
-				PayerAddress:           tx.Payer.Hex(),
-				Authorizers:            authorizers,
-				Script:                 string(tx.Script),
-				Arguments:              argsJSON,
-				Status:                 res.Status.String(),
-				GasLimit:               tx.GasLimit,
-				ComputationUsage:       res.ComputationUsage,
-				StatusCode:             0, // Not directly available in SDK TransactionResult
-				ExecutionStatus:        res.Status.String(),
-				EventCount:             len(res.Events),
-				Timestamp:              block.Timestamp,
-			}
-
-			// Redundancy: Marshal Signatures and ProposalKey
-			pkJSON, _ := json.Marshal(tx.ProposalKey)
-			pSigJSON, _ := json.Marshal(tx.PayloadSignatures)
-			eSigJSON, _ := json.Marshal(tx.EnvelopeSignatures)
-
-			dbTx.ReferenceBlockID = tx.ReferenceBlockID.String()
-			dbTx.ProposalKey = pkJSON
-			dbTx.PayloadSignatures = pSigJSON
-			dbTx.EnvelopeSignatures = eSigJSON
-
-			if res.Error != nil {
-				dbTx.ErrorMessage = res.Error.Error()
-			}
-
-			// Address Activity (Participants)
-			// Process Events
-			for _, evt := range res.Events {
-				payload := w.flattenCadenceValue(evt.Value)
-				payloadJSON, _ := json.Marshal(payload)
-
-				addrStr, contractStr, eventStr := w.parseEventType(evt.Type)
-
-				dbEvent := models.Event{
-					TransactionID:    tx.ID().String(),
-					TransactionIndex: txIndex,
-					Type:             evt.Type,
-					EventIndex:       evt.EventIndex,
-					ContractAddress:  addrStr,
-					ContractName:     contractStr,
-					EventName:        eventStr,
-					Payload:          payloadJSON,
-					BlockHeight:      height,
-					Timestamp:        block.Timestamp,
-					CreatedAt:        time.Now(),
+		// 2. Process Collections & Transactions
+		repin := false
+		txIndex := 0
+		for _, collection := range collections {
+			for _, txID := range collection.TransactionIDs {
+				// Fetch Transaction (pinned)
+				tx, err := pin.GetTransaction(ctx, txID)
+				if err != nil {
+					if shouldRepin(err) {
+						repin = true
+						break
+					}
+					// Retry or skip? For now, we error out to be safe in the pipeline
+					result.Error = fmt.Errorf("failed to get tx %s: %w", txID, err)
+					return result
 				}
-				dbEvents = append(dbEvents, dbEvent)
 
-				// Detect EVM Events
-				if strings.Contains(evt.Type, "EVM.") {
-					isEVM = true
-					if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
-						var evmPayload map[string]interface{}
-						if err := json.Unmarshal(payloadJSON, &evmPayload); err == nil {
-							if h, ok := evmPayload["transactionHash"].(string); ok {
-								dbTx.EVMHash = h
+				// Fetch Result (Status & Events) (pinned)
+				res, err := pin.GetTransactionResult(ctx, txID)
+				if err != nil {
+					if shouldRepin(err) {
+						repin = true
+						break
+					}
+					result.Error = fmt.Errorf("failed to get tx result %s: %w", txID, err)
+					return result
+				}
+
+				// Map to DB Models
+				// tx.Arguments is [][]byte, where each byte slice is a JSON-CDC string.
+				// defaults json.Marshal would base64 encode them. We want the raw JSON strings in an array.
+				var argsList []json.RawMessage
+				for _, arg := range tx.Arguments {
+					argsList = append(argsList, json.RawMessage(arg))
+				}
+				argsJSON, _ := json.Marshal(argsList)
+				authorizers := make([]string, len(tx.Authorizers))
+				for i, a := range tx.Authorizers {
+					authorizers[i] = a.Hex()
+				}
+
+				// Detect EVM in Script
+				isEVM := strings.Contains(string(tx.Script), "import EVM")
+
+				dbTx := models.Transaction{
+					ID:                     tx.ID().String(),
+					BlockHeight:            height,
+					TransactionIndex:       txIndex,
+					ProposerAddress:        tx.ProposalKey.Address.Hex(),
+					ProposerKeyIndex:       tx.ProposalKey.KeyIndex,
+					ProposerSequenceNumber: tx.ProposalKey.SequenceNumber,
+					PayerAddress:           tx.Payer.Hex(),
+					Authorizers:            authorizers,
+					Script:                 string(tx.Script),
+					Arguments:              argsJSON,
+					Status:                 res.Status.String(),
+					GasLimit:               tx.GasLimit,
+					ComputationUsage:       res.ComputationUsage,
+					StatusCode:             0, // Not directly available in SDK TransactionResult
+					ExecutionStatus:        res.Status.String(),
+					EventCount:             len(res.Events),
+					Timestamp:              block.Timestamp,
+				}
+
+				// Redundancy: Marshal Signatures and ProposalKey
+				pkJSON, _ := json.Marshal(tx.ProposalKey)
+				pSigJSON, _ := json.Marshal(tx.PayloadSignatures)
+				eSigJSON, _ := json.Marshal(tx.EnvelopeSignatures)
+
+				dbTx.ReferenceBlockID = tx.ReferenceBlockID.String()
+				dbTx.ProposalKey = pkJSON
+				dbTx.PayloadSignatures = pSigJSON
+				dbTx.EnvelopeSignatures = eSigJSON
+
+				if res.Error != nil {
+					dbTx.ErrorMessage = res.Error.Error()
+				}
+
+				// Address Activity (Participants)
+				// Process Events
+				for _, evt := range res.Events {
+					payload := w.flattenCadenceValue(evt.Value)
+					payloadJSON, _ := json.Marshal(payload)
+
+					addrStr, contractStr, eventStr := w.parseEventType(evt.Type)
+
+					dbEvent := models.Event{
+						TransactionID:    tx.ID().String(),
+						TransactionIndex: txIndex,
+						Type:             evt.Type,
+						EventIndex:       evt.EventIndex,
+						ContractAddress:  addrStr,
+						ContractName:     contractStr,
+						EventName:        eventStr,
+						Payload:          payloadJSON,
+						BlockHeight:      height,
+						Timestamp:        block.Timestamp,
+						CreatedAt:        time.Now(),
+					}
+					dbEvents = append(dbEvents, dbEvent)
+
+					// Detect EVM Events
+					if strings.Contains(evt.Type, "EVM.") {
+						isEVM = true
+						if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
+							var evmPayload map[string]interface{}
+							if err := json.Unmarshal(payloadJSON, &evmPayload); err == nil {
+								if h, ok := evmPayload["transactionHash"].(string); ok {
+									dbTx.EVMHash = h
+								}
 							}
 						}
 					}
+
 				}
 
+				dbTx.IsEVM = isEVM
+
+				dbTxs = append(dbTxs, dbTx)
+				txIndex++
 			}
-
-			dbTx.IsEVM = isEVM
-
-			dbTxs = append(dbTxs, dbTx)
-			txIndex++
+			if repin {
+				break
+			}
 		}
+		if repin {
+			continue
+		}
+
+		dbBlock.TxCount = len(dbTxs)
+		dbBlock.EventCount = len(dbEvents)
+
+		result.Block = &dbBlock
+		result.Transactions = dbTxs
+		result.Events = dbEvents
+		return result
 	}
 
-	dbBlock.TxCount = len(dbTxs)
-	dbBlock.EventCount = len(dbEvents)
-
-	result.Block = &dbBlock
-	result.Transactions = dbTxs
-	result.Events = dbEvents
+	result.Error = fmt.Errorf("failed to fetch block %d: no suitable access node available", height)
 	return result
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"flowscan-clone/internal/models"
@@ -124,11 +125,14 @@ func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountK
 			address = normalizeAddress(addr)
 		}
 
-		if pk, ok := payload["publicKey"].(string); ok {
-			publicKey = pk
-		} else if key, ok := payload["key"].(map[string]interface{}); ok {
-			if pk, ok := key["publicKey"].(string); ok {
-				publicKey = pk
+		// flow.AccountKeyAdded payloads can vary by spork/version.
+		// We've observed:
+		//   { "publicKey": { "publicKey": ["24","104",...], "signatureAlgorithm": "SignatureAlgorithm(rawValue: 1)" }, "hashAlgorithm": "HashAlgorithm(rawValue: 1)", ... }
+		// but older formats may have "publicKey" as a hex string.
+		publicKey = extractPublicKey(payload["publicKey"])
+		if publicKey == "" {
+			if key, ok := payload["key"].(map[string]interface{}); ok {
+				publicKey = extractPublicKey(key["publicKey"])
 			}
 		}
 
@@ -142,17 +146,41 @@ func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountK
 			BlockHeight: evt.BlockHeight,
 		}
 
-		if idx, ok := payload["keyIndex"].(float64); ok {
-			key.KeyIndex = int(idx)
+		if v, ok := payload["keyIndex"]; ok {
+			if n, ok := parseInt(v); ok {
+				key.KeyIndex = n
+			}
 		}
+
+		// Signature algorithm may be under "signingAlgorithm" or inside publicKey struct.
 		if sa, ok := payload["signingAlgorithm"].(string); ok {
 			key.SigningAlgorithm = sa
+		} else if pkObj, ok := payload["publicKey"].(map[string]interface{}); ok {
+			if sa, ok := pkObj["signatureAlgorithm"].(string); ok {
+				key.SigningAlgorithm = sa
+			}
 		}
+
+		// Hashing algorithm may be "hashingAlgorithm" or "hashAlgorithm".
 		if ha, ok := payload["hashingAlgorithm"].(string); ok {
 			key.HashingAlgorithm = ha
+		} else if ha, ok := payload["hashAlgorithm"].(string); ok {
+			key.HashingAlgorithm = ha
 		}
-		if wgt, ok := payload["weight"].(float64); ok {
-			key.Weight = int(wgt)
+
+		if v, ok := payload["weight"]; ok {
+			if wgt, ok := parseWeightToInt(v); ok {
+				key.Weight = wgt
+			}
+		}
+
+		if v, ok := payload["revoked"]; ok {
+			switch vv := v.(type) {
+			case bool:
+				key.Revoked = vv
+			case string:
+				key.Revoked = strings.EqualFold(vv, "true")
+			}
 		}
 
 		keys = append(keys, key)
@@ -194,4 +222,96 @@ func normalizeAddress(addr string) string {
 		return ""
 	}
 	return normalized
+}
+
+func extractPublicKey(v interface{}) string {
+	switch vv := v.(type) {
+	case string:
+		return vv
+	case map[string]interface{}:
+		// Prefer field publicKey (array of bytes)
+		raw, ok := vv["publicKey"]
+		if !ok {
+			return ""
+		}
+
+		var bytes []byte
+		switch arr := raw.(type) {
+		case []interface{}:
+			bytes = make([]byte, 0, len(arr))
+			for _, it := range arr {
+				switch x := it.(type) {
+				case string:
+					if n, err := strconv.Atoi(x); err == nil && n >= 0 && n <= 255 {
+						bytes = append(bytes, byte(n))
+					}
+				case float64:
+					if x >= 0 && x <= 255 {
+						bytes = append(bytes, byte(x))
+					}
+				}
+			}
+		case []string:
+			bytes = make([]byte, 0, len(arr))
+			for _, s := range arr {
+				if n, err := strconv.Atoi(s); err == nil && n >= 0 && n <= 255 {
+					bytes = append(bytes, byte(n))
+				}
+			}
+		}
+
+		if len(bytes) == 0 {
+			return ""
+		}
+
+		// Store as lowercase hex. UI can add 0x prefix if desired.
+		return fmt.Sprintf("%x", bytes)
+	default:
+		return ""
+	}
+}
+
+func parseInt(v interface{}) (int, bool) {
+	switch vv := v.(type) {
+	case float64:
+		return int(vv), true
+	case int:
+		return vv, true
+	case int64:
+		return int(vv), true
+	case string:
+		n, err := strconv.Atoi(vv)
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	default:
+		return 0, false
+	}
+}
+
+func parseWeightToInt(v interface{}) (int, bool) {
+	switch vv := v.(type) {
+	case float64:
+		return int(vv), true
+	case string:
+		if vv == "" {
+			return 0, false
+		}
+		// Common format: "1000.00000000"
+		if strings.Contains(vv, ".") {
+			f, err := strconv.ParseFloat(vv, 64)
+			if err != nil {
+				return 0, false
+			}
+			return int(f), true
+		}
+		n, err := strconv.Atoi(vv)
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	default:
+		return 0, false
+	}
 }
