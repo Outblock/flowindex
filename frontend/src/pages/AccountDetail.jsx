@@ -312,18 +312,44 @@ function AccountDetail() {
                 {account.keys && account.keys.length > 0 ? (
                   <div className="space-y-2">
                     {account.keys.map((key, idx) => (
-                      <div key={idx} className="bg-black/50 border border-white/5 p-4 group">
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <span className="text-[10px] text-zinc-500 uppercase">Index #{key.keyIndex ?? idx}</span>
-                            <span className="text-[10px] text-zinc-500 uppercase">Sign: {key.signingAlgorithm || 'N/A'}</span>
-                            <span className="text-[10px] text-zinc-500 uppercase">Hash: {key.hashingAlgorithm || 'N/A'}</span>
-                            <span className="text-[10px] text-zinc-500 uppercase">Weight: {key.weight ?? 0}</span>
-                            <span className={`text-[10px] uppercase px-2 py-0.5 border rounded-sm ${key.revoked ? 'border-red-500/40 text-red-400 bg-red-500/10' : 'border-nothing-green/30 text-nothing-green bg-nothing-green/10'}`}>
+                      <div key={idx} className="bg-black/40 border border-white/5 p-5 group hover:border-nothing-green/30 transition-colors">
+                        <div className="flex flex-col gap-4">
+                          {/* Top Row: Metadata Badges */}
+                          <div className="flex flex-wrap items-center gap-3 border-b border-white/5 pb-3">
+                            <div className="flex items-center gap-2 pr-3 border-r border-white/5">
+                              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Index</span>
+                              <span className="text-xs text-white font-mono">#{key.keyIndex ?? idx}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 pr-3 border-r border-white/5">
+                              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Weight</span>
+                              <span className="text-xs text-white font-mono">{key.weight ?? 0}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 pr-3 border-r border-white/5">
+                              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Algo</span>
+                              <span className="text-xs text-zinc-300 font-mono">
+                                {key.signingAlgorithm || 'N/A'} <span className="text-zinc-600">/</span> {key.hashingAlgorithm || 'N/A'}
+                              </span>
+                            </div>
+
+                            <span className={`ml-auto text-[10px] uppercase px-2 py-0.5 border rounded-sm tracking-widest ${key.revoked
+                              ? 'border-red-500/40 text-red-400 bg-red-500/10'
+                              : 'border-nothing-green/30 text-nothing-green bg-nothing-green/10'
+                              }`}>
                               {key.revoked ? 'Revoked' : 'Active'}
                             </span>
                           </div>
-                          <code className="text-xs text-zinc-400 break-all font-mono">{key.publicKey}</code>
+
+                          {/* Bottom Row: Key Data */}
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] text-zinc-600 uppercase tracking-widest">Public Key</span>
+                            <div className="bg-black/60 p-3 border border-white/5 rounded-sm overflow-hidden group-hover:bg-black/80 transition-colors">
+                              <code className="text-xs text-zinc-400 break-all font-mono leading-relaxed select-all">
+                                {key.publicKey}
+                              </code>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -439,9 +465,9 @@ function AccountDetail() {
                         return (
                           <tr key={tx.id} className="hover:bg-white/5 transition-colors group">
                             <td className="p-4">
-                            <Link to={`/transactions/${tx.id}`} className="text-nothing-green hover:underline font-mono">
-                              {formatShort(tx.id, 12, 8)}
-                            </Link>
+                              <Link to={`/transactions/${tx.id}`} className="text-nothing-green hover:underline font-mono">
+                                {formatShort(tx.id, 12, 8)}
+                              </Link>
                             </td>
                             <td className="p-4">
                               <span className="border border-white/10 px-2 py-1 rounded-sm text-zinc-300 text-[10px] uppercase">

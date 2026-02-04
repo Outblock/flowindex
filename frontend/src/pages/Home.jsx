@@ -452,7 +452,7 @@ function Home() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2 pr-1">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-1 relative">
               <AnimatePresence mode='popLayout'>
                 {(blocks || []).map((block) => {
                   const isNew = newBlockIds.has(block.height);
@@ -527,7 +527,7 @@ function Home() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2 pr-1">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-1 relative">
               <AnimatePresence mode='popLayout'>
                 {(transactions || []).map((tx) => {
                   const isNew = newTxIds.has(tx.id);

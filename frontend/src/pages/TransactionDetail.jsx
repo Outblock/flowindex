@@ -217,34 +217,51 @@ function TransactionDetail() {
                 </div>
               </div>
 
-              <div className="space-y-6">
+              <div className="flex flex-col gap-6">
+                {/* Payer Section */}
                 <div className="group">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Payer</p>
-                  <Link to={`/accounts/${formatAddress(transaction.payer)}`} className="text-sm text-nothing-green hover:underline break-all uppercase tracking-tight">
-                    {formatAddress(transaction.payer)}
-                  </Link>
-                </div>
-
-                <div className="group">
-                  <div className="flex justify-between items-end mb-1">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Proposer</p>
-                    <span className="text-[9px] text-zinc-600 uppercase tracking-tight bg-white/5 px-2 py-0.5 rounded">
-                      Seq: {transaction.proposerSequenceNumber} • Key: {transaction.proposerKeyIndex}
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Payer</p>
+                  <div className="bg-black/40 border border-white/5 p-3 flex items-center justify-between hover:border-nothing-green/30 transition-colors">
+                    <Link to={`/accounts/${formatAddress(transaction.payer)}`} className="text-sm text-nothing-green hover:underline break-all font-mono">
+                      {formatAddress(transaction.payer)}
+                    </Link>
+                    <span className="text-[10px] text-zinc-600 uppercase tracking-wider px-2 py-0.5 bg-white/5 rounded-sm">
+                      Fee Payer
                     </span>
                   </div>
-                  <Link to={`/accounts/${formatAddress(transaction.proposer)}`} className="text-sm text-zinc-300 hover:text-white break-all uppercase tracking-tight block">
-                    {formatAddress(transaction.proposer)}
-                  </Link>
                 </div>
 
+                {/* Proposer Section */}
+                <div className="group">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Proposer</p>
+                  <div className="bg-black/40 border border-white/5 p-3 flex flex-col gap-2 hover:border-white/20 transition-colors">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-1">
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Key Info</span>
+                      <div className="flex gap-3">
+                        <span className="text-[10px] text-zinc-400 font-mono">Seq: <span className="text-white">{transaction.proposerSequenceNumber}</span></span>
+                        <span className="text-[10px] text-zinc-400 font-mono">Key: <span className="text-white">{transaction.proposerKeyIndex}</span></span>
+                      </div>
+                    </div>
+                    <Link to={`/accounts/${formatAddress(transaction.proposer)}`} className="text-sm text-zinc-300 hover:text-white break-all font-mono">
+                      {formatAddress(transaction.proposer)}
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Authorizers Section */}
                 {transaction.authorizers && transaction.authorizers.length > 0 && (
                   <div className="group">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Authorizers</p>
-                    <div className="flex flex-col gap-1">
-                      {transaction.authorizers.map(auth => (
-                        <Link key={auth} to={`/accounts/${formatAddress(auth)}`} className="text-sm text-zinc-400 hover:text-white break-all uppercase tracking-tight">
-                          {formatAddress(auth)}
-                        </Link>
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Authorizers</p>
+                      <span className="bg-white/10 text-white text-[9px] px-1.5 py-0.5 rounded-full">{transaction.authorizers.length}</span>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {transaction.authorizers.map((auth, idx) => (
+                        <div key={`${auth}-${idx}`} className="bg-black/40 border border-white/5 p-3 hover:border-white/20 transition-colors">
+                          <Link to={`/accounts/${formatAddress(auth)}`} className="text-sm text-zinc-400 hover:text-white break-all font-mono block">
+                            {formatAddress(auth)}
+                          </Link>
+                        </div>
                       ))}
                     </div>
                   </div>
