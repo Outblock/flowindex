@@ -361,7 +361,7 @@ function Home() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-nothing-dark border border-white/10 p-6 h-[520px] flex flex-col"
+            className="bg-nothing-dark border border-white/10 p-6 h-[620px] flex flex-col overflow-hidden"
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
@@ -370,7 +370,7 @@ function Home() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2 pr-1">
               <AnimatePresence mode='popLayout'>
                 {(blocks || []).map((block) => {
                   const isNew = newBlockIds.has(block.height);
@@ -431,7 +431,7 @@ function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-nothing-dark border border-white/10 p-6 h-[600px] flex flex-col"
+            className="bg-nothing-dark border border-white/10 p-6 h-[620px] flex flex-col overflow-hidden"
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
@@ -440,12 +440,12 @@ function Home() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-2 pr-1">
               <AnimatePresence mode='popLayout'>
                 {(transactions || []).map((tx) => {
                   const isNew = newTxIds.has(tx.id);
                   const isSealed = tx.status === 'SEALED';
-                  const isError = !isSealed && tx.status !== 'PENDING'; // Assume anything else is error for list
+                  const isError = Boolean(tx.error_message || tx.errorMessage);
                   const txTimeSource = tx.timestamp || tx.created_at || tx.block_timestamp;
                   const txTimeRelative = formatRelativeTime(txTimeSource, nowTick);
                   const txTimeAbsolute = formatAbsoluteTime(txTimeSource);
