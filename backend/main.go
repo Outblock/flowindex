@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -91,6 +92,8 @@ func main() {
 	maxReorgDepth := getEnvUint("MAX_REORG_DEPTH", 1000)
 	tokenWorkerRange := getEnvUint("TOKEN_WORKER_RANGE", 50000)
 	metaWorkerRange := getEnvUint("META_WORKER_RANGE", 50000)
+	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
+	metaWorkerConcurrency := getEnvInt("META_WORKER_CONCURRENCY", 1)
 
 	// 3. Services
 	// Forward Ingester (Live Data)
@@ -122,17 +125,25 @@ func main() {
 	enableMetaWorker := os.Getenv("ENABLE_META_WORKER") != "false"
 
 	var tokenWorkerProcessor *ingester.TokenWorker
-	var tokenWorker *ingester.AsyncWorker
+	var tokenWorkers []*ingester.AsyncWorker
 	var metaWorkerProcessor *ingester.MetaWorker
-	var metaWorker *ingester.AsyncWorker
+	var metaWorkers []*ingester.AsyncWorker
 
 	workerTypes := make([]string, 0, 2)
 
 	if enableTokenWorker {
 		tokenWorkerProcessor = ingester.NewTokenWorker(repo)
-		tokenWorker = ingester.NewAsyncWorker(tokenWorkerProcessor, repo, ingester.WorkerConfig{
-			RangeSize: tokenWorkerRange,
-		})
+		if tokenWorkerConcurrency < 1 {
+			tokenWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < tokenWorkerConcurrency; i++ {
+			tokenWorkers = append(tokenWorkers, ingester.NewAsyncWorker(tokenWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: tokenWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-token-%d", hostname, pid, i),
+			}))
+		}
 		workerTypes = append(workerTypes, tokenWorkerProcessor.Name())
 	} else {
 		log.Println("Token Worker is DISABLED (ENABLE_TOKEN_WORKER=false)")
@@ -140,9 +151,17 @@ func main() {
 
 	if enableMetaWorker {
 		metaWorkerProcessor = ingester.NewMetaWorker(repo)
-		metaWorker = ingester.NewAsyncWorker(metaWorkerProcessor, repo, ingester.WorkerConfig{
-			RangeSize: metaWorkerRange,
-		})
+		if metaWorkerConcurrency < 1 {
+			metaWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < metaWorkerConcurrency; i++ {
+			metaWorkers = append(metaWorkers, ingester.NewAsyncWorker(metaWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: metaWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-meta-%d", hostname, pid, i),
+			}))
+		}
 		workerTypes = append(workerTypes, metaWorkerProcessor.Name())
 	} else {
 		log.Println("Meta Worker is DISABLED (ENABLE_META_WORKER=false)")
@@ -206,19 +225,23 @@ func main() {
 
 	// Start Async Workers
 	if enableTokenWorker {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			tokenWorker.Start(ctx)
-		}()
+		for _, worker := range tokenWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
 	}
 
 	if enableMetaWorker {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			metaWorker.Start(ctx)
-		}()
+		for _, worker := range metaWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
 	}
 
 	// Start Committer

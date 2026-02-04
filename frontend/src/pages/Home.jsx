@@ -27,6 +27,10 @@ function Home() {
   // Pagination State
   const [blockPage, setBlockPage] = useState(1);
   const [txPage, setTxPage] = useState(1);
+  const [blockCursors, setBlockCursors] = useState({ 1: '' });
+  const [txCursors, setTxCursors] = useState({ 1: '' });
+  const [blockHasNext, setBlockHasNext] = useState(false);
+  const [txHasNext, setTxHasNext] = useState(false);
 
   const [newBlockIds, setNewBlockIds] = useState(new Set());
   const [newTxIds, setNewTxIds] = useState(new Set());
@@ -37,8 +41,15 @@ function Home() {
   // Load Blocks for Page
   const loadBlocks = async (page) => {
     try {
-      const res = await api.getBlocks(page);
-      setBlocks(res || []);
+      const cursor = blockCursors[page] ?? '';
+      const res = await api.getBlocks(cursor, 10);
+      const items = res?.items ?? (Array.isArray(res) ? res : []);
+      const nextCursor = res?.next_cursor ?? '';
+      setBlocks(items);
+      setBlockHasNext(Boolean(nextCursor));
+      if (nextCursor) {
+        setBlockCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
+      }
     } catch (err) {
       console.error("Failed to load blocks", err);
     }
@@ -47,14 +58,21 @@ function Home() {
   // Load Txs for Page
   const loadTransactions = async (page) => {
     try {
-      const res = await api.getTransactions(page);
-      const transformedTxs = Array.isArray(res) ? res.map(tx => ({
+      const cursor = txCursors[page] ?? '';
+      const res = await api.getTransactions(cursor, 10);
+      const items = res?.items ?? (Array.isArray(res) ? res : []);
+      const nextCursor = res?.next_cursor ?? '';
+      const transformedTxs = Array.isArray(items) ? items.map(tx => ({
         ...tx,
         type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
         payer: tx.payer_address || tx.proposer_address,
         blockHeight: tx.block_height
       })) : [];
       setTransactions(transformedTxs);
+      setTxHasNext(Boolean(nextCursor));
+      if (nextCursor) {
+        setTxCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
+      }
     } catch (err) {
       console.error("Failed to load transactions", err);
     }
@@ -537,7 +555,7 @@ function Home() {
             <Pagination
               currentPage={blockPage}
               onPageChange={handleBlockPageChange}
-              hasNext={blocks.length >= 10}
+              hasNext={blockHasNext}
             />
           </motion.div>
 
@@ -664,7 +682,7 @@ function Home() {
             <Pagination
               currentPage={txPage}
               onPageChange={handleTxPageChange}
-              hasNext={transactions.length >= 10}
+              hasNext={txHasNext}
             />
           </motion.div>
         </div>

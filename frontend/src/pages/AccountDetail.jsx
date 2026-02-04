@@ -17,6 +17,8 @@ function AccountDetail() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [txLoading, setTxLoading] = useState(false);
+  const [txCursors, setTxCursors] = useState({ 1: '' });
+  const [txHasNext, setTxHasNext] = useState(false);
   const [tokenTransfers, setTokenTransfers] = useState([]);
   const [tokenCursor, setTokenCursor] = useState('');
   const [tokenHasMore, setTokenHasMore] = useState(false);
@@ -50,8 +52,11 @@ function AccountDetail() {
   const loadTransactions = async (page) => {
     setTxLoading(true);
     try {
-      const txRes = await api.getAccountTransactions(address, page);
-      const accountTxs = (txRes || [])
+      const cursor = txCursors[page] ?? '';
+      const txRes = await api.getAccountTransactions(address, cursor, 20);
+      const items = txRes?.items ?? (Array.isArray(txRes) ? txRes : []);
+      const nextCursor = txRes?.next_cursor ?? '';
+      const accountTxs = (items || [])
         .map(tx => ({
           ...tx,
           type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
@@ -60,6 +65,10 @@ function AccountDetail() {
           blockHeight: tx.block_height
         }));
       setTransactions(accountTxs);
+      setTxHasNext(Boolean(nextCursor));
+      if (nextCursor) {
+        setTxCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
+      }
     } catch (err) {
       console.error("Failed to load transactions", err);
     } finally {
@@ -102,9 +111,15 @@ function AccountDetail() {
   useEffect(() => {
     loadTransactions(currentPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, currentPage]);
+  }, [currentPage]);
 
   useEffect(() => {
+    setCurrentPage(1);
+    setTxCursors({ 1: '' });
+    setTxHasNext(false);
+    if (currentPage === 1) {
+      loadTransactions(1);
+    }
     setTokenTransfers([]);
     setTokenCursor('');
     setTokenHasMore(false);
@@ -433,7 +448,7 @@ function AccountDetail() {
               <Pagination
                 currentPage={currentPage}
                 onPageChange={handlePageChange}
-                hasNext={transactions.length >= 20 || transactions.length === 10} // Depending on limit
+                hasNext={txHasNext}
               />
             </>
           )}

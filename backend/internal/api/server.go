@@ -397,8 +397,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListBlocks(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
 	cursorParam := r.URL.Query().Get("cursor")
+	_, hasCursor := r.URL.Query()["cursor"]
 
-	if cursorParam != "" {
+	if hasCursor {
 		cursorHeight, err := parseCursorHeight(cursorParam)
 		if err != nil {
 			http.Error(w, "invalid cursor", http.StatusBadRequest)
@@ -435,8 +436,9 @@ func (s *Server) handleListBlocks(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListTransactions(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
 	cursorParam := r.URL.Query().Get("cursor")
+	_, hasCursor := r.URL.Query()["cursor"]
 
-	if cursorParam != "" {
+	if hasCursor {
 		cursor, err := parseTxCursor(cursorParam)
 		if err != nil {
 			http.Error(w, "invalid cursor", http.StatusBadRequest)
@@ -757,8 +759,9 @@ func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Req
 
 	limit, offset := parsePagination(r)
 	cursorParam := r.URL.Query().Get("cursor")
+	_, hasCursor := r.URL.Query()["cursor"]
 
-	if cursorParam != "" {
+	if hasCursor {
 		cursor, err := parseAddressTxCursor(cursorParam)
 		if err != nil {
 			http.Error(w, "invalid cursor", http.StatusBadRequest)

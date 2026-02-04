@@ -26,6 +26,8 @@ This is the final publish list of environment variables used by the backend. Rai
 - `ENABLE_META_WORKER` (default: true)
 - `TOKEN_WORKER_RANGE` (default: 50000)
 - `META_WORKER_RANGE` (default: 50000)
+- `TOKEN_WORKER_CONCURRENCY` (default: 1)
+- `META_WORKER_CONCURRENCY` (default: 1)
 - `ENABLE_DAILY_STATS` (default: true)
 - `ENABLE_LOOKUP_REPAIR` (default: false)
 - `LOOKUP_REPAIR_LIMIT` (default: 1000)

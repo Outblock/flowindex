@@ -11,6 +11,7 @@ RUN go mod download
 COPY backend/ .
 RUN go mod tidy
 RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o indexer main.go
+RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o backfill_token_transfers ./cmd/tools/backfill_token_transfers
 
 FROM debian:bookworm-slim
 
@@ -22,6 +23,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/indexer .
+COPY --from=builder /app/backfill_token_transfers .
 # Copy schema for potential migration on startup (optional, user does it manually now)
 COPY --from=builder /app/schema_v2.sql .
 
