@@ -98,8 +98,21 @@ function Home() {
     return totalTxs / durationSec;
   };
 
+  const computeAvgBlockTime = (items) => {
+    const withTime = (items || []).filter(b => b?.timestamp);
+    if (withTime.length < 2) return 0;
+    const sorted = [...withTime].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const newest = new Date(sorted[0].timestamp).getTime();
+    const oldest = new Date(sorted[sorted.length - 1].timestamp).getTime();
+    const durationSec = Math.max(1, (newest - oldest) / 1000);
+    return durationSec / (sorted.length - 1);
+  };
+
+  const [avgBlockTime, setAvgBlockTime] = useState(0);
+
   useEffect(() => {
     setTps(computeTpsFromBlocks(blocks));
+    setAvgBlockTime(computeAvgBlockTime(blocks));
   }, [blocks]);
 
   // Handle WebSocket messages (Real-time updates)
@@ -202,6 +215,7 @@ function Home() {
   const historyPercent = totalHistory > 0 ? (coveredRange / totalHistory) * 100 : 0;
   const maxTpsEstimate = 3900;
   const utilization = maxTpsEstimate > 0 ? (tps / maxTpsEstimate) * 100 : 0;
+  const isHistoryComplete = historyPercent >= 99.99;
 
   return (
     <div className="min-h-screen bg-nothing-black text-nothing-white font-mono selection:bg-nothing-green selection:text-black">
@@ -283,7 +297,7 @@ function Home() {
 
       <div className="container mx-auto px-4 py-8 space-y-8">
         {/* Basic Stats Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           <div className="group bg-nothing-dark border border-white/10 p-6 hover:border-nothing-green/50 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 border border-white/10 rounded-sm">
@@ -314,7 +328,17 @@ function Home() {
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400 uppercase tracking-widest">Total TXs</p>
+              <p className="text-xs text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                Total TXs
+                {!isHistoryComplete && (
+                  <span
+                    className="text-[9px] uppercase px-1.5 py-0.5 border border-yellow-500/30 text-yellow-400 bg-yellow-500/10 rounded-sm"
+                    title="Partial data: history backfill is still in progress."
+                  >
+                    Partial
+                  </span>
+                )}
+              </p>
               <p className="text-3xl font-bold font-mono text-white">
                 <NumberFlow
                   value={statusRaw?.total_transactions || 0}
@@ -340,6 +364,50 @@ function Home() {
               </p>
               <p className="text-[10px] text-gray-500 uppercase tracking-widest">
                 Utilization: {Math.min(100, utilization).toFixed(2)}% of {maxTpsEstimate.toLocaleString()} TPS (est.)
+              </p>
+            </div>
+          </div>
+
+          <div className="group bg-nothing-dark border border-white/10 p-6 hover:border-white/30 transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2 border border-white/10 rounded-sm">
+                <Box className="h-5 w-5 text-white" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-gray-400 uppercase tracking-widest">Average Block Time</p>
+              <p className="text-3xl font-bold font-mono text-white">
+                {avgBlockTime > 0 ? `${avgBlockTime.toFixed(2)}s` : 'N/A'}
+              </p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest">
+                Based on recent blocks
+              </p>
+            </div>
+          </div>
+
+          <div className="group bg-nothing-dark border border-white/10 p-6 hover:border-white/30 transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2 border border-white/10 rounded-sm">
+                <Activity className="h-5 w-5 text-white" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                Total Addresses
+                {!isHistoryComplete && (
+                  <span
+                    className="text-[9px] uppercase px-1.5 py-0.5 border border-yellow-500/30 text-yellow-400 bg-yellow-500/10 rounded-sm"
+                    title="Partial data: history backfill is still in progress."
+                  >
+                    Partial
+                  </span>
+                )}
+              </p>
+              <p className="text-3xl font-bold font-mono text-white">
+                <NumberFlow
+                  value={statusRaw?.total_addresses || 0}
+                  format={{ useGrouping: true }}
+                />
               </p>
             </div>
           </div>
