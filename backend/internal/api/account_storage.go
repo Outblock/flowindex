@@ -131,27 +131,38 @@ func (s *Server) executeCadenceScript(ctx context.Context, script string, args [
 var storageIdentifierRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func cadenceStorageOverviewScript() string {
-	// Cadence v1 account APIs:
-	// - https://cadence-lang.org/docs/language/accounts#authaccount
-	// - https://cadence-lang.org/docs/language/account-storage
+	// NOTE:
+	// On Flow mainnet, the Cadence runtime still supports `getAuthAccount(address)` in scripts.
+	// The more modern generic form `getAuthAccount<auth(Storage) &Account>(address)` currently
+	// fails due to legacy on-chain programs that haven't migrated to Cadence 1.0 syntax.
+	//
+	// So we use the compatibility surface that FlowView used historically:
+	// - getAuthAccount(address)
+	// - account.forEachStored / forEachPublic
+	//
+	// This gives us a best-effort storage/public path listing without depending on external
+	// helper contracts.
 	return `
 		access(all) fun main(address: Address): {String: AnyStruct} {
-			let account = getAuthAccount<auth(Storage) &Account>(address)
+			let account = getAuthAccount(address)
 
-			let storagePaths = account.storage.storagePaths
-			let publicPaths = account.storage.publicPaths
+			var storagePaths: [StoragePath] = []
+			var publicPaths: [PublicPath] = []
 
-			// Best-effort type map for quick browsing.
 			var types: {String: Type} = {}
-			for path in storagePaths {
-				if let t = account.storage.type(at: path) {
-					types[path.toString()] = t
-				}
-			}
+			account.forEachStored(fun (path: StoragePath, type: Type): Bool {
+				storagePaths.append(path)
+				types[path.toString()] = type
+				return true
+			})
+			account.forEachPublic(fun (path: PublicPath, type: Type): Bool {
+				publicPaths.append(path)
+				return true
+			})
 
 			return {
-				"used": account.storage.used,
-				"capacity": account.storage.capacity,
+				"used": account.storageUsed,
+				"capacity": account.storageCapacity,
 				"storagePaths": storagePaths,
 				"publicPaths": publicPaths,
 				"types": types
@@ -163,8 +174,13 @@ func cadenceStorageOverviewScript() string {
 func cadencePublicPathsScript() string {
 	return `
 		access(all) fun main(address: Address): [PublicPath] {
-			let account = getAuthAccount<auth(Storage) &Account>(address)
-			return account.storage.publicPaths
+			let account = getAuthAccount(address)
+			var publicPaths: [PublicPath] = []
+			account.forEachPublic(fun (path: PublicPath, type: Type): Bool {
+				publicPaths.append(path)
+				return true
+			})
+			return publicPaths
 		}
 	`
 }
@@ -172,16 +188,12 @@ func cadencePublicPathsScript() string {
 func cadenceStorageItemScript() string {
 	return `
 		access(all) fun main(address: Address, path: String): {String: AnyStruct} {
-			let account = getAuthAccount<auth(Storage) &Account>(address)
+			let account = getAuthAccount(address)
 			let storagePath = StoragePath(identifier: path)!
-
-			let t = account.storage.type(at: storagePath)
-			let v = account.storage.borrow<&Any>(from: storagePath)
 
 			return {
 				"path": storagePath,
-				"type": t,
-				"value": v
+				"value": account.borrow<auth &AnyResource>(from: storagePath)
 			}
 		}
 	`
