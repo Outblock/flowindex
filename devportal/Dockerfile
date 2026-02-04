@@ -1,7 +1,10 @@
 FROM node:20-bookworm AS deps
 
 WORKDIR /app
-COPY package.json package-lock.json ./
+# NOTE: fumadocs-mdx runs on postinstall and requires source.config.ts + content.
+# We copy just enough inputs here so `npm ci` can run successfully.
+COPY package.json package-lock.json source.config.ts tsconfig.json mdx-components.tsx ./
+COPY content ./content
 RUN npm ci
 
 FROM node:20-bookworm AS builder
@@ -29,4 +32,3 @@ COPY --from=builder /app/public ./public
 EXPOSE 8080
 
 CMD ["node", "server.js"]
-
