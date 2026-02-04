@@ -114,6 +114,14 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	}
 	defer tx.Rollback(ctx)
 
+	// Indexing data is reconstructable from the chain. For high-throughput ingestion, we can trade
+	// a small durability window for speed by disabling synchronous commit at the transaction level.
+	// This is opt-in via env var to keep the default conservative.
+	if strings.ToLower(strings.TrimSpace(os.Getenv("DB_SYNCHRONOUS_COMMIT"))) == "off" {
+		// Best-effort: if this fails, continue with default settings.
+		_, _ = tx.Exec(ctx, "SET LOCAL synchronous_commit = off")
+	}
+
 	// Precompute block timestamps for downstream inserts
 	blockTimeByHeight := make(map[uint64]time.Time, len(blocks))
 
