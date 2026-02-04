@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -154,6 +156,12 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	}
 
 	// 2. Insert Transactions
+	scriptInlineMaxBytes := 0
+	if v := os.Getenv("TX_SCRIPT_INLINE_MAX_BYTES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			scriptInlineMaxBytes = n
+		}
+	}
 	for _, t := range txs {
 		// eventsJSON, _ := json.Marshal(t.Events) // No longer needed in raw.transactions? Plan says "raw tables only", strict schema.
 		// Actually schema has `arguments JSONB`.
@@ -179,18 +187,56 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			eventCount = len(t.Events)
 		}
 
+		scriptText := strings.TrimSpace(t.Script)
+		var scriptHashPtr *string
+		if scriptText != "" {
+			sum := sha256.Sum256([]byte(scriptText))
+			scriptHash := hex.EncodeToString(sum[:])
+			scriptHashPtr = &scriptHash
+
+			// De-dupe scripts into raw.scripts. Keep it in the same transaction so
+			// readers can always resolve script_hash -> script_text.
+			_, err := tx.Exec(ctx, `
+				INSERT INTO raw.scripts (script_hash, script_text, created_at)
+				VALUES ($1, $2, NOW())
+				ON CONFLICT (script_hash) DO NOTHING`,
+				scriptHash, scriptText,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to upsert raw.scripts for tx %s: %w", t.ID, err)
+			}
+		}
+
+		var scriptInline *string
+		if scriptInlineMaxBytes > 0 && scriptText != "" && len(scriptText) <= scriptInlineMaxBytes {
+			scriptInline = &scriptText
+		}
+
 		_, err := tx.Exec(ctx, `
-			INSERT INTO raw.transactions (block_height, id, transaction_index, proposer_address, payer_address, authorizers, script, arguments, status, error_message, is_evm, gas_limit, gas_used, event_count, timestamp, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			INSERT INTO raw.transactions (
+				block_height, id, transaction_index,
+				proposer_address, payer_address, authorizers,
+				script_hash, script, arguments,
+				status, error_message, is_evm,
+				gas_limit, gas_used, event_count,
+				timestamp, created_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 			ON CONFLICT (block_height, id) DO UPDATE SET
 				transaction_index = EXCLUDED.transaction_index,
 				status = EXCLUDED.status,
 				error_message = EXCLUDED.error_message,
 				gas_used = EXCLUDED.gas_used,
 				event_count = EXCLUDED.event_count,
-				is_evm = EXCLUDED.is_evm, 
+				is_evm = EXCLUDED.is_evm,
+				script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash),
 				created_at = EXCLUDED.created_at`,
-			t.BlockHeight, t.ID, t.TransactionIndex, t.ProposerAddress, t.PayerAddress, t.Authorizers, t.Script, t.Arguments, t.Status, t.ErrorMessage, t.IsEVM, t.GasLimit, t.GasUsed, eventCount, txTimestamp, createdAt,
+			t.BlockHeight, t.ID, t.TransactionIndex,
+			t.ProposerAddress, t.PayerAddress, t.Authorizers,
+			scriptHashPtr, scriptInline, t.Arguments,
+			t.Status, t.ErrorMessage, t.IsEVM,
+			t.GasLimit, t.GasUsed, eventCount,
+			txTimestamp, createdAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
@@ -279,20 +325,54 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// 4. Insert Account Keys (app schema)
 	if enableDerivedWrites {
 		for _, ak := range accountKeys {
+			// Revocation events update state by (address, key_index).
+			if ak.Revoked && ak.PublicKey == "" {
+				_, err := tx.Exec(ctx, `
+					UPDATE app.account_keys
+					SET revoked = TRUE,
+						revoked_at_height = $3,
+						last_updated_height = $3,
+						updated_at = NOW()
+					WHERE address = $1 AND key_index = $2
+					  AND $3 >= last_updated_height`,
+					ak.Address, ak.KeyIndex, ak.RevokedAtHeight,
+				)
+				if err != nil {
+					return fmt.Errorf("failed to update account key revoke: %w", err)
+				}
+				continue
+			}
+
 			_, err := tx.Exec(ctx, `
-				INSERT INTO app.account_keys (public_key, address, key_index, signing_algorithm, hashing_algorithm, weight, revoked, last_updated_height)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-				ON CONFLICT (public_key, address) DO UPDATE SET
-					key_index = EXCLUDED.key_index,
+				INSERT INTO app.account_keys (
+					address, key_index, public_key,
+					signing_algorithm, hashing_algorithm, weight,
+					revoked, added_at_height, revoked_at_height, last_updated_height,
+					created_at, updated_at
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+				ON CONFLICT (address, key_index) DO UPDATE SET
+					public_key = EXCLUDED.public_key,
 					signing_algorithm = EXCLUDED.signing_algorithm,
 					hashing_algorithm = EXCLUDED.hashing_algorithm,
 					weight = EXCLUDED.weight,
 					revoked = EXCLUDED.revoked,
-					last_updated_height = EXCLUDED.last_updated_height`,
-				ak.PublicKey, ak.Address, ak.KeyIndex, ak.SigningAlgorithm, ak.HashingAlgorithm, ak.Weight, ak.Revoked, ak.BlockHeight,
+					added_at_height = COALESCE(app.account_keys.added_at_height, EXCLUDED.added_at_height),
+					revoked_at_height = CASE WHEN EXCLUDED.revoked THEN EXCLUDED.revoked_at_height ELSE NULL END,
+					last_updated_height = EXCLUDED.last_updated_height,
+					updated_at = NOW()
+				WHERE EXCLUDED.last_updated_height >= app.account_keys.last_updated_height`,
+				ak.Address, ak.KeyIndex, ak.PublicKey,
+				ak.SigningAlgorithm, ak.HashingAlgorithm, ak.Weight,
+				ak.Revoked, ak.AddedAtHeight, func() *uint64 {
+					if ak.RevokedAtHeight == 0 {
+						return nil
+					}
+					return &ak.RevokedAtHeight
+				}(), ak.LastUpdatedHeight,
 			)
 			if err != nil {
-				return fmt.Errorf("failed to insert account key: %w", err)
+				return fmt.Errorf("failed to upsert account key: %w", err)
 			}
 		}
 	}
@@ -511,7 +591,7 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 
 	// Get transactions for this block
 	txRows, err := r.db.Query(ctx, `
-		SELECT id, block_height, transaction_index, proposer_address, payer_address, authorizers, script, arguments, status, error_message, is_evm, gas_limit, gas_used, created_at 
+		SELECT id, block_height, transaction_index, proposer_address, payer_address, authorizers, status, error_message, is_evm, gas_limit, gas_used, timestamp, created_at
 		FROM raw.transactions 
 		WHERE block_height = $1 
 		ORDER BY transaction_index ASC`, height)
@@ -525,7 +605,7 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 	var transactions []models.Transaction
 	for txRows.Next() {
 		var t models.Transaction
-		if err := txRows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Script, &t.Arguments, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.CreatedAt); err != nil {
+		if err := txRows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		transactions = append(transactions, t)
@@ -565,9 +645,10 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 		query = `
 			SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, 
 			       COALESCE(0, 0), COALESCE(0, 0), -- placeholders for key_index/seq_num if missing in raw table
-			       t.payer_address, t.authorizers, t.script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.created_at,
+			       t.payer_address, t.authorizers, COALESCE(t.script, s.script_text) AS script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.timestamp, t.created_at,
 			       COALESCE(et.evm_hash, ''), COALESCE(et.from_address, ''), COALESCE(et.to_address, ''), ''
 			FROM raw.transactions t
+			LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 			LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
 			WHERE t.id = $1 AND t.block_height = $2`
 		args = []interface{}{id, blockHeight}
@@ -582,9 +663,10 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 			query = `
 				SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, 
    				       COALESCE(0, 0), COALESCE(0, 0),
-				       t.payer_address, t.authorizers, t.script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.created_at,
+				       t.payer_address, t.authorizers, COALESCE(t.script, s.script_text) AS script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.timestamp, t.created_at,
 				       COALESCE(et.evm_hash, ''), COALESCE(et.from_address, ''), COALESCE(et.to_address, ''), ''
 				FROM raw.transactions t
+				LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 				LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
 				WHERE t.id = $1 AND t.block_height = $2`
 			args = []interface{}{txID, bh}
@@ -602,9 +684,10 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 				query = `
 					SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, 
 	   				       COALESCE(0, 0), COALESCE(0, 0),
-					       t.payer_address, t.authorizers, t.script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.created_at,
+					       t.payer_address, t.authorizers, COALESCE(t.script, s.script_text) AS script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.timestamp, t.created_at,
 					       COALESCE(et.evm_hash, ''), COALESCE(et.from_address, ''), COALESCE(et.to_address, ''), ''
 					FROM raw.transactions t
+					LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 					LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
 					WHERE t.id = $1 AND t.block_height = $2`
 				args = []interface{}{txID, bh}
@@ -616,7 +699,7 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 
 	err = r.db.QueryRow(ctx, query, args...).
 		Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.ProposerKeyIndex, &t.ProposerSequenceNumber,
-			&t.PayerAddress, &t.Authorizers, &t.Script, &t.Arguments, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.CreatedAt,
+			&t.PayerAddress, &t.Authorizers, &t.Script, &t.Arguments, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt,
 			&t.EVMHash, &t.EVMFrom, &t.EVMTo, &t.EVMValue)
 
 	if err != nil {
@@ -662,11 +745,11 @@ func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) 
 
 func (r *Repository) GetTransactionsByAddress(ctx context.Context, address string, limit, offset int) ([]models.Transaction, error) {
 	query := `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.created_at
+		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
 		FROM app.address_transactions at
 		JOIN raw.transactions t ON at.transaction_id = t.id AND at.block_height = t.block_height
 		WHERE at.address = $1
-		ORDER BY at.block_height DESC
+		ORDER BY at.block_height DESC, at.transaction_id DESC
 		LIMIT $2 OFFSET $3`
 
 	rows, err := r.db.Query(ctx, query, address, limit, offset)
@@ -678,7 +761,7 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Script, &t.Status, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
@@ -693,7 +776,7 @@ type AddressTxCursor struct {
 
 func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address string, limit int, cursor *AddressTxCursor) ([]models.Transaction, error) {
 	query := `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.created_at
+		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
 		FROM app.address_transactions at
 		JOIN raw.transactions t ON at.transaction_id = t.id AND at.block_height = t.block_height
 		WHERE at.address = $1
@@ -719,7 +802,7 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Script, &t.Status, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
@@ -729,7 +812,7 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 
 func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, error) {
 	query := `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.error_message, t.created_at
+		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
 		FROM raw.transactions t
 		ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC
 		LIMIT $1 OFFSET $2`
@@ -743,7 +826,7 @@ func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset in
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Script, &t.Status, &t.ErrorMessage, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
@@ -765,7 +848,7 @@ type TokenTransferCursor struct {
 
 func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cursor *TxCursor) ([]models.Transaction, error) {
 	query := `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.script, t.status, t.error_message, t.created_at
+		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
 		FROM raw.transactions t
 		WHERE ($1::bigint IS NULL OR (t.block_height, t.transaction_index, t.id) < ($1, $2, $3))
 		ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC
@@ -791,7 +874,7 @@ func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cur
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Script, &t.Status, &t.ErrorMessage, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
@@ -1121,8 +1204,19 @@ func (r *Repository) GetAllCheckpoints(ctx context.Context) (map[string]uint64, 
 
 // GetAddressByPublicKey finds the address associated with a public key
 func (r *Repository) GetAddressByPublicKey(ctx context.Context, publicKey string) (string, error) {
+	publicKey = strings.TrimSpace(publicKey)
+	publicKey = strings.TrimPrefix(strings.ToLower(publicKey), "0x")
+	if publicKey == "" {
+		return "", nil
+	}
+
 	var address string
-	err := r.db.QueryRow(ctx, "SELECT address FROM app.account_keys WHERE public_key = $1 LIMIT 1", publicKey).Scan(&address)
+	err := r.db.QueryRow(ctx, `
+		SELECT address
+		FROM app.account_keys
+		WHERE public_key = $1 AND revoked = FALSE
+		ORDER BY last_updated_height DESC
+		LIMIT 1`, publicKey).Scan(&address)
 	if err == pgx.ErrNoRows {
 		return "", nil
 	}

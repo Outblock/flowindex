@@ -190,7 +190,9 @@ CREATE TABLE IF NOT EXISTS raw.transactions (
     payer_address     VARCHAR(18),
     authorizers       TEXT[],
 
-    -- storage warning: script can be huge; prefer script_hash + script_ref table if needed
+    -- Storage warning: script can be huge; store script_hash and de-dupe via raw.scripts.
+    -- We keep `script` for backwards compatibility (older rows), but new ingests should prefer NULL + script_hash.
+    script_hash       VARCHAR(64),
     script            TEXT,
     arguments         JSONB,
 
@@ -206,6 +208,10 @@ CREATE TABLE IF NOT EXISTS raw.transactions (
 
     PRIMARY KEY (block_height, id)
 ) PARTITION BY RANGE (block_height);
+
+-- Ensure column exists on older installs (safe no-op for new DBs).
+ALTER TABLE IF EXISTS raw.transactions
+  ADD COLUMN IF NOT EXISTS script_hash VARCHAR(64);
 
 -- 3.2.a Tx lookup for fast "by tx id" queries
 CREATE TABLE IF NOT EXISTS raw.tx_lookup (
@@ -322,16 +328,27 @@ CREATE INDEX IF NOT EXISTS idx_evm_hash ON app.evm_transactions(evm_hash);
 
 -- 5.1 Account Keys
 CREATE TABLE IF NOT EXISTS app.account_keys (
-    public_key         TEXT NOT NULL,
-    address            VARCHAR(18) NOT NULL,
-    key_index          INT,
-    signing_algorithm  VARCHAR(20),
-    hashing_algorithm  VARCHAR(20),
-    weight             INT,
-    revoked            BOOLEAN DEFAULT FALSE,
-    last_updated_height BIGINT,
-    PRIMARY KEY (public_key, address)
+    address             VARCHAR(18) NOT NULL,
+    key_index            INT NOT NULL,
+    public_key           TEXT NOT NULL,
+    signing_algorithm    TEXT,
+    hashing_algorithm    TEXT,
+    weight               INT,
+    revoked              BOOLEAN NOT NULL DEFAULT FALSE,
+    added_at_height      BIGINT,
+    revoked_at_height    BIGINT,
+    last_updated_height  BIGINT NOT NULL DEFAULT 0,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    PRIMARY KEY (address, key_index)
 );
+
+CREATE INDEX IF NOT EXISTS idx_account_keys_public_key
+  ON app.account_keys (public_key);
+CREATE INDEX IF NOT EXISTS idx_account_keys_public_key_active
+  ON app.account_keys (public_key)
+  WHERE revoked = FALSE;
 
 -- 5.2 Smart Contracts
 CREATE TABLE IF NOT EXISTS app.smart_contracts (

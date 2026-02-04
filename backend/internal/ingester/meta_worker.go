@@ -109,7 +109,10 @@ func (w *MetaWorker) buildAddressIndexes(txs []models.Transaction) ([]models.Add
 func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountKey {
 	var keys []models.AccountKey
 	for _, evt := range events {
-		if !strings.Contains(evt.Type, "AccountCreated") && !strings.Contains(evt.Type, "AccountKeyAdded") {
+		// We materialize a state table of account keys from Flow system events.
+		// Note: `flow.AccountKeyRemoved` payload does NOT include the full public key bytes
+		// in our JSON-CDC flattening; it includes the key index (often under "publicKey").
+		if !strings.Contains(evt.Type, "AccountKeyAdded") && !strings.Contains(evt.Type, "AccountKeyRemoved") {
 			continue
 		}
 
@@ -119,37 +122,71 @@ func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountK
 		}
 
 		address := ""
-		publicKey := ""
 
 		if addr, ok := payload["address"].(string); ok {
 			address = normalizeAddress(addr)
 		}
+		if address == "" {
+			continue
+		}
 
-		// flow.AccountKeyAdded payloads can vary by spork/version.
-		// We've observed:
-		//   { "publicKey": { "publicKey": ["24","104",...], "signatureAlgorithm": "SignatureAlgorithm(rawValue: 1)" }, "hashAlgorithm": "HashAlgorithm(rawValue: 1)", ... }
-		// but older formats may have "publicKey" as a hex string.
-		publicKey = extractPublicKey(payload["publicKey"])
+		if strings.Contains(evt.Type, "AccountKeyRemoved") {
+			// Removal: mark revoked by (address, key_index).
+			// Payload examples:
+			//   {"address":"...","publicKey":"0"}  <-- this is the key index in practice
+			keyIdx := -1
+			if v, ok := payload["keyIndex"]; ok {
+				if n, ok := parseInt(v); ok {
+					keyIdx = n
+				}
+			}
+			if keyIdx < 0 {
+				if v, ok := payload["publicKey"]; ok {
+					if n, ok := parseInt(v); ok {
+						keyIdx = n
+					}
+				}
+			}
+			if keyIdx < 0 {
+				continue
+			}
+
+			keys = append(keys, models.AccountKey{
+				Address:           address,
+				KeyIndex:          keyIdx,
+				Revoked:           true,
+				RevokedAtHeight:   evt.BlockHeight,
+				LastUpdatedHeight: evt.BlockHeight,
+			})
+			continue
+		}
+
+		// AccountKeyAdded: extract full public key + metadata.
+		publicKey := extractPublicKey(payload["publicKey"])
 		if publicKey == "" {
 			if key, ok := payload["key"].(map[string]interface{}); ok {
 				publicKey = extractPublicKey(key["publicKey"])
 			}
 		}
+		publicKey = normalizePublicKey(publicKey)
 
-		if address == "" || publicKey == "" {
+		keyIdx := -1
+		if v, ok := payload["keyIndex"]; ok {
+			if n, ok := parseInt(v); ok {
+				keyIdx = n
+			}
+		}
+		if keyIdx < 0 || publicKey == "" {
 			continue
 		}
 
 		key := models.AccountKey{
-			PublicKey:   publicKey,
-			Address:     address,
-			BlockHeight: evt.BlockHeight,
-		}
-
-		if v, ok := payload["keyIndex"]; ok {
-			if n, ok := parseInt(v); ok {
-				key.KeyIndex = n
-			}
+			Address:           address,
+			KeyIndex:          keyIdx,
+			PublicKey:         publicKey,
+			Revoked:           false,
+			AddedAtHeight:     evt.BlockHeight,
+			LastUpdatedHeight: evt.BlockHeight,
 		}
 
 		// Signature algorithm may be under "signingAlgorithm" or inside publicKey struct.
@@ -171,15 +208,6 @@ func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountK
 		if v, ok := payload["weight"]; ok {
 			if wgt, ok := parseWeightToInt(v); ok {
 				key.Weight = wgt
-			}
-		}
-
-		if v, ok := payload["revoked"]; ok {
-			switch vv := v.(type) {
-			case bool:
-				key.Revoked = vv
-			case string:
-				key.Revoked = strings.EqualFold(vv, "true")
 			}
 		}
 
@@ -269,6 +297,15 @@ func extractPublicKey(v interface{}) string {
 	default:
 		return ""
 	}
+}
+
+func normalizePublicKey(pk string) string {
+	pk = strings.TrimSpace(pk)
+	if pk == "" {
+		return ""
+	}
+	pk = strings.TrimPrefix(strings.ToLower(pk), "0x")
+	return pk
 }
 
 func parseInt(v interface{}) (int, bool) {

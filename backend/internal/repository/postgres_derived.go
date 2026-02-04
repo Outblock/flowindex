@@ -40,17 +40,56 @@ func (r *Repository) UpsertAccountKeys(ctx context.Context, keys []models.Accoun
 
 	batch := &pgx.Batch{}
 	for _, ak := range keys {
+		// Revocation events don't include the full public key payload in our stored JSON,
+		// so we update by (address, key_index) without touching the public key field.
+		if ak.Revoked && ak.PublicKey == "" {
+			batch.Queue(`
+				UPDATE app.account_keys
+				SET revoked = TRUE,
+					revoked_at_height = $3,
+					last_updated_height = $3,
+					updated_at = NOW()
+				WHERE address = $1 AND key_index = $2
+				  AND $3 >= last_updated_height`,
+				ak.Address, ak.KeyIndex, ak.RevokedAtHeight,
+			)
+			continue
+		}
+
+		// Add/update event
+		var revokedAt *uint64
+		if ak.RevokedAtHeight != 0 {
+			revokedAt = &ak.RevokedAtHeight
+		}
 		batch.Queue(`
-			INSERT INTO app.account_keys (public_key, address, key_index, signing_algorithm, hashing_algorithm, weight, revoked, last_updated_height)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			ON CONFLICT (public_key, address) DO UPDATE SET
-				key_index = EXCLUDED.key_index,
+			INSERT INTO app.account_keys (
+				address, key_index, public_key,
+				signing_algorithm, hashing_algorithm, weight,
+				revoked, added_at_height, revoked_at_height, last_updated_height,
+				created_at, updated_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+			ON CONFLICT (address, key_index) DO UPDATE SET
+				public_key = EXCLUDED.public_key,
 				signing_algorithm = EXCLUDED.signing_algorithm,
 				hashing_algorithm = EXCLUDED.hashing_algorithm,
 				weight = EXCLUDED.weight,
 				revoked = EXCLUDED.revoked,
-				last_updated_height = EXCLUDED.last_updated_height`,
-			ak.PublicKey, ak.Address, ak.KeyIndex, ak.SigningAlgorithm, ak.HashingAlgorithm, ak.Weight, ak.Revoked, ak.BlockHeight,
+				added_at_height = COALESCE(app.account_keys.added_at_height, EXCLUDED.added_at_height),
+				revoked_at_height = CASE WHEN EXCLUDED.revoked THEN EXCLUDED.revoked_at_height ELSE NULL END,
+				last_updated_height = EXCLUDED.last_updated_height,
+				updated_at = NOW()
+			WHERE EXCLUDED.last_updated_height >= app.account_keys.last_updated_height`,
+			ak.Address,
+			ak.KeyIndex,
+			ak.PublicKey,
+			ak.SigningAlgorithm,
+			ak.HashingAlgorithm,
+			ak.Weight,
+			ak.Revoked,
+			ak.AddedAtHeight,
+			revokedAt,
+			ak.LastUpdatedHeight,
 		)
 	}
 

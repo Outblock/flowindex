@@ -239,59 +239,97 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 func (w *Worker) ExtractAccountKeys(events []models.Event) []models.AccountKey {
 	var keys []models.AccountKey
 	for _, evt := range events {
-		// flow.AccountCreated (A.fee1619a13d78a63.AccountCreated)
-		// flow.AccountKeyAdded (A.fee1619a13d78a63.AccountKeyAdded)
-		if strings.Contains(evt.Type, "AccountCreated") || strings.Contains(evt.Type, "AccountKeyAdded") {
+		if strings.Contains(evt.Type, "AccountKeyAdded") || strings.Contains(evt.Type, "AccountKeyRemoved") {
 			var payload map[string]interface{}
 			if err := json.Unmarshal(evt.Payload, &payload); err != nil {
 				continue
 			}
 
 			address := ""
-			publicKey := ""
-
-			// Extract address (usually in 'address' field)
 			if addr, ok := payload["address"].(string); ok {
-				address = strings.TrimPrefix(addr, "0x")
+				address = normalizeAddress(addr)
+			}
+			if address == "" {
+				continue
 			}
 
-			// Extract public key
-			// AccountCreated might have a 'publicKey' field or it might be in an 'AccountKeyAdded' event immediately following.
-			// AccountKeyAdded has a 'publicKey' field or 'key' field depending on the version.
-			if pk, ok := payload["publicKey"].(string); ok {
-				publicKey = pk
-			} else if key, ok := payload["key"].(map[string]interface{}); ok {
-				// Sometimes it's a struct with 'publicKey'
-				if pk, ok := key["publicKey"].(string); ok {
-					publicKey = pk
+			if strings.Contains(evt.Type, "AccountKeyRemoved") {
+				keyIdx := -1
+				if v, ok := payload["keyIndex"]; ok {
+					if n, ok := parseInt(v); ok {
+						keyIdx = n
+					}
 				}
+				if keyIdx < 0 {
+					if v, ok := payload["publicKey"]; ok {
+						if n, ok := parseInt(v); ok {
+							keyIdx = n
+						}
+					}
+				}
+				if keyIdx < 0 {
+					continue
+				}
+				keys = append(keys, models.AccountKey{
+					Address:           address,
+					KeyIndex:          keyIdx,
+					Revoked:           true,
+					RevokedAtHeight:   evt.BlockHeight,
+					LastUpdatedHeight: evt.BlockHeight,
+				})
+				continue
 			}
 
-			if address != "" && publicKey != "" {
-				key := models.AccountKey{
-					PublicKey:     publicKey,
-					Address:       address,
-					TransactionID: evt.TransactionID,
-					BlockHeight:   evt.BlockHeight,
-					CreatedAt:     time.Now(),
+			// AccountKeyAdded
+			keyIdx := -1
+			if v, ok := payload["keyIndex"]; ok {
+				if n, ok := parseInt(v); ok {
+					keyIdx = n
 				}
+			}
+			if keyIdx < 0 {
+				continue
+			}
 
-				// Extract more granular fields if available
-				if idx, ok := payload["keyIndex"].(float64); ok {
-					key.KeyIndex = int(idx)
+			publicKey := extractPublicKey(payload["publicKey"])
+			if publicKey == "" {
+				if key, ok := payload["key"].(map[string]interface{}); ok {
+					publicKey = extractPublicKey(key["publicKey"])
 				}
-				if sa, ok := payload["signingAlgorithm"].(string); ok {
+			}
+			publicKey = normalizePublicKey(publicKey)
+			if publicKey == "" {
+				continue
+			}
+
+			key := models.AccountKey{
+				Address:           address,
+				KeyIndex:          keyIdx,
+				PublicKey:         publicKey,
+				Revoked:           false,
+				AddedAtHeight:     evt.BlockHeight,
+				LastUpdatedHeight: evt.BlockHeight,
+			}
+
+			if sa, ok := payload["signingAlgorithm"].(string); ok {
+				key.SigningAlgorithm = sa
+			} else if pkObj, ok := payload["publicKey"].(map[string]interface{}); ok {
+				if sa, ok := pkObj["signatureAlgorithm"].(string); ok {
 					key.SigningAlgorithm = sa
 				}
-				if ha, ok := payload["hashingAlgorithm"].(string); ok {
-					key.HashingAlgorithm = ha
-				}
-				if w, ok := payload["weight"].(float64); ok {
-					key.Weight = int(w)
-				}
-
-				keys = append(keys, key)
 			}
+			if ha, ok := payload["hashingAlgorithm"].(string); ok {
+				key.HashingAlgorithm = ha
+			} else if ha, ok := payload["hashAlgorithm"].(string); ok {
+				key.HashingAlgorithm = ha
+			}
+			if v, ok := payload["weight"]; ok {
+				if wgt, ok := parseWeightToInt(v); ok {
+					key.Weight = wgt
+				}
+			}
+
+			keys = append(keys, key)
 		}
 	}
 	return keys

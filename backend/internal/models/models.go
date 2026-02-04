@@ -146,16 +146,17 @@ type IndexingCheckpoint struct {
 
 // AccountKey represents the public key to address mapping
 type AccountKey struct {
-	PublicKey        string    `json:"public_key"`
-	Address          string    `json:"address"`
-	TransactionID    string    `json:"transaction_id"`
-	BlockHeight      uint64    `json:"block_height"`
-	KeyIndex         int       `json:"key_index"`
-	SigningAlgorithm string    `json:"signing_algorithm"`
-	HashingAlgorithm string    `json:"hashing_algorithm"`
-	Weight           int       `json:"weight"`
-	Revoked          bool      `json:"revoked"`
-	CreatedAt        time.Time `json:"created_at"`
+	Address          string `json:"address"`
+	KeyIndex         int    `json:"key_index"`
+	PublicKey        string `json:"public_key,omitempty"`
+	SigningAlgorithm string `json:"signing_algorithm,omitempty"`
+	HashingAlgorithm string `json:"hashing_algorithm,omitempty"`
+	Weight           int    `json:"weight,omitempty"`
+	Revoked          bool   `json:"revoked"`
+
+	AddedAtHeight     uint64 `json:"added_at_height,omitempty"`
+	RevokedAtHeight   uint64 `json:"revoked_at_height,omitempty"`
+	LastUpdatedHeight uint64 `json:"last_updated_height,omitempty"`
 }
 
 // SmartContract represents the smart_contracts table
