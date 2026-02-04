@@ -28,12 +28,27 @@ function AccountDetail() {
   const [nftHasMore, setNftHasMore] = useState(false);
   const [nftLoading, setNftLoading] = useState(false);
 
+  const normalizeAddress = (value) => {
+    if (!value) return '';
+    const lower = String(value).toLowerCase();
+    return lower.startsWith('0x') ? lower : `0x${lower}`;
+  };
+
+  const formatShort = (value, head = 8, tail = 6) => {
+    if (!value) return 'N/A';
+    const normalized = normalizeAddress(value);
+    if (normalized.length <= head + tail + 3) return normalized;
+    return `${normalized.slice(0, head)}...${normalized.slice(-tail)}`;
+  };
+
+  const normalizedAddress = normalizeAddress(address);
+
   useEffect(() => {
     const loadAccountInfo = async () => {
       try {
-        const accountRes = await api.getAccount(address);
+        const accountRes = await api.getAccount(normalizedAddress || address);
         setAccount({
-          address: accountRes.address,
+          address: normalizeAddress(accountRes.address),
           balance: accountRes.balance,
           createdAt: null,
           contracts: accountRes.contracts || [],
@@ -53,15 +68,15 @@ function AccountDetail() {
     setTxLoading(true);
     try {
       const cursor = txCursors[page] ?? '';
-      const txRes = await api.getAccountTransactions(address, cursor, 20);
+      const txRes = await api.getAccountTransactions(normalizedAddress || address, cursor, 20);
       const items = txRes?.items ?? (Array.isArray(txRes) ? txRes : []);
       const nextCursor = txRes?.next_cursor ?? '';
       const accountTxs = (items || [])
         .map(tx => ({
           ...tx,
           type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
-          payer: tx.payer_address || tx.proposer_address,
-          proposer: tx.proposer_address,
+          payer: normalizeAddress(tx.payer_address || tx.proposer_address),
+          proposer: normalizeAddress(tx.proposer_address),
           blockHeight: tx.block_height
         }));
       setTransactions(accountTxs);
@@ -79,7 +94,7 @@ function AccountDetail() {
   const loadTokenTransfers = async (cursorValue, append) => {
     setTokenLoading(true);
     try {
-      const tokenRes = await api.getAccountTokenTransfers(address, cursorValue, 20);
+      const tokenRes = await api.getAccountTokenTransfers(normalizedAddress || address, cursorValue, 20);
       const items = tokenRes?.items ?? tokenRes ?? [];
       const nextCursor = tokenRes?.next_cursor ?? '';
       setTokenTransfers(prev => (append ? [...prev, ...items] : items));
@@ -95,7 +110,7 @@ function AccountDetail() {
   const loadNFTTransfers = async (cursorValue, append) => {
     setNftLoading(true);
     try {
-      const nftRes = await api.getAccountNFTTransfers(address, cursorValue, 20);
+      const nftRes = await api.getAccountNFTTransfers(normalizedAddress || address, cursorValue, 20);
       const items = nftRes?.items ?? nftRes ?? [];
       const nextCursor = nftRes?.next_cursor ?? '';
       setNftTransfers(prev => (append ? [...prev, ...items] : items));
@@ -141,14 +156,6 @@ function AccountDetail() {
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
   };
-
-  const formatShort = (value, size = 10) => {
-    if (!value) return 'N/A';
-    if (value.length <= size + 3) return value;
-    return `${value.slice(0, size)}...`;
-  };
-
-
 
   if (loading) {
     return (
@@ -199,8 +206,8 @@ function AccountDetail() {
                 </span>
               </div>
 
-              <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 break-all">
-                {account.address}
+              <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 break-all" title={account.address}>
+                {formatShort(account.address, 12, 8)}
               </h1>
             </div>
           </div>
@@ -277,7 +284,7 @@ function AccountDetail() {
                 </h2>
                 <div className="group">
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Address</p>
-                  <p className="text-sm text-white font-mono">{account.address}</p>
+                  <p className="text-sm text-white font-mono" title={account.address}>{formatShort(account.address, 12, 8)}</p>
                 </div>
                 <div className="group">
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Created At</p>
@@ -413,14 +420,14 @@ function AccountDetail() {
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {transactions.map((tx) => {
-                        const role = tx.payer === address ? 'Payer' :
-                          tx.proposer === address ? 'Proposer' : 'Authorizer';
+                        const role = tx.payer === normalizedAddress ? 'Payer' :
+                          tx.proposer === normalizedAddress ? 'Proposer' : 'Authorizer';
                         return (
                           <tr key={tx.id} className="hover:bg-white/5 transition-colors group">
                             <td className="p-4">
-                              <Link to={`/transactions/${tx.id}`} className="text-nothing-green hover:underline font-mono">
-                                {tx.id.slice(0, 16)}...
-                              </Link>
+                            <Link to={`/transactions/${tx.id}`} className="text-nothing-green hover:underline font-mono">
+                              {formatShort(tx.id, 12, 8)}
+                            </Link>
                             </td>
                             <td className="p-4">
                               <span className="border border-white/10 px-2 py-1 rounded-sm text-zinc-300 text-[10px] uppercase">
@@ -479,7 +486,7 @@ function AccountDetail() {
                         <tr key={`${tt.transaction_id}-${tt.event_index}`} className="hover:bg-white/5 transition-colors group">
                           <td className="p-4">
                             <Link to={`/transactions/${tt.transaction_id}`} className="text-nothing-green hover:underline font-mono">
-                              {formatShort(tt.transaction_id, 16)}
+                              {formatShort(tt.transaction_id, 12, 8)}
                             </Link>
                           </td>
                           <td className="p-4">
@@ -488,12 +495,12 @@ function AccountDetail() {
                             </Link>
                           </td>
                           <td className="p-4 font-mono text-zinc-300">
-                            {formatShort(tt.token_contract_address, 12)}
+                            {formatShort(tt.token_contract_address, 8, 6)}
                           </td>
                           <td className="p-4">
                             {tt.from_address ? (
-                              <Link to={`/accounts/${tt.from_address}`} className="text-zinc-300 hover:text-white font-mono">
-                                {formatShort(tt.from_address, 10)}
+                              <Link to={`/accounts/${normalizeAddress(tt.from_address)}`} className="text-zinc-300 hover:text-white font-mono">
+                                {formatShort(tt.from_address, 8, 6)}
                               </Link>
                             ) : (
                               <span className="text-zinc-600">N/A</span>
@@ -501,8 +508,8 @@ function AccountDetail() {
                           </td>
                           <td className="p-4">
                             {tt.to_address ? (
-                              <Link to={`/accounts/${tt.to_address}`} className="text-zinc-300 hover:text-white font-mono">
-                                {formatShort(tt.to_address, 10)}
+                              <Link to={`/accounts/${normalizeAddress(tt.to_address)}`} className="text-zinc-300 hover:text-white font-mono">
+                                {formatShort(tt.to_address, 8, 6)}
                               </Link>
                             ) : (
                               <span className="text-zinc-600">N/A</span>
@@ -556,7 +563,7 @@ function AccountDetail() {
                         <tr key={`${tt.transaction_id}-${tt.event_index}`} className="hover:bg-white/5 transition-colors group">
                           <td className="p-4">
                             <Link to={`/transactions/${tt.transaction_id}`} className="text-nothing-green hover:underline font-mono">
-                              {formatShort(tt.transaction_id, 16)}
+                              {formatShort(tt.transaction_id, 12, 8)}
                             </Link>
                           </td>
                           <td className="p-4">
@@ -565,12 +572,12 @@ function AccountDetail() {
                             </Link>
                           </td>
                           <td className="p-4 font-mono text-zinc-300">
-                            {formatShort(tt.token_contract_address, 12)}
+                            {formatShort(tt.token_contract_address, 8, 6)}
                           </td>
                           <td className="p-4">
                             {tt.from_address ? (
-                              <Link to={`/accounts/${tt.from_address}`} className="text-zinc-300 hover:text-white font-mono">
-                                {formatShort(tt.from_address, 10)}
+                              <Link to={`/accounts/${normalizeAddress(tt.from_address)}`} className="text-zinc-300 hover:text-white font-mono">
+                                {formatShort(tt.from_address, 8, 6)}
                               </Link>
                             ) : (
                               <span className="text-zinc-600">N/A</span>
@@ -578,8 +585,8 @@ function AccountDetail() {
                           </td>
                           <td className="p-4">
                             {tt.to_address ? (
-                              <Link to={`/accounts/${tt.to_address}`} className="text-zinc-300 hover:text-white font-mono">
-                                {formatShort(tt.to_address, 10)}
+                              <Link to={`/accounts/${normalizeAddress(tt.to_address)}`} className="text-zinc-300 hover:text-white font-mono">
+                                {formatShort(tt.to_address, 8, 6)}
                               </Link>
                             ) : (
                               <span className="text-zinc-600">N/A</span>

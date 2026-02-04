@@ -37,6 +37,18 @@ function Home() {
   const { isConnected, lastMessage } = useWebSocket();
   const nowTick = useTimeTicker(20000);
 
+  const normalizeHex = (value) => {
+    if (!value) return '';
+    const lower = String(value).toLowerCase();
+    return lower.startsWith('0x') ? lower : `0x${lower}`;
+  };
+
+  const formatMiddle = (value, head = 12, tail = 8) => {
+    if (!value) return '';
+    if (value.length <= head + tail + 3) return value;
+    return `${value.slice(0, head)}...${value.slice(-tail)}`;
+  };
+
   // Load Blocks for Page
   const loadBlocks = async (page) => {
     try {
@@ -444,6 +456,8 @@ function Home() {
                   const isNew = newBlockIds.has(block.height);
                   const blockTimeRelative = formatRelativeTime(block.timestamp, nowTick);
                   const blockTimeAbsolute = formatAbsoluteTime(block.timestamp);
+                  const blockIdFull = normalizeHex(block.id || '');
+                  const blockIdShort = formatMiddle(blockIdFull, 12, 8);
                   return (
                     <motion.div
                       layout
@@ -464,8 +478,11 @@ function Home() {
                         <div className="flex items-center justify-between h-full">
                           <div className="flex flex-col">
                             <span className="text-xs text-nothing-green font-mono">#{block.height.toLocaleString()}</span>
-                            <span className="text-[10px] text-gray-500 font-mono hidden sm:inline-block">
-                              Id: {block.id?.slice(0, 12)}...
+                            <span
+                              className="text-[10px] text-gray-500 font-mono hidden sm:inline-block"
+                              title={blockIdFull || ''}
+                            >
+                              Id: {blockIdShort || 'N/A'}
                             </span>
                           </div>
                           <div className="flex flex-col items-end">
@@ -517,6 +534,8 @@ function Home() {
                   const txTimeSource = tx.timestamp || tx.created_at || tx.block_timestamp;
                   const txTimeRelative = formatRelativeTime(txTimeSource, nowTick);
                   const txTimeAbsolute = formatAbsoluteTime(txTimeSource);
+                  const txIdFull = normalizeHex(tx.id || '');
+                  const txIdShort = formatMiddle(txIdFull, 12, 8);
 
                   // Helper to determine Transaction Type & Details
                   const getTxMetadata = (tx) => {
@@ -571,8 +590,11 @@ function Home() {
                         {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-white animate-ping" />}
                         <div className="flex items-center justify-between h-full">
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs text-gray-400 font-mono truncate w-40 sm:w-48">
-                              {tx.id}
+                            <span
+                              className="text-xs text-gray-400 font-mono truncate w-52 sm:w-64"
+                              title={txIdFull || ''}
+                            >
+                              {txIdShort || tx.id}
                             </span>
                             <div className="flex items-center space-x-2">
                               <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${txType === 'Transfer' ? 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5' :
