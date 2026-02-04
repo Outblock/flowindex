@@ -340,17 +340,18 @@ function Home() {
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                Total TXs
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-gray-400 uppercase tracking-widest">Total TXs</p>
                 {!isHistoryComplete && (
                   <span
-                    className="text-[9px] uppercase px-1.5 py-0.5 border border-yellow-500/30 text-yellow-400 bg-yellow-500/10 rounded-sm"
+                    className="flex items-center space-x-2 px-2 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm"
                     title="Partial data: history backfill is still in progress."
                   >
-                    Partial
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                    <span className="text-[9px] uppercase tracking-wider text-yellow-400">Partial</span>
                   </span>
                 )}
-              </p>
+              </div>
               <p className="text-3xl font-bold font-mono text-white">
                 <NumberFlow
                   value={statusRaw?.total_transactions || 0}
@@ -404,17 +405,18 @@ function Home() {
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                Total Addresses
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-gray-400 uppercase tracking-widest">Total Addresses</p>
                 {!isHistoryComplete && (
                   <span
-                    className="text-[9px] uppercase px-1.5 py-0.5 border border-yellow-500/30 text-yellow-400 bg-yellow-500/10 rounded-sm"
+                    className="flex items-center space-x-2 px-2 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm"
                     title="Partial data: history backfill is still in progress."
                   >
-                    Partial
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                    <span className="text-[9px] uppercase tracking-wider text-yellow-400">Partial</span>
                   </span>
                 )}
-              </p>
+              </div>
               <p className="text-3xl font-bold font-mono text-white">
                 <NumberFlow
                   value={statusRaw?.total_addresses || 0}
