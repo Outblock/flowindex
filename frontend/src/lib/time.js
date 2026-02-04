@@ -1,9 +1,9 @@
-export function formatRelativeTime(value) {
+export function formatRelativeTime(value, nowOverride) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
 
-  const now = Date.now();
+  const now = typeof nowOverride === 'number' ? nowOverride : Date.now();
   const diffMs = now - date.getTime();
   const past = diffMs >= 0;
   const absSec = Math.floor(Math.abs(diffMs) / 1000);
@@ -41,4 +41,3 @@ export function formatAbsoluteTime(value) {
     timeZoneName: 'short'
   }).format(date);
 }
-

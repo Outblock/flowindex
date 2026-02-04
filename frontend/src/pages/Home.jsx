@@ -12,6 +12,7 @@ import { NetworkStats } from '../components/NetworkStats';
 import { Pagination } from '../components/Pagination';
 import { DailyStatsChart } from '../components/DailyStatsChart';
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
+import { useTimeTicker } from '../hooks/useTimeTicker';
 
 function Home() {
   const [blocks, setBlocks] = useState([]);
@@ -38,6 +39,7 @@ function Home() {
   // Removed unused refs and state
 
   const { isConnected, lastMessage } = useWebSocket();
+  const nowTick = useTimeTicker(20000);
 
   // Load Blocks for Page
   const loadBlocks = async (page) => {
@@ -515,7 +517,7 @@ function Home() {
               <AnimatePresence mode='popLayout'>
                 {(blocks || []).map((block) => {
                   const isNew = newBlockIds.has(block.height);
-                  const blockTimeRelative = formatRelativeTime(block.timestamp);
+                  const blockTimeRelative = formatRelativeTime(block.timestamp, nowTick);
                   const blockTimeAbsolute = formatAbsoluteTime(block.timestamp);
                   return (
                     <motion.div
@@ -586,7 +588,7 @@ function Home() {
                   const isSealed = tx.status === 'SEALED';
                   const isError = !isSealed && tx.status !== 'PENDING'; // Assume anything else is error for list
                   const txTimeSource = tx.timestamp || tx.created_at || tx.block_timestamp;
-                  const txTimeRelative = formatRelativeTime(txTimeSource);
+                  const txTimeRelative = formatRelativeTime(txTimeSource, nowTick);
                   const txTimeAbsolute = formatAbsoluteTime(txTimeSource);
 
                   // Helper to determine Transaction Type & Details

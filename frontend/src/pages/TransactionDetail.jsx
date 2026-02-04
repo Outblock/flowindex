@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
+import { useTimeTicker } from '../hooks/useTimeTicker';
 
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
@@ -16,6 +17,7 @@ function TransactionDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('script');
+  const nowTick = useTimeTicker(20000);
 
   useEffect(() => {
     const loadTransaction = async () => {
@@ -114,7 +116,7 @@ function TransactionDetail() {
 
   const txTimeSource = transaction.timestamp || transaction.created_at || transaction.block_timestamp;
   const txTimeAbsolute = formatAbsoluteTime(txTimeSource);
-  const txTimeRelative = formatRelativeTime(txTimeSource);
+  const txTimeRelative = formatRelativeTime(txTimeSource, nowTick);
 
 
 

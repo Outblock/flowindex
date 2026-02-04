@@ -3,12 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import { ArrowLeft, Box, Clock, Hash, Activity, ArrowRightLeft, User, Coins, Image as ImageIcon } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
+import { useTimeTicker } from '../hooks/useTimeTicker';
 
 function BlockDetail() {
   const { height } = useParams();
   const [block, setBlock] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const nowTick = useTimeTicker(20000);
 
   useEffect(() => {
     const loadBlock = async () => {
@@ -64,7 +66,7 @@ function BlockDetail() {
   }
 
   const blockTimeAbsolute = formatAbsoluteTime(block.timestamp);
-  const blockTimeRelative = formatRelativeTime(block.timestamp);
+  const blockTimeRelative = formatRelativeTime(block.timestamp, nowTick);
 
   return (
     <div className="min-h-screen bg-black text-zinc-300 font-mono selection:bg-nothing-green selection:text-black">

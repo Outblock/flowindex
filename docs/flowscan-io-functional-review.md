@@ -29,7 +29,7 @@
 - Scheduled 页面
 
 ## 首页
-![FlowScan Home](../output/playwright/flowscan-home.png)
+![FlowScan Home](./assets/flowscan/flowscan-home.png)
 
 可见功能：
 - Flow Pulse：价格与历史走势摘要（可见加载提示/价格卡片）。
@@ -40,7 +40,7 @@
 - 侧边栏导航与全局搜索。
 
 ## Transactions 列表
-![FlowScan Transactions](../output/playwright/flowscan-transactions.png)
+![FlowScan Transactions](./assets/flowscan/flowscan-transactions.png)
 
 可见功能：
 - 标题区：Recent Transactions + Filter 入口。
@@ -48,7 +48,7 @@
 - 列表项字段：区块高度与时间戳、交易类型标签（FT / NFT / EVM / Flow）、交易状态（SEALED / CODE_ERROR / CANNOT_PAY 等）、交易哈希（可点击）、多签提示（Multisig）、关联合约/Token 入口（如 NFT/FT 合约名）。
 
 ## Transaction 详情
-![FlowScan Transaction Detail](../output/playwright/flowscan-tx-detail.png)
+![FlowScan Transaction Detail](./assets/flowscan/flowscan-tx-detail.png)
 
 可见功能：
 - 交易基础信息卡片（类型、状态、交易哈希、网络标签）。
@@ -57,7 +57,7 @@
 - 失败交易会显示错误原因。
 
 ## Blocks 列表
-![FlowScan Blocks](../output/playwright/flowscan-blocks.png)
+![FlowScan Blocks](./assets/flowscan/flowscan-blocks.png)
 
 可见功能：
 - 标题区：Recent Blocks + Filter 入口。
@@ -65,7 +65,7 @@
 - 列表项字段：区块高度与时间戳、Flow / Empty Flow block 标记、交易数量提示（Number of transactions）、Gas 消耗提示（Gas: N）、进入详情链接。
 
 ## Block 详情
-![FlowScan Block Detail](../output/playwright/flowscan-block-detail.png)
+![FlowScan Block Detail](./assets/flowscan/flowscan-block-detail.png)
 
 可见功能：
 - 区块头部信息（高度、时间、ID、是否空块等）。
@@ -73,7 +73,7 @@
 - 关联集合与事件信息入口。
 
 ## Accounts 列表
-![FlowScan Accounts](../output/playwright/flowscan-accounts.png)
+![FlowScan Accounts](./assets/flowscan/flowscan-accounts.png)
 
 可见功能：
 - 标题区：Top Accounts。
@@ -81,49 +81,49 @@
 - 列表项字段：账户地址、余额（Balance）、创建时间（Account created at）、创建交易（Created in: tx hash）、标签（Big Fish / Staker / Delegator）。
 
 ## Contracts 页面
-![FlowScan Contracts](../output/playwright/flowscan-contracts.png)
+![FlowScan Contracts](./assets/flowscan/flowscan-contracts.png)
 
 可见功能：
 - 合约目录视图（可跳转至合约详情）。
 - 合约名称 / 地址等基础信息展示。
 
 ## Nodes 页面
-![FlowScan Nodes](../output/playwright/flowscan-nodes.png)
+![FlowScan Nodes](./assets/flowscan/flowscan-nodes.png)
 
 可见功能：
 - 节点列表与状态信息。
 - 节点角色/类型分类视图。
 
 ## Analytics 页面
-![FlowScan Analytics](../output/playwright/flowscan-analytics.png)
+![FlowScan Analytics](./assets/flowscan/flowscan-analytics.png)
 
 可见功能：
 - 多图表统计面板。
 - 时间区间维度切换。
 
 ## Tokenomics 页面
-![FlowScan Tokenomics](../output/playwright/flowscan-tokenomics.png)
+![FlowScan Tokenomics](./assets/flowscan/flowscan-tokenomics.png)
 
 可见功能：
 - 供应/流通等宏观指标卡片。
 - 代币经济学图表与趋势。
 
 ## NFT 页面
-![FlowScan NFT](../output/playwright/flowscan-nft.png)
+![FlowScan NFT](./assets/flowscan/flowscan-nft.png)
 
 可见功能：
 - NFT 集合列表（可进入集合详情）。
 - 集合相关指标展示入口（如 volume/floor 等）。
 
 ## FT 页面
-![FlowScan FT](../output/playwright/flowscan-ft.png)
+![FlowScan FT](./assets/flowscan/flowscan-ft.png)
 
 可见功能：
 - FT 代币列表与详情入口。
 - 代币基本信息与统计入口。
 
 ## Scheduled 页面
-![FlowScan Scheduled](../output/playwright/flowscan-scheduled.png)
+![FlowScan Scheduled](./assets/flowscan/flowscan-scheduled.png)
 
 可见功能：
 - Scheduled Transactions 列表。
