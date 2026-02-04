@@ -6,7 +6,7 @@ function Footer() {
       <div className="container mx-auto px-4 py-6 flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-zinc-500">
         <div className="flex items-center gap-2 uppercase tracking-widest">
           <span>Built by</span>
-          <span className="text-white">ZenaBot</span>
+          <span className="text-white">Flow Community</span>
         </div>
         <a
           href="https://github.com/zenabot27/flowscan-clone"
