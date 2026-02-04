@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Box, Activity, TrendingUp, Database, ArrowRightLeft } from 'lucide-react';
+import { Box, Activity, TrendingUp, Database, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../api';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -21,10 +21,6 @@ function Home() {
   const [status, setStatus] = useState(null);
   const [statusRaw, setStatusRaw] = useState(null);
   const [networkStats, setNetworkStats] = useState(null); // New state
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const navigate = useNavigate();
 
   // Pagination State
   const [blockPage, setBlockPage] = useState(1);
@@ -166,41 +162,6 @@ function Home() {
     loadInitialData();
   }, []);
 
-  // ... (Helper functions remain same)
-
-  // Search Logic
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    setSearching(true);
-    const query = searchQuery.trim();
-
-    // Simple heuristic routing
-    // 1. Block Height (numeric)
-    if (/^\d+$/.test(query)) {
-      navigate(`/blocks/${query}`);
-    }
-    // 2. Transaction ID (64 chars hex)
-    else if (/^[a-fA-F0-9]{64}$/.test(query)) {
-      navigate(`/transactions/${query}`);
-    }
-    // 3. Address (18 chars with 0x) - Flow addresses are usually 16 hex chars (8 bytes) = 18 with 0x
-    else if (/^0x[a-fA-F0-9]{16}$/.test(query)) {
-      navigate(`/accounts/${query}`);
-    }
-    // Fallback based on prefix
-    else if (query.startsWith('0x')) {
-      navigate(`/accounts/${query}`);
-    }
-    else {
-      // Default to transaction lookup for other hashes
-      navigate(`/transactions/${query}`);
-    }
-
-    setSearching(false);
-  };
-
   const latestHeight = statusRaw?.latest_height || 0;
   const minHeight = statusRaw?.min_height || 0;
   const maxHeight = statusRaw?.max_height || 0;
@@ -210,70 +171,6 @@ function Home() {
 
   return (
     <div className="min-h-screen bg-nothing-black text-nothing-white font-mono selection:bg-nothing-green selection:text-black">
-      {/* Sticky Header with Search */}
-      <div className="sticky top-0 z-50 bg-nothing-dark/95 backdrop-blur-md border-b border-white/5 py-4">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
-
-          {/* Top Row on Mobile: Logo + Status */}
-          <div className="w-full md:w-auto flex items-center justify-between md:justify-start">
-            <Link to="/" className="flex items-center space-x-2 group">
-              <Box className="h-6 w-6 text-nothing-green group-hover:rotate-12 transition-transform" />
-              <div className="flex flex-col">
-                <span className="text-xl font-black tracking-tighter text-white uppercase italic leading-none">
-                  Flow<span className="text-nothing-green">Scan</span>
-                </span>
-              </div>
-            </Link>
-
-            {/* Mobile Status Indicator (visible only on small screens here if we want, but let's keep it next to logo or separate?) 
-                Actually, let's keep status on the right on desktop, but maybe next to logo on mobile? 
-                Let's stick to the plan: Logo | Status on top row for mobile.
-            */}
-            <div className="flex md:hidden items-center space-x-2 px-3 py-1 border rounded-sm border-white/10 bg-white/5">
-              <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-nothing-green animate-pulse' : 'bg-gray-500'}`}></div>
-              <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-nothing-green' : 'text-gray-500'}`}>
-                {isConnected ? 'Online' : 'Offline'}
-              </span>
-            </div>
-          </div>
-
-          {/* Search Bar */}
-          <motion.form
-            onSubmit={handleSearch}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full md:flex-1 md:max-w-xl md:mx-8 relative group"
-          >
-            <div className="absolute inset-0 bg-nothing-green/5 blur-md group-hover:bg-nothing-green/10 transition-colors duration-500" />
-            <div className="relative flex items-center bg-black/50 border border-white/10 p-1 group-focus-within:border-nothing-green transition-all duration-300">
-              <Search className="h-4 w-4 ml-3 text-gray-500 group-focus-within:text-nothing-green" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="SEARCH ADDRESS / TX / BLOCK..."
-                className="flex-1 bg-transparent border-none focus:ring-0 text-xs py-2 px-3 text-white placeholder:text-gray-600 uppercase tracking-widest outline-none w-full"
-              />
-              <button
-                type="submit"
-                disabled={searching}
-                className="bg-nothing-green text-black text-[10px] font-bold uppercase tracking-widest px-4 py-2 hover:bg-white transition-colors duration-300 disabled:opacity-50"
-              >
-                {searching ? '...' : 'GO'}
-              </button>
-            </div>
-          </motion.form>
-
-          {/* Desktop Status Indicator */}
-          <div className={`hidden md:flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-nothing-green/10 border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-nothing-green animate-pulse' : 'bg-gray-500'}`}></div>
-            <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-nothing-green' : 'text-gray-500'}`}>
-              {isConnected ? 'Online' : 'Offline'}
-            </span>
-          </div>
-        </div>
-      </div>
-
       <div className="border-b border-white/5 bg-nothing-dark/50">
         <div className="container mx-auto px-4 py-12 space-y-8">
           {/* Branding / Hero Text */}
