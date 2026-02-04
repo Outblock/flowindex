@@ -15,6 +15,7 @@ import (
 	"flowscan-clone/internal/api"
 	"flowscan-clone/internal/flow"
 	"flowscan-clone/internal/ingester"
+	"flowscan-clone/internal/market"
 	"flowscan-clone/internal/repository"
 )
 
@@ -282,6 +283,57 @@ func main() {
 		}()
 	} else {
 		log.Println("Daily Stats Aggregator is DISABLED (ENABLE_DAILY_STATS=false)")
+	}
+
+	// Start Market Price Poller (Runs every N mins)
+	enablePriceFeed := os.Getenv("ENABLE_PRICE_FEED") != "false"
+	if enablePriceFeed {
+		refreshMin := getEnvInt("PRICE_REFRESH_MIN", 10)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			fetchAndStore := func() {
+				ctxFetch, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
+
+				quote, err := market.FetchFlowPrice(ctxFetch)
+				if err != nil {
+					log.Printf("Failed to fetch Flow price: %v", err)
+					return
+				}
+
+				if err := repo.InsertMarketPrice(ctxFetch, repository.MarketPrice{
+					Asset:          quote.Asset,
+					Currency:       quote.Currency,
+					Price:          quote.Price,
+					PriceChange24h: quote.PriceChange24h,
+					MarketCap:      quote.MarketCap,
+					Source:         quote.Source,
+					AsOf:           quote.AsOf,
+				}); err != nil {
+					log.Printf("Failed to store Flow price: %v", err)
+				}
+			}
+
+			// Run immediately
+			fetchAndStore()
+
+			ticker := time.NewTicker(time.Duration(refreshMin) * time.Minute)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					fetchAndStore()
+				}
+			}
+		}()
+	} else {
+		log.Println("Market Price Poller is DISABLED (ENABLE_PRICE_FEED=false)")
 	}
 
 	// Start Lookup Repair Job (optional)

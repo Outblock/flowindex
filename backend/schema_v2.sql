@@ -401,4 +401,18 @@ CREATE TABLE IF NOT EXISTS app.daily_stats (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS app.market_prices (
+    id BIGSERIAL PRIMARY KEY,
+    asset TEXT NOT NULL,
+    currency TEXT NOT NULL,
+    price DOUBLE PRECISION NOT NULL,
+    price_change_24h DOUBLE PRECISION,
+    market_cap DOUBLE PRECISION,
+    source TEXT,
+    as_of TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_market_prices_asset_currency_time
+    ON app.market_prices (asset, currency, as_of DESC);
+
 COMMIT;

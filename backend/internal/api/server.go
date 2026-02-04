@@ -975,11 +975,12 @@ func (s *Server) handleGetNetworkStats(w http.ResponseWriter, r *http.Request) {
 
 	// Cache for 5 minutes
 	if time.Now().Unix()-lastStatsUpdate > 300 {
-		// Update Price (CoinGecko)
-		price, change, mcap := fetchFlowPrice()
-		cachedStats.Price = price
-		cachedStats.PriceChange24h = change
-		cachedStats.MarketCap = mcap
+		// Update Price (from DB, avoids frequent external calls)
+		if quote, err := s.repo.GetLatestMarketPrice(r.Context(), "flow", "usd"); err == nil {
+			cachedStats.Price = quote.Price
+			cachedStats.PriceChange24h = quote.PriceChange24h
+			cachedStats.MarketCap = quote.MarketCap
+		}
 
 		// Mock/Calculation for Epoch (Real implementation would query chain)
 		// Assuming ~1 week epochs, arbitrary start
@@ -993,29 +994,4 @@ func (s *Server) handleGetNetworkStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(cachedStats)
-}
-
-func fetchFlowPrice() (float64, float64, float64) {
-	resp, err := http.Get("https://api.coingecko.com/api/v3/simple/price?ids=flow&vs_currencies=usd&include_24hr_change=true&include_market_cap=true")
-	if err != nil {
-		log.Printf("Error fetching flow price: %v", err)
-		return 0, 0, 0
-	}
-	defer resp.Body.Close()
-
-	var result map[string]struct {
-		USD          float64 `json:"usd"`
-		USDChange24h float64 `json:"usd_24h_change"`
-		USDMarketCap float64 `json:"usd_market_cap"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("Error decoding price response: %v", err)
-		return 0, 0, 0
-	}
-
-	if data, ok := result["flow"]; ok {
-		return data.USD, data.USDChange24h, data.USDMarketCap
-	}
-	return 0, 0, 0
 }
