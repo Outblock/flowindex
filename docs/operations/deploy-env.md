@@ -58,3 +58,20 @@ These are used by the **frontend** container to proxy `/api` and `/ws` to backen
   - Railway: `http://backend.railway.internal:8080`
   - GCP: set to your internal LB / service URL
 - `BACKEND_WS` (default: same as `BACKEND_API`)
+
+## Developer Portal (Docs Service)
+
+These are used by the **docs** service (`devportal/`) to proxy `/flowscan-api/*` to backend (so Scalar can "Try it" without CORS).
+
+- `BACKEND_API_URL` (required)
+  - Railway: `http://backend.railway.internal:8080`
+  - Local Docker: `http://backend:8080`
+  - GCP: set to your internal LB / service URL
+- `PORT` (default: `8080`)
+
+## Frontend Docs Link (optional)
+
+The frontend reads `DOCS_URL` at runtime from `/env.js` (rendered by `frontend/entrypoint.sh`). This avoids a rebuild when the docs domain changes.
+
+- `DOCS_URL` (optional)
+  - Example: `https://<docs-domain>.up.railway.app`

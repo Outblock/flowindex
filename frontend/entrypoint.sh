@@ -34,6 +34,13 @@ fi
 echo "Backend API: $BACKEND_API"
 echo "Backend WS:  $BACKEND_WS"
 
+# Generate runtime config for the SPA (safe, public values only).
+# This lets us set DOCS_URL without rebuilding the frontend image.
+if [ -f /usr/share/nginx/html/env.template.js ]; then
+    envsubst '$DOCS_URL' < /usr/share/nginx/html/env.template.js > /usr/share/nginx/html/env.js
+    echo "Docs URL:    ${DOCS_URL:-}"
+fi
+
 # Execute the original Nginx entrypoint
 # This will handle envsubst for templates using the DNS_RESOLVER variable we just set
 exec /docker-entrypoint.sh "$@"

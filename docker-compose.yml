@@ -52,8 +52,21 @@ services:
     environment:
       - BACKEND_API=http://backend:8080
       - BACKEND_WS=http://backend:8080
+      - DOCS_URL=http://localhost:3000
     ports:
       - "5173:8080" # Nginx listens on 8080 inside the container
+    depends_on:
+      - backend
+
+  docs:
+    build:
+      context: devportal
+      dockerfile: Dockerfile
+    environment:
+      - PORT=8080
+      - BACKEND_API_URL=http://backend:8080
+    ports:
+      - "3000:8080"
     depends_on:
       - backend
 

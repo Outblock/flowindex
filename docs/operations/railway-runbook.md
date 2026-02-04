@@ -7,10 +7,15 @@
 2. Deploy (preferred: Railway CLI from repo root):
    - `railway up --service backend --detach`
    - `railway up --service frontend --detach`
-3. Verify:
+   - `railway up --service docs --detach`
+3. Generate a domain for the docs service and wire it into the frontend footer:
+   - `railway domain --service docs --port 8080`
+   - `railway variable set --service frontend DOCS_URL=https://<docs-domain>`
+   - `railway service redeploy --service frontend --yes`
+4. Verify:
    - `GET /health` returns `{"status":"ok"}`
    - `GET /status` shows `indexed_height` moving upward
-4. Let it run 10-30 minutes. Confirm no error loops.
+5. Let it run 10-30 minutes. Confirm no error loops.
 
 ## 2) Enable Derived Workers (Incrementally)
 Turn on in this order, one at a time:

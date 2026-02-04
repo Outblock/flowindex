@@ -17,6 +17,7 @@ The UI expects the backend on the same origin by default (`/api`, `/ws`).
 | --- | --- | --- |
 | `VITE_API_URL` | `/api` | Base URL for REST API (example: `http://localhost:8080/api`) |
 | `VITE_WS_URL` | derived from `VITE_API_URL` or window host | Base URL for WebSocket (example: `ws://localhost:8080`) |
+| `VITE_DOCS_URL` | unset | Docs portal base URL (used as a fallback in dev builds) |
 
 ## Docker / Railway
 The frontend container uses Nginx to proxy `/api` and `/ws` to the backend. These env vars are used by `frontend/entrypoint.sh` and `frontend/nginx.conf`:
@@ -25,6 +26,6 @@ The frontend container uses Nginx to proxy `/api` and `/ws` to the backend. Thes
 | --- | --- | --- |
 | `BACKEND_API` | auto-detected | Backend REST base (example: `http://backend.railway.internal:8080`) |
 | `BACKEND_WS` | `BACKEND_API` | Backend WS base |
+| `DOCS_URL` | unset | Public docs portal base URL (example: `https://<docs-domain>.up.railway.app`) |
 
 If `BACKEND_API` is not set, the entrypoint will try to detect Railway and fallback to `http://backend:8080`.
-

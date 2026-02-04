@@ -22,6 +22,7 @@ A Flow blockchain explorer (similar to Etherscan / Blockscout) focused on high-t
 ## Project Structure
 - `backend/`: Go indexer + API
 - `frontend/`: React (Vite) UI
+- `devportal/`: Developer portal (Fumadocs + Scalar API reference)
 - `docker-compose.yml`: local one-command stack
 
 ## Local Development
@@ -37,6 +38,7 @@ docker compose up -d --build
 ```
 - Backend: `http://localhost:8080`
 - Frontend: `http://localhost:5173`
+- Docs: `http://localhost:3000`
 
 ### Run Backend (dev)
 ```bash

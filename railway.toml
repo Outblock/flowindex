@@ -31,3 +31,14 @@ RAILWAY_DOCKERFILE_PATH = "frontend/Dockerfile"
 
 [services.buildArgs]
 VITE_API_URL = "/api"
+
+[[services]]
+name = "docs"
+root = "devportal"
+dockerfilePath = "Dockerfile"
+
+[services.env]
+PORT = "8080"
+# Used by devportal/next.config.mjs to proxy /flowscan-api/* to the backend service.
+BACKEND_API_URL = "http://backend.railway.internal:8080"
+RAILWAY_DOCKERFILE_PATH = "devportal/Dockerfile"

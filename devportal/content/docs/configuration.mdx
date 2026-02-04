@@ -1,0 +1,40 @@
+---
+title: Configuration
+description: Environment variables and service wiring.
+---
+
+## Backend (Indexer + API)
+
+Required:
+- `DB_URL`
+- `FLOW_ACCESS_NODE` or `FLOW_ACCESS_NODES`
+- `PORT`
+- `START_BLOCK`
+
+Recommended:
+- `FLOW_HISTORIC_ACCESS_NODES`  
+  Used by the history ingester to cross spork roots (include an archive node).
+
+Performance:
+- `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS`
+- `DB_SYNCHRONOUS_COMMIT=off` (higher throughput; small durability tradeoff)
+- `FLOW_RPC_RPS_PER_NODE`, `FLOW_RPC_BURST_PER_NODE`
+
+## Frontend (Web UI)
+
+The UI is a static Vite build served by nginx. It proxies:
+- `/api/*` -> backend HTTP
+- `/ws` -> backend WebSocket
+
+## Developer Portal (This Site)
+
+The portal proxies the backend under:
+- `/flowscan-api/*` -> backend HTTP
+
+Set:
+- `BACKEND_API_URL` (server-side rewrite target)
+
+Optional:
+- `NEXT_PUBLIC_OPENAPI_URL` (defaults to `/flowscan-api/openapi.yaml`)
+- `NEXT_PUBLIC_API_BASE_URL` (defaults to `/flowscan-api`)
+
