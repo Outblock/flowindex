@@ -16,7 +16,24 @@ const generateSparkline = (currentPrice) => {
 };
 
 export function FlowPriceChart({ data }) {
-    if (!data) return null;
+    if (!data) {
+        return (
+            <div className="bg-nothing-dark border border-white/10 p-6 h-full flex flex-col justify-between animate-pulse">
+                <div className="flex justify-between items-start mb-4">
+                    <div className="space-y-2">
+                        <div className="h-4 w-24 bg-white/5 rounded-sm"></div>
+                        <div className="h-8 w-32 bg-white/5 rounded-sm"></div>
+                    </div>
+                    <div className="h-6 w-16 bg-white/5 rounded-sm"></div>
+                </div>
+                <div className="h-16 w-full bg-white/5 rounded-sm mt-auto"></div>
+                <div className="mt-4 pt-4 border-t border-white/5 flex justify-between">
+                    <div className="h-3 w-16 bg-white/5 rounded-sm"></div>
+                    <div className="h-3 w-16 bg-white/5 rounded-sm"></div>
+                </div>
+            </div>
+        );
+    }
 
     const { price, price_change_24h, market_cap } = data;
     const isPositive = price_change_24h >= 0;

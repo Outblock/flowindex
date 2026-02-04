@@ -1,6 +1,22 @@
 import { Users, Lock, Server } from 'lucide-react';
 
 export function NetworkStats({ totalStaked, activeNodes }) {
+    if (!totalStaked) {
+        return (
+            <div className="grid grid-cols-2 gap-4 h-full">
+                {[1, 2].map((i) => (
+                    <div key={i} className="bg-nothing-dark border border-white/10 p-4 flex flex-col justify-between animate-pulse">
+                        <div className="p-1.5 w-8 h-8 bg-white/5 rounded-sm mb-4"></div>
+                        <div className="space-y-2">
+                            <div className="h-3 w-16 bg-white/5 rounded-sm"></div>
+                            <div className="h-6 w-24 bg-white/5 rounded-sm"></div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
     const stats = [
         {
             label: "Total Staked",

@@ -213,10 +213,10 @@ function Home() {
     const netStatsTimer = setInterval(refreshNetworkStats, 300000);
 
     return () => {
-      active = false;
       clearInterval(statusTimer);
       clearInterval(netStatsTimer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const latestHeight = statusRaw?.latest_height || 0;
@@ -283,27 +283,25 @@ function Home() {
           </Link>
 
           {/* New Premium Stats Grid (Flow Pulse) */}
-          {networkStats && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="grid grid-cols-1 md:grid-cols-3 gap-6"
-            >
-              {/* 1. Price Chart */}
-              <FlowPriceChart data={networkStats} />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+          >
+            {/* 1. Price Chart */}
+            <FlowPriceChart data={networkStats} />
 
-              {/* 2. Epoch Progress */}
-              <EpochProgress
-                epoch={networkStats.epoch}
-                progress={networkStats.epoch_progress}
-                updatedAt={networkStats.updated_at}
-              />
+            {/* 2. Epoch Progress */}
+            <EpochProgress
+              epoch={networkStats?.epoch}
+              progress={networkStats?.epoch_progress}
+              updatedAt={networkStats?.updated_at}
+            />
 
-              {/* 3. Network Stats Grid */}
-              <NetworkStats totalStaked={networkStats.total_staked} activeNodes={networkStats.active_nodes} />
-            </motion.div>
-          )}
+            {/* 3. Network Stats Grid */}
+            <NetworkStats totalStaked={networkStats?.total_staked} activeNodes={networkStats?.active_nodes} />
+          </motion.div>
         </div>
       </div>
 
@@ -338,20 +336,18 @@ function Home() {
               <div className="p-2 border border-white/10 rounded-sm">
                 <Activity className="h-5 w-5 text-white" />
               </div>
+              {!isHistoryComplete && (
+                <div
+                  className="flex items-center space-x-2 px-3 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm cursor-help"
+                  title="Data indexing is in progress. Historical data may be incomplete."
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                  <span className="text-[10px] uppercase tracking-wider text-yellow-400">Partial Data</span>
+                </div>
+              )}
             </div>
             <div className="space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-gray-400 uppercase tracking-widest">Total TXs</p>
-                {!isHistoryComplete && (
-                  <span
-                    className="flex items-center space-x-2 px-2 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm"
-                    title="Partial data: history backfill is still in progress."
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                    <span className="text-[9px] uppercase tracking-wider text-yellow-400">Partial</span>
-                  </span>
-                )}
-              </div>
+              <p className="text-xs text-gray-400 uppercase tracking-widest">Total TXs</p>
               <p className="text-3xl font-bold font-mono text-white">
                 <NumberFlow
                   value={statusRaw?.total_transactions || 0}
@@ -376,7 +372,7 @@ function Home() {
                 />
               </p>
               <p className="text-[10px] text-gray-500 uppercase tracking-widest">
-                Utilization: {Math.min(100, utilization).toFixed(2)}% of {maxTpsEstimate.toLocaleString()} TPS (est.)
+                Utilization: {Math.min(100, utilization).toFixed(2)}% (Est. {maxTpsEstimate.toLocaleString()} TPS)
               </p>
             </div>
           </div>
@@ -403,20 +399,18 @@ function Home() {
               <div className="p-2 border border-white/10 rounded-sm">
                 <Activity className="h-5 w-5 text-white" />
               </div>
+              {!isHistoryComplete && (
+                <div
+                  className="flex items-center space-x-2 px-3 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm cursor-help"
+                  title="Data indexing is in progress. Historical data may be incomplete."
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                  <span className="text-[10px] uppercase tracking-wider text-yellow-400">Partial Data</span>
+                </div>
+              )}
             </div>
             <div className="space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-gray-400 uppercase tracking-widest">Total Addresses</p>
-                {!isHistoryComplete && (
-                  <span
-                    className="flex items-center space-x-2 px-2 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm"
-                    title="Partial data: history backfill is still in progress."
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                    <span className="text-[9px] uppercase tracking-wider text-yellow-400">Partial</span>
-                  </span>
-                )}
-              </div>
+              <p className="text-xs text-gray-400 uppercase tracking-widest">Total Addresses</p>
               <p className="text-3xl font-bold font-mono text-white">
                 <NumberFlow
                   value={statusRaw?.total_addresses || 0}

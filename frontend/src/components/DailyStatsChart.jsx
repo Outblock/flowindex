@@ -56,19 +56,24 @@ export function DailyStatsChart() {
         <div className="bg-nothing-dark border border-white/10 p-6 group hover:border-nothing-green/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-white uppercase tracking-widest">Transaction History</h2>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setRangeDays(14)}
-                        className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${rangeDays === 14 ? 'text-nothing-green border-nothing-green/40 bg-nothing-green/10' : 'text-gray-500 border-white/10 bg-white/5 hover:text-white'}`}
-                    >
-                        14 Days
-                    </button>
-                    <button
-                        onClick={() => setRangeDays(30)}
-                        className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${rangeDays === 30 ? 'text-nothing-green border-nothing-green/40 bg-nothing-green/10' : 'text-gray-500 border-white/10 bg-white/5 hover:text-white'}`}
-                    >
-                        30 Days
-                    </button>
+                <div className="flex items-center gap-1">
+                    {[
+                        { label: '14D', value: 14 },
+                        { label: '30D', value: 30 },
+                        { label: '3M', value: 90 },
+                        { label: '6M', value: 180 }
+                    ].map((range) => (
+                        <button
+                            key={range.value}
+                            onClick={() => setRangeDays(range.value)}
+                            className={`text-[9px] uppercase tracking-wider px-2 py-1 border rounded-sm transition-colors ${rangeDays === range.value
+                                ? 'text-nothing-green border-nothing-green/40 bg-nothing-green/10'
+                                : 'text-zinc-500 border-white/5 bg-white/5 hover:text-white hover:border-white/20'
+                                }`}
+                        >
+                            {range.label}
+                        </button>
+                    ))}
                 </div>
             </div>
             <div className="h-[200px] w-full">
@@ -89,10 +94,21 @@ export function DailyStatsChart() {
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                        <XAxis dataKey="name" stroke="#666" fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#666', fontFamily: 'monospace' }} />
-                        <YAxis stroke="#666" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} tick={{ fill: '#666', fontFamily: 'monospace' }} />
+                        <XAxis
+                            dataKey="name"
+                            stroke="#666"
+                            fontSize={9}
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: '#666', fontFamily: 'monospace' }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={50}
+                            minTickGap={20}
+                        />
+                        <YAxis stroke="#666" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} tick={{ fill: '#666', fontFamily: 'monospace' }} width={30} />
                         <Tooltip
-                            contentStyle={{ backgroundColor: '#000', borderColor: '#333', color: '#fff' }}
+                            contentStyle={{ backgroundColor: '#000', borderColor: '#333', color: '#fff', fontSize: '12px' }}
                             itemStyle={{ color: '#00ef8b', fontFamily: 'monospace' }}
                             cursor={{ stroke: '#333', strokeDasharray: '5 5' }}
                         />

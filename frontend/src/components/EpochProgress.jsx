@@ -4,6 +4,19 @@ import { motion } from 'framer-motion';
 import { formatAbsoluteTime } from '../lib/time';
 
 export function EpochProgress({ epoch, progress, updatedAt }) {
+    if (!epoch) {
+        return (
+            <div className="bg-nothing-dark border border-white/10 p-6 h-full flex items-center justify-between animate-pulse">
+                <div className="space-y-3">
+                    <div className="h-3 w-20 bg-white/5 rounded-sm"></div>
+                    <div className="h-8 w-24 bg-white/5 rounded-sm"></div>
+                    <div className="h-3 w-32 bg-white/5 rounded-sm"></div>
+                </div>
+                <div className="w-24 h-24 rounded-full border-4 border-white/5"></div>
+            </div>
+        );
+    }
+
     const radius = 40;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (progress / 100) * circumference;
