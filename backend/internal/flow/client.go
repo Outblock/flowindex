@@ -29,7 +29,15 @@ type Client struct {
 
 // NewClient creates a new Flow gRPC client
 func NewClient(url string) (*Client, error) {
-	nodes := parseAccessNodes(url)
+	return NewClientFromEnv("FLOW_ACCESS_NODES", url)
+}
+
+// NewClientFromEnv creates a new Flow gRPC client from an env var (comma/space separated list),
+// falling back to `fallback` when the env var is empty.
+//
+// This is useful for separating "live" nodes from "historic" nodes for backfills across sporks.
+func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
+	nodes := parseAccessNodesFromEnv(envKey, fallback)
 	clients := make([]*grpc.Client, 0, len(nodes))
 	for _, node := range nodes {
 		c, err := grpc.NewClient(node)
@@ -214,7 +222,11 @@ func getEnvFloat(key string, defaultVal float64) float64 {
 }
 
 func parseAccessNodes(fallback string) []string {
-	raw := os.Getenv("FLOW_ACCESS_NODES")
+	return parseAccessNodesFromEnv("FLOW_ACCESS_NODES", fallback)
+}
+
+func parseAccessNodesFromEnv(envKey string, fallback string) []string {
+	raw := os.Getenv(envKey)
 	if raw == "" {
 		raw = fallback
 	}

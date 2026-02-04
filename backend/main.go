@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -61,11 +62,24 @@ func main() {
 	}
 	log.Println("Database Migration Complete.")
 
-	flowClient, err := flow.NewClient(flowURL)
+	flowClient, err := flow.NewClientFromEnv("FLOW_ACCESS_NODES", flowURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to Flow: %v", err)
 	}
 	defer flowClient.Close()
+
+	// Optional historic nodes for pre-spork history backfill.
+	// If not provided, we reuse the live client.
+	historicNodesRaw := strings.TrimSpace(os.Getenv("FLOW_HISTORIC_ACCESS_NODES"))
+	historyClient := flowClient
+	if historicNodesRaw != "" {
+		c, err := flow.NewClientFromEnv("FLOW_HISTORIC_ACCESS_NODES", flowURL)
+		if err != nil {
+			log.Fatalf("Failed to connect to Flow historic nodes: %v", err)
+		}
+		historyClient = c
+		defer historyClient.Close()
+	}
 
 	// 3. Services
 	// Config Parsing Helpers
@@ -110,7 +124,7 @@ func main() {
 	})
 
 	// Backward Ingester (History Backfill)
-	backwardIngester := ingester.NewService(flowClient, repo, ingester.Config{
+	backwardIngester := ingester.NewService(historyClient, repo, ingester.Config{
 		ServiceName:   "history_ingester",
 		BatchSize:     historyBatch,
 		WorkerCount:   historyWorkers,

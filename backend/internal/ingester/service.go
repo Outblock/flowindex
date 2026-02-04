@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +19,12 @@ type Service struct {
 	client *flow.Client
 	repo   *repository.Repository
 	config Config
+
+	// When using a non-historic access node, Flow will return NotFound for blocks
+	// before the spork root height. We learn that boundary from the error message and
+	// clamp history backfill to avoid getting stuck in an infinite retry loop.
+	minAvailableHeight uint64
+	loggedHistoryFloor bool
 }
 
 // Callback type for real-time updates
@@ -125,12 +133,23 @@ func (s *Service) process(ctx context.Context) error {
 		startHeight = targetStart
 		endHeight = targetEnd
 
-		// Next checkpoint will be startHeight (we proved we indexed down to here)
-		checkpointHeight = startHeight // Set checkpoint to the bottom of the processed batch
-		// If we indexed [100, 109], and we go backwards.
-		// Old logic: last indexed = 109.
-		// Backward: last indexed = 100. Next we want 99.
-		// So checkpoint = min(batch).
+		// If we've learned a spork root floor for this client, clamp the range.
+		// This avoids retrying a range that contains heights the node cannot serve.
+		if s.minAvailableHeight > 0 {
+			if endHeight < s.minAvailableHeight {
+				// Nothing left this node can serve.
+				if !s.loggedHistoryFloor {
+					log.Printf("[%s] History backfill reached spork root height %d. Configure FLOW_HISTORIC_ACCESS_NODES to continue indexing earlier history.", s.config.ServiceName, s.minAvailableHeight)
+					s.loggedHistoryFloor = true
+				}
+				return nil
+			}
+			if startHeight < s.minAvailableHeight {
+				startHeight = s.minAvailableHeight
+			}
+		}
+
+		// Backward checkpoint is the lowest height we processed in this batch.
 		checkpointHeight = startHeight
 
 		log.Printf("[History] Backfilling range %d -> %d (%d blocks)", endHeight, startHeight, endHeight-startHeight+1)
@@ -176,6 +195,42 @@ func (s *Service) process(ctx context.Context) error {
 	// 6. Execute Batch Fetch
 	results, err := s.fetchBatchParallel(ctx, startHeight, endHeight)
 	if err != nil {
+		// Handle spork boundary errors in backward mode:
+		// When a non-historic access node is used for history backfill, Flow returns a NotFound
+		// error and includes the spork root block height in the message.
+		if s.config.Mode == "backward" {
+			if root, ok := extractSporkRootHeight(err); ok {
+				if root > s.minAvailableHeight {
+					s.minAvailableHeight = root
+					s.loggedHistoryFloor = false
+				}
+
+				// If this batch crosses below the spork root, clamp and retry so we still
+				// persist the blocks above the spork boundary.
+				if endHeight < s.minAvailableHeight {
+					if !s.loggedHistoryFloor {
+						log.Printf("[%s] History backfill reached spork root height %d. Configure FLOW_HISTORIC_ACCESS_NODES to continue indexing earlier history.", s.config.ServiceName, s.minAvailableHeight)
+						s.loggedHistoryFloor = true
+					}
+					return nil
+				}
+
+				if startHeight < s.minAvailableHeight {
+					log.Printf("[History] Detected spork root height %d; retrying batch with floor clamped.", s.minAvailableHeight)
+					startHeight = s.minAvailableHeight
+					checkpointHeight = startHeight
+					retryResults, retryErr := s.fetchBatchParallel(ctx, startHeight, endHeight)
+					if retryErr == nil {
+						results = retryResults
+						err = nil
+					} else {
+						return retryErr
+					}
+				}
+			}
+		}
+	}
+	if err != nil {
 		return err
 	}
 
@@ -192,6 +247,35 @@ func (s *Service) process(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func extractSporkRootHeight(err error) (uint64, bool) {
+	if err == nil {
+		return 0, false
+	}
+	const needle = "spork root block height "
+	msg := err.Error()
+	idx := strings.Index(msg, needle)
+	if idx == -1 {
+		return 0, false
+	}
+	rest := msg[idx+len(needle):]
+	n := 0
+	for n < len(rest) {
+		ch := rest[n]
+		if ch < '0' || ch > '9' {
+			break
+		}
+		n++
+	}
+	if n == 0 {
+		return 0, false
+	}
+	v, parseErr := strconv.ParseUint(rest[:n], 10, 64)
+	if parseErr != nil || v == 0 {
+		return 0, false
+	}
+	return v, true
 }
 
 func (s *Service) ensureContinuity(ctx context.Context, results []*FetchResult, lastIndexed uint64) error {
