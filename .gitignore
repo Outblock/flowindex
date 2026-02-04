@@ -25,6 +25,7 @@ bin/
 
 # Project Specific
 backend/config.yaml
+backend/indexer
 backend/build_error*.log
 *.log
 
@@ -34,5 +35,6 @@ docker-compose.override.yml
 # IDE
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo

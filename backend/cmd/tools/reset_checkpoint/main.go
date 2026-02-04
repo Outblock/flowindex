@@ -10,10 +10,9 @@ import (
 )
 
 func main() {
-	// Default DB URL from config
-	dbURL := "postgres://stats:n0uejXPl61ci6ldCuE2gQU5Y@localhost:7433/stats?sslmode=disable"
-	if url := os.Getenv("DB_URL"); url != "" {
-		dbURL = url
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL is required (e.g. postgres://user:password@host:5432/db?sslmode=disable)")
 	}
 
 	config, err := pgxpool.ParseConfig(dbURL)

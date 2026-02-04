@@ -28,4 +28,4 @@ PORT = "8080"
 RAILWAY_DOCKERFILE_PATH = "frontend/Dockerfile"
 
 [services.buildArgs]
-VITE_API_URL = "https://backend-production-df6e.up.railway.app"
+VITE_API_URL = "/api"

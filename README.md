@@ -1,32 +1,33 @@
 # FlowScan Clone
 
-Flow 区块链浏览器（类似 etherscan / blockscout），聚焦高性能索引、可扩展存储与低延迟查询。
+A Flow blockchain explorer (similar to Etherscan / Blockscout) focused on high-throughput indexing, extensible storage, and low-latency queries.
 
 ## Features
-- **Schema V2**: `raw.*` / `app.*` 分层 + 分区表
-- **Forward/Backward Ingesters**: 并行抓取最新与历史
-- **Async Workers**: Token/Meta 派生数据异步生成
-- **Cursor Pagination**: Blocks / Transactions / Address / Token / NFT
-- **REST + WebSocket**: 实时区块与交易推送
-- **Railway & Docker**: 可快速验证与部署
+- **Schema V2:** `raw.*` / `app.*` separation with partitioned tables
+- **Forward/Backward Ingesters:** Live head + historical backfill in parallel
+- **Async Workers:** Token/Meta derived data
+- **Cursor Pagination:** Blocks / Transactions / Address / Token / NFT
+- **REST + WebSocket:** Real-time block and transaction updates
+- **Railway & Docker:** Fast validation and deployment
 
 ## Docs
-- `ARCHITECTURE.md`：架构与流程图
-- `DEPLOY_ENV.md`：最终发布环境变量清单
-- `RAILWAY_RUNBOOK.md`：Railway 验证流程
-- `PROJECT_STATUS.md`：当前状态与待办
+- `docs/architecture/ARCHITECTURE.md` — architecture + diagrams
+- `docs/architecture/schema-v2-plan.md` — Schema V2 refactor plan
+- `docs/operations/deploy-env.md` — deployment environment variables
+- `docs/operations/railway-runbook.md` — Railway validation steps
+- `docs/status/project-status.md` — current status and next steps
 
 ## Project Structure
-- `backend/`: Go Indexer + API
+- `backend/`: Go indexer + API
 - `frontend/`: React (Vite) UI
-- `docker-compose.yml`: 本地一键启动
+- `docker-compose.yml`: local one-command stack
 
 ## Local Development
 
 ### Prerequisites
 - Docker & Docker Compose
 - Go 1.24+
-- Node.js 20+ (或 Bun)
+- Node.js 20+ (or Bun)
 
 ### Run via Docker (recommended)
 ```bash
@@ -38,7 +39,7 @@ docker compose up -d --build
 ### Run Backend (dev)
 ```bash
 cd backend
-export DB_URL="postgres://flowscan:secretpassword@localhost:5432/flowscan?sslmode=disable"
+export DB_URL="postgres://flowscan:password@localhost:5432/flowscan?sslmode=disable"
 export FLOW_ACCESS_NODE="access-001.mainnet28.nodes.onflow.org:9000"
 go run main.go
 ```
@@ -51,7 +52,6 @@ npm run dev
 ```
 
 ## Deployment (Railway)
-- Railway 通过 Root Build Context 部署
-- 环境变量模板参考 `RAILWAY_ENV.example`
-- 详细步骤见 `RAILWAY_RUNBOOK.md`
-
+- Railway deploys from root build context
+- Environment template: `docs/operations/railway.env.example`
+- Runbook: `docs/operations/railway-runbook.md`
