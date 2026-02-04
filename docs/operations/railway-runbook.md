@@ -4,7 +4,9 @@
 
 ## 1) Raw-Only Validation
 1. Set Railway env vars from `docs/operations/railway.env.example`.
-2. Deploy (Railway auto-deploy on push).
+2. Deploy (preferred: Railway CLI from repo root):
+   - `railway up --service backend --detach`
+   - `railway up --service frontend --detach`
 3. Verify:
    - `GET /health` returns `{"status":"ok"}`
    - `GET /status` shows `indexed_height` moving upward
@@ -32,3 +34,5 @@ When stable:
 - **No partition for height**: ensure you are using `schema_v2.sql` and new partition manager is in place.
 - **RPC rate limits**: reduce `FLOW_RPC_RPS` / `FLOW_RPC_BURST`.
 - **Derived lag**: reduce worker `RANGE_SIZE` or scale workers horizontally.
+- **History stuck at spork root**: set `FLOW_HISTORIC_ACCESS_NODES` to include older spork endpoints and redeploy.
+- **`app.account_keys` empty after schema/parsing changes**: run `go run ./cmd/tools/backfill_account_keys` against your DB once.

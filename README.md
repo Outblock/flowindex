@@ -6,8 +6,10 @@ A Flow blockchain explorer (similar to Etherscan / Blockscout) focused on high-t
 - **Schema V2:** `raw.*` / `app.*` separation with partitioned tables
 - **Forward/Backward Ingesters:** Live head + historical backfill in parallel
 - **Async Workers:** Token/Meta derived data
+- **Spork-Aware History Backfill:** Separate historic node pool via `FLOW_HISTORIC_ACCESS_NODES`
 - **Cursor Pagination:** Blocks / Transactions / Address / Token / NFT
 - **REST + WebSocket:** Real-time block and transaction updates
+- **Script De-dup:** `raw.transactions.script_hash` + `raw.scripts` to reduce long-term storage growth
 - **Railway & Docker:** Fast validation and deployment
 
 ## Docs
@@ -41,6 +43,7 @@ docker compose up -d --build
 cd backend
 export DB_URL="postgres://flowscan:password@localhost:5432/flowscan?sslmode=disable"
 export FLOW_ACCESS_NODE="access-001.mainnet28.nodes.onflow.org:9000"
+export FLOW_HISTORIC_ACCESS_NODES="access-001.mainnet28.nodes.onflow.org:9000,access-001.mainnet27.nodes.onflow.org:9000"
 go run main.go
 ```
 

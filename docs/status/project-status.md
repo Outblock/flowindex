@@ -3,7 +3,7 @@
 **Last Updated:** 2026-02-04
 
 ## Executive Summary
-FlowScan v2 is operational on Railway with multi-node Flow access, cursor-based APIs, and high-throughput backfill. The system can index latest blocks and backfill history concurrently. Token/NFT transfer indexing is now consistent and backfill is running with higher concurrency. Current focus is sustained throughput and preparing for GCP migration.
+FlowScan v2 is operational on Railway with multi-node Flow access, cursor-based APIs, and parallel live + history backfill. The backend is now spork-aware for history backfills (separate historic node pool + pinned per-height RPC) to avoid getting stuck at spork roots. Current focus is sustained throughput and storage growth control before migrating to GCP.
 
 ## Current Architecture (High Level)
 - **Ingesters**
@@ -24,6 +24,12 @@ FlowScan v2 is operational on Railway with multi-node Flow access, cursor-based 
 - **Cursor API** deployed; frontend now uses cursor for blocks/txs/account txs.
 - **TokenWorker parsing** supports FT + NFT (Deposited/Withdrawn) and writes `token_id` correctly.
 - **Multi-node access** enabled via `FLOW_ACCESS_NODES`, `FLOW_RPC_RPS_PER_NODE`.
+- **Spork-aware history**:
+  - `FLOW_HISTORIC_ACCESS_NODES` for history ingestion across sporks.
+  - Pinned client per height so `block -> collection -> tx/result` uses the same access node.
+- **Account keys**:
+  - `app.account_keys` keyed by `(address, key_index)` with revoked support.
+  - One-off backfill tool available to populate from existing `raw.events`.
 - **WebSocket proxy** stable in frontend nginx.
 - **Stats page** shows worker checkpoints and history progress bar.
 
@@ -32,6 +38,7 @@ FlowScan v2 is operational on Railway with multi-node Flow access, cursor-based 
 - Token transfer upserts now include `token_id`, `token_contract_address`, `is_nft` updates.
 - TokenWorker concurrency is configurable.
 - Backend image includes `backfill_token_transfers` binary.
+- Script de-dup enabled: `raw.transactions.script_hash` + `raw.scripts` (scripts are no longer always stored inline).
 
 ## Current Environment Highlights (Example)
 Use this section as a template for deployment-specific tracking.
@@ -43,7 +50,7 @@ Use this section as a template for deployment-specific tracking.
 
 ## Known Risks / Bottlenecks
 - **Raw events payload** (JSONB) is the dominant storage cost. At 10-50TB, this becomes the primary pressure.
-- **Partition size** currently 10M for `raw.events` and `app.token_transfers`. Long-term, 1-2M partitions will reduce per-partition bloat and improve VACUUM.
+- **Script/arguments growth**: scripts are now de-duped; arguments may still become large depending on workload.
 - **Address/Token queries** will require additional composite indexes for large-scale read performance.
 - **History+Derived contention**: backfill + heavy derived workers may contend on I/O.
 
@@ -53,6 +60,8 @@ Use this section as a template for deployment-specific tracking.
    - Add nodes after whitelist confirmation.
 2. **Token/NFT completeness**
    - Run `backfill_token_transfers` in backend container for older heights if needed.
+3. **Account key completeness**
+   - Run `backfill_account_keys` once after schema/parsing changes to populate `app.account_keys` from existing `raw.events`.
 3. **Indexing efficiency**
    - Add composite indexes once history is 80%+ complete.
 4. **GCP migration prep**

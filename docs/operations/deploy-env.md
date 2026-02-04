@@ -7,6 +7,7 @@ This is the final publish list of environment variables used by the backend. Rai
 - `DB_URL` = Postgres connection string.
 - `FLOW_ACCESS_NODE` = Flow access node, e.g. `access-001.mainnet28.nodes.onflow.org:9000`.
 - `FLOW_ACCESS_NODES` = optional comma-separated list of access nodes (overrides `FLOW_ACCESS_NODE`).
+- `FLOW_HISTORIC_ACCESS_NODES` = optional comma-separated list of historic spork nodes for history backfill (recommended for full history).
 - `PORT` = API port (Railway sets this automatically; for GCP you can set explicitly).
 - `START_BLOCK` = start height for indexing (optional but strongly recommended).
 
@@ -32,6 +33,9 @@ This is the final publish list of environment variables used by the backend. Rai
 - `ENABLE_LOOKUP_REPAIR` (default: false)
 - `LOOKUP_REPAIR_LIMIT` (default: 1000)
 - `LOOKUP_REPAIR_INTERVAL_MIN` (default: 10)
+- `TX_SCRIPT_INLINE_MAX_BYTES` (default: 0)
+  - If `>0`, store `raw.transactions.script` inline only when the script size is <= this limit.
+  - Otherwise, scripts are stored as `raw.transactions.script_hash` and de-duplicated in `raw.scripts`.
 
 ## Flow RPC Throttling
 

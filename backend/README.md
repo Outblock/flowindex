@@ -19,6 +19,7 @@ Core:
 | `DB_URL` | `postgres://flowscan:secretpassword@localhost:5432/flowscan` | Postgres connection string |
 | `FLOW_ACCESS_NODE` | `access-001.mainnet28.nodes.onflow.org:9000` | Single Flow access node |
 | `FLOW_ACCESS_NODES` | fallback to `FLOW_ACCESS_NODE` | Comma/space separated list of access nodes |
+| `FLOW_HISTORIC_ACCESS_NODES` | unset | Optional comma/space separated historic spork nodes for history backfill |
 | `PORT` | `8080` | HTTP server port |
 | `START_BLOCK` | `0` | History backfill start height |
 
@@ -38,6 +39,7 @@ Ingest / Worker:
 | `META_WORKER_RANGE` | `50000` | Meta worker lease range |
 | `META_WORKER_CONCURRENCY` | `1` | Meta worker concurrency |
 | `ENABLE_DERIVED_WRITES` | `false` | Enable app.* partition ensure during raw ingest |
+| `TX_SCRIPT_INLINE_MAX_BYTES` | `0` | If >0, store `raw.transactions.script` inline only when <= this size (otherwise NULL + `raw.scripts`) |
 
 Rate Limiting:
 | Variable | Default | Purpose |
@@ -66,4 +68,15 @@ DB Pool:
 ## Notes
 - `app.market_prices` stores Flow price quotes and powers `/stats/network` to reduce external API calls.
 - Daily stats aggregate by `raw.transactions.timestamp` (chain time), not by insert time.
+- `app.account_keys` is keyed by `(address, key_index)` and is derived from `flow.AccountKeyAdded`/`flow.AccountKeyRemoved`.
 
+## Tools
+
+### Backfill Account Keys (from existing `raw.events`)
+If `app.account_keys` is empty or you changed the parsing/schema, you can backfill from already-ingested events:
+
+```bash
+cd backend
+export DB_URL="postgres://..."
+go run ./cmd/tools/backfill_account_keys --start <min_height> --end <max_height>
+```

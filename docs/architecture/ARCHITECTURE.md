@@ -57,6 +57,7 @@ Raw/App dual-layer design. Raw is append-only; App is query-optimized.
 - `raw.execution_results` (partition by block_height)
 - `raw.block_lookup` (block_id -> height fast lookup)
 - `raw.tx_lookup` (tx_id -> height fast lookup)
+- `raw.scripts` (script_hash -> script_text de-dup)
 - `raw.indexing_errors` (dedupe + audit)
 
 ### App Schema (Derived Tables)
@@ -64,7 +65,7 @@ Raw/App dual-layer design. Raw is append-only; App is query-optimized.
 - `app.token_transfers` (FT/NFT transfers)
 - `app.nft_transfers` (NFT-only table)
 - `app.address_stats` (address stats)
-- `app.account_keys` (public key mapping)
+- `app.account_keys` (Flow account keys state, keyed by `(address, key_index)`; supports publicKey -> address lookup)
 - `app.smart_contracts` (contract catalog)
 - `app.indexing_checkpoints` (resumability)
 - `app.worker_leases` (lease-based concurrency)
@@ -106,11 +107,11 @@ Full list in `docs/operations/deploy-env.md`.
 
 ### Core
 - `PORT`
-- `DATABASE_URL`
-- `REDIS_URL` (optional)
+- `DB_URL`
 
 ### Flow Nodes and Rate Limits
 - `FLOW_ACCESS_NODES`
+- `FLOW_HISTORIC_ACCESS_NODES` (optional, recommended for full history across sporks)
 - `FLOW_RPC_RPS_PER_NODE`
 - `FLOW_RPC_BURST_PER_NODE`
 
@@ -129,6 +130,11 @@ Full list in `docs/operations/deploy-env.md`.
 ### DB Pool
 - `DB_MAX_OPEN_CONNS`
 - `DB_MAX_IDLE_CONNS`
+
+### Storage Tuning
+- `TX_SCRIPT_INLINE_MAX_BYTES` (optional)
+  - If `>0`, store `raw.transactions.script` inline when small.
+  - Otherwise store `script_hash` and resolve via `raw.scripts` on-demand.
 
 ## 10. Extensibility Guidance
 - Add new derived modules in `app.*` to avoid raw overload.

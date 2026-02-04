@@ -165,7 +165,7 @@ This can be done at process start or via a small periodic â€œpartition managerâ€
 - `evm_transactions` / `evm_logs` (partitioned by `block_height`)
 
 ### 4.2 State / Lookup (Non-partitioned or selective partitioning)
-- `account_keys` (large lookup; consider normal btree first; hash partition later only if needed)
+- `account_keys` (large lookup; keyed by `(address, key_index)` to support revocations; indexed by `public_key` for publicKey -> address)
 - `smart_contracts`
 - `address_stats`
 - `nft_metadata`
@@ -317,8 +317,9 @@ To avoid "storage death by JSON", we strictly enforce:
 2. **No GIN on Raw**: **PROHIBITED** to create GIN indexes on `raw.events.payload` or `raw.transactions.arguments`. These are for storage only.
     - Derived queries MUST use `app` tables (e.g., `app.token_transfers`) with structured columns.
 3. **Large Payloads**:
-    - Consider hashing (`sha256(script)`) and storing in a separate `scripts` mapping table.
+    - Implement hashing (`sha256(script)`) and store in a separate `scripts` mapping table.
     - Schema Convention: `raw.scripts(script_hash PK, script_text, created_at)` and `app.contract_code(code_hash PK, code_text)`.
+    - Optional: keep small scripts inline for convenience, but cap with `TX_SCRIPT_INLINE_MAX_BYTES` to avoid runaway growth.
 
 ### 6.4 Denormalization Policy (10TB Guardrail)
 - **Do not** store full event lists inside `raw.transactions` in production.

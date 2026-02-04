@@ -79,10 +79,10 @@ npm run preview
 psql postgres://flowscan:secretpassword@localhost:5432/flowscan
 
 # Run schema manually
-psql postgres://flowscan:secretpassword@localhost:5432/flowscan < backend/schema.sql
+psql postgres://flowscan:secretpassword@localhost:5432/flowscan < backend/schema_v2.sql
 
 # Check indexing progress
-psql -c "SELECT * FROM indexing_checkpoints;" postgres://flowscan:secretpassword@localhost:5432/flowscan
+psql -c "SELECT * FROM app.indexing_checkpoints;" postgres://flowscan:secretpassword@localhost:5432/flowscan
 ```
 
 ## Architecture
@@ -124,17 +124,18 @@ The backend follows a concurrent pipeline architecture inspired by Blockscout:
    - WebSocket endpoint `/ws` for live updates
    - CORS enabled for frontend integration
 
-### Database Schema (`backend/schema.sql`)
+### Database Schema (`backend/schema_v2.sql`)
 
 **Core Tables:**
-- `blocks`: Block metadata with exhaustive redundancy fields (collection_guarantees, block_seals, signatures, etc.)
-- `transactions`: Full Flow transaction data including proposal_key, payload_signatures, envelope_signatures
-- `evm_transactions`: EVM-specific data (evm_hash, from_address, to_address, logs)
-- `events`: Event logs with transaction and block references
-- `address_transactions`: Many-to-many relationship tracking roles (PROPOSER, PAYER, AUTHORIZER)
-- `token_transfers`: Fungible and NFT transfer records
-- `account_keys`: Public key registry with revocation support
-- `indexing_checkpoints`: Progress tracking for multiple ingesters
+- `raw.blocks`: Block metadata (partitioned)
+- `raw.transactions`: Transaction metadata (partitioned)
+- `raw.events`: Event logs (partitioned)
+- `raw.tx_lookup` / `raw.block_lookup`: global ID -> height lookup tables
+- `raw.scripts`: de-duplicated scripts (`script_hash` -> `script_text`)
+- `app.address_transactions`: Many-to-many relationship tracking roles (PROPOSER, PAYER, AUTHORIZER)
+- `app.token_transfers`: FT/NFT transfer records (derived)
+- `app.account_keys`: Account key state keyed by `(address, key_index)` with revocation support
+- `app.indexing_checkpoints`: Progress tracking for ingesters/workers
 
 **Design Principles:**
 - Exhaustive data capture aligned with Flow Access API spec
@@ -170,6 +171,8 @@ The backend follows a concurrent pipeline architecture inspired by Blockscout:
 ### Backend Environment Variables
 - `DB_URL`: PostgreSQL connection string (required)
 - `FLOW_ACCESS_NODE`: Flow gRPC endpoint (default: mainnet28)
+- `FLOW_ACCESS_NODES`: Optional node pool for live ingestion
+- `FLOW_HISTORIC_ACCESS_NODES`: Optional node pool for history ingestion across sporks
 - `PORT`: API server port (default: 8080)
 - `START_BLOCK`: Starting block height for ingestion
 - `LATEST_WORKER_COUNT`: Forward ingester workers (Railway: 50, local: 2)
@@ -179,6 +182,7 @@ The backend follows a concurrent pipeline architecture inspired by Blockscout:
 - `ENABLE_HISTORY_INGESTER`: Enable history backfill (default: true)
 - `DB_MAX_OPEN_CONNS`: Database connection pool size (Railway: 200)
 - `DB_MAX_IDLE_CONNS`: Idle connection limit (Railway: 50)
+- `TX_SCRIPT_INLINE_MAX_BYTES`: If >0, store small scripts inline; otherwise use `raw.scripts`
 
 ### Frontend Environment Variables
 - `VITE_API_URL`: Backend API base URL (Railway: dynamic, local: http://localhost:8080)
