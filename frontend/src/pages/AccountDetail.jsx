@@ -247,22 +247,6 @@ function AccountDetail() {
     }
   };
 
-  const browseLinks = async (domain) => {
-    setStorageLoading(true);
-    setStorageError(null);
-    setStorageSelected(domain);
-    setStorageItem(null);
-    try {
-      const res = await api.getAccountStorageLinks(normalizedAddress || address, domain);
-      setStorageItem(decodeCadenceValue(res));
-    } catch (err) {
-      console.error('Failed to browse links', err);
-      setStorageError('Failed to browse links');
-    } finally {
-      setStorageLoading(false);
-    }
-  };
-
   useEffect(() => {
     loadTransactions(currentPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -587,11 +571,20 @@ function AccountDetail() {
                       </div>
 
                       <div className="mb-6">
+                        <div className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1">
+                          Storage Usage
+                        </div>
+                        <div className="text-xs text-white font-mono">
+                          {String(storageOverview.used ?? 'N/A')} / {String(storageOverview.capacity ?? 'N/A')}
+                        </div>
+                      </div>
+
+                      <div className="mb-6">
                         <div className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2">
                           Storage Paths
                         </div>
                         <div className="max-h-[280px] overflow-auto space-y-1">
-                          {(Array.isArray(storageOverview.paths) ? storageOverview.paths : []).slice(0, 200).map((p) => (
+                          {(Array.isArray(storageOverview.storagePaths) ? storageOverview.storagePaths : []).slice(0, 200).map((p) => (
                             <button
                               key={String(p)}
                               type="button"
@@ -602,7 +595,7 @@ function AccountDetail() {
                               {String(p)}
                             </button>
                           ))}
-                          {(Array.isArray(storageOverview.paths) ? storageOverview.paths : []).length === 0 && (
+                          {(Array.isArray(storageOverview.storagePaths) ? storageOverview.storagePaths : []).length === 0 && (
                             <div className="text-xs text-zinc-500 italic">No storage paths found</div>
                           )}
                         </div>
@@ -610,23 +603,26 @@ function AccountDetail() {
 
                       <div>
                         <div className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2">
-                          Links
+                          Public Paths
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => browseLinks('public')}
-                            className="px-3 py-2 text-[10px] uppercase tracking-widest border border-white/10 text-zinc-300 hover:bg-white/5 hover:border-nothing-green/30 transition-colors"
-                          >
-                            Public
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => browseLinks('private')}
-                            className="px-3 py-2 text-[10px] uppercase tracking-widest border border-white/10 text-zinc-300 hover:bg-white/5 hover:border-nothing-green/30 transition-colors"
-                          >
-                            Private
-                          </button>
+                        <div className="max-h-[180px] overflow-auto space-y-1">
+                          {(Array.isArray(storageOverview.publicPaths) ? storageOverview.publicPaths : []).slice(0, 200).map((p) => (
+                            <button
+                              key={String(p)}
+                              type="button"
+                              onClick={() => {
+                                setStorageSelected(String(p));
+                                setStorageItem({ publicPath: String(p) });
+                              }}
+                              className={`w-full text-left px-2 py-1 text-xs font-mono border border-white/5 hover:border-nothing-green/30 hover:bg-black/60 transition-colors ${storageSelected === String(p) ? 'bg-black/70 border-nothing-green/30' : 'bg-black/30'}`}
+                              title={String(p)}
+                            >
+                              {String(p)}
+                            </button>
+                          ))}
+                          {(Array.isArray(storageOverview.publicPaths) ? storageOverview.publicPaths : []).length === 0 && (
+                            <div className="text-xs text-zinc-500 italic">No public paths found</div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -655,7 +651,7 @@ function AccountDetail() {
                         </pre>
                       ) : (
                         <div className="text-xs text-zinc-500 italic">
-                          Select a storage path or link domain to view details.
+                          Select a storage path to view details.
                         </div>
                       )}
                     </div>

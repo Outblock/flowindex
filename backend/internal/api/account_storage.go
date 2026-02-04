@@ -5,8 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"strconv"
+	"regexp"
 	"strings"
 	"time"
 
@@ -50,7 +49,7 @@ func (s *Server) handleGetAccountStorage(w http.ResponseWriter, r *http.Request)
 	vars := mux.Vars(r)
 	address := flowsdk.HexToAddress(vars["address"])
 
-	out, err := s.executeFlowViewScript(r.Context(), flowViewScriptAccountData(), []cadence.Value{
+	out, err := s.executeCadenceScript(r.Context(), cadenceStorageOverviewScript(), []cadence.Value{
 		cadence.NewAddress([8]byte(address)),
 	})
 	if err != nil {
@@ -65,16 +64,13 @@ func (s *Server) handleGetAccountStorageLinks(w http.ResponseWriter, r *http.Req
 	address := flowsdk.HexToAddress(vars["address"])
 
 	domain := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("domain")))
-	if domain != "public" && domain != "private" {
-		http.Error(w, "invalid domain (expected public|private)", http.StatusBadRequest)
+	if domain != "public" {
+		http.Error(w, "invalid domain (expected public)", http.StatusBadRequest)
 		return
 	}
 
-	domainVal, _ := cadence.NewString(domain)
-
-	out, err := s.executeFlowViewScript(r.Context(), flowViewScriptAccountLinks(domain), []cadence.Value{
+	out, err := s.executeCadenceScript(r.Context(), cadencePublicPathsScript(), []cadence.Value{
 		cadence.NewAddress([8]byte(address)),
-		domainVal,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -92,32 +88,20 @@ func (s *Server) handleGetAccountStorageItem(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "missing path", http.StatusBadRequest)
 		return
 	}
-
-	raw := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("raw")))
-	isRaw := raw == "1" || raw == "true" || raw == "yes"
-
-	pathVal, _ := cadence.NewString(path)
-
-	if uuidStr := strings.TrimSpace(r.URL.Query().Get("uuid")); uuidStr != "" {
-		u, err := strconv.ParseUint(uuidStr, 10, 64)
-		if err != nil {
-			http.Error(w, "invalid uuid", http.StatusBadRequest)
-			return
-		}
-		out, err := s.executeFlowViewScript(r.Context(), flowViewScriptAccountStorageNFT(), []cadence.Value{
-			cadence.NewAddress([8]byte(address)),
-			pathVal,
-			cadence.NewUInt64(u),
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		w.Write(out)
+	// Cadence StoragePath(identifier:) requires a valid identifier.
+	// We accept either "foo" or "storage/foo" and normalize to "foo".
+	if strings.Contains(path, "/") {
+		parts := strings.Split(path, "/")
+		path = parts[len(parts)-1]
+	}
+	if !storageIdentifierRe.MatchString(path) {
+		http.Error(w, "invalid storage path identifier", http.StatusBadRequest)
 		return
 	}
 
-	out, err := s.executeFlowViewScript(r.Context(), flowViewScriptAccountStorage(isRaw), []cadence.Value{
+	pathVal, _ := cadence.NewString(path)
+
+	out, err := s.executeCadenceScript(r.Context(), cadenceStorageItemScript(), []cadence.Value{
 		cadence.NewAddress([8]byte(address)),
 		pathVal,
 	})
@@ -128,7 +112,7 @@ func (s *Server) handleGetAccountStorageItem(w http.ResponseWriter, r *http.Requ
 	w.Write(out)
 }
 
-func (s *Server) executeFlowViewScript(ctx context.Context, script string, args []cadence.Value) ([]byte, error) {
+func (s *Server) executeCadenceScript(ctx context.Context, script string, args []cadence.Value) ([]byte, error) {
 	ctxExec, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
@@ -144,95 +128,61 @@ func (s *Server) executeFlowViewScript(ctx context.Context, script string, args 
 	return b, nil
 }
 
-func flowViewScriptAccountData() string {
-	addr := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(os.Getenv("FLOWVIEW_FDNZ_ADDRESS"))), "0x")
-	if addr == "" {
-		addr = "73e4a1094d0bcab6" // mainnet default
-	}
-	contractName := strings.TrimSpace(os.Getenv("FLOWVIEW_CONTRACT_NAME"))
-	if contractName == "" {
-		contractName = "FDNZ"
-	}
-	authCall := strings.TrimSpace(os.Getenv("FLOWVIEW_AUTH_ACCOUNT_CALL"))
-	if authCall == "" {
-		authCall = "getAuthAccount(address)"
-	}
+var storageIdentifierRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-	return fmt.Sprintf(`
-		import %s from 0x%s
-		access(all) fun main(address: Address): AnyStruct {
-			return %s.getAccountData(%s)
+func cadenceStorageOverviewScript() string {
+	// Cadence v1 account APIs:
+	// - https://cadence-lang.org/docs/language/accounts#authaccount
+	// - https://cadence-lang.org/docs/language/account-storage
+	return `
+		access(all) fun main(address: Address): {String: AnyStruct} {
+			let account = getAuthAccount<auth(Storage) &Account>(address)
+
+			let storagePaths = account.storage.storagePaths
+			let publicPaths = account.storage.publicPaths
+
+			// Best-effort type map for quick browsing.
+			var types: {String: Type} = {}
+			for path in storagePaths {
+				if let t = account.storage.type(at: path) {
+					types[path.toString()] = t
+				}
+			}
+
+			return {
+				"used": account.storage.used,
+				"capacity": account.storage.capacity,
+				"storagePaths": storagePaths,
+				"publicPaths": publicPaths,
+				"types": types
+			}
 		}
-	`, contractName, addr, contractName, authCall)
+	`
 }
 
-func flowViewScriptAccountLinks(domain string) string {
-	addr := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(os.Getenv("FLOWVIEW_FDNZ_ADDRESS"))), "0x")
-	if addr == "" {
-		addr = "73e4a1094d0bcab6"
-	}
-	contractName := strings.TrimSpace(os.Getenv("FLOWVIEW_CONTRACT_NAME"))
-	if contractName == "" {
-		contractName = "FDNZ"
-	}
-	authCall := strings.TrimSpace(os.Getenv("FLOWVIEW_AUTH_ACCOUNT_CALL"))
-	if authCall == "" {
-		authCall = "getAuthAccount(address)"
-	}
-
-	return fmt.Sprintf(`
-		import %s from 0x%s
-		access(all) fun main(address: Address, domain: String): [{String:AnyStruct}] {
-			return %s.getAccountLinks(%s, domain: domain)
+func cadencePublicPathsScript() string {
+	return `
+		access(all) fun main(address: Address): [PublicPath] {
+			let account = getAuthAccount<auth(Storage) &Account>(address)
+			return account.storage.publicPaths
 		}
-	`, contractName, addr, contractName, authCall)
+	`
 }
 
-func flowViewScriptAccountStorage(isRaw bool) string {
-	addr := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(os.Getenv("FLOWVIEW_FDNZ_ADDRESS"))), "0x")
-	if addr == "" {
-		addr = "73e4a1094d0bcab6"
-	}
-	contractName := strings.TrimSpace(os.Getenv("FLOWVIEW_CONTRACT_NAME"))
-	if contractName == "" {
-		contractName = "FDNZ"
-	}
-	authCall := strings.TrimSpace(os.Getenv("FLOWVIEW_AUTH_ACCOUNT_CALL"))
-	if authCall == "" {
-		authCall = "getAuthAccount(address)"
-	}
+func cadenceStorageItemScript() string {
+	return `
+		access(all) fun main(address: Address, path: String): {String: AnyStruct} {
+			let account = getAuthAccount<auth(Storage) &Account>(address)
+			let storagePath = StoragePath(identifier: path)!
 
-	suffix := ""
-	if isRaw {
-		suffix = "Raw"
-	}
+			let t = account.storage.type(at: storagePath)
+			let v = account.storage.borrow<&Any>(from: storagePath)
 
-	return fmt.Sprintf(`
-		import %s from 0x%s
-		access(all) fun main(address: Address, path: String): AnyStruct {
-			return %s.getAccountStorage%s(%s, path: path)
+			return {
+				"path": storagePath,
+				"type": t,
+				"value": v
+			}
 		}
-	`, contractName, addr, contractName, suffix, authCall)
-}
-
-func flowViewScriptAccountStorageNFT() string {
-	addr := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(os.Getenv("FLOWVIEW_FDNZ_ADDRESS"))), "0x")
-	if addr == "" {
-		addr = "73e4a1094d0bcab6"
-	}
-	contractName := strings.TrimSpace(os.Getenv("FLOWVIEW_CONTRACT_NAME"))
-	if contractName == "" {
-		contractName = "FDNZ"
-	}
-	authCall := strings.TrimSpace(os.Getenv("FLOWVIEW_AUTH_ACCOUNT_CALL"))
-	if authCall == "" {
-		authCall = "getAuthAccount(address)"
-	}
-
-	return fmt.Sprintf(`
-		import %s from 0x%s
-		access(all) fun main(address: Address, path: String, uuid: UInt64): AnyStruct {
-			return %s.getAccountStorageNFT(%s, path: path, uuid: uuid)
-		}
-	`, contractName, addr, contractName, authCall)
+	`
 }

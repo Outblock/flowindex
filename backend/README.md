@@ -87,18 +87,14 @@ DB Pool:
   - `GET /openapi.yaml`
   - `GET /openapi.json`
 
-## Account Storage (FlowView-Compatible)
-The backend can execute FlowView-compatible Cadence scripts to expose account storage as JSON-CDC:
+## Account Storage (Cadence v1)
+The backend executes Cadence v1 scripts (JSON-CDC) via the Flow Access API to expose account storage paths and best-effort inspection:
 - `GET /accounts/{address}/storage`
-- `GET /accounts/{address}/storage/links?domain=public|private`
-- `GET /accounts/{address}/storage/item?path=<identifier>&raw=true|false&uuid=<optional>`
+- `GET /accounts/{address}/storage/links?domain=public`
+- `GET /accounts/{address}/storage/item?path=<identifier>`
 
-Config:
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `FLOWVIEW_FDNZ_ADDRESS` | `73e4a1094d0bcab6` | Mainnet contract address for `FDNZ` |
-| `FLOWVIEW_CONTRACT_NAME` | `FDNZ` | Contract name to import |
-| `FLOWVIEW_AUTH_ACCOUNT_CALL` | `getAuthAccount(address)` | Cadence auth-account call (network dependent) |
+Notes:
+- Cadence v1 removed the legacy `private` path domain; only `storage` and `public` remain.
 
 ## Tools
 

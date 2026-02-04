@@ -428,7 +428,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [public, private]
+            enum: [public]
       responses:
         '200':
           description: JSON-CDC value
@@ -454,19 +454,6 @@ paths:
           schema:
             type: string
           description: Storage path identifier (e.g. "flowTokenVault").
-        - name: raw
-          in: query
-          required: false
-          schema:
-            type: boolean
-          description: Return the raw Cadence resource without metadata view shaping (best effort).
-        - name: uuid
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: uint64
-          description: For resolver collections, fetch metadata for a specific UUID.
       responses:
         '200':
           description: JSON-CDC value
