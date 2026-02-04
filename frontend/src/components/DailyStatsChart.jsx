@@ -18,7 +18,7 @@ export function DailyStatsChart() {
                     const chartData = stats.map(s => ({
                         name: s.date,
                         txs: s.tx_count
-                    }));
+                    })).sort((a, b) => new Date(a.name) - new Date(b.name));
                     setData(chartData);
                 } else {
                     console.warn("Daily stats is empty or invalid format");

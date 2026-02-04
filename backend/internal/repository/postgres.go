@@ -961,14 +961,18 @@ func (r *Repository) GetContractByAddress(ctx context.Context, address string) (
 // RefreshDailyStats aggregates transaction counts by date into daily_stats table
 func (r *Repository) RefreshDailyStats(ctx context.Context) error {
 	_, err := r.db.Exec(ctx, `
-		INSERT INTO app.daily_stats (date, tx_count)
+		INSERT INTO app.daily_stats (date, tx_count, updated_at)
 		SELECT 
-			DATE(created_at) as date, 
-			COUNT(*) as tx_count
-		FROM raw.transactions 
-		GROUP BY DATE(created_at)
+			DATE(timestamp) as date, 
+			COUNT(*) as tx_count,
+			NOW() as updated_at
+		FROM raw.transactions
+		WHERE timestamp IS NOT NULL
+		  AND timestamp >= NOW() - INTERVAL '30 days'
+		GROUP BY DATE(timestamp)
 		ON CONFLICT (date) DO UPDATE SET 
-			tx_count = EXCLUDED.tx_count;
+			tx_count = EXCLUDED.tx_count,
+			updated_at = NOW();
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to refresh daily stats: %w", err)
@@ -981,9 +985,8 @@ func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, err
 	rows, err := r.db.Query(ctx, `
 		SELECT date::text, tx_count, active_accounts, new_contracts
 		FROM app.daily_stats
-		WHERE date > '2000-01-01'
-		ORDER BY date DESC
-		LIMIT 14`)
+		WHERE date >= CURRENT_DATE - INTERVAL '13 days'
+		ORDER BY date ASC`)
 	if err != nil {
 		return nil, err
 	}

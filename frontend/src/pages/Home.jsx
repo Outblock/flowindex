@@ -18,9 +18,9 @@ function Home() {
   const [blocks, setBlocks] = useState([]);
   const [transactions, setTransactions] = useState([]);
   // const [loading, setLoading] = useState(true); // Unused
-  const [status, setStatus] = useState(null);
   const [statusRaw, setStatusRaw] = useState(null);
   const [networkStats, setNetworkStats] = useState(null); // New state
+  const [tps, setTps] = useState(0);
 
   // Pagination State
   const [blockPage, setBlockPage] = useState(1);
@@ -87,6 +87,21 @@ function Home() {
     loadTransactions(newPage);
   };
 
+  const computeTpsFromBlocks = (items) => {
+    const withTime = (items || []).filter(b => b?.timestamp);
+    if (withTime.length < 2) return 0;
+    const sorted = [...withTime].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const newest = new Date(sorted[0].timestamp).getTime();
+    const oldest = new Date(sorted[sorted.length - 1].timestamp).getTime();
+    const durationSec = Math.max(1, (newest - oldest) / 1000);
+    const totalTxs = sorted.reduce((sum, b) => sum + (b.tx_count ?? b.txCount ?? 0), 0);
+    return totalTxs / durationSec;
+  };
+
+  useEffect(() => {
+    setTps(computeTpsFromBlocks(blocks));
+  }, [blocks]);
+
   // Handle WebSocket messages (Real-time updates)
   useEffect(() => {
     if (!lastMessage) return;
@@ -101,6 +116,11 @@ function Home() {
         next.delete(newBlock.height);
         return next;
       }), 3000);
+      setStatusRaw(prev => prev ? {
+        ...prev,
+        latest_height: Math.max(prev.latest_height || 0, newBlock.height),
+        max_height: Math.max(prev.max_height || 0, newBlock.height)
+      } : prev);
     }
 
     // Only update if on first page
@@ -122,44 +142,52 @@ function Home() {
     }
   }, [lastMessage, blockPage, txPage]);
 
-  // Initial data load
+  // Initial data load + periodic refresh
   useEffect(() => {
+    let active = true;
+
+    const refreshStatus = async () => {
+      try {
+        const statusRes = await api.getStatus();
+        if (!active || !statusRes) return;
+        setStatusRaw(statusRes);
+      } catch (error) {
+        console.error('Failed to fetch status:', error);
+      }
+    };
+
+    const refreshNetworkStats = async () => {
+      try {
+        const netStatsRes = await api.getNetworkStats();
+        if (!active) return;
+        setNetworkStats(netStatsRes);
+      } catch (error) {
+        console.error('Failed to fetch network stats:', error);
+      }
+    };
+
     const loadInitialData = async () => {
       try {
-        const [statusResult, netStatsResult] = await Promise.allSettled([
-          api.getStatus(),
-          api.getNetworkStats() // Fetch new stats
-        ]);
-
-        // Call the new load functions for page 1
+        await Promise.allSettled([refreshStatus(), refreshNetworkStats()]);
         await loadBlocks(1);
         await loadTransactions(1);
-
-        const statusRes = statusResult.status === 'fulfilled' ? statusResult.value : null;
-        const netStatsRes = netStatsResult.status === 'fulfilled' ? netStatsResult.value : null;
-
-        setNetworkStats(netStatsRes);
-
-
-
-        if (statusRes) {
-          setStatusRaw(statusRes);
-          setStatus({
-            latestBlock: statusRes.latest_height,
-            totalTransactions: statusRes.indexed_height,
-            tps: 0
-          });
-          if (statusRes.latest_height) {
-            // setPrevHeight(statusRes.latest_height);
-          }
-        }
       } catch (error) {
         console.error('Failed to fetch initial data:', error);
       } finally {
         // setLoading(false);
       }
     };
+
     loadInitialData();
+
+    const statusTimer = setInterval(refreshStatus, 15000);
+    const netStatsTimer = setInterval(refreshNetworkStats, 300000);
+
+    return () => {
+      active = false;
+      clearInterval(statusTimer);
+      clearInterval(netStatsTimer);
+    };
   }, []);
 
   const latestHeight = statusRaw?.latest_height || 0;
@@ -234,7 +262,11 @@ function Home() {
               <FlowPriceChart data={networkStats} />
 
               {/* 2. Epoch Progress */}
-              <EpochProgress epoch={networkStats.epoch} progress={networkStats.epoch_progress} />
+              <EpochProgress
+                epoch={networkStats.epoch}
+                progress={networkStats.epoch_progress}
+                updatedAt={networkStats.updated_at}
+              />
 
               {/* 3. Network Stats Grid */}
               <NetworkStats totalStaked={networkStats.total_staked} activeNodes={networkStats.active_nodes} />
@@ -262,7 +294,7 @@ function Home() {
               <p className="text-xs text-gray-400 uppercase tracking-widest">Latest Block</p>
               <p className="text-3xl font-bold font-mono text-white group-hover:text-nothing-green transition-colors">
                 <NumberFlow
-                  value={status?.latestBlock || 0}
+                  value={statusRaw?.latest_height || 0}
                   format={{ useGrouping: true }}
                 />
               </p>
@@ -279,7 +311,7 @@ function Home() {
               <p className="text-xs text-gray-400 uppercase tracking-widest">Total TXs</p>
               <p className="text-3xl font-bold font-mono text-white">
                 <NumberFlow
-                  value={status?.totalTransactions || 0}
+                  value={statusRaw?.total_transactions || 0}
                   format={{ useGrouping: true }}
                 />
               </p>
@@ -296,7 +328,7 @@ function Home() {
               <p className="text-xs text-gray-400 uppercase tracking-widest">Network TPS</p>
               <p className="text-3xl font-bold font-mono text-white">
                 <NumberFlow
-                  value={status?.tps || 0}
+                  value={tps || 0}
                   format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                 />
               </p>
@@ -305,7 +337,7 @@ function Home() {
         </div>
 
         {/* Indexing Progress Bar */}
-        {status && status.start_height && status.latest_height && (
+        {statusRaw && statusRaw.start_height && statusRaw.latest_height && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -319,16 +351,16 @@ function Home() {
                   <h3 className="text-sm uppercase tracking-widest text-white">Blockchain Indexing Progress</h3>
                 </div>
                 <span className="text-xs text-gray-500 uppercase tracking-wider">
-                  {status.progress || '0%'} Complete
+                  {statusRaw.progress || '0%'} Complete
                 </span>
               </div>
 
               {/* Visual Progress Bar */}
               <div className="relative h-12 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
                 {(() => {
-                  const start = status.start_height || 0;
-                  const indexed = status.indexed_height || start;
-                  const latest = status.latest_height || indexed;
+                  const start = statusRaw.start_height || 0;
+                  const indexed = statusRaw.indexed_height || start;
+                  const latest = statusRaw.latest_height || indexed;
                   const totalRange = latest - start;
                   const indexedRange = indexed - start;
                   const indexedPercent = totalRange > 0 ? (indexedRange / totalRange) * 100 : 0;
@@ -366,18 +398,18 @@ function Home() {
               <div className="grid grid-cols-3 gap-4 text-center pt-2">
                 <div>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Blocks Behind</p>
-                  <p className="text-sm font-mono text-white">{status.behind?.toLocaleString() || '0'}</p>
+                  <p className="text-sm font-mono text-white">{statusRaw.behind?.toLocaleString() || '0'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Blocks Indexed</p>
                   <p className="text-sm font-mono text-nothing-green">
-                    {((status.indexed_height || 0) - (status.start_height || 0)).toLocaleString()}
+                    {((statusRaw.indexed_height || 0) - (statusRaw.start_height || 0)).toLocaleString()}
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Total Range</p>
                   <p className="text-sm font-mono text-white">
-                    {((status.latest_height || 0) - (status.start_height || 0)).toLocaleString()}
+                    {((statusRaw.latest_height || 0) - (statusRaw.start_height || 0)).toLocaleString()}
                   </p>
                 </div>
               </div>

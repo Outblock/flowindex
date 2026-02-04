@@ -1,10 +1,13 @@
 import { Zap } from 'lucide-react';
 // eslint-disable-next-line
 import { motion } from 'framer-motion';
-export function EpochProgress({ epoch, progress }) {
+import { formatAbsoluteTime } from '../lib/time';
+
+export function EpochProgress({ epoch, progress, updatedAt }) {
     const radius = 40;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (progress / 100) * circumference;
+    const updatedText = updatedAt ? formatAbsoluteTime(updatedAt * 1000) : '';
 
     return (
         <div className="bg-nothing-dark border border-white/10 p-6 flex items-center justify-between relative overflow-hidden group hover:border-nothing-green/30 transition-all duration-300">
@@ -19,6 +22,11 @@ export function EpochProgress({ epoch, progress }) {
                 <div className="mt-2 text-[10px] uppercase tracking-wider text-nothing-green animate-pulse">
                     {(100 - progress).toFixed(1)}% Remaining
                 </div>
+                {updatedText && (
+                    <div className="mt-2 text-[10px] uppercase tracking-wider text-gray-500">
+                        As of {updatedText}
+                    </div>
+                )}
             </div>
 
             <div className="relative w-24 h-24 flex items-center justify-center">
