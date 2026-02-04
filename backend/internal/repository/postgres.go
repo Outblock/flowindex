@@ -745,7 +745,8 @@ func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) 
 
 func (r *Repository) GetTransactionsByAddress(ctx context.Context, address string, limit, offset int) ([]models.Transaction, error) {
 	query := `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
+		SELECT DISTINCT ON (at.block_height, at.transaction_id)
+		       t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
 		FROM app.address_transactions at
 		JOIN raw.transactions t ON at.transaction_id = t.id AND at.block_height = t.block_height
 		WHERE at.address = $1
@@ -776,7 +777,8 @@ type AddressTxCursor struct {
 
 func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address string, limit int, cursor *AddressTxCursor) ([]models.Transaction, error) {
 	query := `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
+		SELECT DISTINCT ON (at.block_height, at.transaction_id)
+		       t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
 		FROM app.address_transactions at
 		JOIN raw.transactions t ON at.transaction_id = t.id AND at.block_height = t.block_height
 		WHERE at.address = $1

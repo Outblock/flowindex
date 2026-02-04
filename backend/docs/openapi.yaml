@@ -1,65 +1,234 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
-  title: FlowScan Clone API
-  description: "Minimalist Flow Blockchain Explorer API"
-  version: "1.0.0"
+  title: FlowScan API
+  version: "0.2.0"
+  description: |
+    FlowScan is a Flow blockchain explorer. This OpenAPI document describes the public HTTP API
+    consumed by the frontend.
+
+    Notes:
+    - The hosted frontend proxies the backend under `/api` (nginx rewrites `/api/*` -> `/*`).
+    - Pagination:
+      - Most list endpoints support cursor pagination (preferred) via `cursor` + `limit`.
+      - Some endpoints also accept `page`/`offset` for legacy compatibility.
 servers:
   - url: /api
-    description: API Server (via Proxy)
+    description: Frontend proxy (nginx)
+
+tags:
+  - name: System
+  - name: Blocks
+  - name: Transactions
+  - name: Accounts
+  - name: Stats
+  - name: Storage
+
+components:
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+      description: Page size.
+    CursorParam:
+      name: cursor
+      in: query
+      schema:
+        type: string
+      description: Cursor returned by a previous response's `next_cursor`. Use an empty string for the first page.
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+    StatusResponse:
+      type: object
+      description: Indexing status and database totals. Fields may evolve over time.
+      additionalProperties: true
+    BlockSummary:
+      type: object
+      properties:
+        height:
+          type: integer
+          format: int64
+        id:
+          type: string
+        parent_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        tx_count:
+          type: integer
+        event_count:
+          type: integer
+      required: [height, id, timestamp]
+    TransactionSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        block_height:
+          type: integer
+          format: int64
+        transaction_index:
+          type: integer
+        proposer_address:
+          type: string
+        payer_address:
+          type: string
+        status:
+          type: string
+        error_message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+      required: [id]
+    CursorPageBlocks:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlockSummary'
+        next_cursor:
+          type: string
+      required: [items, next_cursor]
+    CursorPageTransactions:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionSummary'
+        next_cursor:
+          type: string
+      required: [items, next_cursor]
+    AccountResponse:
+      type: object
+      properties:
+        address:
+          type: string
+        balance:
+          type: number
+          format: double
+        keys:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        contracts:
+          type: array
+          items:
+            type: string
+        contract_count:
+          type: integer
+      required: [address, balance]
+    ContractCodeResponse:
+      type: object
+      properties:
+        address:
+          type: string
+        name:
+          type: string
+        code:
+          type: string
+        byte_size:
+          type: integer
+      required: [address, name, code]
+    CadenceJSON:
+      type: object
+      description: |
+        A JSON-CDC value as defined by the Flow "JSON-Cadence" specification.
+        Shape depends on the returned Cadence value.
+      additionalProperties: true
+
 paths:
-  /status:
+  /health:
     get:
-      summary: Get Indexing Status
+      tags: [System]
+      summary: Health check
       responses:
         '200':
-          description: Successful response
+          description: OK
           content:
             application/json:
-              example:
-                latest_height: 140904702
-                indexed_height: 140900989
-                start_height: 140900000
-                behind: 3713
-  /blocks:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /status:
     get:
-      summary: List recent blocks
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
+      tags: [System]
+      summary: Indexing status
       responses:
         '200':
-          description: List of blocks
-  /blocks/{height}:
+          description: Current status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+  /blocks:
     get:
-      summary: Get block details
+      tags: [Blocks]
+      summary: List blocks (cursor)
       parameters:
-        - name: height
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
+      responses:
+        '200':
+          description: A cursor page of blocks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPageBlocks'
+        '400':
+          description: Invalid cursor
+  /blocks/{id}:
+    get:
+      tags: [Blocks]
+      summary: Get a block by height or ID
+      parameters:
+        - name: id
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+          description: Block height (decimal) or block ID (hex string).
       responses:
         '200':
-          description: Block details
+          description: Block
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
         '404':
-          description: Block not found
+          description: Not found
   /transactions:
     get:
-      summary: List recent transactions
+      tags: [Transactions]
+      summary: List transactions (cursor)
       parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
       responses:
         '200':
-          description: List of transactions
+          description: A cursor page of transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPageTransactions'
+        '400':
+          description: Invalid cursor
   /transactions/{id}:
     get:
+      tags: [Transactions]
       summary: Get transaction details
       parameters:
         - name: id
@@ -69,6 +238,291 @@ paths:
             type: string
       responses:
         '200':
-          description: Transaction details
+          description: Transaction
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
         '404':
-          description: Transaction not found
+          description: Not found
+  /accounts/{address}:
+    get:
+      tags: [Accounts]
+      summary: Get account (balance, keys, contracts)
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Flow address (with or without 0x prefix).
+      responses:
+        '200':
+          description: Account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '404':
+          description: Not found
+  /accounts/{address}/transactions:
+    get:
+      tags: [Accounts]
+      summary: List transactions involving an account (cursor)
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
+      responses:
+        '200':
+          description: Cursor page of transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPageTransactions'
+        '400':
+          description: Invalid cursor
+  /accounts/{address}/token-transfers:
+    get:
+      tags: [Accounts]
+      summary: List fungible token transfers for an account (cursor)
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LimitParam'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Cursor of the form `block_height:tx_id:event_index`.
+      responses:
+        '200':
+          description: Cursor page of token transfers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  next_cursor:
+                    type: string
+                required: [items, next_cursor]
+  /accounts/{address}/nft-transfers:
+    get:
+      tags: [Accounts]
+      summary: List NFT transfers for an account (cursor)
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LimitParam'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Cursor of the form `block_height:tx_id:event_index`.
+      responses:
+        '200':
+          description: Cursor page of NFT transfers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  next_cursor:
+                    type: string
+                required: [items, next_cursor]
+  /accounts/{address}/stats:
+    get:
+      tags: [Accounts]
+      summary: Get derived statistics for an account (best effort)
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stats
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Not found
+  /accounts/{address}/contracts/{name}:
+    get:
+      tags: [Accounts]
+      summary: Get contract source code by name
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contract code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractCodeResponse'
+        '404':
+          description: Not found
+  /accounts/{address}/storage:
+    get:
+      tags: [Storage]
+      summary: Get storage overview (JSON-CDC)
+      description: Uses a FlowView-compatible Cadence script to enumerate account storage and links.
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JSON-CDC value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CadenceJSON'
+  /accounts/{address}/storage/links:
+    get:
+      tags: [Storage]
+      summary: List public/private links (JSON-CDC)
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: domain
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [public, private]
+      responses:
+        '200':
+          description: JSON-CDC value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CadenceJSON'
+        '400':
+          description: Invalid domain
+  /accounts/{address}/storage/item:
+    get:
+      tags: [Storage]
+      summary: Browse a stored resource (JSON-CDC)
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Storage path identifier (e.g. "flowTokenVault").
+        - name: raw
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Return the raw Cadence resource without metadata view shaping (best effort).
+        - name: uuid
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: uint64
+          description: For resolver collections, fetch metadata for a specific UUID.
+      responses:
+        '200':
+          description: JSON-CDC value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CadenceJSON'
+        '400':
+          description: Invalid query
+  /stats/daily:
+    get:
+      tags: [Stats]
+      summary: Daily transaction stats (30 days)
+      responses:
+        '200':
+          description: Array of daily stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /stats/network:
+    get:
+      tags: [Stats]
+      summary: Network statistics (cached)
+      responses:
+        '200':
+          description: Network stats
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /keys/{publicKey}:
+    get:
+      tags: [Accounts]
+      summary: Resolve a Flow address by public key (best effort)
+      parameters:
+        - name: publicKey
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Hex public key (with or without 0x prefix).
+      responses:
+        '200':
+          description: Address
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  address:
+                    type: string
+                required: [address]
+        '404':
+          description: Not found

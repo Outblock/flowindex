@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"golang.org/x/time/rate"
@@ -146,6 +147,32 @@ func (c *Client) GetAccount(ctx context.Context, address flow.Address) (*flow.Ac
 		return err
 	})
 	return acc, err
+}
+
+func (c *Client) ExecuteScriptAtLatestBlock(ctx context.Context, script []byte, args []cadence.Value) (cadence.Value, error) {
+	var out cadence.Value
+	err := c.withRetry(ctx, func() error {
+		v, err := c.pickClient().ExecuteScriptAtLatestBlock(ctx, script, args)
+		if err != nil {
+			return err
+		}
+		out = v
+		return nil
+	})
+	return out, err
+}
+
+func (c *Client) ExecuteScriptAtBlockHeight(ctx context.Context, height uint64, script []byte, args []cadence.Value) (cadence.Value, error) {
+	var out cadence.Value
+	err := c.withRetry(ctx, func() error {
+		v, err := c.pickClient().ExecuteScriptAtBlockHeight(ctx, height, script, args)
+		if err != nil {
+			return err
+		}
+		out = v
+		return nil
+	})
+	return out, err
 }
 
 func (c *Client) withRetry(ctx context.Context, fn func() error) error {

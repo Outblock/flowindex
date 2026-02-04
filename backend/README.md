@@ -20,6 +20,7 @@ Core:
 | `FLOW_ACCESS_NODE` | `access-001.mainnet28.nodes.onflow.org:9000` | Single Flow access node |
 | `FLOW_ACCESS_NODES` | fallback to `FLOW_ACCESS_NODE` | Comma/space separated list of access nodes |
 | `FLOW_HISTORIC_ACCESS_NODES` | unset | Optional comma/space separated historic spork nodes for history backfill |
+| `FLOW_ARCHIVE_NODE` | `archive.mainnet.nodes.onflow.org:9000` | Default archive node appended to the historic pool (safety net across sporks) |
 | `PORT` | `8080` | HTTP server port |
 | `START_BLOCK` | `0` | History backfill start height |
 
@@ -49,6 +50,13 @@ Rate Limiting:
 | `FLOW_RPC_RPS` | `5` | Total RPS if per-node not set |
 | `FLOW_RPC_BURST` | `FLOW_RPC_RPS` | Burst if per-node not set |
 
+API Rate Limiting:
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `API_RATE_LIMIT_RPS` | `10` | Per-IP API requests per second |
+| `API_RATE_LIMIT_BURST` | `20` | Per-IP burst capacity |
+| `API_RATE_LIMIT_TTL_MIN` | `15` | How long to keep inactive IP buckets in memory |
+
 Maintenance / Jobs:
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -58,6 +66,9 @@ Maintenance / Jobs:
 | `LOOKUP_REPAIR_INTERVAL_MIN` | `10` | Repair interval in minutes |
 | `ENABLE_PRICE_FEED` | `true` | Persist Flow price to DB |
 | `PRICE_REFRESH_MIN` | `10` | Price refresh interval (minutes) |
+| `ENABLE_LIVE_ADDRESS_BACKFILL` | `true` | One-shot backfill of `app.address_transactions` near the head on startup |
+| `LIVE_ADDRESS_BACKFILL_BLOCKS` | `META_WORKER_RANGE` | How many recent blocks to backfill into `app.address_transactions` |
+| `LIVE_ADDRESS_BACKFILL_CHUNK` | `5000` | Chunk size (blocks) for the one-shot backfill job |
 
 DB Pool:
 | Variable | Default | Purpose |
@@ -69,6 +80,25 @@ DB Pool:
 - `app.market_prices` stores Flow price quotes and powers `/stats/network` to reduce external API calls.
 - Daily stats aggregate by `raw.transactions.timestamp` (chain time), not by insert time.
 - `app.account_keys` is keyed by `(address, key_index)` and is derived from `flow.AccountKeyAdded`/`flow.AccountKeyRemoved`.
+
+## OpenAPI
+- Spec: `backend/docs/openapi.yaml`
+- Served by backend:
+  - `GET /openapi.yaml`
+  - `GET /openapi.json`
+
+## Account Storage (FlowView-Compatible)
+The backend can execute FlowView-compatible Cadence scripts to expose account storage as JSON-CDC:
+- `GET /accounts/{address}/storage`
+- `GET /accounts/{address}/storage/links?domain=public|private`
+- `GET /accounts/{address}/storage/item?path=<identifier>&raw=true|false&uuid=<optional>`
+
+Config:
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `FLOWVIEW_FDNZ_ADDRESS` | `73e4a1094d0bcab6` | Mainnet contract address for `FDNZ` |
+| `FLOWVIEW_CONTRACT_NAME` | `FDNZ` | Contract name to import |
+| `FLOWVIEW_AUTH_ACCOUNT_CALL` | `getAuthAccount(address)` | Cadence auth-account call (network dependent) |
 
 ## Tools
 

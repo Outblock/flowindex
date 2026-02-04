@@ -15,6 +15,7 @@ ENABLE_HISTORY_INGESTER = "true"
 DB_MAX_OPEN_CONNS = "200"
 DB_MAX_IDLE_CONNS = "50"
 FLOW_ACCESS_NODE = "access-001.mainnet28.nodes.onflow.org:9000"
+FLOW_HISTORIC_ACCESS_NODES = "access-001.mainnet28.nodes.onflow.org:9000,archive.mainnet.nodes.onflow.org:9000"
 DB_URL = "postgres://${{ Postgres.PGUSER }}:${{ Postgres.PGPASSWORD }}@${{ Postgres.PGHOST }}:${{ Postgres.PGPORT }}/${{ Postgres.POSTGRES_DB }}?sslmode=disable"
 RAILWAY_DOCKERFILE_PATH = "backend/Dockerfile"
 

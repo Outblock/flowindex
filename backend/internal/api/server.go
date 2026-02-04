@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -190,9 +191,12 @@ func NewServer(repo *repository.Repository, client *flow.Client, port string, st
 
 	// Middleware
 	r.Use(commonMiddleware)
+	r.Use(rateLimitMiddleware)
 
 	// Routes
 	r.HandleFunc("/health", s.handleHealth).Methods("GET", "OPTIONS")
+	r.HandleFunc("/openapi.yaml", s.handleOpenAPIYAML).Methods("GET", "OPTIONS")
+	r.HandleFunc("/openapi.json", s.handleOpenAPIJSON).Methods("GET", "OPTIONS")
 	r.HandleFunc("/status", s.handleStatus).Methods("GET", "OPTIONS")
 	r.HandleFunc("/ws", s.handleWebSocket).Methods("GET", "OPTIONS") // WebSocket Endpoint
 	r.HandleFunc("/blocks", s.handleListBlocks).Methods("GET", "OPTIONS")
@@ -205,6 +209,10 @@ func NewServer(repo *repository.Repository, client *flow.Client, port string, st
 	r.HandleFunc("/accounts/{address}/nft-transfers", s.handleGetAccountNFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/stats", s.handleGetAddressStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/contract", s.handleGetContractByAddress).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/contracts/{name}", s.handleGetAccountContractCode).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/storage", s.handleGetAccountStorage).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/storage/links", s.handleGetAccountStorageLinks).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/storage/item", s.handleGetAccountStorageItem).Methods("GET", "OPTIONS")
 	r.HandleFunc("/stats/daily", s.handleGetDailyStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/stats/network", s.handleGetNetworkStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/keys/{publicKey}", s.handleGetAddressByPublicKey).Methods("GET", "OPTIONS")
@@ -742,11 +750,18 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	contractNames := make([]string, 0, len(acc.Contracts))
+	for name := range acc.Contracts {
+		contractNames = append(contractNames, name)
+	}
+	sort.Strings(contractNames)
+
 	resp := map[string]interface{}{
-		"address":   acc.Address.Hex(),
-		"balance":   balanceVal,
-		"keys":      formattedKeys, // Use formatted keys
-		"contracts": acc.Contracts, // Contracts map is usually fine
+		"address":        acc.Address.Hex(),
+		"balance":        balanceVal,
+		"keys":           formattedKeys,
+		"contracts":      contractNames,
+		"contract_count": len(contractNames),
 	}
 
 	json.NewEncoder(w).Encode(resp)

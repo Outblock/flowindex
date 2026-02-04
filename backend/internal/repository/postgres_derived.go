@@ -161,6 +161,41 @@ func (r *Repository) UpsertAddressTransactions(ctx context.Context, rows []model
 	return nil
 }
 
+// BackfillAddressTransactionsRange populates app.address_transactions from raw.transactions
+// for a block height range [fromHeight, toHeight). It is safe to run repeatedly.
+func (r *Repository) BackfillAddressTransactionsRange(ctx context.Context, fromHeight, toHeight uint64) (int64, error) {
+	if toHeight <= fromHeight {
+		return 0, nil
+	}
+
+	cmd, err := r.db.Exec(ctx, `
+		INSERT INTO app.address_transactions (address, transaction_id, block_height, role)
+		SELECT address, transaction_id, block_height, role
+		FROM (
+			SELECT payer_address AS address, id AS transaction_id, block_height, 'PAYER' AS role
+			FROM raw.transactions
+			WHERE block_height >= $1 AND block_height < $2
+
+			UNION ALL
+			SELECT proposer_address AS address, id AS transaction_id, block_height, 'PROPOSER' AS role
+			FROM raw.transactions
+			WHERE block_height >= $1 AND block_height < $2
+
+			UNION ALL
+			SELECT unnest(authorizers) AS address, id AS transaction_id, block_height, 'AUTHORIZER' AS role
+			FROM raw.transactions
+			WHERE block_height >= $1 AND block_height < $2
+		) s
+		WHERE address IS NOT NULL AND address <> ''
+		ON CONFLICT (address, block_height, transaction_id, role) DO NOTHING
+	`, fromHeight, toHeight)
+	if err != nil {
+		return 0, fmt.Errorf("backfill address transactions: %w", err)
+	}
+
+	return cmd.RowsAffected(), nil
+}
+
 type AddressStatDelta struct {
 	Address          string
 	TxCount          int64

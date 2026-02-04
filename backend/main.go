@@ -68,18 +68,42 @@ func main() {
 	}
 	defer flowClient.Close()
 
-	// Optional historic nodes for pre-spork history backfill.
-	// If not provided, we reuse the live client.
+	// Historic nodes for pre-spork history backfill.
+	//
+	// NOTE: Regular access nodes only serve blocks for the current spork. When history backfill
+	// crosses a spork boundary, the node returns NotFound with a "spork root block height" hint.
+	// We include an archive node by default so history backfill keeps progressing without manual
+	// env var edits + restarts.
+	//
+	// You can override/extend the pool via FLOW_HISTORIC_ACCESS_NODES.
+	// Example: "access-001.mainnet28.nodes.onflow.org:9000,access-001.mainnet27.nodes.onflow.org:9000,archive.mainnet.nodes.onflow.org:9000"
 	historicNodesRaw := strings.TrimSpace(os.Getenv("FLOW_HISTORIC_ACCESS_NODES"))
-	historyClient := flowClient
-	if historicNodesRaw != "" {
-		c, err := flow.NewClientFromEnv("FLOW_HISTORIC_ACCESS_NODES", flowURL)
-		if err != nil {
-			log.Fatalf("Failed to connect to Flow historic nodes: %v", err)
+	if historicNodesRaw == "" {
+		// Reuse the live pool by default for the newest heights.
+		historicNodesRaw = strings.TrimSpace(os.Getenv("FLOW_ACCESS_NODES"))
+		if historicNodesRaw == "" {
+			historicNodesRaw = flowURL
 		}
-		historyClient = c
-		defer historyClient.Close()
 	}
+	archiveNode := strings.TrimSpace(os.Getenv("FLOW_ARCHIVE_NODE"))
+	if archiveNode == "" {
+		archiveNode = "archive.mainnet.nodes.onflow.org:9000"
+	}
+	// Ensure the archive node is always included as a safety net.
+	historicNodesRaw = strings.TrimSpace(historicNodesRaw)
+	if archiveNode != "" && !strings.Contains(historicNodesRaw, archiveNode) {
+		if historicNodesRaw != "" {
+			historicNodesRaw = historicNodesRaw + "," + archiveNode
+		} else {
+			historicNodesRaw = archiveNode
+		}
+	}
+
+	historyClient, err := flow.NewClientFromEnv("FLOW_HISTORIC_ACCESS_NODES_EFFECTIVE", historicNodesRaw)
+	if err != nil {
+		log.Fatalf("Failed to connect to Flow historic nodes: %v", err)
+	}
+	defer historyClient.Close()
 
 	// 3. Services
 	// Config Parsing Helpers
@@ -206,10 +230,6 @@ func main() {
 
 	// Start API in background
 	go func() {
-		// Serve Swagger Docs
-		fs := http.FileServer(http.Dir("./docs"))
-		http.Handle("/swagger/", http.StripPrefix("/swagger/", fs))
-
 		log.Printf("Starting API Server on :%s", apiPort)
 		if err := apiServer.Start(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("API Server failed: %v", err)
@@ -266,6 +286,71 @@ func main() {
 			defer wg.Done()
 			committer.Start(ctx)
 		}()
+	}
+
+	// Live address backfill (optional)
+	//
+	// Problem: meta_worker often runs in large ranges (e.g. 50k blocks) for throughput, which can
+	// leave app.address_transactions stale near the chain head. That makes "account -> transactions"
+	// pages look empty even though the underlying transactions are already indexed.
+	//
+	// This one-shot job backfills the most recent N blocks into app.address_transactions so the UI
+	// reflects recent activity immediately. It is idempotent (ON CONFLICT DO NOTHING).
+	enableLiveAddrBackfill := os.Getenv("ENABLE_LIVE_ADDRESS_BACKFILL") != "false"
+	if enableLiveAddrBackfill {
+		backfillBlocks := getEnvUint("LIVE_ADDRESS_BACKFILL_BLOCKS", metaWorkerRange)
+		chunkBlocks := getEnvUint("LIVE_ADDRESS_BACKFILL_CHUNK", 5000)
+		if chunkBlocks < 1 {
+			chunkBlocks = 5000
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Give the ingester a moment to start and the DB to warm up.
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(15 * time.Second):
+			}
+
+			tip, err := repo.GetLastIndexedHeight(ctx, "main_ingester")
+			if err != nil || tip == 0 {
+				log.Printf("[live_address_backfill] Skip: cannot read main_ingester tip: %v", err)
+				return
+			}
+
+			from := uint64(0)
+			if backfillBlocks > 0 && tip > backfillBlocks {
+				from = tip - backfillBlocks
+			}
+			to := tip + 1
+
+			log.Printf("[live_address_backfill] Backfilling app.address_transactions for heights [%d, %d) (chunk=%d)", from, to, chunkBlocks)
+			for start := from; start < to; start += chunkBlocks {
+				if ctx.Err() != nil {
+					return
+				}
+				end := start + chunkBlocks
+				if end > to {
+					end = to
+				}
+
+				rows, err := repo.BackfillAddressTransactionsRange(ctx, start, end)
+				if err != nil {
+					log.Printf("[live_address_backfill] Range [%d, %d) failed: %v", start, end, err)
+					continue
+				}
+				if rows > 0 {
+					log.Printf("[live_address_backfill] Range [%d, %d) inserted %d rows", start, end, rows)
+				}
+			}
+
+			log.Printf("[live_address_backfill] Done (tip=%d)", tip)
+		}()
+	} else {
+		log.Println("Live address backfill is DISABLED (ENABLE_LIVE_ADDRESS_BACKFILL=false)")
 	}
 
 	// Start Daily Stats Aggregator (Runs every 5 mins)

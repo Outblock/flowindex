@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -417,5 +418,17 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 	}
 
 	// Use the atomic batch save
-	return s.repo.SaveBatch(ctx, blocks, txs, events, addrActivity, tokenTransfers, accountKeys, s.config.ServiceName, checkpointHeight)
+	if err := s.repo.SaveBatch(ctx, blocks, txs, events, addrActivity, tokenTransfers, accountKeys, s.config.ServiceName, checkpointHeight); err != nil {
+		return err
+	}
+
+	// Keep address->tx lookups fresh at the head so account pages show recent activity even when
+	// meta_worker is processing in large ranges.
+	if broadcastRealtime && os.Getenv("ENABLE_LIVE_ADDRESS_INDEX") != "false" && len(addrActivity) > 0 {
+		if err := s.repo.UpsertAddressTransactions(ctx, addrActivity); err != nil {
+			log.Printf("[%s] live address index update failed: %v", s.config.ServiceName, err)
+		}
+	}
+
+	return nil
 }

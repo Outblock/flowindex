@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
-import { ArrowLeft, User, Activity, Wallet, Key, Code, Coins, Image as ImageIcon, FileText } from 'lucide-react';
+import { ArrowLeft, User, Activity, Wallet, Key, Code, Coins, Image as ImageIcon, FileText, HardDrive } from 'lucide-react';
 import { Pagination } from '../components/Pagination';
 import NumberFlow from '@number-flow/react';
 
@@ -28,6 +28,19 @@ function AccountDetail() {
   const [nftHasMore, setNftHasMore] = useState(false);
   const [nftLoading, setNftLoading] = useState(false);
 
+  // Contract code viewer
+  const [selectedContract, setSelectedContract] = useState('');
+  const [selectedContractCode, setSelectedContractCode] = useState('');
+  const [contractCodeLoading, setContractCodeLoading] = useState(false);
+  const [contractCodeError, setContractCodeError] = useState(null);
+
+  // Storage viewer (JSON-CDC via FlowView-compatible scripts)
+  const [storageOverview, setStorageOverview] = useState(null);
+  const [storageSelected, setStorageSelected] = useState(null);
+  const [storageItem, setStorageItem] = useState(null);
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [storageError, setStorageError] = useState(null);
+
   const normalizeAddress = (value) => {
     if (!value) return '';
     const lower = String(value).toLowerCase();
@@ -41,9 +54,57 @@ function AccountDetail() {
     return `${normalized.slice(0, head)}...${normalized.slice(-tail)}`;
   };
 
+  // Decode JSON-CDC (Cadence JSON) to plain JS values for display.
+  const decodeCadenceValue = (val) => {
+    if (!val || typeof val !== 'object') return val;
+
+    if (val.value !== undefined) {
+      if (val.type === 'Optional') return val.value ? decodeCadenceValue(val.value) : null;
+      if (val.type === 'Array') return Array.isArray(val.value) ? val.value.map(decodeCadenceValue) : [];
+      if (val.type === 'Dictionary') {
+        const dict = {};
+        (val.value || []).forEach((item) => {
+          const k = decodeCadenceValue(item.key);
+          const v = decodeCadenceValue(item.value);
+          dict[String(k)] = v;
+        });
+        return dict;
+      }
+      if (val.type === 'Struct' || val.type === 'Resource' || val.type === 'Event') {
+        const obj = {};
+        if (val.value && Array.isArray(val.value.fields)) {
+          val.value.fields.forEach((f) => {
+            obj[f.name] = decodeCadenceValue(f.value);
+          });
+          return obj;
+        }
+      }
+      if (val.type === 'Path') {
+        const domain = val.value?.domain ?? '';
+        const identifier = val.value?.identifier ?? '';
+        return domain && identifier ? `${domain}/${identifier}` : '';
+      }
+      if (val.type === 'Type') return val.value?.staticType ?? '';
+      if (val.type === 'Address') return normalizeAddress(val.value);
+
+      return val.value;
+    }
+
+    return val;
+  };
+
   const normalizedAddress = normalizeAddress(address);
 
   useEffect(() => {
+    // Reset per-address UI state
+    setSelectedContract('');
+    setSelectedContractCode('');
+    setContractCodeError(null);
+    setStorageOverview(null);
+    setStorageSelected(null);
+    setStorageItem(null);
+    setStorageError(null);
+
     const loadAccountInfo = async () => {
       try {
         const accountRes = await api.getAccount(normalizedAddress || address);
@@ -132,6 +193,76 @@ function AccountDetail() {
     }
   };
 
+  const loadContractCode = async (name) => {
+    if (!name) return;
+    setContractCodeLoading(true);
+    setContractCodeError(null);
+    setSelectedContract(name);
+    setSelectedContractCode('');
+    try {
+      const res = await api.getAccountContractCode(normalizedAddress || address, name);
+      setSelectedContractCode(res?.code || '');
+    } catch (err) {
+      console.error('Failed to load contract code', err);
+      setContractCodeError('Failed to load contract code');
+    } finally {
+      setContractCodeLoading(false);
+    }
+  };
+
+  const loadStorageOverview = async () => {
+    setStorageLoading(true);
+    setStorageError(null);
+    setStorageItem(null);
+    setStorageSelected(null);
+    try {
+      const res = await api.getAccountStorageOverview(normalizedAddress || address);
+      setStorageOverview(decodeCadenceValue(res));
+    } catch (err) {
+      console.error('Failed to load storage overview', err);
+      setStorageError('Failed to load storage overview');
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  const browseStoragePath = async (pathValue, opts = {}) => {
+    const str = String(pathValue || '');
+    const parts = str.split('/');
+    const identifier = parts[parts.length - 1] || '';
+    if (!identifier) return;
+
+    setStorageLoading(true);
+    setStorageError(null);
+    setStorageSelected(str);
+    setStorageItem(null);
+    try {
+      const res = await api.getAccountStorageItem(normalizedAddress || address, identifier, opts);
+      setStorageItem(decodeCadenceValue(res));
+    } catch (err) {
+      console.error('Failed to browse storage item', err);
+      setStorageError('Failed to browse storage item');
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  const browseLinks = async (domain) => {
+    setStorageLoading(true);
+    setStorageError(null);
+    setStorageSelected(domain);
+    setStorageItem(null);
+    try {
+      const res = await api.getAccountStorageLinks(normalizedAddress || address, domain);
+      setStorageItem(decodeCadenceValue(res));
+    } catch (err) {
+      console.error('Failed to browse links', err);
+      setStorageError('Failed to browse links');
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadTransactions(currentPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -161,6 +292,13 @@ function AccountDetail() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activityTab, address]);
+
+  useEffect(() => {
+    if (activeTab !== 'storage') return;
+    if (storageOverview || storageLoading) return;
+    loadStorageOverview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, address]);
 
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
@@ -283,6 +421,18 @@ function AccountDetail() {
                 Contracts ({account.contracts ? account.contracts.length : 0})
               </span>
             </button>
+            <button
+              onClick={() => setActiveTab('storage')}
+              className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'storage'
+                ? 'text-white border-b-2 border-nothing-green bg-white/5'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                }`}
+            >
+              <span className="flex items-center gap-2">
+                <HardDrive className={`h-4 w-4 ${activeTab === 'storage' ? 'text-nothing-green' : ''}`} />
+                Storage
+              </span>
+            </button>
           </div>
 
           <div className="bg-nothing-dark border border-white/10 border-t-0 p-6 min-h-[200px]">
@@ -368,16 +518,148 @@ function AccountDetail() {
                 {account.contracts && account.contracts.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {account.contracts.map((contract, idx) => (
-                      <div key={idx} className="bg-black/50 border border-white/5 p-4 flex items-center justify-between">
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => loadContractCode(contract.name || contract)}
+                        className="bg-black/50 border border-white/5 p-4 flex items-center justify-between hover:border-nothing-green/30 hover:bg-black/70 transition-colors text-left"
+                      >
                         <div className="flex items-center gap-3">
                           <Code className="h-4 w-4 text-nothing-green" />
                           <span className="text-sm text-white font-mono">{contract.name || contract}</span>
                         </div>
-                      </div>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest">View</span>
+                      </button>
                     ))}
                   </div>
                 ) : (
                   <p className="text-xs text-zinc-500 italic">No contracts deployed</p>
+                )}
+
+                {(contractCodeLoading || contractCodeError || selectedContractCode) && (
+                  <div className="mt-6 border border-white/10 bg-black/40 p-4">
+                    <div className="flex items-center justify-between gap-4 mb-3">
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                        Contract Source
+                      </div>
+                      {selectedContract && (
+                        <div className="text-xs text-white font-mono">
+                          {selectedContract}
+                        </div>
+                      )}
+                    </div>
+
+                    {contractCodeLoading && (
+                      <div className="text-xs text-zinc-500 italic">Loading contract source…</div>
+                    )}
+                    {contractCodeError && (
+                      <div className="text-xs text-red-400">{contractCodeError}</div>
+                    )}
+                    {!contractCodeLoading && !contractCodeError && selectedContractCode && (
+                      <pre className="text-[11px] leading-relaxed text-zinc-300 whitespace-pre-wrap break-words overflow-x-auto max-h-[420px]">
+                        {selectedContractCode}
+                      </pre>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'storage' && (
+              <div className="space-y-4">
+                <h2 className="text-white text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-2">
+                  Storage (Experimental)
+                </h2>
+
+                {storageError && (
+                  <div className="text-xs text-red-400">{storageError}</div>
+                )}
+
+                {!storageOverview && storageLoading && (
+                  <div className="text-xs text-zinc-500 italic">Loading storage…</div>
+                )}
+
+                {storageOverview && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-1 border border-white/10 bg-black/40 p-4">
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3">
+                        Browser
+                      </div>
+
+                      <div className="mb-6">
+                        <div className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2">
+                          Storage Paths
+                        </div>
+                        <div className="max-h-[280px] overflow-auto space-y-1">
+                          {(Array.isArray(storageOverview.paths) ? storageOverview.paths : []).slice(0, 200).map((p) => (
+                            <button
+                              key={String(p)}
+                              type="button"
+                              onClick={() => browseStoragePath(p)}
+                              className={`w-full text-left px-2 py-1 text-xs font-mono border border-white/5 hover:border-nothing-green/30 hover:bg-black/60 transition-colors ${storageSelected === String(p) ? 'bg-black/70 border-nothing-green/30' : 'bg-black/30'}`}
+                              title={String(p)}
+                            >
+                              {String(p)}
+                            </button>
+                          ))}
+                          {(Array.isArray(storageOverview.paths) ? storageOverview.paths : []).length === 0 && (
+                            <div className="text-xs text-zinc-500 italic">No storage paths found</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2">
+                          Links
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => browseLinks('public')}
+                            className="px-3 py-2 text-[10px] uppercase tracking-widest border border-white/10 text-zinc-300 hover:bg-white/5 hover:border-nothing-green/30 transition-colors"
+                          >
+                            Public
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => browseLinks('private')}
+                            className="px-3 py-2 text-[10px] uppercase tracking-widest border border-white/10 text-zinc-300 hover:bg-white/5 hover:border-nothing-green/30 transition-colors"
+                          >
+                            Private
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2 border border-white/10 bg-black/40 p-4 relative overflow-hidden">
+                      {storageLoading && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
+                          <div className="w-8 h-8 border-2 border-dashed border-white rounded-full animate-spin"></div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between gap-4 mb-3">
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                          Selected
+                        </div>
+                        {storageSelected && (
+                          <div className="text-xs text-white font-mono truncate max-w-[60%]" title={String(storageSelected)}>
+                            {String(storageSelected)}
+                          </div>
+                        )}
+                      </div>
+
+                      {storageItem ? (
+                        <pre className="text-[11px] leading-relaxed text-zinc-300 whitespace-pre-wrap break-words overflow-x-auto max-h-[520px]">
+                          {JSON.stringify(storageItem, null, 2)}
+                        </pre>
+                      ) : (
+                        <div className="text-xs text-zinc-500 italic">
+                          Select a storage path or link domain to view details.
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             )}

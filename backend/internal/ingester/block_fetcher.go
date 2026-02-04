@@ -172,6 +172,34 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				}
 
 				// Address Activity (Participants)
+				// This is used for the account transactions page. We write it for forward ingestion
+				// so the UI stays fresh even if meta_worker is processing in large ranges.
+				seenActivity := make(map[string]bool)
+				addActivity := func(addr, role string) {
+					normalized := normalizeAddress(addr)
+					if normalized == "" {
+						return
+					}
+					k := normalized + "|" + role
+					if seenActivity[k] {
+						return
+					}
+					seenActivity[k] = true
+					result.AddressActivity = append(result.AddressActivity, models.AddressTransaction{
+						Address:         normalized,
+						TransactionID:   tx.ID().String(),
+						BlockHeight:     height,
+						TransactionType: "GENERAL",
+						Role:            role,
+					})
+				}
+
+				addActivity(tx.Payer.Hex(), "PAYER")
+				addActivity(tx.ProposalKey.Address.Hex(), "PROPOSER")
+				for _, auth := range tx.Authorizers {
+					addActivity(auth.Hex(), "AUTHORIZER")
+				}
+
 				// Process Events
 				for _, evt := range res.Events {
 					payload := w.flattenCadenceValue(evt.Value)
