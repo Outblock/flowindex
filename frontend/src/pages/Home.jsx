@@ -53,7 +53,7 @@ function Home() {
   const loadBlocks = async (page) => {
     try {
       const cursor = blockCursors[page] ?? '';
-      const res = await api.getBlocks(cursor, 10);
+      const res = await api.getBlocks(cursor, 20);
       const items = res?.items ?? (Array.isArray(res) ? res : []);
       const nextCursor = res?.next_cursor ?? '';
       setBlocks(items);
@@ -70,7 +70,7 @@ function Home() {
   const loadTransactions = async (page) => {
     try {
       const cursor = txCursors[page] ?? '';
-      const res = await api.getTransactions(cursor, 10);
+      const res = await api.getTransactions(cursor, 20);
       const items = res?.items ?? (Array.isArray(res) ? res : []);
       const nextCursor = res?.next_cursor ?? '';
       const transformedTxs = Array.isArray(items) ? items.map(tx => ({
@@ -134,7 +134,7 @@ function Home() {
     // Only update if on first page
     if (blockPage === 1 && lastMessage.type === 'new_block') {
       const newBlock = lastMessage.payload;
-      setBlocks(prev => [newBlock, ...(prev || []).slice(0, 9)]);
+      setBlocks(prev => [newBlock, ...(prev || []).slice(0, 19)]);
       setNewBlockIds(prev => new Set(prev).add(newBlock.height));
       setTimeout(() => setNewBlockIds(prev => {
         const next = new Set(prev);
@@ -157,7 +157,7 @@ function Home() {
         payer: rawTx.payer_address || rawTx.proposer_address,
         blockHeight: rawTx.block_height
       };
-      setTransactions(prev => [newTx, ...(prev || []).slice(0, 9)]);
+      setTransactions(prev => [newTx, ...(prev || []).slice(0, 19)]);
       setNewTxIds(prev => new Set(prev).add(newTx.id));
       setTimeout(() => setNewTxIds(prev => {
         const next = new Set(prev);
