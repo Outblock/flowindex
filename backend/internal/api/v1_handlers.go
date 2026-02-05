@@ -11,6 +11,8 @@ import (
 	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
+	"github.com/onflow/cadence"
+	cadjson "github.com/onflow/cadence/encoding/json"
 	flowsdk "github.com/onflow/flow-go-sdk"
 )
 
@@ -281,6 +283,58 @@ func toContractOutput(contract models.SmartContract) map[string]interface{} {
 	}
 }
 
+func parseStorageOverview(raw []byte) (used uint64, capacity uint64) {
+	val, err := cadjson.Decode(nil, raw)
+	if err != nil {
+		return 0, 0
+	}
+	dict, ok := val.(cadence.Dictionary)
+	if !ok {
+		return 0, 0
+	}
+	for _, pair := range dict.Pairs {
+		key, ok := pair.Key.(cadence.String)
+		if !ok {
+			continue
+		}
+		switch string(key) {
+		case "used":
+			used = cadenceToUint64(pair.Value)
+		case "capacity":
+			capacity = cadenceToUint64(pair.Value)
+		}
+	}
+	return used, capacity
+}
+
+func cadenceToUint64(val cadence.Value) uint64 {
+	switch v := val.(type) {
+	case cadence.UInt64:
+		return uint64(v)
+	case cadence.UInt32:
+		return uint64(v)
+	case cadence.UInt16:
+		return uint64(v)
+	case cadence.UInt8:
+		return uint64(v)
+	case cadence.UInt:
+		n, _ := strconv.ParseUint(v.String(), 10, 64)
+		return n
+	case cadence.UInt128:
+		n, _ := strconv.ParseUint(v.String(), 10, 64)
+		return n
+	case cadence.UFix64:
+		f, _ := strconv.ParseFloat(v.String(), 64)
+		if f < 0 {
+			return 0
+		}
+		return uint64(f)
+	default:
+		n, _ := strconv.ParseUint(v.String(), 10, 64)
+		return n
+	}
+}
+
 func toEVMTransactionOutput(rec repository.EVMTransactionRecord) map[string]interface{} {
 	return map[string]interface{}{
 		"block_number": rec.BlockHeight,
@@ -317,9 +371,14 @@ func transferDirection(addrFilter, from, to string) string {
 	return "deposit"
 }
 
-func toFTTransferOutput(t models.TokenTransfer, addrFilter string) map[string]interface{} {
+func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string) map[string]interface{} {
+	tokenIdentifier := formatTokenIdentifier(t.TokenContractAddress, contractName)
+	tokenName := ""
+	if contractName != "" {
+		tokenName = contractName
+	}
 	return map[string]interface{}{
-		"address":          t.TokenContractAddress,
+		"address":          tokenIdentifier,
 		"transaction_hash": t.TransactionID,
 		"block_height":     t.BlockHeight,
 		"timestamp":        formatTime(t.Timestamp),
@@ -330,20 +389,21 @@ func toFTTransferOutput(t models.TokenTransfer, addrFilter string) map[string]in
 		"verified":         false,
 		"is_primary":       false,
 		"token": map[string]interface{}{
-			"token":  t.TokenContractAddress,
-			"name":   "",
+			"token":  tokenIdentifier,
+			"name":   tokenName,
 			"symbol": "",
 			"logo":   "",
 		},
 	}
 }
 
-func toNFTTransferOutput(t models.TokenTransfer, addrFilter string) map[string]interface{} {
+func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string) map[string]interface{} {
+	nftType := formatTokenIdentifier(t.TokenContractAddress, contractName)
 	return map[string]interface{}{
 		"transaction_hash": t.TransactionID,
 		"block_height":     t.BlockHeight,
 		"timestamp":        formatTime(t.Timestamp),
-		"nft_type":         t.TokenContractAddress,
+		"nft_type":         nftType,
 		"nft_id":           t.TokenID,
 		"sender":           t.FromAddress,
 		"receiver":         t.ToAddress,
@@ -523,14 +583,26 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 		contractNames = append(contractNames, name)
 	}
 
+	storageUsed := uint64(0)
+	storageCapacity := uint64(0)
+	if raw, err := s.executeCadenceScript(r.Context(), cadenceStorageOverviewScript(), []cadence.Value{
+		cadence.NewAddress([8]byte(acc.Address)),
+	}); err == nil {
+		storageUsed, storageCapacity = parseStorageOverview(raw)
+	}
+	storageAvailable := uint64(0)
+	if storageCapacity > storageUsed {
+		storageAvailable = storageCapacity - storageUsed
+	}
+
 	data := map[string]interface{}{
 		"address":          strings.TrimPrefix(strings.ToLower(acc.Address.Hex()), "0x"),
 		"flowBalance":      float64(acc.Balance) / 1e8,
 		"contracts":        contractNames,
 		"keys":             keys,
-		"flowStorage":      0,
-		"storageUsed":      0,
-		"storageAvailable": 0,
+		"flowStorage":      storageCapacity,
+		"storageUsed":      storageUsed,
+		"storageAvailable": storageAvailable,
 	}
 	writeAPIResponse(w, []interface{}{data}, nil, nil)
 }
@@ -584,16 +656,16 @@ func (s *Server) handleFlowAccountFTTransfers(w http.ResponseWriter, r *http.Req
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, err := s.repo.ListTokenTransfersFiltered(r.Context(), false, address, "", "", height, limit, offset)
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, "", "", height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toFTTransferOutput(t, address))
+		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowAccountNFTTransfers(w http.ResponseWriter, r *http.Request) {
@@ -604,16 +676,16 @@ func (s *Server) handleFlowAccountNFTTransfers(w http.ResponseWriter, r *http.Re
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, err := s.repo.ListTokenTransfersFiltered(r.Context(), true, address, "", "", height, limit, offset)
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, address, "", "", height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toNFTTransferOutput(t, address))
+		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, address))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
@@ -623,17 +695,17 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, err := s.repo.ListTokenTransfersFiltered(r.Context(), false, normalizeAddr(r.URL.Query().Get("address")), normalizeTokenParam(r.URL.Query().Get("token")), r.URL.Query().Get("transaction_hash"), height, limit, offset)
+	addrFilter := normalizeAddr(r.URL.Query().Get("address"))
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, addrFilter, normalizeTokenParam(r.URL.Query().Get("token")), r.URL.Query().Get("transaction_hash"), height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	addrFilter := normalizeAddr(r.URL.Query().Get("address"))
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toFTTransferOutput(t, addrFilter))
+		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowNFTTransfers(w http.ResponseWriter, r *http.Request) {
@@ -643,17 +715,17 @@ func (s *Server) handleFlowNFTTransfers(w http.ResponseWriter, r *http.Request) 
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, err := s.repo.ListTokenTransfersFiltered(r.Context(), true, normalizeAddr(r.URL.Query().Get("address")), normalizeTokenParam(r.URL.Query().Get("nft_type")), r.URL.Query().Get("transaction_hash"), height, limit, offset)
+	addrFilter := normalizeAddr(r.URL.Query().Get("address"))
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, addrFilter, normalizeTokenParam(r.URL.Query().Get("nft_type")), r.URL.Query().Get("transaction_hash"), height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	addrFilter := normalizeAddr(r.URL.Query().Get("address"))
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toNFTTransferOutput(t, addrFilter))
+		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Request) {
@@ -663,6 +735,20 @@ func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if len(holdings) == 0 {
+		contracts, err := s.repo.ListFTTokenContractsByAddress(r.Context(), address, limit, offset)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		for _, c := range contracts {
+			holdings = append(holdings, models.FTHolding{
+				Address:         address,
+				ContractAddress: c,
+				Balance:         "0",
+			})
+		}
 	}
 	out := make([]map[string]interface{}, 0, len(holdings))
 	for _, h := range holdings {
@@ -678,6 +764,20 @@ func (s *Server) handleFlowAccountFTVaults(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if len(holdings) == 0 {
+		contracts, err := s.repo.ListFTTokenContractsByAddress(r.Context(), address, limit, offset)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		for _, c := range contracts {
+			holdings = append(holdings, models.FTHolding{
+				Address:         address,
+				ContractAddress: c,
+				Balance:         "0",
+			})
+		}
 	}
 	out := make([]map[string]interface{}, 0, len(holdings))
 	for _, h := range holdings {
@@ -726,16 +826,16 @@ func (s *Server) handleFlowAccountFTTokenTransfers(w http.ResponseWriter, r *htt
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, err := s.repo.ListTokenTransfersFiltered(r.Context(), false, address, token, "", height, limit, offset)
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, token, "", height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toFTTransferOutput(t, address))
+		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowAccountNFTByCollection(w http.ResponseWriter, r *http.Request) {
