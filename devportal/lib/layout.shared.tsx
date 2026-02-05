@@ -1,5 +1,5 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
-import { BookOpen, Code2 } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 
 export function baseOptions(): BaseLayoutProps {
   return {
@@ -13,11 +13,6 @@ export function baseOptions(): BaseLayoutProps {
         text: 'Docs',
         url: '/docs',
         icon: <BookOpen className="size-4" />,
-      },
-      {
-        text: 'API (Scalar)',
-        url: '/api-reference',
-        icon: <Code2 className="size-4" />,
       },
     ],
   };

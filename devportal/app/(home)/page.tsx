@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, BookOpen, Code2, Github } from 'lucide-react';
+import { ArrowRight, BookOpen, Github } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -17,14 +17,6 @@ export default function HomePage() {
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row items-stretch justify-center gap-3">
-          <Link
-            href="/api-reference"
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-fd-primary px-4 py-2 text-sm font-medium text-fd-primary-foreground hover:opacity-90 transition"
-          >
-            <Code2 className="size-4" />
-            API (Scalar)
-            <ArrowRight className="size-4" />
-          </Link>
           <Link
             href="/docs"
             className="inline-flex items-center justify-center gap-2 rounded-md border border-fd-border bg-fd-card px-4 py-2 text-sm font-medium text-fd-foreground hover:bg-fd-muted transition"
@@ -45,15 +37,6 @@ export default function HomePage() {
       </div>
 
       <div className="mx-auto w-full max-w-5xl mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-lg border border-fd-border bg-fd-card p-5">
-          <div className="flex items-center gap-2 text-sm font-medium text-fd-foreground">
-            <Code2 className="size-4 text-fd-primary" />
-            OpenAPI + Try It
-          </div>
-          <p className="mt-2 text-sm text-fd-muted-foreground leading-relaxed">
-            Browse endpoints, inspect schemas, and send test requests directly from your browser.
-          </p>
-        </div>
         <div className="rounded-lg border border-fd-border bg-fd-card p-5">
           <div className="flex items-center gap-2 text-sm font-medium text-fd-foreground">
             <BookOpen className="size-4 text-fd-primary" />
