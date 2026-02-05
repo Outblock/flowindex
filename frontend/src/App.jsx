@@ -22,15 +22,15 @@ function App() {
         <Route path="/stats" element={<Stats />} />
         <Route
           path="/api-docs"
-          element={<ApiDocs specUrl="/api/openapi/v1.json" apiBase="/api" title="FlowScan API v1" />}
+          element={<ApiDocs specUrl="/openapi/v1.json" />}
         />
         <Route
           path="/api-docs/v1"
-          element={<ApiDocs specUrl="/api/openapi/v1.json" apiBase="/api" title="FlowScan API v1" />}
+          element={<ApiDocs specUrl="/openapi/v1.json" />}
         />
         <Route
           path="/api-docs/v2"
-          element={<ApiDocs specUrl="/api/openapi/v2.json" apiBase="/api/api/v2" title="FlowScan API v2" />}
+          element={<ApiDocs specUrl="/openapi/v2.json" />}
         />
       </Routes>
       <Footer />

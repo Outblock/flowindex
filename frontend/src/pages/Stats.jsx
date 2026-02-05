@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 // eslint-disable-next-line
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Activity, HardDrive, Server } from 'lucide-react';
@@ -11,57 +11,79 @@ export default function Stats() {
     // State for Speed Calculations
     const [historySpeed, setHistorySpeed] = useState(0); // blocks per second
     const [forwardSpeed, setForwardSpeed] = useState(0); // blocks per second
-    const [lastHistoryCheck, setLastHistoryCheck] = useState(null); // { time: number, height: number }
-    const [lastForwardCheck, setLastForwardCheck] = useState(null); // { time: number, height: number }
+    const lastHistoryCheckRef = useRef(null); // { time: number, height: number }
+    const lastForwardCheckRef = useRef(null); // { time: number, height: number }
+
+    const processStatus = useCallback((data) => {
+        const now = Date.now();
+
+        // Calculate History Speed
+        const currentHistoryHeight = (data.history_height && data.history_height > 0)
+            ? data.history_height
+            : (data.min_height || 0);
+
+        if (lastHistoryCheckRef.current) {
+            const timeDiff = (now - lastHistoryCheckRef.current.time) / 1000;
+            const blockDiff = lastHistoryCheckRef.current.height - currentHistoryHeight;
+            if (timeDiff > 0 && blockDiff >= 0) {
+                const instantaneousSpeed = blockDiff / timeDiff;
+                setHistorySpeed(prev => (prev * 0.7) + (instantaneousSpeed * 0.3));
+            }
+        }
+
+        lastHistoryCheckRef.current = { time: now, height: currentHistoryHeight };
+
+        // Calculate Forward Speed
+        const currentForwardHeight = data.indexed_height || 0;
+        if (lastForwardCheckRef.current) {
+            const timeDiff = (now - lastForwardCheckRef.current.time) / 1000;
+            const blockDiff = currentForwardHeight - lastForwardCheckRef.current.height;
+            if (timeDiff > 0 && blockDiff >= 0) {
+                const instantaneousSpeed = blockDiff / timeDiff;
+                setForwardSpeed(prev => (prev * 0.7) + (instantaneousSpeed * 0.3));
+            }
+        }
+        lastForwardCheckRef.current = { time: now, height: currentForwardHeight };
+
+        setStatus(data);
+        setLoading(false);
+    }, []);
 
     const fetchStatus = async () => {
         try {
             const data = await api.getStatus();
-
-            // Calculate History Speed
-            const now = Date.now();
-            const currentHistoryHeight = (data.history_height && data.history_height > 0)
-                ? data.history_height
-                : (data.min_height || 0);
-
-            if (lastHistoryCheck) {
-                const timeDiff = (now - lastHistoryCheck.time) / 1000; // Seconds
-                const blockDiff = lastHistoryCheck.height - currentHistoryHeight; // Should be positive (going backwards)
-
-                if (timeDiff > 0 && blockDiff >= 0) { // Only update if moving or same
-                    // Use a simple moving average or just instantaneous
-                    const instantaneousSpeed = blockDiff / timeDiff;
-                    // simple weighted average for smoothness: 0.7 * new + 0.3 * old
-                    setHistorySpeed(prev => (prev * 0.7) + (instantaneousSpeed * 0.3));
-                }
-            }
-
-            setLastHistoryCheck({ time: now, height: currentHistoryHeight });
-
-            // Calculate Forward Speed
-            const currentForwardHeight = data.indexed_height || 0;
-            if (lastForwardCheck) {
-                const timeDiff = (now - lastForwardCheck.time) / 1000;
-                const blockDiff = currentForwardHeight - lastForwardCheck.height;
-                if (timeDiff > 0 && blockDiff >= 0) {
-                    const instantaneousSpeed = blockDiff / timeDiff;
-                    setForwardSpeed(prev => (prev * 0.7) + (instantaneousSpeed * 0.3));
-                }
-            }
-            setLastForwardCheck({ time: now, height: currentForwardHeight });
-            setStatus(data);
-            setLoading(false);
+            processStatus(data);
         } catch (error) {
             console.error('Failed to fetch status:', error);
         }
     };
 
     useEffect(() => {
-        // eslint-disable-next-line
         fetchStatus();
-        const interval = setInterval(fetchStatus, 3000); // Check every 3 seconds for better rate calc
-        return () => clearInterval(interval);
-    }, []); // Removed fetchStatus from dependency to avoid loop, though it's inside component so it's fine.
+        const interval = setInterval(fetchStatus, 3000);
+
+        let ws;
+        try {
+            const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const wsUrl = `${proto}://${window.location.host}/ws/status`;
+            ws = new WebSocket(wsUrl);
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    processStatus(data);
+                } catch (err) {
+                    console.error('Failed to parse status WS payload:', err);
+                }
+            };
+        } catch (err) {
+            console.error('Failed to open status WS:', err);
+        }
+
+        return () => {
+            clearInterval(interval);
+            if (ws) ws.close();
+        };
+    }, [processStatus]);
 
     if (loading) {
         return (
@@ -112,7 +134,7 @@ export default function Stats() {
         historyEtaSeconds = historyHeight / historySpeed;
     }
 
-    const historyBase = startHeight > 0 ? startHeight : latestHeight;
+    const historyBase = latestHeight > 0 ? latestHeight : startHeight;
     const historyTotal = historyBase > 0 ? historyBase : 0;
     const historyCovered = historyBase > 0 && historyHeight > 0 ? Math.max(0, historyBase - historyHeight) : 0;
     const historyPercent = historyTotal > 0 ? (historyCovered / historyTotal) * 100 : 0;
@@ -311,6 +333,7 @@ export default function Stats() {
                             const height = checkpoints?.[worker.key] || 0;
                             const behind = latestHeight > height ? (latestHeight - height) : 0;
                             const enabled = workerEnabled?.[worker.key];
+                            const progress = latestHeight > 0 ? Math.min(100, (height / latestHeight) * 100) : 0;
                             return (
                                 <div key={worker.key} className="bg-black/30 border border-white/10 p-4">
                                     <div className="flex items-center justify-between text-gray-400 text-xs uppercase tracking-wider mb-1">
@@ -320,6 +343,12 @@ export default function Stats() {
                                         </span>
                                     </div>
                                     <div className="text-xl font-bold text-white">{height.toLocaleString()}</div>
+                                    <div className="mt-2 h-2 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-nothing-green/40 to-nothing-green/80"
+                                            style={{ width: `${progress}%` }}
+                                        />
+                                    </div>
                                     <div className="text-[10px] uppercase tracking-wider text-gray-500">
                                         Behind: {behind.toLocaleString()}
                                     </div>

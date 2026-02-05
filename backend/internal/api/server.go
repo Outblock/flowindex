@@ -128,6 +128,29 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleStatusWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("Status WebSocket upgrade error:", err)
+		return
+	}
+	defer conn.Close()
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		payload, err := s.buildStatusPayload(r.Context())
+		if err != nil {
+			payload = []byte(`{"status":"error"}`)
+		}
+		if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+			return
+		}
+		<-ticker.C
+	}
+}
+
 // --- Broadcast Helpers ---
 
 type BroadcastMessage struct {
@@ -223,6 +246,7 @@ func registerBaseRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/openapi/v2.json", s.handleOpenAPIV2JSON).Methods("GET", "OPTIONS")
 	r.HandleFunc("/status", s.handleStatus).Methods("GET", "OPTIONS")
 	r.HandleFunc("/ws", s.handleWebSocket).Methods("GET", "OPTIONS")
+	r.HandleFunc("/ws/status", s.handleStatusWebSocket).Methods("GET", "OPTIONS")
 }
 
 func registerLegacyRoutes(r *mux.Router, s *Server) {
@@ -477,41 +501,56 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	s.statusCache.mu.Unlock()
 
+	payload, err := s.buildStatusPayload(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.statusCache.mu.Lock()
+	s.statusCache.payload = payload
+	s.statusCache.expiresAt = time.Now().Add(3 * time.Second)
+	s.statusCache.mu.Unlock()
+
+	w.Write(payload)
+}
+
+func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 	// Get indexed height from DB (Forward Tip)
-	lastIndexed, err := s.repo.GetLastIndexedHeight(r.Context(), "main_ingester")
+	lastIndexed, err := s.repo.GetLastIndexedHeight(ctx, "main_ingester")
 	if err != nil {
 		lastIndexed = 0
 	}
 
 	// Get history height from DB (Backward Tip)
-	historyIndexed, err := s.repo.GetLastIndexedHeight(r.Context(), "history_ingester")
+	historyIndexed, err := s.repo.GetLastIndexedHeight(ctx, "history_ingester")
 	if err != nil {
 		historyIndexed = 0
 	}
 	// If historyIngester never ran, it returns 0. If it ran, it returns the lowest block processed.
 
 	// Get Real Block Range (Min/Max/Count in DB)
-	minH, maxH, totalBlocks, err := s.repo.GetBlockRange(r.Context())
+	minH, maxH, totalBlocks, err := s.repo.GetBlockRange(ctx)
 	if err != nil {
 		minH = 0
 		maxH = 0
 		totalBlocks = 0
 	}
 
-	checkpoints, err := s.repo.GetAllCheckpoints(r.Context())
+	checkpoints, err := s.repo.GetAllCheckpoints(ctx)
 	if err != nil {
 		checkpoints = map[string]uint64{}
 	}
 
-	totalEvents, err := s.repo.GetTotalEvents(r.Context())
+	totalEvents, err := s.repo.GetTotalEvents(ctx)
 	if err != nil {
 		totalEvents = 0
 	}
-	totalAddresses, err := s.repo.GetTotalAddresses(r.Context())
+	totalAddresses, err := s.repo.GetTotalAddresses(ctx)
 	if err != nil {
 		totalAddresses = 0
 	}
-	totalContracts, err := s.repo.GetTotalContracts(r.Context())
+	totalContracts, err := s.repo.GetTotalContracts(ctx)
 	if err != nil {
 		totalContracts = 0
 	}
@@ -538,7 +577,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		cachedHeight = s.latestHeightCache.height
 		s.latestHeightCache.mu.Unlock()
 
-		ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 		defer cancel()
 		if h, err := s.client.GetLatestBlockHeight(ctx); err == nil {
 			latestHeight = h
@@ -584,7 +623,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get total transactions
-	totalTxs, err := s.repo.GetTotalTransactions(r.Context())
+	totalTxs, err := s.repo.GetTotalTransactions(ctx)
 	if err != nil {
 		totalTxs = 0
 	}
@@ -624,16 +663,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := json.Marshal(resp)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	s.statusCache.mu.Lock()
-	s.statusCache.payload = payload
-	s.statusCache.expiresAt = time.Now().Add(3 * time.Second)
-	s.statusCache.mu.Unlock()
-
-	w.Write(payload)
+	return payload, nil
 }
 
 func (s *Server) handleListBlocks(w http.ResponseWriter, r *http.Request) {
