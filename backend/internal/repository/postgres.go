@@ -266,16 +266,16 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 						errMsg = t.ErrorMessage
 					}
 
-						return []any{
-							t.BlockHeight, t.ID, t.TransactionIndex,
-							t.ProposerAddress, t.PayerAddress, t.Authorizers,
-							scriptHash, scriptInline, args,
-							t.Status, errMsg, t.IsEVM,
-							t.GasLimit, t.GasUsed, eventCount,
-							txTimestamp, batchCreatedAt,
+					return []any{
+						t.BlockHeight, t.ID, t.TransactionIndex,
+						t.ProposerAddress, t.PayerAddress, t.Authorizers,
+						scriptHash, scriptInline, args,
+						t.Status, errMsg, t.IsEVM,
+						t.GasLimit, t.GasUsed, eventCount,
+						txTimestamp, batchCreatedAt,
 					}, nil
-					}),
-				)
+				}),
+			)
 
 			if errTx == nil {
 				if err := sub.Commit(ctx); err == nil {
@@ -652,11 +652,11 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		for _, e := range events {
 			if strings.Contains(e.Type, "AccountContractAdded") || strings.Contains(e.Type, "AccountContractUpdated") {
 				var payload map[string]interface{}
-					if err := json.Unmarshal(e.Payload, &payload); err == nil {
-						address, _ := payload["address"].(string)
-						name, _ := payload["name"].(string)
-						if address != "" && name != "" {
-							_, err := dbtx.Exec(ctx, `
+				if err := json.Unmarshal(e.Payload, &payload); err == nil {
+					address, _ := payload["address"].(string)
+					name, _ := payload["name"].(string)
+					if address != "" && name != "" {
+						_, err := dbtx.Exec(ctx, `
 								INSERT INTO app.smart_contracts (address, name, last_updated_height, created_at, updated_at)
 								VALUES ($1, $2, $3, $4, $5)
 								ON CONFLICT (address, name) DO UPDATE SET
@@ -795,7 +795,19 @@ func (r *Repository) GetBlockByID(ctx context.Context, id string) (*models.Block
 
 func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*models.Block, error) {
 	var b models.Block
-	err := r.db.QueryRow(ctx, "SELECT height, id, parent_id, timestamp, collection_count, total_gas_used, is_sealed, created_at FROM raw.blocks WHERE height = $1", height).
+	err := r.db.QueryRow(ctx, `
+		SELECT
+			height,
+			id,
+			COALESCE(parent_id, '') AS parent_id,
+			timestamp,
+			COALESCE(collection_count, 0) AS collection_count,
+			COALESCE(total_gas_used, 0) AS total_gas_used,
+			COALESCE(is_sealed, FALSE) AS is_sealed,
+			created_at
+		FROM raw.blocks
+		WHERE height = $1
+	`, height).
 		Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed, &b.CreatedAt)
 	if err != nil {
 		return nil, err
@@ -803,10 +815,24 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 
 	// Get transactions for this block
 	txRows, err := r.db.Query(ctx, `
-		SELECT id, block_height, transaction_index, proposer_address, payer_address, authorizers, status, error_message, is_evm, gas_limit, gas_used, timestamp, created_at
-		FROM raw.transactions 
-		WHERE block_height = $1 
-		ORDER BY transaction_index ASC`, height)
+		SELECT
+			id,
+			block_height,
+			transaction_index,
+			COALESCE(proposer_address, '') AS proposer_address,
+			COALESCE(payer_address, '') AS payer_address,
+			COALESCE(authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(status, '') AS status,
+			COALESCE(error_message, '') AS error_message,
+			COALESCE(is_evm, FALSE) AS is_evm,
+			COALESCE(gas_limit, 0) AS gas_limit,
+			COALESCE(gas_used, 0) AS gas_used,
+			timestamp,
+			created_at
+		FROM raw.transactions
+		WHERE block_height = $1
+		ORDER BY transaction_index ASC
+	`, height)
 	if err != nil {
 		// If no transactions, just return block without them
 		b.TxCount = 0
@@ -855,10 +881,27 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 		// NOTE: raw.transactions does NOT have EVM logs. app.evm_transactions has them.
 		// For simplicity, we query raw.transactions and app.evm_transactions.
 		query = `
-			SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, 
-			       COALESCE(0, 0), COALESCE(0, 0), -- placeholders for key_index/seq_num if missing in raw table
-			       t.payer_address, t.authorizers, COALESCE(t.script, s.script_text) AS script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.timestamp, t.created_at,
-			       COALESCE(et.evm_hash, ''), COALESCE(et.from_address, ''), COALESCE(et.to_address, ''), ''
+			SELECT
+				t.id,
+				t.block_height,
+				t.transaction_index,
+				COALESCE(t.proposer_address, '') AS proposer_address,
+				COALESCE(0, 0), COALESCE(0, 0), -- placeholders for key_index/seq_num if missing in raw table
+				COALESCE(t.payer_address, '') AS payer_address,
+				COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+				COALESCE(t.script, s.script_text, '') AS script,
+				t.arguments,
+				COALESCE(t.status, '') AS status,
+				COALESCE(t.error_message, '') AS error_message,
+				COALESCE(t.is_evm, FALSE) AS is_evm,
+				COALESCE(t.gas_limit, 0) AS gas_limit,
+				COALESCE(t.gas_used, 0) AS gas_used,
+				t.timestamp,
+				t.created_at,
+				COALESCE(et.evm_hash, '') AS evm_hash,
+				COALESCE(et.from_address, '') AS from_address,
+				COALESCE(et.to_address, '') AS to_address,
+				'' AS evm_value
 			FROM raw.transactions t
 			LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 			LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
@@ -873,10 +916,27 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 		errLookup := r.db.QueryRow(ctx, "SELECT id, block_height FROM raw.tx_lookup WHERE evm_hash = $1", normalizedID).Scan(&txID, &bh)
 		if errLookup == nil {
 			query = `
-				SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, 
-   				       COALESCE(0, 0), COALESCE(0, 0),
-				       t.payer_address, t.authorizers, COALESCE(t.script, s.script_text) AS script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.timestamp, t.created_at,
-				       COALESCE(et.evm_hash, ''), COALESCE(et.from_address, ''), COALESCE(et.to_address, ''), ''
+				SELECT
+					t.id,
+					t.block_height,
+					t.transaction_index,
+					COALESCE(t.proposer_address, '') AS proposer_address,
+					COALESCE(0, 0), COALESCE(0, 0),
+					COALESCE(t.payer_address, '') AS payer_address,
+					COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+					COALESCE(t.script, s.script_text, '') AS script,
+					t.arguments,
+					COALESCE(t.status, '') AS status,
+					COALESCE(t.error_message, '') AS error_message,
+					COALESCE(t.is_evm, FALSE) AS is_evm,
+					COALESCE(t.gas_limit, 0) AS gas_limit,
+					COALESCE(t.gas_used, 0) AS gas_used,
+					t.timestamp,
+					t.created_at,
+					COALESCE(et.evm_hash, '') AS evm_hash,
+					COALESCE(et.from_address, '') AS from_address,
+					COALESCE(et.to_address, '') AS to_address,
+					'' AS evm_value
 				FROM raw.transactions t
 				LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 				LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
@@ -894,10 +954,27 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 			if errEvm == nil {
 				// Found via EVM Hash
 				query = `
-					SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, 
-	   				       COALESCE(0, 0), COALESCE(0, 0),
-					       t.payer_address, t.authorizers, COALESCE(t.script, s.script_text) AS script, t.arguments, t.status, t.error_message, t.is_evm, t.gas_limit, t.gas_used, t.timestamp, t.created_at,
-					       COALESCE(et.evm_hash, ''), COALESCE(et.from_address, ''), COALESCE(et.to_address, ''), ''
+					SELECT
+						t.id,
+						t.block_height,
+						t.transaction_index,
+						COALESCE(t.proposer_address, '') AS proposer_address,
+						COALESCE(0, 0), COALESCE(0, 0),
+						COALESCE(t.payer_address, '') AS payer_address,
+						COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+						COALESCE(t.script, s.script_text, '') AS script,
+						t.arguments,
+						COALESCE(t.status, '') AS status,
+						COALESCE(t.error_message, '') AS error_message,
+						COALESCE(t.is_evm, FALSE) AS is_evm,
+						COALESCE(t.gas_limit, 0) AS gas_limit,
+						COALESCE(t.gas_used, 0) AS gas_used,
+						t.timestamp,
+						t.created_at,
+						COALESCE(et.evm_hash, '') AS evm_hash,
+						COALESCE(et.from_address, '') AS from_address,
+						COALESCE(et.to_address, '') AS to_address,
+						'' AS evm_value
 					FROM raw.transactions t
 					LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 					LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
@@ -957,13 +1034,42 @@ func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) 
 
 func (r *Repository) GetTransactionsByAddress(ctx context.Context, address string, limit, offset int) ([]models.Transaction, error) {
 	query := `
-		SELECT DISTINCT ON (at.block_height, at.transaction_id)
-		       t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
-		FROM app.address_transactions at
-		JOIN raw.transactions t ON at.transaction_id = t.id AND at.block_height = t.block_height
-		WHERE at.address = $1
-		ORDER BY at.block_height DESC, at.transaction_id DESC
-		LIMIT $2 OFFSET $3`
+		WITH addr_txs AS (
+			-- 1) Signed participation (payer/proposer/authorizer)
+			SELECT at.block_height, at.transaction_id
+			FROM app.address_transactions at
+			WHERE at.address = $1
+
+			UNION
+
+			-- 2) Token/NFT transfer participation (from/to)
+			-- Note: written by token_worker from raw.events, so this does not require reindexing.
+			SELECT tt.block_height, tt.transaction_id
+			FROM app.token_transfers tt
+			WHERE tt.from_address = $1
+
+			UNION
+
+			SELECT tt.block_height, tt.transaction_id
+			FROM app.token_transfers tt
+			WHERE tt.to_address = $1
+		)
+		SELECT DISTINCT ON (a.block_height, a.transaction_id)
+			t.id,
+			t.block_height,
+			t.transaction_index,
+			COALESCE(t.proposer_address, '') AS proposer_address,
+			COALESCE(t.payer_address, '') AS payer_address,
+			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(t.status, '') AS status,
+			COALESCE(t.error_message, '') AS error_message,
+			t.timestamp,
+			t.created_at
+		FROM addr_txs a
+		JOIN raw.transactions t ON t.id = a.transaction_id AND t.block_height = a.block_height
+		ORDER BY a.block_height DESC, a.transaction_id DESC
+		LIMIT $2 OFFSET $3
+	`
 
 	rows, err := r.db.Query(ctx, query, address, limit, offset)
 	if err != nil {
@@ -989,14 +1095,40 @@ type AddressTxCursor struct {
 
 func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address string, limit int, cursor *AddressTxCursor) ([]models.Transaction, error) {
 	query := `
-		SELECT DISTINCT ON (at.block_height, at.transaction_id)
-		       t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
-		FROM app.address_transactions at
-		JOIN raw.transactions t ON at.transaction_id = t.id AND at.block_height = t.block_height
-		WHERE at.address = $1
-		  AND ($2::bigint IS NULL OR (at.block_height, at.transaction_id) < ($2, $3))
-		ORDER BY at.block_height DESC, at.transaction_id DESC
-		LIMIT $4`
+		WITH addr_txs AS (
+			SELECT at.block_height, at.transaction_id
+			FROM app.address_transactions at
+			WHERE at.address = $1
+
+			UNION
+
+			SELECT tt.block_height, tt.transaction_id
+			FROM app.token_transfers tt
+			WHERE tt.from_address = $1
+
+			UNION
+
+			SELECT tt.block_height, tt.transaction_id
+			FROM app.token_transfers tt
+			WHERE tt.to_address = $1
+		)
+		SELECT DISTINCT ON (a.block_height, a.transaction_id)
+			t.id,
+			t.block_height,
+			t.transaction_index,
+			COALESCE(t.proposer_address, '') AS proposer_address,
+			COALESCE(t.payer_address, '') AS payer_address,
+			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(t.status, '') AS status,
+			COALESCE(t.error_message, '') AS error_message,
+			t.timestamp,
+			t.created_at
+		FROM addr_txs a
+		JOIN raw.transactions t ON t.id = a.transaction_id AND t.block_height = a.block_height
+		WHERE ($2::bigint IS NULL OR (a.block_height, a.transaction_id) < ($2, $3))
+		ORDER BY a.block_height DESC, a.transaction_id DESC
+		LIMIT $4
+	`
 
 	var (
 		bh interface{}
@@ -1026,7 +1158,17 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 
 func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, error) {
 	query := `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
+		SELECT
+			t.id,
+			t.block_height,
+			t.transaction_index,
+			COALESCE(t.proposer_address, '') AS proposer_address,
+			COALESCE(t.payer_address, '') AS payer_address,
+			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(t.status, '') AS status,
+			COALESCE(t.error_message, '') AS error_message,
+			t.timestamp,
+			t.created_at
 		FROM raw.transactions t
 		ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC
 		LIMIT $1 OFFSET $2`
@@ -1062,7 +1204,17 @@ type TokenTransferCursor struct {
 
 func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cursor *TxCursor) ([]models.Transaction, error) {
 	query := `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers, t.status, t.error_message, t.timestamp, t.created_at
+		SELECT
+			t.id,
+			t.block_height,
+			t.transaction_index,
+			COALESCE(t.proposer_address, '') AS proposer_address,
+			COALESCE(t.payer_address, '') AS payer_address,
+			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(t.status, '') AS status,
+			COALESCE(t.error_message, '') AS error_message,
+			t.timestamp,
+			t.created_at
 		FROM raw.transactions t
 		WHERE ($1::bigint IS NULL OR (t.block_height, t.transaction_index, t.id) < ($1, $2, $3))
 		ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC

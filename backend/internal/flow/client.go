@@ -12,10 +12,12 @@ import (
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/access/grpc"
 	"golang.org/x/time/rate"
+	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	flowgrpc "github.com/onflow/flow-go-sdk/access/grpc"
 )
 
 // Client wraps the Flow Access Client
@@ -24,7 +26,7 @@ type Client struct {
 	// The SDK interface changed in recent versions.
 	// Using the gRPC client directly usually returns an implementation of access.Client.
 	// For now, let's use the specific client to avoid interface confusion if versions mismatch.
-	grpcClients []*grpc.Client
+	grpcClients []*flowgrpc.Client
 	nodes       []string
 	// Per-node spork root (inclusive). Height < minHeight cannot be served by that node.
 	// Learned dynamically from NotFound errors.
@@ -50,12 +52,13 @@ func NewClient(url string) (*Client, error) {
 // This is useful for separating "live" nodes from "historic" nodes for backfills across sporks.
 func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
 	nodes := parseAccessNodesFromEnv(envKey, fallback)
-	clients := make([]*grpc.Client, 0, len(nodes))
+	clients := make([]*flowgrpc.Client, 0, len(nodes))
 	connectedNodes := make([]string, 0, len(nodes))
 	ranks := make([]int, 0, len(nodes))
 	var firstErr error
+	dialOpts := grpcDialOptionsFromEnv()
 	for _, node := range nodes {
-		c, err := grpc.NewClient(node)
+		c, err := flowgrpc.NewClient(node, flowgrpc.WithGRPCDialOptions(dialOpts...))
 		if err != nil {
 			// Be tolerant here: when we configure a long list of historic spork nodes,
 			// some hostnames might not resolve (or might be temporarily unavailable).
@@ -285,12 +288,12 @@ func parseAccessNodesFromEnv(envKey string, fallback string) []string {
 	return nodes
 }
 
-func (c *Client) pickClient() *grpc.Client {
+func (c *Client) pickClient() *flowgrpc.Client {
 	_, cli := c.pickAnyClient()
 	return cli
 }
 
-func (c *Client) pickAnyClient() (int, *grpc.Client) {
+func (c *Client) pickAnyClient() (int, *flowgrpc.Client) {
 	if len(c.grpcClients) == 0 {
 		return -1, nil
 	}
@@ -314,7 +317,7 @@ func (c *Client) pickAnyClient() (int, *grpc.Client) {
 	return start, c.grpcClients[start]
 }
 
-func (c *Client) pickClientForHeight(height uint64) (int, *grpc.Client) {
+func (c *Client) pickClientForHeight(height uint64) (int, *flowgrpc.Client) {
 	if len(c.grpcClients) == 0 {
 		return -1, nil
 	}
@@ -414,7 +417,7 @@ type PinnedClient struct {
 	parent *Client
 	idx    int
 	node   string
-	cli    *grpc.Client
+	cli    *flowgrpc.Client
 }
 
 func (c *Client) PinByHeight(height uint64) (*PinnedClient, error) {
@@ -650,6 +653,28 @@ func extractSporkRank(node string) int {
 		return 0
 	}
 	return v
+}
+
+func grpcDialOptionsFromEnv() []grpc.DialOption {
+	// Batching Access API calls (e.g. GetTransactionResultsByBlockID) can exceed the default 4MB
+	// gRPC receive limit on busy blocks. Allow a larger payload so history backfill doesn't stall.
+	//
+	// Defaults: 64MB recv, 16MB send. Override with FLOW_GRPC_MAX_RECV_MB/FLOW_GRPC_MAX_SEND_MB.
+	maxRecv := int(getEnvFloat("FLOW_GRPC_MAX_RECV_MB", 64) * 1024 * 1024)
+	maxSend := int(getEnvFloat("FLOW_GRPC_MAX_SEND_MB", 16) * 1024 * 1024)
+	const minBytes = 4 * 1024 * 1024
+	if maxRecv < minBytes {
+		maxRecv = minBytes
+	}
+	if maxSend < minBytes {
+		maxSend = minBytes
+	}
+	return []grpc.DialOption{
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(maxRecv),
+			grpc.MaxCallSendMsgSize(maxSend),
+		),
+	}
 }
 
 // Close closes the connection

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/onflow/cadence"
 	flowsdk "github.com/onflow/flow-go-sdk"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // FetchResult holds the data for a single block height
@@ -110,13 +113,42 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			return result
 		}
 
+		// Track whether we should retry this height with a different node pin.
+		repinRequested := false
+
 		results, err := pin.GetTransactionResultsByBlockID(ctx, block.ID)
 		if err != nil {
 			if shouldRepin(err) {
 				continue
 			}
-			result.Error = fmt.Errorf("failed to get transaction results for block %s: %w", block.ID, err)
-			return result
+
+			// Some blocks have enough tx results/events to exceed the default gRPC receive limit.
+			// Fall back to per-tx result calls to avoid stalling history backfill on a single busy block.
+			if isGRPCMessageTooLarge(err) {
+				log.Printf("[history_ingester] Warn: tx results payload too large for block %s (height=%d), falling back to per-tx calls: %v", block.ID, height, err)
+				results = make([]*flowsdk.TransactionResult, 0, len(txs))
+				for _, tx := range txs {
+					if tx == nil {
+						continue
+					}
+					r, rErr := pin.GetTransactionResult(ctx, tx.ID())
+					if rErr != nil {
+						if shouldRepin(rErr) {
+							repinRequested = true
+							break
+						}
+						result.Error = fmt.Errorf("failed to get tx result %s: %w", tx.ID().String(), rErr)
+						return result
+					}
+					results = append(results, r)
+				}
+				if repinRequested {
+					continue
+				}
+			} else {
+				result.Error = fmt.Errorf("failed to get transaction results for block %s: %w", block.ID, err)
+				return result
+			}
 		}
 
 		resByID := make(map[string]*flowsdk.TransactionResult, len(results))
@@ -129,7 +161,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 		var dbTxs []models.Transaction
 		var dbEvents []models.Event
-		repinRequested := false
 
 		now := time.Now()
 
@@ -485,6 +516,23 @@ func isAddress(s string) bool {
 		}
 	}
 	return true
+}
+
+func isGRPCMessageTooLarge(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "received message larger than max") {
+		return true
+	}
+	// Some SDK errors wrap the status; keep the check resilient.
+	if st, ok := status.FromError(err); ok {
+		if st.Code() == codes.ResourceExhausted && strings.Contains(st.Message(), "received message larger than max") {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *Worker) parseEventType(typeID string) (address, contract, event string) {

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,7 +46,7 @@ func main() {
 	}
 
 	log.Println("Initializing FlowScan Clone Backend...")
-	log.Printf("DB: %s", dbURL)
+	log.Printf("DB: %s", redactDatabaseURL(dbURL))
 	log.Printf("Flow Node: %s", flowURL)
 	log.Printf("API Port: %s", apiPort)
 
@@ -467,4 +469,33 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+func redactDatabaseURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	u, err := url.Parse(raw)
+	if err == nil && u.Scheme != "" {
+		if u.User != nil {
+			user := u.User.Username()
+			if user == "" {
+				user = "user"
+			}
+			u.User = url.UserPassword(user, "****")
+		}
+		// Avoid leaking secrets embedded in query params; keep only scheme/host/path for debugging.
+		u.RawQuery = ""
+		return u.String()
+	}
+
+	// Best-effort fallback for malformed/DSN-like URLs.
+	re := regexp.MustCompile(`(?i)(postgres(?:ql)?://[^:/?#]+):([^@]+)@`)
+	if re.MatchString(raw) {
+		return re.ReplaceAllString(raw, `$1:****@`)
+	}
+	re = regexp.MustCompile(`(?i)(password=)([^\\s]+)`)
+	return re.ReplaceAllString(raw, `$1****`)
 }
