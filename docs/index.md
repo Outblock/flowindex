@@ -5,6 +5,7 @@ This directory contains the canonical documentation for FlowScan.
 ## Architecture
 
 - `docs/architecture/ARCHITECTURE.md` — system overview and diagrams
+- `docs/architecture/api-redesign-plan.md` — API redesign coverage + DB gaps
 - `docs/architecture/schema-v2-plan.md` — Schema V2 refactor plan
 
 ## Operations
@@ -28,3 +29,6 @@ This directory contains the canonical documentation for FlowScan.
 
 - `docs/tooling/tooling.md` — local dev commands and references
 
+## API
+
+- `docs/openapi.json` — OpenAPI spec (matches `api.json`)

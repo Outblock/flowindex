@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"flowscan-clone/internal/flow"
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 
@@ -165,7 +164,7 @@ func init() {
 
 type Server struct {
 	repo        *repository.Repository
-	client      *flow.Client
+	client      FlowClient
 	httpServer  *http.Server
 	startBlock  uint64
 	statusCache struct {
@@ -180,7 +179,7 @@ type Server struct {
 	}
 }
 
-func NewServer(repo *repository.Repository, client *flow.Client, port string, startBlock uint64) *Server {
+func NewServer(repo *repository.Repository, client FlowClient, port string, startBlock uint64) *Server {
 	r := mux.NewRouter()
 
 	s := &Server{
@@ -216,6 +215,114 @@ func NewServer(repo *repository.Repository, client *flow.Client, port string, st
 	r.HandleFunc("/stats/daily", s.handleGetDailyStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/stats/network", s.handleGetNetworkStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/keys/{publicKey}", s.handleGetAddressByPublicKey).Methods("GET", "OPTIONS")
+
+	// New API (api.json) - Accounting/Flow/Status
+	r.HandleFunc("/flow/v1/block", s.handleFlowListBlocks).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/block/{height}", s.handleFlowGetBlock).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/block/{height}/service-event", s.handleFlowBlockServiceEvents).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/block/{height}/transaction", s.handleFlowBlockTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/transaction", s.handleFlowListTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/transaction/{id}", s.handleFlowGetTransaction).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account", s.handleFlowListAccounts).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}", s.handleFlowGetAccount).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/transaction", s.handleFlowAccountTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/ft/transfer", s.handleFlowAccountFTTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/nft/transfer", s.handleFlowAccountNFTTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/ft/holding", s.handleFlowAccountFTHoldings).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/ft", s.handleFlowAccountFTVaults).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/ft/{token}", s.handleFlowAccountFTToken).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/ft/{token}/transfer", s.handleFlowAccountFTTokenTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/nft", s.handleFlowAccountNFTCollections).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/nft/{nft_type}", s.handleFlowAccountNFTByCollection).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/ft/transfer", s.handleFlowFTTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/ft", s.handleFlowListFTTokens).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/ft/{token}", s.handleFlowGetFTToken).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/ft/{token}/holding", s.handleFlowFTHoldingsByToken).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/ft/{token}/account/{address}", s.handleFlowAccountFTHoldingByToken).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/nft/transfer", s.handleFlowNFTTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/nft", s.handleFlowListNFTCollections).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/nft/{nft_type}", s.handleFlowGetNFTCollection).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/nft/{nft_type}/holding", s.handleFlowNFTHoldingsByCollection).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/nft/{nft_type}/item/{id}", s.handleFlowNFTItem).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/contract", s.handleFlowListContracts).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/contract/{identifier}", s.handleFlowGetContract).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/contract/{identifier}/{id}", s.handleFlowGetContractVersion).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/evm/transaction", s.handleFlowListEVMTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/evm/transaction/{hash}", s.handleFlowGetEVMTransaction).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/evm/token", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/evm/token/{address}", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/node", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/node/{node_id}", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/node/{node_id}/reward/delegation", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/scheduled-transaction", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/tax-report", s.handleNotImplemented).Methods("GET", "OPTIONS")
+
+	// Accounting (aliases to Flow)
+	r.HandleFunc("/accounting/v1/account/{address}", s.handleFlowGetAccount).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounting/v1/account/{address}/transaction", s.handleFlowAccountTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounting/v1/account/{address}/ft/transfer", s.handleFlowAccountFTTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounting/v1/account/{address}/nft", s.handleFlowAccountNFTCollections).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounting/v1/account/{address}/ft", s.handleFlowAccountFTVaults).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounting/v1/transaction", s.handleFlowListTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounting/v1/transaction/{id}", s.handleFlowGetTransaction).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounting/v1/nft/transfer", s.handleFlowNFTTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounting/v1/account/{address}/tax-report", s.handleNotImplemented).Methods("GET", "OPTIONS")
+
+	// Status
+	r.HandleFunc("/status/v1/count", s.handleStatusCount).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/v1/stat", s.handleStatusStat).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/v1/stat/{timescale}/trend", s.handleStatusStatTrend).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/v1/flow/stat", s.handleStatusFlowStat).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/v1/epoch/status", s.handleStatusEpochStatus).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/v1/epoch/stat", s.handleStatusEpochStat).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/v1/tokenomics", s.handleStatusTokenomics).Methods("GET", "OPTIONS")
+
+	// Out-of-scope tags (Phase 2) -> 501 for compatibility
+	r.HandleFunc("/defi/v1/asset", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/defi/v1/events", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/defi/v1/latest-block", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/defi/v1/latest-swap", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/defi/v1/pair", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/delegator", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/account/{address}/ft/transfer", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/account/{address}/transaction", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/epoch/stats", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/epoch/{epoch}/nodes", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/epoch/{epoch}/role/{role}/nodes/aggregate", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/epoch/{epoch}/role/{role}/nodes/count", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/epoch/{epoch}/role/{role}/nodes/grouped", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/ft_transfer/{address}", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/node/{node_id}/event", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/rewards/paid", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/rewards/staking", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/tokenomics", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/transaction/address/{address}", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/v1/transaction/{transaction_id}", s.handleNotImplemented).Methods("GET", "OPTIONS")
+
+	// find-api compatibility gaps (not in api.json)
+	r.HandleFunc("/auth/v1/generate", s.handleNotImplemented).Methods("POST", "OPTIONS")
+	r.HandleFunc("/bulk/v1/contract", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/nft/v0/{nft_type}/holding", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/nft/v0/{nft_type}/item", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/nft/v0/{nft_type}/item/{nft_id}", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/public/v1/account/{address}", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/public/v1/epoch/payout", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/public/v1/resolver", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/simple/v1/blocks", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/simple/v1/events", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/simple/v1/node_rewards", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/simple/v1/rewards", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/simple/v1/transaction", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/simple/v1/transaction/events", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/triggers/v1/logs", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/triggers/v1/triggers", s.handleNotImplemented).Methods("GET", "POST", "OPTIONS")
+	r.HandleFunc("/triggers/v1/triggers/{id}", s.handleNotImplemented).Methods("GET", "PUT", "DELETE", "OPTIONS")
+	r.HandleFunc("/triggers/v1/triggers/{id}/status", s.handleNotImplemented).Methods("PATCH", "OPTIONS")
+	r.HandleFunc("/triggers/v1/requeue/{id}", s.handleNotImplemented).Methods("POST", "OPTIONS")
+	r.HandleFunc("/wallet/v1/participation/{address}", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/wallet/v1/participation/{address}/aggregate", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/wallet/v1/participation/{address}/count", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/wallet/v1/participation/{address}/{token}", s.handleNotImplemented).Methods("GET", "OPTIONS")
 
 	s.httpServer = &http.Server{
 		Addr:    ":" + port,
