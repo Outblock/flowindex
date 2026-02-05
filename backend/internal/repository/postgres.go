@@ -126,40 +126,146 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	blockTimeByHeight := make(map[uint64]time.Time, len(blocks))
 
 	// 1. Insert Blocks
+	hasHeavyBlockPayloads := false
 	for _, b := range blocks {
 		blockTimeByHeight[b.Height] = b.Timestamp
+		if len(b.CollectionGuarantees) > 0 || len(b.BlockSeals) > 0 || len(b.Signatures) > 0 || strings.TrimSpace(b.ExecutionResultID) != "" {
+			hasHeavyBlockPayloads = true
+		}
+	}
 
-		// Insert into partitioned raw.blocks
+	// Hot path: bulk upsert blocks + block_lookup in ~2 statements instead of 2*len(blocks).
+	//
+	// NOTE: this path intentionally skips the heavy JSON payload columns (collection_guarantees,
+	// seals, signatures). If STORE_BLOCK_PAYLOADS is enabled (and we received non-empty payloads),
+	// we fall back to the slower per-row UPSERT to preserve those columns.
+	if !hasHeavyBlockPayloads && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+		heights := make([]int64, len(blocks))
+		ids := make([]string, len(blocks))
+		parentIDs := make([]string, len(blocks))
+		timestamps := make([]time.Time, len(blocks))
+		collectionCounts := make([]int32, len(blocks))
+		txCounts := make([]int64, len(blocks))
+		eventCounts := make([]int64, len(blocks))
+		stateRootHashes := make([]string, len(blocks))
+		totalGasUsed := make([]int64, len(blocks))
+		isSealed := make([]bool, len(blocks))
+
+		for i, b := range blocks {
+			heights[i] = int64(b.Height)
+			ids[i] = b.ID
+			parentIDs[i] = b.ParentID
+			timestamps[i] = b.Timestamp
+			collectionCounts[i] = int32(b.CollectionCount)
+			txCounts[i] = int64(b.TxCount)
+			eventCounts[i] = int64(b.EventCount)
+			stateRootHashes[i] = b.StateRootHash
+			totalGasUsed[i] = int64(b.TotalGasUsed)
+			isSealed[i] = b.IsSealed
+		}
+
+		batchCreatedAt := time.Now()
+
 		_, err := dbtx.Exec(ctx, `
-			INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, execution_result_id, total_gas_used, is_sealed, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			INSERT INTO raw.blocks (
+				height, id, parent_id, timestamp,
+				collection_count, tx_count, event_count,
+				state_root_hash, total_gas_used, is_sealed,
+				created_at
+			)
+			SELECT
+				u.height,
+				u.id,
+				NULLIF(u.parent_id, '') AS parent_id,
+				u.timestamp,
+				u.collection_count,
+				u.tx_count,
+				u.event_count,
+				NULLIF(u.state_root_hash, '') AS state_root_hash,
+				u.total_gas_used,
+				u.is_sealed,
+				$11 AS created_at
+			FROM UNNEST(
+				$1::bigint[],      -- height
+				$2::text[],        -- id
+				$3::text[],        -- parent_id
+				$4::timestamptz[], -- timestamp
+				$5::int[],         -- collection_count
+				$6::bigint[],      -- tx_count
+				$7::bigint[],      -- event_count
+				$8::text[],        -- state_root_hash
+				$9::bigint[],      -- total_gas_used
+				$10::bool[]        -- is_sealed
+			) AS u(
+				height, id, parent_id, timestamp,
+				collection_count, tx_count, event_count,
+				state_root_hash, total_gas_used, is_sealed
+			)
 			ON CONFLICT (height) DO UPDATE SET
 				id = EXCLUDED.id,
+				parent_id = EXCLUDED.parent_id,
+				timestamp = EXCLUDED.timestamp,
+				collection_count = EXCLUDED.collection_count,
 				tx_count = EXCLUDED.tx_count,
 				event_count = EXCLUDED.event_count,
 				state_root_hash = EXCLUDED.state_root_hash,
-				collection_guarantees = EXCLUDED.collection_guarantees,
-				block_seals = EXCLUDED.block_seals,
-				signatures = EXCLUDED.signatures,
-				execution_result_id = EXCLUDED.execution_result_id,
-				is_sealed = EXCLUDED.is_sealed`,
-			b.Height, b.ID, b.ParentID, b.Timestamp, b.CollectionCount, b.TxCount, b.EventCount, b.StateRootHash, b.CollectionGuarantees, b.BlockSeals, b.Signatures, b.ExecutionResultID, b.TotalGasUsed, b.IsSealed, time.Now(),
-		)
+				total_gas_used = EXCLUDED.total_gas_used,
+				is_sealed = EXCLUDED.is_sealed
+		`, heights, ids, parentIDs, timestamps, collectionCounts, txCounts, eventCounts, stateRootHashes, totalGasUsed, isSealed, batchCreatedAt)
 		if err != nil {
-			return fmt.Errorf("failed to insert block %d: %w", b.Height, err)
+			return fmt.Errorf("failed to bulk upsert blocks: %w", err)
 		}
 
-		// Insert into raw.block_lookup (Atomic Lookup)
 		_, err = dbtx.Exec(ctx, `
 			INSERT INTO raw.block_lookup (id, height, timestamp, created_at)
-			VALUES ($1, $2, $3, $4)
+			SELECT DISTINCT ON (u.id)
+				u.id,
+				u.height,
+				u.timestamp,
+				$4 AS created_at
+			FROM UNNEST($1::text[], $2::bigint[], $3::timestamptz[]) AS u(id, height, timestamp)
+			ORDER BY u.id, u.height DESC
 			ON CONFLICT (id) DO UPDATE SET
 				height = EXCLUDED.height,
-				timestamp = EXCLUDED.timestamp`,
-			b.ID, b.Height, b.Timestamp, time.Now(),
-		)
+				timestamp = EXCLUDED.timestamp
+		`, ids, heights, timestamps, batchCreatedAt)
 		if err != nil {
-			return fmt.Errorf("failed to insert block lookup %d: %w", b.Height, err)
+			return fmt.Errorf("failed to bulk upsert block lookup: %w", err)
+		}
+	} else {
+		for _, b := range blocks {
+			// Insert into partitioned raw.blocks
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, execution_result_id, total_gas_used, is_sealed, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+				ON CONFLICT (height) DO UPDATE SET
+					id = EXCLUDED.id,
+					tx_count = EXCLUDED.tx_count,
+					event_count = EXCLUDED.event_count,
+					state_root_hash = EXCLUDED.state_root_hash,
+					collection_guarantees = EXCLUDED.collection_guarantees,
+					block_seals = EXCLUDED.block_seals,
+					signatures = EXCLUDED.signatures,
+					execution_result_id = EXCLUDED.execution_result_id,
+					is_sealed = EXCLUDED.is_sealed`,
+				b.Height, b.ID, b.ParentID, b.Timestamp, b.CollectionCount, b.TxCount, b.EventCount, b.StateRootHash, b.CollectionGuarantees, b.BlockSeals, b.Signatures, b.ExecutionResultID, b.TotalGasUsed, b.IsSealed, time.Now(),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert block %d: %w", b.Height, err)
+			}
+
+			// Insert into raw.block_lookup (Atomic Lookup)
+			_, err = dbtx.Exec(ctx, `
+				INSERT INTO raw.block_lookup (id, height, timestamp, created_at)
+				VALUES ($1, $2, $3, $4)
+				ON CONFLICT (id) DO UPDATE SET
+					height = EXCLUDED.height,
+					timestamp = EXCLUDED.timestamp`,
+				b.ID, b.Height, b.Timestamp, time.Now(),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert block lookup %d: %w", b.Height, err)
+			}
 		}
 	}
 
