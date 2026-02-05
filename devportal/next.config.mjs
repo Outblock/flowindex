@@ -10,6 +10,12 @@ const repoRoot = path.resolve(__dirname, '..');
 const config = {
   output: 'standalone',
   reactStrictMode: true,
+  // Railway build containers can report very high CPU counts, which makes Next spawn
+  // dozens of static-analysis workers. That often stalls/ooms during `next build`.
+  // Keep it conservative for predictable CI builds.
+  experimental: {
+    cpus: 8,
+  },
   // Avoid Next guessing a workspace root outside the repo (monorepo-style lockfile detection),
   // which bloats the standalone output and can break Docker builds.
   outputFileTracingRoot: repoRoot,
