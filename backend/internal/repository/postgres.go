@@ -326,10 +326,12 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 
 		_, err := dbtx.Exec(ctx, `
 			INSERT INTO raw.tx_lookup (id, evm_hash, block_height, transaction_index, timestamp, created_at)
-			SELECT u.id, NULLIF(u.evm_hash, ''), u.block_height, u.transaction_index, u.timestamp, $6
+			SELECT DISTINCT ON (u.id)
+				u.id, NULLIF(u.evm_hash, ''), u.block_height, u.transaction_index, u.timestamp, $6
 			FROM UNNEST($1::text[], $2::text[], $3::bigint[], $4::int[], $5::timestamptz[]) AS u(
 				id, evm_hash, block_height, transaction_index, timestamp
 			)
+			ORDER BY u.id, u.block_height DESC, u.transaction_index DESC
 			ON CONFLICT (id) DO UPDATE SET
 				evm_hash = COALESCE(EXCLUDED.evm_hash, raw.tx_lookup.evm_hash),
 				block_height = EXCLUDED.block_height,
