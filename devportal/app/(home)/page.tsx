@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, BookOpen, Code2, FlaskConical, Github } from 'lucide-react';
+import { ArrowRight, BookOpen, Code2, Github } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -24,13 +24,6 @@ export default function HomePage() {
             <Code2 className="size-4" />
             API (Scalar)
             <ArrowRight className="size-4" />
-          </Link>
-          <Link
-            href="/api-explorer"
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-fd-border bg-fd-card px-4 py-2 text-sm font-medium text-fd-foreground hover:bg-fd-muted transition"
-          >
-            <FlaskConical className="size-4" />
-            API (Fumadocs)
           </Link>
           <Link
             href="/docs"
