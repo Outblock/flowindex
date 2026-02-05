@@ -12,10 +12,14 @@ const config = {
   reactStrictMode: true,
   // Railway build containers can report very high CPU counts, which makes Next spawn
   // dozens of static-analysis workers. That often stalls/ooms during `next build`.
-  // Keep it conservative for predictable CI builds.
+  // Cap workers and avoid worker threads for more predictable CI builds.
   experimental: {
-    cpus: 8,
+    cpus: 16,
+    memoryBasedWorkersCount: false,
+    workerThreads: false,
   },
+  // Avoid CI stalls when collecting page data on slower builders.
+  staticPageGenerationTimeout: 180,
   // Avoid Next guessing a workspace root outside the repo (monorepo-style lockfile detection),
   // which bloats the standalone output and can break Docker builds.
   outputFileTracingRoot: repoRoot,
