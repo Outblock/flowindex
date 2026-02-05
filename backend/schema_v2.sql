@@ -501,6 +501,26 @@ CREATE TABLE IF NOT EXISTS app.tx_tags (
     PRIMARY KEY (transaction_id, tag)
 );
 
+CREATE TABLE IF NOT EXISTS app.tx_metrics (
+    block_height     BIGINT NOT NULL,
+    transaction_id   VARCHAR(64) NOT NULL,
+    event_count      INT NOT NULL DEFAULT 0,
+    gas_used         BIGINT NOT NULL DEFAULT 0,
+    fee              NUMERIC,
+    execution_status VARCHAR(32),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (block_height, transaction_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tx_metrics_tx ON app.tx_metrics (transaction_id);
+
+CREATE TABLE IF NOT EXISTS app.account_storage_snapshots (
+    address           VARCHAR(18) PRIMARY KEY,
+    storage_used      BIGINT NOT NULL DEFAULT 0,
+    storage_capacity  BIGINT NOT NULL DEFAULT 0,
+    storage_available BIGINT NOT NULL DEFAULT 0,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS app.status_snapshots (
     kind       TEXT NOT NULL,
     payload    JSONB NOT NULL,

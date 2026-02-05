@@ -639,16 +639,29 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 
 	storageUsed := uint64(0)
 	storageCapacity := uint64(0)
-	if raw, err := s.executeCadenceScript(r.Context(), cadenceStorageOverviewScript(), []cadence.Value{
-		cadence.NewAddress([8]byte(acc.Address)),
-	}); err == nil {
-		storageUsed, storageCapacity = parseStorageOverview(raw)
+	storageAvailable := uint64(0)
+	addressNorm := normalizeAddr(acc.Address.Hex())
+	if s.repo != nil {
+		if snap, err := s.repo.GetAccountStorageSnapshot(r.Context(), addressNorm); err == nil && snap != nil {
+			storageUsed = snap.StorageUsed
+			storageCapacity = snap.StorageCapacity
+			storageAvailable = snap.StorageAvailable
+		}
+	}
+	if storageCapacity == 0 {
+		if raw, err := s.executeCadenceScript(r.Context(), cadenceStorageOverviewScript(), []cadence.Value{
+			cadence.NewAddress([8]byte(acc.Address)),
+		}); err == nil {
+			storageUsed, storageCapacity = parseStorageOverview(raw)
+			if storageCapacity > storageUsed {
+				storageAvailable = storageCapacity - storageUsed
+			}
+			if s.repo != nil && addressNorm != "" {
+				_ = s.repo.UpsertAccountStorageSnapshot(r.Context(), addressNorm, storageUsed, storageCapacity, storageAvailable)
+			}
+		}
 	}
 	const bytesPerMB = 1024 * 1024
-	storageAvailable := uint64(0)
-	if storageCapacity > storageUsed {
-		storageAvailable = storageCapacity - storageUsed
-	}
 	storageCapacityMB := float64(storageCapacity) / bytesPerMB
 	storageUsedMB := float64(storageUsed) / bytesPerMB
 	storageAvailableMB := float64(storageAvailable) / bytesPerMB

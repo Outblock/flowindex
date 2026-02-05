@@ -1001,7 +1001,8 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 				COALESCE(t.error_message, '') AS error_message,
 				COALESCE(t.is_evm, FALSE) AS is_evm,
 				COALESCE(t.gas_limit, 0) AS gas_limit,
-				COALESCE(t.gas_used, 0) AS gas_used,
+				COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
+				COALESCE(m.event_count, t.event_count, 0) AS event_count,
 				t.timestamp,
 				t.created_at,
 				COALESCE(et.evm_hash, '') AS evm_hash,
@@ -1011,6 +1012,7 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 			FROM raw.transactions t
 			LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 			LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
+			LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 			WHERE t.id = $1 AND t.block_height = $2`
 		args = []interface{}{id, blockHeight}
 	} else {
@@ -1036,7 +1038,8 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 					COALESCE(t.error_message, '') AS error_message,
 					COALESCE(t.is_evm, FALSE) AS is_evm,
 					COALESCE(t.gas_limit, 0) AS gas_limit,
-					COALESCE(t.gas_used, 0) AS gas_used,
+					COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
+					COALESCE(m.event_count, t.event_count, 0) AS event_count,
 					t.timestamp,
 					t.created_at,
 					COALESCE(et.evm_hash, '') AS evm_hash,
@@ -1046,6 +1049,7 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 				FROM raw.transactions t
 				LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 				LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
+				LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 				WHERE t.id = $1 AND t.block_height = $2`
 			args = []interface{}{txID, bh}
 		} else {
@@ -1074,7 +1078,8 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 						COALESCE(t.error_message, '') AS error_message,
 						COALESCE(t.is_evm, FALSE) AS is_evm,
 						COALESCE(t.gas_limit, 0) AS gas_limit,
-						COALESCE(t.gas_used, 0) AS gas_used,
+						COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
+						COALESCE(m.event_count, t.event_count, 0) AS event_count,
 						t.timestamp,
 						t.created_at,
 						COALESCE(et.evm_hash, '') AS evm_hash,
@@ -1084,6 +1089,7 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 					FROM raw.transactions t
 					LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 					LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
+					LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 					WHERE t.id = $1 AND t.block_height = $2`
 				args = []interface{}{txID, bh}
 			} else {
@@ -1094,7 +1100,7 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 
 	err = r.db.QueryRow(ctx, query, args...).
 		Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.ProposerKeyIndex, &t.ProposerSequenceNumber,
-			&t.PayerAddress, &t.Authorizers, &t.Script, &t.Arguments, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt,
+			&t.PayerAddress, &t.Authorizers, &t.Script, &t.Arguments, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.EventCount, &t.Timestamp, &t.CreatedAt,
 			&t.EVMHash, &t.EVMFrom, &t.EVMTo, &t.EVMValue)
 
 	if err != nil {
@@ -1169,12 +1175,13 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
-			COALESCE(t.gas_used, 0) AS gas_used,
-			COALESCE(t.event_count, 0) AS event_count,
+			COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
+			COALESCE(m.event_count, t.event_count, 0) AS event_count,
 			t.timestamp,
 			t.created_at
 		FROM addr_txs a
 		JOIN raw.transactions t ON t.id = a.transaction_id AND t.block_height = a.block_height
+		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 		ORDER BY a.block_height DESC, a.transaction_id DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -1229,12 +1236,13 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
-			COALESCE(t.gas_used, 0) AS gas_used,
-			COALESCE(t.event_count, 0) AS event_count,
+			COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
+			COALESCE(m.event_count, t.event_count, 0) AS event_count,
 			t.timestamp,
 			t.created_at
 		FROM addr_txs a
 		JOIN raw.transactions t ON t.id = a.transaction_id AND t.block_height = a.block_height
+		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 		WHERE ($2::bigint IS NULL OR (a.block_height, a.transaction_id) < ($2, $3))
 		ORDER BY a.block_height DESC, a.transaction_id DESC
 		LIMIT $4

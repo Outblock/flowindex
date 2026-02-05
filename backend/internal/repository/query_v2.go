@@ -66,11 +66,15 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	args = append(args, f.Limit, f.Offset)
 
 	rows, err := r.db.Query(ctx, `
-		SELECT id, block_height, transaction_index, proposer_address, payer_address, authorizers,
-		       status, error_message, is_evm, gas_limit, gas_used, timestamp, created_at, event_count
-		FROM raw.transactions
+		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers,
+		       t.status, t.error_message, t.is_evm, t.gas_limit,
+		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
+		       t.timestamp, t.created_at,
+		       COALESCE(m.event_count, t.event_count) AS event_count
+		FROM raw.transactions t
+		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 		`+where+`
-		ORDER BY block_height DESC, transaction_index DESC
+		ORDER BY t.block_height DESC, t.transaction_index DESC
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
 	if err != nil {
 		return nil, err
@@ -91,11 +95,15 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 
 func (r *Repository) ListTransactionsByBlock(ctx context.Context, height uint64, includeEvents bool) ([]models.Transaction, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, block_height, transaction_index, proposer_address, payer_address, authorizers,
-		       status, error_message, is_evm, gas_limit, gas_used, timestamp, created_at, event_count
-		FROM raw.transactions
-		WHERE block_height = $1
-		ORDER BY transaction_index ASC`, height)
+		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers,
+		       t.status, t.error_message, t.is_evm, t.gas_limit,
+		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
+		       t.timestamp, t.created_at,
+		       COALESCE(m.event_count, t.event_count) AS event_count
+		FROM raw.transactions t
+		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
+		WHERE t.block_height = $1
+		ORDER BY t.transaction_index ASC`, height)
 	if err != nil {
 		return nil, err
 	}

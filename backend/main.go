@@ -145,12 +145,14 @@ func main() {
 	ftHoldingsWorkerRange := getEnvUint("FT_HOLDINGS_WORKER_RANGE", 50000)
 	nftOwnershipWorkerRange := getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 50000)
 	txContractsWorkerRange := getEnvUint("TX_CONTRACTS_WORKER_RANGE", 50000)
+	txMetricsWorkerRange := getEnvUint("TX_METRICS_WORKER_RANGE", 50000)
 	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
 	metaWorkerConcurrency := getEnvInt("META_WORKER_CONCURRENCY", 1)
 	accountsWorkerConcurrency := getEnvInt("ACCOUNTS_WORKER_CONCURRENCY", 1)
 	ftHoldingsWorkerConcurrency := getEnvInt("FT_HOLDINGS_WORKER_CONCURRENCY", 1)
 	nftOwnershipWorkerConcurrency := getEnvInt("NFT_OWNERSHIP_WORKER_CONCURRENCY", 1)
 	txContractsWorkerConcurrency := getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1)
+	txMetricsWorkerConcurrency := getEnvInt("TX_METRICS_WORKER_CONCURRENCY", 1)
 
 	if strings.ToLower(os.Getenv("RUN_TX_METRICS_BACKFILL")) == "true" {
 		cfg := repository.TxMetricsBackfillConfig{
@@ -198,6 +200,7 @@ func main() {
 	enableFTHoldingsWorker := os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false"
 	enableNFTOwnershipWorker := os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false"
 	enableTxContractsWorker := os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false"
+	enableTxMetricsWorker := os.Getenv("ENABLE_TX_METRICS_WORKER") != "false"
 
 	var tokenWorkerProcessor *ingester.TokenWorker
 	var tokenWorkers []*ingester.AsyncWorker
@@ -211,8 +214,10 @@ func main() {
 	var nftOwnershipWorkers []*ingester.AsyncWorker
 	var txContractsWorkerProcessor *ingester.TxContractsWorker
 	var txContractsWorkers []*ingester.AsyncWorker
+	var txMetricsWorkerProcessor *ingester.TxMetricsWorker
+	var txMetricsWorkers []*ingester.AsyncWorker
 
-	workerTypes := make([]string, 0, 6)
+	workerTypes := make([]string, 0, 7)
 
 	if enableTokenWorker {
 		tokenWorkerProcessor = ingester.NewTokenWorker(repo)
@@ -320,6 +325,24 @@ func main() {
 		workerTypes = append(workerTypes, txContractsWorkerProcessor.Name())
 	} else {
 		log.Println("Tx Contracts Worker is DISABLED (ENABLE_TX_CONTRACTS_WORKER=false)")
+	}
+
+	if enableTxMetricsWorker {
+		txMetricsWorkerProcessor = ingester.NewTxMetricsWorker(repo)
+		if txMetricsWorkerConcurrency < 1 {
+			txMetricsWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < txMetricsWorkerConcurrency; i++ {
+			txMetricsWorkers = append(txMetricsWorkers, ingester.NewAsyncWorker(txMetricsWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: txMetricsWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-tx-metrics-%d", hostname, pid, i),
+			}))
+		}
+		workerTypes = append(workerTypes, txMetricsWorkerProcessor.Name())
+	} else {
+		log.Println("Tx Metrics Worker is DISABLED (ENABLE_TX_METRICS_WORKER=false)")
 	}
 
 	var committer *ingester.CheckpointCommitter
@@ -431,6 +454,16 @@ func main() {
 
 	if enableTxContractsWorker {
 		for _, worker := range txContractsWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableTxMetricsWorker {
+		for _, worker := range txMetricsWorkers {
 			wg.Add(1)
 			go func(w *ingester.AsyncWorker) {
 				defer wg.Done()

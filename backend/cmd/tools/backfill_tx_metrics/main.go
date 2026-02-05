@@ -21,6 +21,7 @@ type txKey struct {
 type txMetric struct {
 	Count   int
 	GasUsed uint64
+	Fee     float64
 }
 
 func main() {
@@ -114,6 +115,9 @@ func loadMetrics(ctx context.Context, conn *pgx.Conn, from, to int64) (map[txKey
 			if gas := parseGasUsed(payload); gas > 0 {
 				m.GasUsed = gas
 			}
+			if fee, ok := parseFeeAmount(payload); ok {
+				m.Fee += fee
+			}
 		}
 		metrics[key] = m
 	}
@@ -121,7 +125,7 @@ func loadMetrics(ctx context.Context, conn *pgx.Conn, from, to int64) (map[txKey
 }
 
 func applyMetrics(ctx context.Context, conn *pgx.Conn, metrics map[txKey]txMetric) error {
-	if _, err := conn.Exec(ctx, "CREATE TEMP TABLE IF NOT EXISTS tmp_tx_metrics (block_height BIGINT, transaction_id TEXT, event_count INT, gas_used BIGINT)"); err != nil {
+	if _, err := conn.Exec(ctx, "CREATE TEMP TABLE IF NOT EXISTS tmp_tx_metrics (block_height BIGINT, transaction_id TEXT, event_count INT, gas_used BIGINT, fee NUMERIC)"); err != nil {
 		return err
 	}
 	if _, err := conn.Exec(ctx, "TRUNCATE tmp_tx_metrics"); err != nil {
@@ -130,22 +134,24 @@ func applyMetrics(ctx context.Context, conn *pgx.Conn, metrics map[txKey]txMetri
 
 	rows := make([][]interface{}, 0, len(metrics))
 	for k, m := range metrics {
-		rows = append(rows, []interface{}{k.Height, k.ID, m.Count, int64(m.GasUsed)})
+		rows = append(rows, []interface{}{k.Height, k.ID, m.Count, int64(m.GasUsed), m.Fee})
 	}
 
-	if _, err := conn.CopyFrom(ctx, pgx.Identifier{"tmp_tx_metrics"}, []string{"block_height", "transaction_id", "event_count", "gas_used"}, pgx.CopyFromRows(rows)); err != nil {
+	if _, err := conn.CopyFrom(ctx, pgx.Identifier{"tmp_tx_metrics"}, []string{"block_height", "transaction_id", "event_count", "gas_used", "fee"}, pgx.CopyFromRows(rows)); err != nil {
 		return err
 	}
 
 	_, err := conn.Exec(ctx, `
-		UPDATE raw.transactions t
-		SET event_count = COALESCE(tmp.event_count, t.event_count),
-			gas_used = CASE
-				WHEN t.gas_used = 0 AND tmp.gas_used > 0 THEN tmp.gas_used
-				ELSE t.gas_used
-			END
-		FROM tmp_tx_metrics tmp
-		WHERE t.block_height = tmp.block_height AND t.id = tmp.transaction_id`)
+		INSERT INTO app.tx_metrics (
+			block_height, transaction_id, event_count, gas_used, fee, updated_at
+		)
+		SELECT block_height, transaction_id, event_count, gas_used, fee, NOW()
+		FROM tmp_tx_metrics
+		ON CONFLICT (block_height, transaction_id) DO UPDATE SET
+			event_count = EXCLUDED.event_count,
+			gas_used = EXCLUDED.gas_used,
+			fee = EXCLUDED.fee,
+			updated_at = NOW()`)
 	return err
 }
 
@@ -171,6 +177,79 @@ func parseGasUsed(payload []byte) uint64 {
 		return uint64(v)
 	}
 	return 0
+}
+
+func parseFeeAmount(payload []byte) (float64, bool) {
+	var obj interface{}
+	if err := json.Unmarshal(payload, &obj); err != nil {
+		return 0, false
+	}
+	raw, ok := extractAmount(obj)
+	if !ok || raw == "" {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, false
+	}
+	return f, true
+}
+
+func extractAmount(v interface{}) (string, bool) {
+	switch vv := v.(type) {
+	case map[string]interface{}:
+		if val, ok := vv["amount"]; ok {
+			if s, ok := cadenceValueToString(val); ok {
+				return s, true
+			}
+		}
+		if val, ok := vv["fee"]; ok {
+			if s, ok := cadenceValueToString(val); ok {
+				return s, true
+			}
+		}
+		if val, ok := vv["value"]; ok {
+			if s, ok := extractAmount(val); ok {
+				return s, true
+			}
+		}
+		if fields, ok := vv["fields"].([]interface{}); ok {
+			for _, field := range fields {
+				fm, ok := field.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				name, _ := fm["name"].(string)
+				switch name {
+				case "amount", "fee", "fees":
+					if s, ok := cadenceValueToString(fm["value"]); ok {
+						return s, true
+					}
+				}
+			}
+		}
+	case []interface{}:
+		for _, item := range vv {
+			if s, ok := extractAmount(item); ok {
+				return s, true
+			}
+		}
+	}
+	return "", false
+}
+
+func cadenceValueToString(v interface{}) (string, bool) {
+	switch vv := v.(type) {
+	case string:
+		return vv, true
+	case float64:
+		return strconv.FormatFloat(vv, 'f', -1, 64), true
+	case map[string]interface{}:
+		if val, ok := vv["value"]; ok {
+			return cadenceValueToString(val)
+		}
+	}
+	return "", false
 }
 
 func findNumericField(v interface{}, keys map[string]bool) (float64, bool) {
