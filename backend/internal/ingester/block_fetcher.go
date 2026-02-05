@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"flowscan-clone/internal/models"
 
 	"github.com/onflow/cadence"
+	flowsdk "github.com/onflow/flow-go-sdk"
 )
 
 // FetchResult holds the data for a single block height
@@ -62,8 +64,8 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			return result
 		}
 
-		// 1. Get Block & Collections
-		block, collections, err := pin.GetBlockByHeight(ctx, height)
+		// 1. Get Block Header
+		block, err := pin.GetBlockHeaderByHeight(ctx, height)
 		if err != nil {
 			if shouldRepin(err) {
 				continue
@@ -72,9 +74,17 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			return result
 		}
 
-		collGuarantees, _ := json.Marshal(block.CollectionGuarantees)
-		blockSeals, _ := json.Marshal(block.Seals)
-		signatures, _ := json.Marshal(block.Signatures)
+		// Optional: store heavy block payloads (signatures/seals/guarantees). Most explorer
+		// pages don't need these, and they add significant write + storage overhead.
+		storeBlockPayloads := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_BLOCK_PAYLOADS"))) == "true"
+		var collGuarantees []byte
+		var blockSeals []byte
+		var signatures []byte
+		if storeBlockPayloads {
+			collGuarantees, _ = json.Marshal(block.CollectionGuarantees)
+			blockSeals, _ = json.Marshal(block.Seals)
+			signatures, _ = json.Marshal(block.Signatures)
+		}
 
 		dbBlock := models.Block{
 			Height:               block.Height,
@@ -90,163 +100,186 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			IsSealed:             true,
 		}
 
+		// 2. Fetch All Transactions & Results for the Block (Bulk RPC)
+		txs, err := pin.GetTransactionsByBlockID(ctx, block.ID)
+		if err != nil {
+			if shouldRepin(err) {
+				continue
+			}
+			result.Error = fmt.Errorf("failed to get transactions for block %s: %w", block.ID, err)
+			return result
+		}
+
+		results, err := pin.GetTransactionResultsByBlockID(ctx, block.ID)
+		if err != nil {
+			if shouldRepin(err) {
+				continue
+			}
+			result.Error = fmt.Errorf("failed to get transaction results for block %s: %w", block.ID, err)
+			return result
+		}
+
+		resByID := make(map[string]*flowsdk.TransactionResult, len(results))
+		for _, r := range results {
+			if r == nil {
+				continue
+			}
+			resByID[r.TransactionID.String()] = r
+		}
+
 		var dbTxs []models.Transaction
 		var dbEvents []models.Event
+		repinRequested := false
 
-		// 2. Process Collections & Transactions
-		repin := false
-		txIndex := 0
-		for _, collection := range collections {
-			for _, txID := range collection.TransactionIDs {
-				// Fetch Transaction (pinned)
-				tx, err := pin.GetTransaction(ctx, txID)
+		now := time.Now()
+
+		for txIndex, tx := range txs {
+			if tx == nil {
+				continue
+			}
+			txID := tx.ID().String()
+
+			res := resByID[txID]
+			if res == nil {
+				// Best-effort fallback (rare): fetch result individually.
+				r, err := pin.GetTransactionResult(ctx, tx.ID())
 				if err != nil {
 					if shouldRepin(err) {
-						repin = true
-						break
-					}
-					// Retry or skip? For now, we error out to be safe in the pipeline
-					result.Error = fmt.Errorf("failed to get tx %s: %w", txID, err)
-					return result
-				}
-
-				// Fetch Result (Status & Events) (pinned)
-				res, err := pin.GetTransactionResult(ctx, txID)
-				if err != nil {
-					if shouldRepin(err) {
-						repin = true
+						// Retry the entire height with a different pin.
+						repinRequested = true
 						break
 					}
 					result.Error = fmt.Errorf("failed to get tx result %s: %w", txID, err)
 					return result
 				}
+				res = r
+			}
 
-				// Map to DB Models
-				// tx.Arguments is [][]byte, where each byte slice is a JSON-CDC string.
-				// defaults json.Marshal would base64 encode them. We want the raw JSON strings in an array.
-				var argsList []json.RawMessage
-				for _, arg := range tx.Arguments {
-					argsList = append(argsList, json.RawMessage(arg))
+			// Map to DB Models
+			// tx.Arguments is [][]byte, where each byte slice is a JSON-CDC string.
+			// json.Marshal would base64 encode []byte; we want raw JSON strings in an array.
+			argsList := make([]json.RawMessage, 0, len(tx.Arguments))
+			for _, arg := range tx.Arguments {
+				argsList = append(argsList, json.RawMessage(arg))
+			}
+			argsJSON, _ := json.Marshal(argsList)
+			if len(argsList) == 0 {
+				argsJSON = []byte("[]")
+			}
+
+			authorizers := make([]string, len(tx.Authorizers))
+			for i, a := range tx.Authorizers {
+				authorizers[i] = a.Hex()
+			}
+
+			scriptText := string(tx.Script)
+			isEVM := strings.Contains(scriptText, "import EVM")
+
+			dbTx := models.Transaction{
+				ID:                     txID,
+				BlockHeight:            height,
+				TransactionIndex:       txIndex,
+				ProposerAddress:        tx.ProposalKey.Address.Hex(),
+				ProposerKeyIndex:       tx.ProposalKey.KeyIndex,
+				ProposerSequenceNumber: tx.ProposalKey.SequenceNumber,
+				PayerAddress:           tx.Payer.Hex(),
+				Authorizers:            authorizers,
+				Script:                 scriptText,
+				Arguments:              argsJSON,
+				Status:                 res.Status.String(),
+				GasLimit:               tx.GasLimit,
+				GasUsed:                res.ComputationUsage,
+				ComputationUsage:       res.ComputationUsage,
+				StatusCode:             0, // Not directly available in SDK TransactionResult
+				ExecutionStatus:        res.Status.String(),
+				EventCount:             len(res.Events),
+				Timestamp:              block.Timestamp,
+				CreatedAt:              now,
+			}
+
+			// Redundancy: Marshal Signatures and ProposalKey (kept in model for future use).
+			// Not currently stored in schema_v2.sql.
+			pkJSON, _ := json.Marshal(tx.ProposalKey)
+			pSigJSON, _ := json.Marshal(tx.PayloadSignatures)
+			eSigJSON, _ := json.Marshal(tx.EnvelopeSignatures)
+			dbTx.ReferenceBlockID = tx.ReferenceBlockID.String()
+			dbTx.ProposalKey = pkJSON
+			dbTx.PayloadSignatures = pSigJSON
+			dbTx.EnvelopeSignatures = eSigJSON
+
+			if res.Error != nil {
+				dbTx.ErrorMessage = res.Error.Error()
+			}
+
+			// Address Activity (Participants)
+			seenActivity := make(map[string]bool)
+			addActivity := func(addr, role string) {
+				normalized := normalizeAddress(addr)
+				if normalized == "" {
+					return
 				}
-				argsJSON, _ := json.Marshal(argsList)
-				authorizers := make([]string, len(tx.Authorizers))
-				for i, a := range tx.Authorizers {
-					authorizers[i] = a.Hex()
+				k := normalized + "|" + role
+				if seenActivity[k] {
+					return
 				}
+				seenActivity[k] = true
+				result.AddressActivity = append(result.AddressActivity, models.AddressTransaction{
+					Address:         normalized,
+					TransactionID:   txID,
+					BlockHeight:     height,
+					TransactionType: "GENERAL",
+					Role:            role,
+				})
+			}
 
-				// Detect EVM in Script
-				isEVM := strings.Contains(string(tx.Script), "import EVM")
+			addActivity(tx.Payer.Hex(), "PAYER")
+			addActivity(tx.ProposalKey.Address.Hex(), "PROPOSER")
+			for _, auth := range tx.Authorizers {
+				addActivity(auth.Hex(), "AUTHORIZER")
+			}
 
-				dbTx := models.Transaction{
-					ID:                     tx.ID().String(),
-					BlockHeight:            height,
-					TransactionIndex:       txIndex,
-					ProposerAddress:        tx.ProposalKey.Address.Hex(),
-					ProposerKeyIndex:       tx.ProposalKey.KeyIndex,
-					ProposerSequenceNumber: tx.ProposalKey.SequenceNumber,
-					PayerAddress:           tx.Payer.Hex(),
-					Authorizers:            authorizers,
-					Script:                 string(tx.Script),
-					Arguments:              argsJSON,
-					Status:                 res.Status.String(),
-					GasLimit:               tx.GasLimit,
-					ComputationUsage:       res.ComputationUsage,
-					StatusCode:             0, // Not directly available in SDK TransactionResult
-					ExecutionStatus:        res.Status.String(),
-					EventCount:             len(res.Events),
-					Timestamp:              block.Timestamp,
+			// Process Events
+			for _, evt := range res.Events {
+				payload := w.flattenCadenceValue(evt.Value)
+				payloadJSON, _ := json.Marshal(payload)
+
+				addrStr, contractStr, eventStr := w.parseEventType(evt.Type)
+
+				dbEvent := models.Event{
+					TransactionID:    txID,
+					TransactionIndex: txIndex,
+					Type:             evt.Type,
+					EventIndex:       evt.EventIndex,
+					ContractAddress:  addrStr,
+					ContractName:     contractStr,
+					EventName:        eventStr,
+					Payload:          payloadJSON,
+					BlockHeight:      height,
+					Timestamp:        block.Timestamp,
+					CreatedAt:        now,
 				}
+				dbEvents = append(dbEvents, dbEvent)
 
-				// Redundancy: Marshal Signatures and ProposalKey
-				pkJSON, _ := json.Marshal(tx.ProposalKey)
-				pSigJSON, _ := json.Marshal(tx.PayloadSignatures)
-				eSigJSON, _ := json.Marshal(tx.EnvelopeSignatures)
-
-				dbTx.ReferenceBlockID = tx.ReferenceBlockID.String()
-				dbTx.ProposalKey = pkJSON
-				dbTx.PayloadSignatures = pSigJSON
-				dbTx.EnvelopeSignatures = eSigJSON
-
-				if res.Error != nil {
-					dbTx.ErrorMessage = res.Error.Error()
-				}
-
-				// Address Activity (Participants)
-				// This is used for the account transactions page. We write it for forward ingestion
-				// so the UI stays fresh even if meta_worker is processing in large ranges.
-				seenActivity := make(map[string]bool)
-				addActivity := func(addr, role string) {
-					normalized := normalizeAddress(addr)
-					if normalized == "" {
-						return
-					}
-					k := normalized + "|" + role
-					if seenActivity[k] {
-						return
-					}
-					seenActivity[k] = true
-					result.AddressActivity = append(result.AddressActivity, models.AddressTransaction{
-						Address:         normalized,
-						TransactionID:   tx.ID().String(),
-						BlockHeight:     height,
-						TransactionType: "GENERAL",
-						Role:            role,
-					})
-				}
-
-				addActivity(tx.Payer.Hex(), "PAYER")
-				addActivity(tx.ProposalKey.Address.Hex(), "PROPOSER")
-				for _, auth := range tx.Authorizers {
-					addActivity(auth.Hex(), "AUTHORIZER")
-				}
-
-				// Process Events
-				for _, evt := range res.Events {
-					payload := w.flattenCadenceValue(evt.Value)
-					payloadJSON, _ := json.Marshal(payload)
-
-					addrStr, contractStr, eventStr := w.parseEventType(evt.Type)
-
-					dbEvent := models.Event{
-						TransactionID:    tx.ID().String(),
-						TransactionIndex: txIndex,
-						Type:             evt.Type,
-						EventIndex:       evt.EventIndex,
-						ContractAddress:  addrStr,
-						ContractName:     contractStr,
-						EventName:        eventStr,
-						Payload:          payloadJSON,
-						BlockHeight:      height,
-						Timestamp:        block.Timestamp,
-						CreatedAt:        time.Now(),
-					}
-					dbEvents = append(dbEvents, dbEvent)
-
-					// Detect EVM Events
-					if strings.Contains(evt.Type, "EVM.") {
-						isEVM = true
-						if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
-							var evmPayload map[string]interface{}
-							if err := json.Unmarshal(payloadJSON, &evmPayload); err == nil {
-								if h, ok := evmPayload["transactionHash"].(string); ok {
-									dbTx.EVMHash = h
-								}
+				// Detect EVM Events
+				if strings.Contains(evt.Type, "EVM.") {
+					isEVM = true
+					if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
+						var evmPayload map[string]interface{}
+						if err := json.Unmarshal(payloadJSON, &evmPayload); err == nil {
+							if h, ok := evmPayload["transactionHash"].(string); ok {
+								dbTx.EVMHash = h
 							}
 						}
 					}
-
 				}
-
-				dbTx.IsEVM = isEVM
-
-				dbTxs = append(dbTxs, dbTx)
-				txIndex++
 			}
-			if repin {
-				break
-			}
+
+			dbTx.IsEVM = isEVM
+			dbTxs = append(dbTxs, dbTx)
 		}
-		if repin {
+
+		// If we broke out early due to a repin request, retry the height with a new pin.
+		if repinRequested {
 			continue
 		}
 

@@ -471,6 +471,47 @@ func (p *PinnedClient) GetBlockByHeight(ctx context.Context, height uint64) (*fl
 	return block, collections, nil
 }
 
+// GetBlockHeaderByHeight fetches the block header + collection guarantees, but does not
+// fetch collections. This is significantly cheaper than GetBlockByHeight for ingestion.
+func (p *PinnedClient) GetBlockHeaderByHeight(ctx context.Context, height uint64) (*flow.Block, error) {
+	var block *flow.Block
+	if err := p.withRetry(ctx, func() error {
+		var err error
+		block, err = p.cli.GetBlockByHeight(ctx, height)
+		return err
+	}); err != nil {
+		return nil, fmt.Errorf("failed to get block by height %d: %w", height, err)
+	}
+	return block, nil
+}
+
+// GetTransactionsByBlockID fetches all transactions for a block in a single RPC call.
+func (p *PinnedClient) GetTransactionsByBlockID(ctx context.Context, blockID flow.Identifier) ([]*flow.Transaction, error) {
+	var txs []*flow.Transaction
+	if err := p.withRetry(ctx, func() error {
+		var err error
+		txs, err = p.cli.GetTransactionsByBlockID(ctx, blockID)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return txs, nil
+}
+
+// GetTransactionResultsByBlockID fetches all transaction results (status + events) for a block
+// in a single RPC call.
+func (p *PinnedClient) GetTransactionResultsByBlockID(ctx context.Context, blockID flow.Identifier) ([]*flow.TransactionResult, error) {
+	var results []*flow.TransactionResult
+	if err := p.withRetry(ctx, func() error {
+		var err error
+		results, err = p.cli.GetTransactionResultsByBlockID(ctx, blockID)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 func (p *PinnedClient) GetTransaction(ctx context.Context, txID flow.Identifier) (*flow.Transaction, error) {
 	var tx *flow.Transaction
 	if err := p.withRetry(ctx, func() error {
