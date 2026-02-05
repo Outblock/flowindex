@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	openapiYAML     []byte
-	openapiYAMLOnce sync.Once
-	openapiYAMLErr  error
+	openapiRaw     []byte
+	openapiIsJSON  bool
+	openapiRawOnce sync.Once
+	openapiRawErr  error
 )
 
 var (
@@ -22,44 +23,79 @@ var (
 	openapiJSONErr  error
 )
 
-func ensureOpenAPIYAML() error {
-	openapiYAMLOnce.Do(func() {
+func ensureOpenAPIRaw() error {
+	openapiRawOnce.Do(func() {
 		paths := []string{
 			strings.TrimSpace(os.Getenv("OPENAPI_SPEC_PATH")),
-			"docs/openapi.yaml",
+			"api.json",
+			"openapi.json",
+			"docs/openapi.json",
 			"openapi.yaml",
+			"docs/openapi.yaml",
+			"openapi.yml",
+			"docs/openapi.yml",
 		}
 		for _, p := range paths {
 			if p == "" {
 				continue
 			}
-			if b, err := os.ReadFile(p); err == nil {
-				openapiYAML = b
-				return
+			b, err := os.ReadFile(p)
+			if err != nil {
+				continue
 			}
+			openapiRaw = b
+			lower := strings.ToLower(p)
+			if strings.HasSuffix(lower, ".json") {
+				openapiIsJSON = true
+			} else if strings.HasSuffix(lower, ".yaml") || strings.HasSuffix(lower, ".yml") {
+				openapiIsJSON = false
+			} else {
+				trim := strings.TrimSpace(string(b))
+				openapiIsJSON = strings.HasPrefix(trim, "{")
+			}
+			return
 		}
-		openapiYAMLErr = os.ErrNotExist
+		openapiRawErr = os.ErrNotExist
 	})
-	return openapiYAMLErr
+	return openapiRawErr
 }
 
 func (s *Server) handleOpenAPIYAML(w http.ResponseWriter, r *http.Request) {
-	if err := ensureOpenAPIYAML(); err != nil {
+	if err := ensureOpenAPIRaw(); err != nil {
 		http.Error(w, "openapi spec not found", http.StatusNotFound)
 		return
 	}
+	if !openapiIsJSON {
+		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+		w.Write(openapiRaw)
+		return
+	}
+	var v interface{}
+	if err := json.Unmarshal(openapiRaw, &v); err != nil {
+		http.Error(w, "invalid openapi json", http.StatusInternalServerError)
+		return
+	}
+	out, err := yaml.Marshal(v)
+	if err != nil {
+		http.Error(w, "failed to render yaml", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
-	w.Write(openapiYAML)
+	w.Write(out)
 }
 
 func (s *Server) handleOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
 	openapiJSONOnce.Do(func() {
-		if err := ensureOpenAPIYAML(); err != nil {
+		if err := ensureOpenAPIRaw(); err != nil {
 			openapiJSONErr = err
 			return
 		}
+		if openapiIsJSON {
+			openapiJSON = openapiRaw
+			return
+		}
 		var v interface{}
-		if err := yaml.Unmarshal(openapiYAML, &v); err != nil {
+		if err := yaml.Unmarshal(openapiRaw, &v); err != nil {
 			openapiJSONErr = err
 			return
 		}

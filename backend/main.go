@@ -133,8 +133,16 @@ func main() {
 	maxReorgDepth := getEnvUint("MAX_REORG_DEPTH", 1000)
 	tokenWorkerRange := getEnvUint("TOKEN_WORKER_RANGE", 50000)
 	metaWorkerRange := getEnvUint("META_WORKER_RANGE", 50000)
+	accountsWorkerRange := getEnvUint("ACCOUNTS_WORKER_RANGE", 50000)
+	ftHoldingsWorkerRange := getEnvUint("FT_HOLDINGS_WORKER_RANGE", 50000)
+	nftOwnershipWorkerRange := getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 50000)
+	txContractsWorkerRange := getEnvUint("TX_CONTRACTS_WORKER_RANGE", 50000)
 	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
 	metaWorkerConcurrency := getEnvInt("META_WORKER_CONCURRENCY", 1)
+	accountsWorkerConcurrency := getEnvInt("ACCOUNTS_WORKER_CONCURRENCY", 1)
+	ftHoldingsWorkerConcurrency := getEnvInt("FT_HOLDINGS_WORKER_CONCURRENCY", 1)
+	nftOwnershipWorkerConcurrency := getEnvInt("NFT_OWNERSHIP_WORKER_CONCURRENCY", 1)
+	txContractsWorkerConcurrency := getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1)
 
 	// 3. Services
 	// Forward Ingester (Live Data)
@@ -164,13 +172,25 @@ func main() {
 	// Async Workers (optional)
 	enableTokenWorker := os.Getenv("ENABLE_TOKEN_WORKER") != "false"
 	enableMetaWorker := os.Getenv("ENABLE_META_WORKER") != "false"
+	enableAccountsWorker := os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false"
+	enableFTHoldingsWorker := os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false"
+	enableNFTOwnershipWorker := os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false"
+	enableTxContractsWorker := os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false"
 
 	var tokenWorkerProcessor *ingester.TokenWorker
 	var tokenWorkers []*ingester.AsyncWorker
 	var metaWorkerProcessor *ingester.MetaWorker
 	var metaWorkers []*ingester.AsyncWorker
+	var accountsWorkerProcessor *ingester.AccountsWorker
+	var accountsWorkers []*ingester.AsyncWorker
+	var ftHoldingsWorkerProcessor *ingester.FTHoldingsWorker
+	var ftHoldingsWorkers []*ingester.AsyncWorker
+	var nftOwnershipWorkerProcessor *ingester.NFTOwnershipWorker
+	var nftOwnershipWorkers []*ingester.AsyncWorker
+	var txContractsWorkerProcessor *ingester.TxContractsWorker
+	var txContractsWorkers []*ingester.AsyncWorker
 
-	workerTypes := make([]string, 0, 2)
+	workerTypes := make([]string, 0, 6)
 
 	if enableTokenWorker {
 		tokenWorkerProcessor = ingester.NewTokenWorker(repo)
@@ -206,6 +226,78 @@ func main() {
 		workerTypes = append(workerTypes, metaWorkerProcessor.Name())
 	} else {
 		log.Println("Meta Worker is DISABLED (ENABLE_META_WORKER=false)")
+	}
+
+	if enableAccountsWorker {
+		accountsWorkerProcessor = ingester.NewAccountsWorker(repo)
+		if accountsWorkerConcurrency < 1 {
+			accountsWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < accountsWorkerConcurrency; i++ {
+			accountsWorkers = append(accountsWorkers, ingester.NewAsyncWorker(accountsWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: accountsWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-accounts-%d", hostname, pid, i),
+			}))
+		}
+		workerTypes = append(workerTypes, accountsWorkerProcessor.Name())
+	} else {
+		log.Println("Accounts Worker is DISABLED (ENABLE_ACCOUNTS_WORKER=false)")
+	}
+
+	if enableFTHoldingsWorker {
+		ftHoldingsWorkerProcessor = ingester.NewFTHoldingsWorker(repo)
+		if ftHoldingsWorkerConcurrency < 1 {
+			ftHoldingsWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < ftHoldingsWorkerConcurrency; i++ {
+			ftHoldingsWorkers = append(ftHoldingsWorkers, ingester.NewAsyncWorker(ftHoldingsWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: ftHoldingsWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-ft-holdings-%d", hostname, pid, i),
+			}))
+		}
+		workerTypes = append(workerTypes, ftHoldingsWorkerProcessor.Name())
+	} else {
+		log.Println("FT Holdings Worker is DISABLED (ENABLE_FT_HOLDINGS_WORKER=false)")
+	}
+
+	if enableNFTOwnershipWorker {
+		nftOwnershipWorkerProcessor = ingester.NewNFTOwnershipWorker(repo)
+		if nftOwnershipWorkerConcurrency < 1 {
+			nftOwnershipWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < nftOwnershipWorkerConcurrency; i++ {
+			nftOwnershipWorkers = append(nftOwnershipWorkers, ingester.NewAsyncWorker(nftOwnershipWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: nftOwnershipWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-nft-ownership-%d", hostname, pid, i),
+			}))
+		}
+		workerTypes = append(workerTypes, nftOwnershipWorkerProcessor.Name())
+	} else {
+		log.Println("NFT Ownership Worker is DISABLED (ENABLE_NFT_OWNERSHIP_WORKER=false)")
+	}
+
+	if enableTxContractsWorker {
+		txContractsWorkerProcessor = ingester.NewTxContractsWorker(repo)
+		if txContractsWorkerConcurrency < 1 {
+			txContractsWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < txContractsWorkerConcurrency; i++ {
+			txContractsWorkers = append(txContractsWorkers, ingester.NewAsyncWorker(txContractsWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: txContractsWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-tx-contracts-%d", hostname, pid, i),
+			}))
+		}
+		workerTypes = append(workerTypes, txContractsWorkerProcessor.Name())
+	} else {
+		log.Println("Tx Contracts Worker is DISABLED (ENABLE_TX_CONTRACTS_WORKER=false)")
 	}
 
 	var committer *ingester.CheckpointCommitter
@@ -273,6 +365,46 @@ func main() {
 
 	if enableMetaWorker {
 		for _, worker := range metaWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableAccountsWorker {
+		for _, worker := range accountsWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableFTHoldingsWorker {
+		for _, worker := range ftHoldingsWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableNFTOwnershipWorker {
+		for _, worker := range nftOwnershipWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableTxContractsWorker {
+		for _, worker := range txContractsWorkers {
 			wg.Add(1)
 			go func(w *ingester.AsyncWorker) {
 				defer wg.Done()

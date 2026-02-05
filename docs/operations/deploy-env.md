@@ -8,6 +8,7 @@ This is the final publish list of environment variables used by the backend. Rai
 - `FLOW_ACCESS_NODE` = Flow access node, e.g. `access-001.mainnet28.nodes.onflow.org:9000`.
 - `FLOW_ACCESS_NODES` = optional comma-separated list of access nodes (overrides `FLOW_ACCESS_NODE`).
 - `FLOW_HISTORIC_ACCESS_NODES` = optional comma-separated list of historic spork nodes for history backfill (recommended for full history).
+- `FLOW_ARCHIVE_NODE` = optional archive node fallback (default: `archive.mainnet.nodes.onflow.org:9000`).
 - `PORT` = API port (Railway sets this automatically; for GCP you can set explicitly).
 - `START_BLOCK` = start height for indexing (optional but strongly recommended).
 
@@ -25,10 +26,22 @@ This is the final publish list of environment variables used by the backend. Rai
 - `ENABLE_DERIVED_WRITES` (default: false)
 - `ENABLE_TOKEN_WORKER` (default: true)
 - `ENABLE_META_WORKER` (default: true)
+- `ENABLE_ACCOUNTS_WORKER` (default: true)
+- `ENABLE_FT_HOLDINGS_WORKER` (default: true)
+- `ENABLE_NFT_OWNERSHIP_WORKER` (default: true)
+- `ENABLE_TX_CONTRACTS_WORKER` (default: true)
 - `TOKEN_WORKER_RANGE` (default: 50000)
 - `META_WORKER_RANGE` (default: 50000)
+- `ACCOUNTS_WORKER_RANGE` (default: 50000)
+- `FT_HOLDINGS_WORKER_RANGE` (default: 50000)
+- `NFT_OWNERSHIP_WORKER_RANGE` (default: 50000)
+- `TX_CONTRACTS_WORKER_RANGE` (default: 50000)
 - `TOKEN_WORKER_CONCURRENCY` (default: 1)
 - `META_WORKER_CONCURRENCY` (default: 1)
+- `ACCOUNTS_WORKER_CONCURRENCY` (default: 1)
+- `FT_HOLDINGS_WORKER_CONCURRENCY` (default: 1)
+- `NFT_OWNERSHIP_WORKER_CONCURRENCY` (default: 1)
+- `TX_CONTRACTS_WORKER_CONCURRENCY` (default: 1)
 - `ENABLE_DAILY_STATS` (default: true)
 - `ENABLE_LOOKUP_REPAIR` (default: false)
 - `LOOKUP_REPAIR_LIMIT` (default: 1000)
@@ -36,6 +49,14 @@ This is the final publish list of environment variables used by the backend. Rai
 - `TX_SCRIPT_INLINE_MAX_BYTES` (default: 0)
   - If `>0`, store `raw.transactions.script` inline only when the script size is <= this limit.
   - Otherwise, scripts are stored as `raw.transactions.script_hash` and de-duplicated in `raw.scripts`.
+
+## Live Address Backfill (optional)
+
+These improve account pages during large range backfills by seeding recent activity.
+
+- `ENABLE_LIVE_ADDRESS_BACKFILL` (default: true)
+- `LIVE_ADDRESS_BACKFILL_BLOCKS` (default: `META_WORKER_RANGE`)
+- `LIVE_ADDRESS_BACKFILL_CHUNK` (default: 5000)
 
 ## Flow RPC Throttling
 

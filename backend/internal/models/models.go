@@ -192,3 +192,67 @@ type DailyStat struct {
 	ActiveAccounts int64  `json:"active_accounts"`
 	NewContracts   int    `json:"new_contracts"`
 }
+
+// AccountCatalog represents app.accounts
+type AccountCatalog struct {
+	Address         string    `json:"address"`
+	FirstSeenHeight uint64    `json:"first_seen_height"`
+	LastSeenHeight  uint64    `json:"last_seen_height"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// FTToken represents app.ft_tokens
+type FTToken struct {
+	ContractAddress string    `json:"contract_address"`
+	Name            string    `json:"name"`
+	Symbol          string    `json:"symbol"`
+	Decimals        int       `json:"decimals"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// FTHolding represents app.ft_holdings
+type FTHolding struct {
+	Address         string    `json:"address"`
+	ContractAddress string    `json:"contract_address"`
+	Balance         string    `json:"balance"`
+	LastHeight      uint64    `json:"last_height"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// NFTCollection represents app.nft_collections
+type NFTCollection struct {
+	ContractAddress string    `json:"contract_address"`
+	Name            string    `json:"name"`
+	Symbol          string    `json:"symbol"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// NFTOwnership represents app.nft_ownership
+type NFTOwnership struct {
+	ContractAddress string    `json:"contract_address"`
+	NFTID           string    `json:"nft_id"`
+	Owner           string    `json:"owner"`
+	LastHeight      uint64    `json:"last_height"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// TxContract represents app.tx_contracts
+type TxContract struct {
+	TransactionID     string `json:"transaction_id"`
+	ContractIdentifier string `json:"contract_identifier"`
+	Source            string `json:"source"`
+}
+
+// TxTag represents app.tx_tags
+type TxTag struct {
+	TransactionID string `json:"transaction_id"`
+	Tag           string `json:"tag"`
+}
+
+// StatusSnapshot represents cached status payloads
+type StatusSnapshot struct {
+	Kind    string          `json:"kind"`
+	Payload json.RawMessage `json:"payload"`
+	AsOf    time.Time       `json:"as_of"`
+}

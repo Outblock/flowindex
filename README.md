@@ -14,7 +14,9 @@ A Flow blockchain explorer (similar to Etherscan / Blockscout) focused on high-t
 
 ## Docs
 - `docs/architecture/ARCHITECTURE.md` — architecture + diagrams
+- `docs/architecture/api-redesign-plan.md` — API redesign coverage + DB gaps
 - `docs/architecture/schema-v2-plan.md` — Schema V2 refactor plan
+- `docs/openapi.json` — OpenAPI spec (matches `api.json`)
 - `docs/operations/deploy-env.md` — deployment environment variables
 - `docs/operations/railway-runbook.md` — Railway validation steps
 - `docs/status/project-status.md` — current status and next steps
