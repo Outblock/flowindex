@@ -37,10 +37,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8080
 
 # Next.js standalone output
-COPY --from=builder /app/devportal/.next/standalone ./
-COPY --from=builder /app/devportal/.next/static ./.next/static
-COPY --from=builder /app/devportal/public ./public
+#
+# NOTE: because we set `outputFileTracingRoot` to the repo root, Next's standalone
+# output is rooted at `.next/standalone/devportal/*` (not `.next/standalone/*`).
+COPY --from=builder /app/devportal/.next/standalone/devportal ./devportal
+COPY --from=builder /app/devportal/.next/static ./devportal/.next/static
+COPY --from=builder /app/devportal/public ./devportal/public
+
+# Fumadocs sources markdown from `../docs`, so ensure the docs directory exists at runtime.
+COPY --from=builder /app/docs ./docs
 
 EXPOSE 8080
 
+WORKDIR /app/devportal
 CMD ["node", "server.js"]
