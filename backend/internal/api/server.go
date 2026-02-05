@@ -877,7 +877,7 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	// Sanitize address (remove 0x, lowercase) matching DB format
-	address := flowsdk.HexToAddress(vars["address"]).String()
+	address := normalizeAddr(vars["address"])
 
 	limit, offset := parsePagination(r)
 	cursorParam := r.URL.Query().Get("cursor")
@@ -920,7 +920,7 @@ func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Req
 
 func (s *Server) handleGetAccountTokenTransfers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	address := flowsdk.HexToAddress(vars["address"]).String()
+	address := normalizeAddr(vars["address"])
 
 	limitStr := r.URL.Query().Get("limit")
 	limit := 20
@@ -970,7 +970,7 @@ func (s *Server) handleGetAccountTokenTransfers(w http.ResponseWriter, r *http.R
 
 func (s *Server) handleGetAccountNFTTransfers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	address := flowsdk.HexToAddress(vars["address"]).String()
+	address := normalizeAddr(vars["address"])
 
 	limitStr := r.URL.Query().Get("limit")
 	limit := 20

@@ -572,10 +572,12 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 	keys := make([]map[string]interface{}, 0, len(acc.Keys))
 	for _, key := range acc.Keys {
 		keys = append(keys, map[string]interface{}{
-			"index":      key.Index,
-			"public_key": strings.TrimPrefix(strings.ToLower(key.PublicKey.String()), "0x"),
-			"weight":     key.Weight,
-			"revoked":    key.Revoked,
+			"index":              strconv.FormatUint(uint64(key.Index), 10),
+			"key":                strings.TrimPrefix(strings.ToLower(key.PublicKey.String()), "0x"),
+			"signatureAlgorithm": key.SigAlgo.String(),
+			"hashAlgorithm":      key.HashAlgo.String(),
+			"weight":             key.Weight,
+			"revoked":            key.Revoked,
 		})
 	}
 	contractNames := make([]string, 0, len(acc.Contracts))
@@ -590,19 +592,23 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 	}); err == nil {
 		storageUsed, storageCapacity = parseStorageOverview(raw)
 	}
+	const bytesPerMB = 1024 * 1024
 	storageAvailable := uint64(0)
 	if storageCapacity > storageUsed {
 		storageAvailable = storageCapacity - storageUsed
 	}
+	storageCapacityMB := float64(storageCapacity) / bytesPerMB
+	storageUsedMB := float64(storageUsed) / bytesPerMB
+	storageAvailableMB := float64(storageAvailable) / bytesPerMB
 
 	data := map[string]interface{}{
 		"address":          strings.TrimPrefix(strings.ToLower(acc.Address.Hex()), "0x"),
 		"flowBalance":      float64(acc.Balance) / 1e8,
 		"contracts":        contractNames,
 		"keys":             keys,
-		"flowStorage":      storageCapacity,
-		"storageUsed":      storageUsed,
-		"storageAvailable": storageAvailable,
+		"flowStorage":      storageCapacityMB,
+		"storageUsed":      storageUsedMB,
+		"storageAvailable": storageAvailableMB,
 	}
 	writeAPIResponse(w, []interface{}{data}, nil, nil)
 }
