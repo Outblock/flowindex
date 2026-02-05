@@ -26,7 +26,7 @@ COPY --from=builder /app/indexer .
 COPY --from=builder /app/backfill_token_transfers .
 # Copy schema for potential migration on startup (optional, user does it manually now)
 COPY --from=builder /app/schema_v2.sql .
-COPY --from=builder /app/docs/openapi.yaml ./docs/openapi.yaml
+COPY --from=builder /app/docs ./docs
 
 EXPOSE 8080
 
