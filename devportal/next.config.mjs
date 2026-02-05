@@ -14,12 +14,12 @@ const config = {
   // dozens of static-analysis workers. That often stalls/ooms during `next build`.
   // Cap workers and avoid worker threads for more predictable CI builds.
   experimental: {
-    cpus: 16,
+    cpus: 2,
     memoryBasedWorkersCount: false,
     workerThreads: false,
   },
   // Avoid CI stalls when collecting page data on slower builders.
-  staticPageGenerationTimeout: 180,
+  staticPageGenerationTimeout: 300,
   // Avoid Next guessing a workspace root outside the repo (monorepo-style lockfile detection),
   // which bloats the standalone output and can break Docker builds.
   outputFileTracingRoot: repoRoot,
