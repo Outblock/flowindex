@@ -209,15 +209,14 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 	}
 
-	// Fast path: bulk COPY raw.transactions + raw.tx_lookup inside a savepoint.
+	// Fast path: bulk COPY raw.transactions inside a savepoint.
 	// If COPY fails (e.g. due to a duplicate key), we roll back to the savepoint and fall back to UPSERT loops.
 	usedCopyForTx := false
 	if len(txs) > 0 && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+		batchCreatedAt := time.Now()
 		sub, err := dbtx.Begin(ctx) // savepoint
 		if err == nil {
 			defer sub.Rollback(ctx)
-
-			batchCreatedAt := time.Now()
 
 			_, errTx := sub.CopyFrom(ctx,
 				pgx.Identifier{"raw", "transactions"},
@@ -275,49 +274,70 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 							t.GasLimit, t.GasUsed, eventCount,
 							txTimestamp, batchCreatedAt,
 					}, nil
-				}),
-			)
-
-			if errTx == nil {
-				_, errLookup := sub.CopyFrom(ctx,
-					pgx.Identifier{"raw", "tx_lookup"},
-					[]string{"id", "evm_hash", "block_height", "transaction_index", "timestamp", "created_at"},
-					pgx.CopyFromSlice(len(txs), func(i int) ([]any, error) {
-						t := txs[i]
-
-						txTimestamp := t.Timestamp
-						if txTimestamp.IsZero() {
-							if ts, ok := blockTimeByHeight[t.BlockHeight]; ok {
-								txTimestamp = ts
-							}
-						}
-						if txTimestamp.IsZero() {
-							txTimestamp = batchCreatedAt
-						}
-
-						var evmHash any
-						if t.EVMHash != "" {
-							normalized := strings.TrimPrefix(strings.ToLower(t.EVMHash), "0x")
-							if normalized != "" {
-								evmHash = normalized
-							}
-						}
-
-						return []any{
-							t.ID, evmHash, t.BlockHeight, t.TransactionIndex, txTimestamp, batchCreatedAt,
-						}, nil
 					}),
 				)
-				if errLookup == nil {
-					if err := sub.Commit(ctx); err == nil {
-						usedCopyForTx = true
-					}
+
+			if errTx == nil {
+				if err := sub.Commit(ctx); err == nil {
+					usedCopyForTx = true
 				}
 			}
 
 			if !usedCopyForTx {
 				_ = sub.Rollback(ctx)
 			}
+		}
+	}
+
+	// raw.tx_lookup needs UPSERT semantics (id is globally unique). We batch UPSERT it with UNNEST
+	// so we don't spam the DB with per-row inserts, while still being idempotent across retries.
+	if usedCopyForTx {
+		ids := make([]string, len(txs))
+		evmHashes := make([]string, len(txs))
+		heights := make([]int64, len(txs))
+		txIndexes := make([]int32, len(txs))
+		timestamps := make([]time.Time, len(txs))
+
+		batchCreatedAt := time.Now()
+
+		for i := range txs {
+			t := txs[i]
+			ids[i] = t.ID
+			heights[i] = int64(t.BlockHeight)
+			txIndexes[i] = int32(t.TransactionIndex)
+
+			// Keep the same timestamp fallback as raw.transactions COPY.
+			ts := t.Timestamp
+			if ts.IsZero() {
+				if bts, ok := blockTimeByHeight[t.BlockHeight]; ok {
+					ts = bts
+				}
+			}
+			if ts.IsZero() {
+				ts = batchCreatedAt
+			}
+			timestamps[i] = ts
+
+			if t.EVMHash != "" {
+				normalized := strings.TrimPrefix(strings.ToLower(t.EVMHash), "0x")
+				evmHashes[i] = normalized
+			}
+		}
+
+		_, err := dbtx.Exec(ctx, `
+			INSERT INTO raw.tx_lookup (id, evm_hash, block_height, transaction_index, timestamp, created_at)
+			SELECT u.id, NULLIF(u.evm_hash, ''), u.block_height, u.transaction_index, u.timestamp, $6
+			FROM UNNEST($1::text[], $2::text[], $3::bigint[], $4::int[], $5::timestamptz[]) AS u(
+				id, evm_hash, block_height, transaction_index, timestamp
+			)
+			ON CONFLICT (id) DO UPDATE SET
+				evm_hash = COALESCE(EXCLUDED.evm_hash, raw.tx_lookup.evm_hash),
+				block_height = EXCLUDED.block_height,
+				transaction_index = EXCLUDED.transaction_index,
+				timestamp = EXCLUDED.timestamp
+		`, ids, evmHashes, heights, txIndexes, timestamps, batchCreatedAt)
+		if err != nil {
+			return fmt.Errorf("failed to upsert tx_lookup batch: %w", err)
 		}
 	}
 
