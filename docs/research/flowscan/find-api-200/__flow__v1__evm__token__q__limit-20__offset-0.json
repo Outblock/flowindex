@@ -1,0 +1,228 @@
+{
+  "data": [
+    {
+      "name": "Ghosty Trip Onchain Inventory",
+      "symbol": "GTOI",
+      "total_supply": null,
+      "decimals": null,
+      "contract_address_hash": "e381283c44091c018ad77e143e9928d5b394bee7",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 375616,
+      "transfers": 390846
+    },
+    {
+      "name": "USD Flow",
+      "symbol": "USDF",
+      "total_supply": "3120188631420",
+      "decimals": 6,
+      "contract_address_hash": "2aabea2058b5ac2d339b163c6ab6f2b6d53aabed",
+      "type": "ERC-20",
+      "icon_url": "https://assets.findlabs.io/assets/blockscout/tokens/USDF_Logo.png",
+      "holders": 45682,
+      "transfers": 2274947
+    },
+    {
+      "name": ".",
+      "symbol": ".",
+      "total_supply": null,
+      "decimals": null,
+      "contract_address_hash": "248d64b0e0f7d9add8fed7adf6dec1e099483d5e",
+      "type": "ERC-1155",
+      "icon_url": null,
+      "holders": 19999,
+      "transfers": 20001
+    },
+    {
+      "name": "NBA Top Shot",
+      "symbol": "TOPSHOT",
+      "total_supply": "66060",
+      "decimals": null,
+      "contract_address_hash": "84c6a2e6765e88427c41bb38c82a78b570e24709",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 15789,
+      "transfers": 1999507
+    },
+    {
+      "name": "ProMint",
+      "symbol": "PM",
+      "total_supply": "21215",
+      "decimals": null,
+      "contract_address_hash": "b0938801b30f8fd1f52c80573ccd79a0500057ee",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 15107,
+      "transfers": 21487
+    },
+    {
+      "name": "Triumph of Felis: A CryptoKitties Celebration",
+      "symbol": "CKxRALLY",
+      "total_supply": null,
+      "decimals": null,
+      "contract_address_hash": "f46320c15821caf29afbb13a6075decf62475645",
+      "type": "ERC-1155",
+      "icon_url": "https://assets.findlabs.io/assets/blockscout/tokens/triumph_feliz.png",
+      "holders": 12679,
+      "transfers": 13573
+    },
+    {
+      "name": "Flow Sea",
+      "symbol": "FS",
+      "total_supply": null,
+      "decimals": null,
+      "contract_address_hash": "57c6824456ec4cc14e95998aabe10d2db6253ba7",
+      "type": "ERC-1155",
+      "icon_url": null,
+      "holders": 12551,
+      "transfers": 308276
+    },
+    {
+      "name": "jienigui",
+      "symbol": "Jenie",
+      "total_supply": "9084",
+      "decimals": null,
+      "contract_address_hash": "462e941377c21fb2c1cc6a321072cc66377c5c1e",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 5836,
+      "transfers": 9084
+    },
+    {
+      "name": "FlowToken2049",
+      "symbol": "Flow",
+      "total_supply": "9516",
+      "decimals": null,
+      "contract_address_hash": "1b6c49ec65758d9655678ad0ec2d4162a4fe8b5d",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 5062,
+      "transfers": 9516
+    },
+    {
+      "name": "Wrapped Flow",
+      "symbol": "WFLOW",
+      "total_supply": "82240736961964606481617368",
+      "decimals": 18,
+      "contract_address_hash": "d3bf53dac106a0290b0483ecbc89d40fcc961f3e",
+      "type": "ERC-20",
+      "icon_url": "https://avatars.githubusercontent.com/u/62387156?s=200&v=4",
+      "holders": 3338,
+      "transfers": 3308310
+    },
+    {
+      "name": "BETA",
+      "symbol": "BETA",
+      "total_supply": "1000000000000000000000000000",
+      "decimals": 18,
+      "contract_address_hash": "d8ad8ae8375aa31bff541e17dc4b4917014ebdaa",
+      "type": "ERC-20",
+      "icon_url": "https://dd.dexscreener.com/ds-data/tokens/flowevm/0xd8ad8ae8375aa31bff541e17dc4b4917014ebdaa.png?size=lg&key=cc3fa2",
+      "holders": 2529,
+      "transfers": 49466
+    },
+    {
+      "name": "Maxy Flow",
+      "symbol": "MF",
+      "total_supply": "3471",
+      "decimals": null,
+      "contract_address_hash": "9478ea50cff3b794beca69be24e8615fcbf842a9",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 2525,
+      "transfers": 3479
+    },
+    {
+      "name": "SUNLIGHT",
+      "symbol": "S",
+      "total_supply": "3367",
+      "decimals": null,
+      "contract_address_hash": "c9bba1a12fdfe9f1daf4ba871bb77d62de836bc8",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 2331,
+      "transfers": 3407
+    },
+    {
+      "name": "Beezie Collectibles",
+      "symbol": "CCLT",
+      "total_supply": "25644",
+      "decimals": null,
+      "contract_address_hash": "d112634f06902a977db1d596c77715d72f8da8a9",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 2063,
+      "transfers": 989332
+    },
+    {
+      "name": "Pegasno Flow",
+      "symbol": "PF",
+      "total_supply": "3275",
+      "decimals": null,
+      "contract_address_hash": "3a4cff7730e0b0ef6d1e98c58385052347b90b91",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 2059,
+      "transfers": 3348
+    },
+    {
+      "name": "ETH Denver 2025 X Flow",
+      "symbol": "ED2025XF",
+      "total_supply": "1958",
+      "decimals": null,
+      "contract_address_hash": "86c6d1cf73e320e65da8fe60087ba29a01272113",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 1958,
+      "transfers": 1959
+    },
+    {
+      "name": "fastintop",
+      "symbol": "F",
+      "total_supply": "1956",
+      "decimals": null,
+      "contract_address_hash": "57137e9f829a9881b323d8c0a28e6dbe5c490f96",
+      "type": "ERC-721",
+      "icon_url": null,
+      "holders": 1922,
+      "transfers": 1956
+    },
+    {
+      "name": "Catseye",
+      "symbol": "Catseye",
+      "total_supply": "149384020000000000000000000",
+      "decimals": 18,
+      "contract_address_hash": "9b565507858812e8b5ffbfbde9b200a3bc2e8f76",
+      "type": "ERC-20",
+      "icon_url": "https://assets.findlabs.io/assets/blockscout/tokens/catseye.png",
+      "holders": 1883,
+      "transfers": 69896
+    },
+    {
+      "name": "Bartholomeow",
+      "symbol": "Bartholomeow",
+      "total_supply": "149384020000000000000000000",
+      "decimals": 18,
+      "contract_address_hash": "7296ebca325e835eb6c1b690484cf6fb4c396d2c",
+      "type": "ERC-20",
+      "icon_url": "https://assets.findlabs.io/assets/blockscout/tokens/bartholomeow.png",
+      "holders": 1875,
+      "transfers": 71517
+    },
+    {
+      "name": "Pawderick",
+      "symbol": "Pawderick",
+      "total_supply": "149384020000000000000000000",
+      "decimals": 18,
+      "contract_address_hash": "10448481630fb6d20b597e5b3d7e42dcb1247c8a",
+      "type": "ERC-20",
+      "icon_url": "https://assets.findlabs.io/assets/blockscout/tokens/pawderick.png",
+      "holders": 1839,
+      "transfers": 71257
+    }
+  ],
+  "_links": {
+    "next": "/flow/v1/evm/token?limit=20&offset=20",
+    "self": "/flow/v1/evm/token?limit=20"
+  }
+}

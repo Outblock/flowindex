@@ -14,6 +14,13 @@ type TokenTransferWithContract struct {
 	TotalCount   int64
 }
 
+type FTVaultSummary struct {
+	ContractAddress string
+	ContractName    string
+	Balance         string
+	LastHeight      uint64
+}
+
 func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context, isNFT bool, address, token, txID string, height *uint64, limit, offset int) ([]TokenTransferWithContract, int64, error) {
 	clauses := []string{"t.is_nft = $1"}
 	args := []interface{}{isNFT}
@@ -37,6 +44,11 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 		clauses = append(clauses, fmt.Sprintf("t.block_height = $%d", arg))
 		args = append(args, *height)
 		arg++
+	}
+	if isNFT {
+		clauses = append(clauses, "COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') <> 'NonFungibleToken'")
+	} else {
+		clauses = append(clauses, "COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') <> 'FungibleToken'")
 	}
 	where := "WHERE " + strings.Join(clauses, " AND ")
 	if limit <= 0 {
@@ -122,6 +134,53 @@ func (r *Repository) ListFTTokenContractsByAddress(ctx context.Context, address 
 			return nil, err
 		}
 		out = append(out, v)
+	}
+	return out, nil
+}
+
+func (r *Repository) ListFTVaultSummariesByAddress(ctx context.Context, address string, limit, offset int) ([]FTVaultSummary, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			t.token_contract_address,
+			COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') AS contract_name,
+			SUM(
+				CASE
+					WHEN t.to_address = $1 THEN t.amount::numeric
+					WHEN t.from_address = $1 THEN -t.amount::numeric
+					ELSE 0::numeric
+				END
+			)::text AS balance,
+			MAX(t.block_height) AS last_height
+		FROM app.token_transfers t
+		JOIN raw.tx_lookup l ON l.id = t.transaction_id
+		LEFT JOIN raw.events e
+			ON e.block_height = t.block_height
+			AND e.transaction_id = t.transaction_id
+			AND e.event_index = t.event_index
+		WHERE t.is_nft = FALSE
+		  AND (t.to_address = $1 OR t.from_address = $1)
+		  AND COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') <> 'FungibleToken'
+		GROUP BY t.token_contract_address, contract_name
+		ORDER BY t.token_contract_address ASC
+		LIMIT $2 OFFSET $3`, address, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []FTVaultSummary
+	for rows.Next() {
+		var row FTVaultSummary
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Balance, &row.LastHeight); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
 	}
 	return out, nil
 }

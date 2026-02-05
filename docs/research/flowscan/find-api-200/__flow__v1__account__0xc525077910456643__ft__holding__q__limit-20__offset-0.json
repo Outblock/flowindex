@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "balance": 466.05802322,
+      "percentage": 4.963767098529704e-07,
+      "address": "0xc525077910456643",
+      "token": "A.1654653399040a61.FlowToken.Vault"
+    }
+  ],
+  "_links": {
+    "self": "/flow/v1/account/0xc525077910456643/ft/holding?limit=20"
+  }
+}

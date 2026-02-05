@@ -1,0 +1,555 @@
+{
+  "data": [
+    {
+      "id": "A.215f3ac76cb49656.KARATZ1XR82W.Vault",
+      "contract_name": "KARATZ1XR82W",
+      "name": "KARATZ1XR82W",
+      "symbol": "KARATZ1XR82W",
+      "logo": "https://apps.24karat.io/tokens/KARATZ1XR82W/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/KARATZ1XR82WReceiver",
+        "receiver": "/public/KARATZ1XR82WBalance",
+        "vault": "/storage/KARATZ1XR82WVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x215f3ac76cb49656",
+      "transaction_hash": "47da239b05854d85b4d55196752b2c34a7b5b171c37e2db0c158844c12cf96e8",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 140103113,
+      "updated_at": "2026-01-26T04:14:53.378059Z",
+      "stats": {
+        "owner_counts": 1,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.82ed1b9cba5bb1b3.KARATZ1XR82W.Vault",
+      "contract_name": "KARATZ1XR82W",
+      "name": "KARATZ1XR82W",
+      "symbol": "KARATZ1XR82W",
+      "logo": "https://apps.24karat.io/tokens/KARATZ1XR82W/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/KARATZ1XR82WReceiver",
+        "receiver": "/public/KARATZ1XR82WBalance",
+        "vault": "/storage/KARATZ1XR82WVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x82ed1b9cba5bb1b3",
+      "transaction_hash": "ed93c2966f94a9a9332aba6ba6a98a8c08dbeb47aee7385b84fee3225ffecf0d",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 140086546,
+      "updated_at": "2026-01-26T00:33:41.743402Z",
+      "stats": {
+        "owner_counts": 1,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.1e4aa0b87d10b141.EVMVMBridgedToken_d069d989e2f44b70c65347d1853c0c67e10a9f8d.Vault",
+      "contract_name": "EVMVMBridgedToken_d069d989e2f44b70c65347d1853c0c67e10a9f8d",
+      "name": "EVMVMBridgedToken_d069d989e2f44b70c65347d1853c0c67e10a9f8d",
+      "symbol": "FUSDEV",
+      "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/EVMVMBridgedToken_d069d989e2f44b70c65347d1853c0c67e10a9f8dReceiver",
+        "receiver": "/public/EVMVMBridgedToken_d069d989e2f44b70c65347d1853c0c67e10a9f8dVault",
+        "vault": "/storage/EVMVMBridgedToken_d069d989e2f44b70c65347d1853c0c67e10a9f8dVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x1e4aa0b87d10b141",
+      "transaction_hash": "b6d5552d84255abb7fb56e0e353666142c21af0ca88cb1523bb53ccbaf08f6b4",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 138755589,
+      "updated_at": "2026-01-13T15:52:54.229717Z",
+      "stats": {
+        "owner_counts": 2,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.1e4aa0b87d10b141.EVMVMBridgedToken_99af3eea856556646c98c8b9b2548fe815240750.Vault",
+      "contract_name": "EVMVMBridgedToken_99af3eea856556646c98c8b9b2548fe815240750",
+      "name": "EVMVMBridgedToken_99af3eea856556646c98c8b9b2548fe815240750",
+      "symbol": "PYUSD0",
+      "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/EVMVMBridgedToken_99af3eea856556646c98c8b9b2548fe815240750Receiver",
+        "receiver": "/public/EVMVMBridgedToken_99af3eea856556646c98c8b9b2548fe815240750Vault",
+        "vault": "/storage/EVMVMBridgedToken_99af3eea856556646c98c8b9b2548fe815240750Vault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x1e4aa0b87d10b141",
+      "transaction_hash": "f7e76defecbafecb71606fabd42e15ac8aedd0ae60ed294ec354f77c05d7f14e",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 136558250,
+      "updated_at": "2025-12-19T20:27:19.399017Z",
+      "stats": {
+        "owner_counts": 88,
+        "total_balance": 14776.4557713
+      }
+    },
+    {
+      "id": "A.1e4aa0b87d10b141.EVMVMBridgedToken_cbf9a7753f9d2d0e8141ebb36d99f87acef98597.Vault",
+      "contract_name": "EVMVMBridgedToken_cbf9a7753f9d2d0e8141ebb36d99f87acef98597",
+      "name": "EVMVMBridgedToken_cbf9a7753f9d2d0e8141ebb36d99f87acef98597",
+      "symbol": "syWFLOWv",
+      "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/EVMVMBridgedToken_cbf9a7753f9d2d0e8141ebb36d99f87acef98597Receiver",
+        "receiver": "/public/EVMVMBridgedToken_cbf9a7753f9d2d0e8141ebb36d99f87acef98597Vault",
+        "vault": "/storage/EVMVMBridgedToken_cbf9a7753f9d2d0e8141ebb36d99f87acef98597Vault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x1e4aa0b87d10b141",
+      "transaction_hash": "183026bc144d80ecaa9a33085225062bb0dbef233b6255968b2025f5d7bf73ba",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 135695460,
+      "updated_at": "2025-12-11T20:40:11.695956Z",
+      "stats": {
+        "owner_counts": 3,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.6b00ff876c299c61.MOET.Vault",
+      "contract_name": "MOET",
+      "name": "MOET",
+      "symbol": "MOET",
+      "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/moetTokenReceiver_0x6b00ff876c299c61",
+        "receiver": "/public/moetTokenVault_0x6b00ff876c299c61",
+        "vault": "/storage/moetTokenVault_0x6b00ff876c299c61"
+      },
+      "socials": {
+        "twitter": "https://twitter.com/flow_blockchain"
+      },
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x6b00ff876c299c61",
+      "transaction_hash": "0e81b8791935be99037ea3b93e59c07fd96f5b9a8b8383488c50f1c5eaca6129",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 134914992,
+      "updated_at": "2025-12-04T15:09:16.822462Z",
+      "stats": {
+        "owner_counts": 6,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.82ed1b9cba5bb1b3.KARATZ1DYIVE.Vault",
+      "contract_name": "KARATZ1DYIVE",
+      "name": "KARATZ1DYIVE",
+      "symbol": "KARATZ1DYIVE",
+      "logo": "https://apps.24karat.io/tokens/KARATZ1DYIVE/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/KARATZ1DYIVEReceiver",
+        "receiver": "/public/KARATZ1DYIVEBalance",
+        "vault": "/storage/KARATZ1DYIVEVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x82ed1b9cba5bb1b3",
+      "transaction_hash": "192db0fa36e86a1fc0f3a03018bc91db36581f09aaeeb15cd94dfd81725f95a3",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 134882473,
+      "updated_at": "2025-12-04T07:55:38.237781Z",
+      "stats": {
+        "owner_counts": 189,
+        "total_balance": 2736
+      }
+    },
+    {
+      "id": "A.215f3ac76cb49656.KARATIVHWQ.Vault",
+      "contract_name": "KARATIVHWQ",
+      "name": "KARATIVHWQ",
+      "symbol": "KARATIVHWQ",
+      "logo": "https://apps.24karat.io/tokens/KARATIVHWQ/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/KARATIVHWQReceiver",
+        "receiver": "/public/KARATIVHWQBalance",
+        "vault": "/storage/KARATIVHWQVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x215f3ac76cb49656",
+      "transaction_hash": "4ce6eb609a39dea7c850a3d067de3809a7e84bf31fc23270494efdb62a3ee42a",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 134865703,
+      "updated_at": "2025-12-04T04:12:03.529403Z",
+      "stats": {
+        "owner_counts": 1,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.82ed1b9cba5bb1b3.KARATIVHWQ.Vault",
+      "contract_name": "KARATIVHWQ",
+      "name": "KARATIVHWQ",
+      "symbol": "KARATIVHWQ",
+      "logo": "https://apps.24karat.io/tokens/KARATIVHWQ/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/KARATIVHWQReceiver",
+        "receiver": "/public/KARATIVHWQBalance",
+        "vault": "/storage/KARATIVHWQVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x82ed1b9cba5bb1b3",
+      "transaction_hash": "94493bec819d6470a6f154d58bd221f1c775709a4f426908ce6a40d61a64e2cd",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 134861227,
+      "updated_at": "2025-12-04T03:12:28.391727Z",
+      "stats": {
+        "owner_counts": 1,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.1e4aa0b87d10b141.EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579.Vault",
+      "contract_name": "EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579",
+      "name": "EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579",
+      "symbol": "WBTC",
+      "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579Receiver",
+        "receiver": "/public/EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579Vault",
+        "vault": "/storage/EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579Vault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x1e4aa0b87d10b141",
+      "transaction_hash": "e67a65b76b692548caa6cc3eb2e3f32b1e7c441d8acd3ffe69a8b622b96a9e9d",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 133361919,
+      "updated_at": "2025-11-20T05:56:21.432785Z",
+      "stats": {
+        "owner_counts": 5,
+        "total_balance": 0.00052485
+      }
+    },
+    {
+      "id": "A.1e4aa0b87d10b141.EVMVMBridgedToken_c52e820d2d6207d18667a97e2c6ac22eb26e803c.Vault",
+      "contract_name": "EVMVMBridgedToken_c52e820d2d6207d18667a97e2c6ac22eb26e803c",
+      "name": "EVMVMBridgedToken_c52e820d2d6207d18667a97e2c6ac22eb26e803c",
+      "symbol": "tauUSDFv",
+      "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/EVMVMBridgedToken_c52e820d2d6207d18667a97e2c6ac22eb26e803cReceiver",
+        "receiver": "/public/EVMVMBridgedToken_c52e820d2d6207d18667a97e2c6ac22eb26e803cVault",
+        "vault": "/storage/EVMVMBridgedToken_c52e820d2d6207d18667a97e2c6ac22eb26e803cVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x1e4aa0b87d10b141",
+      "transaction_hash": "3eadb5b143a36e3ce1a97c2c05f2fd61063ea20094a36e42f279899060d31f54",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 132680630,
+      "updated_at": "2025-11-13T22:25:52.319129Z",
+      "stats": {
+        "owner_counts": 2,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.b1d63873c3cc9f79.YieldToken.Vault",
+      "contract_name": "YieldToken",
+      "name": "YieldToken",
+      "symbol": "YIELD",
+      "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/yieldTokenReceiver_0xb1d63873c3cc9f79",
+        "receiver": "/public/yieldTokenVault_0xb1d63873c3cc9f79",
+        "vault": "/storage/yieldTokenVault_0xb1d63873c3cc9f79"
+      },
+      "socials": {
+        "twitter": "https://twitter.com/flow_blockchain"
+      },
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0xb1d63873c3cc9f79",
+      "transaction_hash": "2ae9c1ec1eeec046ff48a2e6ce235c7a6ba367bafb01cf26d5d53c8ef3e37c69",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 132674736,
+      "updated_at": "2025-11-13T21:07:16.382395Z",
+      "stats": {
+        "owner_counts": 1,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.82ed1b9cba5bb1b3.KARATZQ0JIC.Vault",
+      "contract_name": "KARATZQ0JIC",
+      "name": "KARATZQ0JIC",
+      "symbol": "KARATZQ0JIC",
+      "logo": "https://apps.24karat.io/tokens/KARATZQ0JIC/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/KARATZQ0JICReceiver",
+        "receiver": "/public/KARATZQ0JICBalance",
+        "vault": "/storage/KARATZQ0JICVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x82ed1b9cba5bb1b3",
+      "transaction_hash": "12ae6e0e48823edfce8b3f7a6a17e9733605fd8b0ad832cd3640b089e031d42c",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 132590767,
+      "updated_at": "2025-11-13T02:27:38.893947Z",
+      "stats": {
+        "owner_counts": 11,
+        "total_balance": 11
+      }
+    },
+    {
+      "id": "A.bddbae8389c53d32.Fitquest.Vault",
+      "contract_name": "Fitquest",
+      "name": "Fitquest",
+      "symbol": "FIT",
+      "logo": "https://ipfs.io/ipfs/QmVDbrD7XrXWFhhXCqmWh5sR2UZutTphoAWA3hbixo3y9E",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/FitquestReceiver",
+        "receiver": "/public/FitquestMetadata",
+        "vault": "/storage/FitquestVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0xbddbae8389c53d32",
+      "transaction_hash": "342c510d3a3c334afb82b5244085a9b059b7e6a18fda5279db29926848752593",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 129643284,
+      "updated_at": "2025-10-16T12:46:20.108638Z",
+      "stats": {
+        "owner_counts": 1,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.215f3ac76cb49656.JPY24.Vault",
+      "contract_name": "JPY24",
+      "name": "JPY24",
+      "symbol": "JPY24",
+      "logo": "https://24karat.io/tokens/JPY24/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/jpy24Receiver",
+        "receiver": "/public/jpy24Balance",
+        "vault": "/storage/jpy24Vault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x215f3ac76cb49656",
+      "transaction_hash": "7449c0531c6d479bb6b0e5b76d1658b7d4c8a6bccf7043c69a82aee6119c733a",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 129299642,
+      "updated_at": "2025-10-13T08:10:38.96125Z",
+      "stats": {
+        "owner_counts": 377,
+        "total_balance": 663121
+      }
+    },
+    {
+      "id": "A.215f3ac76cb49656.POINT24.Vault",
+      "contract_name": "POINT24",
+      "name": "POINT24",
+      "symbol": "POINT24",
+      "logo": "https://24karat.io/tokens/POINT24/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/point24Receiver",
+        "receiver": "/public/point24Balance",
+        "vault": "/storage/point24Vault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x215f3ac76cb49656",
+      "transaction_hash": "38d640b34dc661733415cad4dcec167796fe2963109106969f7d5a2b9dda3162",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 129299591,
+      "updated_at": "2025-10-13T08:09:56.449146Z",
+      "stats": {
+        "owner_counts": 846,
+        "total_balance": 445544
+      }
+    },
+    {
+      "id": "A.215f3ac76cb49656.TOKEN_IEO_1.Vault",
+      "contract_name": "TOKEN_IEO_1",
+      "name": "TOKEN_IEO_1",
+      "symbol": "TOKEN_IEO_1",
+      "logo": "https://apps.24karat.io/tokens/TOKEN_IEO_1/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/TOKEN_IEO_1Receiver",
+        "receiver": "/public/TOKEN_IEO_1Balance",
+        "vault": "/storage/TOKEN_IEO_1Vault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x215f3ac76cb49656",
+      "transaction_hash": "e078e7af627b22f7b161f69e5bfadce07c71e3d00d9f3ccaef8f00632494245e",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 129290648,
+      "updated_at": "2025-10-13T06:10:38.197294Z",
+      "stats": {
+        "owner_counts": 1,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.82ed1b9cba5bb1b3.KARAT17E8KO.Vault",
+      "contract_name": "KARAT17E8KO",
+      "name": "KARAT17E8KO",
+      "symbol": "KARAT17E8KO",
+      "logo": "https://apps.24karat.io/tokens/KARAT17E8KO/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/KARAT17E8KOReceiver",
+        "receiver": "/public/KARAT17E8KOBalance",
+        "vault": "/storage/KARAT17E8KOVault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x82ed1b9cba5bb1b3",
+      "transaction_hash": "de6c20f466feb5779b6b9719ed68aecafc3fe575237b5f710b37bc72a5f66bfc",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 128966972,
+      "updated_at": "2025-10-10T06:08:56.59607Z",
+      "stats": {
+        "owner_counts": 1,
+        "total_balance": 0
+      }
+    },
+    {
+      "id": "A.ed2202de80195438.BaitCoin.Vault",
+      "contract_name": "BaitCoin",
+      "name": "BaitCoin",
+      "symbol": "BAIT",
+      "logo": "https://derby.fish/bait-coin-logo.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/baitCoinReceiver",
+        "receiver": "/public/baitCoinVault",
+        "vault": "/storage/baitCoinVault"
+      },
+      "socials": {
+        "twitter": "https://twitter.com/derby_fish",
+        "website": "https://derby.fish/bait-coin-logo.png"
+      },
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0xed2202de80195438",
+      "transaction_hash": "7cecaa6461a56c013f5222f39550eb42955761f744b65d17dd4715664345e8de",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 128691675,
+      "updated_at": "2025-10-07T16:51:47.88059Z",
+      "stats": {
+        "owner_counts": 1209,
+        "total_balance": 235
+      }
+    },
+    {
+      "id": "A.82ed1b9cba5bb1b3.KARATZICMQ3.Vault",
+      "contract_name": "KARATZICMQ3",
+      "name": "KARATZICMQ3",
+      "symbol": "KARATZICMQ3",
+      "logo": "https://apps.24karat.io/tokens/KARATZICMQ3/thumbnail.png",
+      "coingecko": "",
+      "coinmarketcap": "",
+      "path": {
+        "balance": "/public/KARATZICMQ3Receiver",
+        "receiver": "/public/KARATZICMQ3Balance",
+        "vault": "/storage/KARATZICMQ3Vault"
+      },
+      "socials": null,
+      "decimals": 8,
+      "tags": null,
+      "circulating_supply": 0,
+      "address": "0x82ed1b9cba5bb1b3",
+      "transaction_hash": "9c516b4516175b9a230e935d4e4dcdce4c30a60d38a27c3f98a312e4f7c99346",
+      "timestamp": "0001-01-01T00:00:00Z",
+      "block_height": 127123965,
+      "updated_at": "2025-09-23T01:09:51.716977Z",
+      "stats": {
+        "owner_counts": 42,
+        "total_balance": 24310
+      }
+    }
+  ],
+  "_links": {
+    "next": "/flow/v1/ft?height=140103113&limit=20&offset=20",
+    "self": "/flow/v1/ft?height=140103113&limit=20"
+  }
+}

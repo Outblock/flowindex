@@ -332,13 +332,17 @@ func main() {
 
 	// Start Ingesters in background
 	var wg sync.WaitGroup
-	wg.Add(1)
-
-	// Always start forward ingester
-	go func() {
-		defer wg.Done()
-		forwardIngester.Start(ctx)
-	}()
+	// Conditionally start forward ingester
+	enableForward := os.Getenv("ENABLE_FORWARD_INGESTER") != "false"
+	if enableForward {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			forwardIngester.Start(ctx)
+		}()
+	} else {
+		log.Println("Forward Ingester is DISABLED (ENABLE_FORWARD_INGESTER=false)")
+	}
 
 	// Conditionally start backward ingester
 	enableHistory := os.Getenv("ENABLE_HISTORY_INGESTER") != "false"

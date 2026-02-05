@@ -1,0 +1,63 @@
+{
+  "data": [
+    {
+      "nft_type": "A.2d4c3caffbeab845.FLOAT.NFT",
+      "nft_count": 7,
+      "owner": "0x84221fe0294044d7",
+      "banner": "https://i.imgur.com/ETeVZZU.jpg",
+      "name": "FLOAT",
+      "logo": "https://i.imgur.com/v0Njnnk.png"
+    },
+    {
+      "nft_type": "A.233eb012d34b0070.Domains.NFT",
+      "nft_count": 1,
+      "owner": "0x84221fe0294044d7",
+      "banner": "https://www.flowns.org/assets/flowns_logo_light.svg",
+      "name": "The Flowns domain Collection",
+      "logo": "https://www.flowns.org/assets/flowns_logo_light.svg"
+    },
+    {
+      "nft_type": "A.8529aaf64c168952.MonoCatMysteryBox.NFT",
+      "nft_count": 1,
+      "owner": "0x84221fe0294044d7",
+      "banner": "https://static.mono.fun/public/contents/projects/a73c1a41-be88-4c7c-a32e-929d453dbd39/carousels/mono%20cats%20PC.png",
+      "name": "MonoCatsGachapon",
+      "logo": "https://static.mono.fun/public/contents/projects/a73c1a41-be88-4c7c-a32e-929d453dbd39/nft/MysteryBox.png"
+    },
+    {
+      "nft_type": "A.a45ead1cf1ca9eda.FlowRewards.NFT",
+      "nft_count": 1,
+      "owner": "0x84221fe0294044d7",
+      "banner": "ipfs://QmTBnCqNwgE8AiHPs9YxuVb8HSKWA2RvY5Q4NYm1tvW6wq",
+      "name": "Flow Rewards NFT",
+      "logo": "ipfs://QmYuLdXMbmDoUjGwKxfv3Jk3cgKV6mxYBAewNpxijkYYZn"
+    },
+    {
+      "nft_type": "A.8529aaf64c168952.MonoCat.NFT",
+      "nft_count": 1,
+      "owner": "0x84221fe0294044d7",
+      "banner": "https://static.mono.fun/public/contents/projects/a73c1a41-be88-4c7c-a32e-929d453dbd39/carousels/mono%20cats%20PC.png",
+      "name": "MonoCats",
+      "logo": "https://static.mono.fun/public/contents/projects/a73c1a41-be88-4c7c-a32e-929d453dbd39/nft/monocats/MonoCatSet_350x350.png"
+    },
+    {
+      "nft_type": "A.9a57dfe5c8ce609c.SoulMadeComponent.NFT",
+      "nft_count": 1,
+      "owner": "0x84221fe0294044d7",
+      "banner": "https://i.imgur.com/yBw3ktk.png",
+      "name": "SoulMadeComponent",
+      "logo": "https://i.imgur.com/XgqDY3s.jpg"
+    },
+    {
+      "nft_type": "A.0b2a3299cc857e29.TopShot.NFT",
+      "nft_count": 0,
+      "owner": "0x84221fe0294044d7",
+      "banner": "https://nbatopshot.com/static/img/top-shot-logo-horizontal-white.svg",
+      "name": "NBA Top Shot",
+      "logo": "https://nbatopshot.com/static/favicon/favicon.svg"
+    }
+  ],
+  "_links": {
+    "self": "/flow/v1/account/0x84221fe0294044d7/nft?limit=20"
+  }
+}

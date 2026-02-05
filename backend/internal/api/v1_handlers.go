@@ -72,6 +72,25 @@ func normalizeAddr(addr string) string {
 	return addr
 }
 
+func formatAddressV1(addr string) string {
+	addr = normalizeAddr(addr)
+	if addr == "" {
+		return ""
+	}
+	return "0x" + addr
+}
+
+func formatAddressListV1(addrs []string) []string {
+	if len(addrs) == 0 {
+		return addrs
+	}
+	out := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		out = append(out, formatAddressV1(a))
+	}
+	return out
+}
+
 func collectTxIDs(txs []models.Transaction) []string {
 	out := make([]string, 0, len(txs))
 	for _, t := range txs {
@@ -133,6 +152,27 @@ func formatTokenIdentifier(address, name string) string {
 	return "A." + address + "." + name
 }
 
+func formatTokenVaultIdentifier(address, name string) string {
+	base := formatTokenIdentifier(address, name)
+	if base == "" {
+		return ""
+	}
+	if strings.Contains(base, ".") && !strings.HasSuffix(base, ".Vault") {
+		return base + ".Vault"
+	}
+	return base
+}
+
+func vaultPathForContract(contractName string) string {
+	if contractName == "" {
+		return ""
+	}
+	if contractName == "FlowToken" {
+		return "/storage/flowTokenVault"
+	}
+	return "/storage/" + contractName + "Vault"
+}
+
 func normalizeTokenParam(token string) string {
 	address, _, _ := splitContractIdentifier(token)
 	return address
@@ -173,9 +213,9 @@ func toFlowTransactionOutput(t models.Transaction, events []models.Event, contra
 		"block_height":      t.BlockHeight,
 		"transaction_index": t.TransactionIndex,
 		"timestamp":         t.Timestamp.UTC().Format(time.RFC3339),
-		"payer":             t.PayerAddress,
-		"proposer":          t.ProposerAddress,
-		"authorizers":       t.Authorizers,
+		"payer":             formatAddressV1(t.PayerAddress),
+		"proposer":          formatAddressV1(t.ProposerAddress),
+		"authorizers":       formatAddressListV1(t.Authorizers),
 		"status":            t.Status,
 		"error":             t.ErrorMessage,
 		"gas_used":          t.GasUsed,
@@ -195,7 +235,7 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 	}
 	return map[string]interface{}{
 		"id":            identifier,
-		"address":       address,
+		"address":       formatAddressV1(address),
 		"contract_name": name,
 		"name":          token.Name,
 		"symbol":        token.Symbol,
@@ -208,7 +248,7 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 func toFTHoldingOutput(holding models.FTHolding, percentage float64) map[string]interface{} {
 	tokenIdentifier := holding.ContractAddress
 	return map[string]interface{}{
-		"address":    holding.Address,
+		"address":    formatAddressV1(holding.Address),
 		"token":      tokenIdentifier,
 		"balance":    parseFloatOrZero(holding.Balance),
 		"percentage": percentage,
@@ -219,7 +259,7 @@ func toVaultOutput(holding models.FTHolding) map[string]interface{} {
 	return map[string]interface{}{
 		"id":           holding.Address + ":" + holding.ContractAddress,
 		"vault_id":     0,
-		"address":      holding.Address,
+		"address":      formatAddressV1(holding.Address),
 		"token":        holding.ContractAddress,
 		"balance":      parseFloatOrZero(holding.Balance),
 		"block_height": holding.LastHeight,
@@ -234,7 +274,7 @@ func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]i
 	}
 	return map[string]interface{}{
 		"id":               identifier,
-		"address":          address,
+		"address":          formatAddressV1(address),
 		"contract_name":    name,
 		"name":             summary.Name,
 		"display_name":     summary.Name,
@@ -247,7 +287,7 @@ func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]i
 
 func toNFTHoldingOutput(owner string, count int64, percentage float64, nftType string) map[string]interface{} {
 	return map[string]interface{}{
-		"owner":      owner,
+		"owner":      formatAddressV1(owner),
 		"nft_type":   nftType,
 		"count":      count,
 		"percentage": percentage,
@@ -258,7 +298,7 @@ func toCombinedNFTDetails(ownership models.NFTOwnership) map[string]interface{} 
 	return map[string]interface{}{
 		"id":           ownership.NFTID,
 		"nft_id":       ownership.NFTID,
-		"owner":        ownership.Owner,
+		"owner":        formatAddressV1(ownership.Owner),
 		"type":         ownership.ContractAddress,
 		"block_height": ownership.LastHeight,
 		"timestamp":    formatTime(ownership.UpdatedAt),
@@ -272,7 +312,7 @@ func toContractOutput(contract models.SmartContract) map[string]interface{} {
 	return map[string]interface{}{
 		"id":         identifier,
 		"identifier": identifier,
-		"address":    contract.Address,
+		"address":    formatAddressV1(contract.Address),
 		"name":       contract.Name,
 		"body":       contract.Code,
 		"created_at": formatTime(contract.CreatedAt),
@@ -372,27 +412,36 @@ func transferDirection(addrFilter, from, to string) string {
 }
 
 func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string) map[string]interface{} {
-	tokenIdentifier := formatTokenIdentifier(t.TokenContractAddress, contractName)
+	tokenIdentifier := formatTokenVaultIdentifier(t.TokenContractAddress, contractName)
 	tokenName := ""
-	if contractName != "" {
+	tokenSymbol := ""
+	tokenLogo := ""
+	if contractName == "FlowToken" {
+		tokenName = "Flow"
+		tokenSymbol = "FLOW"
+		tokenLogo = "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.1654653399040a61.FlowToken/logo.svg"
+	} else if contractName != "" {
 		tokenName = contractName
 	}
 	return map[string]interface{}{
-		"address":          tokenIdentifier,
+		"address":          formatAddressV1(addrFilter),
 		"transaction_hash": t.TransactionID,
 		"block_height":     t.BlockHeight,
 		"timestamp":        formatTime(t.Timestamp),
 		"amount":           parseFloatOrZero(t.Amount),
-		"sender":           t.FromAddress,
-		"receiver":         t.ToAddress,
+		"sender":           formatAddressV1(t.FromAddress),
+		"receiver":         formatAddressV1(t.ToAddress),
 		"direction":        transferDirection(addrFilter, t.FromAddress, t.ToAddress),
 		"verified":         false,
 		"is_primary":       false,
+		"classifier":       "Coin Transfer",
+		"approx_usd_price": 0,
+		"receiver_balance": 0,
 		"token": map[string]interface{}{
 			"token":  tokenIdentifier,
 			"name":   tokenName,
-			"symbol": "",
-			"logo":   "",
+			"symbol": tokenSymbol,
+			"logo":   tokenLogo,
 		},
 	}
 }
@@ -405,9 +454,9 @@ func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string
 		"timestamp":        formatTime(t.Timestamp),
 		"nft_type":         nftType,
 		"nft_id":           t.TokenID,
-		"sender":           t.FromAddress,
-		"receiver":         t.ToAddress,
-		"current_owner":    t.ToAddress,
+		"sender":           formatAddressV1(t.FromAddress),
+		"receiver":         formatAddressV1(t.ToAddress),
+		"current_owner":    formatAddressV1(t.ToAddress),
 		"direction":        transferDirection(addrFilter, t.FromAddress, t.ToAddress),
 		"verified":         false,
 		"is_primary":       false,
@@ -602,7 +651,7 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 	storageAvailableMB := float64(storageAvailable) / bytesPerMB
 
 	data := map[string]interface{}{
-		"address":          strings.TrimPrefix(strings.ToLower(acc.Address.Hex()), "0x"),
+		"address":          formatAddressV1(acc.Address.Hex()),
 		"flowBalance":      float64(acc.Balance) / 1e8,
 		"contracts":        contractNames,
 		"keys":             keys,
@@ -766,28 +815,37 @@ func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Requ
 func (s *Server) handleFlowAccountFTVaults(w http.ResponseWriter, r *http.Request) {
 	address := normalizeAddr(mux.Vars(r)["address"])
 	limit, offset := parseLimitOffset(r)
-	holdings, err := s.repo.ListFTHoldingsByAddress(r.Context(), address, limit, offset)
+	summaries, err := s.repo.ListFTVaultSummariesByAddress(r.Context(), address, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if len(holdings) == 0 {
-		contracts, err := s.repo.ListFTTokenContractsByAddress(r.Context(), address, limit, offset)
-		if err != nil {
-			writeAPIError(w, http.StatusInternalServerError, err.Error())
-			return
+	out := make([]map[string]interface{}, 0, len(summaries)+1)
+	hasFlowToken := false
+	for _, row := range summaries {
+		contractName := row.ContractName
+		if contractName == "FlowToken" {
+			hasFlowToken = true
 		}
-		for _, c := range contracts {
-			holdings = append(holdings, models.FTHolding{
-				Address:         address,
-				ContractAddress: c,
-				Balance:         "0",
+		out = append(out, map[string]interface{}{
+			"address":  formatAddressV1(address),
+			"balance":  row.Balance,
+			"path":     vaultPathForContract(contractName),
+			"token":    formatTokenVaultIdentifier(row.ContractAddress, contractName),
+			"vault_id": 0,
+		})
+	}
+	if !hasFlowToken {
+		if acc, err := s.client.GetAccount(r.Context(), flowsdk.HexToAddress(address)); err == nil {
+			bal := strconv.FormatFloat(float64(acc.Balance)/1e8, 'f', -1, 64)
+			out = append(out, map[string]interface{}{
+				"address":  formatAddressV1(address),
+				"balance":  bal,
+				"path":     "/storage/flowTokenVault",
+				"token":    formatTokenVaultIdentifier("1654653399040a61", "FlowToken"),
+				"vault_id": 0,
 			})
 		}
-	}
-	out := make([]map[string]interface{}, 0, len(holdings))
-	for _, h := range holdings {
-		out = append(out, toVaultOutput(h))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }

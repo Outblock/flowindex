@@ -1,0 +1,5 @@
+{
+  "_links": {
+    "self": "/flow/v1/node/%7Bnode_id%7D/reward/delegation?address=0xe467b9dd11fa00df&limit=20"
+  }
+}

@@ -1,0 +1,440 @@
+{
+  "data": [
+    {
+      "accountInfo": {
+        "delegatedBalance": 0.00940716,
+        "primaryAcctBalance": 472383.76559103,
+        "primaryAddress": "0x84221fe0294044d7",
+        "secondaryAcctBalance": 0,
+        "secondaryAddress": "",
+        "stakedBalance": 139134.79542775
+      },
+      "address": "0x84221fe0294044d7",
+      "domains": {
+        "expiredNames": null
+      },
+      "find": {
+        "mainName": {
+          "name": "",
+          "time": 0
+        },
+        "otherNames": null
+      },
+      "flowBalance": 611518.57042594,
+      "flowStorage": 0.00903843,
+      "storageAvailable": 47238375655260,
+      "storageUsed": 903843,
+      "keys": [
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_secp256k1",
+          "index": "0",
+          "revoked": false,
+          "key": "a7e4668b8bb6e485daf6f98b6d8aac9b4407c8f0d7eebace049467e5acc6a8d24fbef0cb295157d4558cd7100390be87d2f0c7485b335451c2c08b375d92a8d2",
+          "weight": 1000
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "1",
+          "revoked": true,
+          "key": "353273344414a266306d6b0b8741b597f0a1d69bdd5480c3a0f618bff713c7727adb067c0d35cf527b9cf4a7f68f353798a9b63b658a398fab96d123d65c6ed5",
+          "weight": 500
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "2",
+          "revoked": true,
+          "key": "e878cf49de1e7d875d7be34215c4f921389ae42b029538d637380fc4299f24d71a86aebf08bb3a28e5e47ace1bc4eb1b1ce6530536cd45d33530316947d57597",
+          "weight": 500
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "3",
+          "revoked": false,
+          "key": "9a5c7eb9cef5b9f974f62eb3df47dd3995d0367d81e3a243df957c7cf75aafd87c2c4643b77ef942aedcccba2b424808fecfad6fb3cfcc6274f8f0c84569dac1",
+          "weight": 1000
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "4",
+          "revoked": false,
+          "key": "f140ce2ec30bbbee4ed69ffbae80f6222108f4ce76ff43cde4800ed5ba45da30fd3c1df88b0ce80f35de57cbea1a303a022231d33c218b883c04f0d7c15e7af6",
+          "weight": 500
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "5",
+          "revoked": false,
+          "key": "285f5d7cc98b5ee7e29e3f8d97058ad12bcbd1871390c21f6b1fed18554ff8a8b18647d060ec93aa2b4ac3693543185d795551b39da1c53a8ac9670c98c6cad7",
+          "weight": 500
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "6",
+          "revoked": false,
+          "key": "b6f7e418f534770a331e6bed6872f1f91edc1e105130f0d5d493ca0dbaad5a71343e13f19e279487f7650df422c34b9db82a38f0cab3db5628e4c46e426c507e",
+          "weight": 1000
+        }
+      ],
+      "contracts": null,
+      "vaults": {
+        "EVMVMBridgedToken_1b97100ea1d7126c4d60027e231ea4cb25314bdbVault": {
+          "balance": 3.01,
+          "identifier": "A.1e4aa0b87d10b141.EVMVMBridgedToken_1b97100ea1d7126c4d60027e231ea4cb25314bdb.Vault",
+          "path": "/storage/EVMVMBridgedToken_1b97100ea1d7126c4d60027e231ea4cb25314bdbVault",
+          "uuid": 35184373251445,
+          "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_1b97100ea1d7126c4d60027e231ea4cb25314bdb.Vault",
+          "short_path": "EVMVMBridgedToken_1b97100ea1d7126c4d60027e231ea4cb25314bdbVault",
+          "name": "EVMVMBridgedToken_1b97100ea1d7126c4d60027e231ea4cb25314bdb",
+          "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+          "symbol": "ankrFLOWEVM",
+          "socials": null,
+          "tags": []
+        },
+        "EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabedVault": {
+          "balance": 0,
+          "identifier": "A.1e4aa0b87d10b141.EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed.Vault",
+          "path": "/storage/EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabedVault",
+          "uuid": 123145304760643,
+          "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed.Vault",
+          "short_path": "EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabedVault",
+          "name": "EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed",
+          "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+          "symbol": "USDF",
+          "socials": null,
+          "tags": []
+        },
+        "EVMVMBridgedToken_68eb683a393c8a1c816255b4fc4b89d73c52ad4bVault": {
+          "balance": 1,
+          "identifier": "A.1e4aa0b87d10b141.EVMVMBridgedToken_68eb683a393c8a1c816255b4fc4b89d73c52ad4b.Vault",
+          "path": "/storage/EVMVMBridgedToken_68eb683a393c8a1c816255b4fc4b89d73c52ad4bVault",
+          "uuid": 157230164108064,
+          "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_68eb683a393c8a1c816255b4fc4b89d73c52ad4b.Vault",
+          "short_path": "EVMVMBridgedToken_68eb683a393c8a1c816255b4fc4b89d73c52ad4bVault",
+          "name": "EVMVMBridgedToken_68eb683a393c8a1c816255b4fc4b89d73c52ad4b",
+          "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+          "symbol": "PUMP",
+          "socials": null,
+          "tags": []
+        },
+        "EVMVMBridgedToken_9b565507858812e8b5ffbfbde9b200a3bc2e8f76Vault": {
+          "balance": 0,
+          "identifier": "A.1e4aa0b87d10b141.EVMVMBridgedToken_9b565507858812e8b5ffbfbde9b200a3bc2e8f76.Vault",
+          "path": "/storage/EVMVMBridgedToken_9b565507858812e8b5ffbfbde9b200a3bc2e8f76Vault",
+          "uuid": 233096467547032,
+          "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_9b565507858812e8b5ffbfbde9b200a3bc2e8f76.Vault",
+          "short_path": "EVMVMBridgedToken_9b565507858812e8b5ffbfbde9b200a3bc2e8f76Vault",
+          "name": "EVMVMBridgedToken_9b565507858812e8b5ffbfbde9b200a3bc2e8f76",
+          "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+          "symbol": "Catseye",
+          "socials": null,
+          "tags": []
+        },
+        "EVMVMBridgedToken_f1815bd50389c46847f0bda824ec8da914045d14Vault": {
+          "balance": 0,
+          "identifier": "A.1e4aa0b87d10b141.EVMVMBridgedToken_f1815bd50389c46847f0bda824ec8da914045d14.Vault",
+          "path": "/storage/EVMVMBridgedToken_f1815bd50389c46847f0bda824ec8da914045d14Vault",
+          "uuid": 246290606028853,
+          "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_f1815bd50389c46847f0bda824ec8da914045d14.Vault",
+          "short_path": "EVMVMBridgedToken_f1815bd50389c46847f0bda824ec8da914045d14Vault",
+          "name": "EVMVMBridgedToken_f1815bd50389c46847f0bda824ec8da914045d14",
+          "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+          "symbol": "stgUSDC",
+          "socials": null,
+          "tags": []
+        },
+        "FlovatarDustTokenVault": {
+          "balance": 525.63472315,
+          "identifier": "A.921ea449dffec68a.FlovatarDustToken.Vault",
+          "path": "/storage/FlovatarDustTokenVault",
+          "uuid": 1171730347,
+          "token": "A.921ea449dffec68a.FlovatarDustToken.Vault",
+          "short_path": "FlovatarDustTokenVault",
+          "name": "Flovatar ÐUST",
+          "logo": "http://images.flovatar.com/logo-round.png",
+          "symbol": "DUST",
+          "socials": {
+            "coingeckoId": "flovatar-dust",
+            "website": "https://flovatar.com/"
+          },
+          "tags": [
+            "utility-token"
+          ]
+        },
+        "GreenBitcoinVault": {
+          "balance": 0,
+          "identifier": "A.078a8129525775dd.GreenBitcoin.Vault",
+          "path": "/storage/GreenBitcoinVault",
+          "uuid": 1128368274,
+          "token": "A.078a8129525775dd.GreenBitcoin.Vault",
+          "short_path": "GreenBitcoinVault",
+          "name": "Green Bitcoin",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.078a8129525775dd.GreenBitcoin/logo.png",
+          "symbol": "GBTC",
+          "socials": {
+            "discord": "https://discord.gg/vY8pK9x8",
+            "twitter": "https://twitter.com/_GreenBitcoin",
+            "website": "https://toucans.ecdao.org/p/GreenBitcoin"
+          },
+          "tags": [
+            "governance-token"
+          ]
+        },
+        "TopShotBETAVault": {
+          "balance": 1,
+          "identifier": "A.ee09029f1dbcd9d1.TopShotBETA.Vault",
+          "path": "/storage/TopShotBETAVault",
+          "uuid": 16492675816889,
+          "token": "A.ee09029f1dbcd9d1.TopShotBETA.Vault",
+          "short_path": "TopShotBETAVault",
+          "name": "TopShotBETA",
+          "logo": "",
+          "symbol": "",
+          "socials": {},
+          "tags": []
+        },
+        "USDCVault": {
+          "balance": 1.22539558,
+          "identifier": "A.b19436aae4d94622.FiatToken.Vault",
+          "path": "/storage/USDCVault",
+          "uuid": 605076077,
+          "token": "A.b19436aae4d94622.FiatToken.Vault",
+          "short_path": "USDCVault",
+          "name": "USD Coin",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.b19436aae4d94622.FiatToken/logo.svg",
+          "symbol": "USDC",
+          "socials": {
+            "coingeckoId": "usd-coin",
+            "documentation": "https://developers.circle.com/stablecoins/docs",
+            "twitter": "https://twitter.com/circle",
+            "website": "https://www.circle.com/en/usdc-multichain/flow"
+          },
+          "tags": [
+            "stablecoin"
+          ]
+        },
+        "bloctoTokenVault": {
+          "balance": 0.00020468,
+          "identifier": "A.0f9df91c9121c460.BloctoToken.Vault",
+          "path": "/storage/bloctoTokenVault",
+          "uuid": 622623182,
+          "token": "A.0f9df91c9121c460.BloctoToken.Vault",
+          "short_path": "bloctoTokenVault",
+          "name": "Blocto Token",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.0f9df91c9121c460.BloctoToken/logo.png",
+          "symbol": "BLT",
+          "socials": {
+            "coingeckoId": "blocto-token",
+            "website": "https://blocto.app/"
+          },
+          "tags": [
+            "utility-token"
+          ]
+        },
+        "ceAVAXVault": {
+          "balance": 0,
+          "identifier": "A.231cc0dbbcffc4b7.ceAVAX.Vault",
+          "path": "/storage/ceAVAXVault",
+          "uuid": 651589053,
+          "token": "A.231cc0dbbcffc4b7.ceAVAX.Vault",
+          "short_path": "ceAVAXVault",
+          "name": "Avalanche (Celer)",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.231cc0dbbcffc4b7.ceAVAX/logo.png",
+          "symbol": "ceAVAX",
+          "socials": {
+            "address": "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7",
+            "assetContract": "https://snowtrace.io/token/0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7",
+            "coingeckoId": "avalanche-2"
+          },
+          "tags": [
+            "wrapped-celer"
+          ]
+        },
+        "ceBNBVault": {
+          "balance": 0,
+          "identifier": "A.231cc0dbbcffc4b7.ceBNB.Vault",
+          "path": "/storage/ceBNBVault",
+          "uuid": 651575606,
+          "token": "A.231cc0dbbcffc4b7.ceBNB.Vault",
+          "short_path": "ceBNBVault",
+          "name": "Binance Coin (Celer)",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.231cc0dbbcffc4b7.ceBNB/logo.png",
+          "symbol": "ceBNB",
+          "socials": {
+            "address": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+            "assetContract": "https://bscscan.com/address/0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+            "coingeckoId": "binancecoin"
+          },
+          "tags": [
+            "wrapped-celer"
+          ]
+        },
+        "ceBUSDVault": {
+          "balance": 0,
+          "identifier": "A.231cc0dbbcffc4b7.ceBUSD.Vault",
+          "path": "/storage/ceBUSDVault",
+          "uuid": 650842333,
+          "token": "A.231cc0dbbcffc4b7.ceBUSD.Vault",
+          "short_path": "ceBUSDVault",
+          "name": "Binance USD (Celer)",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.231cc0dbbcffc4b7.ceBUSD/logo.png",
+          "symbol": "ceBUSD",
+          "socials": {
+            "address": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+            "assetContract": "https://bscscan.com/address/0xe9e7cea3dedca5984780bafc599bd69add087d56",
+            "coingeckoId": "binance-usd"
+          },
+          "tags": [
+            "wrapped-celer"
+          ]
+        },
+        "ceDAIVault": {
+          "balance": 0,
+          "identifier": "A.231cc0dbbcffc4b7.ceDAI.Vault",
+          "path": "/storage/ceDAIVault",
+          "uuid": 651562984,
+          "token": "A.231cc0dbbcffc4b7.ceDAI.Vault",
+          "short_path": "ceDAIVault",
+          "name": "Dai Stablecoin (Celer)",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.231cc0dbbcffc4b7.ceDAI/logo.png",
+          "symbol": "ceDAI",
+          "socials": {
+            "address": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "assetContract": "https://etherscan.io/address/0x6b175474e89094c44da98b954eedeac495271d0f",
+            "coingeckoId": "dai"
+          },
+          "tags": [
+            "wrapped-celer"
+          ]
+        },
+        "ceWETHVault": {
+          "balance": 1e-08,
+          "identifier": "A.231cc0dbbcffc4b7.ceWETH.Vault",
+          "path": "/storage/ceWETHVault",
+          "uuid": 275977419609004,
+          "token": "A.231cc0dbbcffc4b7.ceWETH.Vault",
+          "short_path": "ceWETHVault",
+          "name": "Wrapped Ether (Celer)",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.231cc0dbbcffc4b7.ceWETH/logo.png",
+          "symbol": "ceWETH",
+          "socials": {
+            "coingeckoId": "weth"
+          },
+          "tags": [
+            "wrapped-celer"
+          ]
+        },
+        "flowTokenVault": {
+          "balance": 472383.76559103,
+          "identifier": "A.1654653399040a61.FlowToken.Vault",
+          "path": "/storage/flowTokenVault",
+          "uuid": 216645319,
+          "token": "A.1654653399040a61.FlowToken.Vault",
+          "short_path": "flowTokenVault",
+          "name": "Flow",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.1654653399040a61.FlowToken/logo.svg",
+          "symbol": "FLOW",
+          "socials": {
+            "coingeckoId": "flow",
+            "discord": "http://discord.gg/flow",
+            "documentation": "https://developers.flow.com/references/core-contracts/flow-token",
+            "github": "https://github.com/onflow/flow-core-contracts",
+            "twitter": "https://twitter.com/flow_blockchain",
+            "website": "https://www.onflow.org"
+          },
+          "tags": [
+            "utility-token"
+          ]
+        },
+        "fusdVault": {
+          "balance": 1.75280653,
+          "identifier": "A.3c5959b568896393.FUSD.Vault",
+          "path": "/storage/fusdVault",
+          "uuid": 605052090,
+          "token": "A.3c5959b568896393.FUSD.Vault",
+          "short_path": "fusdVault",
+          "name": "Flow USD",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.3c5959b568896393.FUSD/logo.svg",
+          "symbol": "FUSD",
+          "socials": {
+            "website": "https://docs.onflow.org/fusd/"
+          },
+          "tags": [
+            "stablecoin"
+          ]
+        },
+        "mytokenVault": {
+          "balance": 0,
+          "identifier": "A.348fe2042c8a70d8.MyToken.Vault",
+          "path": "/storage/mytokenVault",
+          "uuid": 641936040,
+          "token": "A.348fe2042c8a70d8.MyToken.Vault",
+          "short_path": "mytokenVault",
+          "name": "My Token",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.348fe2042c8a70d8.MyToken/logo.svg",
+          "symbol": "MY",
+          "socials": {
+            "website": "https://mynft.io/"
+          },
+          "tags": [
+            "utility-token"
+          ]
+        },
+        "stFlowTokenVault": {
+          "balance": 0,
+          "identifier": "A.d6f80565193ad727.stFlowToken.Vault",
+          "path": "/storage/stFlowTokenVault",
+          "uuid": 650526727,
+          "token": "A.d6f80565193ad727.stFlowToken.Vault",
+          "short_path": "stFlowTokenVault",
+          "name": "Liquid Staked Flow",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.d6f80565193ad727.stFlowToken/logo.svg",
+          "symbol": "stFlow",
+          "socials": {
+            "discord": "https://discord.gg/r2keKxuKqX",
+            "twitter": "https://twitter.com/incrementfi",
+            "website": "https://app.increment.fi/staking"
+          },
+          "tags": [
+            "utility-token"
+          ]
+        },
+        "thulTokenVault": {
+          "balance": 0,
+          "identifier": "A.e3ad6030cbaff1c2.ThulToken.Vault",
+          "path": "/storage/thulTokenVault",
+          "uuid": 651570127,
+          "token": "A.e3ad6030cbaff1c2.ThulToken.Vault",
+          "short_path": "thulTokenVault",
+          "name": "ThulToken",
+          "logo": "",
+          "symbol": "",
+          "socials": {},
+          "tags": []
+        },
+        "usdcFlowVault": {
+          "balance": 1,
+          "identifier": "A.f1ab99c82dee3526.USDCFlow.Vault",
+          "path": "/storage/usdcFlowVault",
+          "uuid": 45079977711437,
+          "token": "A.f1ab99c82dee3526.USDCFlow.Vault",
+          "short_path": "usdcFlowVault",
+          "name": "USDCFlow",
+          "logo": "https://uploads-ssl.webflow.com/5f734f4dbd95382f4fdfa0ea/66bfae00953c3d7bd09e7ac4_USDC-and-FLOW.svg",
+          "symbol": "USDC.e",
+          "socials": null,
+          "tags": []
+        }
+      }
+    }
+  ],
+  "_links": {
+    "self": "/flow/v1/account/0x84221fe0294044d7"
+  }
+}

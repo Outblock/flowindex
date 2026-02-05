@@ -1,0 +1,77 @@
+{
+  "data": [
+    {
+      "token": "A.921ea449dffec68a.FlovatarDustToken.Vault",
+      "balance": "525.63472315",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/FlovatarDustTokenVault",
+      "vault_id": 1171730347
+    },
+    {
+      "token": "A.1654653399040a61.FlowToken.Vault",
+      "balance": "472383.76559103",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/flowTokenVault",
+      "vault_id": 216645319
+    },
+    {
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_1b97100ea1d7126c4d60027e231ea4cb25314bdb.Vault",
+      "balance": "3.01",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/EVMVMBridgedToken_1b97100ea1d7126c4d60027e231ea4cb25314bdbVault",
+      "vault_id": 35184373251445
+    },
+    {
+      "token": "A.3c5959b568896393.FUSD.Vault",
+      "balance": "1.75280653",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/fusdVault",
+      "vault_id": 605052090
+    },
+    {
+      "token": "A.b19436aae4d94622.FiatToken.Vault",
+      "balance": "1.22539558",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/USDCVault",
+      "vault_id": 605076077
+    },
+    {
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_68eb683a393c8a1c816255b4fc4b89d73c52ad4b.Vault",
+      "balance": "1",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/EVMVMBridgedToken_68eb683a393c8a1c816255b4fc4b89d73c52ad4bVault",
+      "vault_id": 157230164108064
+    },
+    {
+      "token": "A.ee09029f1dbcd9d1.TopShotBETA.Vault",
+      "balance": "1",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/TopShotBETAVault",
+      "vault_id": 16492675816889
+    },
+    {
+      "token": "A.f1ab99c82dee3526.USDCFlow.Vault",
+      "balance": "1",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/usdcFlowVault",
+      "vault_id": 45079977711437
+    },
+    {
+      "token": "A.0f9df91c9121c460.BloctoToken.Vault",
+      "balance": "0.00020468",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/bloctoTokenVault",
+      "vault_id": 622623182
+    },
+    {
+      "token": "A.231cc0dbbcffc4b7.ceWETH.Vault",
+      "balance": "0.00000001",
+      "address": "0x84221fe0294044d7",
+      "path": "/storage/ceWETHVault",
+      "vault_id": 275977419609004
+    }
+  ],
+  "_links": {
+    "self": "/flow/v1/account/0x84221fe0294044d7/ft?limit=20"
+  }
+}
