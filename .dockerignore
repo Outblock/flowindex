@@ -23,6 +23,5 @@ tmp/
 **/dist/
 **/build/
 
-# Not needed for the docs/devportal image (root-context build)
-backend/
-frontend/
+# Keep service sources included (Railway may build each service from repo root)
+# but exclude their local build artifacts via the patterns above.
