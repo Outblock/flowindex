@@ -6,6 +6,17 @@ import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { LLMCopyButton, ViewOptions } from '@/components/ai/page-actions';
 import { buttonVariants } from 'fumadocs-ui/components/ui/button';
+import { createAPIPage } from 'fumadocs-openapi/ui';
+import { openapi } from '@/lib/openapi';
+
+const APIPage = createAPIPage(openapi, {
+  client: {
+    storageKeyPrefix: 'flowscan-openapi-',
+    playground: {
+      requestTimeout: 30,
+    },
+  },
+});
 
 export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const params = await props.params;
@@ -13,11 +24,26 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   if (!page) notFound();
 
   const MDX = page.data.body;
+  const apiProps = typeof page.data.getAPIPageProps === 'function' ? await page.data.getAPIPageProps() : null;
+  const apiSchema =
+    typeof page.data.getSchema === 'function' ? await page.data.getSchema() : undefined;
   const gitConfig = {
     user: 'username',
     repo: 'repo',
     branch: 'main',
   };
+
+  if (apiProps) {
+    return (
+      <DocsPage toc={page.data.toc} full className="max-w-[1400px]">
+        <DocsTitle>{page.data.title}</DocsTitle>
+        <DocsDescription className="mb-4">{page.data.description}</DocsDescription>
+        <div className="not-prose">
+          <APIPage {...apiProps} document={apiSchema ?? apiProps.document} />
+        </div>
+      </DocsPage>
+    );
+  }
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>

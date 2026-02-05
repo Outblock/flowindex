@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, BookOpen, Github } from 'lucide-react';
+import { ArrowRight, BookOpen, FlaskConical, Github } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -24,6 +24,13 @@ export default function HomePage() {
             <BookOpen className="size-4" />
             Read the Docs
           </Link>
+          <Link
+            href="/docs/api"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-fd-border bg-fd-card px-4 py-2 text-sm font-medium text-fd-foreground hover:bg-fd-muted transition"
+          >
+            <FlaskConical className="size-4" />
+            API (Fumadocs)
+          </Link>
           <a
             href="https://github.com/zenabot27/flowscan-clone"
             target="_blank"
@@ -37,6 +44,15 @@ export default function HomePage() {
       </div>
 
       <div className="mx-auto w-full max-w-5xl mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-lg border border-fd-border bg-fd-card p-5">
+          <div className="flex items-center gap-2 text-sm font-medium text-fd-foreground">
+            <FlaskConical className="size-4 text-fd-primary" />
+            OpenAPI Explorer
+          </div>
+          <p className="mt-2 text-sm text-fd-muted-foreground leading-relaxed">
+            Explore and test FlowScan endpoints directly from the docs portal.
+          </p>
+        </div>
         <div className="rounded-lg border border-fd-border bg-fd-card p-5">
           <div className="flex items-center gap-2 text-sm font-medium text-fd-foreground">
             <BookOpen className="size-4 text-fd-primary" />

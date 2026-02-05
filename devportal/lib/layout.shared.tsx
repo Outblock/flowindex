@@ -1,5 +1,5 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, FlaskConical } from 'lucide-react';
 
 export function baseOptions(): BaseLayoutProps {
   return {
@@ -13,6 +13,11 @@ export function baseOptions(): BaseLayoutProps {
         text: 'Docs',
         url: '/docs',
         icon: <BookOpen className="size-4" />,
+      },
+      {
+        text: 'API (Fumadocs)',
+        url: '/docs/api',
+        icon: <FlaskConical className="size-4" />,
       },
     ],
   };
