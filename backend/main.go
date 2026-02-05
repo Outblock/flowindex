@@ -117,6 +117,14 @@ func main() {
 		}
 		return defaultVal
 	}
+	getEnvInt64 := func(key string, defaultVal int64) int64 {
+		if valStr := os.Getenv(key); valStr != "" {
+			if val, err := strconv.ParseInt(valStr, 10, 64); err == nil {
+				return val
+			}
+		}
+		return defaultVal
+	}
 	getEnvUint := func(key string, defaultVal uint64) uint64 {
 		if valStr := os.Getenv(key); valStr != "" {
 			if val, err := strconv.ParseUint(valStr, 10, 64); err == nil {
@@ -143,6 +151,20 @@ func main() {
 	ftHoldingsWorkerConcurrency := getEnvInt("FT_HOLDINGS_WORKER_CONCURRENCY", 1)
 	nftOwnershipWorkerConcurrency := getEnvInt("NFT_OWNERSHIP_WORKER_CONCURRENCY", 1)
 	txContractsWorkerConcurrency := getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1)
+
+	if strings.ToLower(os.Getenv("RUN_TX_METRICS_BACKFILL")) == "true" {
+		cfg := repository.TxMetricsBackfillConfig{
+			StartHeight: getEnvInt64("TX_METRICS_BACKFILL_START", 0),
+			EndHeight:   getEnvInt64("TX_METRICS_BACKFILL_END", 0),
+			BatchSize:   getEnvInt64("TX_METRICS_BACKFILL_BATCH", 2000),
+			Sleep:       time.Duration(getEnvInt("TX_METRICS_BACKFILL_SLEEP_MS", 0)) * time.Millisecond,
+		}
+		go func() {
+			if err := repo.BackfillTxMetrics(context.Background(), cfg); err != nil {
+				log.Printf("[backfill_tx_metrics] error: %v", err)
+			}
+		}()
+	}
 
 	// 3. Services
 	// Forward Ingester (Live Data)
