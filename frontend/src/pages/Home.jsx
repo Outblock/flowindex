@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,6 +36,7 @@ function Home() {
 
   const { isConnected, lastMessage } = useWebSocket();
   const nowTick = useTimeTicker(20000);
+  const transactionsRef = useRef([]);
 
   const normalizeHex = (value) => {
     if (!value) return '';
@@ -47,6 +48,88 @@ function Home() {
     if (!value) return '';
     if (value.length <= head + tail + 3) return value;
     return `${value.slice(0, head)}...${value.slice(-tail)}`;
+  };
+
+  const normalizeTxId = (value) => normalizeHex(value).toLowerCase();
+
+  const getTxHeight = (tx) => Number(tx?.block_height ?? tx?.blockHeight ?? 0);
+
+  const getTxTimestampMs = (tx) => {
+    const source = tx?.timestamp || tx?.created_at || tx?.block_timestamp;
+    if (!source) return 0;
+    const ms = new Date(source).getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  };
+
+  const statusRank = (status) => {
+    switch (String(status || '').toUpperCase()) {
+      case 'SEALED':
+        return 3;
+      case 'EXECUTED':
+        return 2;
+      case 'PENDING':
+        return 1;
+      default:
+        return 0;
+    }
+  };
+
+  const mergeTx = (existing, incoming) => {
+    if (!existing) return incoming;
+    const merged = { ...existing, ...incoming };
+
+    // Preserve previous values when the incoming payload is missing fields.
+    for (const [key, value] of Object.entries(existing)) {
+      if (merged[key] == null) merged[key] = value;
+    }
+
+    const existingRank = statusRank(existing.status);
+    const incomingRank = statusRank(incoming.status);
+    merged.status = incomingRank >= existingRank ? incoming.status ?? existing.status : existing.status;
+
+    const existingHeight = getTxHeight(existing);
+    const incomingHeight = getTxHeight(incoming);
+    if (incomingHeight > existingHeight) merged.block_height = incomingHeight;
+
+    const existingTime = getTxTimestampMs(existing);
+    const incomingTime = getTxTimestampMs(incoming);
+    if (incomingTime >= existingTime && incomingTime > 0) {
+      merged.timestamp = incoming.timestamp ?? merged.timestamp;
+      merged.created_at = incoming.created_at ?? merged.created_at;
+      merged.block_timestamp = incoming.block_timestamp ?? merged.block_timestamp;
+    }
+
+    return merged;
+  };
+
+  const mergeTransactions = (prev, incoming) => {
+    const map = new Map();
+
+    for (const tx of prev || []) {
+      const id = normalizeTxId(tx?.id);
+      if (!id) continue;
+      map.set(id, tx);
+    }
+
+    for (const tx of incoming || []) {
+      const id = normalizeTxId(tx?.id);
+      if (!id) continue;
+      const existing = map.get(id);
+      map.set(id, mergeTx(existing, tx));
+    }
+
+    const merged = Array.from(map.values());
+    merged.sort((a, b) => {
+      const ha = getTxHeight(a);
+      const hb = getTxHeight(b);
+      if (ha !== hb) return hb - ha;
+      const ta = getTxTimestampMs(a);
+      const tb = getTxTimestampMs(b);
+      if (ta !== tb) return tb - ta;
+      return String(a?.id || '').localeCompare(String(b?.id || ''));
+    });
+
+    return merged.slice(0, 20);
   };
 
   // Load Blocks for Page
@@ -79,7 +162,7 @@ function Home() {
         payer: tx.payer_address || tx.proposer_address,
         blockHeight: tx.block_height
       })) : [];
-      setTransactions(transformedTxs);
+      setTransactions(mergeTransactions([], transformedTxs));
       setTxHasNext(Boolean(nextCursor));
       if (nextCursor) {
         setTxCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
@@ -129,6 +212,10 @@ function Home() {
 
   // Handle WebSocket messages (Real-time updates)
   useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
+
+  useEffect(() => {
     if (!lastMessage) return;
 
     // Only update if on first page
@@ -157,13 +244,25 @@ function Home() {
         payer: rawTx.payer_address || rawTx.proposer_address,
         blockHeight: rawTx.block_height
       };
-      setTransactions(prev => [newTx, ...(prev || []).slice(0, 19)]);
-      setNewTxIds(prev => new Set(prev).add(newTx.id));
-      setTimeout(() => setNewTxIds(prev => {
-        const next = new Set(prev);
-        next.delete(newTx.id);
-        return next;
-      }), 3000);
+      const txIdKey = normalizeTxId(newTx.id);
+      const exists = transactionsRef.current.some(
+        (tx) => normalizeTxId(tx?.id) === txIdKey,
+      );
+
+      setTransactions(prev => mergeTransactions(prev, [newTx]));
+
+      if (!exists) {
+        setNewTxIds(prev => {
+          const next = new Set(prev);
+          next.add(newTx.id);
+          return next;
+        });
+        setTimeout(() => setNewTxIds(prev => {
+          const next = new Set(prev);
+          next.delete(newTx.id);
+          return next;
+        }), 3000);
+      }
       setStatusRaw(prev => prev ? {
         ...prev,
         total_transactions: (prev.total_transactions || 0) + 1
