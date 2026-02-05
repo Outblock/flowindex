@@ -16,7 +16,7 @@ function stripTrailingSlash(url) {
 function Footer() {
   const docsBase = stripTrailingSlash(getDocsBaseUrl());
   const docsHref = docsBase ? `${docsBase}/docs` : null;
-  const apiHref = docsBase ? `${docsBase}/api-reference` : '/api/openapi.yaml';
+  const apiHref = '/api-docs';
 
   return (
     <footer className="border-t border-white/5 bg-nothing-dark/90">

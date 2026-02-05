@@ -5,6 +5,7 @@ import { getMDXComponents } from '@/mdx-components';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { LLMCopyButton, ViewOptions } from '@/components/ai/page-actions';
+import { buttonVariants } from 'fumadocs-ui/components/ui/button';
 
 export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const params = await props.params;
@@ -24,6 +25,26 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
       <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6">
         <LLMCopyButton markdownUrl={`${page.url}.mdx`} />
+        <a
+          href="/llms.txt"
+          className={buttonVariants({
+            color: 'secondary',
+            size: 'sm',
+            className: 'gap-2',
+          })}
+        >
+          LLM Index
+        </a>
+        <a
+          href="/llms-full.txt"
+          className={buttonVariants({
+            color: 'secondary',
+            size: 'sm',
+            className: 'gap-2',
+          })}
+        >
+          LLM Full
+        </a>
         <ViewOptions
           markdownUrl={`${page.url}.mdx`}
           // update it to match your repo

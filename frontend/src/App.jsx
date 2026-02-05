@@ -4,6 +4,7 @@ import BlockDetail from './pages/BlockDetail';
 import TransactionDetail from './pages/TransactionDetail';
 import AccountDetail from './pages/AccountDetail';
 import Stats from './pages/Stats';
+import ApiDocs from './pages/ApiDocs';
 import { IndexingStatus } from './components/IndexingStatus';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -19,6 +20,7 @@ function App() {
         <Route path="/transactions/:txId" element={<TransactionDetail />} />
         <Route path="/accounts/:address" element={<AccountDetail />} />
         <Route path="/stats" element={<Stats />} />
+        <Route path="/api-docs" element={<ApiDocs />} />
       </Routes>
       <Footer />
     </div>
