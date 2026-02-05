@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -515,6 +516,20 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		totalContracts = 0
 	}
 
+	forwardEnabled := os.Getenv("ENABLE_FORWARD_INGESTER") != "false"
+	historyEnabled := os.Getenv("ENABLE_HISTORY_INGESTER") != "false"
+	workerEnabled := map[string]bool{
+		"main_ingester":        forwardEnabled,
+		"history_ingester":     historyEnabled,
+		"token_worker":         os.Getenv("ENABLE_TOKEN_WORKER") != "false",
+		"meta_worker":          os.Getenv("ENABLE_META_WORKER") != "false",
+		"accounts_worker":      os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false",
+		"ft_holdings_worker":   os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false",
+		"nft_ownership_worker": os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false",
+		"tx_contracts_worker":  os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false",
+		"tx_metrics_worker":    os.Getenv("ENABLE_TX_METRICS_WORKER") != "false",
+	}
+
 	// Get latest block height from Flow (bounded latency)
 	latestHeight := maxH
 	{
@@ -579,20 +594,29 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		behind = latestHeight - lastIndexed
 	}
 
+	historyHeight := historyIndexed
+	if historyHeight == 0 {
+		historyHeight = minH
+	}
+
 	resp := map[string]interface{}{
 		"chain_id":           "flow",
 		"latest_height":      latestHeight,
-		"indexed_height":     lastIndexed,    // Main Ingester Tip
-		"history_height":     historyIndexed, // History Ingester Tip (Lowest)
-		"min_height":         minH,           // Absolute Min in DB
-		"max_height":         maxH,           // Absolute Max in DB
-		"total_blocks":       totalBlocks,    // Count (estimate)
+		"indexed_height":     lastIndexed,   // Main Ingester Tip
+		"history_height":     historyHeight, // History Ingester Tip (Lowest)
+		"min_height":         minH,          // Absolute Min in DB
+		"max_height":         maxH,          // Absolute Max in DB
+		"total_blocks":       totalBlocks,   // Count (estimate)
 		"start_height":       start,
 		"total_transactions": totalTxs,
 		"total_events":       totalEvents,
 		"total_addresses":    totalAddresses,
 		"total_contracts":    totalContracts,
 		"checkpoints":        checkpoints,
+		"forward_enabled":    forwardEnabled,
+		"history_enabled":    historyEnabled,
+		"worker_enabled":     workerEnabled,
+		"generated_at":       time.Now().UTC().Format(time.RFC3339),
 		"progress":           fmt.Sprintf("%.2f%%", progress),
 		"behind":             behind,
 		"status":             "ok",

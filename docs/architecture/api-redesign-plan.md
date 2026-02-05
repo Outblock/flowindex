@@ -64,6 +64,22 @@ All workers are idempotent and checkpointed:
 - Schema-conformance tests against `api.json`.
 - Invariants for critical fields (non-null, correct type).
 
+## Status API (Stats UI contract)
+The `/status` payload is extended to support the Stats UI without extra queries:
+- `forward_enabled` (bool)
+- `history_enabled` (bool)
+- `worker_enabled` (map[string]bool)
+- `generated_at` (RFC3339 timestamp)
+
+These fields are used by the UI to show enabled/disabled workers, progress bars,
+and last update time.
+
+## Performance Guardrails
+- All API read paths must target **app** tables with proper indexes.
+- Avoid raw scans for list endpoints.
+- Target p95 < 3s for all endpoints; prefer paginated queries, indexed lookups,
+  and keyset pagination for large lists.
+
 ## Full Rebuild Flow
 1. Drop DB
 2. Apply schema_v2
