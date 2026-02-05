@@ -1,0 +1,28 @@
+# Keep Docker build context small (especially for `railway up`), so builds don't
+# accidentally upload/copy local artifacts like `node_modules/`, `.next/`, or
+# big indexing outputs.
+
+# VCS / OS junk
+.git
+.DS_Store
+**/.DS_Store
+
+# Local artifacts / datasets
+output/
+tmp/
+**/output/
+**/tmp/
+*.log
+
+# Node / Next / bundlers
+**/node_modules/
+**/.next/
+**/.turbo/
+**/.cache/
+**/.source/
+**/dist/
+**/build/
+
+# Not needed for the docs/devportal image (root-context build)
+backend/
+frontend/
