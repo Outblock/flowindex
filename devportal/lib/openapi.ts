@@ -15,13 +15,12 @@ export const openapi = createOpenAPI({
 
     const doc = (await res.json()) as Record<string, unknown>;
 
-    // The explorer frontend serves the API under `/api`, but the docs portal exposes a reverse
-    // proxy under `/flowscan-api/*`. Override servers so the playground works on the docs domain.
-    doc.servers = [{ url: '/flowscan-api', description: 'FlowScan API (docs proxy)' }];
+    // The explorer frontend serves the API under `/api`, and the docs portal exposes a reverse
+    // proxy under `/api/*`. Override servers so the playground works on the docs domain.
+    doc.servers = [{ url: '/api', description: 'FlowScan API (docs proxy)' }];
 
     return {
       flowscan: doc as any,
     };
   },
 });
-
