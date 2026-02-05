@@ -3957,12 +3957,7 @@
   ],
   "servers": [
     {
-      "url": "/",
-      "description": "FlowScan API"
-    },
-    {
-      "url": "https://flowscan.up.railway.app",
-      "description": "Railway deployment"
+      "url": "/api/v2"
     }
   ],
   "components": {

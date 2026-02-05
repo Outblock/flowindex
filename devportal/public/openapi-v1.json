@@ -15,7 +15,7 @@
     "version": "1.0"
   },
   "host": "",
-  "basePath": "/",
+  "basePath": "/api/v1",
   "paths": {
     "/accounting/v1/account/{address}": {
       "get": {
@@ -1572,7 +1572,7 @@
           },
           {
             "type": "string",
-            "description": "Body to match on using ILIKE %\u003cbody\u003e%",
+            "description": "Body to match on using ILIKE %<body>%",
             "name": "body",
             "in": "query"
           },

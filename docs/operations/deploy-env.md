@@ -30,18 +30,21 @@ This is the final publish list of environment variables used by the backend. Rai
 - `ENABLE_FT_HOLDINGS_WORKER` (default: true)
 - `ENABLE_NFT_OWNERSHIP_WORKER` (default: true)
 - `ENABLE_TX_CONTRACTS_WORKER` (default: true)
+- `ENABLE_TX_METRICS_WORKER` (default: true)
 - `TOKEN_WORKER_RANGE` (default: 50000)
 - `META_WORKER_RANGE` (default: 50000)
 - `ACCOUNTS_WORKER_RANGE` (default: 50000)
 - `FT_HOLDINGS_WORKER_RANGE` (default: 50000)
 - `NFT_OWNERSHIP_WORKER_RANGE` (default: 50000)
 - `TX_CONTRACTS_WORKER_RANGE` (default: 50000)
+- `TX_METRICS_WORKER_RANGE` (default: 50000)
 - `TOKEN_WORKER_CONCURRENCY` (default: 1)
 - `META_WORKER_CONCURRENCY` (default: 1)
 - `ACCOUNTS_WORKER_CONCURRENCY` (default: 1)
 - `FT_HOLDINGS_WORKER_CONCURRENCY` (default: 1)
 - `NFT_OWNERSHIP_WORKER_CONCURRENCY` (default: 1)
 - `TX_CONTRACTS_WORKER_CONCURRENCY` (default: 1)
+- `TX_METRICS_WORKER_CONCURRENCY` (default: 1)
 - `ENABLE_DAILY_STATS` (default: true)
 - `ENABLE_LOOKUP_REPAIR` (default: false)
 - `LOOKUP_REPAIR_LIMIT` (default: 1000)
@@ -96,3 +99,9 @@ The frontend reads `DOCS_URL` at runtime from `/env.js` (rendered by `frontend/e
 
 - `DOCS_URL` (optional)
   - Example: `https://<docs-domain>.up.railway.app`
+
+## OpenAPI Spec Overrides (optional)
+
+- `OPENAPI_SPEC_PATH` (default: `openapi-v2.json`)
+- `OPENAPI_V1_SPEC_PATH` (default: `openapi-v1.json`)
+- `OPENAPI_V2_SPEC_PATH` (default: `openapi-v2.json`)
