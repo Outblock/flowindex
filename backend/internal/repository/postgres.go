@@ -1169,6 +1169,8 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
+			COALESCE(t.gas_used, 0) AS gas_used,
+			COALESCE(t.event_count, 0) AS event_count,
 			t.timestamp,
 			t.created_at
 		FROM addr_txs a
@@ -1186,7 +1188,7 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.GasUsed, &t.EventCount, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
@@ -1227,6 +1229,8 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
+			COALESCE(t.gas_used, 0) AS gas_used,
+			COALESCE(t.event_count, 0) AS event_count,
 			t.timestamp,
 			t.created_at
 		FROM addr_txs a
@@ -1254,7 +1258,7 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.GasUsed, &t.EventCount, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)

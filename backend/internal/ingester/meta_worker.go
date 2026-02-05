@@ -191,18 +191,18 @@ func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountK
 
 		// Signature algorithm may be under "signingAlgorithm" or inside publicKey struct.
 		if sa, ok := payload["signingAlgorithm"].(string); ok {
-			key.SigningAlgorithm = sa
+			key.SigningAlgorithm = normalizeSignatureAlgorithm(sa)
 		} else if pkObj, ok := payload["publicKey"].(map[string]interface{}); ok {
 			if sa, ok := pkObj["signatureAlgorithm"].(string); ok {
-				key.SigningAlgorithm = sa
+				key.SigningAlgorithm = normalizeSignatureAlgorithm(sa)
 			}
 		}
 
 		// Hashing algorithm may be "hashingAlgorithm" or "hashAlgorithm".
 		if ha, ok := payload["hashingAlgorithm"].(string); ok {
-			key.HashingAlgorithm = ha
+			key.HashingAlgorithm = normalizeHashAlgorithm(ha)
 		} else if ha, ok := payload["hashAlgorithm"].(string); ok {
-			key.HashingAlgorithm = ha
+			key.HashingAlgorithm = normalizeHashAlgorithm(ha)
 		}
 
 		if v, ok := payload["weight"]; ok {

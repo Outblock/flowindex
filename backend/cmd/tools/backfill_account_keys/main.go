@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,8 @@ type accountKeyOp struct {
 	RevokedAtHeight  *int64
 	LastUpdated      int64
 }
+
+var algoDigits = regexp.MustCompile(`\d+`)
 
 func main() {
 	var (
@@ -296,18 +299,22 @@ func parseAccountKeyEvent(typ string, payload []byte, height int64) (accountKeyO
 
 		var signAlgo *string
 		if sa, ok := obj["signingAlgorithm"].(string); ok && sa != "" {
-			signAlgo = &sa
+			normalized := normalizeSignatureAlgorithm(sa)
+			signAlgo = &normalized
 		} else if pkObj, ok := obj["publicKey"].(map[string]interface{}); ok {
 			if sa, ok := pkObj["signatureAlgorithm"].(string); ok && sa != "" {
-				signAlgo = &sa
+				normalized := normalizeSignatureAlgorithm(sa)
+				signAlgo = &normalized
 			}
 		}
 
 		var hashAlgo *string
 		if ha, ok := obj["hashingAlgorithm"].(string); ok && ha != "" {
-			hashAlgo = &ha
+			normalized := normalizeHashAlgorithm(ha)
+			hashAlgo = &normalized
 		} else if ha, ok := obj["hashAlgorithm"].(string); ok && ha != "" {
-			hashAlgo = &ha
+			normalized := normalizeHashAlgorithm(ha)
+			hashAlgo = &normalized
 		}
 
 		var weight *int
@@ -346,6 +353,46 @@ func parseAccountKeyEvent(typ string, payload []byte, height int64) (accountKeyO
 		}, true
 	default:
 		return accountKeyOp{}, false
+	}
+}
+
+func normalizeSignatureAlgorithm(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if digits := algoDigits.FindString(raw); digits != "" {
+		return digits
+	}
+	switch strings.ToUpper(raw) {
+	case "ECDSA_P256":
+		return "1"
+	case "ECDSA_SECP256K1":
+		return "2"
+	default:
+		return raw
+	}
+}
+
+func normalizeHashAlgorithm(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if digits := algoDigits.FindString(raw); digits != "" {
+		return digits
+	}
+	switch strings.ToUpper(raw) {
+	case "SHA2_256":
+		return "1"
+	case "SHA2_384":
+		return "2"
+	case "SHA3_256":
+		return "3"
+	case "SHA3_384":
+		return "4"
+	default:
+		return raw
 	}
 }
 
