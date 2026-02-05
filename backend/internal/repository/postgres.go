@@ -200,7 +200,8 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 		_, err := dbtx.Exec(ctx, `
 			INSERT INTO raw.scripts (script_hash, script_text, created_at)
-			SELECT * FROM UNNEST($1::text[], $2::text[])
+			SELECT u.script_hash, u.script_text, NOW()
+			FROM UNNEST($1::text[], $2::text[]) AS u(script_hash, script_text)
 			ON CONFLICT (script_hash) DO NOTHING
 		`, hashes, texts)
 		if err != nil {
