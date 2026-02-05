@@ -16,7 +16,8 @@ function stripTrailingSlash(url) {
 function Footer() {
   const docsBase = stripTrailingSlash(getDocsBaseUrl());
   const docsHref = docsBase ? `${docsBase}/docs` : null;
-  const apiHref = '/api-docs';
+  const apiV1Href = '/api-docs/v1';
+  const apiV2Href = '/api-docs/v2';
 
   return (
     <footer className="border-t border-white/5 bg-nothing-dark/90">
@@ -39,14 +40,24 @@ function Footer() {
             </a>
           ) : null}
           <a
-            href={apiHref}
+            href={apiV1Href}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
-            aria-label="FlowScan API Reference"
+            aria-label="FlowScan API v1 Reference"
           >
             <SquareTerminal className="h-4 w-4" />
-            <span>{docsBase ? 'API' : 'API Spec'}</span>
+            <span>API v1</span>
+          </a>
+          <a
+            href={apiV2Href}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
+            aria-label="FlowScan API v2 Reference"
+          >
+            <SquareTerminal className="h-4 w-4" />
+            <span>API v2</span>
           </a>
           <a
             href="https://github.com/zenabot27/flowscan-clone"

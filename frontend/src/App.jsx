@@ -20,7 +20,18 @@ function App() {
         <Route path="/transactions/:txId" element={<TransactionDetail />} />
         <Route path="/accounts/:address" element={<AccountDetail />} />
         <Route path="/stats" element={<Stats />} />
-        <Route path="/api-docs" element={<ApiDocs />} />
+        <Route
+          path="/api-docs"
+          element={<ApiDocs specUrl="/api/openapi/v1.json" apiBase="/api" title="FlowScan API v1" />}
+        />
+        <Route
+          path="/api-docs/v1"
+          element={<ApiDocs specUrl="/api/openapi/v1.json" apiBase="/api" title="FlowScan API v1" />}
+        />
+        <Route
+          path="/api-docs/v2"
+          element={<ApiDocs specUrl="/api/openapi/v2.json" apiBase="/api/api/v2" title="FlowScan API v2" />}
+        />
       </Routes>
       <Footer />
     </div>
