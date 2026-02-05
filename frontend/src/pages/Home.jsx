@@ -102,13 +102,17 @@ function Home() {
     return merged;
   };
 
-  const mergeTransactions = (prev, incoming) => {
+  const mergeTransactions = (prev, incoming, { prependNew = false } = {}) => {
     const map = new Map();
+    const order = [];
+    const seen = new Set();
 
     for (const tx of prev || []) {
       const id = normalizeTxId(tx?.id);
       if (!id) continue;
       map.set(id, tx);
+      order.push(id);
+      seen.add(id);
     }
 
     for (const tx of incoming || []) {
@@ -116,18 +120,25 @@ function Home() {
       if (!id) continue;
       const existing = map.get(id);
       map.set(id, mergeTx(existing, tx));
+      if (!seen.has(id)) {
+        if (prependNew) {
+          order.unshift(id);
+        } else {
+          order.push(id);
+        }
+        seen.add(id);
+      }
     }
 
-    const merged = Array.from(map.values());
-    merged.sort((a, b) => {
-      const ha = getTxHeight(a);
-      const hb = getTxHeight(b);
-      if (ha !== hb) return hb - ha;
-      const ta = getTxTimestampMs(a);
-      const tb = getTxTimestampMs(b);
-      if (ta !== tb) return tb - ta;
-      return String(a?.id || '').localeCompare(String(b?.id || ''));
-    });
+    const merged = [];
+    const dedup = new Set();
+    for (const id of order) {
+      if (dedup.has(id)) continue;
+      const tx = map.get(id);
+      if (!tx) continue;
+      merged.push(tx);
+      dedup.add(id);
+    }
 
     return merged.slice(0, 20);
   };
@@ -162,7 +173,7 @@ function Home() {
         payer: tx.payer_address || tx.proposer_address,
         blockHeight: tx.block_height
       })) : [];
-      setTransactions(mergeTransactions([], transformedTxs));
+      setTransactions(mergeTransactions([], transformedTxs, { prependNew: false }));
       setTxHasNext(Boolean(nextCursor));
       if (nextCursor) {
         setTxCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
@@ -249,7 +260,7 @@ function Home() {
         (tx) => normalizeTxId(tx?.id) === txIdKey,
       );
 
-      setTransactions(prev => mergeTransactions(prev, [newTx]));
+      setTransactions(prev => mergeTransactions(prev, [newTx], { prependNew: true }));
 
       if (!exists) {
         setNewTxIds(prev => {
