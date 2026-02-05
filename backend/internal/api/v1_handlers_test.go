@@ -62,8 +62,8 @@ func TestHandleFlowGetAccount(t *testing.T) {
 	}
 
 	row := data[0].(map[string]interface{})
-	if row["address"] != "0000000000000001" {
-		t.Fatalf("expected normalized address '0000000000000001', got %v", row["address"])
+	if row["address"] != "0x0000000000000001" {
+		t.Fatalf("expected normalized address '0x0000000000000001', got %v", row["address"])
 	}
 	if row["flowBalance"] != 1.23 {
 		t.Fatalf("expected flowBalance 1.23, got %v", row["flowBalance"])

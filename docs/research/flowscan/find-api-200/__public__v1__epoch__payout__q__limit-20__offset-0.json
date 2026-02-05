@@ -1,0 +1,228 @@
+{
+  "data": [
+    {
+      "block_height": 141140891,
+      "timestamp": "2026-02-04T18:59:59.529Z",
+      "epoch": "217",
+      "fields": {
+        "feesBurned": 3.47264578,
+        "fromFees": 4445.33339904,
+        "minted": 1533887.6047056,
+        "total": 1538332.93810464
+      }
+    },
+    {
+      "block_height": 140385434,
+      "timestamp": "2026-01-28T18:59:58.847Z",
+      "epoch": "216",
+      "fields": {
+        "feesBurned": 1.05299904,
+        "fromFees": 5238.69969042,
+        "minted": 1531656.50075723,
+        "total": 1536895.20044765
+      }
+    },
+    {
+      "block_height": 139629698,
+      "timestamp": "2026-01-21T18:59:59.446Z",
+      "epoch": "215",
+      "fields": {
+        "feesBurned": 1.45823898,
+        "fromFees": 4662.91740567,
+        "minted": 1530795.24562918,
+        "total": 1535458.16303485
+      }
+    },
+    {
+      "block_height": 138874678,
+      "timestamp": "2026-01-14T18:59:59.117Z",
+      "epoch": "214",
+      "fields": {
+        "feesBurned": 2.39767739,
+        "fromFees": 5850.2744231,
+        "minted": 1528173.49899791,
+        "total": 1534023.77342101
+      }
+    },
+    {
+      "block_height": 138125647,
+      "timestamp": "2026-01-06T22:09:39.669Z",
+      "epoch": "213",
+      "fields": {
+        "feesBurned": 3.54832812,
+        "fromFees": 5681.54407008,
+        "minted": 1526908.67411301,
+        "total": 1532590.21818309
+      }
+    },
+    {
+      "block_height": 137602229,
+      "timestamp": "2025-12-31T17:44:22.712Z",
+      "epoch": "212",
+      "fields": {
+        "feesBurned": 4.30043265,
+        "fromFees": 4234.61682318,
+        "minted": 1526922.45974507,
+        "total": 1531157.07656825
+      }
+    },
+    {
+      "block_height": 137091524,
+      "timestamp": "2025-12-24T18:59:58.741Z",
+      "epoch": "211",
+      "fields": {
+        "feesBurned": 5.32169891,
+        "fromFees": 6103.07086578,
+        "minted": 1523624.01142415,
+        "total": 1529727.08228993
+      }
+    },
+    {
+      "block_height": 136335769,
+      "timestamp": "2025-12-17T18:59:59.395Z",
+      "epoch": "210",
+      "fields": {
+        "feesBurned": 2.67432659,
+        "fromFees": 7156.82711437,
+        "minted": 1521142.13787853,
+        "total": 1528298.9649929
+      }
+    },
+    {
+      "block_height": 135580010,
+      "timestamp": "2025-12-10T18:59:59.754Z",
+      "epoch": "209",
+      "fields": {
+        "feesBurned": 1.46974251,
+        "fromFees": 1819.16392386,
+        "minted": 1525047.99405994,
+        "total": 1526867.1579838
+      }
+    },
+    {
+      "block_height": 134824326,
+      "timestamp": "2025-12-03T18:59:58.617Z",
+      "epoch": "208",
+      "fields": {
+        "feesBurned": 1.74776453,
+        "fromFees": 56.02281312,
+        "minted": 1525379.251362,
+        "total": 1525435.27417512
+      }
+    },
+    {
+      "block_height": 134068532,
+      "timestamp": "2025-11-26T18:59:59.422Z",
+      "epoch": "207",
+      "fields": {
+        "feesBurned": 4.79856061,
+        "fromFees": 60.57589438,
+        "minted": 1523944.16085304,
+        "total": 1524004.73674742
+      }
+    },
+    {
+      "block_height": 133312715,
+      "timestamp": "2025-11-19T18:59:59.483Z",
+      "epoch": "206",
+      "fields": {
+        "feesBurned": 3.2133652,
+        "fromFees": 107.48504415,
+        "minted": 1522468.0976219,
+        "total": 1522575.58266605
+      }
+    },
+    {
+      "block_height": 132557219,
+      "timestamp": "2025-11-12T18:59:58.93Z",
+      "epoch": "205",
+      "fields": {
+        "feesBurned": 2.63749106,
+        "fromFees": 97.36947715,
+        "minted": 1521050.39021363,
+        "total": 1521147.75969078
+      }
+    },
+    {
+      "block_height": 131801391,
+      "timestamp": "2025-11-05T19:00:00.037Z",
+      "epoch": "204",
+      "fields": {
+        "feesBurned": 1.650237,
+        "fromFees": 96.37710959,
+        "minted": 1519624.90124718,
+        "total": 1519721.27835677
+      }
+    },
+    {
+      "block_height": 131045660,
+      "timestamp": "2025-10-29T18:59:59.921Z",
+      "epoch": "203",
+      "fields": {
+        "feesBurned": 8.82905441,
+        "fromFees": 111.77138328,
+        "minted": 1518184.37303996,
+        "total": 1518296.14442324
+      }
+    },
+    {
+      "block_height": 130294888,
+      "timestamp": "2025-10-22T17:59:04.565Z",
+      "epoch": "202",
+      "fields": {
+        "feesBurned": 1.81820587,
+        "fromFees": 237.19455996,
+        "minted": 1518057.6134568,
+        "total": 1518294.80801676
+      }
+    },
+    {
+      "block_height": 129563459,
+      "timestamp": "2025-10-15T18:59:59.447511Z",
+      "epoch": "201",
+      "fields": {
+        "feesBurned": 3.7214541,
+        "fromFees": 292.88870989,
+        "minted": 1515155.96568988,
+        "total": 1515448.85439977
+      }
+    },
+    {
+      "block_height": 128809151,
+      "timestamp": "2025-10-08T18:59:59.137693Z",
+      "epoch": "200",
+      "fields": {
+        "feesBurned": 4.58079507,
+        "fromFees": 282.8403921,
+        "minted": 1513745.05067407,
+        "total": 1514027.89106617
+      }
+    },
+    {
+      "block_height": 128053851,
+      "timestamp": "2025-10-01T18:59:59.191232Z",
+      "epoch": "199",
+      "fields": {
+        "feesBurned": 3.83003825,
+        "fromFees": 292.18418237,
+        "minted": 1512316.08477876,
+        "total": 1512608.26896113
+      }
+    },
+    {
+      "block_height": 127307804,
+      "timestamp": "2025-09-24T18:59:59.172933Z",
+      "epoch": "198",
+      "fields": {
+        "feesBurned": 4.95748887,
+        "fromFees": 302.0597913,
+        "minted": 1510887.92727299,
+        "total": 1511189.98706429
+      }
+    }
+  ],
+  "_links": {
+    "next": "/public/v1/epoch/payout?limit=20&offset=20",
+    "self": "/public/v1/epoch/payout?limit=20"
+  }
+}

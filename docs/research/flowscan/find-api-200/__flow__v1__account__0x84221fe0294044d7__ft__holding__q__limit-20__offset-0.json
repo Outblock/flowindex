@@ -1,0 +1,128 @@
+{
+  "data": [
+    {
+      "balance": 472383.76559103,
+      "percentage": 0.0005031139585880761,
+      "address": "0x84221fe0294044d7",
+      "token": "A.1654653399040a61.FlowToken.Vault"
+    },
+    {
+      "balance": 525.63472315,
+      "percentage": 1.6748537253497069e-06,
+      "address": "0x84221fe0294044d7",
+      "token": "A.921ea449dffec68a.FlovatarDustToken.Vault"
+    },
+    {
+      "balance": 3.01,
+      "percentage": 0.023413279176600504,
+      "address": "0x84221fe0294044d7",
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_1b97100ea1d7126c4d60027e231ea4cb25314bdb.Vault"
+    },
+    {
+      "balance": 1.75280653,
+      "percentage": 5.207232060731679e-07,
+      "address": "0x84221fe0294044d7",
+      "token": "A.3c5959b568896393.FUSD.Vault"
+    },
+    {
+      "balance": 1.22539558,
+      "percentage": 2.714164151936309e-06,
+      "address": "0x84221fe0294044d7",
+      "token": "A.b19436aae4d94622.FiatToken.Vault"
+    },
+    {
+      "balance": 1,
+      "percentage": 1.6277673126132303e-09,
+      "address": "0x84221fe0294044d7",
+      "token": "A.ee09029f1dbcd9d1.TopShotBETA.Vault"
+    },
+    {
+      "balance": 1,
+      "percentage": 0.000893051860543845,
+      "address": "0x84221fe0294044d7",
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_68eb683a393c8a1c816255b4fc4b89d73c52ad4b.Vault"
+    },
+    {
+      "balance": 1,
+      "percentage": 1.1368633333983437e-11,
+      "address": "0x84221fe0294044d7",
+      "token": "A.f1ab99c82dee3526.USDCFlow.Vault"
+    },
+    {
+      "balance": 0.00020468,
+      "percentage": 1.0683699656606525e-12,
+      "address": "0x84221fe0294044d7",
+      "token": "A.0f9df91c9121c460.BloctoToken.Vault"
+    },
+    {
+      "balance": 1e-08,
+      "percentage": 1.1368710055692447e-17,
+      "address": "0x84221fe0294044d7",
+      "token": "A.231cc0dbbcffc4b7.ceWETH.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.231cc0dbbcffc4b7.ceBNB.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_9b565507858812e8b5ffbfbde9b200a3bc2e8f76.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.078a8129525775dd.GreenBitcoin.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.348fe2042c8a70d8.MyToken.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.231cc0dbbcffc4b7.ceDAI.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.231cc0dbbcffc4b7.ceBUSD.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.e3ad6030cbaff1c2.ThulToken.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.231cc0dbbcffc4b7.ceAVAX.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.d6f80565193ad727.stFlowToken.Vault"
+    },
+    {
+      "balance": 0,
+      "percentage": 0,
+      "address": "0x84221fe0294044d7",
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_f1815bd50389c46847f0bda824ec8da914045d14.Vault"
+    }
+  ],
+  "_links": {
+    "next": "/flow/v1/account/0x84221fe0294044d7/ft/holding?limit=20&offset=20",
+    "self": "/flow/v1/account/0x84221fe0294044d7/ft/holding?limit=20"
+  }
+}

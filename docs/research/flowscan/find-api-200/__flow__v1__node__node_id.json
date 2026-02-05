@@ -1,0 +1,5 @@
+{
+  "_links": {
+    "self": "/flow/v1/node/%7Bnode_id%7D"
+  }
+}

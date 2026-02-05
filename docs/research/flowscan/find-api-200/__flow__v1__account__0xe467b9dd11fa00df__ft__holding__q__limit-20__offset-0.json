@@ -1,0 +1,91 @@
+{
+  "data": [
+    {
+      "balance": 87960930222.08,
+      "percentage": 0.9999960770583549,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed.Vault"
+    },
+    {
+      "balance": 87960930222.08,
+      "percentage": 0.9999955634109299,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.f1ab99c82dee3526.USDCFlow.Vault"
+    },
+    {
+      "balance": 87960930222.08,
+      "percentage": 0.9999995837009157,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_f1815bd50389c46847f0bda824ec8da914045d14.Vault"
+    },
+    {
+      "balance": 87960930222.08,
+      "percentage": 0.9999999999825738,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_d3378b419feae4e3a4bb4f3349dba43a1b511760.Vault"
+    },
+    {
+      "balance": 87954949980.7595,
+      "percentage": 0.9999999999667436,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.231cc0dbbcffc4b7.ceBUSD.Vault"
+    },
+    {
+      "balance": 87954949558.2172,
+      "percentage": 0.9999999978283841,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.231cc0dbbcffc4b7.ceDAI.Vault"
+    },
+    {
+      "balance": 87954757400.053,
+      "percentage": 0.999999987847727,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.231cc0dbbcffc4b7.ceUSDT.Vault"
+    },
+    {
+      "balance": 879608303.235091,
+      "percentage": 0.9999999996490992,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.231cc0dbbcffc4b7.ceBNB.Vault"
+    },
+    {
+      "balance": 879606918.3214275,
+      "percentage": 0.9999996017377458,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.231cc0dbbcffc4b7.ceWETH.Vault"
+    },
+    {
+      "balance": 87960773.3121788,
+      "percentage": 0.9999999676361789,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.231cc0dbbcffc4b7.ceWBTC.Vault"
+    },
+    {
+      "balance": 1921.04319264,
+      "percentage": 2.046013700559254e-06,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.1654653399040a61.FlowToken.Vault"
+    },
+    {
+      "balance": 1395.12598224,
+      "percentage": 1.48588375555809e-06,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.1654653399040a61.FlowToken.Vault"
+    },
+    {
+      "balance": 0.000447,
+      "percentage": 0.00517225997792012,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_2f6f07cdcf3588944bf4c42ac74ff24bf56e7590.Vault"
+    },
+    {
+      "balance": 2.487e-05,
+      "percentage": 0.0473849671334667,
+      "address": "0xe467b9dd11fa00df",
+      "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579.Vault"
+    }
+  ],
+  "_links": {
+    "self": "/flow/v1/account/0xe467b9dd11fa00df/ft/holding?limit=20"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "data": [
+    {
+      "token": "A.1654653399040a61.FlowToken.Vault",
+      "balance": "466.05802322",
+      "address": "0xc525077910456643",
+      "path": "/storage/flowTokenVault",
+      "vault_id": 84662396706453
+    }
+  ],
+  "_links": {
+    "self": "/flow/v1/account/0xc525077910456643/ft?limit=20"
+  }
+}

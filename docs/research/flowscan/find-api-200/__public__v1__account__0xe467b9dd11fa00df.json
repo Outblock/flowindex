@@ -1,0 +1,15 @@
+{
+  "data": [
+    {
+      "address": "0xe467b9dd11fa00df",
+      "block_height": 0,
+      "coa_address": "0000000000000000000000028026ac0cc5ffd21a",
+      "coa_height": 137606080,
+      "evmAccounts": null,
+      "profile": null
+    }
+  ],
+  "_links": {
+    "self": "/public/v1/account/0xe467b9dd11fa00df"
+  }
+}

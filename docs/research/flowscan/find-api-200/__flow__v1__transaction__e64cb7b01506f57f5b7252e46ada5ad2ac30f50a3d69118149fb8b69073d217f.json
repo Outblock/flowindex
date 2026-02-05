@@ -1,0 +1,92 @@
+{
+  "data": [
+    {
+      "id": "e64cb7b01506f57f5b7252e46ada5ad2ac30f50a3d69118149fb8b69073d217f",
+      "timestamp": "2026-02-05T12:42:41.283Z",
+      "payer": "0x82ed1b9cba5bb1b3",
+      "authorizers": [
+        "0x82ed1b9cba5bb1b3",
+        "0x0e99257ac030d6d3"
+      ],
+      "gas_used": 28,
+      "fee": 0.00122,
+      "status": "SEALED",
+      "block_height": 141220553,
+      "error": "",
+      "error_code": "",
+      "transaction_body_hash": "fa3e5c5a846b726159795c91f8afcebc4cdd21032421114d6dc89e71b0ddba56",
+      "block_id": "e0bdf8c4a3fb96c05fae14fe0eb586a9574a05e25c976a83d04f0d4ff8cb8261",
+      "proposer": "0x82ed1b9cba5bb1b3",
+      "proposer_index": 31,
+      "proposer_sequence_number": 17471,
+      "transaction_body": "\n            /// transactions/mint_v2.cdc\n\nimport FungibleToken from 0xf233dcee88fe0abe\nimport FungibleTokenMetadataViews from 0xf233dcee88fe0abe\nimport NonFungibleToken from 0x1d7e57aa55817448\nimport MetadataViews from 0x1d7e57aa55817448\n\nimport JOSHIN from 0x82ed1b9cba5bb1b3\n\n\n\n\ntransaction(\n\tamount: UFix64,\n\tname: String,\n\tartist: String,\n\tartistAddress: Address,\n\tdescription: String,\n\troyalty: UFix64,\n\ttypeID: String\n) {\n\n    /// Reference to the Token Minter Resource object\n    let tokenAdmin: &JOSHIN.Administrator\n    let tokenReceiver: &{FungibleToken.Receiver}\n\n\n    prepare(\n      minter: auth(BorrowValue) &Account,\n      receiver: auth(BorrowValue, IssueStorageCapabilityController, PublishCapability, SaveValue, UnpublishCapability) &Account\n    ) {\n\n      let vaultData = JOSHIN.resolveContractView(resourceType: nil, viewType: Type<FungibleTokenMetadataViews.FTVaultData>()) as! FungibleTokenMetadataViews.FTVaultData?\n            ?? panic(\"ViewResolver does not resolve FTVaultData view\")\n\n      // enable receiver token\n      if receiver.storage.borrow<&JOSHIN.Vault>(from: vaultData.storagePath) == nil {\n        let vault <- JOSHIN.createEmptyVault(vaultType: Type<@JOSHIN.Vault>())\n\n        // Create a new JOSHIN Vault and put it in storage\n        receiver.storage.save(<-vault, to: vaultData.storagePath)\n\n        // Create a public capability to the Vault that exposes the Vault interfaces\n        let vaultCap = receiver.capabilities.storage.issue<&JOSHIN.Vault>(vaultData.storagePath)\n        receiver.capabilities.publish(vaultCap, at: vaultData.metadataPath)\n\n        // Create a public Capability to the Vault's Receiver functionality\n        let receiverCap = receiver.capabilities.storage.issue<&JOSHIN.Vault>(vaultData.storagePath)\n        receiver.capabilities.publish(receiverCap, at: vaultData.receiverPath)\n      }\n\n      self.tokenAdmin = minter.storage.borrow<&JOSHIN.Administrator>(from: JOSHIN.AdminStoragePath)\n          ?? panic(\"Signer is not the token admin\")\n\n      self.tokenReceiver = getAccount(receiver.address).capabilities.borrow<&{FungibleToken.Receiver}>(vaultData.receiverPath)\n          ?? panic(\"Could not borrow receiver reference to the Vault\")\n\n\n    }\n\n    execute {\n        if amount > UFix64(0) {\n          // Create mint tokens\n\t\t\t    let tokenMinter <- self.tokenAdmin.createNewMinter()\n\n\t\t\t    let mintedVault <- tokenMinter.mintTokens(amount: amount)\n\n          // Deposit them to the receiever\n          self.tokenReceiver.deposit(from: <-mintedVault)\n\n          destroy tokenMinter\n        }\n\n    }\n}\n          ",
+      "execution_effort": 2.8e-07,
+      "argument": [
+        {
+          "key": "amount",
+          "value": 1
+        },
+        {
+          "key": "name",
+          "value": null
+        },
+        {
+          "key": "artist",
+          "value": null
+        },
+        {
+          "key": "artistAddress",
+          "value": "0x82ed1b9cba5bb1b3"
+        },
+        {
+          "key": "description",
+          "value": null
+        },
+        {
+          "key": "royalty",
+          "value": 0
+        },
+        {
+          "key": "typeID",
+          "value": null
+        }
+      ],
+      "events": [
+        {
+          "name": "A.82ed1b9cba5bb1b3.JOSHIN.TokensMinted",
+          "fields": {
+            "amount": 1,
+            "type": "A.82ed1b9cba5bb1b3.JOSHIN.Minter"
+          }
+        },
+        {
+          "name": "A.f233dcee88fe0abe.FungibleToken.Deposited",
+          "fields": {
+            "amount": 1,
+            "balanceAfter": 418,
+            "depositedUUID": 274877909453606,
+            "to": "0x0e99257ac030d6d3",
+            "toUUID": 807411219,
+            "type": "A.82ed1b9cba5bb1b3.JOSHIN.Vault"
+          }
+        }
+      ],
+      "contract_imports": [
+        "A.1d7e57aa55817448.MetadataViews",
+        "A.1d7e57aa55817448.NonFungibleToken",
+        "A.82ed1b9cba5bb1b3.JOSHIN",
+        "A.f233dcee88fe0abe.FungibleToken",
+        "A.f233dcee88fe0abe.FungibleTokenMetadataViews"
+      ],
+      "contract_outputs": [
+        "A.82ed1b9cba5bb1b3.JOSHIN",
+        "A.f233dcee88fe0abe.FungibleToken"
+      ],
+      "evm_transactions": [],
+      "surge_factor": 1
+    }
+  ],
+  "_links": {
+    "self": "/flow/v1/transaction/e64cb7b01506f57f5b7252e46ada5ad2ac30f50a3d69118149fb8b69073d217f"
+  }
+}

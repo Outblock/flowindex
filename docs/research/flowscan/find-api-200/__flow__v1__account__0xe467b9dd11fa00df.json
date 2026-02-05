@@ -1,0 +1,260 @@
+{
+  "data": [
+    {
+      "accountInfo": {
+        "delegatedBalance": 0,
+        "primaryAcctBalance": 1921.04319264,
+        "primaryAddress": "0xe467b9dd11fa00df",
+        "secondaryAcctBalance": 0,
+        "secondaryAddress": "",
+        "stakedBalance": 0
+      },
+      "address": "0xe467b9dd11fa00df",
+      "domains": {
+        "expiredNames": null
+      },
+      "find": {
+        "mainName": {
+          "name": "",
+          "time": 0
+        },
+        "otherNames": null
+      },
+      "flowBalance": 1921.04319264,
+      "flowStorage": 117.80085235,
+      "storageAvailable": 180324234029,
+      "storageUsed": 11780085235,
+      "keys": [
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_secp256k1",
+          "index": "0",
+          "revoked": true,
+          "key": "dfd3ae152932922137e846a8035e61a1741d3ef9e229461b1a000a1c4ca0c50d22cfcc2976e1403b9a6bbf2afb7b01ddb0a26419dd89304ff17f3736f1e8984f",
+          "weight": 1000
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "1",
+          "revoked": true,
+          "key": "3588eb28b60e28d24c1e8b03f9a00f73ebd3f6707ee813e27d58ecb6439b8dde1413d7a74a7cc7e8939cbef2e0aa6acc51d5c7010afdb4c6dba55d4cc2ca8bed",
+          "weight": 1000
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "2",
+          "revoked": true,
+          "key": "b097cf3dcfedf7c4684cd9a536a327cfe633c98f6b6c12803b4d7f3eb05e85e943cf6623cd265b88c9526cc2f8443c9e5d78d2cc4b791b099938476a383f0757",
+          "weight": 400
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "3",
+          "revoked": true,
+          "key": "460b2ec791eece9fd97abd296403c5ab5cee3877346c0876d119b7e77e9123a28424ec50bfe68d9a93ced5f610d73ac06f8cbe1742ce4207a6f325745d3d96ca",
+          "weight": 400
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "4",
+          "revoked": true,
+          "key": "da2ffb11a9eda290fc182bc59528be3d6b3dfe05b4ff7f779df2dd1f491abc895236948aa7d3ac7b5f37cc007acd3aa3ae5e1b43a3207cb3cb87e5b5e16912a4",
+          "weight": 400
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "5",
+          "revoked": true,
+          "key": "a67d09f8526ae8260e6589da8d58a8c544cf9048d6426804c39ddb4920a9e315a2b7dae8dbd5dbc696d5f31f5b7f72c7d2d4d3e03bcd7ac01e033de2a3492600",
+          "weight": 400
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "6",
+          "revoked": true,
+          "key": "9d80d397be438bdd8f930986ed58819a6209e374926bf3d9af21dd418d0e338f0b1adba148182dde642428f3350e3a5396e0e561df81b99ac88180dade0150c6",
+          "weight": 400
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_secp256k1",
+          "index": "7",
+          "revoked": false,
+          "key": "b8cf3deaf03db95abc406f0eb7b35c83e6c131919ca4faf11d0aeb66b832e4ea4ae9bee1ce0f93613e6f8bcf40a18a7a90f2de622f2b9de91171d2cdeb90ae86",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_secp256k1",
+          "index": "8",
+          "revoked": true,
+          "key": "f4c49ec76efeb369cedefe511ed7def63d7090d80577d238e216d8ef88682fae151b4af30be7b99ef999547ccb3c1dc6f3b94865ee2e9e4a1572960d31a73694",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "9",
+          "revoked": true,
+          "key": "5c421222950a6f41b41420f032cbb1fb9c1902ad205b76d6fbd943c92eb6459e780cffa92d137bd4a754976135774d6dac860062922aea93bc9ff834c4c95790",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_secp256k1",
+          "index": "10",
+          "revoked": true,
+          "key": "bcd1fa5093e884c028e36a47a5ba4cd4e55d08f931685c8a28e5eee9fe8573967f480df8049b1b6f03e40ab072d227592ba62927db64c9c2655fef26c65b836b",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "11",
+          "revoked": false,
+          "key": "181a71ed25fc85443aebcf6ec708241498f93a3b395e628d98685b4d78e3242c1e1b11edeb0c143d752df5b155fce47df223e7a535b18b8409b2452d4d1df5c9",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "12",
+          "revoked": false,
+          "key": "5c999370c484e2963d4dce5b75e4c48a1e901518d34f5abfe6e13de064e71c31f1412068e9f20b4692764287fd71f7cac2924f04fec270aa8f7476eba96aa965",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "13",
+          "revoked": false,
+          "key": "b049757d6412fdecd6b1a67f94cbf07dca5c0102831a9b3db2d17ee3a3a9fcc9081311c92b5479c9ea1cdcf49d3f4cfa81990c35849a3eb1a31dbe0c6b257f0d",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA3_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "14",
+          "revoked": true,
+          "key": "ebf2a717ffb63fd9aab2c161c5988347f98f75f7cdc853f30c85c1b697b1224aad7c3ada89e2c0f5797e549bc86834d7a4e0ce3ca4e300c780bb5d81d32953da",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "15",
+          "revoked": true,
+          "key": "fda3f37f8289bbc26c3bd817034726fa3c23eb8d9420c4ac1eef808dd0ce9056b66d0ef022ff00501e9a78e72a6322356db494dcacfcdc3a270ee3110adf0d8b",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "16",
+          "revoked": false,
+          "key": "708c3b36830e9d8dcfac9536fcec3df02fc24b82fbb793d5e3206c64ded49f8e11bcf2aa535b2c2f8e6ace17b6f3c8c6edd0d041222023e8e4b0729b07726b74",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "17",
+          "revoked": true,
+          "key": "ee4aec89e6d83fe563ee93de01374961fcf117b7e746c78b3097f54b630a053fd4ee70a4bde974ce12d71deb444c5c23c224ad92f05a6f72b54742fd9700a3b7",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "18",
+          "revoked": false,
+          "key": "475aac6dc9e0a045323f8e24f0aa8ebbec9dfedc34a5cc47bbb206f8d639f03812231731a9608edab6582056ab0a3281350666330daca384c7dff777cc6823be",
+          "weight": 250
+        },
+        {
+          "hashAlgorithm": "SHA2_256",
+          "signatureAlgorithm": "ECDSA_P256",
+          "index": "19",
+          "revoked": false,
+          "key": "9a9b21fd1a3bba399fc88289da202d14fd3dc03498f06d77af15f2c30a30f4138118410d7ade3a21a103752b385b15abbeca50d271583de0eb5bb0465310baa3",
+          "weight": 250
+        }
+      ],
+      "contracts": [
+        "A.e467b9dd11fa00df.RandomBeaconHistory",
+        "A.e467b9dd11fa00df.Eternal",
+        "A.e467b9dd11fa00df.Migration",
+        "A.e467b9dd11fa00df.FlowContractAudits",
+        "A.e467b9dd11fa00df.Crypto",
+        "A.e467b9dd11fa00df.DependencyAudit",
+        "A.e467b9dd11fa00df.AccountV2Migration",
+        "A.e467b9dd11fa00df.FlowStorageFees",
+        "A.e467b9dd11fa00df.NodeVersionBeacon",
+        "A.e467b9dd11fa00df.RetrieveFraudulentTokensEvents",
+        "A.e467b9dd11fa00df.FlowServiceAccount",
+        "A.e467b9dd11fa00df.EVM",
+        "A.e467b9dd11fa00df.FlowTransactionScheduler",
+        "A.e467b9dd11fa00df.FlowTransactionSchedulerUtils"
+      ],
+      "vaults": {
+        "EVMVMBridgedToken_2f6f07cdcf3588944bf4c42ac74ff24bf56e7590Vault": {
+          "balance": 0.000447,
+          "identifier": "A.1e4aa0b87d10b141.EVMVMBridgedToken_2f6f07cdcf3588944bf4c42ac74ff24bf56e7590.Vault",
+          "path": "/storage/EVMVMBridgedToken_2f6f07cdcf3588944bf4c42ac74ff24bf56e7590Vault",
+          "uuid": 218802816347648,
+          "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_2f6f07cdcf3588944bf4c42ac74ff24bf56e7590.Vault",
+          "short_path": "EVMVMBridgedToken_2f6f07cdcf3588944bf4c42ac74ff24bf56e7590Vault",
+          "name": "EVMVMBridgedToken_2f6f07cdcf3588944bf4c42ac74ff24bf56e7590",
+          "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+          "symbol": "WETH",
+          "socials": null,
+          "tags": []
+        },
+        "EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579Vault": {
+          "balance": 2.487e-05,
+          "identifier": "A.1e4aa0b87d10b141.EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579.Vault",
+          "path": "/storage/EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579Vault",
+          "uuid": 218802816347633,
+          "token": "A.1e4aa0b87d10b141.EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579.Vault",
+          "short_path": "EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579Vault",
+          "name": "EVMVMBridgedToken_717dae2baf7656be9a9b01dee31d571a9d4c9579",
+          "logo": "https://assets.website-files.com/5f6294c0c7a8cdd643b1c820/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.svg",
+          "symbol": "WBTC",
+          "socials": null,
+          "tags": []
+        },
+        "flowTokenVault": {
+          "balance": 1921.04319264,
+          "identifier": "A.1654653399040a61.FlowToken.Vault",
+          "path": "/storage/flowTokenVault",
+          "uuid": 0,
+          "token": "A.1654653399040a61.FlowToken.Vault",
+          "short_path": "flowTokenVault",
+          "name": "Flow",
+          "logo": "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.1654653399040a61.FlowToken/logo.svg",
+          "symbol": "FLOW",
+          "socials": {
+            "coingeckoId": "flow",
+            "discord": "http://discord.gg/flow",
+            "documentation": "https://developers.flow.com/references/core-contracts/flow-token",
+            "github": "https://github.com/onflow/flow-core-contracts",
+            "twitter": "https://twitter.com/flow_blockchain",
+            "website": "https://www.onflow.org"
+          },
+          "tags": [
+            "utility-token"
+          ]
+        }
+      }
+    }
+  ],
+  "_links": {
+    "self": "/flow/v1/account/0xe467b9dd11fa00df"
+  }
+}

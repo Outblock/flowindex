@@ -1,0 +1,10 @@
+{
+  "data": [
+    {
+      "count": 7924
+    }
+  ],
+  "_links": {
+    "self": "/wallet/v1/participation/0x84221fe0294044d7/count?address=0x84221fe0294044d7"
+  }
+}
