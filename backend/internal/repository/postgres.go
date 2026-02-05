@@ -108,18 +108,18 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 	}
 
-	tx, err := r.db.Begin(ctx)
+	dbtx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer dbtx.Rollback(ctx)
 
 	// Indexing data is reconstructable from the chain. For high-throughput ingestion, we can trade
 	// a small durability window for speed by disabling synchronous commit at the transaction level.
 	// This is opt-in via env var to keep the default conservative.
 	if strings.ToLower(strings.TrimSpace(os.Getenv("DB_SYNCHRONOUS_COMMIT"))) == "off" {
 		// Best-effort: if this fails, continue with default settings.
-		_, _ = tx.Exec(ctx, "SET LOCAL synchronous_commit = off")
+		_, _ = dbtx.Exec(ctx, "SET LOCAL synchronous_commit = off")
 	}
 
 	// Precompute block timestamps for downstream inserts
@@ -130,7 +130,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		blockTimeByHeight[b.Height] = b.Timestamp
 
 		// Insert into partitioned raw.blocks
-		_, err := tx.Exec(ctx, `
+		_, err := dbtx.Exec(ctx, `
 			INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, execution_result_id, total_gas_used, is_sealed, created_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 			ON CONFLICT (height) DO UPDATE SET
@@ -150,7 +150,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 
 		// Insert into raw.block_lookup (Atomic Lookup)
-		_, err = tx.Exec(ctx, `
+		_, err = dbtx.Exec(ctx, `
 			INSERT INTO raw.block_lookup (id, height, timestamp, created_at)
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (id) DO UPDATE SET
@@ -170,163 +170,344 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			scriptInlineMaxBytes = n
 		}
 	}
-	for _, t := range txs {
-		// eventsJSON, _ := json.Marshal(t.Events) // No longer needed in raw.transactions? Plan says "raw tables only", strict schema.
-		// Actually schema has `arguments JSONB`.
-		// NOTE: raw.transactions definition misses 'events' column in new schema?
-		// Let's check schema provided. `raw.transactions` does NOT have `events` JSON column.
-		// It has `event_count`.
-		// So we REMOVE events from raw.transactions insert.
 
-		// Ensure timestamp is present; default to block timestamp if missing
-		txTimestamp := t.Timestamp
-		if txTimestamp.IsZero() {
-			if ts, ok := blockTimeByHeight[t.BlockHeight]; ok {
-				txTimestamp = ts
+	// Precompute script hashes and upsert unique scripts in one statement (reduces DB round trips).
+	scriptHashes := make([]string, len(txs))
+	scriptInlines := make([]string, len(txs))
+	scriptsByHash := make(map[string]string)
+	for i := range txs {
+		scriptText := strings.TrimSpace(txs[i].Script)
+		if scriptText == "" {
+			continue
+		}
+		sum := sha256.Sum256([]byte(scriptText))
+		scriptHash := hex.EncodeToString(sum[:])
+		scriptHashes[i] = scriptHash
+		if _, ok := scriptsByHash[scriptHash]; !ok {
+			scriptsByHash[scriptHash] = scriptText
+		}
+		if scriptInlineMaxBytes > 0 && len(scriptText) <= scriptInlineMaxBytes {
+			scriptInlines[i] = scriptText
+		}
+	}
+
+	if len(scriptsByHash) > 0 {
+		hashes := make([]string, 0, len(scriptsByHash))
+		texts := make([]string, 0, len(scriptsByHash))
+		for h, t := range scriptsByHash {
+			hashes = append(hashes, h)
+			texts = append(texts, t)
+		}
+		_, err := dbtx.Exec(ctx, `
+			INSERT INTO raw.scripts (script_hash, script_text, created_at)
+			SELECT * FROM UNNEST($1::text[], $2::text[])
+			ON CONFLICT (script_hash) DO NOTHING
+		`, hashes, texts)
+		if err != nil {
+			return fmt.Errorf("failed to upsert raw.scripts batch: %w", err)
+		}
+	}
+
+	// Fast path: bulk COPY raw.transactions + raw.tx_lookup inside a savepoint.
+	// If COPY fails (e.g. due to a duplicate key), we roll back to the savepoint and fall back to UPSERT loops.
+	usedCopyForTx := false
+	if len(txs) > 0 && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+		sub, err := dbtx.Begin(ctx) // savepoint
+		if err == nil {
+			defer sub.Rollback(ctx)
+
+			batchCreatedAt := time.Now()
+
+			_, errTx := sub.CopyFrom(ctx,
+				pgx.Identifier{"raw", "transactions"},
+				[]string{
+					"block_height", "id", "transaction_index",
+					"proposer_address", "payer_address", "authorizers",
+					"script_hash", "script", "arguments",
+					"status", "error_message", "is_evm",
+					"gas_limit", "gas_used", "event_count",
+					"timestamp", "created_at",
+				},
+				pgx.CopyFromSlice(len(txs), func(i int) ([]any, error) {
+					t := txs[i]
+
+					// Ensure timestamp is present; default to block timestamp if missing
+					txTimestamp := t.Timestamp
+					if txTimestamp.IsZero() {
+						if ts, ok := blockTimeByHeight[t.BlockHeight]; ok {
+							txTimestamp = ts
+						}
+					}
+					if txTimestamp.IsZero() {
+						txTimestamp = batchCreatedAt
+					}
+
+					eventCount := t.EventCount
+					if eventCount == 0 {
+						eventCount = len(t.Events)
+					}
+
+					var scriptHash any
+					if scriptHashes[i] != "" {
+						scriptHash = scriptHashes[i]
+					}
+					var scriptInline any
+					if scriptInlines[i] != "" {
+						scriptInline = scriptInlines[i]
+					}
+
+					var args any
+					if len(t.Arguments) > 0 {
+						args = t.Arguments
+					}
+
+					var errMsg any
+					if strings.TrimSpace(t.ErrorMessage) != "" {
+						errMsg = t.ErrorMessage
+					}
+
+						return []any{
+							t.BlockHeight, t.ID, t.TransactionIndex,
+							t.ProposerAddress, t.PayerAddress, t.Authorizers,
+							scriptHash, scriptInline, args,
+							t.Status, errMsg, t.IsEVM,
+							t.GasLimit, t.GasUsed, eventCount,
+							txTimestamp, batchCreatedAt,
+					}, nil
+				}),
+			)
+
+			if errTx == nil {
+				_, errLookup := sub.CopyFrom(ctx,
+					pgx.Identifier{"raw", "tx_lookup"},
+					[]string{"id", "evm_hash", "block_height", "transaction_index", "timestamp", "created_at"},
+					pgx.CopyFromSlice(len(txs), func(i int) ([]any, error) {
+						t := txs[i]
+
+						txTimestamp := t.Timestamp
+						if txTimestamp.IsZero() {
+							if ts, ok := blockTimeByHeight[t.BlockHeight]; ok {
+								txTimestamp = ts
+							}
+						}
+						if txTimestamp.IsZero() {
+							txTimestamp = batchCreatedAt
+						}
+
+						var evmHash any
+						if t.EVMHash != "" {
+							normalized := strings.TrimPrefix(strings.ToLower(t.EVMHash), "0x")
+							if normalized != "" {
+								evmHash = normalized
+							}
+						}
+
+						return []any{
+							t.ID, evmHash, t.BlockHeight, t.TransactionIndex, txTimestamp, batchCreatedAt,
+						}, nil
+					}),
+				)
+				if errLookup == nil {
+					if err := sub.Commit(ctx); err == nil {
+						usedCopyForTx = true
+					}
+				}
+			}
+
+			if !usedCopyForTx {
+				_ = sub.Rollback(ctx)
 			}
 		}
-		if txTimestamp.IsZero() {
-			txTimestamp = time.Now()
-		}
-		createdAt := time.Now()
+	}
 
-		eventCount := t.EventCount
-		if eventCount == 0 {
-			eventCount = len(t.Events)
-		}
-
-		scriptText := strings.TrimSpace(t.Script)
-		var scriptHashPtr *string
-		if scriptText != "" {
-			sum := sha256.Sum256([]byte(scriptText))
-			scriptHash := hex.EncodeToString(sum[:])
-			scriptHashPtr = &scriptHash
-
-			// De-dupe scripts into raw.scripts. Keep it in the same transaction so
-			// readers can always resolve script_hash -> script_text.
-			_, err := tx.Exec(ctx, `
-				INSERT INTO raw.scripts (script_hash, script_text, created_at)
-				VALUES ($1, $2, NOW())
-				ON CONFLICT (script_hash) DO NOTHING`,
-				scriptHash, scriptText,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to upsert raw.scripts for tx %s: %w", t.ID, err)
+	// Fallback: row-by-row UPSERT (safe, slower).
+	if !usedCopyForTx {
+		for i, t := range txs {
+			// Ensure timestamp is present; default to block timestamp if missing
+			txTimestamp := t.Timestamp
+			if txTimestamp.IsZero() {
+				if ts, ok := blockTimeByHeight[t.BlockHeight]; ok {
+					txTimestamp = ts
+				}
 			}
-		}
+			if txTimestamp.IsZero() {
+				txTimestamp = time.Now()
+			}
+			createdAt := time.Now()
 
-		var scriptInline *string
-		if scriptInlineMaxBytes > 0 && scriptText != "" && len(scriptText) <= scriptInlineMaxBytes {
-			scriptInline = &scriptText
-		}
+			eventCount := t.EventCount
+			if eventCount == 0 {
+				eventCount = len(t.Events)
+			}
 
-		_, err := tx.Exec(ctx, `
-			INSERT INTO raw.transactions (
-				block_height, id, transaction_index,
-				proposer_address, payer_address, authorizers,
-				script_hash, script, arguments,
-				status, error_message, is_evm,
-				gas_limit, gas_used, event_count,
-				timestamp, created_at
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-			ON CONFLICT (block_height, id) DO UPDATE SET
-				transaction_index = EXCLUDED.transaction_index,
-				status = EXCLUDED.status,
-				error_message = EXCLUDED.error_message,
-				gas_used = EXCLUDED.gas_used,
-				event_count = EXCLUDED.event_count,
-				is_evm = EXCLUDED.is_evm,
-				script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash),
-				created_at = EXCLUDED.created_at`,
-			t.BlockHeight, t.ID, t.TransactionIndex,
-			t.ProposerAddress, t.PayerAddress, t.Authorizers,
-			scriptHashPtr, scriptInline, t.Arguments,
-			t.Status, t.ErrorMessage, t.IsEVM,
-			t.GasLimit, t.GasUsed, eventCount,
-			txTimestamp, createdAt,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
-		}
+			var scriptHash any
+			if scriptHashes[i] != "" {
+				scriptHash = scriptHashes[i]
+			}
+			var scriptInline any
+			if scriptInlines[i] != "" {
+				scriptInline = scriptInlines[i]
+			}
 
-		// Insert into raw.tx_lookup (Atomic Lookup)
-		_, err = tx.Exec(ctx, `
-			INSERT INTO raw.tx_lookup (id, evm_hash, block_height, transaction_index, timestamp, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6)
-			ON CONFLICT (id) DO UPDATE SET
-				evm_hash = COALESCE(EXCLUDED.evm_hash, raw.tx_lookup.evm_hash),
-				block_height = EXCLUDED.block_height,
-				transaction_index = EXCLUDED.transaction_index,
-				timestamp = EXCLUDED.timestamp`,
-			t.ID, func() *string {
-				if t.EVMHash == "" {
-					return nil
-				}
-				normalized := strings.TrimPrefix(strings.ToLower(t.EVMHash), "0x")
-				if normalized == "" {
-					return nil
-				}
-				return &normalized
-			}(), t.BlockHeight, t.TransactionIndex, txTimestamp, createdAt,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert tx lookup %s: %w", t.ID, err)
-		}
-
-		// 2a. Insert EVM Transaction details if applicable (to App DB)
-		if enableDerivedWrites && t.IsEVM {
-			// Schema v2: app.evm_transactions (block_height, transaction_id, ...)
-			// Note: logs are JSONB.
-
-			// We need to fetch 'logs' if available. Assuming t.EVMLogs exists or similiar.
-			// Current model might not have strict match. We'll skip logs for now or fix model.
-			// Based on previous code, we just insert basic EVM fields.
-
-			_, err := tx.Exec(ctx, `
-				INSERT INTO app.evm_transactions (block_height, transaction_id, evm_hash, from_address, to_address, timestamp, created_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7)
-				ON CONFLICT (block_height, transaction_id) DO NOTHING`,
-				t.BlockHeight, t.ID, t.EVMHash, t.EVMFrom, t.EVMTo, txTimestamp, time.Now(),
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.transactions (
+					block_height, id, transaction_index,
+					proposer_address, payer_address, authorizers,
+					script_hash, script, arguments,
+					status, error_message, is_evm,
+					gas_limit, gas_used, event_count,
+					timestamp, created_at
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+				ON CONFLICT (block_height, id) DO UPDATE SET
+					transaction_index = EXCLUDED.transaction_index,
+					status = EXCLUDED.status,
+					error_message = EXCLUDED.error_message,
+					gas_used = EXCLUDED.gas_used,
+					event_count = EXCLUDED.event_count,
+					is_evm = EXCLUDED.is_evm,
+					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash),
+					created_at = EXCLUDED.created_at`,
+				t.BlockHeight, t.ID, t.TransactionIndex,
+				t.ProposerAddress, t.PayerAddress, t.Authorizers,
+				scriptHash, scriptInline, t.Arguments,
+				t.Status, func() any {
+					if strings.TrimSpace(t.ErrorMessage) == "" {
+						return nil
+					}
+					return t.ErrorMessage
+				}(), t.IsEVM,
+				t.GasLimit, t.GasUsed, eventCount,
+				txTimestamp, createdAt,
 			)
 			if err != nil {
-				return fmt.Errorf("failed to insert evm tx %s: %w", t.ID, err)
+				return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
+			}
+
+			// Insert into raw.tx_lookup (Atomic Lookup)
+			_, err = dbtx.Exec(ctx, `
+				INSERT INTO raw.tx_lookup (id, evm_hash, block_height, transaction_index, timestamp, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6)
+				ON CONFLICT (id) DO UPDATE SET
+					evm_hash = COALESCE(EXCLUDED.evm_hash, raw.tx_lookup.evm_hash),
+					block_height = EXCLUDED.block_height,
+					transaction_index = EXCLUDED.transaction_index,
+					timestamp = EXCLUDED.timestamp`,
+				t.ID, func() any {
+					if t.EVMHash == "" {
+						return nil
+					}
+					normalized := strings.TrimPrefix(strings.ToLower(t.EVMHash), "0x")
+					if normalized == "" {
+						return nil
+					}
+					return normalized
+				}(), t.BlockHeight, t.TransactionIndex, txTimestamp, createdAt,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert tx lookup %s: %w", t.ID, err)
+			}
+
+			// 2a. Insert EVM Transaction details if applicable (to App DB)
+			if enableDerivedWrites && t.IsEVM {
+				_, err := dbtx.Exec(ctx, `
+					INSERT INTO app.evm_transactions (block_height, transaction_id, evm_hash, from_address, to_address, timestamp, created_at)
+					VALUES ($1, $2, $3, $4, $5, $6, $7)
+					ON CONFLICT (block_height, transaction_id) DO NOTHING`,
+					t.BlockHeight, t.ID, t.EVMHash, t.EVMFrom, t.EVMTo, txTimestamp, time.Now(),
+				)
+				if err != nil {
+					return fmt.Errorf("failed to insert evm tx %s: %w", t.ID, err)
+				}
 			}
 		}
 	}
 
 	// 3. Insert Events
-	for _, e := range events {
-		eventTimestamp := e.Timestamp
-		if eventTimestamp.IsZero() {
-			if ts, ok := blockTimeByHeight[e.BlockHeight]; ok {
-				eventTimestamp = ts
+	usedCopyForEvents := false
+	if len(events) > 0 && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+		sub, err := dbtx.Begin(ctx) // savepoint
+		if err == nil {
+			defer sub.Rollback(ctx)
+
+			batchCreatedAt := time.Now()
+
+			_, errCopy := sub.CopyFrom(ctx,
+				pgx.Identifier{"raw", "events"},
+				[]string{
+					"block_height", "transaction_id", "event_index",
+					"transaction_index", "type", "payload",
+					"contract_address", "event_name",
+					"timestamp", "created_at",
+				},
+				pgx.CopyFromSlice(len(events), func(i int) ([]any, error) {
+					e := events[i]
+
+					eventTimestamp := e.Timestamp
+					if eventTimestamp.IsZero() {
+						if ts, ok := blockTimeByHeight[e.BlockHeight]; ok {
+							eventTimestamp = ts
+						}
+					}
+					if eventTimestamp.IsZero() {
+						eventTimestamp = batchCreatedAt
+					}
+
+					var payload any
+					if len(e.Payload) > 0 {
+						payload = e.Payload
+					}
+
+					return []any{
+						e.BlockHeight, e.TransactionID, e.EventIndex,
+						e.TransactionIndex, e.Type, payload,
+						e.ContractAddress, e.EventName,
+						eventTimestamp, batchCreatedAt,
+					}, nil
+				}),
+			)
+			if errCopy == nil {
+				if err := sub.Commit(ctx); err == nil {
+					usedCopyForEvents = true
+				}
+			}
+
+			if !usedCopyForEvents {
+				_ = sub.Rollback(ctx)
 			}
 		}
-		if eventTimestamp.IsZero() {
-			eventTimestamp = time.Now()
-		}
-		createdAt := time.Now()
+	}
 
-		// raw.events (block_height, transaction_id, event_index, type, payload, contract_address, event_name, timestamp)
-		// Removing 'values' and 'contract_name' if not in schema. Schema has `contract_address`, `event_name`.
-		// Schema has `payload JSONB`.
-		_, err := tx.Exec(ctx, `
-			INSERT INTO raw.events (
-				block_height, transaction_id, event_index, 
-				transaction_index, type, payload, 
-				contract_address, event_name, 
-				timestamp, created_at
+	if !usedCopyForEvents {
+		for _, e := range events {
+			eventTimestamp := e.Timestamp
+			if eventTimestamp.IsZero() {
+				if ts, ok := blockTimeByHeight[e.BlockHeight]; ok {
+					eventTimestamp = ts
+				}
+			}
+			if eventTimestamp.IsZero() {
+				eventTimestamp = time.Now()
+			}
+			createdAt := time.Now()
+
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.events (
+					block_height, transaction_id, event_index,
+					transaction_index, type, payload,
+					contract_address, event_name,
+					timestamp, created_at
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				ON CONFLICT (block_height, transaction_id, event_index) DO NOTHING`,
+				e.BlockHeight, e.TransactionID, e.EventIndex,
+				e.TransactionIndex, e.Type, e.Payload,
+				e.ContractAddress, e.EventName,
+				eventTimestamp, createdAt,
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			ON CONFLICT (block_height, transaction_id, event_index) DO NOTHING`,
-			e.BlockHeight, e.TransactionID, e.EventIndex,
-			e.TransactionIndex, e.Type, e.Payload,
-			e.ContractAddress, e.EventName,
-			eventTimestamp, createdAt,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert event: %w", err)
+			if err != nil {
+				return fmt.Errorf("failed to insert event: %w", err)
+			}
 		}
 	}
 
@@ -335,7 +516,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		for _, ak := range accountKeys {
 			// Revocation events update state by (address, key_index).
 			if ak.Revoked && ak.PublicKey == "" {
-				_, err := tx.Exec(ctx, `
+				_, err := dbtx.Exec(ctx, `
 					UPDATE app.account_keys
 					SET revoked = TRUE,
 						revoked_at_height = $3,
@@ -351,7 +532,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				continue
 			}
 
-			_, err := tx.Exec(ctx, `
+			_, err := dbtx.Exec(ctx, `
 				INSERT INTO app.account_keys (
 					address, key_index, public_key,
 					signing_algorithm, hashing_algorithm, weight,
@@ -390,7 +571,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// We'll trust availability for query support.
 	if enableDerivedWrites {
 		for _, aa := range addressActivity {
-			_, err := tx.Exec(ctx, `
+			_, err := dbtx.Exec(ctx, `
 			INSERT INTO app.address_transactions (address, transaction_id, block_height, role)
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (address, block_height, transaction_id, role) DO NOTHING`,
@@ -428,7 +609,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			}
 
 			// app.address_stats
-			_, err := tx.Exec(ctx, `
+			_, err := dbtx.Exec(ctx, `
 				INSERT INTO app.address_stats (address, tx_count, total_gas_used, last_updated_block, created_at, updated_at)
 				VALUES ($1, 1, 0, $2, NOW(), NOW())
 				ON CONFLICT (address) DO UPDATE SET 
@@ -448,14 +629,14 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		for _, e := range events {
 			if strings.Contains(e.Type, "AccountContractAdded") || strings.Contains(e.Type, "AccountContractUpdated") {
 				var payload map[string]interface{}
-				if err := json.Unmarshal(e.Payload, &payload); err == nil {
-					address, _ := payload["address"].(string)
-					name, _ := payload["name"].(string)
-					if address != "" && name != "" {
-						_, err := tx.Exec(ctx, `
-							INSERT INTO app.smart_contracts (address, name, last_updated_height, created_at, updated_at)
-							VALUES ($1, $2, $3, $4, $5)
-							ON CONFLICT (address, name) DO UPDATE SET
+					if err := json.Unmarshal(e.Payload, &payload); err == nil {
+						address, _ := payload["address"].(string)
+						name, _ := payload["name"].(string)
+						if address != "" && name != "" {
+							_, err := dbtx.Exec(ctx, `
+								INSERT INTO app.smart_contracts (address, name, last_updated_height, created_at, updated_at)
+								VALUES ($1, $2, $3, $4, $5)
+								ON CONFLICT (address, name) DO UPDATE SET
 								last_updated_height = EXCLUDED.last_updated_height,
 								version = app.smart_contracts.version + 1,
 								updated_at = EXCLUDED.updated_at`,
@@ -471,7 +652,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	}
 
 	// 7. Update Checkpoint (app schema)
-	_, err = tx.Exec(ctx, `
+	_, err = dbtx.Exec(ctx, `
 		INSERT INTO app.indexing_checkpoints (service_name, last_height, updated_at)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (service_name) DO UPDATE SET last_height = EXCLUDED.last_height, updated_at = EXCLUDED.updated_at`,
@@ -481,7 +662,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		return fmt.Errorf("failed to update checkpoint: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	return dbtx.Commit(ctx)
 }
 
 // SaveBlockOnly inserts a block without affecting the checkpoint or other tables.
