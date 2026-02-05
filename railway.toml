@@ -34,11 +34,11 @@ VITE_API_URL = "/api"
 
 [[services]]
 name = "docs"
-root = "devportal"
-dockerfilePath = "Dockerfile"
+root = "."
+dockerfilePath = "devportal/Dockerfile"
 
 [services.env]
 PORT = "8080"
-# Used by devportal/next.config.mjs to proxy /flowscan-api/* to the backend service.
+# Used by devportal to proxy /flowscan-api/* to the backend service (Scalar "Try it" without CORS).
 BACKEND_API_URL = "http://backend.railway.internal:8080"
 RAILWAY_DOCKERFILE_PATH = "devportal/Dockerfile"

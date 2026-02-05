@@ -12,7 +12,8 @@ cd devportal
 # Point the portal's /flowscan-api/* proxy to a backend instance
 export BACKEND_API_URL="http://localhost:8080"
 
-npm run dev
+bun install
+bun run dev
 ```
 
 Open:
@@ -22,10 +23,10 @@ Open:
 
 ## How It Works
 
-- Docs: MDX content in `devportal/content/docs/*` rendered by Fumadocs.
+- Docs: rendered directly from the repository `docs/*` directory (single source of truth).
 - API Reference: `devportal/app/api-reference/page.tsx` renders Scalar and loads the OpenAPI spec.
-- Backend proxy: `devportal/next.config.mjs` proxies `/flowscan-api/*` to `BACKEND_API_URL` so the API
-  reference can do same-origin "Try It" requests without CORS.
+- Backend proxy: `devportal/app/flowscan-api/[...path]/route.ts` proxies `/flowscan-api/*` to `BACKEND_API_URL`
+  so the API reference can do same-origin "Try It" requests without CORS.
 
 ## Environment Variables
 

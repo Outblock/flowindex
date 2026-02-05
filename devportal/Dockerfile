@@ -1,22 +1,28 @@
-FROM node:20-bookworm AS deps
+FROM oven/bun:1 AS deps
 
-WORKDIR /app
-# NOTE: fumadocs-mdx runs on postinstall and requires source.config.ts + content.
-# We copy just enough inputs here so `npm ci` can run successfully.
-COPY package.json package-lock.json source.config.ts tsconfig.json mdx-components.tsx ./
-COPY content ./content
-RUN npm ci
+# We build from the repository root context so the portal can reuse `../docs/*`.
+WORKDIR /app/devportal
 
-FROM node:20-bookworm AS builder
+# NOTE: fumadocs-mdx runs on postinstall and requires source.config.ts + docs content.
+# Copy just enough for dependency install to succeed (before we copy the whole app).
+COPY devportal/package.json devportal/bun.lock devportal/source.config.ts devportal/tsconfig.json devportal/mdx-components.tsx ./
+COPY docs /app/docs
 
-WORKDIR /app
+RUN bun install --frozen-lockfile
+
+FROM oven/bun:1 AS builder
+
+WORKDIR /app/devportal
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps /app/devportal/node_modules ./node_modules
+COPY devportal/ ./
+COPY docs /app/docs
 
+# Some setups omit `public/`, but our runtime image expects it.
 RUN mkdir -p public
-RUN npm run build
+
+RUN bun run build
 
 # Railway (and many container runtimes) set $HOSTNAME to the container ID.
 # Next.js standalone uses that to bind, which can end up on a loopback address.
@@ -31,9 +37,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8080
 
 # Next.js standalone output
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/devportal/.next/standalone ./
+COPY --from=builder /app/devportal/.next/static ./.next/static
+COPY --from=builder /app/devportal/public ./public
 
 EXPOSE 8080
 

@@ -60,8 +60,8 @@ services:
 
   docs:
     build:
-      context: devportal
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: devportal/Dockerfile
     environment:
       - PORT=8080
       - BACKEND_API_URL=http://backend:8080
