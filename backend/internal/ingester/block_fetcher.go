@@ -140,6 +140,10 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					ChunkData:   payload,
 					Timestamp:   block.Timestamp,
 				})
+
+				// Keep raw.blocks.execution_result_id consistent with raw.execution_results.id
+				// when seals are not available from the access API.
+				dbBlock.ExecutionResultID = executionResultID
 			}
 		}
 
