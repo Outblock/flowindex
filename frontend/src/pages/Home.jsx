@@ -238,7 +238,10 @@ function Home() {
     // Only update if on first page
     if (blockPage === 1 && lastMessage.type === 'new_block') {
       const newBlock = lastMessage.payload;
-      setBlocks(prev => [newBlock, ...(prev || []).slice(0, 19)]);
+      setBlocks(prev => {
+        const next = [newBlock, ...(prev || [])];
+        return next.slice(0, 20);
+      });
       setNewBlockIds(prev => new Set(prev).add(newBlock.height));
       setTimeout(() => setNewBlockIds(prev => {
         const next = new Set(prev);
@@ -261,12 +264,15 @@ function Home() {
         payer: rawTx.payer_address || rawTx.proposer_address,
         blockHeight: rawTx.block_height
       };
-      const txIdKey = normalizeTxId(newTx.id);
+
       const exists = transactionsRef.current.some(
-        (tx) => normalizeTxId(tx?.id) === txIdKey,
+        (tx) => normalizeTxId(tx?.id) === normalizeTxId(newTx.id)
       );
 
-      setTransactions(prev => mergeTransactions(prev, [newTx], { prependNew: true }));
+      setTransactions(prev => {
+        const merged = mergeTransactions(prev, [newTx], { prependNew: true });
+        return merged.slice(0, 20);
+      });
 
       if (!exists) {
         setNewTxIds(prev => {
