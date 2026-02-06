@@ -3,10 +3,10 @@ package repository
 import "context"
 
 type AccountStorageSnapshot struct {
-	Address           string
-	StorageUsed       uint64
-	StorageCapacity   uint64
-	StorageAvailable  uint64
+	Address          string
+	StorageUsed      uint64
+	StorageCapacity  uint64
+	StorageAvailable uint64
 }
 
 func (r *Repository) GetAccountStorageSnapshot(ctx context.Context, address string) (*AccountStorageSnapshot, error) {

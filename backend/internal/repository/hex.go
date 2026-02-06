@@ -2,8 +2,8 @@ package repository
 
 import (
 	"encoding/hex"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 func normalizeHex(input string) string {
