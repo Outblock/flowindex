@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WSStatusContext, WSMessageContext } from '../contexts/WebSocketContext';
-
-const WS_URL = window.location.protocol === 'https:'
-    ? `wss://${window.location.host}/ws`
-    : `ws://${window.location.host}/ws`;
+import { WS_URL } from '../api';
 
 export function WebSocketProvider({ children }) {
     const [isConnected, setIsConnected] = useState(false);

@@ -333,11 +333,12 @@ function Home() {
 
     const statusTimer = setInterval(refreshStatus, 10000);
     const netStatsTimer = setInterval(refreshNetworkStats, 300000);
+    // Fallback polling when websocket is unavailable.
     const txRefreshTimer = setInterval(() => {
       if (txPageRef.current === 1) {
         loadTransactions(1);
       }
-    }, 15000);
+    }, 5000);
 
     return () => {
       clearInterval(statusTimer);

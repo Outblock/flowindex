@@ -10,7 +10,7 @@ const WS_BASE = (() => {
     ? `wss://${window.location.host}`
     : `ws://${window.location.host}`;
 })();
-const WS_URL = WS_BASE.endsWith('/ws') ? WS_BASE : `${WS_BASE}/ws`;
+export const WS_URL = WS_BASE.endsWith('/ws') ? WS_BASE : `${WS_BASE}/ws`;
 
 export const api = {
   getBlocks: (cursor = '', limit = 10) =>
