@@ -103,7 +103,7 @@ export default function Sidebar() {
                     {isCollapsed ? <ChevronRight className="h-5 w-5 shrink-0" /> : <ChevronLeft className="h-5 w-5 shrink-0" />}
                     {!isCollapsed && (
                         <span className="text-sm font-medium">
-                            Collapse Sidebar
+                            Collapse
                         </span>
                     )}
                 </button>

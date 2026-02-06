@@ -23,7 +23,7 @@ function App() {
         <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
           <IndexingStatus />
           <Header />
-          <main className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth focus:scroll-auto">
+          <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden relative scroll-smooth focus:scroll-auto">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/blocks/:height" element={<BlockDetail />} />
