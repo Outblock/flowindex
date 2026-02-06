@@ -8,7 +8,7 @@ import ApiDocs from './pages/ApiDocs';
 import { IndexingStatus } from './components/IndexingStatus';
 import Header from './components/Header';
 import Footer from './components/Footer';
-import { WebSocketProvider } from './hooks/useWebSocket';
+import { WebSocketProvider } from './components/WebSocketProvider';
 
 function App() {
   return (

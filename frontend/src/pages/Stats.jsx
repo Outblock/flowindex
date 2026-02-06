@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 // eslint-disable-next-line
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Activity, HardDrive, Server } from 'lucide-react';
+import NumberFlow from '@number-flow/react';
 import { api } from '../api';
 
 export default function Stats() {
@@ -83,6 +84,7 @@ export default function Stats() {
             clearInterval(interval);
             if (ws) ws.close();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [processStatus]);
 
     if (loading) {
@@ -195,23 +197,23 @@ export default function Stats() {
 
                     {/* Progress Bar */}
                     <div className="relative h-16 bg-black/50 border border-white/10 rounded-sm overflow-hidden mb-6">
-                        {/* Indexed portion (green gradient) */}
+                        {/* Indexed portion (solid green with glow) */}
                         <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${progressPercent}%` }}
                             transition={{ duration: 1, ease: "easeOut" }}
-                            className="absolute h-full bg-gradient-to-r from-nothing-green/30 to-nothing-green/60 border-r-2 border-nothing-green"
-                            style={{ boxShadow: '0 0 20px rgba(0, 255, 127, 0.3)' }}
+                            className="absolute h-full bg-nothing-green"
+                            style={{ boxShadow: '0 0 30px rgba(0, 255, 127, 0.5)' }}
                         />
                         {isForwardActive && (
-                            <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-20" />
+                            <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-30 mix-blend-overlay" />
                         )}
 
                         {/* Height Labels */}
-                        <div className="absolute inset-0 flex items-center justify-between px-4 text-xs font-mono">
-                            <span className="text-gray-400">Start: {startHeight.toLocaleString()}</span>
-                            <span className="text-nothing-green font-bold">Current: {indexedHeight.toLocaleString()}</span>
-                            <span className="text-gray-400">Latest: {latestHeight.toLocaleString()}</span>
+                        <div className="absolute inset-0 flex items-center justify-between px-4 text-xs font-mono drop-shadow-md">
+                            <span className="text-white mix-blend-screen font-bold">Start: <NumberFlow value={startHeight} format={{ useGrouping: true }} /></span>
+                            <span className="text-black font-bold mix-blend-screen bg-white/20 px-2 py-0.5 rounded">Current: <NumberFlow value={indexedHeight} format={{ useGrouping: true }} /></span>
+                            <span className="text-white mix-blend-screen font-bold">Latest: <NumberFlow value={latestHeight} format={{ useGrouping: true }} /></span>
                         </div>
                     </div>
 
@@ -219,16 +221,20 @@ export default function Stats() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="bg-black/30 border border-white/10 p-4">
                             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Blocks Behind</div>
-                            <div className="text-2xl font-bold text-nothing-pink">{blocksBehind.toLocaleString()}</div>
+                            <div className="text-2xl font-bold text-nothing-pink">
+                                <NumberFlow value={blocksBehind} format={{ useGrouping: true }} />
+                            </div>
                         </div>
                         <div className="bg-black/30 border border-white/10 p-4">
                             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Blocks Indexed</div>
-                            <div className="text-2xl font-bold text-nothing-green">{indexedRange.toLocaleString()}</div>
+                            <div className="text-2xl font-bold text-nothing-green">
+                                <NumberFlow value={indexedRange} format={{ useGrouping: true }} />
+                            </div>
                         </div>
                         <div className="bg-black/30 border border-white/10 p-4">
                             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Speed (blocks/s)</div>
                             <div className="text-2xl font-bold text-nothing-blue">
-                                {forwardEnabled ? blocksPerSecond.toFixed(1) : 'N/A'}
+                                <NumberFlow value={forwardEnabled ? blocksPerSecond : 0} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />
                             </div>
                         </div>
                         <div className="bg-black/30 border border-white/10 p-4">
@@ -337,27 +343,55 @@ export default function Stats() {
                             const progress = latestHeight > 0 && height > 0 ? Math.min(100, (height / latestHeight) * 100) : 0;
                             const config = workerConfig?.[worker.key] || {};
                             return (
-                                <div key={worker.key} className="bg-black/30 border border-white/10 p-4">
-                                    <div className="flex items-center justify-between text-gray-400 text-xs uppercase tracking-wider mb-1">
-                                        <span>{worker.label}</span>
-                                        <span className={`${enabled === false ? 'text-red-400' : 'text-nothing-green'}`}>
-                                            {enabled === false ? 'DISABLED' : 'ENABLED'}
-                                        </span>
+                                <div key={worker.key} className="bg-black/30 border border-white/10 p-5 hover:border-nothing-green/30 transition-all group">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-xs text-zinc-400 uppercase tracking-widest">{worker.label}</span>
+                                        <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : 'bg-nothing-green shadow-[0_0_8px_rgba(0,255,65,0.6)]'}`} />
                                     </div>
-                                    <div className="text-xl font-bold text-white">{height.toLocaleString()}</div>
-                                    <div className="mt-2 h-2 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-nothing-green/40 to-nothing-green/80"
-                                            style={{ width: `${progress}%` }}
-                                        />
+
+                                    <div className="mb-4">
+                                        <div className="text-2xl font-mono font-bold text-white mb-2">
+                                            <NumberFlow value={height} format={{ useGrouping: true }} />
+                                        </div>
+                                        <div className="h-1 bg-white/10 w-full rounded-sm overflow-hidden">
+                                            <div
+                                                className="h-full bg-nothing-green"
+                                                style={{ width: `${progress}%` }}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="mt-2 text-[10px] uppercase tracking-wider text-gray-500 space-x-2">
-                                        <span>{height > 0 ? `Behind: ${behind.toLocaleString()}` : 'No checkpoint yet'}</span>
-                                        {config.workers !== undefined ? <span>Workers: {config.workers}</span> : null}
-                                        {config.batch_size !== undefined ? <span>Batch: {config.batch_size}</span> : null}
-                                        {config.concurrency !== undefined ? <span>Concurrency: {config.concurrency}</span> : null}
-                                        {config.range !== undefined && config.range !== 0 ? <span>Range: {config.range}</span> : null}
-                                    </div>
+
+                                    {height > 0 && (
+                                        <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-y-3 gap-x-2">
+                                            <div className="col-span-2 flex items-center justify-between">
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Behind</span>
+                                                <span className="text-sm font-bold text-nothing-pink font-mono">
+                                                    <NumberFlow value={behind} format={{ useGrouping: true }} />
+                                                </span>
+                                            </div>
+
+                                            {config.concurrency !== undefined && (
+                                                <div className="bg-white/5 p-1.5 rounded text-center">
+                                                    <div className="text-[9px] text-zinc-500 uppercase">Concurrency</div>
+                                                    <div className="text-xs text-white font-mono">{config.concurrency}</div>
+                                                </div>
+                                            )}
+
+                                            {config.range !== undefined && config.range !== 0 && (
+                                                <div className="bg-white/5 p-1.5 rounded text-center">
+                                                    <div className="text-[9px] text-zinc-500 uppercase">Range</div>
+                                                    <div className="text-xs text-white font-mono">{config.range}</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Config Fallbacks if needed */}
+                                    {config.workers !== undefined && (
+                                        <div className="mt-2 text-[10px] text-zinc-600 uppercase">
+                                            Workers: {config.workers}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
@@ -379,19 +413,27 @@ export default function Stats() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-black/30 border border-white/10 p-4">
                             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Transactions</div>
-                            <div className="text-xl font-bold text-white">{(status?.total_transactions || 0).toLocaleString()}</div>
+                            <div className="text-xl font-bold text-white">
+                                <NumberFlow value={status?.total_transactions || 0} format={{ useGrouping: true }} />
+                            </div>
                         </div>
                         <div className="bg-black/30 border border-white/10 p-4">
                             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Events</div>
-                            <div className="text-xl font-bold text-white">{(status?.total_events || 0).toLocaleString()}</div>
+                            <div className="text-xl font-bold text-white">
+                                <NumberFlow value={status?.total_events || 0} format={{ useGrouping: true }} />
+                            </div>
                         </div>
                         <div className="bg-black/30 border border-white/10 p-4">
                             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Addresses</div>
-                            <div className="text-xl font-bold text-white">{(status?.total_addresses || 0).toLocaleString()}</div>
+                            <div className="text-xl font-bold text-white">
+                                <NumberFlow value={status?.total_addresses || 0} format={{ useGrouping: true }} />
+                            </div>
                         </div>
                         <div className="bg-black/30 border border-white/10 p-4">
                             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Smart Contracts</div>
-                            <div className="text-xl font-bold text-white">{(status?.total_contracts || 0).toLocaleString()}</div>
+                            <div className="text-xl font-bold text-white">
+                                <NumberFlow value={status?.total_contracts || 0} format={{ useGrouping: true }} />
+                            </div>
                         </div>
                     </div>
                 </motion.div>

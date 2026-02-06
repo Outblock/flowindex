@@ -9,8 +9,6 @@ function ApiDocs({ specUrl }) {
           url: specUrl,
           theme: 'deepSpace',
           darkMode: true,
-          forceDarkModeState: 'dark',
-          hideDarkModeToggle: true,
           showSidebar: true,
           hideDownloadButton: false,
           hideTestRequestButton: false,
