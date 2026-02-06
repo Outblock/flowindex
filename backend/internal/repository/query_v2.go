@@ -237,7 +237,7 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, `
-		SELECT transaction_id, block_height, token_contract_address, from_address, to_address, amount, token_id, event_index, is_nft, timestamp, created_at
+		SELECT transaction_id, block_height, token_contract_address, from_address, to_address, amount, COALESCE(token_id, '') AS token_id, event_index, is_nft, timestamp, created_at
 		FROM app.token_transfers
 		`+where+`
 		ORDER BY block_height DESC, event_index DESC
@@ -259,7 +259,7 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 
 func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, toHeight uint64, isNFT bool) ([]models.TokenTransfer, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT transaction_id, block_height, token_contract_address, from_address, to_address, amount, token_id, event_index, is_nft, timestamp, created_at
+		SELECT transaction_id, block_height, token_contract_address, from_address, to_address, amount, COALESCE(token_id, '') AS token_id, event_index, is_nft, timestamp, created_at
 		FROM app.token_transfers
 		WHERE block_height >= $1 AND block_height < $2 AND is_nft = $3
 		ORDER BY block_height ASC, event_index ASC`, fromHeight, toHeight, isNFT)
