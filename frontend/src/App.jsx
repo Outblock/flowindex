@@ -14,7 +14,7 @@ import { WebSocketProvider } from './components/WebSocketProvider';
 function App() {
   return (
     <WebSocketProvider>
-      <div className="bg-black min-h-screen text-zinc-300 font-mono antialiased selection:bg-nothing-green selection:text-black flex">
+      <div className="bg-gray-50 dark:bg-black min-h-screen text-zinc-700 dark:text-zinc-300 font-mono antialiased selection:bg-nothing-green selection:text-black flex transition-colors duration-300">
         {/* Sidebar */}
         <Sidebar />
 
