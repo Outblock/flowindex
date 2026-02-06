@@ -103,6 +103,7 @@ export default function Stats() {
     const forwardEnabled = status?.forward_enabled ?? true;
     const historyEnabled = status?.history_enabled ?? true;
     const workerEnabled = status?.worker_enabled || {};
+    const workerConfig = status?.worker_config || {};
     const generatedAt = status?.generated_at ? new Date(status.generated_at) : new Date();
 
     const checkpoints = status?.checkpoints || {};
@@ -331,9 +332,10 @@ export default function Stats() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         {workerOrder.map((worker) => {
                             const height = checkpoints?.[worker.key] || 0;
-                            const behind = latestHeight > height ? (latestHeight - height) : 0;
                             const enabled = workerEnabled?.[worker.key];
-                            const progress = latestHeight > 0 ? Math.min(100, (height / latestHeight) * 100) : 0;
+                            const behind = latestHeight > 0 && height > 0 ? (latestHeight - height) : 0;
+                            const progress = latestHeight > 0 && height > 0 ? Math.min(100, (height / latestHeight) * 100) : 0;
+                            const config = workerConfig?.[worker.key] || {};
                             return (
                                 <div key={worker.key} className="bg-black/30 border border-white/10 p-4">
                                     <div className="flex items-center justify-between text-gray-400 text-xs uppercase tracking-wider mb-1">
@@ -349,8 +351,12 @@ export default function Stats() {
                                             style={{ width: `${progress}%` }}
                                         />
                                     </div>
-                                    <div className="text-[10px] uppercase tracking-wider text-gray-500">
-                                        Behind: {behind.toLocaleString()}
+                                    <div className="mt-2 text-[10px] uppercase tracking-wider text-gray-500 space-x-2">
+                                        <span>{height > 0 ? `Behind: ${behind.toLocaleString()}` : 'No checkpoint yet'}</span>
+                                        {config.workers !== undefined ? <span>Workers: {config.workers}</span> : null}
+                                        {config.batch_size !== undefined ? <span>Batch: {config.batch_size}</span> : null}
+                                        {config.concurrency !== undefined ? <span>Concurrency: {config.concurrency}</span> : null}
+                                        {config.range !== undefined && config.range !== 0 ? <span>Range: {config.range}</span> : null}
                                     </div>
                                 </div>
                             );

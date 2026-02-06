@@ -516,6 +516,23 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
+	getEnvInt := func(key string, defaultVal int) int {
+		if valStr := os.Getenv(key); valStr != "" {
+			if val, err := strconv.Atoi(valStr); err == nil {
+				return val
+			}
+		}
+		return defaultVal
+	}
+	getEnvUint := func(key string, defaultVal uint64) uint64 {
+		if valStr := os.Getenv(key); valStr != "" {
+			if val, err := strconv.ParseUint(valStr, 10, 64); err == nil {
+				return val
+			}
+		}
+		return defaultVal
+	}
+
 	// Get indexed height from DB (Forward Tip)
 	lastIndexed, err := s.repo.GetLastIndexedHeight(ctx, "main_ingester")
 	if err != nil {
@@ -567,6 +584,45 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"nft_ownership_worker": os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false",
 		"tx_contracts_worker":  os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false",
 		"tx_metrics_worker":    os.Getenv("ENABLE_TX_METRICS_WORKER") != "false",
+	}
+
+	workerConfig := map[string]map[string]interface{}{
+		"main_ingester": {
+			"workers":    getEnvInt("LATEST_WORKER_COUNT", 1),
+			"batch_size": getEnvInt("LATEST_BATCH_SIZE", 1),
+		},
+		"history_ingester": {
+			"workers":    getEnvInt("HISTORY_WORKER_COUNT", 1),
+			"batch_size": getEnvInt("HISTORY_BATCH_SIZE", 1),
+		},
+		"token_worker": {
+			"concurrency": getEnvInt("TOKEN_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("TOKEN_WORKER_RANGE", 0),
+		},
+		"meta_worker": {
+			"concurrency": getEnvInt("META_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("META_WORKER_RANGE", 0),
+		},
+		"accounts_worker": {
+			"concurrency": getEnvInt("ACCOUNTS_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("ACCOUNTS_WORKER_RANGE", 0),
+		},
+		"ft_holdings_worker": {
+			"concurrency": getEnvInt("FT_HOLDINGS_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("FT_HOLDINGS_WORKER_RANGE", 0),
+		},
+		"nft_ownership_worker": {
+			"concurrency": getEnvInt("NFT_OWNERSHIP_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 0),
+		},
+		"tx_contracts_worker": {
+			"concurrency": getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("TX_CONTRACTS_WORKER_RANGE", 0),
+		},
+		"tx_metrics_worker": {
+			"concurrency": getEnvInt("TX_METRICS_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("TX_METRICS_WORKER_RANGE", 0),
+		},
 	}
 
 	// Get latest block height from Flow (bounded latency)
@@ -655,6 +711,7 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"forward_enabled":    forwardEnabled,
 		"history_enabled":    historyEnabled,
 		"worker_enabled":     workerEnabled,
+		"worker_config":      workerConfig,
 		"generated_at":       time.Now().UTC().Format(time.RFC3339),
 		"progress":           fmt.Sprintf("%.2f%%", progress),
 		"behind":             behind,
