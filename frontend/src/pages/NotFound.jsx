@@ -9,9 +9,6 @@ function NotFound() {
             <GridScan scanColor="#9effe2" className="absolute inset-0 pointer-events-none" />
 
             <div className="relative z-10 space-y-6 max-w-lg mx-auto">
-                <h1 className="text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-white/10 tracking-tighter">
-                    404
-                </h1>
                 <div className="space-y-2">
                     <h2 className="text-2xl font-bold text-white uppercase tracking-widest">Page Not Found</h2>
                     <p className="text-zinc-400 font-mono text-sm leading-relaxed">
