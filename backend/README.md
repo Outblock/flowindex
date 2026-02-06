@@ -34,8 +34,11 @@ Ingest / Worker:
 | `MAX_REORG_DEPTH` | `1000` | Reorg safety window |
 | `ENABLE_HISTORY_INGESTER` | `true` | Enable history backfill |
 | `ENABLE_TOKEN_WORKER` | `true` | Enable token worker |
+| `ENABLE_EVM_WORKER` | `true` | Enable EVM worker |
 | `TOKEN_WORKER_RANGE` | `50000` | Token worker lease range |
+| `EVM_WORKER_RANGE` | `50000` | EVM worker lease range |
 | `TOKEN_WORKER_CONCURRENCY` | `1` | Token worker concurrency |
+| `EVM_WORKER_CONCURRENCY` | `1` | EVM worker concurrency |
 | `ENABLE_META_WORKER` | `true` | Enable meta worker |
 | `META_WORKER_RANGE` | `50000` | Meta worker lease range |
 | `META_WORKER_CONCURRENCY` | `1` | Meta worker concurrency |

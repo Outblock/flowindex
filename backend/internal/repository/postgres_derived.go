@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"flowscan-clone/internal/models"
 
@@ -166,6 +167,98 @@ func (r *Repository) UpsertAddressTransactions(ctx context.Context, rows []model
 			return fmt.Errorf("upsert address transactions: %w", err)
 		}
 	}
+	return nil
+}
+
+// UpsertEVMTxHashes inserts EVM hash mappings derived from raw.events.
+// It also keeps app.evm_transactions populated with a single representative hash per Cadence tx.
+func (r *Repository) UpsertEVMTxHashes(ctx context.Context, rows []models.EVMTxHash) error {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+
+	batch := &pgx.Batch{}
+	for _, row := range rows {
+		ts := row.Timestamp
+		if ts.IsZero() {
+			ts = now
+		}
+		createdAt := row.CreatedAt
+		if createdAt.IsZero() {
+			createdAt = now
+		}
+
+		batch.Queue(`
+			INSERT INTO app.evm_tx_hashes (
+				block_height, transaction_id, evm_hash,
+				event_index, timestamp, created_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (block_height, transaction_id, event_index, evm_hash) DO NOTHING`,
+			row.BlockHeight,
+			hexToBytes(row.TransactionID),
+			hexToBytes(row.EVMHash),
+			row.EventIndex,
+			ts,
+			createdAt,
+		)
+	}
+
+	br := r.db.SendBatch(ctx, batch)
+	defer br.Close()
+
+	for i := 0; i < len(rows); i++ {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("upsert evm_tx_hashes: %w", err)
+		}
+	}
+
+	type txKey struct {
+		blockHeight uint64
+		transaction string
+	}
+	firstByTx := make(map[txKey]models.EVMTxHash)
+	for _, row := range rows {
+		key := txKey{blockHeight: row.BlockHeight, transaction: row.TransactionID}
+		existing, ok := firstByTx[key]
+		if !ok || row.EventIndex < existing.EventIndex {
+			firstByTx[key] = row
+		}
+	}
+
+	summaryBatch := &pgx.Batch{}
+	for _, row := range firstByTx {
+		ts := row.Timestamp
+		if ts.IsZero() {
+			ts = now
+		}
+		summaryBatch.Queue(`
+			INSERT INTO app.evm_transactions (
+				block_height, transaction_id, evm_hash,
+				timestamp, created_at
+			)
+			VALUES ($1, $2, $3, $4, NOW())
+			ON CONFLICT (block_height, transaction_id) DO UPDATE SET
+				evm_hash = COALESCE(app.evm_transactions.evm_hash, EXCLUDED.evm_hash),
+				timestamp = EXCLUDED.timestamp`,
+			row.BlockHeight,
+			hexToBytes(row.TransactionID),
+			hexToBytes(row.EVMHash),
+			ts,
+		)
+	}
+
+	br2 := r.db.SendBatch(ctx, summaryBatch)
+	defer br2.Close()
+
+	for i := 0; i < len(firstByTx); i++ {
+		if _, err := br2.Exec(); err != nil {
+			return fmt.Errorf("upsert evm_transactions summary: %w", err)
+		}
+	}
+
 	return nil
 }
 

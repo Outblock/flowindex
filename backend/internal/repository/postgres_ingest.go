@@ -1,0 +1,848 @@
+package repository
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"flowscan-clone/internal/models"
+
+	"github.com/jackc/pgx/v5"
+)
+
+// SaveBatch atomicially saves a batch of blocks and all related data
+// SaveBatch saves a batch of blocks and related data atomically
+func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, collections []models.Collection, executionResults []models.ExecutionResult, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, accountKeys []models.AccountKey, serviceName string, checkpointHeight uint64) error {
+	if len(blocks) == 0 {
+		return nil
+	}
+
+	enableDerivedWrites := os.Getenv("ENABLE_DERIVED_WRITES") == "true"
+
+	minHeight := blocks[0].Height
+	maxHeight := blocks[0].Height
+	for _, b := range blocks {
+		if b.Height < minHeight {
+			minHeight = b.Height
+		}
+		if b.Height > maxHeight {
+			maxHeight = b.Height
+		}
+	}
+
+	if err := r.EnsureRawPartitions(ctx, minHeight, maxHeight); err != nil {
+		return err
+	}
+	if enableDerivedWrites {
+		if err := r.EnsureAppPartitions(ctx, minHeight, maxHeight); err != nil {
+			return err
+		}
+	}
+
+	dbtx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer dbtx.Rollback(ctx)
+
+	// Indexing data is reconstructable from the chain. For high-throughput ingestion, we can trade
+	// a small durability window for speed by disabling synchronous commit at the transaction level.
+	// This is opt-in via env var to keep the default conservative.
+	if strings.ToLower(strings.TrimSpace(os.Getenv("DB_SYNCHRONOUS_COMMIT"))) == "off" {
+		// Best-effort: if this fails, continue with default settings.
+		_, _ = dbtx.Exec(ctx, "SET LOCAL synchronous_commit = off")
+	}
+
+	// Precompute block timestamps for downstream inserts
+	blockTimeByHeight := make(map[uint64]time.Time, len(blocks))
+
+	// 1. Insert Blocks
+	hasHeavyBlockPayloads := false
+	for _, b := range blocks {
+		blockTimeByHeight[b.Height] = b.Timestamp
+		if len(b.CollectionGuarantees) > 0 || len(b.BlockSeals) > 0 || len(b.Signatures) > 0 || strings.TrimSpace(b.ExecutionResultID) != "" {
+			hasHeavyBlockPayloads = true
+		}
+	}
+
+	// Hot path: bulk upsert blocks + block_lookup in ~2 statements instead of 2*len(blocks).
+	//
+	// NOTE: this path intentionally skips the heavy JSON payload columns (collection_guarantees,
+	// seals, signatures). If STORE_BLOCK_PAYLOADS is enabled (and we received non-empty payloads),
+	// we fall back to the slower per-row UPSERT to preserve those columns.
+	if !hasHeavyBlockPayloads && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+		heights := make([]int64, len(blocks))
+		ids := make([][]byte, len(blocks))
+		parentIDs := make([][]byte, len(blocks))
+		timestamps := make([]time.Time, len(blocks))
+		collectionCounts := make([]int32, len(blocks))
+		txCounts := make([]int64, len(blocks))
+		eventCounts := make([]int64, len(blocks))
+		stateRootHashes := make([][]byte, len(blocks))
+		totalGasUsed := make([]int64, len(blocks))
+		isSealed := make([]bool, len(blocks))
+
+		for i, b := range blocks {
+			heights[i] = int64(b.Height)
+			ids[i] = hexToBytes(b.ID)
+			parentIDs[i] = hexToBytes(b.ParentID)
+			timestamps[i] = b.Timestamp
+			collectionCounts[i] = int32(b.CollectionCount)
+			txCounts[i] = int64(b.TxCount)
+			eventCounts[i] = int64(b.EventCount)
+			stateRootHashes[i] = hexToBytes(b.StateRootHash)
+			totalGasUsed[i] = int64(b.TotalGasUsed)
+			isSealed[i] = b.IsSealed
+		}
+
+		_, err := dbtx.Exec(ctx, `
+			INSERT INTO raw.blocks (
+				height, id, parent_id, timestamp,
+				collection_count, tx_count, event_count,
+				state_root_hash, total_gas_used, is_sealed
+			)
+			SELECT
+				u.height,
+				u.id,
+				u.parent_id,
+				u.timestamp,
+				u.collection_count,
+				u.tx_count,
+				u.event_count,
+				u.state_root_hash,
+				u.total_gas_used,
+				u.is_sealed
+			FROM UNNEST(
+				$1::bigint[],      -- height
+				$2::bytea[],       -- id
+				$3::bytea[],       -- parent_id
+				$4::timestamptz[], -- timestamp
+				$5::int[],         -- collection_count
+				$6::bigint[],      -- tx_count
+				$7::bigint[],      -- event_count
+				$8::bytea[],       -- state_root_hash
+				$9::bigint[],      -- total_gas_used
+				$10::bool[]        -- is_sealed
+			) AS u(
+				height, id, parent_id, timestamp,
+				collection_count, tx_count, event_count,
+				state_root_hash, total_gas_used, is_sealed
+			)
+			ON CONFLICT (height) DO UPDATE SET
+				id = EXCLUDED.id,
+				parent_id = EXCLUDED.parent_id,
+				timestamp = EXCLUDED.timestamp,
+				collection_count = EXCLUDED.collection_count,
+				tx_count = EXCLUDED.tx_count,
+				event_count = EXCLUDED.event_count,
+				state_root_hash = EXCLUDED.state_root_hash,
+				total_gas_used = EXCLUDED.total_gas_used,
+				is_sealed = EXCLUDED.is_sealed
+		`, heights, ids, parentIDs, timestamps, collectionCounts, txCounts, eventCounts, stateRootHashes, totalGasUsed, isSealed)
+		if err != nil {
+			return fmt.Errorf("failed to bulk upsert blocks: %w", err)
+		}
+
+		_, err = dbtx.Exec(ctx, `
+			INSERT INTO raw.block_lookup (id, height, timestamp)
+			SELECT DISTINCT ON (u.id)
+				u.id,
+				u.height,
+				u.timestamp
+			FROM UNNEST($1::bytea[], $2::bigint[], $3::timestamptz[]) AS u(id, height, timestamp)
+			ORDER BY u.id, u.height DESC
+			ON CONFLICT (id) DO UPDATE SET
+				height = EXCLUDED.height,
+				timestamp = EXCLUDED.timestamp
+		`, ids, heights, timestamps)
+		if err != nil {
+			return fmt.Errorf("failed to bulk upsert block lookup: %w", err)
+		}
+	} else {
+		for _, b := range blocks {
+			// Insert into partitioned raw.blocks
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, execution_result_id, total_gas_used, is_sealed)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+				ON CONFLICT (height) DO UPDATE SET
+					id = EXCLUDED.id,
+					tx_count = EXCLUDED.tx_count,
+					event_count = EXCLUDED.event_count,
+					state_root_hash = EXCLUDED.state_root_hash,
+					collection_guarantees = EXCLUDED.collection_guarantees,
+					block_seals = EXCLUDED.block_seals,
+					signatures = EXCLUDED.signatures,
+					execution_result_id = EXCLUDED.execution_result_id,
+					is_sealed = EXCLUDED.is_sealed`,
+				b.Height,
+				hexToBytes(b.ID),
+				hexToBytes(b.ParentID),
+				b.Timestamp,
+				b.CollectionCount,
+				b.TxCount,
+				b.EventCount,
+				hexToBytes(b.StateRootHash),
+				b.CollectionGuarantees,
+				b.BlockSeals,
+				b.Signatures,
+				hexToBytes(b.ExecutionResultID),
+				b.TotalGasUsed,
+				b.IsSealed,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert block %d: %w", b.Height, err)
+			}
+
+			// Insert into raw.block_lookup (Atomic Lookup)
+			_, err = dbtx.Exec(ctx, `
+				INSERT INTO raw.block_lookup (id, height, timestamp)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (id) DO UPDATE SET
+					height = EXCLUDED.height,
+					timestamp = EXCLUDED.timestamp`,
+				hexToBytes(b.ID), b.Height, b.Timestamp,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert block lookup %d: %w", b.Height, err)
+			}
+		}
+	}
+
+	// 2. Insert Transactions
+	scriptInlineMaxBytes := 0
+	if v := os.Getenv("TX_SCRIPT_INLINE_MAX_BYTES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			scriptInlineMaxBytes = n
+		}
+	}
+
+	// Precompute script hashes and upsert unique scripts in one statement (reduces DB round trips).
+	scriptHashes := make([]string, len(txs))
+	scriptInlines := make([]string, len(txs))
+	scriptsByHash := make(map[string]string)
+	for i := range txs {
+		scriptText := strings.TrimSpace(txs[i].Script)
+		if scriptText == "" {
+			continue
+		}
+		sum := sha256.Sum256([]byte(scriptText))
+		scriptHash := hex.EncodeToString(sum[:])
+		scriptHashes[i] = scriptHash
+		if _, ok := scriptsByHash[scriptHash]; !ok {
+			scriptsByHash[scriptHash] = scriptText
+		}
+		if scriptInlineMaxBytes > 0 && len(scriptText) <= scriptInlineMaxBytes {
+			scriptInlines[i] = scriptText
+		}
+	}
+
+	if len(scriptsByHash) > 0 {
+		hashes := make([]string, 0, len(scriptsByHash))
+		texts := make([]string, 0, len(scriptsByHash))
+		for h, t := range scriptsByHash {
+			hashes = append(hashes, h)
+			texts = append(texts, t)
+		}
+		_, err := dbtx.Exec(ctx, `
+			INSERT INTO raw.scripts (script_hash, script_text, created_at)
+			SELECT u.script_hash, u.script_text, NOW()
+			FROM UNNEST($1::text[], $2::text[]) AS u(script_hash, script_text)
+			ON CONFLICT (script_hash) DO NOTHING
+		`, hashes, texts)
+		if err != nil {
+			return fmt.Errorf("failed to upsert raw.scripts batch: %w", err)
+		}
+	}
+
+	// Fast path: bulk COPY raw.transactions inside a savepoint.
+	// If COPY fails (e.g. due to a duplicate key), we roll back to the savepoint and fall back to UPSERT loops.
+	usedCopyForTx := false
+	if len(txs) > 0 && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+		batchCreatedAt := time.Now()
+		sub, err := dbtx.Begin(ctx) // savepoint
+		if err == nil {
+			defer sub.Rollback(ctx)
+
+			_, errTx := sub.CopyFrom(ctx,
+				pgx.Identifier{"raw", "transactions"},
+				[]string{
+					"block_height", "id", "transaction_index",
+					"proposer_address", "payer_address", "authorizers",
+					"script_hash", "script", "arguments",
+					"status", "error_message", "is_evm",
+					"gas_limit", "gas_used", "event_count",
+					"timestamp",
+				},
+				pgx.CopyFromSlice(len(txs), func(i int) ([]any, error) {
+					t := txs[i]
+
+					// Ensure timestamp is present; default to block timestamp if missing
+					txTimestamp := t.Timestamp
+					if txTimestamp.IsZero() {
+						if ts, ok := blockTimeByHeight[t.BlockHeight]; ok {
+							txTimestamp = ts
+						}
+					}
+					if txTimestamp.IsZero() {
+						txTimestamp = batchCreatedAt
+					}
+
+					eventCount := t.EventCount
+					if eventCount == 0 {
+						eventCount = len(t.Events)
+					}
+
+					var scriptHash any
+					if scriptHashes[i] != "" {
+						scriptHash = scriptHashes[i]
+					}
+					var scriptInline any
+					if scriptInlines[i] != "" {
+						scriptInline = scriptInlines[i]
+					}
+
+					var args any
+					if len(t.Arguments) > 0 {
+						args = t.Arguments
+					}
+
+					var errMsg any
+					if strings.TrimSpace(t.ErrorMessage) != "" {
+						errMsg = t.ErrorMessage
+					}
+
+					return []any{
+						t.BlockHeight,
+						hexToBytes(t.ID),
+						t.TransactionIndex,
+						hexToBytes(t.ProposerAddress),
+						hexToBytes(t.PayerAddress),
+						sliceHexToBytes(t.Authorizers),
+						scriptHash,
+						scriptInline,
+						args,
+						t.Status,
+						errMsg,
+						t.IsEVM,
+						t.GasLimit,
+						t.GasUsed,
+						eventCount,
+						txTimestamp,
+					}, nil
+				}),
+			)
+
+			if errTx == nil {
+				if err := sub.Commit(ctx); err == nil {
+					usedCopyForTx = true
+				}
+			}
+
+			if !usedCopyForTx {
+				_ = sub.Rollback(ctx)
+			}
+		}
+	}
+
+	// raw.tx_lookup needs UPSERT semantics (id is globally unique). We batch UPSERT it with UNNEST
+	// so we don't spam the DB with per-row inserts, while still being idempotent across retries.
+	if usedCopyForTx {
+		ids := make([][]byte, len(txs))
+		heights := make([]int64, len(txs))
+		txIndexes := make([]int32, len(txs))
+		timestamps := make([]time.Time, len(txs))
+
+		batchCreatedAt := time.Now()
+
+		for i := range txs {
+			t := txs[i]
+			ids[i] = hexToBytes(t.ID)
+			heights[i] = int64(t.BlockHeight)
+			txIndexes[i] = int32(t.TransactionIndex)
+
+			// Keep the same timestamp fallback as raw.transactions COPY.
+			ts := t.Timestamp
+			if ts.IsZero() {
+				if bts, ok := blockTimeByHeight[t.BlockHeight]; ok {
+					ts = bts
+				}
+			}
+			if ts.IsZero() {
+				ts = batchCreatedAt
+			}
+			timestamps[i] = ts
+		}
+
+		_, err := dbtx.Exec(ctx, `
+			INSERT INTO raw.tx_lookup (id, block_height, transaction_index, timestamp)
+			SELECT DISTINCT ON (u.id)
+				u.id, u.block_height, u.transaction_index, u.timestamp
+			FROM UNNEST($1::bytea[], $2::bigint[], $3::int[], $4::timestamptz[]) AS u(
+				id, block_height, transaction_index, timestamp
+			)
+			ORDER BY u.id, u.block_height DESC, u.transaction_index DESC
+			ON CONFLICT (id) DO UPDATE SET
+				block_height = EXCLUDED.block_height,
+				transaction_index = EXCLUDED.transaction_index,
+				timestamp = EXCLUDED.timestamp
+		`, ids, heights, txIndexes, timestamps)
+		if err != nil {
+			return fmt.Errorf("failed to upsert tx_lookup batch: %w", err)
+		}
+	}
+
+	// Fallback: row-by-row UPSERT (safe, slower).
+	if !usedCopyForTx {
+		for i, t := range txs {
+			// Ensure timestamp is present; default to block timestamp if missing
+			txTimestamp := t.Timestamp
+			if txTimestamp.IsZero() {
+				if ts, ok := blockTimeByHeight[t.BlockHeight]; ok {
+					txTimestamp = ts
+				}
+			}
+			if txTimestamp.IsZero() {
+				txTimestamp = time.Now()
+			}
+			eventCount := t.EventCount
+			if eventCount == 0 {
+				eventCount = len(t.Events)
+			}
+
+			var scriptHash any
+			if scriptHashes[i] != "" {
+				scriptHash = scriptHashes[i]
+			}
+			var scriptInline any
+			if scriptInlines[i] != "" {
+				scriptInline = scriptInlines[i]
+			}
+
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.transactions (
+					block_height, id, transaction_index,
+					proposer_address, payer_address, authorizers,
+					script_hash, script, arguments,
+					status, error_message, is_evm,
+					gas_limit, gas_used, event_count,
+					timestamp
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+				ON CONFLICT (block_height, id) DO UPDATE SET
+					transaction_index = EXCLUDED.transaction_index,
+					status = EXCLUDED.status,
+					error_message = EXCLUDED.error_message,
+					gas_used = EXCLUDED.gas_used,
+					event_count = EXCLUDED.event_count,
+					is_evm = EXCLUDED.is_evm,
+					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash)`,
+				t.BlockHeight, hexToBytes(t.ID), t.TransactionIndex,
+				hexToBytes(t.ProposerAddress), hexToBytes(t.PayerAddress), sliceHexToBytes(t.Authorizers),
+				scriptHash, scriptInline, t.Arguments,
+				t.Status, func() any {
+					if strings.TrimSpace(t.ErrorMessage) == "" {
+						return nil
+					}
+					return t.ErrorMessage
+				}(), t.IsEVM,
+				t.GasLimit, t.GasUsed, eventCount,
+				txTimestamp,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
+			}
+
+			// Insert into raw.tx_lookup (Atomic Lookup)
+			_, err = dbtx.Exec(ctx, `
+				INSERT INTO raw.tx_lookup (id, block_height, transaction_index, timestamp)
+				VALUES ($1, $2, $3, $4)
+				ON CONFLICT (id) DO UPDATE SET
+					block_height = EXCLUDED.block_height,
+					transaction_index = EXCLUDED.transaction_index,
+					timestamp = EXCLUDED.timestamp`,
+				hexToBytes(t.ID), t.BlockHeight, t.TransactionIndex, txTimestamp,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert tx lookup %s: %w", t.ID, err)
+			}
+		}
+	}
+
+	// 3. Insert Events
+	usedCopyForEvents := false
+	if len(events) > 0 && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+		sub, err := dbtx.Begin(ctx) // savepoint
+		if err == nil {
+			defer sub.Rollback(ctx)
+
+			_, errCopy := sub.CopyFrom(ctx,
+				pgx.Identifier{"raw", "events"},
+				[]string{
+					"block_height", "transaction_id", "event_index",
+					"transaction_index", "type", "payload",
+					"contract_address", "event_name",
+					"timestamp",
+				},
+				pgx.CopyFromSlice(len(events), func(i int) ([]any, error) {
+					e := events[i]
+
+					eventTimestamp := e.Timestamp
+					if eventTimestamp.IsZero() {
+						if ts, ok := blockTimeByHeight[e.BlockHeight]; ok {
+							eventTimestamp = ts
+						}
+					}
+					if eventTimestamp.IsZero() {
+						eventTimestamp = time.Now()
+					}
+
+					var payload any
+					if len(e.Payload) > 0 {
+						payload = e.Payload
+					}
+
+					return []any{
+						e.BlockHeight,
+						hexToBytes(e.TransactionID),
+						e.EventIndex,
+						e.TransactionIndex,
+						e.Type,
+						payload,
+						hexToBytes(e.ContractAddress),
+						e.EventName,
+						eventTimestamp,
+					}, nil
+				}),
+			)
+			if errCopy == nil {
+				if err := sub.Commit(ctx); err == nil {
+					usedCopyForEvents = true
+				}
+			}
+
+			if !usedCopyForEvents {
+				_ = sub.Rollback(ctx)
+			}
+		}
+	}
+
+	if !usedCopyForEvents {
+		for _, e := range events {
+			eventTimestamp := e.Timestamp
+			if eventTimestamp.IsZero() {
+				if ts, ok := blockTimeByHeight[e.BlockHeight]; ok {
+					eventTimestamp = ts
+				}
+			}
+			if eventTimestamp.IsZero() {
+				eventTimestamp = time.Now()
+			}
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.events (
+					block_height, transaction_id, event_index,
+					transaction_index, type, payload,
+					contract_address, event_name,
+					timestamp
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+				ON CONFLICT (block_height, transaction_id, event_index) DO NOTHING`,
+				e.BlockHeight, hexToBytes(e.TransactionID), e.EventIndex,
+				e.TransactionIndex, e.Type, e.Payload,
+				hexToBytes(e.ContractAddress), e.EventName,
+				eventTimestamp,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert event: %w", err)
+			}
+		}
+	}
+
+	// 3.1 Insert Collections (if enabled)
+	usedCopyForCollections := false
+	if len(collections) > 0 && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+		sub, err := dbtx.Begin(ctx)
+		if err == nil {
+			defer sub.Rollback(ctx)
+
+			_, errCopy := sub.CopyFrom(ctx,
+				pgx.Identifier{"raw", "collections"},
+				[]string{
+					"block_height", "id",
+					"guarantor_ids", "signer_ids", "signatures",
+					"transaction_ids", "timestamp",
+				},
+				pgx.CopyFromSlice(len(collections), func(i int) ([]any, error) {
+					c := collections[i]
+					collectionTimestamp := c.Timestamp
+					if collectionTimestamp.IsZero() {
+						if ts, ok := blockTimeByHeight[c.BlockHeight]; ok {
+							collectionTimestamp = ts
+						}
+					}
+					if collectionTimestamp.IsZero() {
+						collectionTimestamp = time.Now()
+					}
+
+					return []any{
+						c.BlockHeight,
+						hexToBytes(c.ID),
+						nil,
+						nil,
+						nil,
+						sliceHexToBytes(c.TransactionIDs),
+						collectionTimestamp,
+					}, nil
+				}),
+			)
+			if errCopy == nil {
+				if err := sub.Commit(ctx); err == nil {
+					usedCopyForCollections = true
+				}
+			}
+
+			if !usedCopyForCollections {
+				_ = sub.Rollback(ctx)
+			}
+		}
+	}
+
+	if !usedCopyForCollections {
+		for _, c := range collections {
+			collectionTimestamp := c.Timestamp
+			if collectionTimestamp.IsZero() {
+				if ts, ok := blockTimeByHeight[c.BlockHeight]; ok {
+					collectionTimestamp = ts
+				}
+			}
+			if collectionTimestamp.IsZero() {
+				collectionTimestamp = time.Now()
+			}
+
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.collections (
+					block_height, id,
+					guarantor_ids, signer_ids, signatures,
+					transaction_ids, timestamp
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+				ON CONFLICT (block_height, id) DO NOTHING`,
+				c.BlockHeight,
+				hexToBytes(c.ID),
+				nil,
+				nil,
+				nil,
+				sliceHexToBytes(c.TransactionIDs),
+				collectionTimestamp,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert collection: %w", err)
+			}
+		}
+	}
+
+	// 3.2 Insert Execution Results (if enabled)
+	if len(executionResults) > 0 {
+		for _, er := range executionResults {
+			var payload any
+			if len(er.ChunkData) > 0 {
+				payload = er.ChunkData
+			}
+
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.execution_results (
+					block_height, id, chunk_data, timestamp
+				)
+				VALUES ($1, $2, $3, $4)
+				ON CONFLICT (block_height, id) DO UPDATE SET
+					chunk_data = COALESCE(EXCLUDED.chunk_data, raw.execution_results.chunk_data),
+					timestamp = EXCLUDED.timestamp`,
+				er.BlockHeight,
+				hexToBytes(er.ID),
+				payload,
+				er.Timestamp,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert execution result: %w", err)
+			}
+		}
+	}
+
+	// 4. Insert Account Keys (app schema)
+	if enableDerivedWrites {
+		for _, ak := range accountKeys {
+			// Revocation events update state by (address, key_index).
+			if ak.Revoked && ak.PublicKey == "" {
+				_, err := dbtx.Exec(ctx, `
+					UPDATE app.account_keys
+					SET revoked = TRUE,
+						revoked_at_height = $3,
+						last_updated_height = $3,
+						updated_at = NOW()
+					WHERE address = $1 AND key_index = $2
+					  AND $3 >= last_updated_height`,
+					hexToBytes(ak.Address), ak.KeyIndex, ak.RevokedAtHeight,
+				)
+				if err != nil {
+					return fmt.Errorf("failed to update account key revoke: %w", err)
+				}
+				continue
+			}
+
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO app.account_keys (
+					address, key_index, public_key,
+					signing_algorithm, hashing_algorithm, weight,
+					revoked, added_at_height, revoked_at_height, last_updated_height,
+					created_at, updated_at
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+				ON CONFLICT (address, key_index) DO UPDATE SET
+					public_key = EXCLUDED.public_key,
+					signing_algorithm = EXCLUDED.signing_algorithm,
+					hashing_algorithm = EXCLUDED.hashing_algorithm,
+					weight = EXCLUDED.weight,
+					revoked = EXCLUDED.revoked,
+					added_at_height = COALESCE(app.account_keys.added_at_height, EXCLUDED.added_at_height),
+					revoked_at_height = CASE WHEN EXCLUDED.revoked THEN EXCLUDED.revoked_at_height ELSE NULL END,
+					last_updated_height = EXCLUDED.last_updated_height,
+					updated_at = NOW()
+				WHERE EXCLUDED.last_updated_height >= app.account_keys.last_updated_height`,
+				hexToBytes(ak.Address), ak.KeyIndex, hexToBytes(ak.PublicKey),
+				parseSmallInt(ak.SigningAlgorithm), parseSmallInt(ak.HashingAlgorithm), ak.Weight,
+				ak.Revoked, ak.AddedAtHeight, func() *uint64 {
+					if ak.RevokedAtHeight == 0 {
+						return nil
+					}
+					return &ak.RevokedAtHeight
+				}(), ak.LastUpdatedHeight,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to upsert account key: %w", err)
+			}
+		}
+	}
+
+	// 4. Insert Address Activity (app.address_transactions)
+	// NOTE: Check if table 'app.address_transactions' exists. User schema didn't have it.
+	// We'll trust availability for query support.
+	if enableDerivedWrites {
+		for _, aa := range addressActivity {
+			_, err := dbtx.Exec(ctx, `
+			INSERT INTO app.address_transactions (address, transaction_id, block_height, role)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (address, block_height, transaction_id, role) DO NOTHING`,
+				hexToBytes(aa.Address), hexToBytes(aa.TransactionID), aa.BlockHeight, aa.Role,
+			)
+			if err != nil {
+				// Fail softly here if table missing? No, fail hard so I know to fix it.
+				return fmt.Errorf("failed to insert addr tx: %w", err)
+			}
+		}
+	}
+
+	// 5. Update Address Stats
+	// Sort unique addresses to prevent deadlocks
+	if enableDerivedWrites {
+		uniqueAddresses := make(map[string]bool)
+		for _, aa := range addressActivity {
+			uniqueAddresses[aa.Address] = true
+		}
+
+		sortedAddresses := make([]string, 0, len(uniqueAddresses))
+		for addr := range uniqueAddresses {
+			sortedAddresses = append(sortedAddresses, addr)
+		}
+		sort.Strings(sortedAddresses)
+
+		for _, addr := range sortedAddresses {
+			// Find any activity for this address to get the block height
+			var blockHeight uint64
+			for _, aa := range addressActivity {
+				if aa.Address == addr {
+					blockHeight = aa.BlockHeight
+					break
+				}
+			}
+
+			// app.address_stats
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO app.address_stats (address, tx_count, total_gas_used, last_updated_block, created_at, updated_at)
+				VALUES ($1, 1, 0, $2, NOW(), NOW())
+				ON CONFLICT (address) DO UPDATE SET 
+					tx_count = app.address_stats.tx_count + 1,
+					last_updated_block = GREATEST(app.address_stats.last_updated_block, EXCLUDED.last_updated_block),
+					updated_at = NOW()`,
+				hexToBytes(addr), blockHeight,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to update address stats for %s: %w", addr, err)
+			}
+		}
+	}
+
+	// 6. Track Smart Contracts (app schema)
+	if enableDerivedWrites {
+		for _, e := range events {
+			if strings.Contains(e.Type, "AccountContractAdded") || strings.Contains(e.Type, "AccountContractUpdated") {
+				var payload map[string]interface{}
+				if err := json.Unmarshal(e.Payload, &payload); err == nil {
+					address, _ := payload["address"].(string)
+					name, _ := payload["name"].(string)
+					if address != "" && name != "" {
+						_, err := dbtx.Exec(ctx, `
+								INSERT INTO app.smart_contracts (address, name, last_updated_height, created_at, updated_at)
+								VALUES ($1, $2, $3, $4, $5)
+								ON CONFLICT (address, name) DO UPDATE SET
+								last_updated_height = EXCLUDED.last_updated_height,
+								version = app.smart_contracts.version + 1,
+								updated_at = EXCLUDED.updated_at`,
+							hexToBytes(address), name, e.BlockHeight, time.Now(), time.Now(),
+						)
+						if err != nil {
+							return fmt.Errorf("failed to track contract %s: %w", name, err)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 7. Update Checkpoint (app schema)
+	_, err = dbtx.Exec(ctx, `
+		INSERT INTO app.indexing_checkpoints (service_name, last_height, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (service_name) DO UPDATE SET last_height = EXCLUDED.last_height, updated_at = EXCLUDED.updated_at`,
+		serviceName, checkpointHeight, time.Now(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update checkpoint: %w", err)
+	}
+
+	return dbtx.Commit(ctx)
+}
+
+// SaveBlockOnly inserts a block without affecting the checkpoint or other tables.
+// Used for pre-insertion in batches to satisfy FK constraints.
+func (r *Repository) SaveBlockOnly(ctx context.Context, block models.Block) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, total_gas_used, is_sealed)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (height) DO NOTHING`,
+		block.Height, hexToBytes(block.ID), hexToBytes(block.ParentID), block.Timestamp, block.CollectionCount, block.TotalGasUsed, block.IsSealed,
+	)
+	if err != nil {
+		// Log ALL errors for debugging
+		fmt.Printf("DB Error (Block %d): %v\n", block.Height, err)
+		return err
+	}
+	return nil
+}
+
+// --- Read Methods ---

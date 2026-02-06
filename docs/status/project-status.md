@@ -68,6 +68,5 @@ Use this section as a template for deployment-specific tracking.
    - Split `raw` and `app` into separate DBs in Phase 2.
 
 ## Open Items
-- EVM worker (write into `app.evm_transactions`).
 - Token/NFT global list pages.
 - Long-term storage strategy for `raw.events.payload`.

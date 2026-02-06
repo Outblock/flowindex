@@ -61,6 +61,9 @@ func (r *Repository) RollbackFromHeight(ctx context.Context, rollbackHeight uint
 	if _, err := tx.Exec(ctx, "DELETE FROM app.evm_transactions WHERE block_height >= $1", rollbackHeight); err != nil {
 		return fmt.Errorf("rollback app.evm_transactions: %w", err)
 	}
+	if _, err := tx.Exec(ctx, "DELETE FROM app.evm_tx_hashes WHERE block_height >= $1", rollbackHeight); err != nil {
+		return fmt.Errorf("rollback app.evm_tx_hashes: %w", err)
+	}
 	if _, err := tx.Exec(ctx, "DELETE FROM app.address_transactions WHERE block_height >= $1", rollbackHeight); err != nil {
 		return fmt.Errorf("rollback app.address_transactions: %w", err)
 	}

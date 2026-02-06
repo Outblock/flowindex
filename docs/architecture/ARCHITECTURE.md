@@ -70,6 +70,7 @@ Raw/App dual-layer design. Raw is append-only; App is query-optimized.
 - `app.indexing_checkpoints` (resumability)
 - `app.worker_leases` (lease-based concurrency)
 - `app.evm_transactions` (EVM-derived)
+- `app.evm_tx_hashes` (Cadence tx -> multiple EVM hash mappings)
 
 ### Partitioning Strategy
 ```mermaid

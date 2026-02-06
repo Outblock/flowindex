@@ -140,6 +140,7 @@ func main() {
 	historyBatch := getEnvInt("HISTORY_BATCH_SIZE", 20) // Throughput
 	maxReorgDepth := getEnvUint("MAX_REORG_DEPTH", 1000)
 	tokenWorkerRange := getEnvUint("TOKEN_WORKER_RANGE", 50000)
+	evmWorkerRange := getEnvUint("EVM_WORKER_RANGE", 50000)
 	metaWorkerRange := getEnvUint("META_WORKER_RANGE", 50000)
 	accountsWorkerRange := getEnvUint("ACCOUNTS_WORKER_RANGE", 50000)
 	ftHoldingsWorkerRange := getEnvUint("FT_HOLDINGS_WORKER_RANGE", 50000)
@@ -147,6 +148,7 @@ func main() {
 	txContractsWorkerRange := getEnvUint("TX_CONTRACTS_WORKER_RANGE", 50000)
 	txMetricsWorkerRange := getEnvUint("TX_METRICS_WORKER_RANGE", 50000)
 	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
+	evmWorkerConcurrency := getEnvInt("EVM_WORKER_CONCURRENCY", 1)
 	metaWorkerConcurrency := getEnvInt("META_WORKER_CONCURRENCY", 1)
 	accountsWorkerConcurrency := getEnvInt("ACCOUNTS_WORKER_CONCURRENCY", 1)
 	ftHoldingsWorkerConcurrency := getEnvInt("FT_HOLDINGS_WORKER_CONCURRENCY", 1)
@@ -195,6 +197,7 @@ func main() {
 
 	// Async Workers (optional)
 	enableTokenWorker := os.Getenv("ENABLE_TOKEN_WORKER") != "false"
+	enableEVMWorker := os.Getenv("ENABLE_EVM_WORKER") != "false"
 	enableMetaWorker := os.Getenv("ENABLE_META_WORKER") != "false"
 	enableAccountsWorker := os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false"
 	enableFTHoldingsWorker := os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false"
@@ -204,6 +207,8 @@ func main() {
 
 	var tokenWorkerProcessor *ingester.TokenWorker
 	var tokenWorkers []*ingester.AsyncWorker
+	var evmWorkerProcessor *ingester.EVMWorker
+	var evmWorkers []*ingester.AsyncWorker
 	var metaWorkerProcessor *ingester.MetaWorker
 	var metaWorkers []*ingester.AsyncWorker
 	var accountsWorkerProcessor *ingester.AccountsWorker
@@ -217,7 +222,7 @@ func main() {
 	var txMetricsWorkerProcessor *ingester.TxMetricsWorker
 	var txMetricsWorkers []*ingester.AsyncWorker
 
-	workerTypes := make([]string, 0, 7)
+	workerTypes := make([]string, 0, 8)
 
 	if enableTokenWorker {
 		tokenWorkerProcessor = ingester.NewTokenWorker(repo)
@@ -235,6 +240,24 @@ func main() {
 		workerTypes = append(workerTypes, tokenWorkerProcessor.Name())
 	} else {
 		log.Println("Token Worker is DISABLED (ENABLE_TOKEN_WORKER=false)")
+	}
+
+	if enableEVMWorker {
+		evmWorkerProcessor = ingester.NewEVMWorker(repo)
+		if evmWorkerConcurrency < 1 {
+			evmWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < evmWorkerConcurrency; i++ {
+			evmWorkers = append(evmWorkers, ingester.NewAsyncWorker(evmWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: evmWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-evm-%d", hostname, pid, i),
+			}))
+		}
+		workerTypes = append(workerTypes, evmWorkerProcessor.Name())
+	} else {
+		log.Println("EVM Worker is DISABLED (ENABLE_EVM_WORKER=false)")
 	}
 
 	if enableMetaWorker {
@@ -414,6 +437,16 @@ func main() {
 
 	if enableMetaWorker {
 		for _, worker := range metaWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableEVMWorker {
+		for _, worker := range evmWorkers {
 			wg.Add(1)
 			go func(w *ingester.AsyncWorker) {
 				defer wg.Done()

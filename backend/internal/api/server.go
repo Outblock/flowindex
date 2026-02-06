@@ -159,11 +159,11 @@ type BroadcastMessage struct {
 }
 
 type WSBlock struct {
-	Height    uint64    `json:"height"`
-	ID        string    `json:"id"`
-	Timestamp time.Time `json:"timestamp"`
-	TxCount   int       `json:"tx_count"`
-	EventCount int      `json:"event_count"`
+	Height     uint64    `json:"height"`
+	ID         string    `json:"id"`
+	Timestamp  time.Time `json:"timestamp"`
+	TxCount    int       `json:"tx_count"`
+	EventCount int       `json:"event_count"`
 }
 
 type WSTransaction struct {
@@ -337,11 +337,13 @@ func registerV1Routes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/v1/ft", s.handleFlowListFTTokens).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/ft/{token}", s.handleFlowGetFTToken).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/ft/{token}/holding", s.handleFlowFTHoldingsByToken).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/ft/{token}/top-account", s.handleFlowTopFTAccounts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/ft/{token}/account/{address}", s.handleFlowAccountFTHoldingByToken).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/transfer", s.handleFlowNFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft", s.handleFlowListNFTCollections).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/{nft_type}", s.handleFlowGetNFTCollection).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/{nft_type}/holding", s.handleFlowNFTHoldingsByCollection).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/nft/{nft_type}/top-account", s.handleFlowTopNFTAccounts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/{nft_type}/item/{id}", s.handleFlowNFTItem).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/contract", s.handleFlowListContracts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/contract/{identifier}", s.handleFlowGetContract).Methods("GET", "OPTIONS")
@@ -447,11 +449,13 @@ func registerV2Routes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/v1/ft", s.handleFlowListFTTokens).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/ft/{token}", s.handleFlowGetFTToken).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/ft/{token}/holding", s.handleFlowFTHoldingsByToken).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/ft/{token}/top-account", s.handleFlowTopFTAccounts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/ft/{token}/account/{address}", s.handleFlowAccountFTHoldingByToken).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/transfer", s.handleFlowNFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft", s.handleFlowListNFTCollections).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/{nft_type}", s.handleFlowGetNFTCollection).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/{nft_type}/holding", s.handleFlowNFTHoldingsByCollection).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/nft/{nft_type}/top-account", s.handleFlowTopNFTAccounts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/{nft_type}/item/{id}", s.handleFlowNFTItem).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/contract", s.handleFlowListContracts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/contract/{identifier}", s.handleFlowGetContract).Methods("GET", "OPTIONS")
@@ -623,6 +627,7 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"main_ingester":        forwardEnabled,
 		"history_ingester":     historyEnabled,
 		"token_worker":         os.Getenv("ENABLE_TOKEN_WORKER") != "false",
+		"evm_worker":           os.Getenv("ENABLE_EVM_WORKER") != "false",
 		"meta_worker":          os.Getenv("ENABLE_META_WORKER") != "false",
 		"accounts_worker":      os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false",
 		"ft_holdings_worker":   os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false",
@@ -643,6 +648,10 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"token_worker": {
 			"concurrency": getEnvInt("TOKEN_WORKER_CONCURRENCY", 1),
 			"range":       getEnvUint("TOKEN_WORKER_RANGE", 0),
+		},
+		"evm_worker": {
+			"concurrency": getEnvInt("EVM_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("EVM_WORKER_RANGE", 0),
 		},
 		"meta_worker": {
 			"concurrency": getEnvInt("META_WORKER_CONCURRENCY", 1),

@@ -25,6 +25,7 @@ This is the final publish list of environment variables used by the backend. Rai
 
 - `ENABLE_DERIVED_WRITES` (default: false)
 - `ENABLE_TOKEN_WORKER` (default: true)
+- `ENABLE_EVM_WORKER` (default: true)
 - `ENABLE_META_WORKER` (default: true)
 - `ENABLE_ACCOUNTS_WORKER` (default: true)
 - `ENABLE_FT_HOLDINGS_WORKER` (default: true)
@@ -32,6 +33,7 @@ This is the final publish list of environment variables used by the backend. Rai
 - `ENABLE_TX_CONTRACTS_WORKER` (default: true)
 - `ENABLE_TX_METRICS_WORKER` (default: true)
 - `TOKEN_WORKER_RANGE` (default: 50000)
+- `EVM_WORKER_RANGE` (default: 50000)
 - `META_WORKER_RANGE` (default: 50000)
 - `ACCOUNTS_WORKER_RANGE` (default: 50000)
 - `FT_HOLDINGS_WORKER_RANGE` (default: 50000)
@@ -39,6 +41,7 @@ This is the final publish list of environment variables used by the backend. Rai
 - `TX_CONTRACTS_WORKER_RANGE` (default: 50000)
 - `TX_METRICS_WORKER_RANGE` (default: 50000)
 - `TOKEN_WORKER_CONCURRENCY` (default: 1)
+- `EVM_WORKER_CONCURRENCY` (default: 1)
 - `META_WORKER_CONCURRENCY` (default: 1)
 - `ACCOUNTS_WORKER_CONCURRENCY` (default: 1)
 - `FT_HOLDINGS_WORKER_CONCURRENCY` (default: 1)

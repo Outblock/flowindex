@@ -1016,6 +1016,21 @@ func (s *Server) handleFlowFTHoldingsByToken(w http.ResponseWriter, r *http.Requ
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
 
+func (s *Server) handleFlowTopFTAccounts(w http.ResponseWriter, r *http.Request) {
+	token := normalizeTokenParam(mux.Vars(r)["token"])
+	limit, offset := parseLimitOffset(r)
+	holdings, err := s.repo.ListFTHoldingsByToken(r.Context(), token, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(holdings))
+	for _, h := range holdings {
+		out = append(out, toFTHoldingOutput(h, 0))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
 func (s *Server) handleFlowAccountFTHoldingByToken(w http.ResponseWriter, r *http.Request) {
 	address := normalizeAddr(mux.Vars(r)["address"])
 	token := normalizeTokenParam(mux.Vars(r)["token"])
@@ -1076,6 +1091,25 @@ func (s *Server) handleFlowNFTHoldingsByCollection(w http.ResponseWriter, r *htt
 		out = append(out, toNFTHoldingOutput(row.Owner, row.Count, percentage, collection))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) handleFlowTopNFTAccounts(w http.ResponseWriter, r *http.Request) {
+	collection := normalizeTokenParam(mux.Vars(r)["nft_type"])
+	limit, offset := parseLimitOffset(r)
+	rows, total, err := s.repo.ListNFTOwnerCountsByCollection(r.Context(), collection, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		percentage := 0.0
+		if total > 0 {
+			percentage = float64(row.Count) / float64(total)
+		}
+		out = append(out, toNFTHoldingOutput(row.Owner, row.Count, percentage, collection))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "total_nfts": total}, nil)
 }
 
 func (s *Server) handleFlowNFTItem(w http.ResponseWriter, r *http.Request) {

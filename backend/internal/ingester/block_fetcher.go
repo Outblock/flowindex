@@ -2,14 +2,11 @@ package ingester
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -33,7 +30,6 @@ type FetchResult struct {
 	AddressActivity  []models.AddressTransaction
 	TokenTransfers   []models.TokenTransfer
 	AccountKeys      []models.AccountKey
-	EVMTxHashes      []models.EVMTxHash
 	Error            error
 }
 
@@ -224,7 +220,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 		var dbTxs []models.Transaction
 		var dbEvents []models.Event
-		var evmTxHashes []models.EVMTxHash
 
 		now := time.Now()
 
@@ -358,21 +353,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				// Detect EVM Events
 				if strings.Contains(evt.Type, "EVM.") {
 					isEVM = true
-					if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
-						if h := extractEVMHash(payload); h != "" {
-							if dbTx.EVMHash == "" {
-								dbTx.EVMHash = h
-							}
-							evmTxHashes = append(evmTxHashes, models.EVMTxHash{
-								BlockHeight:   height,
-								TransactionID: txID,
-								EVMHash:       h,
-								EventIndex:    evt.EventIndex,
-								Timestamp:     block.Timestamp,
-								CreatedAt:     now,
-							})
-						}
-					}
 				}
 			}
 
@@ -391,7 +371,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		result.Block = &dbBlock
 		result.Transactions = dbTxs
 		result.Events = dbEvents
-		result.EVMTxHashes = evmTxHashes
 		return result
 	}
 
@@ -662,141 +641,4 @@ func (w *Worker) flattenCadenceValue(v cadence.Value) interface{} {
 	default:
 		return val.String()
 	}
-}
-
-func extractEVMHash(payload interface{}) string {
-	m, ok := payload.(map[string]interface{})
-	if !ok {
-		return ""
-	}
-
-	keys := []string{"hash", "transactionHash", "txHash", "evmHash"}
-	for _, key := range keys {
-		if v, ok := m[key]; ok {
-			if h := normalizeEVMHashValue(v); h != "" {
-				return h
-			}
-		}
-	}
-
-	return ""
-}
-
-func normalizeEVMHashValue(value interface{}) string {
-	switch v := value.(type) {
-	case string:
-		return normalizeHexString(v)
-	case []byte:
-		if len(v) == 0 {
-			return ""
-		}
-		return hex.EncodeToString(v)
-	case []interface{}:
-		if b, ok := bytesFromInterfaceArray(v); ok && len(b) > 0 {
-			return hex.EncodeToString(b)
-		}
-	}
-	return ""
-}
-
-func normalizeHexString(input string) string {
-	s := strings.TrimSpace(input)
-	if s == "" {
-		return ""
-	}
-	s = strings.ToLower(s)
-	s = strings.TrimPrefix(strings.TrimPrefix(s, "0x"), "\\x")
-	return s
-}
-
-func bytesFromInterfaceArray(values []interface{}) ([]byte, bool) {
-	out := make([]byte, 0, len(values))
-	for _, v := range values {
-		b, ok := interfaceToByte(v)
-		if !ok {
-			return nil, false
-		}
-		out = append(out, b)
-	}
-	return out, true
-}
-
-func interfaceToByte(value interface{}) (byte, bool) {
-	switch v := value.(type) {
-	case uint8:
-		return v, true
-	case uint16:
-		if v > math.MaxUint8 {
-			return 0, false
-		}
-		return byte(v), true
-	case uint32:
-		if v > math.MaxUint8 {
-			return 0, false
-		}
-		return byte(v), true
-	case uint64:
-		if v > math.MaxUint8 {
-			return 0, false
-		}
-		return byte(v), true
-	case int:
-		if v < 0 || v > math.MaxUint8 {
-			return 0, false
-		}
-		return byte(v), true
-	case int8:
-		if v < 0 {
-			return 0, false
-		}
-		return byte(v), true
-	case int16:
-		if v < 0 || v > math.MaxUint8 {
-			return 0, false
-		}
-		return byte(v), true
-	case int32:
-		if v < 0 || v > math.MaxUint8 {
-			return 0, false
-		}
-		return byte(v), true
-	case int64:
-		if v < 0 || v > math.MaxUint8 {
-			return 0, false
-		}
-		return byte(v), true
-	case float64:
-		if v < 0 || v > math.MaxUint8 || v != math.Trunc(v) {
-			return 0, false
-		}
-		return byte(v), true
-	case string:
-		return parseByteString(v)
-	default:
-		return 0, false
-	}
-}
-
-func parseByteString(value string) (byte, bool) {
-	s := strings.TrimSpace(value)
-	if s == "" {
-		return 0, false
-	}
-	if strings.HasPrefix(strings.ToLower(s), "0x") {
-		s = s[2:]
-		if len(s) == 0 {
-			return 0, false
-		}
-		if n, err := strconv.ParseUint(s, 16, 8); err == nil {
-			return byte(n), true
-		}
-		return 0, false
-	}
-	if n, err := strconv.ParseUint(s, 10, 8); err == nil {
-		return byte(n), true
-	}
-	if n, err := strconv.ParseUint(s, 16, 8); err == nil {
-		return byte(n), true
-	}
-	return 0, false
 }
