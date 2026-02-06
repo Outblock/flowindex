@@ -1,16 +1,28 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 const WS_URL = window.location.protocol === 'https:'
   ? `wss://${window.location.host}/ws`
   : `ws://${window.location.host}/ws`;
 
-export function useWebSocket() {
+const WSStatusContext = createContext({ isConnected: false });
+const WSMessageContext = createContext({ subscribe: () => () => {} });
+
+export function WebSocketProvider({ children }) {
   const [isConnected, setIsConnected] = useState(false);
-  const [lastMessage, setLastMessage] = useState(null);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
-
+  const listenersRef = useRef(new Set());
   const connectRef = useRef(null);
+
+  const notify = useCallback((payload) => {
+    listenersRef.current.forEach((listener) => {
+      try {
+        listener(payload);
+      } catch (err) {
+        console.error('WebSocket listener error:', err);
+      }
+    });
+  }, []);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -19,23 +31,20 @@ export function useWebSocket() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('WebSocket Connected');
       setIsConnected(true);
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        setLastMessage(data);
+        notify(data);
       } catch (e) {
         console.error('Failed to parse WebSocket message:', e);
       }
     };
 
     ws.onclose = () => {
-      console.log('WebSocket Disconnected');
       setIsConnected(false);
-      // Auto-reconnect after 3 seconds
       reconnectTimeoutRef.current = setTimeout(() => {
         if (connectRef.current) {
           connectRef.current();
@@ -47,9 +56,8 @@ export function useWebSocket() {
       console.error('WebSocket Error:', error);
       ws.close();
     };
-  }, []);
+  }, [notify]);
 
-  // Update ref
   useEffect(() => {
     connectRef.current = connect;
   }, [connect]);
@@ -66,5 +74,37 @@ export function useWebSocket() {
     };
   }, [connect]);
 
-  return { isConnected, lastMessage };
+  const subscribe = useCallback((listener) => {
+    listenersRef.current.add(listener);
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const statusValue = useMemo(() => ({ isConnected }), [isConnected]);
+  const messageValue = useMemo(() => ({ subscribe }), [subscribe]);
+
+  return (
+    <WSStatusContext.Provider value={statusValue}>
+      <WSMessageContext.Provider value={messageValue}>
+        {children}
+      </WSMessageContext.Provider>
+    </WSStatusContext.Provider>
+  );
+}
+
+export function useWebSocketStatus() {
+  return useContext(WSStatusContext);
+}
+
+export function useWebSocketMessages() {
+  const { subscribe } = useContext(WSMessageContext);
+  const [lastMessage, setLastMessage] = useState(null);
+
+  useEffect(() => {
+    if (!subscribe) return undefined;
+    return subscribe(setLastMessage);
+  }, [subscribe]);
+
+  return { lastMessage };
 }

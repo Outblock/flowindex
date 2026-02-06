@@ -158,19 +158,63 @@ type BroadcastMessage struct {
 	Payload interface{} `json:"payload"`
 }
 
+type WSBlock struct {
+	Height    uint64    `json:"height"`
+	ID        string    `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	TxCount   int       `json:"tx_count"`
+	EventCount int      `json:"event_count"`
+}
+
+type WSTransaction struct {
+	ID              string    `json:"id"`
+	BlockHeight     uint64    `json:"block_height"`
+	Status          string    `json:"status"`
+	PayerAddress    string    `json:"payer_address,omitempty"`
+	ProposerAddress string    `json:"proposer_address,omitempty"`
+	Timestamp       time.Time `json:"timestamp"`
+	ExecutionStatus string    `json:"execution_status,omitempty"`
+	ErrorMessage    string    `json:"error_message,omitempty"`
+}
+
 func BroadcastNewBlock(block models.Block) {
+	ts := block.Timestamp
+	if ts.IsZero() {
+		ts = block.CreatedAt
+	}
+	payload := WSBlock{
+		Height:     block.Height,
+		ID:         block.ID,
+		Timestamp:  ts,
+		TxCount:    block.TxCount,
+		EventCount: block.EventCount,
+	}
 	msg := BroadcastMessage{
 		Type:    "new_block",
-		Payload: block,
+		Payload: payload,
 	}
 	data, _ := json.Marshal(msg)
 	hub.broadcast <- data
 }
 
 func BroadcastNewTransaction(tx models.Transaction) {
+	ts := tx.Timestamp
+	if ts.IsZero() {
+		ts = tx.CreatedAt
+	}
+	payload := WSTransaction{
+		ID:              tx.ID,
+		BlockHeight:     tx.BlockHeight,
+		Status:          tx.Status,
+		PayerAddress:    tx.PayerAddress,
+		ProposerAddress: tx.ProposerAddress,
+		Timestamp:       ts,
+		ExecutionStatus: tx.ExecutionStatus,
+		ErrorMessage:    tx.ErrorMessage,
+	}
 	msg := BroadcastMessage{
 		Type:    "new_transaction",
-		Payload: tx,
+		Payload: payload,
 	}
 	data, _ := json.Marshal(msg)
 	hub.broadcast <- data

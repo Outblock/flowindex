@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Activity, TrendingUp, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../api';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
 import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
 import { NetworkStats } from '../components/NetworkStats';
@@ -34,7 +34,8 @@ function Home() {
   const [newTxIds, setNewTxIds] = useState(new Set());
   // Removed unused refs and state
 
-  const { isConnected, lastMessage } = useWebSocket();
+  const { isConnected } = useWebSocketStatus();
+  const { lastMessage } = useWebSocketMessages();
   const nowTick = useTimeTicker(20000);
   const transactionsRef = useRef([]);
 

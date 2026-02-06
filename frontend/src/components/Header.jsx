@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Box, Search } from 'lucide-react';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useWebSocketStatus } from '../hooks/useWebSocket';
 
 function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
-  const { isConnected } = useWebSocket();
+  const { isConnected } = useWebSocketStatus();
 
   const handleSearch = (e) => {
     e.preventDefault();
