@@ -406,6 +406,9 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 			}
 			if s.config.OnNewTransaction != nil {
 				for _, tx := range res.Transactions {
+					if isSystemFlowTransaction(tx) {
+						continue
+					}
 					s.config.OnNewTransaction(tx)
 				}
 			}
@@ -435,4 +438,9 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 	}
 
 	return nil
+}
+
+func isSystemFlowTransaction(tx models.Transaction) bool {
+	return strings.EqualFold(strings.TrimSpace(tx.PayerAddress), "0000000000000000") &&
+		strings.EqualFold(strings.TrimSpace(tx.ProposerAddress), "0000000000000000")
 }
