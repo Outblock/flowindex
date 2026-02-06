@@ -26,6 +26,7 @@ type FetchResult struct {
 	Transactions    []models.Transaction
 	Events          []models.Event
 	Collections     []models.Collection
+	ExecutionResults []models.ExecutionResult
 	AddressActivity []models.AddressTransaction
 	TokenTransfers  []models.TokenTransfer
 	AccountKeys     []models.AccountKey
@@ -92,6 +93,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		// Optional: store heavy block payloads (signatures/seals/guarantees). Most explorer
 		// pages don't need these, and they add significant write + storage overhead.
 		storeBlockPayloads := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_BLOCK_PAYLOADS"))) != "false"
+		storeExecutionResults := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_EXECUTION_RESULTS"))) != "false"
 		var collGuarantees []byte
 		var blockSeals []byte
 		var signatures []byte
@@ -118,6 +120,27 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			BlockStatus:          "BLOCK_SEALED", // Default for indexed blocks
 			ExecutionResultID:    executionResultID,
 			IsSealed:             true,
+		}
+
+		if storeExecutionResults {
+			execResult, execErr := pin.GetExecutionResultForBlockID(ctx, block.ID)
+			if execErr != nil {
+				if shouldRepin(execErr) {
+					continue
+				}
+				log.Printf("[ingester] warn: failed to get execution result for block %s (height=%d): %v", block.ID, height, execErr)
+			} else if execResult != nil {
+				payload, _ := json.Marshal(execResult)
+				if executionResultID == "" {
+					executionResultID = block.ID.String()
+				}
+				result.ExecutionResults = append(result.ExecutionResults, models.ExecutionResult{
+					BlockHeight: block.Height,
+					ID:          executionResultID,
+					ChunkData:   payload,
+					Timestamp:   block.Timestamp,
+				})
+			}
 		}
 
 		if storeCollections && len(collections) > 0 {

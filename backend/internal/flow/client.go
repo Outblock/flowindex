@@ -515,6 +515,19 @@ func (p *PinnedClient) GetTransactionResultsByBlockID(ctx context.Context, block
 	return results, nil
 }
 
+// GetExecutionResultForBlockID fetches execution result for a block.
+func (p *PinnedClient) GetExecutionResultForBlockID(ctx context.Context, blockID flow.Identifier) (*flow.ExecutionResult, error) {
+	var result *flow.ExecutionResult
+	if err := p.withRetry(ctx, func() error {
+		var err error
+		result, err = p.cli.GetExecutionResultForBlockID(ctx, blockID)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (p *PinnedClient) GetTransaction(ctx context.Context, txID flow.Identifier) (*flow.Transaction, error) {
 	var tx *flow.Transaction
 	if err := p.withRetry(ctx, func() error {

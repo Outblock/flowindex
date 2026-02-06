@@ -81,7 +81,7 @@ func (r *Repository) GetLastIndexedHeight(ctx context.Context, serviceName strin
 
 // SaveBatch atomicially saves a batch of blocks and all related data
 // SaveBatch saves a batch of blocks and related data atomically
-func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, collections []models.Collection, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, accountKeys []models.AccountKey, serviceName string, checkpointHeight uint64) error {
+func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, collections []models.Collection, executionResults []models.ExecutionResult, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, accountKeys []models.AccountKey, serviceName string, checkpointHeight uint64) error {
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -730,6 +730,33 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert collection: %w", err)
+			}
+		}
+	}
+
+	// 3.2 Insert Execution Results (if enabled)
+	if len(executionResults) > 0 {
+		for _, er := range executionResults {
+			var payload any
+			if len(er.ChunkData) > 0 {
+				payload = er.ChunkData
+			}
+
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.execution_results (
+					block_height, id, chunk_data, timestamp
+				)
+				VALUES ($1, $2, $3, $4)
+				ON CONFLICT (block_height, id) DO UPDATE SET
+					chunk_data = COALESCE(EXCLUDED.chunk_data, raw.execution_results.chunk_data),
+					timestamp = EXCLUDED.timestamp`,
+				er.BlockHeight,
+				hexToBytes(er.ID),
+				payload,
+				er.Timestamp,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert execution result: %w", err)
 			}
 		}
 	}

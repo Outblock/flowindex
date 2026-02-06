@@ -106,6 +106,14 @@ type Collection struct {
 	Timestamp      time.Time `json:"timestamp"`
 }
 
+// ExecutionResult represents block execution result (raw.execution_results)
+type ExecutionResult struct {
+	BlockHeight uint64          `json:"block_height"`
+	ID          string          `json:"id"`
+	ChunkData   json.RawMessage `json:"chunk_data"`
+	Timestamp   time.Time       `json:"timestamp"`
+}
+
 // TokenTransfer represents 'token_transfers' (Fungible & NFT)
 type TokenTransfer struct {
 	ID                   int       `json:"id"`
