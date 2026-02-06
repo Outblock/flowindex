@@ -458,6 +458,16 @@ CREATE TABLE IF NOT EXISTS app.ft_tokens (
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS app.coa_accounts (
+    coa_address   VARCHAR(64) PRIMARY KEY,
+    flow_address  VARCHAR(64) NOT NULL,
+    transaction_id VARCHAR(64),
+    block_height  BIGINT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_coa_accounts_flow ON app.coa_accounts (flow_address);
+
 CREATE TABLE IF NOT EXISTS app.ft_holdings (
     address          VARCHAR(18) NOT NULL,
     contract_address VARCHAR(255) NOT NULL,

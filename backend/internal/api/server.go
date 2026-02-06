@@ -267,6 +267,7 @@ func registerLegacyRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/stats/daily", s.handleGetDailyStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/stats/network", s.handleGetNetworkStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/keys/{publicKey}", s.handleGetAddressByPublicKey).Methods("GET", "OPTIONS")
+	r.HandleFunc("/coa/{address}", s.handleGetCOAMapping).Methods("GET", "OPTIONS")
 }
 
 func registerV1Routes(r *mux.Router, s *Server) {

@@ -760,6 +760,34 @@ func (s *Server) handleFlowAccountNFTTransfers(w http.ResponseWriter, r *http.Re
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
+func (s *Server) handleGetCOAMapping(w http.ResponseWriter, r *http.Request) {
+	coa := normalizeAddr(mux.Vars(r)["address"])
+	if coa == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid coa address")
+		return
+	}
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
+	row, err := s.repo.GetFlowAddressByCOA(r.Context(), coa)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if row == nil {
+		writeAPIError(w, http.StatusNotFound, "mapping not found")
+		return
+	}
+	out := map[string]interface{}{
+		"coa_address":    row.COAAddress,
+		"flow_address":   formatAddressV1(row.FlowAddress),
+		"transaction_id": row.TransactionID,
+		"block_height":   row.BlockHeight,
+	}
+	writeAPIResponse(w, []interface{}{out}, nil, nil)
+}
+
 func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
 	height, err := parseHeightParam(r.URL.Query().Get("height"))

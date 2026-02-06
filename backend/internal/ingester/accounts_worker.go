@@ -33,6 +33,8 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 	}
 
 	seen := make(map[string]*models.AccountCatalog)
+	coaMappings := make(map[string]models.COAAccount)
+	txByID := make(map[string]models.Transaction, len(txs))
 
 	add := func(addr string, height uint64) {
 		addr = normalizeAddressLower(addr)
@@ -55,16 +57,57 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 		}
 	}
 
+	for _, tx := range txs {
+		txByID[tx.ID] = tx
+	}
+
 	for _, evt := range events {
-		if !strings.Contains(evt.Type, "AccountCreated") {
+		if evt.Type == "flow.AccountCreated" {
+			var payload map[string]interface{}
+			if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+				continue
+			}
+			if addr, ok := payload["address"].(string); ok {
+				add(addr, evt.BlockHeight)
+			}
 			continue
 		}
-		var payload map[string]interface{}
-		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
-			continue
-		}
-		if addr, ok := payload["address"].(string); ok {
-			add(addr, evt.BlockHeight)
+
+		if strings.Contains(evt.Type, "CadenceOwnedAccountCreated") {
+			var payload map[string]interface{}
+			if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+				continue
+			}
+			coaAddr, ok := payload["address"].(string)
+			if !ok || coaAddr == "" {
+				continue
+			}
+			coaAddr = normalizeAddressLower(coaAddr)
+			if coaAddr == "" {
+				continue
+			}
+			tx, ok := txByID[evt.TransactionID]
+			if !ok {
+				continue
+			}
+			owner := ""
+			if len(tx.Authorizers) > 0 {
+				owner = tx.Authorizers[0]
+			} else if tx.PayerAddress != "" {
+				owner = tx.PayerAddress
+			} else {
+				owner = tx.ProposerAddress
+			}
+			owner = normalizeAddressLower(owner)
+			if owner == "" {
+				continue
+			}
+			coaMappings[coaAddr] = models.COAAccount{
+				COAAddress:    coaAddr,
+				FlowAddress:   owner,
+				TransactionID: evt.TransactionID,
+				BlockHeight:   evt.BlockHeight,
+			}
 		}
 	}
 
@@ -80,7 +123,20 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 	for _, v := range seen {
 		accounts = append(accounts, *v)
 	}
-	return w.repo.UpsertAccounts(ctx, accounts)
+	if err := w.repo.UpsertAccounts(ctx, accounts); err != nil {
+		return err
+	}
+
+	if len(coaMappings) > 0 {
+		rows := make([]models.COAAccount, 0, len(coaMappings))
+		for _, v := range coaMappings {
+			rows = append(rows, v)
+		}
+		if err := w.repo.UpsertCOAAccounts(ctx, rows); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func normalizeAddressLower(addr string) string {

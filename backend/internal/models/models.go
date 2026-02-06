@@ -114,6 +114,16 @@ type TokenTransfer struct {
 	CreatedAt            time.Time `json:"created_at"`
 }
 
+// COAAccount maps a Cadence Owned Account (EVM/COA) address to a Flow address.
+type COAAccount struct {
+	COAAddress    string    `json:"coa_address"`
+	FlowAddress   string    `json:"flow_address"`
+	TransactionID string    `json:"transaction_id"`
+	BlockHeight   uint64    `json:"block_height"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 // NFTTransfer represents the 'nft_transfers' table
 type NFTTransfer struct {
 	ID                   int       `json:"id"`
@@ -239,9 +249,9 @@ type NFTOwnership struct {
 
 // TxContract represents app.tx_contracts
 type TxContract struct {
-	TransactionID     string `json:"transaction_id"`
+	TransactionID      string `json:"transaction_id"`
 	ContractIdentifier string `json:"contract_identifier"`
-	Source            string `json:"source"`
+	Source             string `json:"source"`
 }
 
 // TxTag represents app.tx_tags
