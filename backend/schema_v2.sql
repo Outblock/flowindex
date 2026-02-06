@@ -441,7 +441,7 @@ COMMIT;
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS app.accounts (
-    address           VARCHAR(64) PRIMARY KEY,
+    address           VARCHAR(16) PRIMARY KEY,
     first_seen_height BIGINT,
     last_seen_height  BIGINT,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),

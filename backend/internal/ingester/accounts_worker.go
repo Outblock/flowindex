@@ -41,6 +41,10 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 		if addr == "" {
 			return
 		}
+		// Flow addresses are 8-byte (16 hex) without 0x.
+		if len(addr) != 16 {
+			return
+		}
 		if existing, ok := seen[addr]; ok {
 			if height < existing.FirstSeenHeight {
 				existing.FirstSeenHeight = height
@@ -99,7 +103,7 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 				owner = tx.ProposerAddress
 			}
 			owner = normalizeAddressLower(owner)
-			if owner == "" {
+			if owner == "" || len(owner) != 16 {
 				continue
 			}
 			coaMappings[coaAddr] = models.COAAccount{
