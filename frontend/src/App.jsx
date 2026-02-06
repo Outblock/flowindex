@@ -29,28 +29,30 @@ function App() {
           <IndexingStatus />
           <Header />
           <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden relative scroll-smooth focus:scroll-auto">
-            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-nothing-green border-t-transparent rounded-full animate-spin"></div></div>}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/blocks/:height" element={<BlockDetail />} />
-                <Route path="/transactions/:txId" element={<TransactionDetail />} />
-                <Route path="/accounts/:address" element={<AccountDetail />} />
-                <Route path="/stats" element={<Stats />} />
-                <Route
-                  path="/api-docs"
-                  element={<ApiDocs specUrl="/openapi/v1.json" />}
-                />
-                <Route
-                  path="/api-docs/v1"
-                  element={<ApiDocs specUrl="/openapi/v1.json" />}
-                />
-                <Route
-                  path="/api-docs/v2"
-                  element={<ApiDocs specUrl="/openapi/v2.json" />}
-                />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
+            <div className="flex-1">
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-nothing-green border-t-transparent rounded-full animate-spin"></div></div>}>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/blocks/:height" element={<BlockDetail />} />
+                  <Route path="/transactions/:txId" element={<TransactionDetail />} />
+                  <Route path="/accounts/:address" element={<AccountDetail />} />
+                  <Route path="/stats" element={<Stats />} />
+                  <Route
+                    path="/api-docs"
+                    element={<ApiDocs specUrl="/openapi/v1.json" />}
+                  />
+                  <Route
+                    path="/api-docs/v1"
+                    element={<ApiDocs specUrl="/openapi/v1.json" />}
+                  />
+                  <Route
+                    path="/api-docs/v2"
+                    element={<ApiDocs specUrl="/openapi/v2.json" />}
+                  />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </div>
             <Footer />
           </main>
         </div>
