@@ -81,6 +81,7 @@
     background-repeat: no-repeat;
   }
 
+
   @keyframes indeterminate-subtle {
     0% {
       background-position: -50% 0;
@@ -90,4 +91,30 @@
       background-position: 150% 0;
     }
   }
+}
+
+/* View Transition API Overrides for Theme Toggler */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Ensure the new view is on top */
+::view-transition-new(root) {
+  z-index: 2147483646;
+}
+
+/* Ensure the old view is NOT on top (default is ok, but implicit) */
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+/* Dark mode specific - optional depending on preference, but usually uniform is fine */
+.dark::view-transition-old(root) {
+  z-index: 1;
+}
+
+.dark::view-transition-new(root) {
+  z-index: 2147483646;
 }

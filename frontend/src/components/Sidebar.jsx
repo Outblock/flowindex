@@ -82,7 +82,7 @@ export default function Sidebar() {
 
                 {/* Theme Toggle */}
                 <button
-                    onClick={toggleTheme}
+                    onClick={(e) => toggleTheme(e)}
                     className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3 px-4'} py-2 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-400 transition-colors`}
                     title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
                 >

@@ -19,8 +19,43 @@ export function ThemeProvider({ children }) {
         localStorage.setItem('theme', theme);
     }, [theme]);
 
-    const toggleTheme = () => {
-        setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    const toggleTheme = async (e) => {
+        // Fallback or if no event passed (no coordinates)
+        if (!document.startViewTransition || !e?.clientX || !e?.clientY) {
+            setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+            return;
+        }
+
+        const x = e.clientX;
+        const y = e.clientY;
+        const endRadius = Math.hypot(
+            Math.max(x, window.innerWidth - x),
+            Math.max(y, window.innerHeight - y)
+        );
+
+        // Start the transition
+        const transition = document.startViewTransition(() => {
+            setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+        });
+
+        // Wait for the pseudo-elements to be created
+        await transition.ready;
+
+        // Animate the new view (the expanding circle)
+        document.documentElement.animate(
+            {
+                clipPath: [
+                    `circle(0px at ${x}px ${y}px)`,
+                    `circle(${endRadius}px at ${x}px ${y}px)`,
+                ],
+            },
+            {
+                duration: 500,
+                easing: 'ease-in-out',
+                // Specify which pseudo-element to animate
+                pseudoElement: '::view-transition-new(root)',
+            }
+        );
     };
 
     return (
