@@ -67,7 +67,7 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 
 	rows, err := r.db.Query(ctx, `
 		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers,
-		       t.status, t.error_message, t.is_evm, t.gas_limit,
+		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.created_at,
 		       COALESCE(m.event_count, t.event_count) AS event_count
@@ -96,7 +96,7 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 func (r *Repository) ListTransactionsByBlock(ctx context.Context, height uint64, includeEvents bool) ([]models.Transaction, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers,
-		       t.status, t.error_message, t.is_evm, t.gas_limit,
+		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.created_at,
 		       COALESCE(m.event_count, t.event_count) AS event_count
@@ -139,8 +139,13 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 		return nil, nil
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT id, transaction_id, transaction_index, type, event_index, contract_address, contract_name,
-		       event_name, payload, values, block_height, timestamp, created_at
+		SELECT id, transaction_id, transaction_index, type, event_index,
+		       COALESCE(contract_address, '') AS contract_address,
+		       COALESCE(contract_name, '') AS contract_name,
+		       COALESCE(event_name, '') AS event_name,
+		       COALESCE(payload, '{}'::jsonb) AS payload,
+		       COALESCE(values, '{}'::jsonb) AS values,
+		       block_height, timestamp, created_at
 		FROM raw.events
 		WHERE transaction_id = ANY($1)
 		ORDER BY block_height DESC, transaction_index ASC, event_index ASC`, txIDs)
@@ -163,8 +168,13 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 
 func (r *Repository) GetEventsByBlockHeight(ctx context.Context, height uint64) ([]models.Event, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, transaction_id, transaction_index, type, event_index, contract_address, contract_name,
-		       event_name, payload, values, block_height, timestamp, created_at
+		SELECT id, transaction_id, transaction_index, type, event_index,
+		       COALESCE(contract_address, '') AS contract_address,
+		       COALESCE(contract_name, '') AS contract_name,
+		       COALESCE(event_name, '') AS event_name,
+		       COALESCE(payload, '{}'::jsonb) AS payload,
+		       COALESCE(values, '{}'::jsonb) AS values,
+		       block_height, timestamp, created_at
 		FROM raw.events
 		WHERE block_height = $1
 		ORDER BY transaction_index ASC, event_index ASC`, height)
