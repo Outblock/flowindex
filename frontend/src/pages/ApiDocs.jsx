@@ -8,7 +8,6 @@ function ApiDocs({ specUrl }) {
   return (
     <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white transition-colors duration-300">
       <ApiReferenceReact
-        key={theme}
         configuration={{
           url: specUrl,
           darkMode: theme === 'dark',
