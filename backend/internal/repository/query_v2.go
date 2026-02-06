@@ -154,7 +154,7 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 		       COALESCE(event_name, '') AS event_name,
 		       COALESCE(payload, '{}'::jsonb) AS payload,
 		       '{}'::jsonb AS values,
-		       block_height, timestamp, created_at
+		       block_height, timestamp
 		FROM raw.events
 		WHERE transaction_id = ANY($1)
 		ORDER BY block_height DESC, transaction_index ASC, event_index ASC`, txIDBytes)
@@ -167,7 +167,7 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 	for rows.Next() {
 		var e models.Event
 		if err := rows.Scan(&e.ID, &e.TransactionID, &e.TransactionIndex, &e.Type, &e.EventIndex, &e.ContractAddress, &e.ContractName,
-			&e.EventName, &e.Payload, &e.Values, &e.BlockHeight, &e.Timestamp, &e.CreatedAt); err != nil {
+			&e.EventName, &e.Payload, &e.Values, &e.BlockHeight, &e.Timestamp); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -185,7 +185,7 @@ func (r *Repository) GetEventsByBlockHeight(ctx context.Context, height uint64) 
 		       COALESCE(event_name, '') AS event_name,
 		       COALESCE(payload, '{}'::jsonb) AS payload,
 		       '{}'::jsonb AS values,
-		       block_height, timestamp, created_at
+		       block_height, timestamp
 		FROM raw.events
 		WHERE block_height = $1
 		ORDER BY transaction_index ASC, event_index ASC`, height)
@@ -197,7 +197,7 @@ func (r *Repository) GetEventsByBlockHeight(ctx context.Context, height uint64) 
 	for rows.Next() {
 		var e models.Event
 		if err := rows.Scan(&e.ID, &e.TransactionID, &e.TransactionIndex, &e.Type, &e.EventIndex, &e.ContractAddress, &e.ContractName,
-			&e.EventName, &e.Payload, &e.Values, &e.BlockHeight, &e.Timestamp, &e.CreatedAt); err != nil {
+			&e.EventName, &e.Payload, &e.Values, &e.BlockHeight, &e.Timestamp); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

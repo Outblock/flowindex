@@ -198,8 +198,7 @@ func (r *Repository) GetRawEventsInRange(ctx context.Context, fromHeight, toHeig
 			payload,
 			COALESCE(encode(contract_address, 'hex'), '') AS contract_address,
 			event_name,
-			timestamp,
-			created_at
+			timestamp
 		FROM raw.events
 		WHERE block_height >= $1 AND block_height < $2
 		ORDER BY block_height ASC, transaction_index ASC, event_index ASC`,
@@ -213,7 +212,7 @@ func (r *Repository) GetRawEventsInRange(ctx context.Context, fromHeight, toHeig
 	var events []models.Event
 	for rows.Next() {
 		var e models.Event
-		if err := rows.Scan(&e.BlockHeight, &e.TransactionID, &e.EventIndex, &e.TransactionIndex, &e.Type, &e.Payload, &e.ContractAddress, &e.EventName, &e.Timestamp, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.BlockHeight, &e.TransactionID, &e.EventIndex, &e.TransactionIndex, &e.Type, &e.Payload, &e.ContractAddress, &e.EventName, &e.Timestamp); err != nil {
 			return nil, err
 		}
 		events = append(events, e)

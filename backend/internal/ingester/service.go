@@ -380,6 +380,7 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 	var blocks []*models.Block
 	var txs []models.Transaction
 	var events []models.Event
+	var collections []models.Collection
 	var addrActivity []models.AddressTransaction
 	var tokenTransfers []models.TokenTransfer
 	var accountKeys []models.AccountKey
@@ -412,13 +413,14 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 		blocks = append(blocks, res.Block)
 		txs = append(txs, res.Transactions...)
 		events = append(events, res.Events...)
+		collections = append(collections, res.Collections...)
 		addrActivity = append(addrActivity, res.AddressActivity...)
 		tokenTransfers = append(tokenTransfers, res.TokenTransfers...)
 		accountKeys = append(accountKeys, res.AccountKeys...)
 	}
 
 	// Use the atomic batch save
-	if err := s.repo.SaveBatch(ctx, blocks, txs, events, addrActivity, tokenTransfers, accountKeys, s.config.ServiceName, checkpointHeight); err != nil {
+	if err := s.repo.SaveBatch(ctx, blocks, txs, events, collections, addrActivity, tokenTransfers, accountKeys, s.config.ServiceName, checkpointHeight); err != nil {
 		return err
 	}
 

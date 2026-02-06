@@ -81,7 +81,7 @@ func (r *Repository) GetLastIndexedHeight(ctx context.Context, serviceName strin
 
 // SaveBatch atomicially saves a batch of blocks and all related data
 // SaveBatch saves a batch of blocks and related data atomically
-func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, accountKeys []models.AccountKey, serviceName string, checkpointHeight uint64) error {
+func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, collections []models.Collection, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, accountKeys []models.AccountKey, serviceName string, checkpointHeight uint64) error {
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -164,14 +164,11 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			isSealed[i] = b.IsSealed
 		}
 
-		batchCreatedAt := time.Now()
-
 		_, err := dbtx.Exec(ctx, `
 			INSERT INTO raw.blocks (
 				height, id, parent_id, timestamp,
 				collection_count, tx_count, event_count,
-				state_root_hash, total_gas_used, is_sealed,
-				created_at
+				state_root_hash, total_gas_used, is_sealed
 			)
 			SELECT
 				u.height,
@@ -183,8 +180,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				u.event_count,
 				u.state_root_hash,
 				u.total_gas_used,
-				u.is_sealed,
-				$11 AS created_at
+				u.is_sealed
 			FROM UNNEST(
 				$1::bigint[],      -- height
 				$2::bytea[],       -- id
@@ -211,24 +207,23 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				state_root_hash = EXCLUDED.state_root_hash,
 				total_gas_used = EXCLUDED.total_gas_used,
 				is_sealed = EXCLUDED.is_sealed
-		`, heights, ids, parentIDs, timestamps, collectionCounts, txCounts, eventCounts, stateRootHashes, totalGasUsed, isSealed, batchCreatedAt)
+		`, heights, ids, parentIDs, timestamps, collectionCounts, txCounts, eventCounts, stateRootHashes, totalGasUsed, isSealed)
 		if err != nil {
 			return fmt.Errorf("failed to bulk upsert blocks: %w", err)
 		}
 
 		_, err = dbtx.Exec(ctx, `
-			INSERT INTO raw.block_lookup (id, height, timestamp, created_at)
+			INSERT INTO raw.block_lookup (id, height, timestamp)
 			SELECT DISTINCT ON (u.id)
 				u.id,
 				u.height,
-				u.timestamp,
-				$4 AS created_at
+				u.timestamp
 			FROM UNNEST($1::bytea[], $2::bigint[], $3::timestamptz[]) AS u(id, height, timestamp)
 			ORDER BY u.id, u.height DESC
 			ON CONFLICT (id) DO UPDATE SET
 				height = EXCLUDED.height,
 				timestamp = EXCLUDED.timestamp
-		`, ids, heights, timestamps, batchCreatedAt)
+		`, ids, heights, timestamps)
 		if err != nil {
 			return fmt.Errorf("failed to bulk upsert block lookup: %w", err)
 		}
@@ -236,8 +231,8 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		for _, b := range blocks {
 			// Insert into partitioned raw.blocks
 			_, err := dbtx.Exec(ctx, `
-				INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, execution_result_id, total_gas_used, is_sealed, created_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+				INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, execution_result_id, total_gas_used, is_sealed)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 				ON CONFLICT (height) DO UPDATE SET
 					id = EXCLUDED.id,
 					tx_count = EXCLUDED.tx_count,
@@ -262,7 +257,6 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				hexToBytes(b.ExecutionResultID),
 				b.TotalGasUsed,
 				b.IsSealed,
-				time.Now(),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert block %d: %w", b.Height, err)
@@ -270,12 +264,12 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 
 			// Insert into raw.block_lookup (Atomic Lookup)
 			_, err = dbtx.Exec(ctx, `
-				INSERT INTO raw.block_lookup (id, height, timestamp, created_at)
-				VALUES ($1, $2, $3, $4)
+				INSERT INTO raw.block_lookup (id, height, timestamp)
+				VALUES ($1, $2, $3)
 				ON CONFLICT (id) DO UPDATE SET
 					height = EXCLUDED.height,
 					timestamp = EXCLUDED.timestamp`,
-				hexToBytes(b.ID), b.Height, b.Timestamp, time.Now(),
+				hexToBytes(b.ID), b.Height, b.Timestamp,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert block lookup %d: %w", b.Height, err)
@@ -346,7 +340,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					"script_hash", "script", "arguments",
 					"status", "error_message", "is_evm",
 					"gas_limit", "gas_used", "event_count",
-					"timestamp", "created_at",
+					"timestamp",
 				},
 				pgx.CopyFromSlice(len(txs), func(i int) ([]any, error) {
 					t := txs[i]
@@ -403,7 +397,6 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 						t.GasUsed,
 						eventCount,
 						txTimestamp,
-						batchCreatedAt,
 					}, nil
 				}),
 			)
@@ -455,9 +448,9 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 
 		_, err := dbtx.Exec(ctx, `
-			INSERT INTO raw.tx_lookup (id, evm_hash, block_height, transaction_index, timestamp, created_at)
+			INSERT INTO raw.tx_lookup (id, evm_hash, block_height, transaction_index, timestamp)
 			SELECT DISTINCT ON (u.id)
-				u.id, u.evm_hash, u.block_height, u.transaction_index, u.timestamp, $6
+				u.id, u.evm_hash, u.block_height, u.transaction_index, u.timestamp
 			FROM UNNEST($1::bytea[], $2::bytea[], $3::bigint[], $4::int[], $5::timestamptz[]) AS u(
 				id, evm_hash, block_height, transaction_index, timestamp
 			)
@@ -467,7 +460,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				block_height = EXCLUDED.block_height,
 				transaction_index = EXCLUDED.transaction_index,
 				timestamp = EXCLUDED.timestamp
-		`, ids, evmHashes, heights, txIndexes, timestamps, batchCreatedAt)
+		`, ids, evmHashes, heights, txIndexes, timestamps)
 		if err != nil {
 			return fmt.Errorf("failed to upsert tx_lookup batch: %w", err)
 		}
@@ -486,8 +479,6 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			if txTimestamp.IsZero() {
 				txTimestamp = time.Now()
 			}
-			createdAt := time.Now()
-
 			eventCount := t.EventCount
 			if eventCount == 0 {
 				eventCount = len(t.Events)
@@ -509,9 +500,9 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					script_hash, script, arguments,
 					status, error_message, is_evm,
 					gas_limit, gas_used, event_count,
-					timestamp, created_at
+					timestamp
 				)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 				ON CONFLICT (block_height, id) DO UPDATE SET
 					transaction_index = EXCLUDED.transaction_index,
 					status = EXCLUDED.status,
@@ -519,8 +510,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					gas_used = EXCLUDED.gas_used,
 					event_count = EXCLUDED.event_count,
 					is_evm = EXCLUDED.is_evm,
-					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash),
-					created_at = EXCLUDED.created_at`,
+					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash)`,
 				t.BlockHeight, hexToBytes(t.ID), t.TransactionIndex,
 				hexToBytes(t.ProposerAddress), hexToBytes(t.PayerAddress), sliceHexToBytes(t.Authorizers),
 				scriptHash, scriptInline, t.Arguments,
@@ -531,7 +521,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					return t.ErrorMessage
 				}(), t.IsEVM,
 				t.GasLimit, t.GasUsed, eventCount,
-				txTimestamp, createdAt,
+				txTimestamp,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
@@ -539,8 +529,8 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 
 			// Insert into raw.tx_lookup (Atomic Lookup)
 			_, err = dbtx.Exec(ctx, `
-				INSERT INTO raw.tx_lookup (id, evm_hash, block_height, transaction_index, timestamp, created_at)
-				VALUES ($1, $2, $3, $4, $5, $6)
+				INSERT INTO raw.tx_lookup (id, evm_hash, block_height, transaction_index, timestamp)
+				VALUES ($1, $2, $3, $4, $5)
 				ON CONFLICT (id) DO UPDATE SET
 					evm_hash = COALESCE(EXCLUDED.evm_hash, raw.tx_lookup.evm_hash),
 					block_height = EXCLUDED.block_height,
@@ -551,7 +541,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 						return nil
 					}
 					return hexToBytes(t.EVMHash)
-				}(), t.BlockHeight, t.TransactionIndex, txTimestamp, createdAt,
+				}(), t.BlockHeight, t.TransactionIndex, txTimestamp,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert tx lookup %s: %w", t.ID, err)
@@ -579,15 +569,13 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		if err == nil {
 			defer sub.Rollback(ctx)
 
-			batchCreatedAt := time.Now()
-
 			_, errCopy := sub.CopyFrom(ctx,
 				pgx.Identifier{"raw", "events"},
 				[]string{
 					"block_height", "transaction_id", "event_index",
 					"transaction_index", "type", "payload",
 					"contract_address", "event_name",
-					"timestamp", "created_at",
+					"timestamp",
 				},
 				pgx.CopyFromSlice(len(events), func(i int) ([]any, error) {
 					e := events[i]
@@ -599,7 +587,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 						}
 					}
 					if eventTimestamp.IsZero() {
-						eventTimestamp = batchCreatedAt
+						eventTimestamp = time.Now()
 					}
 
 					var payload any
@@ -617,7 +605,6 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 						hexToBytes(e.ContractAddress),
 						e.EventName,
 						eventTimestamp,
-						batchCreatedAt,
 					}, nil
 				}),
 			)
@@ -644,24 +631,105 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			if eventTimestamp.IsZero() {
 				eventTimestamp = time.Now()
 			}
-			createdAt := time.Now()
-
 			_, err := dbtx.Exec(ctx, `
 				INSERT INTO raw.events (
 					block_height, transaction_id, event_index,
 					transaction_index, type, payload,
 					contract_address, event_name,
-					timestamp, created_at
+					timestamp
 				)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 				ON CONFLICT (block_height, transaction_id, event_index) DO NOTHING`,
 				e.BlockHeight, hexToBytes(e.TransactionID), e.EventIndex,
 				e.TransactionIndex, e.Type, e.Payload,
 				hexToBytes(e.ContractAddress), e.EventName,
-				eventTimestamp, createdAt,
+				eventTimestamp,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert event: %w", err)
+			}
+		}
+	}
+
+	// 3.1 Insert Collections (if enabled)
+	usedCopyForCollections := false
+	if len(collections) > 0 && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+		sub, err := dbtx.Begin(ctx)
+		if err == nil {
+			defer sub.Rollback(ctx)
+
+			_, errCopy := sub.CopyFrom(ctx,
+				pgx.Identifier{"raw", "collections"},
+				[]string{
+					"block_height", "id",
+					"guarantor_ids", "signer_ids", "signatures",
+					"transaction_ids", "timestamp",
+				},
+				pgx.CopyFromSlice(len(collections), func(i int) ([]any, error) {
+					c := collections[i]
+					collectionTimestamp := c.Timestamp
+					if collectionTimestamp.IsZero() {
+						if ts, ok := blockTimeByHeight[c.BlockHeight]; ok {
+							collectionTimestamp = ts
+						}
+					}
+					if collectionTimestamp.IsZero() {
+						collectionTimestamp = time.Now()
+					}
+
+					return []any{
+						c.BlockHeight,
+						hexToBytes(c.ID),
+						nil,
+						nil,
+						nil,
+						sliceHexToBytes(c.TransactionIDs),
+						collectionTimestamp,
+					}, nil
+				}),
+			)
+			if errCopy == nil {
+				if err := sub.Commit(ctx); err == nil {
+					usedCopyForCollections = true
+				}
+			}
+
+			if !usedCopyForCollections {
+				_ = sub.Rollback(ctx)
+			}
+		}
+	}
+
+	if !usedCopyForCollections {
+		for _, c := range collections {
+			collectionTimestamp := c.Timestamp
+			if collectionTimestamp.IsZero() {
+				if ts, ok := blockTimeByHeight[c.BlockHeight]; ok {
+					collectionTimestamp = ts
+				}
+			}
+			if collectionTimestamp.IsZero() {
+				collectionTimestamp = time.Now()
+			}
+
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.collections (
+					block_height, id,
+					guarantor_ids, signer_ids, signatures,
+					transaction_ids, timestamp
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+				ON CONFLICT (block_height, id) DO NOTHING`,
+				c.BlockHeight,
+				hexToBytes(c.ID),
+				nil,
+				nil,
+				nil,
+				sliceHexToBytes(c.TransactionIDs),
+				collectionTimestamp,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert collection: %w", err)
 			}
 		}
 	}
@@ -824,10 +892,10 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 // Used for pre-insertion in batches to satisfy FK constraints.
 func (r *Repository) SaveBlockOnly(ctx context.Context, block models.Block) error {
 	_, err := r.db.Exec(ctx, `
-		INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, total_gas_used, is_sealed, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, total_gas_used, is_sealed)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (height) DO NOTHING`,
-		block.Height, hexToBytes(block.ID), hexToBytes(block.ParentID), block.Timestamp, block.CollectionCount, block.TotalGasUsed, block.IsSealed, time.Now(),
+		block.Height, hexToBytes(block.ID), hexToBytes(block.ParentID), block.Timestamp, block.CollectionCount, block.TotalGasUsed, block.IsSealed,
 	)
 	if err != nil {
 		// Log ALL errors for debugging
@@ -877,7 +945,7 @@ func (r *Repository) GetRecentBlocks(ctx context.Context, limit, offset int) ([]
 		SELECT b.height,
 		       encode(b.id, 'hex') AS id,
 		       encode(b.parent_id, 'hex') AS parent_id,
-		       b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at, b.tx_count
+		       b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.tx_count
 		FROM raw.blocks b 
 		ORDER BY b.height DESC 
 		LIMIT $1 OFFSET $2`
@@ -891,7 +959,7 @@ func (r *Repository) GetRecentBlocks(ctx context.Context, limit, offset int) ([]
 	var blocks []models.Block
 	for rows.Next() {
 		var b models.Block
-		if err := rows.Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed, &b.CreatedAt, &b.TxCount); err != nil {
+		if err := rows.Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed, &b.TxCount); err != nil {
 			return nil, err
 		}
 		blocks = append(blocks, b)
@@ -904,7 +972,7 @@ func (r *Repository) GetBlocksByCursor(ctx context.Context, limit int, cursorHei
 		SELECT b.height,
 		       encode(b.id, 'hex') AS id,
 		       encode(b.parent_id, 'hex') AS parent_id,
-		       b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at, b.tx_count
+		       b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.tx_count
 		FROM raw.blocks b
 		WHERE ($1::bigint IS NULL OR b.height < $1)
 		ORDER BY b.height DESC
@@ -919,7 +987,7 @@ func (r *Repository) GetBlocksByCursor(ctx context.Context, limit int, cursorHei
 	var blocks []models.Block
 	for rows.Next() {
 		var b models.Block
-		if err := rows.Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed, &b.CreatedAt, &b.TxCount); err != nil {
+		if err := rows.Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed, &b.TxCount); err != nil {
 			return nil, err
 		}
 		blocks = append(blocks, b)
@@ -946,12 +1014,11 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 			timestamp,
 			COALESCE(collection_count, 0) AS collection_count,
 			COALESCE(total_gas_used, 0) AS total_gas_used,
-			COALESCE(is_sealed, FALSE) AS is_sealed,
-			created_at
+			COALESCE(is_sealed, FALSE) AS is_sealed
 		FROM raw.blocks
 		WHERE height = $1
 	`, height).
-		Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed, &b.CreatedAt)
+		Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed)
 	if err != nil {
 		return nil, err
 	}
@@ -970,8 +1037,7 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 			COALESCE(is_evm, FALSE) AS is_evm,
 			COALESCE(gas_limit, 0) AS gas_limit,
 			COALESCE(gas_used, 0) AS gas_used,
-			timestamp,
-			created_at
+			timestamp
 		FROM raw.transactions
 		WHERE block_height = $1
 		ORDER BY transaction_index ASC
@@ -986,7 +1052,7 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 	var transactions []models.Transaction
 	for txRows.Next() {
 		var t models.Transaction
-		if err := txRows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := txRows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp); err != nil {
 			return nil, err
 		}
 		transactions = append(transactions, t)
@@ -1041,7 +1107,6 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 				COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
 				COALESCE(m.event_count, t.event_count, 0) AS event_count,
 				t.timestamp,
-				t.created_at,
 				COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
 				COALESCE(encode(et.from_address, 'hex'), '') AS from_address,
 				COALESCE(encode(et.to_address, 'hex'), '') AS to_address,
@@ -1078,7 +1143,6 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 					COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
 					COALESCE(m.event_count, t.event_count, 0) AS event_count,
 					t.timestamp,
-					t.created_at,
 					COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
 					COALESCE(encode(et.from_address, 'hex'), '') AS from_address,
 					COALESCE(encode(et.to_address, 'hex'), '') AS to_address,
@@ -1118,7 +1182,6 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 						COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
 						COALESCE(m.event_count, t.event_count, 0) AS event_count,
 						t.timestamp,
-						t.created_at,
 						COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
 						COALESCE(encode(et.from_address, 'hex'), '') AS from_address,
 						COALESCE(encode(et.to_address, 'hex'), '') AS to_address,
@@ -1137,7 +1200,7 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 
 	err = r.db.QueryRow(ctx, query, args...).
 		Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.ProposerKeyIndex, &t.ProposerSequenceNumber,
-			&t.PayerAddress, &t.Authorizers, &t.Script, &t.Arguments, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.EventCount, &t.Timestamp, &t.CreatedAt,
+			&t.PayerAddress, &t.Authorizers, &t.Script, &t.Arguments, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.EventCount, &t.Timestamp,
 			&t.EVMHash, &t.EVMFrom, &t.EVMTo, &t.EVMValue)
 
 	if err != nil {
@@ -1161,7 +1224,7 @@ func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) 
 	}
 
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(transaction_id, 'hex') AS transaction_id, block_height, transaction_index, type, event_index, payload, timestamp, created_at
+		SELECT encode(transaction_id, 'hex') AS transaction_id, block_height, transaction_index, type, event_index, payload, timestamp
 		FROM raw.events
 		WHERE transaction_id = $1 AND block_height = $2
 		ORDER BY event_index ASC`, hexToBytes(txID), blockHeight)
@@ -1173,7 +1236,7 @@ func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) 
 	var events []models.Event
 	for rows.Next() {
 		var e models.Event
-		if err := rows.Scan(&e.TransactionID, &e.BlockHeight, &e.TransactionIndex, &e.Type, &e.EventIndex, &e.Payload, &e.Timestamp, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.TransactionID, &e.BlockHeight, &e.TransactionIndex, &e.Type, &e.EventIndex, &e.Payload, &e.Timestamp); err != nil {
 			return nil, err
 		}
 		events = append(events, e)
@@ -1214,8 +1277,7 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 			COALESCE(t.error_message, '') AS error_message,
 			COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
 			COALESCE(m.event_count, t.event_count, 0) AS event_count,
-			t.timestamp,
-			t.created_at
+			t.timestamp
 		FROM addr_txs a
 		JOIN raw.transactions t ON t.id = a.transaction_id AND t.block_height = a.block_height
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
@@ -1232,7 +1294,7 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.GasUsed, &t.EventCount, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.GasUsed, &t.EventCount, &t.Timestamp); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
@@ -1275,8 +1337,7 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 			COALESCE(t.error_message, '') AS error_message,
 			COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
 			COALESCE(m.event_count, t.event_count, 0) AS event_count,
-			t.timestamp,
-			t.created_at
+			t.timestamp
 		FROM addr_txs a
 		JOIN raw.transactions t ON t.id = a.transaction_id AND t.block_height = a.block_height
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
@@ -1303,7 +1364,7 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.GasUsed, &t.EventCount, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.GasUsed, &t.EventCount, &t.Timestamp); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
@@ -1322,8 +1383,7 @@ func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset in
 			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
-			t.timestamp,
-			t.created_at
+			t.timestamp
 		FROM raw.transactions t
 		ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC
 		LIMIT $1 OFFSET $2`
@@ -1337,7 +1397,7 @@ func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset in
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
@@ -1368,8 +1428,7 @@ func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cur
 			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
-			t.timestamp,
-			t.created_at
+			t.timestamp
 		FROM raw.transactions t
 		WHERE ($1::bigint IS NULL OR (t.block_height, t.transaction_index, t.id) < ($1, $2, $3))
 		ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC
@@ -1395,7 +1454,7 @@ func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cur
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)

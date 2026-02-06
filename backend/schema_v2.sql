@@ -148,8 +148,6 @@ CREATE TABLE IF NOT EXISTS raw.blocks (
     signatures           JSONB,
     execution_result_id  BYTEA,
 
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-
     PRIMARY KEY (height),
     UNIQUE (height, id)
 ) PARTITION BY RANGE (height);
@@ -173,8 +171,7 @@ CREATE TABLE IF NOT EXISTS app.contract_code (
 CREATE TABLE IF NOT EXISTS raw.block_lookup (
     id      BYTEA PRIMARY KEY,
     height  BIGINT NOT NULL,
-    timestamp TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    timestamp TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_block_lookup_height ON raw.block_lookup(height);
 
@@ -204,7 +201,6 @@ CREATE TABLE IF NOT EXISTS raw.transactions (
     is_evm            BOOLEAN DEFAULT FALSE,
 
     timestamp         TIMESTAMPTZ NOT NULL, -- copy from block.timestamp for redundancy
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     PRIMARY KEY (block_height, id)
 ) PARTITION BY RANGE (block_height);
@@ -219,8 +215,7 @@ CREATE TABLE IF NOT EXISTS raw.tx_lookup (
     evm_hash     BYTEA,
     block_height BIGINT NOT NULL,
     transaction_index INT,
-    timestamp    TIMESTAMPTZ,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    timestamp    TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_tx_lookup_height ON raw.tx_lookup(block_height);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_lookup_evm_hash
@@ -245,7 +240,6 @@ CREATE TABLE IF NOT EXISTS raw.events (
     event_name        TEXT,
 
     timestamp         TIMESTAMPTZ NOT NULL,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     PRIMARY KEY (block_height, transaction_id, event_index)
 ) PARTITION BY RANGE (block_height);
@@ -261,7 +255,6 @@ CREATE TABLE IF NOT EXISTS raw.collections (
     signatures     JSONB,
     transaction_ids BYTEA[],
     timestamp      TIMESTAMPTZ NOT NULL,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (block_height, id)
 ) PARTITION BY RANGE (block_height);
 
@@ -271,7 +264,6 @@ CREATE TABLE IF NOT EXISTS raw.execution_results (
     id           BYTEA NOT NULL,
     chunk_data   JSONB,
     timestamp    TIMESTAMPTZ NOT NULL,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (block_height, id)
 ) PARTITION BY RANGE (block_height);
 

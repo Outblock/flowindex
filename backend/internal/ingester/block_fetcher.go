@@ -25,6 +25,7 @@ type FetchResult struct {
 	Block           *models.Block
 	Transactions    []models.Transaction
 	Events          []models.Event
+	Collections     []models.Collection
 	AddressActivity []models.AddressTransaction
 	TokenTransfers  []models.TokenTransfer
 	AccountKeys     []models.AccountKey
@@ -67,8 +68,19 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			return result
 		}
 
-		// 1. Get Block Header
-		block, err := pin.GetBlockHeaderByHeight(ctx, height)
+		// 1. Get Block Header (+ optional collections)
+		storeCollections := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_COLLECTIONS"))) != "false"
+
+		var (
+			block       *flowsdk.Block
+			collections []*flowsdk.Collection
+		)
+
+		if storeCollections {
+			block, collections, err = pin.GetBlockByHeight(ctx, height)
+		} else {
+			block, err = pin.GetBlockHeaderByHeight(ctx, height)
+		}
 		if err != nil {
 			if shouldRepin(err) {
 				continue
@@ -79,14 +91,18 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 		// Optional: store heavy block payloads (signatures/seals/guarantees). Most explorer
 		// pages don't need these, and they add significant write + storage overhead.
-		storeBlockPayloads := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_BLOCK_PAYLOADS"))) == "true"
+		storeBlockPayloads := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_BLOCK_PAYLOADS"))) != "false"
 		var collGuarantees []byte
 		var blockSeals []byte
 		var signatures []byte
+		var executionResultID string
 		if storeBlockPayloads {
 			collGuarantees, _ = json.Marshal(block.CollectionGuarantees)
 			blockSeals, _ = json.Marshal(block.Seals)
 			signatures, _ = json.Marshal(block.Signatures)
+		}
+		if len(block.Seals) > 0 && block.Seals[0] != nil {
+			executionResultID = block.Seals[0].ResultId.String()
 		}
 
 		dbBlock := models.Block{
@@ -100,7 +116,27 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			BlockSeals:           blockSeals,
 			Signatures:           signatures,
 			BlockStatus:          "BLOCK_SEALED", // Default for indexed blocks
+			ExecutionResultID:    executionResultID,
 			IsSealed:             true,
+		}
+
+		if storeCollections && len(collections) > 0 {
+			result.Collections = make([]models.Collection, 0, len(collections))
+			for _, coll := range collections {
+				if coll == nil {
+					continue
+				}
+				txIDs := make([]string, 0, len(coll.TransactionIDs))
+				for _, tid := range coll.TransactionIDs {
+					txIDs = append(txIDs, tid.String())
+				}
+				result.Collections = append(result.Collections, models.Collection{
+					BlockHeight:    block.Height,
+					ID:             coll.ID().String(),
+					TransactionIDs: txIDs,
+					Timestamp:      block.Timestamp,
+				})
+			}
 		}
 
 		// 2. Fetch All Transactions & Results for the Block (Bulk RPC)

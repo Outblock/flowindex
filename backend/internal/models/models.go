@@ -98,6 +98,14 @@ type Event struct {
 	CreatedAt        time.Time       `json:"created_at"`
 }
 
+// Collection represents a block collection (raw.collections)
+type Collection struct {
+	BlockHeight    uint64    `json:"block_height"`
+	ID             string    `json:"id"`
+	TransactionIDs []string  `json:"transaction_ids"`
+	Timestamp      time.Time `json:"timestamp"`
+}
+
 // TokenTransfer represents 'token_transfers' (Fungible & NFT)
 type TokenTransfer struct {
 	ID                   int       `json:"id"`

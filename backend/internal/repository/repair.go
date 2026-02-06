@@ -21,8 +21,8 @@ func (r *Repository) RepairTxLookup(ctx context.Context, limit int) error {
 			ORDER BY t.block_height DESC
 			LIMIT $1
 		)
-		INSERT INTO raw.tx_lookup (id, block_height, transaction_index, timestamp, created_at)
-		SELECT id, block_height, transaction_index, timestamp, NOW()
+		INSERT INTO raw.tx_lookup (id, block_height, transaction_index, timestamp)
+		SELECT id, block_height, transaction_index, timestamp
 		FROM missing
 		ON CONFLICT (id) DO UPDATE SET
 			block_height = EXCLUDED.block_height,
@@ -64,8 +64,8 @@ func (r *Repository) RepairBlockLookup(ctx context.Context, limit int) error {
 			ORDER BY b.height DESC
 			LIMIT $1
 		)
-		INSERT INTO raw.block_lookup (id, height, timestamp, created_at)
-		SELECT id, height, timestamp, NOW()
+		INSERT INTO raw.block_lookup (id, height, timestamp)
+		SELECT id, height, timestamp
 		FROM missing
 		ON CONFLICT (id) DO UPDATE SET
 			height = EXCLUDED.height,
