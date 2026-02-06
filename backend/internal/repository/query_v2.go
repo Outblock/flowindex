@@ -139,12 +139,12 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 		return nil, nil
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT id, transaction_id, transaction_index, type, event_index,
+		SELECT COALESCE(internal_id, 0) AS id, transaction_id, transaction_index, type, event_index,
 		       COALESCE(contract_address, '') AS contract_address,
-		       COALESCE(contract_name, '') AS contract_name,
+		       '' AS contract_name,
 		       COALESCE(event_name, '') AS event_name,
 		       COALESCE(payload, '{}'::jsonb) AS payload,
-		       COALESCE(values, '{}'::jsonb) AS values,
+		       '{}'::jsonb AS values,
 		       block_height, timestamp, created_at
 		FROM raw.events
 		WHERE transaction_id = ANY($1)
@@ -168,12 +168,12 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 
 func (r *Repository) GetEventsByBlockHeight(ctx context.Context, height uint64) ([]models.Event, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, transaction_id, transaction_index, type, event_index,
+		SELECT COALESCE(internal_id, 0) AS id, transaction_id, transaction_index, type, event_index,
 		       COALESCE(contract_address, '') AS contract_address,
-		       COALESCE(contract_name, '') AS contract_name,
+		       '' AS contract_name,
 		       COALESCE(event_name, '') AS event_name,
 		       COALESCE(payload, '{}'::jsonb) AS payload,
-		       COALESCE(values, '{}'::jsonb) AS values,
+		       '{}'::jsonb AS values,
 		       block_height, timestamp, created_at
 		FROM raw.events
 		WHERE block_height = $1

@@ -1127,7 +1127,14 @@ func (s *Server) handleFlowBlockServiceEvents(w http.ResponseWriter, r *http.Req
 	}
 	out := make([]map[string]interface{}, 0)
 	for _, e := range events {
-		if e.ContractName != "flow" {
+		contractName := strings.ToLower(e.ContractName)
+		if contractName == "" {
+			parts := strings.SplitN(e.Type, ".", 2)
+			if len(parts) > 0 {
+				contractName = strings.ToLower(parts[0])
+			}
+		}
+		if contractName != "flow" {
 			continue
 		}
 		var fields interface{}

@@ -177,6 +177,23 @@ def normalize_shape(payload):
     return []
 
 
+def maybe_add_query(url, path):
+    if "?" in url:
+        return url
+    list_markers = [
+        "/transaction",
+        "/transfer",
+        "/ft",
+        "/nft",
+        "/block",
+        "/account",
+        "/contract",
+    ]
+    if any(marker in path for marker in list_markers):
+        return url + "?limit=1&offset=0"
+    return url
+
+
 def load_paths(spec):
     return spec.get("paths", {})
 
@@ -237,6 +254,7 @@ def main():
             return None
         api_root = f"{base}{api_prefix}/api/{spec_name}" if api_prefix else f"{base}/api/{spec_name}"
         url = f"{api_root}{resolved}" if resolved.startswith("/") else f"{api_root}/{resolved}"
+        url = maybe_add_query(url, path)
         try:
             status, payload = http_json(url, timeout=timeout)
             return {"status": status, "payload": payload, "url": url}
