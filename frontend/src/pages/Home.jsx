@@ -463,8 +463,8 @@ function Home() {
 
           <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 border border-white/10 rounded-sm">
-                <Activity className="h-5 w-5 text-white" />
+              <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
+                <Activity className="h-5 w-5 text-zinc-900 dark:text-white" />
               </div>
               {!isHistoryComplete && (
                 <div
@@ -477,8 +477,8 @@ function Home() {
               )}
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400 uppercase tracking-widest">Total TXs</p>
-              <p className="text-3xl font-bold font-mono text-white">
+              <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Total TXs</p>
+              <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                 <NumberFlow
                   value={statusRaw?.total_transactions || 0}
                   format={{ useGrouping: true }}
@@ -491,19 +491,19 @@ function Home() {
 
           <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 border border-white/10 rounded-sm">
-                <TrendingUp className="h-5 w-5 text-white" />
+              <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
+                <TrendingUp className="h-5 w-5 text-zinc-900 dark:text-white" />
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400 uppercase tracking-widest">Network TPS</p>
-              <p className="text-3xl font-bold font-mono text-white">
+              <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Network TPS</p>
+              <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                 <NumberFlow
                   value={tps || 0}
                   format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                 />
               </p>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest">
+              <p className="text-[10px] text-zinc-400 dark:text-gray-500 uppercase tracking-widest">
                 Utilization: {Math.min(100, utilization).toFixed(2)}% (Est. {maxTpsEstimate.toLocaleString()} TPS)
               </p>
             </div>
@@ -520,7 +520,7 @@ function Home() {
               <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                 {avgBlockTime > 0 ? `${avgBlockTime.toFixed(2)}s` : 'N/A'}
               </p>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest">
+              <p className="text-[10px] text-zinc-400 dark:text-gray-500 uppercase tracking-widest">
                 Based on recent blocks
               </p>
             </div>
@@ -530,8 +530,8 @@ function Home() {
 
           <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 border border-white/10 rounded-sm">
-                <Activity className="h-5 w-5 text-white" />
+              <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
+                <Activity className="h-5 w-5 text-zinc-900 dark:text-white" />
               </div>
               {!isHistoryComplete && (
                 <div
@@ -544,8 +544,8 @@ function Home() {
               )}
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400 uppercase tracking-widest">Total Addresses</p>
-              <p className="text-3xl font-bold font-mono text-white">
+              <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Total Addresses</p>
+              <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                 <NumberFlow
                   value={statusRaw?.total_addresses || 0}
                   format={{ useGrouping: true }}
