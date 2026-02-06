@@ -185,7 +185,7 @@ func toFlowBlockOutput(b models.Block) map[string]interface{} {
 		"timestamp":          b.Timestamp.UTC().Format(time.RFC3339),
 		"tx":                 b.TxCount,
 		"system_event_count": b.EventCount,
-		"total_gas_used":     b.TotalGasUsed,
+		"total_gas_used":     0,
 		"evm_tx_count":       0,
 		"fees":               0,
 		"surge_factor":       0,

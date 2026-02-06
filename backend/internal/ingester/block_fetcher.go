@@ -90,36 +90,16 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			return result
 		}
 
-		// Optional: store heavy block payloads (signatures/seals/guarantees). Most explorer
-		// pages don't need these, and they add significant write + storage overhead.
-		storeBlockPayloads := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_BLOCK_PAYLOADS"))) != "false"
 		storeExecutionResults := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_EXECUTION_RESULTS"))) != "false"
-		var collGuarantees []byte
-		var blockSeals []byte
-		var signatures []byte
-		var executionResultID string
-		if storeBlockPayloads {
-			collGuarantees, _ = json.Marshal(block.CollectionGuarantees)
-			blockSeals, _ = json.Marshal(block.Seals)
-			signatures, _ = json.Marshal(block.Signatures)
-		}
-		if len(block.Seals) > 0 && block.Seals[0] != nil {
-			executionResultID = block.Seals[0].ResultId.String()
-		}
 
 		dbBlock := models.Block{
-			Height:               block.Height,
-			ID:                   block.ID.String(),
-			ParentID:             block.ParentID.String(),
-			Timestamp:            block.Timestamp,
-			CollectionCount:      len(block.CollectionGuarantees),
-			StateRootHash:        block.ID.String(), // Fallback
-			CollectionGuarantees: collGuarantees,
-			BlockSeals:           blockSeals,
-			Signatures:           signatures,
-			BlockStatus:          "BLOCK_SEALED", // Default for indexed blocks
-			ExecutionResultID:    executionResultID,
-			IsSealed:             true,
+			Height:          block.Height,
+			ID:              block.ID.String(),
+			ParentID:        block.ParentID.String(),
+			Timestamp:       block.Timestamp,
+			CollectionCount: len(block.CollectionGuarantees),
+			StateRootHash:   block.ID.String(), // Fallback
+			IsSealed:        true,
 		}
 
 		if storeExecutionResults {
@@ -131,12 +111,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				log.Printf("[ingester] warn: failed to get execution result for block %s (height=%d): %v", block.ID, height, execErr)
 			} else if execResult != nil {
 				payload, _ := json.Marshal(execResult)
-				if executionResultID == "" {
-					executionResultID = block.ID.String()
-				}
 				result.ExecutionResults = append(result.ExecutionResults, models.ExecutionResult{
 					BlockHeight: block.Height,
-					ID:          executionResultID,
+					ID:          block.ID.String(),
 					ChunkData:   payload,
 					Timestamp:   block.Timestamp,
 				})
