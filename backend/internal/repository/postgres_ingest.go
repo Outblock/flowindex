@@ -354,18 +354,21 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// raw.tx_lookup needs UPSERT semantics (id is globally unique). We batch UPSERT it with UNNEST
 	// so we don't spam the DB with per-row inserts, while still being idempotent across retries.
 	if usedCopyForTx {
-		ids := make([][]byte, len(txs))
-		heights := make([]int64, len(txs))
-		txIndexes := make([]int32, len(txs))
-		timestamps := make([]time.Time, len(txs))
+		ids := make([][]byte, 0, len(txs))
+		heights := make([]int64, 0, len(txs))
+		txIndexes := make([]int32, 0, len(txs))
+		timestamps := make([]time.Time, 0, len(txs))
 
 		batchCreatedAt := time.Now()
 
-		for i := range txs {
-			t := txs[i]
-			ids[i] = hexToBytes(t.ID)
-			heights[i] = int64(t.BlockHeight)
-			txIndexes[i] = int32(t.TransactionIndex)
+		for _, t := range txs {
+			if isSystemTransaction(t.PayerAddress, t.ProposerAddress) {
+				continue
+			}
+
+			ids = append(ids, hexToBytes(t.ID))
+			heights = append(heights, int64(t.BlockHeight))
+			txIndexes = append(txIndexes, int32(t.TransactionIndex))
 
 			// Keep the same timestamp fallback as raw.transactions COPY.
 			ts := t.Timestamp
@@ -377,24 +380,26 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			if ts.IsZero() {
 				ts = batchCreatedAt
 			}
-			timestamps[i] = ts
+			timestamps = append(timestamps, ts)
 		}
 
-		_, err := dbtx.Exec(ctx, `
-			INSERT INTO raw.tx_lookup (id, block_height, transaction_index, timestamp)
-			SELECT DISTINCT ON (u.id)
-				u.id, u.block_height, u.transaction_index, u.timestamp
-			FROM UNNEST($1::bytea[], $2::bigint[], $3::int[], $4::timestamptz[]) AS u(
-				id, block_height, transaction_index, timestamp
-			)
-			ORDER BY u.id, u.block_height DESC, u.transaction_index DESC
-			ON CONFLICT (id) DO UPDATE SET
-				block_height = EXCLUDED.block_height,
-				transaction_index = EXCLUDED.transaction_index,
-				timestamp = EXCLUDED.timestamp
-		`, ids, heights, txIndexes, timestamps)
-		if err != nil {
-			return fmt.Errorf("failed to upsert tx_lookup batch: %w", err)
+		if len(ids) > 0 {
+			_, err := dbtx.Exec(ctx, `
+				INSERT INTO raw.tx_lookup (id, block_height, transaction_index, timestamp)
+				SELECT DISTINCT ON (u.id)
+					u.id, u.block_height, u.transaction_index, u.timestamp
+				FROM UNNEST($1::bytea[], $2::bigint[], $3::int[], $4::timestamptz[]) AS u(
+					id, block_height, transaction_index, timestamp
+				)
+				ORDER BY u.id, u.block_height DESC, u.transaction_index DESC
+				ON CONFLICT (id) DO UPDATE SET
+					block_height = EXCLUDED.block_height,
+					transaction_index = EXCLUDED.transaction_index,
+					timestamp = EXCLUDED.timestamp
+			`, ids, heights, txIndexes, timestamps)
+			if err != nil {
+				return fmt.Errorf("failed to upsert tx_lookup batch: %w", err)
+			}
 		}
 	}
 
@@ -460,17 +465,19 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			}
 
 			// Insert into raw.tx_lookup (Atomic Lookup)
-			_, err = dbtx.Exec(ctx, `
-				INSERT INTO raw.tx_lookup (id, block_height, transaction_index, timestamp)
-				VALUES ($1, $2, $3, $4)
-				ON CONFLICT (id) DO UPDATE SET
-					block_height = EXCLUDED.block_height,
-					transaction_index = EXCLUDED.transaction_index,
-					timestamp = EXCLUDED.timestamp`,
-				hexToBytes(t.ID), t.BlockHeight, t.TransactionIndex, txTimestamp,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to insert tx lookup %s: %w", t.ID, err)
+			if !isSystemTransaction(t.PayerAddress, t.ProposerAddress) {
+				_, err = dbtx.Exec(ctx, `
+					INSERT INTO raw.tx_lookup (id, block_height, transaction_index, timestamp)
+					VALUES ($1, $2, $3, $4)
+					ON CONFLICT (id) DO UPDATE SET
+						block_height = EXCLUDED.block_height,
+						transaction_index = EXCLUDED.transaction_index,
+						timestamp = EXCLUDED.timestamp`,
+					hexToBytes(t.ID), t.BlockHeight, t.TransactionIndex, txTimestamp,
+				)
+				if err != nil {
+					return fmt.Errorf("failed to insert tx lookup %s: %w", t.ID, err)
+				}
 			}
 		}
 	}

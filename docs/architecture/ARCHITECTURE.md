@@ -6,6 +6,7 @@
 - **Goal:** High-throughput indexing, low-latency queries, and extensible derived data for Flow.
 - **Scale target:** 10TB+ with concurrent live + historical backfill.
 - **Core principle:** Preserve raw data fully; aggregate in the app layer for fast queries.
+- Backend file ownership map: `docs/architecture/BACKEND_STRUCTURE.md`
 
 ## 2. System Overview
 ```mermaid
@@ -71,6 +72,12 @@ Raw/App dual-layer design. Raw is append-only; App is query-optimized.
 - `app.worker_leases` (lease-based concurrency)
 - `app.evm_transactions` (EVM-derived)
 - `app.evm_tx_hashes` (Cadence tx -> multiple EVM hash mappings)
+
+### Placement Rule (Raw vs App)
+- `raw.*` stores direct RPC fields with minimal interpretation.
+- `app.*` stores worker-derived projections and query models.
+- Event-specific parsing should write to dedicated `app.*` tables, while full event payload remains in `raw.events`.
+- `raw.tx_lookup` is Flow tx lookup only; EVM hash mapping belongs in `app.evm_tx_hashes`.
 
 ### Partitioning Strategy
 ```mermaid

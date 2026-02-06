@@ -5,465 +5,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
 	"github.com/onflow/cadence"
-	cadjson "github.com/onflow/cadence/encoding/json"
 	flowsdk "github.com/onflow/flow-go-sdk"
 )
-
-type apiEnvelope struct {
-	Links map[string]string      `json:"_links,omitempty"`
-	Meta  map[string]interface{} `json:"_meta,omitempty"`
-	Data  interface{}            `json:"data,omitempty"`
-	Error interface{}            `json:"error,omitempty"`
-}
-
-func writeAPIResponse(w http.ResponseWriter, data interface{}, meta map[string]interface{}, links map[string]string) {
-	resp := apiEnvelope{
-		Links: links,
-		Meta:  meta,
-		Data:  data,
-	}
-	json.NewEncoder(w).Encode(resp)
-}
-
-func writeAPIError(w http.ResponseWriter, status int, message string) {
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(apiEnvelope{
-		Error: map[string]string{"message": message},
-	})
-}
-
-func parseLimitOffset(r *http.Request) (int, int) {
-	limit := 20
-	offset := 0
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
-			limit = n
-		}
-	}
-	if v := r.URL.Query().Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			offset = n
-		}
-	}
-	return limit, offset
-}
-
-func parseHeightParam(val string) (*uint64, error) {
-	if val == "" {
-		return nil, nil
-	}
-	n, err := strconv.ParseUint(val, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	return &n, nil
-}
-
-func normalizeAddr(addr string) string {
-	addr = strings.TrimSpace(addr)
-	addr = strings.TrimPrefix(strings.ToLower(addr), "0x")
-	return addr
-}
-
-func formatAddressV1(addr string) string {
-	addr = normalizeAddr(addr)
-	if addr == "" {
-		return ""
-	}
-	return "0x" + addr
-}
-
-func formatAddressListV1(addrs []string) []string {
-	if len(addrs) == 0 {
-		return addrs
-	}
-	out := make([]string, 0, len(addrs))
-	for _, a := range addrs {
-		out = append(out, formatAddressV1(a))
-	}
-	return out
-}
-
-func collectTxIDs(txs []models.Transaction) []string {
-	out := make([]string, 0, len(txs))
-	for _, t := range txs {
-		out = append(out, t.ID)
-	}
-	return out
-}
-
-func formatTime(ts time.Time) string {
-	if ts.IsZero() {
-		return ""
-	}
-	return ts.UTC().Format(time.RFC3339)
-}
-
-func parseFloatOrZero(val string) float64 {
-	if val == "" {
-		return 0
-	}
-	f, err := strconv.ParseFloat(val, 64)
-	if err != nil {
-		return 0
-	}
-	return f
-}
-
-func splitContractIdentifier(value string) (address, name, identifier string) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", "", ""
-	}
-	identifier = value
-	parts := strings.Split(value, ".")
-	if len(parts) >= 3 && parts[0] == "A" {
-		address = strings.ToLower(parts[1])
-		name = parts[2]
-		return address, name, identifier
-	}
-	if len(parts) == 2 {
-		address = strings.ToLower(parts[0])
-		name = parts[1]
-		identifier = "A." + address + "." + name
-		return address, name, identifier
-	}
-	address = strings.ToLower(strings.TrimPrefix(value, "0x"))
-	identifier = address
-	return address, "", identifier
-}
-
-func formatTokenIdentifier(address, name string) string {
-	address = strings.TrimSpace(strings.TrimPrefix(strings.ToLower(address), "0x"))
-	name = strings.TrimSpace(name)
-	if address == "" {
-		return name
-	}
-	if name == "" {
-		return address
-	}
-	return "A." + address + "." + name
-}
-
-func formatTokenVaultIdentifier(address, name string) string {
-	base := formatTokenIdentifier(address, name)
-	if base == "" {
-		return ""
-	}
-	if strings.Contains(base, ".") && !strings.HasSuffix(base, ".Vault") {
-		return base + ".Vault"
-	}
-	return base
-}
-
-func vaultPathForContract(contractName string) string {
-	if contractName == "" {
-		return ""
-	}
-	if contractName == "FlowToken" {
-		return "/storage/flowTokenVault"
-	}
-	return "/storage/" + contractName + "Vault"
-}
-
-func normalizeTokenParam(token string) string {
-	address, _, _ := splitContractIdentifier(token)
-	return address
-}
-
-func toFlowBlockOutput(b models.Block) map[string]interface{} {
-	return map[string]interface{}{
-		"id":                 b.ID,
-		"height":             b.Height,
-		"timestamp":          b.Timestamp.UTC().Format(time.RFC3339),
-		"tx":                 b.TxCount,
-		"system_event_count": b.EventCount,
-		"total_gas_used":     b.TotalGasUsed,
-		"evm_tx_count":       0,
-		"fees":               0,
-		"surge_factor":       0,
-	}
-}
-
-func toFlowEventOutput(e models.Event) map[string]interface{} {
-	return map[string]interface{}{
-		"type":         e.Type,
-		"transaction":  e.TransactionID,
-		"event_index":  e.EventIndex,
-		"block_height": e.BlockHeight,
-		"timestamp":    e.Timestamp.UTC().Format(time.RFC3339),
-		"payload":      e.Payload,
-	}
-}
-
-func toFlowTransactionOutput(t models.Transaction, events []models.Event, contracts []string, tags []string, fee float64) map[string]interface{} {
-	evOut := make([]map[string]interface{}, 0, len(events))
-	for _, e := range events {
-		evOut = append(evOut, toFlowEventOutput(e))
-	}
-	return map[string]interface{}{
-		"id":                t.ID,
-		"block_height":      t.BlockHeight,
-		"transaction_index": t.TransactionIndex,
-		"timestamp":         t.Timestamp.UTC().Format(time.RFC3339),
-		"payer":             formatAddressV1(t.PayerAddress),
-		"proposer":          formatAddressV1(t.ProposerAddress),
-		"authorizers":       formatAddressListV1(t.Authorizers),
-		"status":            t.Status,
-		"error":             t.ErrorMessage,
-		"gas_used":          t.GasUsed,
-		"event_count":       t.EventCount,
-		"events":            evOut,
-		"contract_imports":  contracts,
-		"contract_outputs":  []string{},
-		"tags":              tags,
-		"fee":               fee,
-	}
-}
-
-func toFTListOutput(token models.FTToken) map[string]interface{} {
-	address, name, identifier := splitContractIdentifier(token.ContractAddress)
-	if name == "" {
-		name = token.Name
-	}
-	return map[string]interface{}{
-		"id":            identifier,
-		"address":       formatAddressV1(address),
-		"contract_name": name,
-		"name":          token.Name,
-		"symbol":        token.Symbol,
-		"decimals":      token.Decimals,
-		"timestamp":     formatTime(token.UpdatedAt),
-		"updated_at":    formatTime(token.UpdatedAt),
-	}
-}
-
-func toFTHoldingOutput(holding models.FTHolding, percentage float64) map[string]interface{} {
-	tokenIdentifier := holding.ContractAddress
-	return map[string]interface{}{
-		"address":    formatAddressV1(holding.Address),
-		"token":      tokenIdentifier,
-		"balance":    parseFloatOrZero(holding.Balance),
-		"percentage": percentage,
-	}
-}
-
-func toVaultOutput(holding models.FTHolding) map[string]interface{} {
-	return map[string]interface{}{
-		"id":           holding.Address + ":" + holding.ContractAddress,
-		"vault_id":     0,
-		"address":      formatAddressV1(holding.Address),
-		"token":        holding.ContractAddress,
-		"balance":      parseFloatOrZero(holding.Balance),
-		"block_height": holding.LastHeight,
-		"path":         "",
-	}
-}
-
-func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]interface{} {
-	address, name, identifier := splitContractIdentifier(summary.ContractAddress)
-	if name == "" {
-		name = summary.Name
-	}
-	return map[string]interface{}{
-		"id":               identifier,
-		"address":          formatAddressV1(address),
-		"contract_name":    name,
-		"name":             summary.Name,
-		"display_name":     summary.Name,
-		"number_of_tokens": summary.Count,
-		"timestamp":        formatTime(summary.UpdatedAt),
-		"updated_at":       formatTime(summary.UpdatedAt),
-		"status":           "",
-	}
-}
-
-func toNFTHoldingOutput(owner string, count int64, percentage float64, nftType string) map[string]interface{} {
-	return map[string]interface{}{
-		"owner":      formatAddressV1(owner),
-		"nft_type":   nftType,
-		"count":      count,
-		"percentage": percentage,
-	}
-}
-
-func toCombinedNFTDetails(ownership models.NFTOwnership) map[string]interface{} {
-	return map[string]interface{}{
-		"id":           ownership.NFTID,
-		"nft_id":       ownership.NFTID,
-		"owner":        formatAddressV1(ownership.Owner),
-		"type":         ownership.ContractAddress,
-		"block_height": ownership.LastHeight,
-		"timestamp":    formatTime(ownership.UpdatedAt),
-		"live":         false,
-		"status":       "",
-	}
-}
-
-func toContractOutput(contract models.SmartContract) map[string]interface{} {
-	identifier := formatTokenIdentifier(contract.Address, contract.Name)
-	return map[string]interface{}{
-		"id":         identifier,
-		"identifier": identifier,
-		"address":    formatAddressV1(contract.Address),
-		"name":       contract.Name,
-		"body":       contract.Code,
-		"created_at": formatTime(contract.CreatedAt),
-		"valid_from": contract.BlockHeight,
-		"valid_to":   0,
-		"status":     "",
-		"tags":       []string{},
-	}
-}
-
-func parseStorageOverview(raw []byte) (used uint64, capacity uint64) {
-	val, err := cadjson.Decode(nil, raw)
-	if err != nil {
-		return 0, 0
-	}
-	dict, ok := val.(cadence.Dictionary)
-	if !ok {
-		return 0, 0
-	}
-	for _, pair := range dict.Pairs {
-		key, ok := pair.Key.(cadence.String)
-		if !ok {
-			continue
-		}
-		switch string(key) {
-		case "used":
-			used = cadenceToUint64(pair.Value)
-		case "capacity":
-			capacity = cadenceToUint64(pair.Value)
-		}
-	}
-	return used, capacity
-}
-
-func cadenceToUint64(val cadence.Value) uint64 {
-	switch v := val.(type) {
-	case cadence.UInt64:
-		return uint64(v)
-	case cadence.UInt32:
-		return uint64(v)
-	case cadence.UInt16:
-		return uint64(v)
-	case cadence.UInt8:
-		return uint64(v)
-	case cadence.UInt:
-		n, _ := strconv.ParseUint(v.String(), 10, 64)
-		return n
-	case cadence.UInt128:
-		n, _ := strconv.ParseUint(v.String(), 10, 64)
-		return n
-	case cadence.UFix64:
-		f, _ := strconv.ParseFloat(v.String(), 64)
-		if f < 0 {
-			return 0
-		}
-		return uint64(f)
-	default:
-		n, _ := strconv.ParseUint(v.String(), 10, 64)
-		return n
-	}
-}
-
-func toEVMTransactionOutput(rec repository.EVMTransactionRecord) map[string]interface{} {
-	return map[string]interface{}{
-		"block_number": rec.BlockHeight,
-		"hash":         rec.EVMHash,
-		"from":         rec.FromAddress,
-		"to":           rec.ToAddress,
-		"timestamp":    formatTime(rec.Timestamp),
-		"status":       "SEALED",
-		"gas_used":     "0",
-		"gas_limit":    "0",
-		"gas_price":    "0",
-		"value":        "0",
-		"type":         0,
-		"position":     0,
-		"nonce":        0,
-	}
-}
-
-func transferDirection(addrFilter, from, to string) string {
-	if addrFilter != "" {
-		if addrFilter == from {
-			return "withdraw"
-		}
-		if addrFilter == to {
-			return "deposit"
-		}
-	}
-	if from == "" && to != "" {
-		return "deposit"
-	}
-	if to == "" && from != "" {
-		return "withdraw"
-	}
-	return "deposit"
-}
-
-func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string) map[string]interface{} {
-	tokenIdentifier := formatTokenVaultIdentifier(t.TokenContractAddress, contractName)
-	tokenName := ""
-	tokenSymbol := ""
-	tokenLogo := ""
-	if contractName == "FlowToken" {
-		tokenName = "Flow"
-		tokenSymbol = "FLOW"
-		tokenLogo = "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.1654653399040a61.FlowToken/logo.svg"
-	} else if contractName != "" {
-		tokenName = contractName
-	}
-	return map[string]interface{}{
-		"address":          formatAddressV1(addrFilter),
-		"transaction_hash": t.TransactionID,
-		"block_height":     t.BlockHeight,
-		"timestamp":        formatTime(t.Timestamp),
-		"amount":           parseFloatOrZero(t.Amount),
-		"sender":           formatAddressV1(t.FromAddress),
-		"receiver":         formatAddressV1(t.ToAddress),
-		"direction":        transferDirection(addrFilter, t.FromAddress, t.ToAddress),
-		"verified":         false,
-		"is_primary":       false,
-		"classifier":       "Coin Transfer",
-		"approx_usd_price": 0,
-		"receiver_balance": 0,
-		"token": map[string]interface{}{
-			"token":  tokenIdentifier,
-			"name":   tokenName,
-			"symbol": tokenSymbol,
-			"logo":   tokenLogo,
-		},
-	}
-}
-
-func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string) map[string]interface{} {
-	nftType := formatTokenIdentifier(t.TokenContractAddress, contractName)
-	return map[string]interface{}{
-		"transaction_hash": t.TransactionID,
-		"block_height":     t.BlockHeight,
-		"timestamp":        formatTime(t.Timestamp),
-		"nft_type":         nftType,
-		"nft_id":           t.TokenID,
-		"sender":           formatAddressV1(t.FromAddress),
-		"receiver":         formatAddressV1(t.ToAddress),
-		"current_owner":    formatAddressV1(t.ToAddress),
-		"direction":        transferDirection(addrFilter, t.FromAddress, t.ToAddress),
-		"verified":         false,
-		"is_primary":       false,
-	}
-}
-
-// --- Accounting + Flow + Status Handlers ---
 
 func (s *Server) handleFlowListBlocks(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
@@ -1223,6 +772,39 @@ func (s *Server) handleFlowListEVMTransactions(w http.ResponseWriter, r *http.Re
 		out = append(out, toEVMTransactionOutput(row))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) handleFlowListEVMTokens(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parseLimitOffset(r)
+	rows, err := s.repo.ListEVMTokenSummaries(r.Context(), limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toEVMTokenOutput(row))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) handleFlowGetEVMToken(w http.ResponseWriter, r *http.Request) {
+	address := normalizeAddr(mux.Vars(r)["address"])
+	if len(address) != 40 {
+		writeAPIError(w, http.StatusBadRequest, "invalid evm token address")
+		return
+	}
+
+	rec, err := s.repo.GetEVMTokenSummary(r.Context(), address)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if rec == nil {
+		writeAPIResponse(w, []interface{}{}, nil, nil)
+		return
+	}
+	writeAPIResponse(w, []interface{}{toEVMTokenOutput(*rec)}, nil, nil)
 }
 
 func (s *Server) handleFlowGetEVMTransaction(w http.ResponseWriter, r *http.Request) {

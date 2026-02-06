@@ -92,8 +92,8 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 		// Optional: store heavy block payloads (signatures/seals/guarantees). Most explorer
 		// pages don't need these, and they add significant write + storage overhead.
-		storeBlockPayloads := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_BLOCK_PAYLOADS"))) != "false"
-		storeExecutionResults := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_EXECUTION_RESULTS"))) != "false"
+		storeBlockPayloads := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_BLOCK_PAYLOADS"))) == "true"
+		storeExecutionResults := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_EXECUTION_RESULTS"))) == "true"
 		var collGuarantees []byte
 		var blockSeals []byte
 		var signatures []byte

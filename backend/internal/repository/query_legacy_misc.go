@@ -277,13 +277,22 @@ func (r *Repository) GetTotalEvents(ctx context.Context) (int64, error) {
 }
 
 func (r *Repository) GetTotalAddresses(ctx context.Context) (int64, error) {
-	estimate, err := r.estimateTableCount(ctx, "app", "address_stats")
-	if err == nil && estimate > 0 {
-		return estimate, nil
+	statsEstimate, _ := r.estimateTableCount(ctx, "app", "address_stats")
+	accountsEstimate, _ := r.estimateTableCount(ctx, "app", "accounts")
+	if statsEstimate > 0 || accountsEstimate > 0 {
+		if accountsEstimate > statsEstimate {
+			return accountsEstimate, nil
+		}
+		return statsEstimate, nil
 	}
 
 	var count int64
-	err = r.db.QueryRow(ctx, "SELECT COUNT(*) FROM app.address_stats").Scan(&count)
+	err := r.db.QueryRow(ctx, `
+		SELECT GREATEST(
+			(SELECT COUNT(*) FROM app.address_stats),
+			(SELECT COUNT(*) FROM app.accounts)
+		)`,
+	).Scan(&count)
 	return count, err
 }
 

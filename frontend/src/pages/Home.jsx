@@ -55,6 +55,7 @@ function Home() {
   const normalizeTxId = (value) => normalizeHex(value).toLowerCase();
 
   const getTxHeight = (tx) => Number(tx?.block_height ?? tx?.blockHeight ?? 0);
+  const getTxIndex = (tx) => Number(tx?.transaction_index ?? tx?.tx_index ?? 0);
 
   const getTxTimestampMs = (tx) => {
     const source = tx?.timestamp || tx?.created_at || tx?.block_timestamp;
@@ -104,6 +105,19 @@ function Home() {
     return merged;
   };
 
+  const compareTxDesc = (a, b) => {
+    const heightDiff = getTxHeight(b) - getTxHeight(a);
+    if (heightDiff !== 0) return heightDiff;
+
+    const indexDiff = getTxIndex(b) - getTxIndex(a);
+    if (indexDiff !== 0) return indexDiff;
+
+    const timeDiff = getTxTimestampMs(b) - getTxTimestampMs(a);
+    if (timeDiff !== 0) return timeDiff;
+
+    return normalizeTxId(b?.id).localeCompare(normalizeTxId(a?.id));
+  };
+
   const mergeTransactions = (prev, incoming, { prependNew = false } = {}) => {
     const map = new Map();
     const order = [];
@@ -142,7 +156,28 @@ function Home() {
       dedup.add(id);
     }
 
+    merged.sort(compareTxDesc);
     return merged.slice(0, 20);
+  };
+
+  const mergeBlocks = (prev, incoming) => {
+    const byHeight = new Map();
+
+    for (const block of prev || []) {
+      if (!block || block.height == null) continue;
+      byHeight.set(Number(block.height), block);
+    }
+
+    for (const block of incoming || []) {
+      if (!block || block.height == null) continue;
+      const height = Number(block.height);
+      const existing = byHeight.get(height);
+      byHeight.set(height, existing ? { ...existing, ...block } : block);
+    }
+
+    return Array.from(byHeight.values())
+      .sort((a, b) => Number(b?.height ?? 0) - Number(a?.height ?? 0))
+      .slice(0, 20);
   };
 
   // Load Blocks for Page
@@ -152,7 +187,7 @@ function Home() {
       const res = await api.getBlocks(cursor, 20);
       const items = res?.items ?? (Array.isArray(res) ? res : []);
       const nextCursor = res?.next_cursor ?? '';
-      setBlocks(items);
+      setBlocks(prev => (page === 1 ? mergeBlocks(prev, items) : items));
       setBlockHasNext(Boolean(nextCursor));
       if (nextCursor) {
         setBlockCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
@@ -175,7 +210,9 @@ function Home() {
         payer: tx.payer_address || tx.proposer_address,
         blockHeight: tx.block_height
       })) : [];
-      setTransactions(mergeTransactions([], transformedTxs, { prependNew: false }));
+      setTransactions(prev => (page === 1
+        ? mergeTransactions(prev, transformedTxs, { prependNew: false })
+        : mergeTransactions([], transformedTxs, { prependNew: false })));
       setTxHasNext(Boolean(nextCursor));
       if (nextCursor) {
         setTxCursors(prev => ({ ...prev, [page + 1]: nextCursor }));

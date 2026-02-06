@@ -20,6 +20,8 @@ This is the final publish list of environment variables used by the backend. Rai
 - `HISTORY_BATCH_SIZE` (default: 20)
 - `ENABLE_HISTORY_INGESTER` (default: true)
 - `MAX_REORG_DEPTH` (default: 1000)
+- `STORE_BLOCK_PAYLOADS` (default: false; set true only if you need full guarantees/seals/signatures JSON in `raw.blocks`)
+- `STORE_EXECUTION_RESULTS` (default: false; set true only if you need `raw.execution_results`)
 
 ## Derived + Async Workers
 
@@ -55,6 +57,11 @@ This is the final publish list of environment variables used by the backend. Rai
 - `TX_SCRIPT_INLINE_MAX_BYTES` (default: 0)
   - If `>0`, store `raw.transactions.script` inline only when the script size is <= this limit.
   - Otherwise, scripts are stored as `raw.transactions.script_hash` and de-duplicated in `raw.scripts`.
+
+## API Query Tuning
+
+- `API_RECENT_TX_WINDOW` (default: 20000)
+  - First-page recent transaction queries are constrained to the latest N block heights to avoid wide partition scans.
 
 ## Live Address Backfill (optional)
 

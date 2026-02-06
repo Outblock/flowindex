@@ -1,6 +1,6 @@
 # FlowScan Clone - Project Status
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-02-06
 
 ## Executive Summary
 FlowScan v2 is operational on Railway with multi-node Flow access, cursor-based APIs, and parallel live + history backfill. The backend is now spork-aware for history backfills (separate historic node pool + pinned per-height RPC) to avoid getting stuck at spork roots. Current focus is sustained throughput and storage growth control before migrating to GCP.
@@ -34,6 +34,12 @@ FlowScan v2 is operational on Railway with multi-node Flow access, cursor-based 
 - **Stats page** shows worker checkpoints and history progress bar.
 
 ## Recent Changes (Last 24h)
+- API module split completed (`server_bootstrap`, `routes_registration`, `websocket`, `v1_helpers`) to reduce single-file hotspots.
+- Added backend architecture/file map doc: `docs/architecture/BACKEND_STRUCTURE.md`.
+- Recent transaction APIs now filter repeated system-level tx rows (`payer/proposer=0x000...`) for better homepage signal.
+- `raw.tx_lookup` now skips repeated system tx ids to avoid ambiguous lookup collisions.
+- Added `API_RECENT_TX_WINDOW` for first-page recent tx query windowing to reduce wide partition scans.
+- `STORE_BLOCK_PAYLOADS` and `STORE_EXECUTION_RESULTS` are now opt-in (default false) to reduce storage growth.
 - Cursor pagination used by frontend (no offset queries).
 - Token transfer upserts now include `token_id`, `token_contract_address`, `is_nft` updates.
 - TokenWorker concurrency is configurable.

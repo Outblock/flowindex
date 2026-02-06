@@ -3,10 +3,38 @@ package repository
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"flowscan-clone/internal/models"
 )
+
+const systemFlowAddressHex = "0000000000000000"
+
+func nonSystemTxSQL(alias string) string {
+	return fmt.Sprintf(
+		`NOT (
+			COALESCE(%[1]s.payer_address, '\x'::bytea) = '\x%[2]s'::bytea
+			AND COALESCE(%[1]s.proposer_address, '\x'::bytea) = '\x%[2]s'::bytea
+		)`,
+		alias,
+		systemFlowAddressHex,
+	)
+}
+
+func recentTxWindowFromEnv() int64 {
+	const defaultWindow int64 = 20000
+	raw := strings.TrimSpace(os.Getenv("API_RECENT_TX_WINDOW"))
+	if raw == "" {
+		return defaultWindow
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || v <= 0 {
+		return defaultWindow
+	}
+	return v
+}
 
 func (r *Repository) ListBlocks(ctx context.Context, limit, offset int) ([]models.Block, error) {
 	rows, err := r.db.Query(ctx, `
@@ -471,7 +499,7 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 }
 
 func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, error) {
-	query := `
+	query := fmt.Sprintf(`
 		SELECT
 			encode(t.id, 'hex') AS id,
 			t.block_height,
@@ -483,8 +511,9 @@ func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset in
 			COALESCE(t.error_message, '') AS error_message,
 			t.timestamp
 		FROM raw.transactions t
+		WHERE %s
 		ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC
-		LIMIT $1 OFFSET $2`
+		LIMIT $1 OFFSET $2`, nonSystemTxSQL("t"))
 
 	rows, err := r.db.Query(ctx, query, limit, offset)
 	if err != nil {
@@ -516,7 +545,7 @@ type TokenTransferCursor struct {
 }
 
 func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cursor *TxCursor) ([]models.Transaction, error) {
-	query := `
+	query := fmt.Sprintf(`
 		SELECT
 			encode(t.id, 'hex') AS id,
 			t.block_height,
@@ -528,15 +557,57 @@ func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cur
 			COALESCE(t.error_message, '') AS error_message,
 			t.timestamp
 		FROM raw.transactions t
-		WHERE ($1::bigint IS NULL OR (t.block_height, t.transaction_index, t.id) < ($1, $2, $3))
+		WHERE %s
+		  AND ($1::bigint IS NULL OR (t.block_height, t.transaction_index, t.id) < ($1, $2, $3))
 		ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC
-		LIMIT $4`
+		LIMIT $4`, nonSystemTxSQL("t"))
 
 	var (
 		bh interface{}
 		ti interface{}
 		id interface{}
 	)
+
+	if cursor == nil {
+		window := recentTxWindowFromEnv()
+		rows, err := r.db.Query(ctx, fmt.Sprintf(`
+			WITH latest AS (
+				SELECT COALESCE(MAX(height), 0) AS max_height
+				FROM raw.blocks
+			)
+			SELECT
+				encode(t.id, 'hex') AS id,
+				t.block_height,
+				t.transaction_index,
+				COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+				COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+				COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
+				COALESCE(t.status, '') AS status,
+				COALESCE(t.error_message, '') AS error_message,
+				t.timestamp
+			FROM raw.transactions t
+			WHERE %s
+			  AND t.block_height >= GREATEST((SELECT max_height FROM latest) - $1, 0)
+			ORDER BY t.block_height DESC, t.transaction_index DESC, t.id DESC
+			LIMIT $2`, nonSystemTxSQL("t")), window, limit)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		var txs []models.Transaction
+		for rows.Next() {
+			var t models.Transaction
+			if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.Timestamp); err != nil {
+				return nil, err
+			}
+			txs = append(txs, t)
+		}
+		if len(txs) > 0 {
+			return txs, nil
+		}
+	}
+
 	if cursor != nil {
 		bh = cursor.BlockHeight
 		ti = cursor.TxIndex
