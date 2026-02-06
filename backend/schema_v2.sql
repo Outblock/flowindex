@@ -152,6 +152,14 @@ CREATE TABLE IF NOT EXISTS raw.blocks (
     UNIQUE (height, id)
 ) PARTITION BY RANGE (height);
 
+-- Ensure payload columns exist on older installs (safe no-op if present).
+ALTER TABLE IF EXISTS raw.blocks
+    ADD COLUMN IF NOT EXISTS total_gas_used BIGINT DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS collection_guarantees JSONB,
+    ADD COLUMN IF NOT EXISTS block_seals JSONB,
+    ADD COLUMN IF NOT EXISTS signatures JSONB,
+    ADD COLUMN IF NOT EXISTS execution_result_id BYTEA;
+
 -- 3.1.b Scripts & Contract Code mapping tables (For payload offloading)
 -- raw.scripts (store script text by hash)
 CREATE TABLE IF NOT EXISTS raw.scripts (
