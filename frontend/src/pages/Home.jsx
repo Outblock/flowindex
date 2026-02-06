@@ -368,7 +368,7 @@ function Home() {
               animate={{ opacity: 1, y: 0 }}
             >
               <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic">
-                Flow<span className="text-nothing-green">Scan</span>
+                Flow<span className="text-emerald-600 dark:text-nothing-green">Scan</span>
               </h1>
               <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
             </motion.div>
@@ -383,7 +383,7 @@ function Home() {
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                    <Database className="h-4 w-4 text-nothing-green" />
+                    <Database className="h-4 w-4 text-emerald-600 dark:text-nothing-green" />
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-zinc-500 dark:text-gray-400">Indexing Progress</p>
@@ -398,13 +398,13 @@ function Home() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="h-2 w-48 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
+                  <div className="h-2 w-48 bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
                     <div
-                      className="h-full bg-nothing-green"
+                      className="h-full bg-emerald-500 dark:bg-nothing-green"
                       style={{ width: `${Math.min(100, historyPercent).toFixed(2)}%` }}
                     />
                   </div>
-                  <span className="text-[10px] uppercase tracking-widest text-nothing-green">View Details →</span>
+                  <span className="text-[10px] uppercase tracking-widest text-emerald-600 dark:text-nothing-green">View Details →</span>
                 </div>
               </div>
             </div>
@@ -439,11 +439,11 @@ function Home() {
           <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-nothing-green/50 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                <Box className="h-5 w-5 text-nothing-green" />
+                <Box className="h-5 w-5 text-emerald-600 dark:text-nothing-green" />
               </div>
-              <div className={`flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-nothing-green/10 border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-nothing-green animate-pulse' : 'bg-gray-500'}`}></div>
-                <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-nothing-green' : 'text-gray-500'}`}>
+              <div className={`flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-emerald-500/10 dark:bg-nothing-green/10 border-emerald-500/30 dark:border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-600 dark:bg-nothing-green animate-pulse' : 'bg-gray-500'}`}></div>
+                <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-emerald-600 dark:text-nothing-green' : 'text-gray-500'}`}>
                   {isConnected ? 'System Online' : 'Offline'}
                 </span>
               </div>

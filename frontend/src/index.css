@@ -7,6 +7,8 @@
 @layer base {
   :root {
     --nothing-green: #00ef8b;
+    --nothing-green-dark: #059669;
+    /* Emerald 600 for light mode text */
     --nothing-black: #000000;
     --nothing-dark: #0a0a0a;
     --nothing-white: #ffffff;
