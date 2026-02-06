@@ -53,9 +53,9 @@ export function DailyStatsChart() {
 
     const visibleData = rangeDays >= data.length ? data : data.slice(-rangeDays);
     return (
-        <div className="bg-nothing-dark border border-white/10 p-6 group hover:border-nothing-green/30 transition-all duration-300">
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 group hover:border-nothing-green/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-white uppercase tracking-widest">Transaction History</h2>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Transaction History</h2>
                 <div className="flex items-center gap-1">
                     {[
                         { label: '14D', value: 14 },
@@ -68,7 +68,7 @@ export function DailyStatsChart() {
                             onClick={() => setRangeDays(range.value)}
                             className={`text-[9px] uppercase tracking-wider px-2 py-1 border rounded-sm transition-colors ${rangeDays === range.value
                                 ? 'text-nothing-green border-nothing-green/40 bg-nothing-green/10'
-                                : 'text-zinc-500 border-white/5 bg-white/5 hover:text-white hover:border-white/20'
+                                : 'text-zinc-500 border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20'
                                 }`}
                         >
                             {range.label}
@@ -93,7 +93,7 @@ export function DailyStatsChart() {
                                 <stop offset="95%" stopColor="#00ef8b" stopOpacity={0} />
                             </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
                         <XAxis
                             dataKey="name"
                             stroke="#666"
@@ -108,7 +108,7 @@ export function DailyStatsChart() {
                         />
                         <YAxis stroke="#666" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} tick={{ fill: '#666', fontFamily: 'monospace' }} width={30} />
                         <Tooltip
-                            contentStyle={{ backgroundColor: '#000', borderColor: '#333', color: '#fff', fontSize: '12px' }}
+                            contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff', fontSize: '12px' }}
                             itemStyle={{ color: '#00ef8b', fontFamily: 'monospace' }}
                             cursor={{ stroke: '#333', strokeDasharray: '5 5' }}
                         />

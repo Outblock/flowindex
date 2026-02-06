@@ -40,20 +40,20 @@ export function FlowPriceChart({ data }) {
     const sparklineData = generateSparkline(price);
 
     return (
-        <div className="bg-nothing-dark border border-white/10 p-6 relative overflow-hidden group hover:border-nothing-green/30 transition-all duration-300">
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 relative overflow-hidden group hover:border-nothing-green/30 transition-all duration-300">
             {/* Background Gradient */}
             <div className={`absolute -right-10 -top-10 w-32 h-32 blur-3xl rounded-full opacity-10 ${isPositive ? 'bg-nothing-green' : 'bg-red-500'}`} />
 
             <div className="flex justify-between items-start mb-4 relative z-10">
                 <div>
                     <div className="flex items-center space-x-2 mb-1">
-                        <div className="p-1.5 border border-white/10 rounded-sm bg-black/20">
+                        <div className="p-1.5 border border-zinc-200 dark:border-white/10 rounded-sm bg-zinc-50 dark:bg-black/20">
                             <DollarSign className="w-4 h-4 text-nothing-green" />
                         </div>
-                        <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400">Flow Price</h3>
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-gray-400">Flow Price</h3>
                     </div>
                     <div className="flex items-baseline space-x-3">
-                        <span className="text-3xl font-mono font-bold text-white tracking-tighter">
+                        <span className="text-3xl font-mono font-bold text-zinc-900 dark:text-white tracking-tighter">
                             ${price.toFixed(3)}
                         </span>
                         <div className={`flex items-center space-x-1 text-xs font-bold px-1.5 py-0.5 rounded-sm border ${isPositive
@@ -91,9 +91,9 @@ export function FlowPriceChart({ data }) {
                 </ResponsiveContainer>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center text-[10px] uppercase tracking-wider text-gray-500">
+            <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-white/5 flex justify-between items-center text-[10px] uppercase tracking-wider text-zinc-500 dark:text-gray-500">
                 <span>Market Cap</span>
-                <span className="text-white font-mono">${(market_cap / 1000000).toFixed(0)}M</span>
+                <span className="text-zinc-900 dark:text-white font-mono">${(market_cap / 1000000).toFixed(0)}M</span>
             </div>
         </div>
     );

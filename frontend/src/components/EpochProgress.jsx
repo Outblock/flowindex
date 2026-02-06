@@ -23,20 +23,20 @@ export function EpochProgress({ epoch, progress, updatedAt }) {
     const updatedText = updatedAt ? formatAbsoluteTime(updatedAt * 1000) : '';
 
     return (
-        <div className="bg-nothing-dark border border-white/10 p-6 flex items-center justify-between relative overflow-hidden group hover:border-nothing-green/30 transition-all duration-300">
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 flex items-center justify-between relative overflow-hidden group hover:border-nothing-green/30 transition-all duration-300">
             {/* Background Gradient */}
             <div className="absolute -right-10 -bottom-10 w-32 h-32 blur-3xl rounded-full bg-blue-500/10" />
 
             <div>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Current Epoch</h3>
-                <div className="text-3xl font-mono font-bold text-white tracking-tighter">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-gray-400 mb-1">Current Epoch</h3>
+                <div className="text-3xl font-mono font-bold text-zinc-900 dark:text-white tracking-tighter">
                     #{epoch}
                 </div>
                 <div className="mt-2 text-[10px] uppercase tracking-wider text-nothing-green animate-pulse">
                     {(100 - progress).toFixed(1)}% Remaining
                 </div>
                 {updatedText && (
-                    <div className="mt-2 text-[10px] uppercase tracking-wider text-gray-500">
+                    <div className="mt-2 text-[10px] uppercase tracking-wider text-zinc-400 dark:text-gray-500">
                         As of {updatedText}
                     </div>
                 )}
@@ -49,7 +49,8 @@ export function EpochProgress({ epoch, progress, updatedAt }) {
                         cx="50%"
                         cy="50%"
                         r={radius}
-                        stroke="#333"
+                        stroke="currentColor"
+                        className="text-zinc-100 dark:text-[#333]"
                         strokeWidth="8"
                         fill="transparent"
                     />
@@ -68,7 +69,7 @@ export function EpochProgress({ epoch, progress, updatedAt }) {
                         strokeLinecap="round"
                     />
                 </svg>
-                <div className="absolute text-sm font-bold text-blue-400 font-mono">
+                <div className="absolute text-sm font-bold text-blue-500 dark:text-blue-400 font-mono">
                     {progress.toFixed(0)}%
                 </div>
             </div>

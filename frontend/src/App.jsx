@@ -10,6 +10,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import Sidebar from './components/Sidebar';
 import { WebSocketProvider } from './components/WebSocketProvider';
+import NotFound from './pages/NotFound';
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
                 path="/api-docs/v2"
                 element={<ApiDocs specUrl="/openapi/v2.json" />}
               />
+              <Route path="*" element={<NotFound />} />
             </Routes>
             <Footer />
           </main>
