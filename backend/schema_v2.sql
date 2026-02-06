@@ -220,15 +220,13 @@ ALTER TABLE IF EXISTS raw.transactions
 -- 3.2.a Tx lookup for fast "by tx id" queries
 CREATE TABLE IF NOT EXISTS raw.tx_lookup (
     id           BYTEA PRIMARY KEY,
-    evm_hash     BYTEA,
     block_height BIGINT NOT NULL,
     transaction_index INT,
     timestamp    TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_tx_lookup_height ON raw.tx_lookup(block_height);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_lookup_evm_hash
-  ON raw.tx_lookup(evm_hash)
-  WHERE evm_hash IS NOT NULL;
+ALTER TABLE IF EXISTS raw.tx_lookup
+  DROP COLUMN IF EXISTS evm_hash;
 
 -- Pagination / range queries (built on parent => per-partition indexes)
 CREATE INDEX IF NOT EXISTS idx_transactions_pagination
