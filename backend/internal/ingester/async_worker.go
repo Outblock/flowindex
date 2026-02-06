@@ -26,6 +26,8 @@ type AsyncWorker struct {
 	rangeSize uint64
 	workerID  string // e.g. hostname-pid
 	stopCh    chan struct{}
+	minStartHeight uint64
+	minStartCheckedAt time.Time
 }
 
 // Config holds configuration for the AsyncWorker
@@ -103,6 +105,13 @@ func (w *AsyncWorker) tryProcessNextRange(ctx context.Context) {
 	// The plan says: "Start at floor(checkpoint / RANGE_SIZE) * RANGE_SIZE" and then "Priority: Reclaim FAILED" or "Fallback: Increment".
 
 	baseHeight := (checkpointH / w.rangeSize) * w.rangeSize
+	if minStart, err := w.getMinStartHeight(ctx); err == nil && minStart > 0 && checkpointH < minStart {
+		aligned := (minStart / w.rangeSize) * w.rangeSize
+		if aligned > baseHeight {
+			log.Printf("[%s] Fast-forwarding base height from %d to %d (min raw height %d)", workerType, baseHeight, aligned, minStart)
+			baseHeight = aligned
+		}
+	}
 
 	// Candidate List:
 	// A. Failed Ranges (Priority) - We don't have a quick query for this yet,
@@ -128,6 +137,19 @@ func (w *AsyncWorker) tryProcessNextRange(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (w *AsyncWorker) getMinStartHeight(ctx context.Context) (uint64, error) {
+	if w.minStartHeight > 0 && time.Since(w.minStartCheckedAt) < 30*time.Second {
+		return w.minStartHeight, nil
+	}
+	minH, _, _, err := w.repo.GetBlockRange(ctx)
+	if err != nil {
+		return 0, err
+	}
+	w.minStartHeight = minH
+	w.minStartCheckedAt = time.Now()
+	return minH, nil
 }
 
 func (w *AsyncWorker) attemptRange(ctx context.Context, fromHeight uint64) bool {
