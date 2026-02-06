@@ -11,9 +11,9 @@ type AccountStorageSnapshot struct {
 
 func (r *Repository) GetAccountStorageSnapshot(ctx context.Context, address string) (*AccountStorageSnapshot, error) {
 	row := r.db.QueryRow(ctx, `
-		SELECT address, storage_used, storage_capacity, storage_available
+		SELECT encode(address, 'hex') AS address, storage_used, storage_capacity, storage_available
 		FROM app.account_storage_snapshots
-		WHERE address = $1`, address)
+		WHERE address = $1`, hexToBytes(address))
 	var s AccountStorageSnapshot
 	if err := row.Scan(&s.Address, &s.StorageUsed, &s.StorageCapacity, &s.StorageAvailable); err != nil {
 		return nil, err
@@ -30,6 +30,6 @@ func (r *Repository) UpsertAccountStorageSnapshot(ctx context.Context, address s
 			storage_capacity = EXCLUDED.storage_capacity,
 			storage_available = EXCLUDED.storage_available,
 			updated_at = NOW()`,
-		address, used, capacity, available)
+		hexToBytes(address), used, capacity, available)
 	return err
 }

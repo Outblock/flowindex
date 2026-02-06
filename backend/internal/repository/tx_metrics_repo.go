@@ -15,9 +15,9 @@ func (r *Repository) GetTransactionFeesByIDs(ctx context.Context, txIDs []string
 	}
 
 	rows, err := r.db.Query(ctx, `
-		SELECT transaction_id, COALESCE(fee, 0)
+		SELECT encode(transaction_id, 'hex') AS transaction_id, COALESCE(fee, 0)
 		FROM app.tx_metrics
-		WHERE transaction_id = ANY($1)`, txIDs)
+		WHERE transaction_id = ANY($1)`, sliceHexToBytes(txIDs))
 	if err != nil {
 		return nil, err
 	}

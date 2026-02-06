@@ -32,17 +32,17 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	}
 	if f.Payer != "" {
 		clauses = append(clauses, fmt.Sprintf("payer_address = $%d", arg))
-		args = append(args, f.Payer)
+		args = append(args, hexToBytes(f.Payer))
 		arg++
 	}
 	if f.Proposer != "" {
 		clauses = append(clauses, fmt.Sprintf("proposer_address = $%d", arg))
-		args = append(args, f.Proposer)
+		args = append(args, hexToBytes(f.Proposer))
 		arg++
 	}
 	if f.Authorizer != "" {
 		clauses = append(clauses, fmt.Sprintf("$%d = ANY(authorizers)", arg))
-		args = append(args, f.Authorizer)
+		args = append(args, hexToBytes(f.Authorizer))
 		arg++
 	}
 	if f.Status != "" {
@@ -66,7 +66,10 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	args = append(args, f.Limit, f.Offset)
 
 	rows, err := r.db.Query(ctx, `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers,
+		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
+		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.created_at,
@@ -95,7 +98,10 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 
 func (r *Repository) ListTransactionsByBlock(ctx context.Context, height uint64, includeEvents bool) ([]models.Transaction, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT t.id, t.block_height, t.transaction_index, t.proposer_address, t.payer_address, t.authorizers,
+		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
+		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.created_at,
@@ -138,9 +144,12 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 	if len(txIDs) == 0 {
 		return nil, nil
 	}
+	txIDBytes := sliceHexToBytes(txIDs)
 	rows, err := r.db.Query(ctx, `
-		SELECT COALESCE(internal_id, 0) AS id, transaction_id, transaction_index, type, event_index,
-		       COALESCE(contract_address, '') AS contract_address,
+		SELECT COALESCE(internal_id, 0) AS id,
+		       encode(transaction_id, 'hex') AS transaction_id,
+		       transaction_index, type, event_index,
+		       COALESCE(encode(contract_address, 'hex'), '') AS contract_address,
 		       '' AS contract_name,
 		       COALESCE(event_name, '') AS event_name,
 		       COALESCE(payload, '{}'::jsonb) AS payload,
@@ -148,7 +157,7 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 		       block_height, timestamp, created_at
 		FROM raw.events
 		WHERE transaction_id = ANY($1)
-		ORDER BY block_height DESC, transaction_index ASC, event_index ASC`, txIDs)
+		ORDER BY block_height DESC, transaction_index ASC, event_index ASC`, txIDBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -168,8 +177,10 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 
 func (r *Repository) GetEventsByBlockHeight(ctx context.Context, height uint64) ([]models.Event, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT COALESCE(internal_id, 0) AS id, transaction_id, transaction_index, type, event_index,
-		       COALESCE(contract_address, '') AS contract_address,
+		SELECT COALESCE(internal_id, 0) AS id,
+		       encode(transaction_id, 'hex') AS transaction_id,
+		       transaction_index, type, event_index,
+		       COALESCE(encode(contract_address, 'hex'), '') AS contract_address,
 		       '' AS contract_name,
 		       COALESCE(event_name, '') AS event_name,
 		       COALESCE(payload, '{}'::jsonb) AS payload,
@@ -209,17 +220,17 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 	arg := 2
 	if address != "" {
 		clauses = append(clauses, fmt.Sprintf("(from_address = $%d OR to_address = $%d)", arg, arg))
-		args = append(args, address)
+		args = append(args, hexToBytes(address))
 		arg++
 	}
 	if token != "" {
 		clauses = append(clauses, fmt.Sprintf("token_contract_address = $%d", arg))
-		args = append(args, token)
+		args = append(args, hexToBytes(token))
 		arg++
 	}
 	if txID != "" {
 		clauses = append(clauses, fmt.Sprintf("transaction_id = $%d", arg))
-		args = append(args, txID)
+		args = append(args, hexToBytes(txID))
 		arg++
 	}
 	if height != nil {
@@ -237,7 +248,18 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, `
-		SELECT transaction_id, block_height, token_contract_address, from_address, to_address, amount, COALESCE(token_id, '') AS token_id, event_index, is_nft, timestamp, created_at
+		SELECT
+			encode(transaction_id, 'hex') AS transaction_id,
+			block_height,
+			encode(token_contract_address, 'hex') AS token_contract_address,
+			encode(from_address, 'hex') AS from_address,
+			encode(to_address, 'hex') AS to_address,
+			amount,
+			COALESCE(token_id, '') AS token_id,
+			event_index,
+			is_nft,
+			timestamp,
+			created_at
 		FROM app.token_transfers
 		`+where+`
 		ORDER BY block_height DESC, event_index DESC
@@ -259,7 +281,18 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 
 func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, toHeight uint64, isNFT bool) ([]models.TokenTransfer, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT transaction_id, block_height, token_contract_address, from_address, to_address, amount, COALESCE(token_id, '') AS token_id, event_index, is_nft, timestamp, created_at
+		SELECT
+			encode(transaction_id, 'hex') AS transaction_id,
+			block_height,
+			encode(token_contract_address, 'hex') AS token_contract_address,
+			encode(from_address, 'hex') AS from_address,
+			encode(to_address, 'hex') AS to_address,
+			amount,
+			COALESCE(token_id, '') AS token_id,
+			event_index,
+			is_nft,
+			timestamp,
+			created_at
 		FROM app.token_transfers
 		WHERE block_height >= $1 AND block_height < $2 AND is_nft = $3
 		ORDER BY block_height ASC, event_index ASC`, fromHeight, toHeight, isNFT)

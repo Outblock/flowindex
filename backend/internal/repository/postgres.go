@@ -141,25 +141,25 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// we fall back to the slower per-row UPSERT to preserve those columns.
 	if !hasHeavyBlockPayloads && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
 		heights := make([]int64, len(blocks))
-		ids := make([]string, len(blocks))
-		parentIDs := make([]string, len(blocks))
+		ids := make([][]byte, len(blocks))
+		parentIDs := make([][]byte, len(blocks))
 		timestamps := make([]time.Time, len(blocks))
 		collectionCounts := make([]int32, len(blocks))
 		txCounts := make([]int64, len(blocks))
 		eventCounts := make([]int64, len(blocks))
-		stateRootHashes := make([]string, len(blocks))
+		stateRootHashes := make([][]byte, len(blocks))
 		totalGasUsed := make([]int64, len(blocks))
 		isSealed := make([]bool, len(blocks))
 
 		for i, b := range blocks {
 			heights[i] = int64(b.Height)
-			ids[i] = b.ID
-			parentIDs[i] = b.ParentID
+			ids[i] = hexToBytes(b.ID)
+			parentIDs[i] = hexToBytes(b.ParentID)
 			timestamps[i] = b.Timestamp
 			collectionCounts[i] = int32(b.CollectionCount)
 			txCounts[i] = int64(b.TxCount)
 			eventCounts[i] = int64(b.EventCount)
-			stateRootHashes[i] = b.StateRootHash
+			stateRootHashes[i] = hexToBytes(b.StateRootHash)
 			totalGasUsed[i] = int64(b.TotalGasUsed)
 			isSealed[i] = b.IsSealed
 		}
@@ -176,24 +176,24 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			SELECT
 				u.height,
 				u.id,
-				NULLIF(u.parent_id, '') AS parent_id,
+				u.parent_id,
 				u.timestamp,
 				u.collection_count,
 				u.tx_count,
 				u.event_count,
-				NULLIF(u.state_root_hash, '') AS state_root_hash,
+				u.state_root_hash,
 				u.total_gas_used,
 				u.is_sealed,
 				$11 AS created_at
 			FROM UNNEST(
 				$1::bigint[],      -- height
-				$2::text[],        -- id
-				$3::text[],        -- parent_id
+				$2::bytea[],       -- id
+				$3::bytea[],       -- parent_id
 				$4::timestamptz[], -- timestamp
 				$5::int[],         -- collection_count
 				$6::bigint[],      -- tx_count
 				$7::bigint[],      -- event_count
-				$8::text[],        -- state_root_hash
+				$8::bytea[],       -- state_root_hash
 				$9::bigint[],      -- total_gas_used
 				$10::bool[]        -- is_sealed
 			) AS u(
@@ -223,7 +223,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				u.height,
 				u.timestamp,
 				$4 AS created_at
-			FROM UNNEST($1::text[], $2::bigint[], $3::timestamptz[]) AS u(id, height, timestamp)
+			FROM UNNEST($1::bytea[], $2::bigint[], $3::timestamptz[]) AS u(id, height, timestamp)
 			ORDER BY u.id, u.height DESC
 			ON CONFLICT (id) DO UPDATE SET
 				height = EXCLUDED.height,
@@ -248,7 +248,21 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					signatures = EXCLUDED.signatures,
 					execution_result_id = EXCLUDED.execution_result_id,
 					is_sealed = EXCLUDED.is_sealed`,
-				b.Height, b.ID, b.ParentID, b.Timestamp, b.CollectionCount, b.TxCount, b.EventCount, b.StateRootHash, b.CollectionGuarantees, b.BlockSeals, b.Signatures, b.ExecutionResultID, b.TotalGasUsed, b.IsSealed, time.Now(),
+				b.Height,
+				hexToBytes(b.ID),
+				hexToBytes(b.ParentID),
+				b.Timestamp,
+				b.CollectionCount,
+				b.TxCount,
+				b.EventCount,
+				hexToBytes(b.StateRootHash),
+				b.CollectionGuarantees,
+				b.BlockSeals,
+				b.Signatures,
+				hexToBytes(b.ExecutionResultID),
+				b.TotalGasUsed,
+				b.IsSealed,
+				time.Now(),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert block %d: %w", b.Height, err)
@@ -261,7 +275,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				ON CONFLICT (id) DO UPDATE SET
 					height = EXCLUDED.height,
 					timestamp = EXCLUDED.timestamp`,
-				b.ID, b.Height, b.Timestamp, time.Now(),
+				hexToBytes(b.ID), b.Height, b.Timestamp, time.Now(),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert block lookup %d: %w", b.Height, err)
@@ -373,12 +387,23 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					}
 
 					return []any{
-						t.BlockHeight, t.ID, t.TransactionIndex,
-						t.ProposerAddress, t.PayerAddress, t.Authorizers,
-						scriptHash, scriptInline, args,
-						t.Status, errMsg, t.IsEVM,
-						t.GasLimit, t.GasUsed, eventCount,
-						txTimestamp, batchCreatedAt,
+						t.BlockHeight,
+						hexToBytes(t.ID),
+						t.TransactionIndex,
+						hexToBytes(t.ProposerAddress),
+						hexToBytes(t.PayerAddress),
+						sliceHexToBytes(t.Authorizers),
+						scriptHash,
+						scriptInline,
+						args,
+						t.Status,
+						errMsg,
+						t.IsEVM,
+						t.GasLimit,
+						t.GasUsed,
+						eventCount,
+						txTimestamp,
+						batchCreatedAt,
 					}, nil
 				}),
 			)
@@ -398,8 +423,8 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	// raw.tx_lookup needs UPSERT semantics (id is globally unique). We batch UPSERT it with UNNEST
 	// so we don't spam the DB with per-row inserts, while still being idempotent across retries.
 	if usedCopyForTx {
-		ids := make([]string, len(txs))
-		evmHashes := make([]string, len(txs))
+		ids := make([][]byte, len(txs))
+		evmHashes := make([][]byte, len(txs))
 		heights := make([]int64, len(txs))
 		txIndexes := make([]int32, len(txs))
 		timestamps := make([]time.Time, len(txs))
@@ -408,7 +433,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 
 		for i := range txs {
 			t := txs[i]
-			ids[i] = t.ID
+			ids[i] = hexToBytes(t.ID)
 			heights[i] = int64(t.BlockHeight)
 			txIndexes[i] = int32(t.TransactionIndex)
 
@@ -425,16 +450,15 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			timestamps[i] = ts
 
 			if t.EVMHash != "" {
-				normalized := strings.TrimPrefix(strings.ToLower(t.EVMHash), "0x")
-				evmHashes[i] = normalized
+				evmHashes[i] = hexToBytes(t.EVMHash)
 			}
 		}
 
 		_, err := dbtx.Exec(ctx, `
 			INSERT INTO raw.tx_lookup (id, evm_hash, block_height, transaction_index, timestamp, created_at)
 			SELECT DISTINCT ON (u.id)
-				u.id, NULLIF(u.evm_hash, ''), u.block_height, u.transaction_index, u.timestamp, $6
-			FROM UNNEST($1::text[], $2::text[], $3::bigint[], $4::int[], $5::timestamptz[]) AS u(
+				u.id, u.evm_hash, u.block_height, u.transaction_index, u.timestamp, $6
+			FROM UNNEST($1::bytea[], $2::bytea[], $3::bigint[], $4::int[], $5::timestamptz[]) AS u(
 				id, evm_hash, block_height, transaction_index, timestamp
 			)
 			ORDER BY u.id, u.block_height DESC, u.transaction_index DESC
@@ -497,8 +521,8 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					is_evm = EXCLUDED.is_evm,
 					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash),
 					created_at = EXCLUDED.created_at`,
-				t.BlockHeight, t.ID, t.TransactionIndex,
-				t.ProposerAddress, t.PayerAddress, t.Authorizers,
+				t.BlockHeight, hexToBytes(t.ID), t.TransactionIndex,
+				hexToBytes(t.ProposerAddress), hexToBytes(t.PayerAddress), sliceHexToBytes(t.Authorizers),
 				scriptHash, scriptInline, t.Arguments,
 				t.Status, func() any {
 					if strings.TrimSpace(t.ErrorMessage) == "" {
@@ -522,15 +546,11 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					block_height = EXCLUDED.block_height,
 					transaction_index = EXCLUDED.transaction_index,
 					timestamp = EXCLUDED.timestamp`,
-				t.ID, func() any {
+				hexToBytes(t.ID), func() any {
 					if t.EVMHash == "" {
 						return nil
 					}
-					normalized := strings.TrimPrefix(strings.ToLower(t.EVMHash), "0x")
-					if normalized == "" {
-						return nil
-					}
-					return normalized
+					return hexToBytes(t.EVMHash)
 				}(), t.BlockHeight, t.TransactionIndex, txTimestamp, createdAt,
 			)
 			if err != nil {
@@ -543,7 +563,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					INSERT INTO app.evm_transactions (block_height, transaction_id, evm_hash, from_address, to_address, timestamp, created_at)
 					VALUES ($1, $2, $3, $4, $5, $6, $7)
 					ON CONFLICT (block_height, transaction_id) DO NOTHING`,
-					t.BlockHeight, t.ID, t.EVMHash, t.EVMFrom, t.EVMTo, txTimestamp, time.Now(),
+					t.BlockHeight, hexToBytes(t.ID), hexToBytes(t.EVMHash), hexToBytes(t.EVMFrom), hexToBytes(t.EVMTo), txTimestamp, time.Now(),
 				)
 				if err != nil {
 					return fmt.Errorf("failed to insert evm tx %s: %w", t.ID, err)
@@ -588,10 +608,16 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					}
 
 					return []any{
-						e.BlockHeight, e.TransactionID, e.EventIndex,
-						e.TransactionIndex, e.Type, payload,
-						e.ContractAddress, e.EventName,
-						eventTimestamp, batchCreatedAt,
+						e.BlockHeight,
+						hexToBytes(e.TransactionID),
+						e.EventIndex,
+						e.TransactionIndex,
+						e.Type,
+						payload,
+						hexToBytes(e.ContractAddress),
+						e.EventName,
+						eventTimestamp,
+						batchCreatedAt,
 					}, nil
 				}),
 			)
@@ -629,9 +655,9 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 				ON CONFLICT (block_height, transaction_id, event_index) DO NOTHING`,
-				e.BlockHeight, e.TransactionID, e.EventIndex,
+				e.BlockHeight, hexToBytes(e.TransactionID), e.EventIndex,
 				e.TransactionIndex, e.Type, e.Payload,
-				e.ContractAddress, e.EventName,
+				hexToBytes(e.ContractAddress), e.EventName,
 				eventTimestamp, createdAt,
 			)
 			if err != nil {
@@ -653,7 +679,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 						updated_at = NOW()
 					WHERE address = $1 AND key_index = $2
 					  AND $3 >= last_updated_height`,
-					ak.Address, ak.KeyIndex, ak.RevokedAtHeight,
+					hexToBytes(ak.Address), ak.KeyIndex, ak.RevokedAtHeight,
 				)
 				if err != nil {
 					return fmt.Errorf("failed to update account key revoke: %w", err)
@@ -680,8 +706,8 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					last_updated_height = EXCLUDED.last_updated_height,
 					updated_at = NOW()
 				WHERE EXCLUDED.last_updated_height >= app.account_keys.last_updated_height`,
-				ak.Address, ak.KeyIndex, ak.PublicKey,
-				ak.SigningAlgorithm, ak.HashingAlgorithm, ak.Weight,
+				hexToBytes(ak.Address), ak.KeyIndex, hexToBytes(ak.PublicKey),
+				parseSmallInt(ak.SigningAlgorithm), parseSmallInt(ak.HashingAlgorithm), ak.Weight,
 				ak.Revoked, ak.AddedAtHeight, func() *uint64 {
 					if ak.RevokedAtHeight == 0 {
 						return nil
@@ -704,7 +730,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			INSERT INTO app.address_transactions (address, transaction_id, block_height, role)
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (address, block_height, transaction_id, role) DO NOTHING`,
-				aa.Address, aa.TransactionID, aa.BlockHeight, aa.Role,
+				hexToBytes(aa.Address), hexToBytes(aa.TransactionID), aa.BlockHeight, aa.Role,
 			)
 			if err != nil {
 				// Fail softly here if table missing? No, fail hard so I know to fix it.
@@ -745,7 +771,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					tx_count = app.address_stats.tx_count + 1,
 					last_updated_block = GREATEST(app.address_stats.last_updated_block, EXCLUDED.last_updated_block),
 					updated_at = NOW()`,
-				addr, blockHeight,
+				hexToBytes(addr), blockHeight,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to update address stats for %s: %w", addr, err)
@@ -769,7 +795,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 								last_updated_height = EXCLUDED.last_updated_height,
 								version = app.smart_contracts.version + 1,
 								updated_at = EXCLUDED.updated_at`,
-							address, name, e.BlockHeight, time.Now(), time.Now(),
+							hexToBytes(address), name, e.BlockHeight, time.Now(), time.Now(),
 						)
 						if err != nil {
 							return fmt.Errorf("failed to track contract %s: %w", name, err)
@@ -801,7 +827,7 @@ func (r *Repository) SaveBlockOnly(ctx context.Context, block models.Block) erro
 		INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, total_gas_used, is_sealed, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (height) DO NOTHING`,
-		block.Height, block.ID, block.ParentID, block.Timestamp, block.CollectionCount, block.TotalGasUsed, block.IsSealed, time.Now(),
+		block.Height, hexToBytes(block.ID), hexToBytes(block.ParentID), block.Timestamp, block.CollectionCount, block.TotalGasUsed, block.IsSealed, time.Now(),
 	)
 	if err != nil {
 		// Log ALL errors for debugging
@@ -815,7 +841,12 @@ func (r *Repository) SaveBlockOnly(ctx context.Context, block models.Block) erro
 
 func (r *Repository) ListBlocks(ctx context.Context, limit, offset int) ([]models.Block, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, total_gas_used, is_sealed
+		SELECT height,
+		       encode(id, 'hex') AS id,
+		       encode(parent_id, 'hex') AS parent_id,
+		       timestamp, collection_count, tx_count, event_count,
+		       encode(state_root_hash, 'hex') AS state_root_hash,
+		       total_gas_used, is_sealed
 		FROM raw.blocks 
 		ORDER BY height DESC 
 		LIMIT $1 OFFSET $2`,
@@ -843,7 +874,10 @@ func (r *Repository) ListBlocks(ctx context.Context, limit, offset int) ([]model
 
 func (r *Repository) GetRecentBlocks(ctx context.Context, limit, offset int) ([]models.Block, error) {
 	query := `
-		SELECT b.height, b.id, b.parent_id, b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at, b.tx_count
+		SELECT b.height,
+		       encode(b.id, 'hex') AS id,
+		       encode(b.parent_id, 'hex') AS parent_id,
+		       b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at, b.tx_count
 		FROM raw.blocks b 
 		ORDER BY b.height DESC 
 		LIMIT $1 OFFSET $2`
@@ -867,7 +901,10 @@ func (r *Repository) GetRecentBlocks(ctx context.Context, limit, offset int) ([]
 
 func (r *Repository) GetBlocksByCursor(ctx context.Context, limit int, cursorHeight *uint64) ([]models.Block, error) {
 	query := `
-		SELECT b.height, b.id, b.parent_id, b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at, b.tx_count
+		SELECT b.height,
+		       encode(b.id, 'hex') AS id,
+		       encode(b.parent_id, 'hex') AS parent_id,
+		       b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.created_at, b.tx_count
 		FROM raw.blocks b
 		WHERE ($1::bigint IS NULL OR b.height < $1)
 		ORDER BY b.height DESC
@@ -892,7 +929,7 @@ func (r *Repository) GetBlocksByCursor(ctx context.Context, limit int, cursorHei
 
 func (r *Repository) GetBlockByID(ctx context.Context, id string) (*models.Block, error) {
 	var height uint64
-	err := r.db.QueryRow(ctx, "SELECT height FROM raw.block_lookup WHERE id = $1", id).Scan(&height)
+	err := r.db.QueryRow(ctx, "SELECT height FROM raw.block_lookup WHERE id = $1", hexToBytes(id)).Scan(&height)
 	if err != nil {
 		return nil, err
 	}
@@ -904,8 +941,8 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 	err := r.db.QueryRow(ctx, `
 		SELECT
 			height,
-			id,
-			COALESCE(parent_id, '') AS parent_id,
+			encode(id, 'hex') AS id,
+			COALESCE(encode(parent_id, 'hex'), '') AS parent_id,
 			timestamp,
 			COALESCE(collection_count, 0) AS collection_count,
 			COALESCE(total_gas_used, 0) AS total_gas_used,
@@ -922,12 +959,12 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 	// Get transactions for this block
 	txRows, err := r.db.Query(ctx, `
 		SELECT
-			id,
+			encode(id, 'hex') AS id,
 			block_height,
 			transaction_index,
-			COALESCE(proposer_address, '') AS proposer_address,
-			COALESCE(payer_address, '') AS payer_address,
-			COALESCE(authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(encode(proposer_address, 'hex'), '') AS proposer_address,
+			COALESCE(encode(payer_address, 'hex'), '') AS payer_address,
+			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(authorizers) a), ARRAY[]::text[]) AS authorizers,
 			COALESCE(status, '') AS status,
 			COALESCE(error_message, '') AS error_message,
 			COALESCE(is_evm, FALSE) AS is_evm,
@@ -973,9 +1010,9 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 
 	// 1. Try resolving ID via raw.tx_lookup
 	var blockHeight uint64
-	err := r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", id).Scan(&blockHeight)
+	err := r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", hexToBytes(id)).Scan(&blockHeight)
 	if err != nil && has0x {
-		err = r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", normalizedID).Scan(&blockHeight)
+		err = r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", hexToBytes(normalizedID)).Scan(&blockHeight)
 	}
 
 	query := ""
@@ -988,13 +1025,13 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 		// For simplicity, we query raw.transactions and app.evm_transactions.
 		query = `
 			SELECT
-				t.id,
+				encode(t.id, 'hex') AS id,
 				t.block_height,
 				t.transaction_index,
-				COALESCE(t.proposer_address, '') AS proposer_address,
+				COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
 				COALESCE(0, 0), COALESCE(0, 0), -- placeholders for key_index/seq_num if missing in raw table
-				COALESCE(t.payer_address, '') AS payer_address,
-				COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+				COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+				COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 				COALESCE(t.script, s.script_text, '') AS script,
 				t.arguments,
 				COALESCE(t.status, '') AS status,
@@ -1005,33 +1042,33 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 				COALESCE(m.event_count, t.event_count, 0) AS event_count,
 				t.timestamp,
 				t.created_at,
-				COALESCE(et.evm_hash, '') AS evm_hash,
-				COALESCE(et.from_address, '') AS from_address,
-				COALESCE(et.to_address, '') AS to_address,
+				COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
+				COALESCE(encode(et.from_address, 'hex'), '') AS from_address,
+				COALESCE(encode(et.to_address, 'hex'), '') AS to_address,
 				'' AS evm_value
 			FROM raw.transactions t
 			LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 			LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
 			LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 			WHERE t.id = $1 AND t.block_height = $2`
-		args = []interface{}{id, blockHeight}
+		args = []interface{}{hexToBytes(id), blockHeight}
 	} else {
 		// Fallback (or EVM Hash Search)
 		// If ID is not found, maybe it's EVM Hash?
 		// Try finding by EVM hash in raw.tx_lookup first (fast path)
 		var txID string
 		var bh uint64
-		errLookup := r.db.QueryRow(ctx, "SELECT id, block_height FROM raw.tx_lookup WHERE evm_hash = $1", normalizedID).Scan(&txID, &bh)
+		errLookup := r.db.QueryRow(ctx, "SELECT encode(id, 'hex'), block_height FROM raw.tx_lookup WHERE evm_hash = $1", hexToBytes(normalizedID)).Scan(&txID, &bh)
 		if errLookup == nil {
 			query = `
 				SELECT
-					t.id,
+					encode(t.id, 'hex') AS id,
 					t.block_height,
 					t.transaction_index,
-					COALESCE(t.proposer_address, '') AS proposer_address,
+					COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
 					COALESCE(0, 0), COALESCE(0, 0),
-					COALESCE(t.payer_address, '') AS payer_address,
-					COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+					COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+					COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 					COALESCE(t.script, s.script_text, '') AS script,
 					t.arguments,
 					COALESCE(t.status, '') AS status,
@@ -1042,36 +1079,36 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 					COALESCE(m.event_count, t.event_count, 0) AS event_count,
 					t.timestamp,
 					t.created_at,
-					COALESCE(et.evm_hash, '') AS evm_hash,
-					COALESCE(et.from_address, '') AS from_address,
-					COALESCE(et.to_address, '') AS to_address,
+					COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
+					COALESCE(encode(et.from_address, 'hex'), '') AS from_address,
+					COALESCE(encode(et.to_address, 'hex'), '') AS to_address,
 					'' AS evm_value
 				FROM raw.transactions t
 				LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 				LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
 				LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 				WHERE t.id = $1 AND t.block_height = $2`
-			args = []interface{}{txID, bh}
+			args = []interface{}{hexToBytes(txID), bh}
 		} else {
 			// Try finding by EVM hash in app.evm_transactions
 			var txID string
 			var bh uint64
-			errEvm := r.db.QueryRow(ctx, "SELECT transaction_id, block_height FROM app.evm_transactions WHERE evm_hash = $1", normalizedID).Scan(&txID, &bh)
+			errEvm := r.db.QueryRow(ctx, "SELECT encode(transaction_id, 'hex'), block_height FROM app.evm_transactions WHERE evm_hash = $1", hexToBytes(normalizedID)).Scan(&txID, &bh)
 			if errEvm != nil && has0x {
 				// If stored with 0x prefix, try that too
-				errEvm = r.db.QueryRow(ctx, "SELECT transaction_id, block_height FROM app.evm_transactions WHERE evm_hash = $1", id).Scan(&txID, &bh)
+				errEvm = r.db.QueryRow(ctx, "SELECT encode(transaction_id, 'hex'), block_height FROM app.evm_transactions WHERE evm_hash = $1", hexToBytes(id)).Scan(&txID, &bh)
 			}
 			if errEvm == nil {
 				// Found via EVM Hash
 				query = `
 					SELECT
-						t.id,
+						encode(t.id, 'hex') AS id,
 						t.block_height,
 						t.transaction_index,
-						COALESCE(t.proposer_address, '') AS proposer_address,
+						COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
 						COALESCE(0, 0), COALESCE(0, 0),
-						COALESCE(t.payer_address, '') AS payer_address,
-						COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+						COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+						COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 						COALESCE(t.script, s.script_text, '') AS script,
 						t.arguments,
 						COALESCE(t.status, '') AS status,
@@ -1082,16 +1119,16 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 						COALESCE(m.event_count, t.event_count, 0) AS event_count,
 						t.timestamp,
 						t.created_at,
-						COALESCE(et.evm_hash, '') AS evm_hash,
-						COALESCE(et.from_address, '') AS from_address,
-						COALESCE(et.to_address, '') AS to_address,
+						COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
+						COALESCE(encode(et.from_address, 'hex'), '') AS from_address,
+						COALESCE(encode(et.to_address, 'hex'), '') AS to_address,
 						'' AS evm_value
 					FROM raw.transactions t
 					LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 					LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
 					LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 					WHERE t.id = $1 AND t.block_height = $2`
-				args = []interface{}{txID, bh}
+				args = []interface{}{hexToBytes(txID), bh}
 			} else {
 				return nil, fmt.Errorf("transaction not found")
 			}
@@ -1118,16 +1155,16 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 
 func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) ([]models.Event, error) {
 	var blockHeight uint64
-	err := r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", txID).Scan(&blockHeight)
+	err := r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", hexToBytes(txID)).Scan(&blockHeight)
 	if err != nil {
 		return nil, err
 	}
 
 	rows, err := r.db.Query(ctx, `
-		SELECT transaction_id, block_height, transaction_index, type, event_index, payload, timestamp, created_at
+		SELECT encode(transaction_id, 'hex') AS transaction_id, block_height, transaction_index, type, event_index, payload, timestamp, created_at
 		FROM raw.events
 		WHERE transaction_id = $1 AND block_height = $2
-		ORDER BY event_index ASC`, txID, blockHeight)
+		ORDER BY event_index ASC`, hexToBytes(txID), blockHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -1167,12 +1204,12 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 			WHERE tt.to_address = $1
 		)
 		SELECT DISTINCT ON (a.block_height, a.transaction_id)
-			t.id,
+			encode(t.id, 'hex') AS id,
 			t.block_height,
 			t.transaction_index,
-			COALESCE(t.proposer_address, '') AS proposer_address,
-			COALESCE(t.payer_address, '') AS payer_address,
-			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+			COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
 			COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
@@ -1186,7 +1223,7 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := r.db.Query(ctx, query, address, limit, offset)
+	rows, err := r.db.Query(ctx, query, hexToBytes(address), limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -1228,12 +1265,12 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 			WHERE tt.to_address = $1
 		)
 		SELECT DISTINCT ON (a.block_height, a.transaction_id)
-			t.id,
+			encode(t.id, 'hex') AS id,
 			t.block_height,
 			t.transaction_index,
-			COALESCE(t.proposer_address, '') AS proposer_address,
-			COALESCE(t.payer_address, '') AS payer_address,
-			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+			COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
 			COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
@@ -1254,10 +1291,10 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 	)
 	if cursor != nil {
 		bh = cursor.BlockHeight
-		id = cursor.TxID
+		id = hexToBytes(cursor.TxID)
 	}
 
-	rows, err := r.db.Query(ctx, query, address, bh, id, limit)
+	rows, err := r.db.Query(ctx, query, hexToBytes(address), bh, id, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1277,12 +1314,12 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 func (r *Repository) GetRecentTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, error) {
 	query := `
 		SELECT
-			t.id,
+			encode(t.id, 'hex') AS id,
 			t.block_height,
 			t.transaction_index,
-			COALESCE(t.proposer_address, '') AS proposer_address,
-			COALESCE(t.payer_address, '') AS payer_address,
-			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+			COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
 			t.timestamp,
@@ -1323,12 +1360,12 @@ type TokenTransferCursor struct {
 func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cursor *TxCursor) ([]models.Transaction, error) {
 	query := `
 		SELECT
-			t.id,
+			encode(t.id, 'hex') AS id,
 			t.block_height,
 			t.transaction_index,
-			COALESCE(t.proposer_address, '') AS proposer_address,
-			COALESCE(t.payer_address, '') AS payer_address,
-			COALESCE(t.authorizers, ARRAY[]::text[]) AS authorizers,
+			COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+			COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
 			t.timestamp,
@@ -1346,7 +1383,7 @@ func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cur
 	if cursor != nil {
 		bh = cursor.BlockHeight
 		ti = cursor.TxIndex
-		id = cursor.ID
+		id = hexToBytes(cursor.ID)
 	}
 
 	rows, err := r.db.Query(ctx, query, bh, ti, id, limit)
@@ -1370,13 +1407,24 @@ func (r *Repository) GetTransactionsByCursor(ctx context.Context, limit int, cur
 
 func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address string, limit int) ([]models.TokenTransfer, error) {
 	query := `
-		SELECT tt.internal_id, tt.transaction_id, tt.block_height, tt.token_contract_address, tt.from_address, tt.to_address, tt.amount, tt.token_id, tt.event_index, tt.is_nft, tt.timestamp, tt.created_at
+		SELECT tt.internal_id,
+		       encode(tt.transaction_id, 'hex') AS transaction_id,
+		       tt.block_height,
+		       encode(tt.token_contract_address, 'hex') AS token_contract_address,
+		       encode(tt.from_address, 'hex') AS from_address,
+		       encode(tt.to_address, 'hex') AS to_address,
+		       tt.amount,
+		       tt.token_id,
+		       tt.event_index,
+		       tt.is_nft,
+		       tt.timestamp,
+		       tt.created_at
 		FROM app.token_transfers tt
 		WHERE tt.from_address = $1 OR tt.to_address = $1
 		ORDER BY tt.block_height DESC, tt.transaction_id DESC, tt.event_index DESC
 		LIMIT $2`
 
-	rows, err := r.db.Query(ctx, query, address, limit)
+	rows, err := r.db.Query(ctx, query, hexToBytes(address), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1395,7 +1443,18 @@ func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address str
 
 func (r *Repository) GetTokenTransfersByAddressCursor(ctx context.Context, address string, limit int, cursor *TokenTransferCursor) ([]models.TokenTransfer, error) {
 	query := `
-		SELECT tt.internal_id, tt.transaction_id, tt.block_height, tt.token_contract_address, tt.from_address, tt.to_address, tt.amount, tt.token_id, tt.event_index, tt.is_nft, tt.timestamp, tt.created_at
+		SELECT tt.internal_id,
+		       encode(tt.transaction_id, 'hex') AS transaction_id,
+		       tt.block_height,
+		       encode(tt.token_contract_address, 'hex') AS token_contract_address,
+		       encode(tt.from_address, 'hex') AS from_address,
+		       encode(tt.to_address, 'hex') AS to_address,
+		       tt.amount,
+		       tt.token_id,
+		       tt.event_index,
+		       tt.is_nft,
+		       tt.timestamp,
+		       tt.created_at
 		FROM app.token_transfers tt
 		WHERE (tt.from_address = $1 OR tt.to_address = $1)
 		  AND ($2::bigint IS NULL OR (tt.block_height, tt.transaction_id, tt.event_index) < ($2, $3, $4))
@@ -1409,11 +1468,11 @@ func (r *Repository) GetTokenTransfersByAddressCursor(ctx context.Context, addre
 	)
 	if cursor != nil {
 		bh = cursor.BlockHeight
-		tx = cursor.TxID
+		tx = hexToBytes(cursor.TxID)
 		ev = cursor.EventIndex
 	}
 
-	rows, err := r.db.Query(ctx, query, address, bh, tx, ev, limit)
+	rows, err := r.db.Query(ctx, query, hexToBytes(address), bh, tx, ev, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1432,10 +1491,19 @@ func (r *Repository) GetTokenTransfersByAddressCursor(ctx context.Context, addre
 
 func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address string) ([]models.NFTTransfer, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT internal_id, transaction_id, block_height, token_contract_address, token_id, from_address, to_address, event_index, timestamp, created_at
+		SELECT internal_id,
+		       encode(transaction_id, 'hex') AS transaction_id,
+		       block_height,
+		       encode(token_contract_address, 'hex') AS token_contract_address,
+		       token_id,
+		       encode(from_address, 'hex') AS from_address,
+		       encode(to_address, 'hex') AS to_address,
+		       event_index,
+		       timestamp,
+		       created_at
 		FROM app.token_transfers
 		WHERE (from_address = $1 OR to_address = $1) AND is_nft = TRUE
-		ORDER BY block_height DESC, transaction_id DESC, event_index DESC`, address)
+		ORDER BY block_height DESC, transaction_id DESC, event_index DESC`, hexToBytes(address))
 	if err != nil {
 		return nil, err
 	}
@@ -1455,7 +1523,16 @@ func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address strin
 
 func (r *Repository) GetNFTTransfersByAddressCursor(ctx context.Context, address string, limit int, cursor *TokenTransferCursor) ([]models.NFTTransfer, error) {
 	query := `
-		SELECT tt.internal_id, tt.transaction_id, tt.block_height, tt.token_contract_address, tt.token_id, tt.from_address, tt.to_address, tt.event_index, tt.timestamp, tt.created_at
+		SELECT tt.internal_id,
+		       encode(tt.transaction_id, 'hex') AS transaction_id,
+		       tt.block_height,
+		       encode(tt.token_contract_address, 'hex') AS token_contract_address,
+		       tt.token_id,
+		       encode(tt.from_address, 'hex') AS from_address,
+		       encode(tt.to_address, 'hex') AS to_address,
+		       tt.event_index,
+		       tt.timestamp,
+		       tt.created_at
 		FROM app.token_transfers tt
 		WHERE (tt.from_address = $1 OR tt.to_address = $1)
 		  AND tt.is_nft = TRUE
@@ -1470,11 +1547,11 @@ func (r *Repository) GetNFTTransfersByAddressCursor(ctx context.Context, address
 	)
 	if cursor != nil {
 		bh = cursor.BlockHeight
-		tx = cursor.TxID
+		tx = hexToBytes(cursor.TxID)
 		ev = cursor.EventIndex
 	}
 
-	rows, err := r.db.Query(ctx, query, address, bh, tx, ev, limit)
+	rows, err := r.db.Query(ctx, query, hexToBytes(address), bh, tx, ev, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1495,9 +1572,9 @@ func (r *Repository) GetNFTTransfersByAddressCursor(ctx context.Context, address
 func (r *Repository) GetAddressStats(ctx context.Context, address string) (*models.AddressStats, error) {
 	var s models.AddressStats
 	err := r.db.QueryRow(ctx, `
-		SELECT address, tx_count, token_transfer_count, 0, total_gas_used, last_updated_block, created_at, updated_at
+		SELECT encode(address, 'hex') AS address, tx_count, token_transfer_count, 0, total_gas_used, last_updated_block, created_at, updated_at
 		FROM app.address_stats
-		WHERE address = $1`, address).Scan(
+		WHERE address = $1`, hexToBytes(address)).Scan(
 		&s.Address, &s.TxCount, &s.TokenTransferCount, &s.NFTTransferCount, &s.TotalGasUsed, &s.LastUpdatedBlock, &s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
@@ -1510,10 +1587,10 @@ func (r *Repository) GetAddressStats(ctx context.Context, address string) (*mode
 func (r *Repository) GetContractByAddress(ctx context.Context, address string) (*models.SmartContract, error) {
 	var c models.SmartContract
 	err := r.db.QueryRow(ctx, `
-		SELECT address, name, version, last_updated_height, created_at, updated_at
+		SELECT encode(address, 'hex') AS address, name, version, last_updated_height, created_at, updated_at
 		FROM app.smart_contracts
 		WHERE address = $1
-		LIMIT 1`, address).Scan(
+		LIMIT 1`, hexToBytes(address)).Scan(
 		&c.Address, &c.Name, &c.Version, &c.BlockHeight, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
@@ -1696,11 +1773,11 @@ func (r *Repository) GetAddressByPublicKey(ctx context.Context, publicKey string
 
 	var address string
 	err := r.db.QueryRow(ctx, `
-		SELECT address
+		SELECT encode(address, 'hex') AS address
 		FROM app.account_keys
 		WHERE public_key = $1 AND revoked = FALSE
 		ORDER BY last_updated_height DESC
-		LIMIT 1`, publicKey).Scan(&address)
+		LIMIT 1`, hexToBytes(publicKey)).Scan(&address)
 	if err == pgx.ErrNoRows {
 		return "", nil
 	}

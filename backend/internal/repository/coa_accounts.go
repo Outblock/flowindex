@@ -23,7 +23,7 @@ func (r *Repository) UpsertCOAAccounts(ctx context.Context, rows []models.COAAcc
 				transaction_id = COALESCE(EXCLUDED.transaction_id, app.coa_accounts.transaction_id),
 				block_height = COALESCE(EXCLUDED.block_height, app.coa_accounts.block_height),
 				updated_at = NOW()`,
-			row.COAAddress, row.FlowAddress, row.TransactionID, row.BlockHeight,
+			hexToBytes(row.COAAddress), hexToBytes(row.FlowAddress), hexToBytes(row.TransactionID), row.BlockHeight,
 		)
 	}
 
@@ -36,9 +36,12 @@ func (r *Repository) UpsertCOAAccounts(ctx context.Context, rows []models.COAAcc
 func (r *Repository) GetFlowAddressByCOA(ctx context.Context, coa string) (*models.COAAccount, error) {
 	var out models.COAAccount
 	err := r.db.QueryRow(ctx, `
-		SELECT coa_address, flow_address, COALESCE(transaction_id,''), COALESCE(block_height,0), created_at, updated_at
+		SELECT encode(coa_address, 'hex') AS coa_address,
+		       encode(flow_address, 'hex') AS flow_address,
+		       COALESCE(encode(transaction_id, 'hex'), '') AS transaction_id,
+		       COALESCE(block_height,0), created_at, updated_at
 		FROM app.coa_accounts
-		WHERE coa_address = $1`, coa).Scan(
+		WHERE coa_address = $1`, hexToBytes(coa)).Scan(
 		&out.COAAddress, &out.FlowAddress, &out.TransactionID, &out.BlockHeight, &out.CreatedAt, &out.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {

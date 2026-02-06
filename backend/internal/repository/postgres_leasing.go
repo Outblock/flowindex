@@ -189,7 +189,17 @@ func (r *Repository) AdvanceCheckpointSafe(ctx context.Context, workerType strin
 func (r *Repository) GetRawEventsInRange(ctx context.Context, fromHeight, toHeight uint64) ([]models.Event, error) {
 	// Select from partitioned raw.events
 	rows, err := r.db.Query(ctx, `
-		SELECT block_height, transaction_id, event_index, transaction_index, type, payload, contract_address, event_name, timestamp, created_at
+		SELECT
+			block_height,
+			encode(transaction_id, 'hex') AS transaction_id,
+			event_index,
+			transaction_index,
+			type,
+			payload,
+			COALESCE(encode(contract_address, 'hex'), '') AS contract_address,
+			event_name,
+			timestamp,
+			created_at
 		FROM raw.events
 		WHERE block_height >= $1 AND block_height < $2
 		ORDER BY block_height ASC, transaction_index ASC, event_index ASC`,
@@ -235,8 +245,8 @@ func (r *Repository) UpsertTokenTransfers(ctx context.Context, transfers []model
 				token_id = EXCLUDED.token_id,
 				is_nft = EXCLUDED.is_nft,
 				updated_at = NOW()`,
-			t.BlockHeight, t.TransactionID, t.EventIndex,
-			t.TokenContractAddress, t.FromAddress, t.ToAddress,
+			t.BlockHeight, hexToBytes(t.TransactionID), t.EventIndex,
+			hexToBytes(t.TokenContractAddress), hexToBytes(t.FromAddress), hexToBytes(t.ToAddress),
 			t.Amount, t.TokenID, t.IsNFT, t.Timestamp,
 		)
 	}

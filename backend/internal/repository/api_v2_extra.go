@@ -34,9 +34,9 @@ type EVMTransactionRecord struct {
 func (r *Repository) GetFTHolding(ctx context.Context, address, contract string) (*models.FTHolding, error) {
 	var h models.FTHolding
 	err := r.db.QueryRow(ctx, `
-		SELECT address, contract_address, balance::text, COALESCE(last_height,0), updated_at
+		SELECT encode(address, 'hex') AS address, encode(contract_address, 'hex') AS contract_address, balance::text, COALESCE(last_height,0), updated_at
 		FROM app.ft_holdings
-		WHERE address = $1 AND contract_address = $2`, address, contract).Scan(&h.Address, &h.ContractAddress, &h.Balance, &h.LastHeight, &h.UpdatedAt)
+		WHERE address = $1 AND contract_address = $2`, hexToBytes(address), hexToBytes(contract)).Scan(&h.Address, &h.ContractAddress, &h.Balance, &h.LastHeight, &h.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -48,9 +48,9 @@ func (r *Repository) GetFTHolding(ctx context.Context, address, contract string)
 
 func (r *Repository) ListFTTokenContracts(ctx context.Context, limit, offset int) ([]string, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT token_contract_address
+		SELECT DISTINCT encode(token_contract_address, 'hex') AS token_contract_address
 		FROM app.token_transfers
-		WHERE is_nft = FALSE AND token_contract_address <> ''
+		WHERE is_nft = FALSE AND token_contract_address IS NOT NULL
 		ORDER BY token_contract_address ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
@@ -70,9 +70,9 @@ func (r *Repository) ListFTTokenContracts(ctx context.Context, limit, offset int
 
 func (r *Repository) ListNFTCollectionContracts(ctx context.Context, limit, offset int) ([]string, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT contract_address
+		SELECT DISTINCT encode(contract_address, 'hex') AS contract_address
 		FROM app.nft_ownership
-		WHERE contract_address <> ''
+		WHERE contract_address IS NOT NULL
 		ORDER BY contract_address ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
@@ -98,7 +98,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			GROUP BY contract_address
 		)
 		SELECT
-			COALESCE(c.contract_address, counts.contract_address) AS contract_address,
+			COALESCE(encode(COALESCE(c.contract_address, counts.contract_address), 'hex'), '') AS contract_address,
 			COALESCE(c.name, '') AS name,
 			COALESCE(c.symbol, '') AS symbol,
 			COALESCE(counts.cnt, 0) AS cnt,
@@ -132,14 +132,14 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract strin
 			GROUP BY contract_address
 		)
 		SELECT
-			COALESCE(c.contract_address, counts.contract_address) AS contract_address,
+			COALESCE(encode(COALESCE(c.contract_address, counts.contract_address), 'hex'), '') AS contract_address,
 			COALESCE(c.name, '') AS name,
 			COALESCE(c.symbol, '') AS symbol,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address
-		WHERE COALESCE(c.contract_address, counts.contract_address) = $1`, contract).Scan(&row.ContractAddress, &row.Name, &row.Symbol, &row.Count, &row.UpdatedAt)
+		WHERE COALESCE(c.contract_address, counts.contract_address) = $1`, hexToBytes(contract)).Scan(&row.ContractAddress, &row.Name, &row.Symbol, &row.Count, &row.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -151,7 +151,7 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract strin
 
 func (r *Repository) ListNFTCollectionSummariesByOwner(ctx context.Context, owner string, limit, offset int) ([]NFTCollectionSummary, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT o.contract_address,
+		SELECT encode(o.contract_address, 'hex') AS contract_address,
 			   COALESCE(c.name,''), COALESCE(c.symbol,''), COUNT(*) AS cnt,
 			   COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_ownership o
@@ -159,7 +159,7 @@ func (r *Repository) ListNFTCollectionSummariesByOwner(ctx context.Context, owne
 		WHERE o.owner = $1
 		GROUP BY o.contract_address, c.name, c.symbol, c.updated_at
 		ORDER BY o.contract_address ASC
-		LIMIT $2 OFFSET $3`, owner, limit, offset)
+		LIMIT $2 OFFSET $3`, hexToBytes(owner), limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -177,11 +177,11 @@ func (r *Repository) ListNFTCollectionSummariesByOwner(ctx context.Context, owne
 
 func (r *Repository) ListNFTOwnershipByOwnerAndCollection(ctx context.Context, owner, collection string, limit, offset int) ([]models.NFTOwnership, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT contract_address, nft_id, COALESCE(owner,''), COALESCE(last_height,0), updated_at
+		SELECT encode(contract_address, 'hex') AS contract_address, nft_id, COALESCE(encode(owner, 'hex'), '') AS owner, COALESCE(last_height,0), updated_at
 		FROM app.nft_ownership
 		WHERE owner = $1 AND contract_address = $2
 		ORDER BY nft_id ASC
-		LIMIT $3 OFFSET $4`, owner, collection, limit, offset)
+		LIMIT $3 OFFSET $4`, hexToBytes(owner), hexToBytes(collection), limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -199,16 +199,16 @@ func (r *Repository) ListNFTOwnershipByOwnerAndCollection(ctx context.Context, o
 
 func (r *Repository) ListNFTOwnerCountsByCollection(ctx context.Context, collection string, limit, offset int) ([]NFTOwnerCount, int64, error) {
 	var total int64
-	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.nft_ownership WHERE contract_address = $1`, collection).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.nft_ownership WHERE contract_address = $1`, hexToBytes(collection)).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT COALESCE(owner,''), COUNT(*) AS cnt
+		SELECT COALESCE(encode(owner, 'hex'), '') AS owner, COUNT(*) AS cnt
 		FROM app.nft_ownership
 		WHERE contract_address = $1
 		GROUP BY owner
 		ORDER BY cnt DESC
-		LIMIT $2 OFFSET $3`, collection, limit, offset)
+		LIMIT $2 OFFSET $3`, hexToBytes(collection), limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -226,7 +226,7 @@ func (r *Repository) ListNFTOwnerCountsByCollection(ctx context.Context, collect
 
 func (r *Repository) ListEVMTransactions(ctx context.Context, limit, offset int) ([]EVMTransactionRecord, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT block_height, COALESCE(evm_hash,''), COALESCE(from_address,''), COALESCE(to_address,''), timestamp
+		SELECT block_height, COALESCE(encode(evm_hash, 'hex'), ''), COALESCE(encode(from_address, 'hex'), ''), COALESCE(encode(to_address, 'hex'), ''), timestamp
 		FROM app.evm_transactions
 		ORDER BY block_height DESC
 		LIMIT $1 OFFSET $2`, limit, offset)
@@ -248,9 +248,13 @@ func (r *Repository) ListEVMTransactions(ctx context.Context, limit, offset int)
 func (r *Repository) GetEVMTransactionByHash(ctx context.Context, hash string) (*EVMTransactionRecord, error) {
 	var row EVMTransactionRecord
 	err := r.db.QueryRow(ctx, `
-		SELECT block_height, COALESCE(evm_hash,''), COALESCE(from_address,''), COALESCE(to_address,''), timestamp
+		SELECT block_height,
+		       COALESCE(encode(evm_hash, 'hex'), ''),
+		       COALESCE(encode(from_address, 'hex'), ''),
+		       COALESCE(encode(to_address, 'hex'), ''),
+		       timestamp
 		FROM app.evm_transactions
-		WHERE evm_hash = $1`, hash).Scan(&row.BlockHeight, &row.EVMHash, &row.FromAddress, &row.ToAddress, &row.Timestamp)
+		WHERE evm_hash = $1`, hexToBytes(hash)).Scan(&row.BlockHeight, &row.EVMHash, &row.FromAddress, &row.ToAddress, &row.Timestamp)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}

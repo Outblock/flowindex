@@ -27,17 +27,17 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 	arg := 2
 	if address != "" {
 		clauses = append(clauses, fmt.Sprintf("(t.from_address = $%d OR t.to_address = $%d)", arg, arg))
-		args = append(args, address)
+		args = append(args, hexToBytes(address))
 		arg++
 	}
 	if token != "" {
 		clauses = append(clauses, fmt.Sprintf("t.token_contract_address = $%d", arg))
-		args = append(args, token)
+		args = append(args, hexToBytes(token))
 		arg++
 	}
 	if txID != "" {
 		clauses = append(clauses, fmt.Sprintf("t.transaction_id = $%d", arg))
-		args = append(args, txID)
+		args = append(args, hexToBytes(txID))
 		arg++
 	}
 	if height != nil {
@@ -61,11 +61,11 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 
 	rows, err := r.db.Query(ctx, `
 		SELECT
-			t.transaction_id,
+			encode(t.transaction_id, 'hex') AS transaction_id,
 			t.block_height,
-			t.token_contract_address,
-			t.from_address,
-			t.to_address,
+			encode(t.token_contract_address, 'hex') AS token_contract_address,
+			encode(t.from_address, 'hex') AS from_address,
+			encode(t.to_address, 'hex') AS to_address,
 			t.amount,
 			t.token_id,
 			t.event_index,
@@ -118,11 +118,11 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 
 func (r *Repository) ListFTTokenContractsByAddress(ctx context.Context, address string, limit, offset int) ([]string, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT token_contract_address
+		SELECT DISTINCT encode(token_contract_address, 'hex') AS token_contract_address
 		FROM app.token_transfers
 		WHERE is_nft = FALSE AND (from_address = $1 OR to_address = $1)
 		ORDER BY token_contract_address ASC
-		LIMIT $2 OFFSET $3`, address, limit, offset)
+		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func (r *Repository) ListFTVaultSummariesByAddress(ctx context.Context, address 
 	}
 	rows, err := r.db.Query(ctx, `
 		SELECT
-			t.token_contract_address,
+			encode(t.token_contract_address, 'hex') AS token_contract_address,
 			COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') AS contract_name,
 			SUM(
 				CASE
@@ -168,7 +168,7 @@ func (r *Repository) ListFTVaultSummariesByAddress(ctx context.Context, address 
 		  AND COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') <> 'FungibleToken'
 		GROUP BY t.token_contract_address, contract_name
 		ORDER BY t.token_contract_address ASC
-		LIMIT $2 OFFSET $3`, address, limit, offset)
+		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
 	if err != nil {
 		return nil, err
 	}

@@ -12,7 +12,15 @@ import (
 // GetRawTransactionsInRange fetches raw transactions for a height range.
 func (r *Repository) GetRawTransactionsInRange(ctx context.Context, fromHeight, toHeight uint64) ([]models.Transaction, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, block_height, transaction_index, proposer_address, payer_address, authorizers, gas_used, timestamp
+		SELECT
+			encode(id, 'hex') AS id,
+			block_height,
+			transaction_index,
+			COALESCE(encode(proposer_address, 'hex'), '') AS proposer_address,
+			COALESCE(encode(payer_address, 'hex'), '') AS payer_address,
+			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(authorizers) a), ARRAY[]::text[]) AS authorizers,
+			gas_used,
+			timestamp
 		FROM raw.transactions
 		WHERE block_height >= $1 AND block_height < $2
 		ORDER BY block_height ASC, transaction_index ASC`, fromHeight, toHeight)
@@ -51,7 +59,7 @@ func (r *Repository) UpsertAccountKeys(ctx context.Context, keys []models.Accoun
 					updated_at = NOW()
 				WHERE address = $1 AND key_index = $2
 				  AND $3 >= last_updated_height`,
-				ak.Address, ak.KeyIndex, ak.RevokedAtHeight,
+				hexToBytes(ak.Address), ak.KeyIndex, ak.RevokedAtHeight,
 			)
 			continue
 		}
@@ -80,11 +88,11 @@ func (r *Repository) UpsertAccountKeys(ctx context.Context, keys []models.Accoun
 				last_updated_height = EXCLUDED.last_updated_height,
 				updated_at = NOW()
 			WHERE EXCLUDED.last_updated_height >= app.account_keys.last_updated_height`,
-			ak.Address,
+			hexToBytes(ak.Address),
 			ak.KeyIndex,
-			ak.PublicKey,
-			ak.SigningAlgorithm,
-			ak.HashingAlgorithm,
+			hexToBytes(ak.PublicKey),
+			parseSmallInt(ak.SigningAlgorithm),
+			parseSmallInt(ak.HashingAlgorithm),
 			ak.Weight,
 			ak.Revoked,
 			ak.AddedAtHeight,
@@ -119,7 +127,7 @@ func (r *Repository) UpsertSmartContracts(ctx context.Context, contracts []model
 				last_updated_height = EXCLUDED.last_updated_height,
 				version = app.smart_contracts.version + 1,
 				updated_at = NOW()`,
-			c.Address, c.Name, c.BlockHeight,
+			hexToBytes(c.Address), c.Name, c.BlockHeight,
 		)
 	}
 
@@ -146,7 +154,7 @@ func (r *Repository) UpsertAddressTransactions(ctx context.Context, rows []model
 			INSERT INTO app.address_transactions (address, transaction_id, block_height, role)
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (address, block_height, transaction_id, role) DO NOTHING`,
-			at.Address, at.TransactionID, at.BlockHeight, at.Role,
+			hexToBytes(at.Address), hexToBytes(at.TransactionID), at.BlockHeight, at.Role,
 		)
 	}
 
@@ -186,7 +194,7 @@ func (r *Repository) BackfillAddressTransactionsRange(ctx context.Context, fromH
 			FROM raw.transactions
 			WHERE block_height >= $1 AND block_height < $2
 		) s
-		WHERE address IS NOT NULL AND address <> ''
+		WHERE address IS NOT NULL
 		ON CONFLICT (address, block_height, transaction_id, role) DO NOTHING
 	`, fromHeight, toHeight)
 	if err != nil {
@@ -219,7 +227,7 @@ func (r *Repository) UpdateAddressStatsBatch(ctx context.Context, deltas []Addre
 				total_gas_used = app.address_stats.total_gas_used + EXCLUDED.total_gas_used,
 				last_updated_block = GREATEST(app.address_stats.last_updated_block, EXCLUDED.last_updated_block),
 				updated_at = NOW()`,
-			d.Address, d.TxCount, d.TotalGasUsed, d.LastUpdatedBlock,
+			hexToBytes(d.Address), d.TxCount, d.TotalGasUsed, d.LastUpdatedBlock,
 		)
 	}
 

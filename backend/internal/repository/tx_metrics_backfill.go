@@ -89,7 +89,7 @@ type txMetric struct {
 
 func (r *Repository) loadTxMetrics(ctx context.Context, from, to int64) (map[txMetricKey]txMetric, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT block_height, transaction_id, type, payload
+		SELECT block_height, encode(transaction_id, 'hex') AS transaction_id, type, payload
 		FROM raw.events
 		WHERE block_height BETWEEN $1 AND $2
 		ORDER BY block_height, transaction_id`, from, to)
@@ -123,7 +123,7 @@ func (r *Repository) loadTxMetrics(ctx context.Context, from, to int64) (map[txM
 }
 
 func (r *Repository) applyTxMetrics(ctx context.Context, metrics map[txMetricKey]txMetric) error {
-	if _, err := r.db.Exec(ctx, "CREATE TEMP TABLE IF NOT EXISTS tmp_tx_metrics (block_height BIGINT, transaction_id TEXT, event_count INT, gas_used BIGINT, fee NUMERIC)"); err != nil {
+	if _, err := r.db.Exec(ctx, "CREATE TEMP TABLE IF NOT EXISTS tmp_tx_metrics (block_height BIGINT, transaction_id BYTEA, event_count INT, gas_used BIGINT, fee NUMERIC)"); err != nil {
 		return err
 	}
 	if _, err := r.db.Exec(ctx, "TRUNCATE tmp_tx_metrics"); err != nil {
@@ -132,7 +132,7 @@ func (r *Repository) applyTxMetrics(ctx context.Context, metrics map[txMetricKey
 
 	rows := make([][]interface{}, 0, len(metrics))
 	for k, m := range metrics {
-		rows = append(rows, []interface{}{k.Height, k.ID, m.Count, int64(m.GasUsed), m.Fee})
+		rows = append(rows, []interface{}{k.Height, hexToBytes(k.ID), m.Count, int64(m.GasUsed), m.Fee})
 	}
 
 	if _, err := r.db.CopyFrom(ctx, pgx.Identifier{"tmp_tx_metrics"}, []string{"block_height", "transaction_id", "event_count", "gas_used", "fee"}, pgx.CopyFromRows(rows)); err != nil {
