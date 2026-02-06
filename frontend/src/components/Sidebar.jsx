@@ -97,9 +97,15 @@ export default function Sidebar() {
                 {/* Collapse Toggle */}
                 <button
                     onClick={() => setIsCollapsed(!isCollapsed)}
-                    className="w-full flex items-center justify-center p-2 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-500 transition-colors"
+                    className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3 px-4'} py-2 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-400 transition-colors`}
+                    title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
                 >
-                    {isCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+                    {isCollapsed ? <ChevronRight className="h-5 w-5 shrink-0" /> : <ChevronLeft className="h-5 w-5 shrink-0" />}
+                    {!isCollapsed && (
+                        <span className="text-sm font-medium">
+                            Collapse Sidebar
+                        </span>
+                    )}
                 </button>
 
                 {!isCollapsed && (
