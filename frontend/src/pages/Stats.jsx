@@ -185,7 +185,7 @@ export default function Stats() {
                 >
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center space-x-3">
-                            <Database className="h-6 w-6 text-nothing-green" />
+                            <Database className="h-6 w-6 text-nothing-green-dark dark:text-nothing-green" />
                             <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide">Live Indexing (Forward)</h2>
                             <div className="flex items-center space-x-2 ml-4">
                                 <span className={`flex h-2 w-2 rounded-full ${forwardStatusLabel === 'SYNCING' ? 'bg-green-500 animate-pulse' : forwardStatusLabel === 'DISABLED' ? 'bg-red-500' : 'bg-gray-500'}`}></span>
@@ -229,7 +229,7 @@ export default function Stats() {
                         </div>
                         <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
                             <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Blocks Indexed</div>
-                            <div className="text-2xl font-bold text-nothing-green">
+                            <div className="text-2xl font-bold text-nothing-green-dark dark:text-nothing-green">
                                 <NumberFlow value={indexedRange} format={{ useGrouping: true }} />
                             </div>
                         </div>
@@ -296,7 +296,7 @@ export default function Stats() {
                         </div>
                         <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
                             <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Total Blocks in DB</div>
-                            <div className="text-xl font-bold text-nothing-green">
+                            <div className="text-xl font-bold text-nothing-green-dark dark:text-nothing-green">
                                 {(status?.total_blocks || 0).toLocaleString()}
                             </div>
                         </div>
@@ -333,7 +333,7 @@ export default function Stats() {
                     className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-8 mb-6 rounded-sm shadow-sm dark:shadow-none"
                 >
                     <div className="flex items-center space-x-3 mb-6">
-                        <Activity className="h-6 w-6 text-nothing-green" />
+                        <Activity className="h-6 w-6 text-nothing-green-dark dark:text-nothing-green" />
                         <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide">Worker Progress</h2>
                     </div>
 
@@ -348,7 +348,7 @@ export default function Stats() {
                                 <div key={worker.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-5 hover:border-nothing-green/30 transition-all group rounded-sm">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">{worker.label}</span>
-                                        <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : 'bg-nothing-green shadow-[0_0_8px_rgba(0,255,65,0.6)]'}`} />
+                                        <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : 'bg-nothing-green-dark dark:bg-nothing-green shadow-[0_0_8px_rgba(5,150,105,0.4)] dark:shadow-[0_0_8px_rgba(0,255,65,0.6)]'}`} />
                                     </div>
 
                                     <div className="mb-4">
@@ -357,7 +357,7 @@ export default function Stats() {
                                         </div>
                                         <div className="h-1 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden">
                                             <div
-                                                className="h-full bg-nothing-green"
+                                                className="h-full bg-nothing-green-dark dark:bg-nothing-green"
                                                 style={{ width: `${progress}%` }}
                                             />
                                         </div>
@@ -456,7 +456,7 @@ export default function Stats() {
                         <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
                             <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Backend Status</div>
                             <div className="flex items-center space-x-2">
-                                <div className="h-3 w-3 bg-nothing-green rounded-full animate-pulse" />
+                                <div className="h-3 w-3 bg-nothing-green-dark dark:bg-nothing-green rounded-full animate-pulse" />
                                 <span className="text-zinc-900 dark:text-white font-bold">ONLINE</span>
                             </div>
                         </div>

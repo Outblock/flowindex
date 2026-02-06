@@ -23,6 +23,7 @@ export default {
           black: "#000000", // Pure Black
           dark: "#0a0a0a",  // Nearly Black
           green: "#00ef8b", // Flow Green
+          'green-dark': "#059669", // Darker Green for Light Mode
           red: "#ff0000",   // Nothing Red accent
           white: "#ffffff", // Pure White
         },

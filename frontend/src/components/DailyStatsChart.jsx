@@ -37,7 +37,7 @@ export function DailyStatsChart() {
 
     if (loading) {
         return (
-            <div className="bg-nothing-dark border border-white/10 p-6 h-[286px] flex items-center justify-center">
+            <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-[286px] flex items-center justify-center">
                 <p className="text-zinc-500 text-xs uppercase tracking-widest animate-pulse">Loading Statistics...</p>
             </div>
         );
@@ -45,7 +45,7 @@ export function DailyStatsChart() {
 
     if (!data.length) {
         return (
-            <div className="bg-nothing-dark border border-white/10 p-6 h-[286px] flex items-center justify-center">
+            <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-[286px] flex items-center justify-center">
                 <p className="text-zinc-500 text-xs uppercase tracking-widest">No Transaction History Available</p>
             </div>
         );
@@ -67,7 +67,7 @@ export function DailyStatsChart() {
                             key={range.value}
                             onClick={() => setRangeDays(range.value)}
                             className={`text-[9px] uppercase tracking-wider px-2 py-1 border rounded-sm transition-colors ${rangeDays === range.value
-                                ? 'text-nothing-green border-nothing-green/40 bg-nothing-green/10'
+                                ? 'text-nothing-green-dark dark:text-nothing-green border-nothing-green-dark/40 dark:border-nothing-green/40 bg-nothing-green/10'
                                 : 'text-zinc-500 border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20'
                                 }`}
                         >

@@ -8,14 +8,21 @@ const ThemeContext = createContext({
 export function ThemeProvider({ children }) {
     // Default to dark mode
     const [theme, setTheme] = useState(() => {
+        // Check what's already on the root (from inline script)
+        if (typeof window !== 'undefined' && window.document.documentElement.classList.contains('dark')) {
+            return 'dark';
+        }
         const saved = localStorage.getItem('theme');
         return saved || 'dark';
     });
 
     useEffect(() => {
         const root = window.document.documentElement;
-        root.classList.remove('light', 'dark');
-        root.classList.add(theme);
+        if (theme === 'dark') {
+            root.classList.add('dark');
+        } else {
+            root.classList.remove('dark');
+        }
         localStorage.setItem('theme', theme);
     }, [theme]);
 

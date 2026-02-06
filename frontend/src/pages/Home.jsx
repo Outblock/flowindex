@@ -368,7 +368,7 @@ function Home() {
               animate={{ opacity: 1, y: 0 }}
             >
               <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic">
-                Flow<span className="text-emerald-600 dark:text-nothing-green">Scan</span>
+                Flow<span className="text-nothing-green-dark dark:text-nothing-green">Scan</span>
               </h1>
               <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
             </motion.div>
@@ -383,7 +383,7 @@ function Home() {
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                    <Database className="h-4 w-4 text-emerald-600 dark:text-nothing-green" />
+                    <Database className="h-4 w-4 text-nothing-green-dark dark:text-nothing-green" />
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-zinc-500 dark:text-gray-400">Indexing Progress</p>
@@ -404,7 +404,7 @@ function Home() {
                       style={{ width: `${Math.min(100, historyPercent).toFixed(2)}%` }}
                     />
                   </div>
-                  <span className="text-[10px] uppercase tracking-widest text-emerald-600 dark:text-nothing-green">View Details →</span>
+                  <span className="text-[10px] uppercase tracking-widest text-nothing-green-dark dark:text-nothing-green">View Details →</span>
                 </div>
               </div>
             </div>
@@ -439,18 +439,18 @@ function Home() {
           <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-nothing-green/50 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                <Box className="h-5 w-5 text-emerald-600 dark:text-nothing-green" />
+                <Box className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
               </div>
               <div className={`flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-emerald-500/10 dark:bg-nothing-green/10 border-emerald-500/30 dark:border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
                 <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-600 dark:bg-nothing-green animate-pulse' : 'bg-gray-500'}`}></div>
-                <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-emerald-600 dark:text-nothing-green' : 'text-gray-500'}`}>
+                <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-nothing-green-dark dark:text-nothing-green' : 'text-gray-500'}`}>
                   {isConnected ? 'System Online' : 'Offline'}
                 </span>
               </div>
             </div>
             <div className="space-y-1">
               <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Latest Block</p>
-              <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white group-hover:text-nothing-green transition-colors">
+              <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white group-hover:text-nothing-green-dark dark:group-hover:text-nothing-green transition-colors">
                 <NumberFlow
                   value={statusRaw?.latest_height || 0}
                   format={{ useGrouping: true }}
@@ -575,7 +575,7 @@ function Home() {
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
-                <Box className="h-5 w-5 text-nothing-green" />
+                <Box className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Recent Blocks</h2>
               </div>
             </div>
@@ -607,7 +607,7 @@ function Home() {
                         {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-nothing-green animate-ping" />}
                         <div className="flex items-center justify-between h-full">
                           <div className="flex flex-col">
-                            <span className="text-xs text-nothing-green font-mono">#{block.height.toLocaleString()}</span>
+                            <span className="text-xs text-nothing-green-dark dark:text-nothing-green font-mono">#{block.height.toLocaleString()}</span>
                             <span
                               className="text-[10px] text-gray-500 font-mono hidden sm:inline-block"
                               title={blockIdFull || ''}
@@ -747,7 +747,7 @@ function Home() {
                             >
                               {txTimeRelative || ''}
                             </span>
-                            <span className={`mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border ${isError ? 'border-red-500/50 text-red-500 bg-red-500/10' : isSealed ? 'border-nothing-green/50 text-nothing-green bg-nothing-green/10' : 'border-white/20 text-gray-400 bg-white/5'
+                            <span className={`mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border ${isError ? 'border-red-500/50 text-red-500 bg-red-500/10' : isSealed ? 'border-nothing-green-dark/50 dark:border-nothing-green/50 text-nothing-green-dark dark:text-nothing-green bg-nothing-green-dark/10 dark:bg-nothing-green/10' : 'border-white/20 text-gray-400 bg-white/5'
                               }`}>
                               {isError ? 'Error' : isSealed ? 'Sealed' : 'Pending'}
                             </span>

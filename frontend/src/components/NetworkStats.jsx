@@ -5,11 +5,11 @@ export function NetworkStats({ totalStaked, activeNodes }) {
         return (
             <div className="grid grid-cols-2 gap-4 h-full">
                 {[1, 2].map((i) => (
-                    <div key={i} className="bg-nothing-dark border border-white/10 p-4 flex flex-col justify-between animate-pulse">
-                        <div className="p-1.5 w-8 h-8 bg-white/5 rounded-sm mb-4"></div>
+                    <div key={i} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4 flex flex-col justify-between animate-pulse">
+                        <div className="p-1.5 w-8 h-8 bg-zinc-100 dark:bg-white/5 rounded-sm mb-4"></div>
                         <div className="space-y-2">
-                            <div className="h-3 w-16 bg-white/5 rounded-sm"></div>
-                            <div className="h-6 w-24 bg-white/5 rounded-sm"></div>
+                            <div className="h-3 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm"></div>
+                            <div className="h-6 w-24 bg-zinc-100 dark:bg-white/5 rounded-sm"></div>
                         </div>
                     </div>
                 ))}
@@ -39,7 +39,7 @@ export function NetworkStats({ totalStaked, activeNodes }) {
     return (
         <div className="grid grid-cols-2 gap-4 h-full">
             {stats.map((stat, idx) => (
-                <div key={idx} className={`bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4 flex flex-col justify-between hover:border-nothing-green/30 dark:hover:border-white/30 transition-all duration-300 relative overflow-hidden group`}>
+                <div key={idx} className={`bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4 flex flex-col justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 hover:shadow-sm dark:hover:border-white/30 transition-all duration-300 relative overflow-hidden group`}>
                     <div className="absolute top-0 right-0 w-16 h-16 bg-nothing-green/5 dark:bg-white/5 blur-2xl rounded-full group-hover:bg-nothing-green/10 dark:group-hover:bg-white/10 transition-colors" />
 
                     <div className="flex justify-between items-start mb-2">

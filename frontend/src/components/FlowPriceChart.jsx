@@ -18,18 +18,18 @@ const generateSparkline = (currentPrice) => {
 export function FlowPriceChart({ data }) {
     if (!data) {
         return (
-            <div className="bg-nothing-dark border border-white/10 p-6 h-full flex flex-col justify-between animate-pulse">
+            <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-full flex flex-col justify-between animate-pulse">
                 <div className="flex justify-between items-start mb-4">
                     <div className="space-y-2">
-                        <div className="h-4 w-24 bg-white/5 rounded-sm"></div>
-                        <div className="h-8 w-32 bg-white/5 rounded-sm"></div>
+                        <div className="h-4 w-24 bg-zinc-100 dark:bg-white/5 rounded-sm"></div>
+                        <div className="h-8 w-32 bg-zinc-100 dark:bg-white/5 rounded-sm"></div>
                     </div>
-                    <div className="h-6 w-16 bg-white/5 rounded-sm"></div>
+                    <div className="h-6 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm"></div>
                 </div>
-                <div className="h-16 w-full bg-white/5 rounded-sm mt-auto"></div>
-                <div className="mt-4 pt-4 border-t border-white/5 flex justify-between">
-                    <div className="h-3 w-16 bg-white/5 rounded-sm"></div>
-                    <div className="h-3 w-16 bg-white/5 rounded-sm"></div>
+                <div className="h-16 w-full bg-zinc-100 dark:bg-white/5 rounded-sm mt-auto"></div>
+                <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-white/5 flex justify-between">
+                    <div className="h-3 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm"></div>
+                    <div className="h-3 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm"></div>
                 </div>
             </div>
         );
@@ -48,7 +48,7 @@ export function FlowPriceChart({ data }) {
                 <div>
                     <div className="flex items-center space-x-2 mb-1">
                         <div className="p-1.5 border border-zinc-200 dark:border-white/10 rounded-sm bg-zinc-50 dark:bg-black/20">
-                            <DollarSign className="w-4 h-4 text-nothing-green" />
+                            <DollarSign className="w-4 h-4 text-nothing-green-dark dark:text-nothing-green" />
                         </div>
                         <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-gray-400">Flow Price</h3>
                     </div>
@@ -57,7 +57,7 @@ export function FlowPriceChart({ data }) {
                             ${price.toFixed(3)}
                         </span>
                         <div className={`flex items-center space-x-1 text-xs font-bold px-1.5 py-0.5 rounded-sm border ${isPositive
-                            ? 'text-nothing-green border-nothing-green/30 bg-nothing-green/5'
+                            ? 'text-nothing-green-dark dark:text-nothing-green border-nothing-green-dark/30 dark:border-nothing-green/30 bg-nothing-green/5'
                             : 'text-red-500 border-red-500/30 bg-red-500/5'
                             }`}>
                             {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
