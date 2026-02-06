@@ -126,13 +126,20 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 	blockTimeByHeight := make(map[uint64]time.Time, len(blocks))
 
 	// 1. Insert Blocks
+	hasHeavyBlockPayloads := false
 	for _, b := range blocks {
 		blockTimeByHeight[b.Height] = b.Timestamp
+		if len(b.CollectionGuarantees) > 0 || len(b.BlockSeals) > 0 || len(b.Signatures) > 0 || strings.TrimSpace(b.ExecutionResultID) != "" {
+			hasHeavyBlockPayloads = true
+		}
 	}
 
 	// Hot path: bulk upsert blocks + block_lookup in ~2 statements instead of 2*len(blocks).
 	//
-	if strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+	// NOTE: this path intentionally skips the heavy JSON payload columns (collection_guarantees,
+	// seals, signatures). If STORE_BLOCK_PAYLOADS is enabled (and we received non-empty payloads),
+	// we fall back to the slower per-row UPSERT to preserve those columns.
+	if !hasHeavyBlockPayloads && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
 		heights := make([]int64, len(blocks))
 		ids := make([][]byte, len(blocks))
 		parentIDs := make([][]byte, len(blocks))
@@ -141,6 +148,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		txCounts := make([]int64, len(blocks))
 		eventCounts := make([]int64, len(blocks))
 		stateRootHashes := make([][]byte, len(blocks))
+		totalGasUsed := make([]int64, len(blocks))
 		isSealed := make([]bool, len(blocks))
 
 		for i, b := range blocks {
@@ -152,6 +160,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			txCounts[i] = int64(b.TxCount)
 			eventCounts[i] = int64(b.EventCount)
 			stateRootHashes[i] = hexToBytes(b.StateRootHash)
+			totalGasUsed[i] = int64(b.TotalGasUsed)
 			isSealed[i] = b.IsSealed
 		}
 
@@ -159,7 +168,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			INSERT INTO raw.blocks (
 				height, id, parent_id, timestamp,
 				collection_count, tx_count, event_count,
-				state_root_hash, is_sealed
+				state_root_hash, total_gas_used, is_sealed
 			)
 			SELECT
 				u.height,
@@ -170,6 +179,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				u.tx_count,
 				u.event_count,
 				u.state_root_hash,
+				u.total_gas_used,
 				u.is_sealed
 			FROM UNNEST(
 				$1::bigint[],      -- height
@@ -180,11 +190,12 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				$6::bigint[],      -- tx_count
 				$7::bigint[],      -- event_count
 				$8::bytea[],       -- state_root_hash
-				$9::bool[]         -- is_sealed
+				$9::bigint[],      -- total_gas_used
+				$10::bool[]        -- is_sealed
 			) AS u(
 				height, id, parent_id, timestamp,
 				collection_count, tx_count, event_count,
-				state_root_hash, is_sealed
+				state_root_hash, total_gas_used, is_sealed
 			)
 			ON CONFLICT (height) DO UPDATE SET
 				id = EXCLUDED.id,
@@ -194,8 +205,9 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				tx_count = EXCLUDED.tx_count,
 				event_count = EXCLUDED.event_count,
 				state_root_hash = EXCLUDED.state_root_hash,
+				total_gas_used = EXCLUDED.total_gas_used,
 				is_sealed = EXCLUDED.is_sealed
-		`, heights, ids, parentIDs, timestamps, collectionCounts, txCounts, eventCounts, stateRootHashes, isSealed)
+		`, heights, ids, parentIDs, timestamps, collectionCounts, txCounts, eventCounts, stateRootHashes, totalGasUsed, isSealed)
 		if err != nil {
 			return fmt.Errorf("failed to bulk upsert blocks: %w", err)
 		}
@@ -219,13 +231,17 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		for _, b := range blocks {
 			// Insert into partitioned raw.blocks
 			_, err := dbtx.Exec(ctx, `
-				INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, is_sealed)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+				INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, tx_count, event_count, state_root_hash, collection_guarantees, block_seals, signatures, execution_result_id, total_gas_used, is_sealed)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 				ON CONFLICT (height) DO UPDATE SET
 					id = EXCLUDED.id,
 					tx_count = EXCLUDED.tx_count,
 					event_count = EXCLUDED.event_count,
 					state_root_hash = EXCLUDED.state_root_hash,
+					collection_guarantees = EXCLUDED.collection_guarantees,
+					block_seals = EXCLUDED.block_seals,
+					signatures = EXCLUDED.signatures,
+					execution_result_id = EXCLUDED.execution_result_id,
 					is_sealed = EXCLUDED.is_sealed`,
 				b.Height,
 				hexToBytes(b.ID),
@@ -235,6 +251,11 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				b.TxCount,
 				b.EventCount,
 				hexToBytes(b.StateRootHash),
+				b.CollectionGuarantees,
+				b.BlockSeals,
+				b.Signatures,
+				hexToBytes(b.ExecutionResultID),
+				b.TotalGasUsed,
 				b.IsSealed,
 			)
 			if err != nil {
@@ -898,10 +919,10 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 // Used for pre-insertion in batches to satisfy FK constraints.
 func (r *Repository) SaveBlockOnly(ctx context.Context, block models.Block) error {
 	_, err := r.db.Exec(ctx, `
-	INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, is_sealed)
-	VALUES ($1, $2, $3, $4, $5, $6)
-	ON CONFLICT (height) DO NOTHING`,
-		block.Height, hexToBytes(block.ID), hexToBytes(block.ParentID), block.Timestamp, block.CollectionCount, block.IsSealed,
+		INSERT INTO raw.blocks (height, id, parent_id, timestamp, collection_count, total_gas_used, is_sealed)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (height) DO NOTHING`,
+		block.Height, hexToBytes(block.ID), hexToBytes(block.ParentID), block.Timestamp, block.CollectionCount, block.TotalGasUsed, block.IsSealed,
 	)
 	if err != nil {
 		// Log ALL errors for debugging
@@ -920,7 +941,7 @@ func (r *Repository) ListBlocks(ctx context.Context, limit, offset int) ([]model
 		       encode(parent_id, 'hex') AS parent_id,
 		       timestamp, collection_count, tx_count, event_count,
 		       encode(state_root_hash, 'hex') AS state_root_hash,
-		       is_sealed
+		       total_gas_used, is_sealed
 		FROM raw.blocks 
 		ORDER BY height DESC 
 		LIMIT $1 OFFSET $2`,
@@ -936,7 +957,7 @@ func (r *Repository) ListBlocks(ctx context.Context, limit, offset int) ([]model
 		var b models.Block
 		err := rows.Scan(
 			&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TxCount,
-			&b.EventCount, &b.StateRootHash, &b.IsSealed,
+			&b.EventCount, &b.StateRootHash, &b.TotalGasUsed, &b.IsSealed,
 		)
 		if err != nil {
 			return nil, err
@@ -951,7 +972,7 @@ func (r *Repository) GetRecentBlocks(ctx context.Context, limit, offset int) ([]
 		SELECT b.height,
 		       encode(b.id, 'hex') AS id,
 		       encode(b.parent_id, 'hex') AS parent_id,
-		       b.timestamp, b.collection_count, b.is_sealed, b.tx_count
+		       b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.tx_count
 		FROM raw.blocks b 
 		ORDER BY b.height DESC 
 		LIMIT $1 OFFSET $2`
@@ -965,7 +986,7 @@ func (r *Repository) GetRecentBlocks(ctx context.Context, limit, offset int) ([]
 	var blocks []models.Block
 	for rows.Next() {
 		var b models.Block
-		if err := rows.Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.IsSealed, &b.TxCount); err != nil {
+		if err := rows.Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed, &b.TxCount); err != nil {
 			return nil, err
 		}
 		blocks = append(blocks, b)
@@ -978,7 +999,7 @@ func (r *Repository) GetBlocksByCursor(ctx context.Context, limit int, cursorHei
 		SELECT b.height,
 		       encode(b.id, 'hex') AS id,
 		       encode(b.parent_id, 'hex') AS parent_id,
-		       b.timestamp, b.collection_count, b.is_sealed, b.tx_count
+		       b.timestamp, b.collection_count, b.total_gas_used, b.is_sealed, b.tx_count
 		FROM raw.blocks b
 		WHERE ($1::bigint IS NULL OR b.height < $1)
 		ORDER BY b.height DESC
@@ -993,7 +1014,7 @@ func (r *Repository) GetBlocksByCursor(ctx context.Context, limit int, cursorHei
 	var blocks []models.Block
 	for rows.Next() {
 		var b models.Block
-		if err := rows.Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.IsSealed, &b.TxCount); err != nil {
+		if err := rows.Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed, &b.TxCount); err != nil {
 			return nil, err
 		}
 		blocks = append(blocks, b)
@@ -1019,11 +1040,12 @@ func (r *Repository) GetBlockByHeight(ctx context.Context, height uint64) (*mode
 			COALESCE(encode(parent_id, 'hex'), '') AS parent_id,
 			timestamp,
 			COALESCE(collection_count, 0) AS collection_count,
+			COALESCE(total_gas_used, 0) AS total_gas_used,
 			COALESCE(is_sealed, FALSE) AS is_sealed
 		FROM raw.blocks
 		WHERE height = $1
 	`, height).
-		Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.IsSealed)
+		Scan(&b.Height, &b.ID, &b.ParentID, &b.Timestamp, &b.CollectionCount, &b.TotalGasUsed, &b.IsSealed)
 	if err != nil {
 		return nil, err
 	}

@@ -139,19 +139,18 @@ CREATE TABLE IF NOT EXISTS raw.blocks (
     tx_count          BIGINT DEFAULT 0,
     event_count       BIGINT DEFAULT 0,
     state_root_hash   BYTEA,
+    total_gas_used    BIGINT DEFAULT 0,
     is_sealed         BOOLEAN DEFAULT FALSE,
+
+    -- payloads (consider trimming if storage pressure is high)
+    collection_guarantees JSONB,
+    block_seals          JSONB,
+    signatures           JSONB,
+    execution_result_id  BYTEA,
 
     PRIMARY KEY (height),
     UNIQUE (height, id)
 ) PARTITION BY RANGE (height);
-
--- Trim unused block payload columns to save storage.
-ALTER TABLE IF EXISTS raw.blocks
-    DROP COLUMN IF EXISTS total_gas_used,
-    DROP COLUMN IF EXISTS collection_guarantees,
-    DROP COLUMN IF EXISTS block_seals,
-    DROP COLUMN IF EXISTS signatures,
-    DROP COLUMN IF EXISTS execution_result_id;
 
 -- 3.1.b Scripts & Contract Code mapping tables (For payload offloading)
 -- raw.scripts (store script text by hash)

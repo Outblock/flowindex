@@ -15,6 +15,16 @@ type Block struct {
 	TxCount         int       `json:"tx_count"`
 	EventCount      int       `json:"event_count"`
 	StateRootHash   string    `json:"state_root_hash"`
+
+	// Redundancy Fields
+	CollectionGuarantees []byte `json:"collection_guarantees,omitempty"`
+	BlockSeals           []byte `json:"block_seals,omitempty"`
+	Signatures           []byte `json:"signatures,omitempty"`
+	ParentVoterSignature string `json:"parent_voter_signature,omitempty"`
+	BlockStatus          string `json:"block_status,omitempty"`
+	ExecutionResultID    string `json:"execution_result_id,omitempty"`
+
+	TotalGasUsed uint64        `json:"total_gas_used"`
 	IsSealed     bool          `json:"is_sealed"`
 	Transactions []Transaction `json:"transactions,omitempty"` // For block details
 	CreatedAt    time.Time     `json:"created_at"`
