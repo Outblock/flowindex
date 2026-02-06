@@ -9,6 +9,7 @@ import { IndexingStatus } from './components/IndexingStatus';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Sidebar from './components/Sidebar';
+import { WebSocketProvider } from './components/WebSocketProvider';
 
 function App() {
   return (

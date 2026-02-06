@@ -510,6 +510,9 @@ CREATE TABLE IF NOT EXISTS app.tx_metrics (
     event_count      INT NOT NULL DEFAULT 0,
     gas_used         BIGINT NOT NULL DEFAULT 0,
     fee              NUMERIC,
+    fee_amount       NUMERIC,
+    inclusion_effort NUMERIC,
+    execution_effort NUMERIC,
     execution_status VARCHAR(32),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (block_height, transaction_id)

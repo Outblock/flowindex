@@ -82,9 +82,11 @@ type txMetricKey struct {
 }
 
 type txMetric struct {
-	Count   int
-	GasUsed uint64
-	Fee     float64
+	Count           int
+	GasUsed         uint64
+	FeeAmount       float64
+	InclusionEffort float64
+	ExecutionEffort float64
 }
 
 func (r *Repository) loadTxMetrics(ctx context.Context, from, to int64) (map[txMetricKey]txMetric, error) {
@@ -110,11 +112,27 @@ func (r *Repository) loadTxMetrics(ctx context.Context, from, to int64) (map[txM
 		m := metrics[key]
 		m.Count++
 		if isFeeEventType(typ) {
-			if gas := parseGasUsed(payload); gas > 0 {
-				m.GasUsed = gas
+			var obj interface{}
+			if err := json.Unmarshal(payload, &obj); err == nil {
+				if fee, ok := findNumericField(obj, map[string]bool{"amount": true}); ok {
+					m.FeeAmount += fee
+				}
+				if inc, ok := findNumericField(obj, map[string]bool{"inclusioneffort": true}); ok {
+					m.InclusionEffort = inc
+				}
+				if exec, ok := findNumericField(obj, map[string]bool{"executioneffort": true}); ok {
+					m.ExecutionEffort = exec
+					if exec > 0 {
+						m.GasUsed = executionEffortToGas(exec)
+					}
+				}
 			}
-			if fee, ok := parseFeeAmount(payload); ok {
-				m.Fee += fee
+
+			// Fallback: if we still don't have gas, use any computation/gas field present.
+			if m.GasUsed == 0 {
+				if gas := parseGasUsed(payload); gas > 0 {
+					m.GasUsed = gas
+				}
 			}
 		}
 		metrics[key] = m
@@ -123,7 +141,7 @@ func (r *Repository) loadTxMetrics(ctx context.Context, from, to int64) (map[txM
 }
 
 func (r *Repository) applyTxMetrics(ctx context.Context, metrics map[txMetricKey]txMetric) error {
-	if _, err := r.db.Exec(ctx, "CREATE TEMP TABLE IF NOT EXISTS tmp_tx_metrics (block_height BIGINT, transaction_id BYTEA, event_count INT, gas_used BIGINT, fee NUMERIC)"); err != nil {
+	if _, err := r.db.Exec(ctx, "CREATE TEMP TABLE IF NOT EXISTS tmp_tx_metrics (block_height BIGINT, transaction_id BYTEA, event_count INT, gas_used BIGINT, fee NUMERIC, fee_amount NUMERIC, inclusion_effort NUMERIC, execution_effort NUMERIC)"); err != nil {
 		return err
 	}
 	if _, err := r.db.Exec(ctx, "TRUNCATE tmp_tx_metrics"); err != nil {
@@ -132,30 +150,45 @@ func (r *Repository) applyTxMetrics(ctx context.Context, metrics map[txMetricKey
 
 	rows := make([][]interface{}, 0, len(metrics))
 	for k, m := range metrics {
-		rows = append(rows, []interface{}{k.Height, hexToBytes(k.ID), m.Count, int64(m.GasUsed), m.Fee})
+		rows = append(rows, []interface{}{k.Height, hexToBytes(k.ID), m.Count, int64(m.GasUsed), m.FeeAmount, m.FeeAmount, m.InclusionEffort, m.ExecutionEffort})
 	}
 
-	if _, err := r.db.CopyFrom(ctx, pgx.Identifier{"tmp_tx_metrics"}, []string{"block_height", "transaction_id", "event_count", "gas_used", "fee"}, pgx.CopyFromRows(rows)); err != nil {
+	if _, err := r.db.CopyFrom(ctx, pgx.Identifier{"tmp_tx_metrics"}, []string{"block_height", "transaction_id", "event_count", "gas_used", "fee", "fee_amount", "inclusion_effort", "execution_effort"}, pgx.CopyFromRows(rows)); err != nil {
 		return err
 	}
 
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO app.tx_metrics (
-			block_height, transaction_id, event_count, gas_used, fee, updated_at
+			block_height, transaction_id, event_count, gas_used, fee, fee_amount, inclusion_effort, execution_effort, updated_at
 		)
-		SELECT block_height, transaction_id, event_count, gas_used, fee, NOW()
+		SELECT block_height, transaction_id, event_count, gas_used, fee, fee_amount, inclusion_effort, execution_effort, NOW()
 		FROM tmp_tx_metrics
 		ON CONFLICT (block_height, transaction_id) DO UPDATE SET
 			event_count = EXCLUDED.event_count,
 			gas_used = EXCLUDED.gas_used,
 			fee = EXCLUDED.fee,
+			fee_amount = EXCLUDED.fee_amount,
+			inclusion_effort = EXCLUDED.inclusion_effort,
+			execution_effort = EXCLUDED.execution_effort,
 			updated_at = NOW()`)
 	return err
 }
 
 func isFeeEventType(typ string) bool {
 	typ = strings.ToLower(typ)
-	return strings.Contains(typ, "transactionfee")
+	return strings.Contains(typ, "flowfees.feesdeducted")
+}
+
+func executionEffortToGas(executionEffort float64) uint64 {
+	if executionEffort <= 0 {
+		return 0
+	}
+	// ExecutionEffort is in FLOW (UFix64). Convert to "gas" units used by UI (1e8).
+	gas := executionEffort * 1e8
+	if gas < 0 {
+		return 0
+	}
+	return uint64(gas + 0.5)
 }
 
 func parseFeeAmount(payload []byte) (float64, bool) {

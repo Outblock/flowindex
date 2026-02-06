@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"flowscan-clone/internal/models"
@@ -97,6 +98,12 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.Toke
 		return nil
 	}
 
+	if !includeFeeTransfers() {
+		if isFeeVaultAddress(fromAddr) || isFeeVaultAddress(toAddr) {
+			return nil
+		}
+	}
+
 	return &models.TokenTransfer{
 		TransactionID:        evt.TransactionID,
 		BlockHeight:          evt.BlockHeight,
@@ -109,6 +116,21 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.Toke
 		IsNFT:                isNFT,
 		Timestamp:            evt.Timestamp,
 	}
+}
+
+func includeFeeTransfers() bool {
+	return strings.ToLower(strings.TrimSpace(os.Getenv("INCLUDE_FEE_TRANSFERS"))) == "true"
+}
+
+func isFeeVaultAddress(addr string) bool {
+	feeVault := strings.ToLower(strings.TrimSpace(os.Getenv("FLOW_FEES_ADDRESS")))
+	if feeVault == "" {
+		feeVault = "f919ee77447b7497"
+	}
+	feeVault = strings.TrimPrefix(feeVault, "0x")
+
+	normalized := strings.TrimPrefix(strings.ToLower(addr), "0x")
+	return normalized != "" && normalized == feeVault
 }
 
 func classifyTokenEvent(eventType string) (bool, bool) {
