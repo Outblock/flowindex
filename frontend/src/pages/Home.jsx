@@ -25,6 +25,7 @@ function Home() {
   // Pagination State
   const [blockPage, setBlockPage] = useState(1);
   const [txPage, setTxPage] = useState(1);
+  const txPageRef = useRef(1);
   const [blockCursors, setBlockCursors] = useState({ 1: '' });
   const [txCursors, setTxCursors] = useState({ 1: '' });
   const [blockHasNext, setBlockHasNext] = useState(false);
@@ -228,6 +229,10 @@ function Home() {
   }, [transactions]);
 
   useEffect(() => {
+    txPageRef.current = txPage;
+  }, [txPage]);
+
+  useEffect(() => {
     if (!lastMessage) return;
 
     // Only update if on first page
@@ -322,10 +327,16 @@ function Home() {
 
     const statusTimer = setInterval(refreshStatus, 10000);
     const netStatsTimer = setInterval(refreshNetworkStats, 300000);
+    const txRefreshTimer = setInterval(() => {
+      if (txPageRef.current === 1) {
+        loadTransactions(1);
+      }
+    }, 15000);
 
     return () => {
       clearInterval(statusTimer);
       clearInterval(netStatsTimer);
+      clearInterval(txRefreshTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
