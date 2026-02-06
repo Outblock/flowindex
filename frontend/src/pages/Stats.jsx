@@ -148,11 +148,13 @@ export default function Stats() {
     const isHistoryActive = historyEnabled && historySpeed > 0;
 
     // Format ETA
+    // Format ETA
     const formatDuration = (seconds) => {
         if (!isFinite(seconds) || seconds === 0) return 'N/A';
         const d = Math.floor(seconds / (3600 * 24));
         const h = Math.floor((seconds % (3600 * 24)) / 3600);
         const m = Math.floor((seconds % 3600) / 60);
+
         if (d > 0) return `${d}d ${h}h`;
         if (h > 0) return `${h}h ${m}m`;
         return `${m}m ${Math.floor(seconds % 60)}s`;
@@ -370,6 +372,13 @@ export default function Stats() {
                                                 </span>
                                             </div>
 
+                                            {config.workers !== undefined && (
+                                                <div className="bg-white/5 p-1.5 rounded text-center">
+                                                    <div className="text-[9px] text-zinc-500 uppercase">Workers</div>
+                                                    <div className="text-xs text-white font-mono">{config.workers}</div>
+                                                </div>
+                                            )}
+
                                             {config.concurrency !== undefined && (
                                                 <div className="bg-white/5 p-1.5 rounded text-center">
                                                     <div className="text-[9px] text-zinc-500 uppercase">Concurrency</div>
@@ -383,13 +392,6 @@ export default function Stats() {
                                                     <div className="text-xs text-white font-mono">{config.range}</div>
                                                 </div>
                                             )}
-                                        </div>
-                                    )}
-
-                                    {/* Config Fallbacks if needed */}
-                                    {config.workers !== undefined && (
-                                        <div className="mt-2 text-[10px] text-zinc-600 uppercase">
-                                            Workers: {config.workers}
                                         </div>
                                     )}
                                 </div>
