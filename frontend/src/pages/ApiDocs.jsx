@@ -11,7 +11,6 @@ function ApiDocs({ specUrl }) {
         key={theme}
         configuration={{
           url: specUrl,
-          theme: 'deepSpace',
           darkMode: theme === 'dark',
           showSidebar: true,
           hideDownloadButton: false,
