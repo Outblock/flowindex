@@ -1,14 +1,17 @@
 import { ApiReferenceReact } from '@scalar/api-reference-react';
 import '@scalar/api-reference-react/style.css';
+import { useTheme } from '../contexts/ThemeContext';
 
 function ApiDocs({ specUrl }) {
+  const { theme } = useTheme();
+
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
       <ApiReferenceReact
         configuration={{
           url: specUrl,
           theme: 'deepSpace',
-          darkMode: true,
+          darkMode: theme === 'dark',
           showSidebar: true,
           hideDownloadButton: false,
           hideTestRequestButton: false,

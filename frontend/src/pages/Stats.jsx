@@ -89,8 +89,8 @@ export default function Stats() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-black via-nothing-darker to-black flex items-center justify-center">
-                <div className="animate-pulse text-white">Loading statistics...</div>
+            <div className="min-h-screen bg-gray-50 dark:bg-gradient-to-br dark:from-black dark:via-nothing-darker dark:to-black flex items-center justify-center transition-colors duration-300">
+                <div className="animate-pulse text-zinc-600 dark:text-white">Loading statistics...</div>
             </div>
         );
     }
@@ -161,7 +161,7 @@ export default function Stats() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-black via-nothing-darker to-black">
+        <div className="min-h-screen bg-gray-50 dark:bg-gradient-to-br dark:from-black dark:via-nothing-darker dark:to-black transition-colors duration-300">
             <div className="max-w-7xl mx-auto p-8">
                 {/* Header */}
                 <motion.div
@@ -169,11 +169,11 @@ export default function Stats() {
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-8"
                 >
-                    <h1 className="text-4xl font-bold text-white mb-2 flex items-center">
+                    <h1 className="text-4xl font-bold text-zinc-900 dark:text-white mb-2 flex items-center">
                         <Activity className="mr-3 h-10 w-10 text-nothing-pink" />
                         System Statistics
                     </h1>
-                    <p className="text-gray-400">Real-time indexing progress and system health monitoring</p>
+                    <p className="text-zinc-500 dark:text-gray-400">Real-time indexing progress and system health monitoring</p>
                 </motion.div>
 
                 {/* Main Indexing Progress (Live) */}
@@ -181,15 +181,15 @@ export default function Stats() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-nothing-dark border border-white/10 p-8 mb-6"
+                    className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-8 mb-6 rounded-sm shadow-sm dark:shadow-none"
                 >
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center space-x-3">
                             <Database className="h-6 w-6 text-nothing-green" />
-                            <h2 className="text-2xl font-bold text-white uppercase tracking-wide">Live Indexing (Forward)</h2>
+                            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide">Live Indexing (Forward)</h2>
                             <div className="flex items-center space-x-2 ml-4">
                                 <span className={`flex h-2 w-2 rounded-full ${forwardStatusLabel === 'SYNCING' ? 'bg-green-500 animate-pulse' : forwardStatusLabel === 'DISABLED' ? 'bg-red-500' : 'bg-gray-500'}`}></span>
-                                <span className="text-xs text-gray-400">{forwardStatusLabel}</span>
+                                <span className="text-xs text-zinc-500 dark:text-gray-400">{forwardStatusLabel}</span>
                             </div>
                         </div>
                         <span className="text-3xl font-bold text-nothing-pink">
@@ -198,7 +198,7 @@ export default function Stats() {
                     </div>
 
                     {/* Progress Bar */}
-                    <div className="relative h-16 bg-black/50 border border-white/10 rounded-sm overflow-hidden mb-6">
+                    <div className="relative h-16 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-6">
                         {/* Indexed portion (solid green with glow) */}
                         <motion.div
                             initial={{ width: 0 }}
@@ -213,35 +213,35 @@ export default function Stats() {
 
                         {/* Height Labels */}
                         <div className="absolute inset-0 flex items-center justify-between px-4 text-xs font-mono drop-shadow-md">
-                            <span className="text-white mix-blend-screen font-bold">Start: <NumberFlow value={startHeight} format={{ useGrouping: true }} /></span>
-                            <span className="text-black font-bold mix-blend-screen bg-white/20 px-2 py-0.5 rounded">Current: <NumberFlow value={indexedHeight} format={{ useGrouping: true }} /></span>
-                            <span className="text-white mix-blend-screen font-bold">Latest: <NumberFlow value={latestHeight} format={{ useGrouping: true }} /></span>
+                            <span className="text-zinc-700 dark:text-white mix-blend-multiply dark:mix-blend-screen font-bold">Start: <NumberFlow value={startHeight} format={{ useGrouping: true }} /></span>
+                            <span className="text-black font-bold mix-blend-screen bg-white/50 dark:bg-white/20 px-2 py-0.5 rounded">Current: <NumberFlow value={indexedHeight} format={{ useGrouping: true }} /></span>
+                            <span className="text-zinc-700 dark:text-white mix-blend-multiply dark:mix-blend-screen font-bold">Latest: <NumberFlow value={latestHeight} format={{ useGrouping: true }} /></span>
                         </div>
                     </div>
 
                     {/* Metrics Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Blocks Behind</div>
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Blocks Behind</div>
                             <div className="text-2xl font-bold text-nothing-pink">
                                 <NumberFlow value={blocksBehind} format={{ useGrouping: true }} />
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Blocks Indexed</div>
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Blocks Indexed</div>
                             <div className="text-2xl font-bold text-nothing-green">
                                 <NumberFlow value={indexedRange} format={{ useGrouping: true }} />
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Speed (blocks/s)</div>
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Speed (blocks/s)</div>
                             <div className="text-2xl font-bold text-nothing-blue">
                                 <NumberFlow value={forwardEnabled ? blocksPerSecond : 0} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">ETA</div>
-                            <div className="text-2xl font-bold text-gray-300">
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">ETA</div>
+                            <div className="text-2xl font-bold text-zinc-900 dark:text-gray-300">
                                 {forwardEnabled && eta > 0 ? `${Math.floor(eta / 60)}m ${eta % 60}s` : 'N/A'}
                             </div>
                         </div>
@@ -253,22 +253,22 @@ export default function Stats() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.15 }}
-                    className="bg-nothing-dark dashed-border border-white/10 p-8 mb-6 relative overflow-hidden"
+                    className="bg-white dark:bg-nothing-dark dashed-border border-zinc-200 dark:border-white/10 p-8 mb-6 relative overflow-hidden rounded-sm shadow-sm dark:shadow-none"
                 >
-                    <div className="absolute top-0 right-0 p-4 opacity-5">
-                        <div className="text-6xl font-bold text-white">HISTORY</div>
+                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                        <div className="text-6xl font-bold text-zinc-900 dark:text-white">HISTORY</div>
                     </div>
                     <div className="flex items-center justify-between mb-6 relative z-10">
                         <div className="flex items-center space-x-3">
                             <HardDrive className="h-6 w-6 text-blue-400" />
-                            <h2 className="text-2xl font-bold text-white uppercase tracking-wide">History Backfill</h2>
+                            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide">History Backfill</h2>
                             <div className="flex items-center space-x-2 ml-4">
                                 <span className={`flex h-2 w-2 rounded-full ${historyStatusLabel === 'SYNCING' ? 'bg-green-500 animate-pulse' : historyStatusLabel === 'DISABLED' ? 'bg-red-500' : 'bg-gray-500'}`}></span>
-                                <span className="text-xs text-gray-400">{historyStatusLabel}</span>
+                                <span className="text-xs text-zinc-500 dark:text-gray-400">{historyStatusLabel}</span>
                             </div>
                         </div>
                         <div className="text-right">
-                            <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Oldest Block Indexed</div>
+                            <div className="text-xs text-zinc-500 dark:text-gray-500 uppercase tracking-widest mb-1">Oldest Block Indexed</div>
                             <span className="text-3xl font-bold text-blue-400">
                                 {historyHeight.toLocaleString()}
                             </span>
@@ -276,26 +276,26 @@ export default function Stats() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Indexed History</div>
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Indexed History</div>
                             <div className="text-xl font-bold text-blue-400">
                                 {historyCovered.toLocaleString()} blocks
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Sync Speed</div>
-                            <div className="text-xl font-bold text-white">
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Sync Speed</div>
+                            <div className="text-xl font-bold text-zinc-900 dark:text-white">
                                 {historyEnabled ? historySpeed.toFixed(1) : 'N/A'} <span className="text-[10px] text-gray-500">blk/s</span>
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Est. Time Remaining</div>
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Est. Time Remaining</div>
                             <div className="text-xl font-bold text-nothing-pink">
                                 {historyEnabled ? formatDuration(historyEtaSeconds) : 'N/A'}
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Blocks in DB</div>
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Total Blocks in DB</div>
                             <div className="text-xl font-bold text-nothing-green">
                                 {(status?.total_blocks || 0).toLocaleString()}
                             </div>
@@ -304,11 +304,11 @@ export default function Stats() {
 
                     {/* History Progress Bar */}
                     <div className="mt-6">
-                        <div className="flex items-center justify-between mb-2 text-xs uppercase tracking-wider text-gray-400">
+                        <div className="flex items-center justify-between mb-2 text-xs uppercase tracking-wider text-zinc-500 dark:text-gray-400">
                             <span>History Progress</span>
                             <span className="text-blue-400">{historyPercent.toFixed(2)}%</span>
                         </div>
-                        <div className="relative h-3 bg-black/50 border border-white/10 rounded-sm overflow-hidden">
+                        <div className="relative h-3 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
                             <motion.div
                                 initial={{ width: 0 }}
                                 animate={{ width: `${historyPercent}%` }}
@@ -319,7 +319,7 @@ export default function Stats() {
                                 <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-15" />
                             )}
                         </div>
-                        <div className="mt-2 text-[10px] uppercase tracking-widest text-gray-500">
+                        <div className="mt-2 text-[10px] uppercase tracking-widest text-zinc-500 dark:text-gray-500">
                             Oldest in DB: {minHeight.toLocaleString()} · Target: 0
                         </div>
                     </div>
@@ -330,11 +330,11 @@ export default function Stats() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.18 }}
-                    className="bg-nothing-dark border border-white/10 p-8 mb-6"
+                    className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-8 mb-6 rounded-sm shadow-sm dark:shadow-none"
                 >
                     <div className="flex items-center space-x-3 mb-6">
                         <Activity className="h-6 w-6 text-nothing-green" />
-                        <h2 className="text-2xl font-bold text-white uppercase tracking-wide">Worker Progress</h2>
+                        <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide">Worker Progress</h2>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -345,17 +345,17 @@ export default function Stats() {
                             const progress = latestHeight > 0 && height > 0 ? Math.min(100, (height / latestHeight) * 100) : 0;
                             const config = workerConfig?.[worker.key] || {};
                             return (
-                                <div key={worker.key} className="bg-black/30 border border-white/10 p-5 hover:border-nothing-green/30 transition-all group">
+                                <div key={worker.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-5 hover:border-nothing-green/30 transition-all group rounded-sm">
                                     <div className="flex items-center justify-between mb-4">
-                                        <span className="text-xs text-zinc-400 uppercase tracking-widest">{worker.label}</span>
+                                        <span className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">{worker.label}</span>
                                         <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : 'bg-nothing-green shadow-[0_0_8px_rgba(0,255,65,0.6)]'}`} />
                                     </div>
 
                                     <div className="mb-4">
-                                        <div className="text-2xl font-mono font-bold text-white mb-2">
+                                        <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-2">
                                             <NumberFlow value={height} format={{ useGrouping: true }} />
                                         </div>
-                                        <div className="h-1 bg-white/10 w-full rounded-sm overflow-hidden">
+                                        <div className="h-1 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden">
                                             <div
                                                 className="h-full bg-nothing-green"
                                                 style={{ width: `${progress}%` }}
@@ -364,7 +364,7 @@ export default function Stats() {
                                     </div>
 
                                     {height > 0 && (
-                                        <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-y-3 gap-x-2">
+                                        <div className="pt-4 border-t border-zinc-200 dark:border-white/5 grid grid-cols-2 gap-y-3 gap-x-2">
                                             <div className="col-span-2 flex items-center justify-between">
                                                 <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Behind</span>
                                                 <span className="text-sm font-bold text-nothing-pink font-mono">
@@ -373,23 +373,23 @@ export default function Stats() {
                                             </div>
 
                                             {config.workers !== undefined && (
-                                                <div className="bg-white/5 p-1.5 rounded text-center">
+                                                <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
                                                     <div className="text-[9px] text-zinc-500 uppercase">Workers</div>
-                                                    <div className="text-xs text-white font-mono">{config.workers}</div>
+                                                    <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.workers}</div>
                                                 </div>
                                             )}
 
                                             {config.concurrency !== undefined && (
-                                                <div className="bg-white/5 p-1.5 rounded text-center">
+                                                <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
                                                     <div className="text-[9px] text-zinc-500 uppercase">Concurrency</div>
-                                                    <div className="text-xs text-white font-mono">{config.concurrency}</div>
+                                                    <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.concurrency}</div>
                                                 </div>
                                             )}
 
                                             {config.range !== undefined && config.range !== 0 && (
-                                                <div className="bg-white/5 p-1.5 rounded text-center">
+                                                <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
                                                     <div className="text-[9px] text-zinc-500 uppercase">Range</div>
-                                                    <div className="text-xs text-white font-mono">{config.range}</div>
+                                                    <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.range}</div>
                                                 </div>
                                             )}
                                         </div>
@@ -405,35 +405,35 @@ export default function Stats() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="bg-nothing-dark border border-white/10 p-8 mb-6"
+                    className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-8 mb-6 rounded-sm shadow-sm dark:shadow-none"
                 >
                     <div className="flex items-center space-x-3 mb-6">
                         <HardDrive className="h-6 w-6 text-nothing-blue" />
-                        <h2 className="text-2xl font-bold text-white uppercase tracking-wide">Database Statistics</h2>
+                        <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide">Database Statistics</h2>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Transactions</div>
-                            <div className="text-xl font-bold text-white">
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Total Transactions</div>
+                            <div className="text-xl font-bold text-zinc-900 dark:text-white">
                                 <NumberFlow value={status?.total_transactions || 0} format={{ useGrouping: true }} />
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Events</div>
-                            <div className="text-xl font-bold text-white">
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Total Events</div>
+                            <div className="text-xl font-bold text-zinc-900 dark:text-white">
                                 <NumberFlow value={status?.total_events || 0} format={{ useGrouping: true }} />
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Addresses</div>
-                            <div className="text-xl font-bold text-white">
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Total Addresses</div>
+                            <div className="text-xl font-bold text-zinc-900 dark:text-white">
                                 <NumberFlow value={status?.total_addresses || 0} format={{ useGrouping: true }} />
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Smart Contracts</div>
-                            <div className="text-xl font-bold text-white">
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Smart Contracts</div>
+                            <div className="text-xl font-bold text-zinc-900 dark:text-white">
                                 <NumberFlow value={status?.total_contracts || 0} format={{ useGrouping: true }} />
                             </div>
                         </div>
@@ -445,28 +445,28 @@ export default function Stats() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
-                    className="bg-nothing-dark border border-white/10 p-8"
+                    className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-8 rounded-sm shadow-sm dark:shadow-none"
                 >
                     <div className="flex items-center space-x-3 mb-6">
                         <Server className="h-6 w-6 text-nothing-pink" />
-                        <h2 className="text-2xl font-bold text-white uppercase tracking-wide">System Health</h2>
+                        <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-wide">System Health</h2>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Backend Status</div>
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Backend Status</div>
                             <div className="flex items-center space-x-2">
                                 <div className="h-3 w-3 bg-nothing-green rounded-full animate-pulse" />
-                                <span className="text-white font-bold">ONLINE</span>
+                                <span className="text-zinc-900 dark:text-white font-bold">ONLINE</span>
                             </div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Last Update</div>
-                            <div className="text-white">{generatedAt.toLocaleTimeString()}</div>
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Last Update</div>
+                            <div className="text-zinc-900 dark:text-white">{generatedAt.toLocaleTimeString()}</div>
                         </div>
-                        <div className="bg-black/30 border border-white/10 p-4">
-                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Network</div>
-                            <div className="text-white font-bold">Flow Mainnet</div>
+                        <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                            <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Network</div>
+                            <div className="text-zinc-900 dark:text-white font-bold">Flow Mainnet</div>
                         </div>
                     </div>
                 </motion.div>
