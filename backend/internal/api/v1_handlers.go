@@ -587,7 +587,7 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		writeAPIError(w, http.StatusNotFound, "transaction not found")
 		return
 	}
-	events, _ := s.repo.GetEventsByTransactionIDs(r.Context(), []string{tx.ID})
+	events, _ := s.repo.GetEventsByTransactionID(r.Context(), tx.ID)
 	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), []string{tx.ID})
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), []string{tx.ID})
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), []string{tx.ID})

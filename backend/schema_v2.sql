@@ -303,6 +303,7 @@ CREATE TABLE IF NOT EXISTS app.token_transfers (
 CREATE INDEX IF NOT EXISTS idx_token_transfers_from  ON app.token_transfers(from_address);
 CREATE INDEX IF NOT EXISTS idx_token_transfers_to    ON app.token_transfers(to_address);
 CREATE INDEX IF NOT EXISTS idx_token_transfers_token ON app.token_transfers(token_contract_address);
+CREATE INDEX IF NOT EXISTS idx_token_transfers_nft_height ON app.token_transfers(is_nft, block_height DESC, event_index DESC);
 
 -- 4.2 EVM transactions/logs (10M partitions)
 CREATE TABLE IF NOT EXISTS app.evm_transactions (
