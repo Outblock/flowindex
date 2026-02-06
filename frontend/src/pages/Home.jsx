@@ -341,8 +341,8 @@ function Home() {
   const isHistoryComplete = historyPercent >= 99.99;
 
   return (
-    <div className="min-h-screen bg-nothing-black text-nothing-white font-mono selection:bg-nothing-green selection:text-black">
-      <div className="border-b border-white/5 bg-nothing-dark/50">
+    <div className="min-h-screen bg-gray-50 dark:bg-nothing-black text-zinc-900 dark:text-nothing-white font-mono selection:bg-nothing-green selection:text-black transition-colors duration-300">
+      <div className="border-b border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-nothing-dark/50">
         <div className="container mx-auto px-4 py-12 space-y-8">
           {/* Branding / Hero Text */}
           <div className="text-center space-y-2 mb-8">
@@ -350,7 +350,7 @@ function Home() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white uppercase italic">
+              <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic">
                 Flow<span className="text-nothing-green">Scan</span>
               </h1>
               <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
@@ -360,17 +360,17 @@ function Home() {
           {/* Indexing Progress Banner */}
           <Link
             to="/stats"
-            className="block border border-white/10 bg-nothing-dark/80 hover:border-nothing-green/40 transition-colors"
+            className="block border border-zinc-200 dark:border-white/10 bg-white dark:bg-nothing-dark/80 hover:border-nothing-green/40 transition-colors"
           >
             <div className="p-4 md:p-5">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 border border-white/10 rounded-sm">
+                  <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
                     <Database className="h-4 w-4 text-nothing-green" />
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-gray-400">Indexing Progress</p>
-                    <p className="text-sm text-white">
+                    <p className="text-[10px] uppercase tracking-widest text-zinc-500 dark:text-gray-400">Indexing Progress</p>
+                    <p className="text-sm text-zinc-900 dark:text-white">
                       {totalHistory > 0 ? `${historyPercent.toFixed(2)}% of full history` : 'Initializing...'}
                     </p>
                     {totalHistory > 0 && (
@@ -419,9 +419,9 @@ function Home() {
       <div className="container mx-auto px-4 py-8 space-y-8">
         {/* Basic Stats Section */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-          <div className="group bg-nothing-dark border border-white/10 p-6 hover:border-nothing-green/50 transition-all duration-300">
+          <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-nothing-green/50 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 border border-white/10 rounded-sm">
+              <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
                 <Box className="h-5 w-5 text-nothing-green" />
               </div>
               <div className={`flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-nothing-green/10 border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
@@ -432,8 +432,8 @@ function Home() {
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400 uppercase tracking-widest">Latest Block</p>
-              <p className="text-3xl font-bold font-mono text-white group-hover:text-nothing-green transition-colors">
+              <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Latest Block</p>
+              <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white group-hover:text-nothing-green transition-colors">
                 <NumberFlow
                   value={statusRaw?.latest_height || 0}
                   format={{ useGrouping: true }}
@@ -442,7 +442,9 @@ function Home() {
             </div>
           </div>
 
-          <div className="group bg-nothing-dark border border-white/10 p-6 hover:border-white/30 transition-all duration-300">
+
+
+          <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 border border-white/10 rounded-sm">
                 <Activity className="h-5 w-5 text-white" />
@@ -468,7 +470,9 @@ function Home() {
             </div>
           </div>
 
-          <div className="group bg-nothing-dark border border-white/10 p-6 hover:border-white/30 transition-all duration-300">
+
+
+          <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 border border-white/10 rounded-sm">
                 <TrendingUp className="h-5 w-5 text-white" />
@@ -488,15 +492,15 @@ function Home() {
             </div>
           </div>
 
-          <div className="group bg-nothing-dark border border-white/10 p-6 hover:border-white/30 transition-all duration-300">
+          <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2 border border-white/10 rounded-sm">
-                <Box className="h-5 w-5 text-white" />
+              <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
+                <Box className="h-5 w-5 text-zinc-900 dark:text-white" />
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400 uppercase tracking-widest">Average Block Time</p>
-              <p className="text-3xl font-bold font-mono text-white">
+              <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Average Block Time</p>
+              <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                 {avgBlockTime > 0 ? `${avgBlockTime.toFixed(2)}s` : 'N/A'}
               </p>
               <p className="text-[10px] text-gray-500 uppercase tracking-widest">
@@ -505,7 +509,9 @@ function Home() {
             </div>
           </div>
 
-          <div className="group bg-nothing-dark border border-white/10 p-6 hover:border-white/30 transition-all duration-300">
+
+
+          <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 border border-white/10 rounded-sm">
                 <Activity className="h-5 w-5 text-white" />
@@ -548,12 +554,12 @@ function Home() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-nothing-dark border border-white/10 p-6 h-[1240px] flex flex-col overflow-hidden"
+            className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-[1240px] flex flex-col overflow-hidden"
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
                 <Box className="h-5 w-5 text-nothing-green" />
-                <h2 className="text-lg font-bold text-white uppercase tracking-widest">Recent Blocks</h2>
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Recent Blocks</h2>
               </div>
             </div>
 
@@ -576,9 +582,9 @@ function Home() {
                     >
                       <Link
                         to={`/blocks/${block.height}`}
-                        className={`block border p-4 h-20 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
+                        className={`block border p-4 h-20 transition-colors duration-200 hover:bg-zinc-50 dark:hover:bg-white/5 hover:border-zinc-300 dark:hover:border-white/20 relative overflow-hidden ${isNew
                           ? 'bg-nothing-green/10 border-nothing-green/50'
-                          : 'bg-black/20 border-white/5'
+                          : 'bg-white dark:bg-black/20 border-zinc-100 dark:border-white/5'
                           }`}
                       >
                         {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-nothing-green animate-ping" />}
@@ -616,19 +622,19 @@ function Home() {
               onPageChange={handleBlockPageChange}
               hasNext={blockHasNext}
             />
-          </motion.div>
+          </motion.div >
 
           {/* Recent Transactions */}
-          <motion.div
+          < motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-nothing-dark border border-white/10 p-6 h-[1240px] flex flex-col overflow-hidden"
+            className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-[1240px] flex flex-col overflow-hidden"
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-3">
-                <Activity className="h-5 w-5 text-white" />
-                <h2 className="text-lg font-bold text-white uppercase tracking-widest">Recent TXs</h2>
+                <Activity className="h-5 w-5 text-zinc-900 dark:text-white" />
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Recent TXs</h2>
               </div>
             </div>
 
@@ -689,9 +695,9 @@ function Home() {
                     >
                       <Link
                         to={`/transactions/${tx.id}`}
-                        className={`block border p-4 h-20 transition-colors duration-200 hover:bg-white/5 hover:border-white/20 relative overflow-hidden ${isNew
-                          ? 'bg-white/10 border-white/40'
-                          : 'bg-black/20 border-white/5'
+                        className={`block border p-4 h-20 transition-colors duration-200 hover:bg-zinc-50 dark:hover:bg-white/5 hover:border-zinc-300 dark:hover:border-white/20 relative overflow-hidden ${isNew
+                          ? 'bg-white/10 border-white/40' // Keep new highlight distinct or adjust
+                          : 'bg-white dark:bg-black/20 border-zinc-100 dark:border-white/5'
                           }`}
                       >
                         {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-white animate-ping" />}
@@ -742,10 +748,10 @@ function Home() {
               onPageChange={handleTxPageChange}
               hasNext={txHasNext}
             />
-          </motion.div>
-        </div>
-      </div>
-    </div>
+          </motion.div >
+        </div >
+      </div >
+    </div >
   );
 }
 
