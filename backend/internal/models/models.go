@@ -81,6 +81,16 @@ type EVMTransaction struct {
 	Logs          []byte `json:"logs"`
 }
 
+// EVMTxHash represents a mapping from a Cadence tx to one or more EVM tx hashes.
+type EVMTxHash struct {
+	BlockHeight   uint64    `json:"block_height"`
+	TransactionID string    `json:"transaction_id"`
+	EVMHash       string    `json:"evm_hash"`
+	EventIndex    int       `json:"event_index"`
+	Timestamp     time.Time `json:"timestamp"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 // Event represents the 'events' table
 type Event struct {
 	ID               int             `json:"id"`

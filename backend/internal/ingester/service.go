@@ -385,6 +385,7 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 	var addrActivity []models.AddressTransaction
 	var tokenTransfers []models.TokenTransfer
 	var accountKeys []models.AccountKey
+	var evmTxHashes []models.EVMTxHash
 
 	// Ensure sorted by height (should be already, but safety first)
 	sort.Slice(results, func(i, j int) bool {
@@ -419,10 +420,11 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 		addrActivity = append(addrActivity, res.AddressActivity...)
 		tokenTransfers = append(tokenTransfers, res.TokenTransfers...)
 		accountKeys = append(accountKeys, res.AccountKeys...)
+		evmTxHashes = append(evmTxHashes, res.EVMTxHashes...)
 	}
 
 	// Use the atomic batch save
-	if err := s.repo.SaveBatch(ctx, blocks, txs, events, collections, executionResults, addrActivity, tokenTransfers, accountKeys, s.config.ServiceName, checkpointHeight); err != nil {
+	if err := s.repo.SaveBatch(ctx, blocks, txs, events, collections, executionResults, addrActivity, tokenTransfers, accountKeys, evmTxHashes, s.config.ServiceName, checkpointHeight); err != nil {
 		return err
 	}
 

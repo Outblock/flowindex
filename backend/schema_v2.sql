@@ -323,6 +323,21 @@ CREATE TABLE IF NOT EXISTS app.evm_transactions (
 
 CREATE INDEX IF NOT EXISTS idx_evm_hash ON app.evm_transactions(evm_hash);
 
+-- 4.3 EVM tx hash mapping (supports multiple EVM hashes per Cadence tx)
+CREATE TABLE IF NOT EXISTS app.evm_tx_hashes (
+    block_height      BIGINT NOT NULL,
+    transaction_id    BYTEA NOT NULL,
+    evm_hash          BYTEA NOT NULL,
+    event_index       INT NOT NULL,
+    timestamp         TIMESTAMPTZ NOT NULL,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    PRIMARY KEY (block_height, transaction_id, event_index, evm_hash)
+) PARTITION BY RANGE (block_height);
+
+CREATE INDEX IF NOT EXISTS idx_evm_tx_hashes_hash ON app.evm_tx_hashes(evm_hash);
+CREATE INDEX IF NOT EXISTS idx_evm_tx_hashes_tx ON app.evm_tx_hashes(transaction_id);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5) STATE TABLES (App DB)
 -- ─────────────────────────────────────────────────────────────────────────────

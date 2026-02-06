@@ -44,6 +44,9 @@ func (r *Repository) EnsureAppPartitions(ctx context.Context, minHeight, maxHeig
 	if err := r.createPartitions(ctx, "app.evm_transactions", minHeight, maxHeight, evmStep); err != nil {
 		return err
 	}
+	if err := r.createPartitions(ctx, "app.evm_tx_hashes", minHeight, maxHeight, evmStep); err != nil {
+		return err
+	}
 	return nil
 }
 

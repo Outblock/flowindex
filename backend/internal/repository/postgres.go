@@ -81,7 +81,7 @@ func (r *Repository) GetLastIndexedHeight(ctx context.Context, serviceName strin
 
 // SaveBatch atomicially saves a batch of blocks and all related data
 // SaveBatch saves a batch of blocks and related data atomically
-func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, collections []models.Collection, executionResults []models.ExecutionResult, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, accountKeys []models.AccountKey, serviceName string, checkpointHeight uint64) error {
+func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, collections []models.Collection, executionResults []models.ExecutionResult, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, accountKeys []models.AccountKey, evmTxHashes []models.EVMTxHash, serviceName string, checkpointHeight uint64) error {
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -651,6 +651,99 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 	}
 
+	// 3.0.a Insert EVM tx hash mappings (derived)
+	if enableDerivedWrites && len(evmTxHashes) > 0 {
+		usedCopyForEVMHashes := false
+		if strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
+			sub, err := dbtx.Begin(ctx)
+			if err == nil {
+				defer sub.Rollback(ctx)
+
+				batchCreatedAt := time.Now()
+				_, errCopy := sub.CopyFrom(ctx,
+					pgx.Identifier{"app", "evm_tx_hashes"},
+					[]string{
+						"block_height", "transaction_id", "evm_hash",
+						"event_index", "timestamp", "created_at",
+					},
+					pgx.CopyFromSlice(len(evmTxHashes), func(i int) ([]any, error) {
+						h := evmTxHashes[i]
+
+						hashTimestamp := h.Timestamp
+						if hashTimestamp.IsZero() {
+							if ts, ok := blockTimeByHeight[h.BlockHeight]; ok {
+								hashTimestamp = ts
+							}
+						}
+						if hashTimestamp.IsZero() {
+							hashTimestamp = batchCreatedAt
+						}
+
+						createdAt := h.CreatedAt
+						if createdAt.IsZero() {
+							createdAt = batchCreatedAt
+						}
+
+						return []any{
+							h.BlockHeight,
+							hexToBytes(h.TransactionID),
+							hexToBytes(h.EVMHash),
+							h.EventIndex,
+							hashTimestamp,
+							createdAt,
+						}, nil
+					}),
+				)
+				if errCopy == nil {
+					if err := sub.Commit(ctx); err == nil {
+						usedCopyForEVMHashes = true
+					}
+				}
+
+				if !usedCopyForEVMHashes {
+					_ = sub.Rollback(ctx)
+				}
+			}
+		}
+
+		if !usedCopyForEVMHashes {
+			for _, h := range evmTxHashes {
+				hashTimestamp := h.Timestamp
+				if hashTimestamp.IsZero() {
+					if ts, ok := blockTimeByHeight[h.BlockHeight]; ok {
+						hashTimestamp = ts
+					}
+				}
+				if hashTimestamp.IsZero() {
+					hashTimestamp = time.Now()
+				}
+
+				createdAt := h.CreatedAt
+				if createdAt.IsZero() {
+					createdAt = time.Now()
+				}
+
+				_, err := dbtx.Exec(ctx, `
+					INSERT INTO app.evm_tx_hashes (
+						block_height, transaction_id, evm_hash,
+						event_index, timestamp, created_at
+					)
+					VALUES ($1, $2, $3, $4, $5, $6)
+					ON CONFLICT (block_height, transaction_id, event_index, evm_hash) DO NOTHING`,
+					h.BlockHeight,
+					hexToBytes(h.TransactionID),
+					hexToBytes(h.EVMHash),
+					h.EventIndex,
+					hashTimestamp,
+					createdAt,
+				)
+				if err != nil {
+					return fmt.Errorf("failed to insert evm tx hash: %w", err)
+				}
+			}
+		}
+	}
+
 	// 3.1 Insert Collections (if enabled)
 	usedCopyForCollections := false
 	if len(collections) > 0 && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
@@ -1181,16 +1274,11 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 				WHERE t.id = $1 AND t.block_height = $2`
 			args = []interface{}{hexToBytes(txID), bh}
 		} else {
-			// Try finding by EVM hash in app.evm_transactions
+			// Try finding by EVM hash in app.evm_tx_hashes (supports multiple EVM hashes per Cadence tx)
 			var txID string
 			var bh uint64
-			errEvm := r.db.QueryRow(ctx, "SELECT encode(transaction_id, 'hex'), block_height FROM app.evm_transactions WHERE evm_hash = $1", hexToBytes(normalizedID)).Scan(&txID, &bh)
-			if errEvm != nil && has0x {
-				// If stored with 0x prefix, try that too
-				errEvm = r.db.QueryRow(ctx, "SELECT encode(transaction_id, 'hex'), block_height FROM app.evm_transactions WHERE evm_hash = $1", hexToBytes(id)).Scan(&txID, &bh)
-			}
+			errEvm := r.db.QueryRow(ctx, "SELECT encode(transaction_id, 'hex'), block_height FROM app.evm_tx_hashes WHERE evm_hash = $1", hexToBytes(normalizedID)).Scan(&txID, &bh)
 			if errEvm == nil {
-				// Found via EVM Hash
 				query = `
 					SELECT
 						encode(t.id, 'hex') AS id,
@@ -1220,7 +1308,45 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 					WHERE t.id = $1 AND t.block_height = $2`
 				args = []interface{}{hexToBytes(txID), bh}
 			} else {
-				return nil, fmt.Errorf("transaction not found")
+				// Try finding by EVM hash in app.evm_transactions
+				errEvm = r.db.QueryRow(ctx, "SELECT encode(transaction_id, 'hex'), block_height FROM app.evm_transactions WHERE evm_hash = $1", hexToBytes(normalizedID)).Scan(&txID, &bh)
+				if errEvm != nil && has0x {
+					// If stored with 0x prefix, try that too
+					errEvm = r.db.QueryRow(ctx, "SELECT encode(transaction_id, 'hex'), block_height FROM app.evm_transactions WHERE evm_hash = $1", hexToBytes(id)).Scan(&txID, &bh)
+				}
+				if errEvm == nil {
+					// Found via EVM Hash
+					query = `
+						SELECT
+							encode(t.id, 'hex') AS id,
+							t.block_height,
+							t.transaction_index,
+							COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+							COALESCE(0, 0), COALESCE(0, 0),
+							COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+							COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
+							COALESCE(t.script, s.script_text, '') AS script,
+							t.arguments,
+							COALESCE(t.status, '') AS status,
+							COALESCE(t.error_message, '') AS error_message,
+							COALESCE(t.is_evm, FALSE) AS is_evm,
+							COALESCE(t.gas_limit, 0) AS gas_limit,
+							COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
+							COALESCE(m.event_count, t.event_count, 0) AS event_count,
+							t.timestamp,
+							COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
+							COALESCE(encode(et.from_address, 'hex'), '') AS from_address,
+							COALESCE(encode(et.to_address, 'hex'), '') AS to_address,
+							'' AS evm_value
+						FROM raw.transactions t
+						LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
+						LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
+						LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
+						WHERE t.id = $1 AND t.block_height = $2`
+					args = []interface{}{hexToBytes(txID), bh}
+				} else {
+					return nil, fmt.Errorf("transaction not found")
+				}
 			}
 		}
 	}
