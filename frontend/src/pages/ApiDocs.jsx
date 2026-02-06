@@ -8,6 +8,7 @@ function ApiDocs({ specUrl }) {
   return (
     <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
       <ApiReferenceReact
+        key={theme}
         configuration={{
           url: specUrl,
           theme: 'deepSpace',

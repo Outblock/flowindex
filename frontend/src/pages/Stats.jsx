@@ -161,7 +161,7 @@ export default function Stats() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gradient-to-br dark:from-black dark:via-nothing-darker dark:to-black transition-colors duration-300">
+        <div className="min-h-screen bg-gray-50 dark:bg-nothing-black text-zinc-900 dark:text-white transition-colors duration-300">
             <div className="max-w-7xl mx-auto p-8">
                 {/* Header */}
                 <motion.div
