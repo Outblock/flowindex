@@ -6,7 +6,7 @@ function ApiDocs({ specUrl }) {
   const { theme } = useTheme();
 
   return (
-    <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
+    <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white transition-colors duration-300">
       <ApiReferenceReact
         key={theme}
         configuration={{

@@ -89,7 +89,7 @@ export default function Stats() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gradient-to-br dark:from-black dark:via-nothing-darker dark:to-black flex items-center justify-center transition-colors duration-300">
+            <div className="min-h-screen bg-white dark:bg-nothing-black flex items-center justify-center transition-colors duration-300">
                 <div className="animate-pulse text-zinc-600 dark:text-white">Loading statistics...</div>
             </div>
         );
