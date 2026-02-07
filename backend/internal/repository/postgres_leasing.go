@@ -37,7 +37,9 @@ func (r *Repository) AcquireLease(ctx context.Context, workerType string, fromHe
 // ReclaimLease attempts to reclaim a FAILED lease (Option A: Attempt stays same, Status=ACTIVE)
 func (r *Repository) ReclaimLease(ctx context.Context, workerType string, fromHeight, toHeight uint64, leasedBy string) (int64, error) {
 	var leaseID int64
-	// Only reclaim if status='FAILED' and attempt < 5
+	// Only reclaim if status='FAILED' and attempt is below a safety cap.
+	// If a bug caused repeated failures and we later deploy a fix, we still want
+	// the system to be able to make progress without manual DB intervention.
 	err := r.db.QueryRow(ctx, `
 		UPDATE app.worker_leases
 		SET leased_by = $1, 
@@ -47,7 +49,7 @@ func (r *Repository) ReclaimLease(ctx context.Context, workerType string, fromHe
 		WHERE worker_type = $2 
 		  AND from_height = $3 
 		  AND status = 'FAILED' 
-		  AND attempt < 5
+		  AND attempt < 20
 		RETURNING id`,
 		leasedBy, workerType, fromHeight,
 	).Scan(&leaseID)
