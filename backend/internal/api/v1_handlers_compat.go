@@ -16,8 +16,8 @@ func (s *Server) handlePublicGetAccount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	address := normalizeAddr(mux.Vars(r)["address"])
-	if len(address) != 16 {
+	address := normalizeFlowAddr(mux.Vars(r)["address"])
+	if address == "" {
 		writeAPIError(w, http.StatusBadRequest, "invalid address")
 		return
 	}

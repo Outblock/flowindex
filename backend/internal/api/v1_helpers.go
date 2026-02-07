@@ -70,8 +70,32 @@ func normalizeAddr(addr string) string {
 	return addr
 }
 
-func formatAddressV1(addr string) string {
+func normalizeFlowAddr(addr string) string {
 	addr = normalizeAddr(addr)
+	if addr == "" {
+		return ""
+	}
+	// Basic hex validation (avoid silently mapping invalid input to 0x0...).
+	for _, r := range addr {
+		if (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') {
+			continue
+		}
+		return ""
+	}
+	if len(addr) > 16 {
+		return ""
+	}
+	if len(addr)%2 == 1 {
+		addr = "0" + addr
+	}
+	if len(addr) < 16 {
+		addr = strings.Repeat("0", 16-len(addr)) + addr
+	}
+	return addr
+}
+
+func formatAddressV1(addr string) string {
+	addr = normalizeFlowAddr(addr)
 	if addr == "" {
 		return ""
 	}
@@ -123,17 +147,17 @@ func splitContractIdentifier(value string) (address, name, identifier string) {
 	identifier = value
 	parts := strings.Split(value, ".")
 	if len(parts) >= 3 && strings.EqualFold(parts[0], "A") {
-		address = strings.ToLower(parts[1])
+		address = normalizeFlowAddr(parts[1])
 		name = parts[2]
 		return address, name, identifier
 	}
 	if len(parts) == 2 {
-		address = strings.ToLower(parts[0])
+		address = normalizeFlowAddr(parts[0])
 		name = parts[1]
 		identifier = "A." + address + "." + name
 		return address, name, identifier
 	}
-	address = strings.ToLower(strings.TrimPrefix(value, "0x"))
+	address = normalizeFlowAddr(value)
 	identifier = address
 	return address, "", identifier
 }

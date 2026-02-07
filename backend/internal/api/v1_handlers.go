@@ -737,7 +737,7 @@ func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	address := normalizeAddr(r.URL.Query().Get("address"))
+	address := normalizeFlowAddr(r.URL.Query().Get("address"))
 	identifierRaw := strings.TrimSpace(r.URL.Query().Get("identifier"))
 	if identifierRaw != "" {
 		addr2, name2, _ := splitContractIdentifier(identifierRaw)
