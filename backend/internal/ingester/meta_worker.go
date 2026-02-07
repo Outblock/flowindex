@@ -230,6 +230,16 @@ func (w *MetaWorker) extractContracts(events []models.Event) []models.SmartContr
 
 		address, _ := payload["address"].(string)
 		name, _ := payload["name"].(string)
+		if name == "" {
+			if v, ok := payload["contract"].(string); ok {
+				name = v
+			}
+		}
+		if name == "" {
+			if v, ok := payload["contractName"].(string); ok {
+				name = v
+			}
+		}
 		address = normalizeAddress(address)
 		if address == "" || name == "" {
 			continue

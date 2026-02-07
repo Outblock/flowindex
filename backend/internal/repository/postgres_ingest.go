@@ -802,6 +802,16 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				if err := json.Unmarshal(e.Payload, &payload); err == nil {
 					address, _ := payload["address"].(string)
 					name, _ := payload["name"].(string)
+					if name == "" {
+						if v, ok := payload["contract"].(string); ok {
+							name = v
+						}
+					}
+					if name == "" {
+						if v, ok := payload["contractName"].(string); ok {
+							name = v
+						}
+					}
 					if address != "" && name != "" {
 						_, err := dbtx.Exec(ctx, `
 								INSERT INTO app.smart_contracts (address, name, last_updated_height, created_at, updated_at)
