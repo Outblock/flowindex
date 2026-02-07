@@ -72,7 +72,7 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
-		       t.timestamp, t.created_at,
+		       t.timestamp, t.timestamp AS created_at,
 		       COALESCE(m.event_count, t.event_count) AS event_count
 		FROM raw.transactions t
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
@@ -104,7 +104,7 @@ func (r *Repository) ListTransactionsByBlock(ctx context.Context, height uint64,
 		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
-		       t.timestamp, t.created_at,
+		       t.timestamp, t.timestamp AS created_at,
 		       COALESCE(m.event_count, t.event_count) AS event_count
 		FROM raw.transactions t
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
