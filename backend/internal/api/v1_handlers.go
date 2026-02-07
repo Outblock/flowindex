@@ -200,7 +200,11 @@ func (s *Server) handleFlowListAccounts(w http.ResponseWriter, r *http.Request) 
 			"transaction_hash":  "",
 		})
 	}
-	meta["count"] = len(out)
+	if total, err := s.repo.GetTotalAddresses(r.Context()); err == nil && total > 0 {
+		meta["count"] = total
+	} else {
+		meta["count"] = len(out)
+	}
 	writeAPIResponse(w, out, meta, nil)
 }
 
@@ -808,7 +812,11 @@ func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request)
 	for _, c := range contracts {
 		out = append(out, toContractOutput(c))
 	}
-	meta["count"] = len(out)
+	if total, err := s.repo.GetTotalContracts(r.Context()); err == nil && total > 0 {
+		meta["count"] = total
+	} else {
+		meta["count"] = len(out)
+	}
 	writeAPIResponse(w, out, meta, nil)
 }
 
