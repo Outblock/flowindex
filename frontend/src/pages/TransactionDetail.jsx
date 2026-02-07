@@ -82,10 +82,10 @@ function TransactionDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center font-mono">
+      <div className="min-h-screen bg-white dark:bg-black flex items-center justify-center font-mono transition-colors duration-300">
         <div className="flex flex-col items-center space-y-4">
-          <div className="w-16 h-16 border-2 border-dashed border-zinc-800 border-t-nothing-green rounded-full animate-spin"></div>
-          <p className="text-nothing-green text-xs uppercase tracking-[0.2em] animate-pulse">Retrieving Transaction Data...</p>
+          <div className="w-16 h-16 border-2 border-dashed border-zinc-300 dark:border-zinc-800 border-t-nothing-green-dark dark:border-t-nothing-green rounded-full animate-spin"></div>
+          <p className="text-nothing-green-dark dark:text-nothing-green text-xs uppercase tracking-[0.2em] animate-pulse">Retrieving Transaction Data...</p>
         </div>
       </div>
     );
@@ -93,19 +93,19 @@ function TransactionDetail() {
 
   if (error || !transaction) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center font-mono">
-        <div className="border border-yellow-500/30 bg-nothing-dark p-8 max-w-md text-center">
+      <div className="min-h-screen bg-white dark:bg-black flex items-center justify-center font-mono transition-colors duration-300">
+        <div className="border border-yellow-500/30 bg-yellow-50 dark:bg-nothing-dark p-8 max-w-md text-center shadow-sm">
           <XCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-lg font-bold text-white uppercase tracking-widest mb-2">Transaction Not Yet Indexed</h2>
-          <p className="text-zinc-400 text-sm mb-4">This transaction exists on the blockchain but hasn't been indexed yet.</p>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-2">Transaction Not Yet Indexed</h2>
+          <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-4">This transaction exists on the blockchain but hasn't been indexed yet.</p>
           <p className="text-zinc-500 text-xs mb-6">
             The indexer is currently processing historical blocks. Please check back in a few minutes.
           </p>
           <div className="space-y-2">
-            <Link to="/" className="inline-block w-full border border-white/20 hover:bg-white/10 text-white text-xs uppercase tracking-widest py-3 transition-all">
+            <Link to="/" className="inline-block w-full border border-zinc-200 dark:border-white/20 hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-900 dark:text-white text-xs uppercase tracking-widest py-3 transition-all">
               Return to Dashboard
             </Link>
-            <Link to="/stats" className="inline-block w-full border border-nothing-green/20 hover:bg-nothing-green/10 text-nothing-green text-xs uppercase tracking-widest py-3 transition-all">
+            <Link to="/stats" className="inline-block w-full border border-nothing-green-dark/20 dark:border-nothing-green/20 hover:bg-nothing-green-dark/10 dark:hover:bg-nothing-green/10 text-nothing-green-dark dark:text-nothing-green text-xs uppercase tracking-widest py-3 transition-all">
               View Indexing Progress
             </Link>
           </div>
@@ -121,39 +121,39 @@ function TransactionDetail() {
 
 
   return (
-    <div className="min-h-screen bg-black text-zinc-300 font-mono selection:bg-nothing-green selection:text-black">
+    <div className="min-h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono selection:bg-nothing-green selection:text-black transition-colors duration-300">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Back Button */}
-        <Link to="/" className="inline-flex items-center space-x-2 text-zinc-500 hover:text-white transition-colors mb-8 group">
+        <Link to="/" className="inline-flex items-center space-x-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-8 group">
           <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
           <span className="text-xs uppercase tracking-widest">Return to Dashboard</span>
         </Link>
 
         {/* Header */}
-        <div className="border border-white/10 p-8 mb-8 relative overflow-hidden bg-nothing-dark">
+        <div className="border border-zinc-200 dark:border-white/10 p-8 mb-8 relative overflow-hidden bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             {transaction.is_evm ? <Box className="h-32 w-32" /> : <Hash className="h-32 w-32" />}
           </div>
 
           <div className="relative z-10">
             <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-              <span className="text-nothing-green text-xs uppercase tracking-[0.2em] border border-nothing-green/30 px-2 py-1 rounded-sm w-fit">
+              <span className="text-nothing-green-dark dark:text-nothing-green text-xs uppercase tracking-[0.2em] border border-nothing-green-dark/30 dark:border-nothing-green/30 px-2 py-1 rounded-sm w-fit">
                 {transaction.type}
               </span>
               <span className={`text-xs uppercase tracking-[0.2em] border px-2 py-1 rounded-sm w-fit ${transaction.status === 'SEALED'
-                ? 'text-white border-white/30'
-                : 'text-yellow-500 border-yellow-500/30'
+                ? 'text-zinc-500 dark:text-white border-zinc-300 dark:border-white/30'
+                : 'text-yellow-600 dark:text-yellow-500 border-yellow-500/30'
                 }`}>
                 {transaction.status}
               </span>
               {transaction.is_evm && (
-                <span className="text-blue-400 text-xs uppercase tracking-[0.2em] border border-blue-400/30 px-2 py-1 rounded-sm w-fit">
+                <span className="text-blue-600 dark:text-blue-400 text-xs uppercase tracking-[0.2em] border border-blue-400/30 px-2 py-1 rounded-sm w-fit">
                   EVM Transaction
                 </span>
               )}
             </div>
 
-            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 break-all">
+            <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white mb-2 break-all">
               {transaction.is_evm ? transaction.evm_hash : transaction.id}
             </h1>
             <p className="text-zinc-500 text-xs uppercase tracking-widest">
@@ -164,11 +164,11 @@ function TransactionDetail() {
 
         {/* Error Message Section */}
         {transaction.errorMessage && (
-          <div className="border border-red-500/30 bg-red-900/10 p-6 mb-8 flex items-start gap-4">
+          <div className="border border-red-500/30 bg-red-50 dark:bg-red-900/10 p-6 mb-8 flex items-start gap-4 rounded-sm">
             <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-0.5" />
             <div>
               <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest mb-1">Execution Error</h3>
-              <p className="text-red-300 text-xs font-mono break-all leading-relaxed">
+              <p className="text-red-600 dark:text-red-300 text-xs font-mono break-all leading-relaxed">
                 {/* Try to parse standard Flow error format if possible, otherwise display raw */}
                 {transaction.errorMessage}
               </p>
@@ -179,8 +179,8 @@ function TransactionDetail() {
         {/* Info Grid - Now Full Width for Flow Info */}
         <div className="mb-8">
           {/* Flow Information */}
-          <div className="border border-white/10 p-6 bg-nothing-dark">
-            <h2 className="text-white text-sm uppercase tracking-widest mb-6 border-b border-white/5 pb-2">
+          <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+            <h2 className="text-zinc-900 dark:text-white text-sm uppercase tracking-widest mb-6 border-b border-zinc-100 dark:border-white/5 pb-2">
               Cadence / Flow Information
             </h2>
 
@@ -188,11 +188,11 @@ function TransactionDetail() {
               <div className="space-y-6">
                 <div className="group">
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Flow Transaction ID</p>
-                  <code className="text-sm text-zinc-300 break-all">{transaction.id}</code>
+                  <code className="text-sm text-zinc-600 dark:text-zinc-300 break-all">{transaction.id}</code>
                 </div>
                 <div className="group">
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Timestamp</p>
-                  <span className="text-sm text-zinc-300">{txTimeAbsolute || 'N/A'}</span>
+                  <span className="text-sm text-zinc-600 dark:text-zinc-300">{txTimeAbsolute || 'N/A'}</span>
                   {txTimeRelative && (
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">
                       {txTimeRelative}
@@ -205,14 +205,14 @@ function TransactionDetail() {
                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Block Height</p>
                     <Link
                       to={`/blocks/${transaction.blockHeight}`}
-                      className="text-sm text-white hover:text-nothing-green transition-colors"
+                      className="text-sm text-zinc-900 dark:text-white hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors"
                     >
                       {transaction.blockHeight?.toLocaleString()}
                     </Link>
                   </div>
                   <div className="group">
                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Computation Usage</p>
-                    <span className="text-sm text-zinc-300">{transaction.computation_usage?.toLocaleString() || 0}</span>
+                    <span className="text-sm text-zinc-600 dark:text-zinc-300">{transaction.computation_usage?.toLocaleString() || 0}</span>
                   </div>
                 </div>
               </div>
@@ -221,11 +221,11 @@ function TransactionDetail() {
                 {/* Payer Section */}
                 <div className="group">
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Payer</p>
-                  <div className="bg-black/40 border border-white/5 p-3 flex items-center justify-between hover:border-nothing-green/30 transition-colors">
-                    <Link to={`/accounts/${formatAddress(transaction.payer)}`} className="text-sm text-nothing-green hover:underline break-all font-mono">
+                  <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 flex items-center justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-colors rounded-sm">
+                    <Link to={`/accounts/${formatAddress(transaction.payer)}`} className="text-sm text-nothing-green-dark dark:text-nothing-green hover:underline break-all font-mono">
                       {formatAddress(transaction.payer)}
                     </Link>
-                    <span className="text-[10px] text-zinc-600 uppercase tracking-wider px-2 py-0.5 bg-white/5 rounded-sm">
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase tracking-wider px-2 py-0.5 bg-zinc-200 dark:bg-white/5 rounded-sm">
                       Fee Payer
                     </span>
                   </div>
@@ -234,15 +234,15 @@ function TransactionDetail() {
                 {/* Proposer Section */}
                 <div className="group">
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Proposer</p>
-                  <div className="bg-black/40 border border-white/5 p-3 flex flex-col gap-2 hover:border-white/20 transition-colors">
-                    <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-1">
+                  <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 flex flex-col gap-2 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm">
+                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/5 pb-2 mb-1">
                       <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Key Info</span>
                       <div className="flex gap-3">
-                        <span className="text-[10px] text-zinc-400 font-mono">Seq: <span className="text-white">{transaction.proposerSequenceNumber}</span></span>
-                        <span className="text-[10px] text-zinc-400 font-mono">Key: <span className="text-white">{transaction.proposerKeyIndex}</span></span>
+                        <span className="text-[10px] text-zinc-400 font-mono">Seq: <span className="text-zinc-600 dark:text-white">{transaction.proposerSequenceNumber}</span></span>
+                        <span className="text-[10px] text-zinc-400 font-mono">Key: <span className="text-zinc-600 dark:text-white">{transaction.proposerKeyIndex}</span></span>
                       </div>
                     </div>
-                    <Link to={`/accounts/${formatAddress(transaction.proposer)}`} className="text-sm text-zinc-300 hover:text-white break-all font-mono">
+                    <Link to={`/accounts/${formatAddress(transaction.proposer)}`} className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white break-all font-mono">
                       {formatAddress(transaction.proposer)}
                     </Link>
                   </div>
@@ -253,12 +253,12 @@ function TransactionDetail() {
                   <div className="group">
                     <div className="flex items-center gap-2 mb-2">
                       <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Authorizers</p>
-                      <span className="bg-white/10 text-white text-[9px] px-1.5 py-0.5 rounded-full">{transaction.authorizers.length}</span>
+                      <span className="bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-white text-[9px] px-1.5 py-0.5 rounded-full">{transaction.authorizers.length}</span>
                     </div>
                     <div className="flex flex-col gap-2">
                       {transaction.authorizers.map((auth, idx) => (
-                        <div key={`${auth}-${idx}`} className="bg-black/40 border border-white/5 p-3 hover:border-white/20 transition-colors">
-                          <Link to={`/accounts/${formatAddress(auth)}`} className="text-sm text-zinc-400 hover:text-white break-all font-mono block">
+                        <div key={`${auth}-${idx}`} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm">
+                          <Link to={`/accounts/${formatAddress(auth)}`} className="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white break-all font-mono block">
                             {formatAddress(auth)}
                           </Link>
                         </div>
@@ -273,28 +273,28 @@ function TransactionDetail() {
 
         {/* Tabs Section */}
         <div className="mt-12">
-          <div className="flex border-b border-white/10 mb-0 overflow-x-auto">
+          <div className="flex border-b border-zinc-200 dark:border-white/10 mb-0 overflow-x-auto">
             <button
               onClick={() => setActiveTab('script')}
               className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'script'
-                ? 'text-white border-b-2 border-nothing-green bg-white/5'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
                 }`}
             >
               <span className="flex items-center gap-2">
-                <Zap className={`h-4 w-4 ${activeTab === 'script' ? 'text-nothing-green' : ''}`} />
+                <Zap className={`h-4 w-4 ${activeTab === 'script' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
                 Script & Args
               </span>
             </button>
             <button
               onClick={() => setActiveTab('events')}
               className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'events'
-                ? 'text-white border-b-2 border-nothing-green bg-white/5'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
                 }`}
             >
               <span className="flex items-center gap-2">
-                <Database className={`h-4 w-4 ${activeTab === 'events' ? 'text-nothing-green' : ''}`} />
+                <Database className={`h-4 w-4 ${activeTab === 'events' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
                 Key Events ({transaction.events ? transaction.events.length : 0})
               </span>
             </button>
@@ -302,19 +302,19 @@ function TransactionDetail() {
               <button
                 onClick={() => setActiveTab('evm')}
                 className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'evm'
-                  ? 'text-white border-b-2 border-nothing-green bg-white/5'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                  ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
+                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
                   }`}
               >
                 <span className="flex items-center gap-2">
-                  <Layers className={`h-4 w-4 ${activeTab === 'evm' ? 'text-blue-400' : ''}`} />
+                  <Layers className={`h-4 w-4 ${activeTab === 'evm' ? 'text-blue-600 dark:text-blue-400' : ''}`} />
                   EVM Execution Details
                 </span>
               </button>
             )}
           </div>
 
-          <div className="bg-nothing-dark border border-white/10 border-t-0 p-6 min-h-[300px]">
+          <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[300px] shadow-sm dark:shadow-none">
             {activeTab === 'script' && (
               <div className="space-y-8">
                 {/* Script */}
@@ -323,7 +323,7 @@ function TransactionDetail() {
                     <Braces className="h-4 w-4" /> Cadence Script
                   </h3>
                   {transaction.script ? (
-                    <div className="border border-white/5 rounded-sm overflow-hidden text-[10px]">
+                    <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden text-[10px]">
                       <SyntaxHighlighter
                         language="swift"
                         style={vscDarkPlus}
@@ -340,7 +340,7 @@ function TransactionDetail() {
                       </SyntaxHighlighter>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-24 text-zinc-600 border border-white/5 border-dashed rounded-sm">
+                    <div className="flex flex-col items-center justify-center h-24 text-zinc-600 border border-zinc-200 dark:border-white/5 border-dashed rounded-sm">
                       <p className="text-xs uppercase tracking-widest">No Script Content Available</p>
                     </div>
                   )}
@@ -352,7 +352,7 @@ function TransactionDetail() {
                     <FileText className="h-4 w-4" /> Script Arguments
                   </h3>
                   {transaction.arguments ? (
-                    <div className="bg-black/50 border border-white/5 p-4 rounded-sm">
+                    <div className="bg-zinc-50 dark:bg-black/50 border border-zinc-200 dark:border-white/5 p-4 rounded-sm">
                       {(() => {
                         // Helper to decode Cadence JSON (JSON-CDC) -> JS Value
                         const decodeCadenceValue = (val) => {
@@ -415,13 +415,13 @@ function TransactionDetail() {
                               args = JSON.parse(args);
                             } catch {
                               // raw string fallback
-                              return <div className="text-zinc-400 text-xs">{args}</div>;
+                              return <div className="text-zinc-500 dark:text-zinc-400 text-xs">{args}</div>;
                             }
                           }
 
                           if (!Array.isArray(args)) {
                             // If it's a single object or something else
-                            return <pre className="text-[10px] text-nothing-green whitespace-pre-wrap">{JSON.stringify(args, null, 2)}</pre>;
+                            return <pre className="text-[10px] text-nothing-green-dark dark:text-nothing-green whitespace-pre-wrap">{JSON.stringify(args, null, 2)}</pre>;
                           }
 
                           // It is an array of arguments. Decode each.
@@ -430,9 +430,9 @@ function TransactionDetail() {
                           return (
                             <div className="space-y-2">
                               {decodedArgs.map((arg, idx) => (
-                                <div key={idx} className="flex flex-col gap-1 border-b border-white/5 last:border-0 pb-2 mb-2 last:mb-0 last:pb-0">
+                                <div key={idx} className="flex flex-col gap-1 border-b border-zinc-200 dark:border-white/5 last:border-0 pb-2 mb-2 last:mb-0 last:pb-0">
                                   <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Argument {idx}</span>
-                                  <div className="text-xs text-zinc-300 font-mono break-all bg-white/5 p-2 rounded-sm">
+                                  <div className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all bg-zinc-100 dark:bg-white/5 p-2 rounded-sm">
                                     {/* Display primitive directly, or stringify complex objects */}
                                     {typeof arg === 'object' && arg !== null
                                       ? JSON.stringify(arg, null, 2)
@@ -461,31 +461,31 @@ function TransactionDetail() {
               <div className="space-y-6">
                 {transaction.events && transaction.events.length > 0 ? (
                   transaction.events.map((event, idx) => (
-                    <div key={idx} className="relative pl-6 border-l border-white/5 hover:border-nothing-green/30 transition-all group/event">
-                      <div className="absolute left-0 top-0 -translate-x-1/2 w-2 h-2 bg-nothing-green/20 border border-nothing-green/40 rounded-full group-hover/event:bg-nothing-green group-hover/event:scale-125 transition-all"></div>
+                    <div key={idx} className="relative pl-6 border-l border-zinc-200 dark:border-white/5 hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-all group/event">
+                      <div className="absolute left-0 top-0 -translate-x-1/2 w-2 h-2 bg-nothing-green-dark/20 dark:bg-nothing-green/20 border border-nothing-green-dark/40 dark:border-nothing-green/40 rounded-full group-hover/event:bg-nothing-green-dark dark:group-hover/event:bg-nothing-green group-hover/event:scale-125 transition-all"></div>
 
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
                         <div className="flex flex-col">
-                          <p className="text-xs font-bold text-nothing-green mb-1 uppercase tracking-wider">
+                          <p className="text-xs font-bold text-nothing-green-dark dark:text-nothing-green mb-1 uppercase tracking-wider">
                             {event.event_name || event.type.split('.').pop()}
                           </p>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-zinc-600 uppercase">Contract</span>
+                            <span className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase">Contract</span>
                             <Link
                               to={`/accounts/${formatAddress(event.contract_address)}`}
-                              className="text-[10px] text-zinc-400 hover:text-white transition-colors underline decoration-white/10 underline-offset-2"
+                              className="text-[10px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors underline decoration-zinc-300 dark:decoration-white/10 underline-offset-2"
                             >
                               {formatAddress(event.contract_address) || 'System'} {event.contract_name ? `(${event.contract_name})` : ''}
                             </Link>
                           </div>
                         </div>
-                        <span className="text-[10px] text-zinc-700 font-mono bg-white/5 px-2 py-0.5 rounded uppercase">
+                        <span className="text-[10px] text-zinc-600 dark:text-zinc-700 font-mono bg-zinc-100 dark:bg-white/5 px-2 py-0.5 rounded uppercase">
                           Index #{event.event_index}
                         </span>
                       </div>
 
-                      <div className="bg-black/40 rounded-sm border border-white/5 p-4 group-hover/event:bg-black/60 transition-colors">
-                        <pre className="text-[11px] text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+                      <div className="bg-zinc-50 dark:bg-black/40 rounded-sm border border-zinc-200 dark:border-white/5 p-4 group-hover/event:bg-zinc-100 dark:group-hover/event:bg-black/60 transition-colors">
+                        <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
                           {JSON.stringify(event.values || event.payload || event.data, null, 2)}
                         </pre>
                       </div>
@@ -504,25 +504,25 @@ function TransactionDetail() {
               <div className="space-y-6">
                 {/* Detailed EVM Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-black/30 p-4 border border-white/5 space-y-1">
+                  <div className="bg-zinc-50 dark:bg-black/30 p-4 border border-zinc-200 dark:border-white/5 space-y-1 rounded-sm">
                     <p className="text-[10px] text-zinc-500 uppercase">EVM Hash</p>
-                    <p className="text-xs text-blue-400 font-mono break-all">{transaction.evm_hash}</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">{transaction.evm_hash}</p>
                   </div>
-                  <div className="bg-black/30 p-4 border border-white/5 space-y-1">
+                  <div className="bg-zinc-50 dark:bg-black/30 p-4 border border-zinc-200 dark:border-white/5 space-y-1 rounded-sm">
                     <p className="text-[10px] text-zinc-500 uppercase">Value</p>
-                    <p className="text-xs text-white font-mono">{transaction.evm_value ? `${parseInt(transaction.evm_value, 16) / 1e18}` : '0'} FLOW</p>
+                    <p className="text-xs text-zinc-700 dark:text-white font-mono">{transaction.evm_value ? `${parseInt(transaction.evm_value, 16) / 1e18}` : '0'} FLOW</p>
                   </div>
-                  <div className="bg-black/30 p-4 border border-white/5 space-y-1">
+                  <div className="bg-zinc-50 dark:bg-black/30 p-4 border border-zinc-200 dark:border-white/5 space-y-1 rounded-sm">
                     <p className="text-[10px] text-zinc-500 uppercase">From</p>
-                    <p className="text-xs text-zinc-300 font-mono break-all uppercase">{transaction.evm_from || 'N/A'}</p>
+                    <p className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all uppercase">{transaction.evm_from || 'N/A'}</p>
                   </div>
-                  <div className="bg-black/30 p-4 border border-white/5 space-y-1">
+                  <div className="bg-zinc-50 dark:bg-black/30 p-4 border border-zinc-200 dark:border-white/5 space-y-1 rounded-sm">
                     <p className="text-[10px] text-zinc-500 uppercase">To</p>
-                    <p className="text-xs text-zinc-300 font-mono break-all uppercase">{transaction.evm_to || 'Contract Creation'}</p>
+                    <p className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all uppercase">{transaction.evm_to || 'Contract Creation'}</p>
                   </div>
                 </div>
 
-                <div className="p-4 border border-white/5 bg-white/5 text-center mt-4">
+                <div className="p-4 border border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 text-center mt-4 rounded-sm">
                   <p className="text-xs text-zinc-500">Further EVM logs and traces to be implemented.</p>
                 </div>
               </div>
