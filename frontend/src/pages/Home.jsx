@@ -9,7 +9,6 @@ import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket'
 import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
 import { NetworkStats } from '../components/NetworkStats';
-import { Pagination } from '../components/Pagination';
 import { DailyStatsChart } from '../components/DailyStatsChart';
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 import { useTimeTicker } from '../hooks/useTimeTicker';
@@ -22,14 +21,7 @@ function Home() {
   const [networkStats, setNetworkStats] = useState(null); // New state
   const [tps, setTps] = useState(0);
 
-  // Pagination State
-  const [blockPage, setBlockPage] = useState(1);
-  const [txPage, setTxPage] = useState(1);
-  const txPageRef = useRef(1);
-  const [blockCursors, setBlockCursors] = useState({ 1: '' });
-  const [txCursors, setTxCursors] = useState({ 1: '' });
-  const [blockHasNext, setBlockHasNext] = useState(false);
-  const [txHasNext, setTxHasNext] = useState(false);
+
 
   const [newBlockIds, setNewBlockIds] = useState(new Set());
   const [newTxIds, setNewTxIds] = useState(new Set());
@@ -157,79 +149,37 @@ function Home() {
     }
 
     merged.sort(compareTxDesc);
-    return merged.slice(0, 20);
+    return merged.slice(0, 50);
   };
 
-  const mergeBlocks = (prev, incoming) => {
-    const byHeight = new Map();
 
-    for (const block of prev || []) {
-      if (!block || block.height == null) continue;
-      byHeight.set(Number(block.height), block);
-    }
 
-    for (const block of incoming || []) {
-      if (!block || block.height == null) continue;
-      const height = Number(block.height);
-      const existing = byHeight.get(height);
-      byHeight.set(height, existing ? { ...existing, ...block } : block);
-    }
-
-    return Array.from(byHeight.values())
-      .sort((a, b) => Number(b?.height ?? 0) - Number(a?.height ?? 0))
-      .slice(0, 20);
-  };
-
-  // Load Blocks for Page
-  const loadBlocks = async (page) => {
+  // Load Blocks (Initial only, no pagination)
+  const loadBlocks = async () => {
     try {
-      const cursor = blockCursors[page] ?? '';
-      const res = await api.getBlocks(cursor, 20);
+      const res = await api.getBlocks('', 50);
       const items = res?.items ?? (Array.isArray(res) ? res : []);
-      const nextCursor = res?.next_cursor ?? '';
-      setBlocks(prev => (page === 1 ? mergeBlocks(prev, items) : items));
-      setBlockHasNext(Boolean(nextCursor));
-      if (nextCursor) {
-        setBlockCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
-      }
+      setBlocks(items);
     } catch (err) {
       console.error("Failed to load blocks", err);
     }
   };
 
-  // Load Txs for Page
-  const loadTransactions = async (page) => {
+  // Load Txs (Initial only, no pagination)
+  const loadTransactions = async () => {
     try {
-      const cursor = txCursors[page] ?? '';
-      const res = await api.getTransactions(cursor, 20);
+      const res = await api.getTransactions('', 50);
       const items = res?.items ?? (Array.isArray(res) ? res : []);
-      const nextCursor = res?.next_cursor ?? '';
       const transformedTxs = Array.isArray(items) ? items.map(tx => ({
         ...tx,
         type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
         payer: tx.payer_address || tx.proposer_address,
         blockHeight: tx.block_height
       })) : [];
-      setTransactions(prev => (page === 1
-        ? mergeTransactions(prev, transformedTxs, { prependNew: false })
-        : mergeTransactions([], transformedTxs, { prependNew: false })));
-      setTxHasNext(Boolean(nextCursor));
-      if (nextCursor) {
-        setTxCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
-      }
+      setTransactions(transformedTxs);
     } catch (err) {
       console.error("Failed to load transactions", err);
     }
-  };
-
-  const handleBlockPageChange = (newPage) => {
-    setBlockPage(newPage);
-    loadBlocks(newPage);
-  };
-
-  const handleTxPageChange = (newPage) => {
-    setTxPage(newPage);
-    loadTransactions(newPage);
   };
 
   const computeTpsFromBlocks = (items) => {
@@ -266,18 +216,13 @@ function Home() {
   }, [transactions]);
 
   useEffect(() => {
-    txPageRef.current = txPage;
-  }, [txPage]);
-
-  useEffect(() => {
     if (!lastMessage) return;
 
-    // Only update if on first page
-    if (blockPage === 1 && lastMessage.type === 'new_block') {
+    if (lastMessage.type === 'new_block') {
       const newBlock = lastMessage.payload;
       setBlocks(prev => {
         const next = [newBlock, ...(prev || [])];
-        return next.slice(0, 20);
+        return next.slice(0, 50);
       });
       setNewBlockIds(prev => new Set(prev).add(newBlock.height));
       setTimeout(() => setNewBlockIds(prev => {
@@ -292,8 +237,7 @@ function Home() {
       } : prev);
     }
 
-    // Only update if on first page
-    if (txPage === 1 && lastMessage.type === 'new_transaction') {
+    if (lastMessage.type === 'new_transaction') {
       const rawTx = lastMessage.payload;
       const newTx = {
         ...rawTx,
@@ -308,7 +252,7 @@ function Home() {
 
       setTransactions(prev => {
         const merged = mergeTransactions(prev, [newTx], { prependNew: true });
-        return merged.slice(0, 20);
+        return merged.slice(0, 50);
       });
 
       if (!exists) {
@@ -328,7 +272,7 @@ function Home() {
         total_transactions: (prev.total_transactions || 0) + 1
       } : prev);
     }
-  }, [lastMessage, blockPage, txPage]);
+  }, [lastMessage]);
 
   // Initial data load + periodic refresh
   useEffect(() => {
@@ -357,8 +301,8 @@ function Home() {
     const loadInitialData = async () => {
       try {
         await Promise.allSettled([refreshStatus(), refreshNetworkStats()]);
-        await loadBlocks(1);
-        await loadTransactions(1);
+        await loadBlocks();
+        await loadTransactions();
       } catch (error) {
         console.error('Failed to fetch initial data:', error);
       } finally {
@@ -372,9 +316,7 @@ function Home() {
     const netStatsTimer = setInterval(refreshNetworkStats, 300000);
     // Fallback polling when websocket is unavailable.
     const txRefreshTimer = setInterval(() => {
-      if (txPageRef.current === 1) {
-        loadTransactions(1);
-      }
+      loadTransactions(1);
     }, 5000);
 
     return () => {
@@ -671,12 +613,6 @@ function Home() {
                 })}
               </AnimatePresence>
             </div>
-
-            <Pagination
-              currentPage={blockPage}
-              onPageChange={handleBlockPageChange}
-              hasNext={blockHasNext}
-            />
           </motion.div >
 
           {/* Recent Transactions */}
@@ -797,13 +733,8 @@ function Home() {
                 })}
               </AnimatePresence>
             </div>
-
-            <Pagination
-              currentPage={txPage}
-              onPageChange={handleTxPageChange}
-              hasNext={txHasNext}
-            />
           </motion.div >
+
         </div >
       </div >
     </div >

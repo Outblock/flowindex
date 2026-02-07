@@ -19,8 +19,8 @@ export default function Sidebar() {
     const navItems = [
         { label: 'Home Page', path: '/', icon: Home },
         { label: 'Scheduled', path: '#', icon: Activity, disabled: true },
-        { label: 'Transactions', path: '/transactions', icon: ArrowRightLeft, disabled: true },
-        { label: 'Blocks', path: '/blocks', icon: Box, disabled: true },
+        { label: 'Transactions', path: '/transactions', icon: ArrowRightLeft },
+        { label: 'Blocks', path: '/blocks', icon: Box },
         { label: 'Contracts', path: '#', icon: FileText, disabled: true },
         { label: 'Accounts', path: '/accounts', icon: Users, disabled: true },
         { label: 'Nodes', path: '#', icon: Layers, disabled: true },

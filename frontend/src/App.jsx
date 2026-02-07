@@ -8,6 +8,8 @@ import { WebSocketProvider } from './components/WebSocketProvider';
 
 // Eager load core dashboard pages
 import Home from './pages/Home';
+import Blocks from './pages/Blocks';
+import Transactions from './pages/Transactions';
 import BlockDetail from './pages/BlockDetail';
 import TransactionDetail from './pages/TransactionDetail';
 import AccountDetail from './pages/AccountDetail';
@@ -33,17 +35,15 @@ function App() {
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-nothing-green border-t-transparent rounded-full animate-spin"></div></div>}>
                 <Routes>
                   <Route path="/" element={<Home />} />
+                  <Route path="/blocks" element={<Blocks />} />
                   <Route path="/blocks/:height" element={<BlockDetail />} />
+                  <Route path="/transactions" element={<Transactions />} />
                   <Route path="/transactions/:txId" element={<TransactionDetail />} />
                   <Route path="/accounts/:address" element={<AccountDetail />} />
                   <Route path="/stats" element={<Stats />} />
                   <Route
                     path="/api-docs"
-                    element={<ApiDocs specUrl="/openapi/v1.json" />}
-                  />
-                  <Route
-                    path="/api-docs/v1"
-                    element={<ApiDocs specUrl="/openapi/v1.json" />}
+                    element={<ApiDocs specUrl="/openapi/v2.json" />}
                   />
                   <Route
                     path="/api-docs/v2"

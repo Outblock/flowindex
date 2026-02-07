@@ -3957,7 +3957,7 @@
   ],
   "servers": [
     {
-      "url": "/api/v2"
+      "url": "/api"
     }
   ],
   "components": {
