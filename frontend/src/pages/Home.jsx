@@ -31,6 +31,11 @@ function Home() {
   const { lastMessage } = useWebSocketMessages();
   const nowTick = useTimeTicker(20000);
   const transactionsRef = useRef([]);
+  const isConnectedRef = useRef(false);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
 
   const normalizeHex = (value) => {
     if (!value) return '';
@@ -176,7 +181,8 @@ function Home() {
         payer: tx.payer_address || tx.proposer_address,
         blockHeight: tx.block_height
       })) : [];
-      setTransactions(transformedTxs);
+      // Merge to avoid websocket "new tx" temporarily disappearing on periodic refresh.
+      setTransactions(prev => mergeTransactions(prev, transformedTxs, { prependNew: false }));
     } catch (err) {
       console.error("Failed to load transactions", err);
     }
@@ -316,7 +322,9 @@ function Home() {
     const netStatsTimer = setInterval(refreshNetworkStats, 300000);
     // Fallback polling when websocket is unavailable.
     const txRefreshTimer = setInterval(() => {
-      loadTransactions(1);
+      if (!isConnectedRef.current) {
+        loadTransactions();
+      }
     }, 5000);
 
     return () => {
