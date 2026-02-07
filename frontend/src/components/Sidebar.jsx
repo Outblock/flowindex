@@ -18,13 +18,12 @@ export default function Sidebar() {
 
     const navItems = [
         { label: 'Home Page', path: '/', icon: Home },
-        { label: 'Network Mosaic', path: '/indexing', icon: Layers },
         { label: 'Transactions', path: '/transactions', icon: ArrowRightLeft },
         { label: 'Blocks', path: '/blocks', icon: Box },
         { label: 'Contracts', path: '/contracts', icon: FileText },
         { label: 'Accounts', path: '/accounts', icon: Users },
         { label: 'Nodes', path: '#', icon: Layers, disabled: true },
-        { label: 'Analytics', path: '/stats', icon: BarChart2 },
+        { label: 'Indexing Status', path: '/stats', icon: Layers },
         { label: 'API Docs', path: '/api-docs', icon: FileText },
     ];
 
