@@ -38,6 +38,70 @@ func (r *Repository) UpsertAccounts(ctx context.Context, accounts []models.Accou
 	return nil
 }
 
+type AccountListRow struct {
+	Address          string
+	FirstSeenHeight  uint64
+	LastSeenHeight   uint64
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	StorageUsed      uint64
+	StorageCapacity  uint64
+	StorageAvailable uint64
+}
+
+func (r *Repository) GetAccountCatalog(ctx context.Context, address string) (*models.AccountCatalog, error) {
+	var a models.AccountCatalog
+	err := r.db.QueryRow(ctx, `
+		SELECT encode(address, 'hex') AS address,
+		       COALESCE(first_seen_height, 0),
+		       COALESCE(last_seen_height, 0),
+		       created_at, updated_at
+		FROM app.accounts
+		WHERE address = $1`, hexToBytes(address)).Scan(
+		&a.Address, &a.FirstSeenHeight, &a.LastSeenHeight, &a.CreatedAt, &a.UpdatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (r *Repository) ListAccountsForAPI(ctx context.Context, cursorHeight *uint64, limit, offset int) ([]AccountListRow, error) {
+	var cursor interface{}
+	if cursorHeight != nil {
+		cursor = int64(*cursorHeight)
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(a.address, 'hex') AS address,
+		       COALESCE(a.first_seen_height, 0),
+		       COALESCE(a.last_seen_height, 0),
+		       a.created_at, a.updated_at,
+		       COALESCE(s.storage_used, 0),
+		       COALESCE(s.storage_capacity, 0),
+		       COALESCE(s.storage_available, 0)
+		FROM app.accounts a
+		LEFT JOIN app.account_storage_snapshots s ON s.address = a.address
+		WHERE ($1::bigint IS NULL OR COALESCE(a.last_seen_height, 0) <= $1)
+		ORDER BY COALESCE(a.last_seen_height, 0) DESC NULLS LAST, a.address ASC
+		LIMIT $2 OFFSET $3`, cursor, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AccountListRow
+	for rows.Next() {
+		var a AccountListRow
+		if err := rows.Scan(&a.Address, &a.FirstSeenHeight, &a.LastSeenHeight, &a.CreatedAt, &a.UpdatedAt, &a.StorageUsed, &a.StorageCapacity, &a.StorageAvailable); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 func (r *Repository) ListAccounts(ctx context.Context, limit, offset int) ([]models.AccountCatalog, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(address, 'hex') AS address, COALESCE(first_seen_height, 0), COALESCE(last_seen_height, 0), created_at, updated_at
@@ -318,25 +382,78 @@ func (r *Repository) GetNFTCollection(ctx context.Context, contract string) (*mo
 }
 
 // Contracts
-func (r *Repository) ListContracts(ctx context.Context, address string, limit, offset int) ([]models.SmartContract, error) {
+type ContractListFilter struct {
+	Address   string
+	Name      string
+	Body      string
+	ValidFrom *uint64
+	Sort      string
+	SortOrder string
+	Limit     int
+	Offset    int
+}
+
+func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFilter) ([]models.SmartContract, error) {
 	clauses := []string{}
 	args := []interface{}{}
 	arg := 1
-	if address != "" {
+
+	if f.Address != "" {
 		clauses = append(clauses, fmt.Sprintf("address = $%d", arg))
-		args = append(args, hexToBytes(address))
+		args = append(args, hexToBytes(f.Address))
 		arg++
 	}
+	if f.Name != "" {
+		clauses = append(clauses, fmt.Sprintf("name = $%d", arg))
+		args = append(args, f.Name)
+		arg++
+	}
+	if f.Body != "" {
+		clauses = append(clauses, fmt.Sprintf("code ILIKE $%d", arg))
+		args = append(args, "%"+f.Body+"%")
+		arg++
+	}
+	if f.ValidFrom != nil {
+		clauses = append(clauses, fmt.Sprintf("COALESCE(last_updated_height,0) <= $%d", arg))
+		args = append(args, int64(*f.ValidFrom))
+		arg++
+	}
+
 	where := ""
 	if len(clauses) > 0 {
 		where = "WHERE " + strings.Join(clauses, " AND ")
 	}
-	args = append(args, limit, offset)
+
+	sort := strings.ToLower(strings.TrimSpace(f.Sort))
+	sortOrder := strings.ToLower(strings.TrimSpace(f.SortOrder))
+	dir := "DESC"
+	if sortOrder == "asc" {
+		dir = "ASC"
+	}
+
+	orderBy := "COALESCE(last_updated_height,0) DESC, address ASC, name ASC"
+	switch sort {
+	case "", "valid_from", "activity":
+		orderBy = "COALESCE(last_updated_height,0) " + dir + ", address ASC, name ASC"
+	case "created_at":
+		orderBy = "created_at " + dir + ", address ASC, name ASC"
+	case "updated_at":
+		orderBy = "updated_at " + dir + ", address ASC, name ASC"
+	case "address":
+		orderBy = "address " + dir + ", name ASC"
+	case "name":
+		orderBy = "name " + dir + ", address ASC"
+	case "usage", "import":
+		// Not modeled yet; approximate with activity.
+		orderBy = "COALESCE(last_updated_height,0) " + dir + ", address ASC, name ASC"
+	}
+
+	args = append(args, f.Limit, f.Offset)
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(address, 'hex') AS address, name, COALESCE(code,''), COALESCE(version,1), COALESCE(last_updated_height,0), created_at, updated_at
 		FROM app.smart_contracts
 		`+where+`
-		ORDER BY address ASC, name ASC
+		ORDER BY `+orderBy+`
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
 	if err != nil {
 		return nil, err
@@ -350,7 +467,15 @@ func (r *Repository) ListContracts(ctx context.Context, address string, limit, o
 		}
 		out = append(out, c)
 	}
-	return out, nil
+	return out, rows.Err()
+}
+
+func (r *Repository) ListContracts(ctx context.Context, address string, limit, offset int) ([]models.SmartContract, error) {
+	return r.ListContractsFiltered(ctx, ContractListFilter{
+		Address: address,
+		Limit:   limit,
+		Offset:  offset,
+	})
 }
 
 func (r *Repository) GetContractByIdentifier(ctx context.Context, identifier string) ([]models.SmartContract, error) {
@@ -374,7 +499,8 @@ func (r *Repository) GetContractByIdentifier(ctx context.Context, identifier str
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(address, 'hex') AS address, name, COALESCE(code,''), COALESCE(version,1), COALESCE(last_updated_height,0), created_at, updated_at
 		FROM app.smart_contracts
-		WHERE address = $1 AND ($2 = '' OR name = $2)`, hexToBytes(address), name)
+		WHERE address = $1 AND ($2 = '' OR name = $2)
+		ORDER BY address ASC, name ASC`, hexToBytes(address), name)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +513,33 @@ func (r *Repository) GetContractByIdentifier(ctx context.Context, identifier str
 		}
 		out = append(out, c)
 	}
-	return out, nil
+	return out, rows.Err()
+}
+
+func (r *Repository) IterateContracts(ctx context.Context, cursorHeight *uint64, fn func(models.SmartContract) error) error {
+	var cursor interface{}
+	if cursorHeight != nil {
+		cursor = int64(*cursorHeight)
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(address, 'hex') AS address, name, COALESCE(code,''), COALESCE(version,1), COALESCE(last_updated_height,0), created_at, updated_at
+		FROM app.smart_contracts
+		WHERE ($1::bigint IS NULL OR COALESCE(last_updated_height,0) <= $1)
+		ORDER BY address ASC, name ASC`, cursor)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c models.SmartContract
+		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return err
+		}
+		if err := fn(c); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 // --- Tx contracts/tags ---

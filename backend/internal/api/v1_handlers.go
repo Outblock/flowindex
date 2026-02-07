@@ -145,21 +145,63 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleFlowListAccounts(w http.ResponseWriter, r *http.Request) {
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
 	limit, offset := parseLimitOffset(r)
-	accounts, err := s.repo.ListAccounts(r.Context(), limit, offset)
+	height, err := parseHeightParam(r.URL.Query().Get("height"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid height")
+		return
+	}
+
+	sortBy := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort_by")))
+	meta := map[string]interface{}{"limit": limit, "offset": offset}
+	if sortBy == "" {
+		sortBy = "block_height"
+	}
+	meta["sort_by"] = sortBy
+	if sortBy == "flow_balance" {
+		// We do not maintain historical balances in DB yet.
+		meta["warning"] = "sort_by=flow_balance is not supported yet; falling back to block_height"
+	}
+
+	cursor := height
+	if cursor == nil {
+		if tip, err := s.repo.GetIndexedTipHeight(r.Context()); err == nil && tip > 0 {
+			cursor = &tip
+		}
+	}
+	if cursor != nil {
+		meta["height"] = *cursor
+	}
+
+	accounts, err := s.repo.ListAccountsForAPI(r.Context(), cursor, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	const bytesPerMB = 1024 * 1024
 	out := make([]map[string]interface{}, 0, len(accounts))
 	for _, a := range accounts {
 		out = append(out, map[string]interface{}{
-			"address":           a.Address,
-			"first_seen_height": a.FirstSeenHeight,
-			"last_seen_height":  a.LastSeenHeight,
+			"address":           formatAddressV1(a.Address),
+			"creator":           "",
+			"data":              map[string]interface{}{},
+			"find_name":         "",
+			"flow_balance":      0,
+			"flow_storage":      float64(a.StorageCapacity) / bytesPerMB,
+			"storage_used":      float64(a.StorageUsed) / bytesPerMB,
+			"storage_available": float64(a.StorageAvailable) / bytesPerMB,
+			"height":            a.LastSeenHeight,
+			"timestamp":         formatTime(a.UpdatedAt),
+			"transaction_hash":  "",
 		})
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	meta["count"] = len(out)
+	writeAPIResponse(w, out, meta, nil)
 }
 
 func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
@@ -677,23 +719,87 @@ func (s *Server) handleFlowNFTItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request) {
-	limit, offset := parseLimitOffset(r)
-	address := normalizeAddr(r.URL.Query().Get("address"))
-	identifier := strings.TrimSpace(r.URL.Query().Get("identifier"))
-	if identifier != "" {
-		contracts, err := s.repo.GetContractByIdentifier(r.Context(), identifier)
-		if err != nil {
-			writeAPIError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		out := make([]map[string]interface{}, 0, len(contracts))
-		for _, c := range contracts {
-			out = append(out, toContractOutput(c))
-		}
-		writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
 		return
 	}
-	contracts, err := s.repo.ListContracts(r.Context(), address, limit, offset)
+
+	limit := 25
+	offset := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
+			limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	address := normalizeAddr(r.URL.Query().Get("address"))
+	identifierRaw := strings.TrimSpace(r.URL.Query().Get("identifier"))
+	if identifierRaw != "" {
+		addr2, name2, _ := splitContractIdentifier(identifierRaw)
+		if addr2 != "" {
+			address = addr2
+		}
+		// name2 can be empty (address-only identifier).
+		_ = name2
+	}
+
+	validFrom, err := parseHeightParam(r.URL.Query().Get("valid_from"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid valid_from")
+		return
+	}
+	if validFrom == nil {
+		if tip, err := s.repo.GetIndexedTipHeight(r.Context()); err == nil && tip > 0 {
+			validFrom = &tip
+		}
+	}
+
+	sort := strings.TrimSpace(r.URL.Query().Get("sort"))
+	sortOrder := strings.TrimSpace(r.URL.Query().Get("sort_order"))
+	body := r.URL.Query().Get("body")
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	tag := strings.TrimSpace(r.URL.Query().Get("tag"))
+	validOnly := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("valid_only"))) == "true"
+
+	meta := map[string]interface{}{
+		"limit":      limit,
+		"offset":     offset,
+		"valid_from": 0,
+	}
+	if validFrom != nil {
+		meta["valid_from"] = *validFrom
+	}
+	if sort != "" {
+		meta["sort"] = sort
+	}
+	if sortOrder != "" {
+		meta["sort_order"] = sortOrder
+	}
+	if status != "" || tag != "" || validOnly {
+		meta["warning"] = "filters status/tag/valid_only are not supported yet"
+	}
+
+	name := ""
+	if identifierRaw != "" {
+		_, name2, _ := splitContractIdentifier(identifierRaw)
+		name = name2
+	}
+
+	contracts, err := s.repo.ListContractsFiltered(r.Context(), repository.ContractListFilter{
+		Address:   address,
+		Name:      name,
+		Body:      body,
+		ValidFrom: validFrom,
+		Sort:      sort,
+		SortOrder: sortOrder,
+		Limit:     limit,
+		Offset:    offset,
+	})
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -702,21 +808,68 @@ func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request)
 	for _, c := range contracts {
 		out = append(out, toContractOutput(c))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	meta["count"] = len(out)
+	writeAPIResponse(w, out, meta, nil)
 }
 
 func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
 	identifier := mux.Vars(r)["identifier"]
-	contracts, err := s.repo.GetContractByIdentifier(r.Context(), identifier)
+
+	limit := 25
+	offset := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
+			limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	validFrom, err := parseHeightParam(r.URL.Query().Get("valid_from"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid valid_from")
+		return
+	}
+	if validFrom == nil {
+		if tip, err := s.repo.GetIndexedTipHeight(r.Context()); err == nil && tip > 0 {
+			validFrom = &tip
+		}
+	}
+
+	address, name, _ := splitContractIdentifier(identifier)
+	if address == "" {
+		writeAPIResponse(w, []interface{}{}, map[string]interface{}{"limit": limit, "offset": offset, "count": 0}, nil)
+		return
+	}
+
+	contracts, err := s.repo.ListContractsFiltered(r.Context(), repository.ContractListFilter{
+		Address:   address,
+		Name:      name,
+		ValidFrom: validFrom,
+		Limit:     limit,
+		Offset:    offset,
+	})
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
 	out := make([]map[string]interface{}, 0, len(contracts))
 	for _, c := range contracts {
 		out = append(out, toContractOutput(c))
 	}
-	writeAPIResponse(w, out, nil, nil)
+	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}
+	if validFrom != nil {
+		meta["valid_from"] = *validFrom
+	}
+	writeAPIResponse(w, out, meta, nil)
 }
 
 func (s *Server) handleFlowGetContractVersion(w http.ResponseWriter, r *http.Request) {

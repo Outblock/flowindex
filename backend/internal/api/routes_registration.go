@@ -140,11 +140,11 @@ func registerDeferredRoutes(r *mux.Router, s *Server) {
 
 func registerCompatibilityRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/auth/v1/generate", s.handleNotImplemented).Methods("POST", "OPTIONS")
-	r.HandleFunc("/bulk/v1/contract", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/bulk/v1/contract", s.handleBulkListContracts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/nft/v0/{nft_type}/holding", s.handleNotImplemented).Methods("GET", "OPTIONS")
 	r.HandleFunc("/nft/v0/{nft_type}/item", s.handleNotImplemented).Methods("GET", "OPTIONS")
 	r.HandleFunc("/nft/v0/{nft_type}/item/{nft_id}", s.handleNotImplemented).Methods("GET", "OPTIONS")
-	r.HandleFunc("/public/v1/account/{address}", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/public/v1/account/{address}", s.handlePublicGetAccount).Methods("GET", "OPTIONS")
 	r.HandleFunc("/public/v1/epoch/payout", s.handleNotImplemented).Methods("GET", "OPTIONS")
 	r.HandleFunc("/public/v1/resolver", s.handleNotImplemented).Methods("GET", "OPTIONS")
 	r.HandleFunc("/simple/v1/blocks", s.handleNotImplemented).Methods("GET", "OPTIONS")

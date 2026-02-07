@@ -122,7 +122,7 @@ func splitContractIdentifier(value string) (address, name, identifier string) {
 	}
 	identifier = value
 	parts := strings.Split(value, ".")
-	if len(parts) >= 3 && parts[0] == "A" {
+	if len(parts) >= 3 && strings.EqualFold(parts[0], "A") {
 		address = strings.ToLower(parts[1])
 		name = parts[2]
 		return address, name, identifier
@@ -308,16 +308,23 @@ func toCombinedNFTDetails(ownership models.NFTOwnership) map[string]interface{} 
 func toContractOutput(contract models.SmartContract) map[string]interface{} {
 	identifier := formatTokenIdentifier(contract.Address, contract.Name)
 	return map[string]interface{}{
-		"id":         identifier,
-		"identifier": identifier,
-		"address":    formatAddressV1(contract.Address),
-		"name":       contract.Name,
-		"body":       contract.Code,
-		"created_at": formatTime(contract.CreatedAt),
-		"valid_from": contract.BlockHeight,
-		"valid_to":   0,
-		"status":     "",
-		"tags":       []string{},
+		"id":                 identifier,
+		"identifier":         identifier,
+		"address":            formatAddressV1(contract.Address),
+		"name":               contract.Name,
+		"body":               contract.Code,
+		"created_at":         formatTime(contract.CreatedAt),
+		"valid_from":         contract.BlockHeight,
+		"valid_to":           0,
+		"status":             "",
+		"tags":               []string{},
+		"deployments":        0,
+		"diff":               "",
+		"import_count":       0,
+		"imported_by":        []string{},
+		"imported_count":     0,
+		"parent_contract_id": "",
+		"transaction_hash":   "",
 	}
 }
 
