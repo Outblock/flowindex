@@ -29,7 +29,7 @@ function App() {
           <IndexingStatus />
           <Header />
           <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden relative scroll-smooth focus:scroll-auto">
-            <div className="flex-1">
+            <div className="flex-1 flex flex-col relative">
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-nothing-green border-t-transparent rounded-full animate-spin"></div></div>}>
                 <Routes>
                   <Route path="/" element={<Home />} />
