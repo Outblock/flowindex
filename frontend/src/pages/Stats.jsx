@@ -24,7 +24,8 @@ export default function Stats() {
     const lastForwardCheckRef = useRef(null); // { time: number, height: number }
 
     // State for Indexing Map
-    const [chunkSize, setChunkSize] = useState(100000); // Default 0.1M
+    // Initialize with 100K
+    const [chunkSize, setChunkSize] = useState(100000);
     const [hoveredChunk, setHoveredChunk] = useState(null);
 
     const processStatus = useCallback((data) => {
@@ -108,6 +109,8 @@ export default function Stats() {
     const forwardEnabled = status?.forward_enabled ?? true;
     const historyEnabled = status?.history_enabled ?? true;
     const workerEnabled = status?.worker_enabled || {};
+    const workerConfig = status?.worker_config || {};
+    const generatedAt = status?.generated_at ? new Date(status.generated_at) : new Date();
     const checkpoints = status?.checkpoints || {};
     const workerOrder = [
         { key: 'main_ingester', label: 'Main Ingester' },
@@ -162,7 +165,7 @@ export default function Stats() {
             result.push({ index: i, start, end });
         }
         return result;
-    }, [status, chunkSize]);
+    }, [status, chunkSize]); // Keep chunkSize dependency to trigger update
 
     const getChunkStatus = (chunk) => {
         if (!status) return 'unknown';
@@ -373,18 +376,50 @@ export default function Stats() {
                                         const height = checkpoints?.[worker.key] || 0;
                                         const enabled = workerEnabled?.[worker.key];
                                         const progress = latestHeight > 0 && height > 0 ? Math.min(100, (height / latestHeight) * 100) : 0;
+                                        const config = workerConfig?.[worker.key] || {};
                                         return (
-                                            <div key={worker.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm hover:border-zinc-300 dark:hover:border-white/30 transition-colors">
-                                                <div className="flex items-center justify-between mb-2">
+                                            <div key={worker.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm hover:border-zinc-300 dark:hover:border-white/30 transition-colors group">
+                                                <div className="flex items-center justify-between mb-4">
                                                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest truncate mr-2" title={worker.label}>{worker.label}</span>
                                                     <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]'}`} />
                                                 </div>
-                                                <div className="text-sm font-mono font-bold text-zinc-900 dark:text-white mb-2">
-                                                    <NumberFlow value={height} />
+                                                <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-2">
+                                                    <NumberFlow value={height} format={{ useGrouping: true }} />
                                                 </div>
-                                                <div className="h-1 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden">
+                                                <div className="h-1 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden mb-4">
                                                     <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
                                                 </div>
+
+                                                {height > 0 && (
+                                                    <div className="pt-4 border-t border-zinc-200 dark:border-white/5 grid grid-cols-2 gap-y-3 gap-x-2">
+
+                                                        {config.workers !== undefined && (
+                                                            <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
+                                                                <div className="text-[9px] text-zinc-500 uppercase">Workers</div>
+                                                                <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.workers}</div>
+                                                            </div>
+                                                        )}
+
+                                                        {config.concurrency !== undefined && (
+                                                            <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
+                                                                <div className="text-[9px] text-zinc-500 uppercase">Concurrency</div>
+                                                                <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.concurrency}</div>
+                                                            </div>
+                                                        )}
+                                                        {config.range !== undefined && config.range !== 0 && (
+                                                            <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
+                                                                <div className="text-[9px] text-zinc-500 uppercase">Range</div>
+                                                                <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.range}</div>
+                                                            </div>
+                                                        )}
+                                                        {config.batch_size !== undefined && config.batch_size !== 0 && (
+                                                            <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
+                                                                <div className="text-[9px] text-zinc-500 uppercase">Batch</div>
+                                                                <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.batch_size}</div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -392,7 +427,7 @@ export default function Stats() {
                             </div>
 
                             {/* DB Stats */}
-                            <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-8 rounded-sm shadow-sm dark:shadow-none">
+                            <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-8 rounded-sm shadow-sm dark:shadow-none mb-6">
                                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-6 flex items-center gap-2">
                                     <Server className="h-4 w-4 text-zinc-500" />
                                     Database Totals
@@ -424,6 +459,18 @@ export default function Stats() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Metadata */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                                    <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Last Update</div>
+                                    <div className="text-zinc-900 dark:text-white">{generatedAt.toLocaleTimeString()}</div>
+                                </div>
+                                <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                                    <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Network</div>
+                                    <div className="text-zinc-900 dark:text-white font-bold">Flow Mainnet</div>
+                                </div>
+                            </div>
                         </motion.div>
                     ) : (
                         <motion.div
@@ -440,17 +487,44 @@ export default function Stats() {
                                     <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider mb-1">Resolution Control</h3>
                                     <p className="text-xs text-zinc-500">Adjust the number of blocks each cell represents.</p>
                                 </div>
-                                <div className="flex bg-zinc-100 dark:bg-black/30 p-1 rounded-sm border border-zinc-200 dark:border-white/5">
+                                <div className="flex bg-zinc-100 dark:bg-black/30 p-1 rounded-sm border border-zinc-200 dark:border-white/5 relative">
+                                    {/* Animated Background Pill */}
+                                    <motion.div
+                                        className="absolute top-1 bottom-1 bg-white dark:bg-white/10 shadow-sm rounded-sm z-0"
+                                        layoutId="chunkSizePill"
+                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        style={{
+                                            width: 50, // Approximation, will need dynamic ref measuring for perfect fit, 
+                                            // but for now let's rely on standard button sizes or just toggle classes which is safer without refs
+                                            // Actually simpler approach: Just animate layout changes of the grid if feasible, 
+                                            // or just use conditional strict styling as before but maybe add a layout transition
+                                        }}
+                                        // Since we can't easily measure width without refs, let's skip the sliding pill 
+                                        // and just use a smooth fade/scale transition on the buttons themselves as requested.
+                                        initial={false}
+                                    />
+
                                     {CHUNK_SIZES.map((size) => (
                                         <button
                                             key={size.value}
                                             onClick={() => setChunkSize(size.value)}
-                                            className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all ${chunkSize === size.value
-                                                ? 'bg-white dark:bg-white/10 text-zinc-900 dark:text-white shadow-sm'
-                                                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-                                                }`}
+                                            className="relative z-10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-colors duration-200"
+                                            style={{
+                                                color: chunkSize === size.value
+                                                    ? 'var(--text-active)' // customized below via inline style or class
+                                                    : 'var(--text-inactive)'
+                                            }}
                                         >
-                                            {size.label}
+                                            <span className={chunkSize === size.value ? "text-zinc-900 dark:text-white" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"}>
+                                                {size.label}
+                                            </span>
+                                            {chunkSize === size.value && (
+                                                <motion.div
+                                                    layoutId="activeTab"
+                                                    className="absolute inset-0 bg-white dark:bg-white/10 shadow-sm rounded-sm -z-10"
+                                                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                                />
+                                            )}
                                         </button>
                                     ))}
                                 </div>
@@ -502,11 +576,11 @@ export default function Stats() {
                                             <span className="text-xs text-zinc-600 dark:text-zinc-400">Backfilling Gap</span>
                                         </div>
                                         <div className="flex items-center gap-3">
-                                            <div className="w-3 h-3 bg-gray-200 dark:bg-white/10 border border-zinc-300 dark:border-white/5 rounded-[1px]"></div>
+                                            <div className="w-3 h-3 bg-purple-500/20 border border-purple-500/40 rounded-[1px]"></div>
                                             <span className="text-xs text-zinc-600 dark:text-zinc-400">Pending / Future</span>
                                         </div>
                                         <div className="flex items-center gap-3">
-                                            <div className="w-3 h-3 bg-red-500/10 border border-red-500/30 rounded-[1px]"></div>
+                                            <div className="w-3 h-3 bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 rounded-[1px]"></div>
                                             <span className="text-xs text-zinc-600 dark:text-zinc-400">Historical Missing</span>
                                         </div>
                                     </div>
@@ -574,11 +648,11 @@ export default function Stats() {
                                                     bgClass = 'bg-blue-500/50 hover:bg-blue-500';
                                                     break;
                                                 case 'missing':
-                                                    bgClass = 'bg-red-500/10 border border-red-500/20 hover:bg-red-500/30';
+                                                    bgClass = 'bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 hover:bg-zinc-300 dark:hover:bg-white/10';
                                                     break;
                                                 case 'pending':
                                                 default:
-                                                    bgClass = 'bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10';
+                                                    bgClass = 'bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20';
                                                     break;
                                             }
 
