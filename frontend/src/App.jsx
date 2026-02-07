@@ -12,7 +12,9 @@ import Blocks from './pages/Blocks';
 import Transactions from './pages/Transactions';
 import BlockDetail from './pages/BlockDetail';
 import TransactionDetail from './pages/TransactionDetail';
+import Accounts from './pages/Accounts';
 import AccountDetail from './pages/AccountDetail';
+import Contracts from './pages/Contracts';
 
 // Lazy load heavy/less frequent pages
 const Stats = lazy(() => import('./pages/Stats'));
@@ -39,7 +41,9 @@ function App() {
                   <Route path="/blocks/:height" element={<BlockDetail />} />
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/transactions/:txId" element={<TransactionDetail />} />
+                  <Route path="/accounts" element={<Accounts />} />
                   <Route path="/accounts/:address" element={<AccountDetail />} />
+                  <Route path="/contracts" element={<Contracts />} />
                   <Route path="/stats" element={<Stats />} />
                   <Route
                     path="/api-docs"

@@ -37,4 +37,10 @@ export const api = {
   getDailyStats: () => axios.get(`${API_URL}/stats/daily`).then(res => res.data),
   getNetworkStats: () => axios.get(`${API_URL}/stats/network`).then(res => res.data),
   getStatus: () => axios.get(`${API_URL}/status`).then(res => res.data),
+
+  // Find-style API (defaulted to v2 via the /api reverse proxy)
+  listFlowAccounts: (limit = 20, offset = 0, { height = '', sort_by = 'block_height' } = {}) =>
+    axios.get(`${API_URL}/flow/v1/account`, { params: { limit, offset, height, sort_by } }).then(res => res.data),
+  listFlowContracts: (limit = 25, offset = 0, { address = '', identifier = '' } = {}) =>
+    axios.get(`${API_URL}/flow/v1/contract`, { params: { limit, offset, address, identifier } }).then(res => res.data),
 };
