@@ -159,10 +159,32 @@ func (r *Repository) loadTxMetrics(ctx context.Context, from, to int64) (map[txM
 }
 
 func (r *Repository) applyTxMetrics(ctx context.Context, metrics map[txMetricKey]txMetric) error {
-	if _, err := r.db.Exec(ctx, "CREATE TEMP TABLE IF NOT EXISTS tmp_tx_metrics (block_height BIGINT, transaction_id BYTEA, event_count INT, gas_used BIGINT, fee NUMERIC, fee_amount NUMERIC, inclusion_effort NUMERIC, execution_effort NUMERIC)"); err != nil {
+	conn, err := r.db.Acquire(ctx)
+	if err != nil {
 		return err
 	}
-	if _, err := r.db.Exec(ctx, "TRUNCATE tmp_tx_metrics"); err != nil {
+	defer conn.Release()
+
+	// Temp tables are session-scoped in Postgres. Using a single acquired connection
+	// (and a transaction) avoids flaky failures when the pool picks a different conn
+	// between CREATE TEMP TABLE / COPY / INSERT.
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `
+		CREATE TEMP TABLE tmp_tx_metrics (
+			block_height BIGINT,
+			transaction_id BYTEA,
+			event_count INT,
+			gas_used BIGINT,
+			fee NUMERIC,
+			fee_amount NUMERIC,
+			inclusion_effort NUMERIC,
+			execution_effort NUMERIC
+		) ON COMMIT DROP`); err != nil {
 		return err
 	}
 
@@ -171,11 +193,11 @@ func (r *Repository) applyTxMetrics(ctx context.Context, metrics map[txMetricKey
 		rows = append(rows, []interface{}{k.Height, hexToBytes(k.ID), m.Count, int64(m.GasUsed), m.FeeAmount, m.FeeAmount, m.InclusionEffort, m.ExecutionEffort})
 	}
 
-	if _, err := r.db.CopyFrom(ctx, pgx.Identifier{"tmp_tx_metrics"}, []string{"block_height", "transaction_id", "event_count", "gas_used", "fee", "fee_amount", "inclusion_effort", "execution_effort"}, pgx.CopyFromRows(rows)); err != nil {
+	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"tmp_tx_metrics"}, []string{"block_height", "transaction_id", "event_count", "gas_used", "fee", "fee_amount", "inclusion_effort", "execution_effort"}, pgx.CopyFromRows(rows)); err != nil {
 		return err
 	}
 
-	_, err := r.db.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO app.tx_metrics (
 			block_height, transaction_id, event_count, gas_used, fee, fee_amount, inclusion_effort, execution_effort, updated_at
 		)
@@ -188,8 +210,11 @@ func (r *Repository) applyTxMetrics(ctx context.Context, metrics map[txMetricKey
 			fee_amount = EXCLUDED.fee_amount,
 			inclusion_effort = EXCLUDED.inclusion_effort,
 			execution_effort = EXCLUDED.execution_effort,
-			updated_at = NOW()`)
-	return err
+			updated_at = NOW()`); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 func isFeeEventType(typ string) bool {
