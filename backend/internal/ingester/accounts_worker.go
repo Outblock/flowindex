@@ -144,7 +144,5 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 }
 
 func normalizeAddressLower(addr string) string {
-	addr = strings.TrimSpace(addr)
-	addr = strings.TrimPrefix(strings.ToLower(addr), "0x")
-	return addr
+	return normalizeFlowAddress(addr)
 }

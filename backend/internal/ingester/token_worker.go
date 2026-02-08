@@ -81,7 +81,7 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.Toke
 		tokenID = extractString(fields["tokenId"])
 	}
 
-	contractAddr := normalizeTokenAddress(evt.ContractAddress)
+	contractAddr := normalizeFlowAddress(evt.ContractAddress)
 	if contractAddr == "" {
 		contractAddr = parseContractAddress(evt.Type)
 	}
@@ -129,7 +129,7 @@ func isFeeVaultAddress(addr string) bool {
 	}
 	feeVault = strings.TrimPrefix(feeVault, "0x")
 
-	normalized := strings.TrimPrefix(strings.ToLower(addr), "0x")
+	normalized := normalizeFlowAddress(addr)
 	return normalized != "" && normalized == feeVault
 }
 
@@ -283,23 +283,19 @@ func extractString(v interface{}) string {
 func extractAddress(v interface{}) string {
 	switch val := v.(type) {
 	case string:
-		return normalizeTokenAddress(val)
+		return normalizeFlowAddress(val)
 	case map[string]interface{}:
 		if addr, ok := val["address"]; ok {
-			return normalizeTokenAddress(extractString(addr))
+			return normalizeFlowAddress(extractString(addr))
 		}
 	}
-	return normalizeTokenAddress(extractString(v))
-}
-
-func normalizeTokenAddress(addr string) string {
-	return strings.TrimPrefix(strings.ToLower(addr), "0x")
+	return normalizeFlowAddress(extractString(v))
 }
 
 func parseContractAddress(eventType string) string {
 	parts := strings.Split(eventType, ".")
 	if len(parts) >= 3 && parts[0] == "A" {
-		return strings.TrimPrefix(strings.ToLower(parts[1]), "0x")
+		return normalizeFlowAddress(parts[1])
 	}
 	return ""
 }

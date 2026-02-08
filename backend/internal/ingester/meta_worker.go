@@ -68,7 +68,7 @@ func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountK
 		address := ""
 
 		if addr, ok := payload["address"].(string); ok {
-			address = normalizeAddress(addr)
+			address = normalizeFlowAddress(addr)
 		}
 		if address == "" {
 			continue
@@ -184,7 +184,7 @@ func (w *MetaWorker) extractContracts(events []models.Event) []models.SmartContr
 				name = v
 			}
 		}
-		address = normalizeAddress(address)
+		address = normalizeFlowAddress(address)
 		if address == "" || name == "" {
 			continue
 		}
@@ -199,11 +199,7 @@ func (w *MetaWorker) extractContracts(events []models.Event) []models.SmartContr
 }
 
 func normalizeAddress(addr string) string {
-	normalized := strings.TrimPrefix(strings.ToLower(addr), "0x")
-	if normalized == "" {
-		return ""
-	}
-	return normalized
+	return normalizeFlowAddress(addr)
 }
 
 func extractPublicKey(v interface{}) string {

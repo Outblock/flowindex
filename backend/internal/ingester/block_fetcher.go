@@ -393,6 +393,13 @@ func (w *Worker) flattenCadenceValue(v cadence.Value) interface{} {
 		return nil
 	}
 	switch val := v.(type) {
+	case cadence.Optional:
+		// Cadence optionals stringify to "nil" when empty; represent them as JSON null
+		// so downstream workers don't misinterpret them as a real string value.
+		if val.Value == nil {
+			return nil
+		}
+		return w.flattenCadenceValue(val.Value)
 	case cadence.Event:
 		m := make(map[string]interface{})
 		fields := val.FieldsMappedByName()
