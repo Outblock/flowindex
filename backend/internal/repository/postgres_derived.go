@@ -297,6 +297,67 @@ func (r *Repository) BackfillAddressTransactionsRange(ctx context.Context, fromH
 	return cmd.RowsAffected(), nil
 }
 
+// BackfillAddressTransactionsAndStatsRange inserts app.address_transactions for the given
+// height range and updates app.address_stats based on newly inserted rows only.
+//
+// This is safe to run repeatedly (idempotent) because address_stats is updated from the
+// INSERT .. RETURNING rows (ON CONFLICT DO NOTHING).
+func (r *Repository) BackfillAddressTransactionsAndStatsRange(ctx context.Context, fromHeight, toHeight uint64) error {
+	if toHeight <= fromHeight {
+		return nil
+	}
+
+	_, err := r.db.Exec(ctx, `
+		WITH ins AS (
+			INSERT INTO app.address_transactions (address, transaction_id, block_height, role)
+			SELECT address, transaction_id, block_height, role
+			FROM (
+				SELECT payer_address AS address, id AS transaction_id, block_height, 'PAYER' AS role
+				FROM raw.transactions
+				WHERE block_height >= $1 AND block_height < $2
+
+				UNION ALL
+				SELECT proposer_address AS address, id AS transaction_id, block_height, 'PROPOSER' AS role
+				FROM raw.transactions
+				WHERE block_height >= $1 AND block_height < $2
+
+				UNION ALL
+				SELECT unnest(authorizers) AS address, id AS transaction_id, block_height, 'AUTHORIZER' AS role
+				FROM raw.transactions
+				WHERE block_height >= $1 AND block_height < $2
+			) s
+			WHERE address IS NOT NULL
+			ON CONFLICT (address, block_height, transaction_id, role) DO NOTHING
+			RETURNING address, transaction_id, block_height
+		),
+		dedup AS (
+			SELECT address, transaction_id, block_height
+			FROM ins
+			GROUP BY address, transaction_id, block_height
+		),
+		agg AS (
+			SELECT d.address,
+			       COUNT(*)::bigint AS tx_count,
+			       COALESCE(SUM(t.gas_used), 0)::bigint AS total_gas_used,
+			       MAX(d.block_height)::bigint AS last_updated_block
+			FROM dedup d
+			JOIN raw.transactions t
+			  ON t.block_height = d.block_height
+			 AND t.id = d.transaction_id
+			GROUP BY d.address
+		)
+		INSERT INTO app.address_stats (address, tx_count, total_gas_used, last_updated_block, created_at, updated_at)
+		SELECT address, tx_count, total_gas_used, last_updated_block, NOW(), NOW()
+		FROM agg
+		ON CONFLICT (address) DO UPDATE SET
+			tx_count = app.address_stats.tx_count + EXCLUDED.tx_count,
+			total_gas_used = app.address_stats.total_gas_used + EXCLUDED.total_gas_used,
+			last_updated_block = GREATEST(app.address_stats.last_updated_block, EXCLUDED.last_updated_block),
+			updated_at = NOW()
+	`, fromHeight, toHeight)
+	return err
+}
+
 type AddressStatDelta struct {
 	Address          string
 	TxCount          int64

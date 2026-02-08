@@ -226,6 +226,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		var dbEvents []models.Event
 
 		now := time.Now()
+		var totalGasUsed uint64
 
 		for txIndex, tx := range txs {
 			if tx == nil {
@@ -290,6 +291,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				Timestamp:              block.Timestamp,
 				CreatedAt:              now,
 			}
+			totalGasUsed += dbTx.GasUsed
 
 			// Redundancy: Marshal Signatures and ProposalKey (kept in model for future use).
 			// Not currently stored in schema_v2.sql.
@@ -371,6 +373,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 		dbBlock.TxCount = len(dbTxs)
 		dbBlock.EventCount = len(dbEvents)
+		dbBlock.TotalGasUsed = totalGasUsed
 
 		result.Block = &dbBlock
 		result.Transactions = dbTxs

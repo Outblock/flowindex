@@ -21,12 +21,12 @@ type Processor interface {
 
 // AsyncWorker manages the lifecycle of an async worker: leasing, processing, error handling.
 type AsyncWorker struct {
-	processor Processor
-	repo      *repository.Repository
-	rangeSize uint64
-	workerID  string // e.g. hostname-pid
-	stopCh    chan struct{}
-	minStartHeight uint64
+	processor         Processor
+	repo              *repository.Repository
+	rangeSize         uint64
+	workerID          string // e.g. hostname-pid
+	stopCh            chan struct{}
+	minStartHeight    uint64
 	minStartCheckedAt time.Time
 }
 
@@ -38,7 +38,7 @@ type WorkerConfig struct {
 
 func NewAsyncWorker(p Processor, repo *repository.Repository, cfg WorkerConfig) *AsyncWorker {
 	if cfg.RangeSize == 0 {
-		cfg.RangeSize = 50000 // Default
+		cfg.RangeSize = 1000 // Default
 	}
 	if cfg.WorkerID == "" {
 		hostname, _ := os.Hostname()

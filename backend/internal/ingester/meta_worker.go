@@ -25,9 +25,11 @@ func (w *MetaWorker) Name() string {
 }
 
 func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint64) error {
-	txs, err := w.repo.GetRawTransactionsInRange(ctx, fromHeight, toHeight)
-	if err != nil {
-		return fmt.Errorf("fetch raw txs: %w", err)
+	// Address lookups and stats are derived entirely from raw.transactions and can be
+	// materialized efficiently in SQL. Importantly, the implementation must be idempotent
+	// because live/head backfills and range workers may overlap.
+	if err := w.repo.BackfillAddressTransactionsAndStatsRange(ctx, fromHeight, toHeight); err != nil {
+		return fmt.Errorf("backfill address tx/stats: %w", err)
 	}
 
 	events, err := w.repo.GetRawEventsInRange(ctx, fromHeight, toHeight)
@@ -35,16 +37,9 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 		return fmt.Errorf("fetch raw events: %w", err)
 	}
 
-	addressTxs, statDeltas := w.buildAddressIndexes(txs)
 	accountKeys := w.extractAccountKeys(events)
 	contracts := w.extractContracts(events)
 
-	if err := w.repo.UpsertAddressTransactions(ctx, addressTxs); err != nil {
-		return err
-	}
-	if err := w.repo.UpdateAddressStatsBatch(ctx, statDeltas); err != nil {
-		return err
-	}
 	if err := w.repo.UpsertAccountKeys(ctx, accountKeys); err != nil {
 		return err
 	}
@@ -53,57 +48,6 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 	}
 
 	return nil
-}
-
-func (w *MetaWorker) buildAddressIndexes(txs []models.Transaction) ([]models.AddressTransaction, []repository.AddressStatDelta) {
-	var addressTxs []models.AddressTransaction
-	statMap := make(map[string]*repository.AddressStatDelta)
-
-	for _, t := range txs {
-		seen := make(map[string]bool)
-
-		addRole := func(addr, role string) {
-			normalized := normalizeAddress(addr)
-			if normalized == "" {
-				return
-			}
-
-			addressTxs = append(addressTxs, models.AddressTransaction{
-				Address:         normalized,
-				TransactionID:   t.ID,
-				BlockHeight:     t.BlockHeight,
-				TransactionType: "GENERAL",
-				Role:            role,
-			})
-
-			if !seen[normalized] {
-				seen[normalized] = true
-				if _, ok := statMap[normalized]; !ok {
-					statMap[normalized] = &repository.AddressStatDelta{
-						Address: normalized,
-					}
-				}
-				statMap[normalized].TxCount += 1
-				statMap[normalized].TotalGasUsed += t.GasUsed
-				if t.BlockHeight > statMap[normalized].LastUpdatedBlock {
-					statMap[normalized].LastUpdatedBlock = t.BlockHeight
-				}
-			}
-		}
-
-		addRole(t.PayerAddress, "PAYER")
-		addRole(t.ProposerAddress, "PROPOSER")
-		for _, auth := range t.Authorizers {
-			addRole(auth, "AUTHORIZER")
-		}
-	}
-
-	statDeltas := make([]repository.AddressStatDelta, 0, len(statMap))
-	for _, v := range statMap {
-		statDeltas = append(statDeltas, *v)
-	}
-
-	return addressTxs, statDeltas
 }
 
 func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountKey {

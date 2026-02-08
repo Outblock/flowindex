@@ -20,11 +20,15 @@ func (w *TxMetricsWorker) Name() string {
 }
 
 func (w *TxMetricsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint64) error {
-	if fromHeight > toHeight {
+	// All workers use half-open ranges: [fromHeight, toHeight).
+	// BackfillTxMetricsRange uses inclusive bounds (BETWEEN), so we convert.
+	if toHeight <= fromHeight {
 		return nil
 	}
-	if err := w.repo.BackfillTxMetricsRange(ctx, int64(fromHeight), int64(toHeight)); err != nil {
-		return fmt.Errorf("backfill tx metrics %d-%d: %w", fromHeight, toHeight, err)
+
+	endInclusive := toHeight - 1
+	if err := w.repo.BackfillTxMetricsRange(ctx, int64(fromHeight), int64(endInclusive)); err != nil {
+		return fmt.Errorf("backfill tx metrics %d-%d: %w", fromHeight, endInclusive, err)
 	}
 	return nil
 }

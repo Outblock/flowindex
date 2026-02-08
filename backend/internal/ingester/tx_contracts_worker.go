@@ -32,6 +32,18 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 
 	contracts := make([]models.TxContract, 0)
 	tags := make([]models.TxTag, 0)
+	seenTag := make(map[string]bool)
+	addTag := func(txID, tag string) {
+		if txID == "" || tag == "" {
+			return
+		}
+		k := txID + "|" + tag
+		if seenTag[k] {
+			return
+		}
+		seenTag[k] = true
+		tags = append(tags, models.TxTag{TransactionID: txID, Tag: tag})
+	}
 
 	for _, tx := range txs {
 		if tx.Script != "" {
@@ -44,35 +56,46 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 					identifier = "A." + addr + "." + name
 				}
 				contracts = append(contracts, models.TxContract{
-					TransactionID:     tx.ID,
+					TransactionID:      tx.ID,
 					ContractIdentifier: identifier,
-					Source:            "script_import",
+					Source:             "script_import",
 				})
 			}
 		}
 	}
 
-	// Tag transactions based on token transfers.
+	// Tag transactions based on token transfers (fee transfers excluded by TokenWorker).
 	transfers, err := w.repo.GetTokenTransfersByRange(ctx, fromHeight, toHeight, false)
 	if err == nil {
-		seen := make(map[string]bool)
 		for _, t := range transfers {
-			if seen[t.TransactionID] {
-				continue
-			}
-			seen[t.TransactionID] = true
-			tags = append(tags, models.TxTag{TransactionID: t.TransactionID, Tag: "FT_TRANSFER"})
+			addTag(t.TransactionID, "FT_TRANSFER")
 		}
 	}
 	nftTransfers, err := w.repo.GetTokenTransfersByRange(ctx, fromHeight, toHeight, true)
 	if err == nil {
-		seen := make(map[string]bool)
 		for _, t := range nftTransfers {
-			if seen[t.TransactionID] {
-				continue
+			addTag(t.TransactionID, "NFT_TRANSFER")
+		}
+	}
+
+	// Additional tags derived directly from raw events (Blockscout-style classification).
+	events, err := w.repo.GetRawEventsInRange(ctx, fromHeight, toHeight)
+	if err == nil {
+		for _, evt := range events {
+			switch {
+			case isEVMTransactionExecutedEvent(evt.Type):
+				addTag(evt.TransactionID, "EVM")
+			case strings.Contains(evt.Type, "FlowFees.FeesDeducted"):
+				addTag(evt.TransactionID, "FEE")
+			case strings.Contains(evt.Type, "NFTStorefront"):
+				addTag(evt.TransactionID, "MARKETPLACE")
+			case strings.Contains(evt.Type, "AccountContractAdded") || strings.Contains(evt.Type, "AccountContractUpdated"):
+				addTag(evt.TransactionID, "CONTRACT_DEPLOY")
+			case evt.Type == "flow.AccountCreated":
+				addTag(evt.TransactionID, "ACCOUNT_CREATED")
+			case strings.Contains(evt.Type, "AccountKeyAdded") || strings.Contains(evt.Type, "AccountKeyRemoved"):
+				addTag(evt.TransactionID, "KEY_UPDATE")
 			}
-			seen[t.TransactionID] = true
-			tags = append(tags, models.TxTag{TransactionID: t.TransactionID, Tag: "NFT_TRANSFER"})
 		}
 	}
 

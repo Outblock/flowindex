@@ -31,6 +31,7 @@ type Service struct {
 // Callback type for real-time updates
 type BlockCallback func(models.Block)
 type TxCallback func(models.Transaction)
+type RangeCallback func(fromHeight, toHeight uint64)
 
 type Config struct {
 	BatchSize        int
@@ -41,6 +42,10 @@ type Config struct {
 	MaxReorgDepth    uint64
 	OnNewBlock       BlockCallback
 	OnNewTransaction TxCallback
+	// OnIndexedRange is invoked after a batch has been persisted to raw.* tables.
+	// It is intended for lightweight, real-time derived materialization at the chain head.
+	// Range is half-open: [fromHeight, toHeight).
+	OnIndexedRange RangeCallback
 }
 
 func NewService(client *flow.Client, repo *repository.Repository, cfg Config) *Service {
@@ -429,11 +434,19 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 		return err
 	}
 
-	// Keep address->tx lookups fresh at the head so account pages show recent activity even when
-	// meta_worker is processing in large ranges.
-	if broadcastRealtime && os.Getenv("ENABLE_LIVE_ADDRESS_INDEX") != "false" && len(addrActivity) > 0 {
-		if err := s.repo.UpsertAddressTransactions(ctx, addrActivity); err != nil {
-			log.Printf("[%s] live address index update failed: %v", s.config.ServiceName, err)
+	// Notify downstream (e.g. live derivers) once raw.* writes are committed.
+	if broadcastRealtime && len(blocks) > 0 {
+		fromHeight := blocks[0].Height
+		toHeight := blocks[len(blocks)-1].Height + 1
+
+		if s.config.OnIndexedRange != nil {
+			s.config.OnIndexedRange(fromHeight, toHeight)
+		} else if os.Getenv("ENABLE_LIVE_ADDRESS_INDEX") != "false" {
+			// Backwards-compatible fallback to keep account pages fresh even if live derivers
+			// are disabled.
+			if err := s.repo.BackfillAddressTransactionsAndStatsRange(ctx, fromHeight, toHeight); err != nil {
+				log.Printf("[%s] live address index (tx+stats) update failed: %v", s.config.ServiceName, err)
+			}
 		}
 	}
 

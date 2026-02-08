@@ -139,14 +139,14 @@ func main() {
 	latestBatch := getEnvInt("LATEST_BATCH_SIZE", 1)    // Real-time
 	historyBatch := getEnvInt("HISTORY_BATCH_SIZE", 20) // Throughput
 	maxReorgDepth := getEnvUint("MAX_REORG_DEPTH", 1000)
-	tokenWorkerRange := getEnvUint("TOKEN_WORKER_RANGE", 50000)
-	evmWorkerRange := getEnvUint("EVM_WORKER_RANGE", 50000)
-	metaWorkerRange := getEnvUint("META_WORKER_RANGE", 50000)
-	accountsWorkerRange := getEnvUint("ACCOUNTS_WORKER_RANGE", 50000)
-	ftHoldingsWorkerRange := getEnvUint("FT_HOLDINGS_WORKER_RANGE", 50000)
-	nftOwnershipWorkerRange := getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 50000)
-	txContractsWorkerRange := getEnvUint("TX_CONTRACTS_WORKER_RANGE", 50000)
-	txMetricsWorkerRange := getEnvUint("TX_METRICS_WORKER_RANGE", 50000)
+	tokenWorkerRange := getEnvUint("TOKEN_WORKER_RANGE", 1000)
+	evmWorkerRange := getEnvUint("EVM_WORKER_RANGE", 1000)
+	metaWorkerRange := getEnvUint("META_WORKER_RANGE", 1000)
+	accountsWorkerRange := getEnvUint("ACCOUNTS_WORKER_RANGE", 1000)
+	ftHoldingsWorkerRange := getEnvUint("FT_HOLDINGS_WORKER_RANGE", 1000)
+	nftOwnershipWorkerRange := getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 1000)
+	txContractsWorkerRange := getEnvUint("TX_CONTRACTS_WORKER_RANGE", 1000)
+	txMetricsWorkerRange := getEnvUint("TX_METRICS_WORKER_RANGE", 1000)
 	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
 	evmWorkerConcurrency := getEnvInt("EVM_WORKER_CONCURRENCY", 1)
 	metaWorkerConcurrency := getEnvInt("META_WORKER_CONCURRENCY", 1)
@@ -170,6 +170,52 @@ func main() {
 		}()
 	}
 
+	// Async Workers (optional)
+	enableTokenWorker := os.Getenv("ENABLE_TOKEN_WORKER") != "false"
+	enableEVMWorker := os.Getenv("ENABLE_EVM_WORKER") != "false"
+	enableMetaWorker := os.Getenv("ENABLE_META_WORKER") != "false"
+	enableAccountsWorker := os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false"
+	enableFTHoldingsWorker := os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false"
+	enableNFTOwnershipWorker := os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false"
+	enableTxContractsWorker := os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false"
+	enableTxMetricsWorker := os.Getenv("ENABLE_TX_METRICS_WORKER") != "false"
+
+	// Live/head derivers: Blockscout-style "real-time head" materialization.
+	// These processors must be idempotent because they can overlap with backfills.
+	enableLiveDerivers := os.Getenv("ENABLE_LIVE_DERIVERS") != "false"
+	liveDeriverChunk := getEnvUint("LIVE_DERIVERS_CHUNK", 10)
+
+	var liveDeriver *ingester.LiveDeriver
+	var onIndexedRange ingester.RangeCallback
+	if enableLiveDerivers {
+		var processors []ingester.Processor
+		if enableTokenWorker {
+			processors = append(processors, ingester.NewTokenWorker(repo))
+		}
+		if enableEVMWorker {
+			processors = append(processors, ingester.NewEVMWorker(repo))
+		}
+		if enableTxContractsWorker {
+			processors = append(processors, ingester.NewTxContractsWorker(repo))
+		}
+		if enableAccountsWorker {
+			processors = append(processors, ingester.NewAccountsWorker(repo))
+		}
+		if enableMetaWorker {
+			processors = append(processors, ingester.NewMetaWorker(repo))
+		}
+		if enableTxMetricsWorker {
+			processors = append(processors, ingester.NewTxMetricsWorker(repo))
+		}
+
+		liveDeriver = ingester.NewLiveDeriver(repo, processors, ingester.LiveDeriverConfig{
+			ChunkSize: liveDeriverChunk,
+		})
+		onIndexedRange = liveDeriver.NotifyRange
+	} else {
+		log.Println("Live Derivers are DISABLED (ENABLE_LIVE_DERIVERS=false)")
+	}
+
 	// 3. Services
 	// Forward Ingester (Live Data)
 	forwardIngester := ingester.NewService(flowClient, repo, ingester.Config{
@@ -181,6 +227,7 @@ func main() {
 		MaxReorgDepth:    maxReorgDepth,
 		OnNewBlock:       api.BroadcastNewBlock,
 		OnNewTransaction: api.BroadcastNewTransaction,
+		OnIndexedRange:   onIndexedRange,
 	})
 
 	// Backward Ingester (History Backfill)
@@ -194,16 +241,6 @@ func main() {
 		// No callbacks for history to avoid spamming the frontend live feed
 		// or maybe we want them? Let's leave them nil for now to keep UI clean.
 	})
-
-	// Async Workers (optional)
-	enableTokenWorker := os.Getenv("ENABLE_TOKEN_WORKER") != "false"
-	enableEVMWorker := os.Getenv("ENABLE_EVM_WORKER") != "false"
-	enableMetaWorker := os.Getenv("ENABLE_META_WORKER") != "false"
-	enableAccountsWorker := os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false"
-	enableFTHoldingsWorker := os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false"
-	enableNFTOwnershipWorker := os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false"
-	enableTxContractsWorker := os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false"
-	enableTxMetricsWorker := os.Getenv("ENABLE_TX_METRICS_WORKER") != "false"
 
 	var tokenWorkerProcessor *ingester.TokenWorker
 	var tokenWorkers []*ingester.AsyncWorker
@@ -379,6 +416,39 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Start live/head derivers (Blockscout-style) if enabled.
+	if liveDeriver != nil {
+		liveDeriver.Start(ctx)
+
+		// Optional: seed the last N blocks so the UI has data immediately after deploy.
+		headBackfillBlocks := getEnvUint("LIVE_DERIVERS_HEAD_BACKFILL_BLOCKS", metaWorkerRange)
+		if headBackfillBlocks > 0 {
+			go func() {
+				// Give the ingester a moment to start and the DB to warm up.
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(15 * time.Second):
+				}
+
+				tip, err := repo.GetLastIndexedHeight(ctx, "main_ingester")
+				if err != nil || tip == 0 {
+					log.Printf("[live_head_backfill] Skip: cannot read main_ingester tip: %v", err)
+					return
+				}
+
+				from := uint64(0)
+				if tip > headBackfillBlocks {
+					from = tip - headBackfillBlocks
+				}
+				to := tip + 1
+
+				log.Printf("[live_head_backfill] Deriving head range [%d, %d) (blocks=%d)", from, to, headBackfillBlocks)
+				liveDeriver.NotifyRange(from, to)
+			}()
+		}
+	}
+
 	// Handle SIGINT
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -524,57 +594,58 @@ func main() {
 	// reflects recent activity immediately. It is idempotent (ON CONFLICT DO NOTHING).
 	enableLiveAddrBackfill := os.Getenv("ENABLE_LIVE_ADDRESS_BACKFILL") != "false"
 	if enableLiveAddrBackfill {
-		backfillBlocks := getEnvUint("LIVE_ADDRESS_BACKFILL_BLOCKS", metaWorkerRange)
-		chunkBlocks := getEnvUint("LIVE_ADDRESS_BACKFILL_CHUNK", 5000)
-		if chunkBlocks < 1 {
-			chunkBlocks = 5000
-		}
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			// Give the ingester a moment to start and the DB to warm up.
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(15 * time.Second):
+		if liveDeriver != nil {
+			log.Println("Live address backfill is DISABLED because live derivers are enabled (ENABLE_LIVE_DERIVERS!=false)")
+		} else {
+			backfillBlocks := getEnvUint("LIVE_ADDRESS_BACKFILL_BLOCKS", metaWorkerRange)
+			chunkBlocks := getEnvUint("LIVE_ADDRESS_BACKFILL_CHUNK", 5000)
+			if chunkBlocks < 1 {
+				chunkBlocks = 5000
 			}
 
-			tip, err := repo.GetLastIndexedHeight(ctx, "main_ingester")
-			if err != nil || tip == 0 {
-				log.Printf("[live_address_backfill] Skip: cannot read main_ingester tip: %v", err)
-				return
-			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
 
-			from := uint64(0)
-			if backfillBlocks > 0 && tip > backfillBlocks {
-				from = tip - backfillBlocks
-			}
-			to := tip + 1
+				// Give the ingester a moment to start and the DB to warm up.
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(15 * time.Second):
+				}
 
-			log.Printf("[live_address_backfill] Backfilling app.address_transactions for heights [%d, %d) (chunk=%d)", from, to, chunkBlocks)
-			for start := from; start < to; start += chunkBlocks {
-				if ctx.Err() != nil {
+				tip, err := repo.GetLastIndexedHeight(ctx, "main_ingester")
+				if err != nil || tip == 0 {
+					log.Printf("[live_address_backfill] Skip: cannot read main_ingester tip: %v", err)
 					return
 				}
-				end := start + chunkBlocks
-				if end > to {
-					end = to
+
+				from := uint64(0)
+				if backfillBlocks > 0 && tip > backfillBlocks {
+					from = tip - backfillBlocks
+				}
+				to := tip + 1
+
+				log.Printf("[live_address_backfill] Backfilling app.address_transactions for heights [%d, %d) (chunk=%d)", from, to, chunkBlocks)
+				for start := from; start < to; start += chunkBlocks {
+					if ctx.Err() != nil {
+						return
+					}
+					end := start + chunkBlocks
+					if end > to {
+						end = to
+					}
+
+					if err := repo.BackfillAddressTransactionsAndStatsRange(ctx, start, end); err != nil {
+						log.Printf("[live_address_backfill] Range [%d, %d) failed: %v", start, end, err)
+						continue
+					}
+					log.Printf("[live_address_backfill] Range [%d, %d) ok", start, end)
 				}
 
-				rows, err := repo.BackfillAddressTransactionsRange(ctx, start, end)
-				if err != nil {
-					log.Printf("[live_address_backfill] Range [%d, %d) failed: %v", start, end, err)
-					continue
-				}
-				if rows > 0 {
-					log.Printf("[live_address_backfill] Range [%d, %d) inserted %d rows", start, end, rows)
-				}
-			}
-
-			log.Printf("[live_address_backfill] Done (tip=%d)", tip)
-		}()
+				log.Printf("[live_address_backfill] Done (tip=%d)", tip)
+			}()
+		}
 	} else {
 		log.Println("Live address backfill is DISABLED (ENABLE_LIVE_ADDRESS_BACKFILL=false)")
 	}

@@ -132,35 +132,35 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		},
 		"token_worker": {
 			"concurrency": getEnvInt("TOKEN_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("TOKEN_WORKER_RANGE", 0),
+			"range":       getEnvUint("TOKEN_WORKER_RANGE", 1000),
 		},
 		"evm_worker": {
 			"concurrency": getEnvInt("EVM_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("EVM_WORKER_RANGE", 0),
+			"range":       getEnvUint("EVM_WORKER_RANGE", 1000),
 		},
 		"meta_worker": {
 			"concurrency": getEnvInt("META_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("META_WORKER_RANGE", 0),
+			"range":       getEnvUint("META_WORKER_RANGE", 1000),
 		},
 		"accounts_worker": {
 			"concurrency": getEnvInt("ACCOUNTS_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("ACCOUNTS_WORKER_RANGE", 0),
+			"range":       getEnvUint("ACCOUNTS_WORKER_RANGE", 1000),
 		},
 		"ft_holdings_worker": {
 			"concurrency": getEnvInt("FT_HOLDINGS_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("FT_HOLDINGS_WORKER_RANGE", 0),
+			"range":       getEnvUint("FT_HOLDINGS_WORKER_RANGE", 1000),
 		},
 		"nft_ownership_worker": {
 			"concurrency": getEnvInt("NFT_OWNERSHIP_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 0),
+			"range":       getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 1000),
 		},
 		"tx_contracts_worker": {
 			"concurrency": getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("TX_CONTRACTS_WORKER_RANGE", 0),
+			"range":       getEnvUint("TX_CONTRACTS_WORKER_RANGE", 1000),
 		},
 		"tx_metrics_worker": {
 			"concurrency": getEnvInt("TX_METRICS_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("TX_METRICS_WORKER_RANGE", 0),
+			"range":       getEnvUint("TX_METRICS_WORKER_RANGE", 1000),
 		},
 	}
 
