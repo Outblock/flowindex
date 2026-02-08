@@ -35,15 +35,23 @@ Ingest / Worker:
 | `ENABLE_HISTORY_INGESTER` | `true` | Enable history backfill |
 | `ENABLE_TOKEN_WORKER` | `true` | Enable token worker |
 | `ENABLE_EVM_WORKER` | `true` | Enable EVM worker |
-| `TOKEN_WORKER_RANGE` | `50000` | Token worker lease range |
-| `EVM_WORKER_RANGE` | `50000` | EVM worker lease range |
+| `TOKEN_WORKER_RANGE` | `1000` | Token worker lease range |
+| `EVM_WORKER_RANGE` | `1000` | EVM worker lease range |
 | `TOKEN_WORKER_CONCURRENCY` | `1` | Token worker concurrency |
 | `EVM_WORKER_CONCURRENCY` | `1` | EVM worker concurrency |
 | `ENABLE_META_WORKER` | `true` | Enable meta worker |
-| `META_WORKER_RANGE` | `50000` | Meta worker lease range |
+| `META_WORKER_RANGE` | `1000` | Meta worker lease range |
 | `META_WORKER_CONCURRENCY` | `1` | Meta worker concurrency |
-| `ENABLE_DERIVED_WRITES` | `false` | Enable app.* partition ensure during raw ingest |
 | `TX_SCRIPT_INLINE_MAX_BYTES` | `0` | If >0, store `raw.transactions.script` inline only when <= this size (otherwise NULL + `raw.scripts`) |
+| `ENABLE_LIVE_DERIVERS` | `true` | Enable near-head derived materialization (Blockscout-style) |
+| `LIVE_DERIVERS_CHUNK` | `10` | Block chunk size for the live derivers |
+
+Raw Storage (optional, heavy):
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `STORE_COLLECTIONS` | `false` | Fetch and persist raw collections (expensive; one RPC per collection) |
+| `STORE_BLOCK_PAYLOADS` | `false` | Persist raw block seals/guarantees/signatures JSON blobs |
+| `STORE_EXECUTION_RESULTS` | `false` | Fetch and persist execution results (expensive; extra RPC per block) |
 
 Rate Limiting:
 | Variable | Default | Purpose |

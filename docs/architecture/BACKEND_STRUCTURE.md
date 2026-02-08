@@ -27,7 +27,8 @@
   - `server_bootstrap.go`: router/middleware/server bootstrap.
   - `routes_registration.go`: route groups.
   - `websocket.go`: WS hub.
-  - `v1_handlers.go`, `v1_helpers.go`: `/flow/v1` and response mappers.
+  - `v1_helpers.go`: response envelope + mappers/shared helpers.
+  - `v1_handlers_*.go`: `/flow/v1` handlers split by resource (blocks/tx/accounts/ft/nft/contracts/evm/status).
 
 ## 3. Data Ownership Rules
 - Put data in `raw.*` when:

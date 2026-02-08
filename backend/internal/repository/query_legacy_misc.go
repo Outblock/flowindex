@@ -307,6 +307,17 @@ func (r *Repository) GetTotalContracts(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+func (r *Repository) GetTotalEVMTransactions(ctx context.Context) (int64, error) {
+	estimate, err := r.estimatePartitionCount(ctx, "app", "evm_transactions_p%")
+	if err == nil && estimate > 0 {
+		return estimate, nil
+	}
+
+	var count int64
+	err = r.db.QueryRow(ctx, "SELECT COUNT(*) FROM app.evm_transactions").Scan(&count)
+	return count, err
+}
+
 // GetBlockRange returns min height, max height, and total count of blocks
 func (r *Repository) GetBlockRange(ctx context.Context) (uint64, uint64, int64, error) {
 	var minH, maxH uint64

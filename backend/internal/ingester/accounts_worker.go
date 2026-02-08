@@ -45,6 +45,10 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 		if len(addr) != 16 {
 			return
 		}
+		// 0x000... is not a real user account; treat as null/system placeholder.
+		if addr == "0000000000000000" {
+			return
+		}
 		if existing, ok := seen[addr]; ok {
 			if height < existing.FirstSeenHeight {
 				existing.FirstSeenHeight = height
