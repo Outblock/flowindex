@@ -84,9 +84,10 @@ func (r *Repository) ListAccountsForAPI(ctx context.Context, cursorHeight *uint6
 		       COALESCE(s.storage_available, 0)
 		FROM app.accounts a
 		LEFT JOIN app.account_storage_snapshots s ON s.address = a.address
-		WHERE ($1::bigint IS NULL OR COALESCE(a.last_seen_height, 0) <= $1)
+		WHERE a.address <> $4
+		  AND ($1::bigint IS NULL OR COALESCE(a.last_seen_height, 0) <= $1)
 		ORDER BY COALESCE(a.last_seen_height, 0) DESC NULLS LAST, a.address ASC
-		LIMIT $2 OFFSET $3`, cursor, limit, offset)
+		LIMIT $2 OFFSET $3`, cursor, limit, offset, hexToBytes(systemFlowAddressHex))
 	if err != nil {
 		return nil, err
 	}
