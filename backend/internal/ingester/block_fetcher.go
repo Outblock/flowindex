@@ -27,9 +27,6 @@ type FetchResult struct {
 	Events           []models.Event
 	Collections      []models.Collection
 	ExecutionResults []models.ExecutionResult
-	AddressActivity  []models.AddressTransaction
-	TokenTransfers   []models.TokenTransfer
-	AccountKeys      []models.AccountKey
 	Error            error
 }
 
@@ -70,7 +67,11 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		}
 
 		// 1. Get Block Header (+ optional collections)
-		storeCollections := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_COLLECTIONS"))) != "false"
+		//
+		// Collections are expensive to fetch because they require one RPC call per collection guarantee.
+		// For most explorer pages we can derive everything we need from raw.transactions/events, so we
+		// default to NOT fetching collections unless explicitly enabled.
+		storeCollections := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_COLLECTIONS"))) == "true"
 
 		var (
 			block       *flowsdk.Block
@@ -307,33 +308,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				dbTx.ErrorMessage = res.Error.Error()
 			}
 
-			// Address Activity (Participants)
-			seenActivity := make(map[string]bool)
-			addActivity := func(addr, role string) {
-				normalized := normalizeAddress(addr)
-				if normalized == "" {
-					return
-				}
-				k := normalized + "|" + role
-				if seenActivity[k] {
-					return
-				}
-				seenActivity[k] = true
-				result.AddressActivity = append(result.AddressActivity, models.AddressTransaction{
-					Address:         normalized,
-					TransactionID:   txID,
-					BlockHeight:     height,
-					TransactionType: "GENERAL",
-					Role:            role,
-				})
-			}
-
-			addActivity(tx.Payer.Hex(), "PAYER")
-			addActivity(tx.ProposalKey.Address.Hex(), "PROPOSER")
-			for _, auth := range tx.Authorizers {
-				addActivity(auth.Hex(), "AUTHORIZER")
-			}
-
 			// Process Events
 			for _, evt := range res.Events {
 				payload := w.flattenCadenceValue(evt.Value)
@@ -383,197 +357,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 	result.Error = fmt.Errorf("failed to fetch block %d: no suitable access node available", height)
 	return result
-}
-
-// ExtractAccountKeys parses events for public key mapping
-func (w *Worker) ExtractAccountKeys(events []models.Event) []models.AccountKey {
-	var keys []models.AccountKey
-	for _, evt := range events {
-		if strings.Contains(evt.Type, "AccountKeyAdded") || strings.Contains(evt.Type, "AccountKeyRemoved") {
-			var payload map[string]interface{}
-			if err := json.Unmarshal(evt.Payload, &payload); err != nil {
-				continue
-			}
-
-			address := ""
-			if addr, ok := payload["address"].(string); ok {
-				address = normalizeAddress(addr)
-			}
-			if address == "" {
-				continue
-			}
-
-			if strings.Contains(evt.Type, "AccountKeyRemoved") {
-				keyIdx := -1
-				if v, ok := payload["keyIndex"]; ok {
-					if n, ok := parseInt(v); ok {
-						keyIdx = n
-					}
-				}
-				if keyIdx < 0 {
-					if v, ok := payload["publicKey"]; ok {
-						if n, ok := parseInt(v); ok {
-							keyIdx = n
-						}
-					}
-				}
-				if keyIdx < 0 {
-					continue
-				}
-				keys = append(keys, models.AccountKey{
-					Address:           address,
-					KeyIndex:          keyIdx,
-					Revoked:           true,
-					RevokedAtHeight:   evt.BlockHeight,
-					LastUpdatedHeight: evt.BlockHeight,
-				})
-				continue
-			}
-
-			// AccountKeyAdded
-			keyIdx := -1
-			if v, ok := payload["keyIndex"]; ok {
-				if n, ok := parseInt(v); ok {
-					keyIdx = n
-				}
-			}
-			if keyIdx < 0 {
-				continue
-			}
-
-			publicKey := extractPublicKey(payload["publicKey"])
-			if publicKey == "" {
-				if key, ok := payload["key"].(map[string]interface{}); ok {
-					publicKey = extractPublicKey(key["publicKey"])
-				}
-			}
-			publicKey = normalizePublicKey(publicKey)
-			if publicKey == "" {
-				continue
-			}
-
-			key := models.AccountKey{
-				Address:           address,
-				KeyIndex:          keyIdx,
-				PublicKey:         publicKey,
-				Revoked:           false,
-				AddedAtHeight:     evt.BlockHeight,
-				LastUpdatedHeight: evt.BlockHeight,
-			}
-
-			if sa, ok := payload["signingAlgorithm"].(string); ok {
-				key.SigningAlgorithm = normalizeSignatureAlgorithm(sa)
-			} else if pkObj, ok := payload["publicKey"].(map[string]interface{}); ok {
-				if sa, ok := pkObj["signatureAlgorithm"].(string); ok {
-					key.SigningAlgorithm = normalizeSignatureAlgorithm(sa)
-				}
-			}
-			if ha, ok := payload["hashingAlgorithm"].(string); ok {
-				key.HashingAlgorithm = normalizeHashAlgorithm(ha)
-			} else if ha, ok := payload["hashAlgorithm"].(string); ok {
-				key.HashingAlgorithm = normalizeHashAlgorithm(ha)
-			}
-			if v, ok := payload["weight"]; ok {
-				if wgt, ok := parseWeightToInt(v); ok {
-					key.Weight = wgt
-				}
-			}
-
-			keys = append(keys, key)
-		}
-	}
-	return keys
-}
-
-func (w *Worker) parseTokenEvent(evtType string, payloadJSON []byte, txID string, height uint64) *models.TokenTransfer {
-	var payload map[string]interface{}
-	json.Unmarshal(payloadJSON, &payload)
-
-	// Check if this is a standard FT event structure
-	eventType, ok := payload["EventType"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-
-	location, ok := eventType["Location"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-
-	addrHex, ok := location["address"].(string)
-	if !ok {
-		return nil
-	}
-
-	contractAddr := strings.TrimPrefix(addrHex, "0x")
-	amount := "0"
-	toAddr := ""
-	fromAddr := ""
-
-	if val, ok := payload["amount"].(json.Number); ok {
-		amount = val.String()
-	} else if val, ok := payload["amount"].(float64); ok {
-		amount = fmt.Sprintf("%f", val)
-	}
-
-	if strings.Contains(evtType, "TokensDeposited") {
-		if toVal, ok := payload["to"].(map[string]interface{}); ok {
-			if addr, ok := toVal["address"].(string); ok {
-				toAddr = strings.TrimPrefix(addr, "0x")
-			}
-		}
-	} else {
-		// TokensWithdrawn
-		if fromVal, ok := payload["from"].(map[string]interface{}); ok {
-			if addr, ok := fromVal["address"].(string); ok {
-				fromAddr = strings.TrimPrefix(addr, "0x")
-			}
-		}
-	}
-
-	return &models.TokenTransfer{
-		TransactionID:        txID,
-		BlockHeight:          height,
-		TokenContractAddress: contractAddr,
-		FromAddress:          fromAddr,
-		ToAddress:            toAddr,
-		Amount:               amount,
-		IsNFT:                false, // Default to FT for now unless specialized parser
-	}
-}
-
-// discoverAddresses recursively scans a payload for Flow and EVM addresses
-func (w *Worker) discoverAddresses(val interface{}, discovered map[string]string) {
-	switch v := val.(type) {
-	case string:
-		addr := strings.TrimPrefix(v, "0x")
-		if isAddress(addr) {
-			discovered[strings.ToLower(addr)] = "EVENT_PARTICIPANT"
-		}
-	case map[string]interface{}:
-		for _, vv := range v {
-			w.discoverAddresses(vv, discovered)
-		}
-	case []interface{}:
-		for _, vv := range v {
-			w.discoverAddresses(vv, discovered)
-		}
-	}
-}
-
-// isAddress checks if a hex string is a Flow (16 chars) or EVM (40 chars) address
-func isAddress(s string) bool {
-	s = strings.TrimPrefix(s, "0x")
-	// Only count as address if it's hex and correct length
-	if len(s) != 16 && len(s) != 40 {
-		return false
-	}
-	for _, r := range s {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
-			return false
-		}
-	}
-	return true
 }
 
 func isGRPCMessageTooLarge(err error) bool {

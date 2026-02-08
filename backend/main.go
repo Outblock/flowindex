@@ -87,17 +87,15 @@ func main() {
 			historicNodesRaw = flowURL
 		}
 	}
+	// Optional single-node fallback for history (e.g. your own archive node).
+	// We intentionally do NOT assume a default here because public hostnames change.
 	archiveNode := strings.TrimSpace(os.Getenv("FLOW_ARCHIVE_NODE"))
-	if archiveNode == "" {
-		archiveNode = "archive.mainnet.nodes.onflow.org:9000"
-	}
-	// Ensure the archive node is always included as a safety net.
-	historicNodesRaw = strings.TrimSpace(historicNodesRaw)
-	if archiveNode != "" && !strings.Contains(historicNodesRaw, archiveNode) {
-		if historicNodesRaw != "" {
-			historicNodesRaw = historicNodesRaw + "," + archiveNode
-		} else {
+	if archiveNode != "" {
+		historicNodesRaw = strings.TrimSpace(historicNodesRaw)
+		if historicNodesRaw == "" {
 			historicNodesRaw = archiveNode
+		} else if !strings.Contains(historicNodesRaw, archiveNode) {
+			historicNodesRaw = historicNodesRaw + "," + archiveNode
 		}
 	}
 

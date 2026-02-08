@@ -33,6 +33,24 @@ func (r *Repository) BackfillTxMetrics(ctx context.Context, cfg TxMetricsBackfil
 		}
 	}
 
+	// Defensive clamp: operators sometimes set TX_METRICS_BACKFILL_* to heights that
+	// haven't been indexed yet. Scanning empty ranges wastes DB I/O and floods logs.
+	{
+		var dbMin, dbMax int64
+		if err := r.db.QueryRow(ctx, "SELECT COALESCE(MIN(height), 0), COALESCE(MAX(height), 0) FROM raw.block_lookup").Scan(&dbMin, &dbMax); err == nil && dbMax > 0 {
+			if cfg.StartHeight < dbMin {
+				cfg.StartHeight = dbMin
+			}
+			if cfg.EndHeight > dbMax {
+				cfg.EndHeight = dbMax
+			}
+		}
+	}
+	if cfg.StartHeight <= 0 || cfg.EndHeight <= 0 || cfg.StartHeight > cfg.EndHeight {
+		log.Printf("[backfill_tx_metrics] Skip: invalid or empty indexed range start=%d end=%d", cfg.StartHeight, cfg.EndHeight)
+		return nil
+	}
+
 	log.Printf("[backfill_tx_metrics] start=%d end=%d batch=%d sleep=%s", cfg.StartHeight, cfg.EndHeight, cfg.BatchSize, cfg.Sleep)
 
 	for height := cfg.StartHeight; height <= cfg.EndHeight; height += cfg.BatchSize {

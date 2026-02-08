@@ -8,7 +8,7 @@ This is the final publish list of environment variables used by the backend. Rai
 - `FLOW_ACCESS_NODE` = Flow access node, e.g. `access-001.mainnet28.nodes.onflow.org:9000`.
 - `FLOW_ACCESS_NODES` = optional comma-separated list of access nodes (overrides `FLOW_ACCESS_NODE`).
 - `FLOW_HISTORIC_ACCESS_NODES` = optional comma-separated list of historic spork nodes for history backfill (recommended for full history).
-- `FLOW_ARCHIVE_NODE` = optional archive node fallback (default: `archive.mainnet.nodes.onflow.org:9000`).
+- `FLOW_ARCHIVE_NODE` = optional single-node fallback to include in the historic pool (no default; set only if you operate your own archive endpoint).
 - `PORT` = API port (Railway sets this automatically; for GCP you can set explicitly).
 - `START_BLOCK` = start height for indexing (optional but strongly recommended).
 
@@ -20,12 +20,12 @@ This is the final publish list of environment variables used by the backend. Rai
 - `HISTORY_BATCH_SIZE` (default: 20)
 - `ENABLE_HISTORY_INGESTER` (default: true)
 - `MAX_REORG_DEPTH` (default: 1000)
+- `STORE_COLLECTIONS` (default: false; set true only if you need `raw.collections`; this adds one RPC call per collection guarantee)
 - `STORE_BLOCK_PAYLOADS` (default: false; set true only if you need full guarantees/seals/signatures JSON in `raw.blocks`)
 - `STORE_EXECUTION_RESULTS` (default: false; set true only if you need `raw.execution_results`)
 
 ## Derived + Async Workers
 
-- `ENABLE_DERIVED_WRITES` (default: false)
 - `ENABLE_TOKEN_WORKER` (default: true)
 - `ENABLE_EVM_WORKER` (default: true)
 - `ENABLE_META_WORKER` (default: true)
@@ -34,14 +34,14 @@ This is the final publish list of environment variables used by the backend. Rai
 - `ENABLE_NFT_OWNERSHIP_WORKER` (default: true)
 - `ENABLE_TX_CONTRACTS_WORKER` (default: true)
 - `ENABLE_TX_METRICS_WORKER` (default: true)
-- `TOKEN_WORKER_RANGE` (default: 50000)
-- `EVM_WORKER_RANGE` (default: 50000)
-- `META_WORKER_RANGE` (default: 50000)
-- `ACCOUNTS_WORKER_RANGE` (default: 50000)
-- `FT_HOLDINGS_WORKER_RANGE` (default: 50000)
-- `NFT_OWNERSHIP_WORKER_RANGE` (default: 50000)
-- `TX_CONTRACTS_WORKER_RANGE` (default: 50000)
-- `TX_METRICS_WORKER_RANGE` (default: 50000)
+- `TOKEN_WORKER_RANGE` (default: 1000)
+- `EVM_WORKER_RANGE` (default: 1000)
+- `META_WORKER_RANGE` (default: 1000)
+- `ACCOUNTS_WORKER_RANGE` (default: 1000)
+- `FT_HOLDINGS_WORKER_RANGE` (default: 1000)
+- `NFT_OWNERSHIP_WORKER_RANGE` (default: 1000)
+- `TX_CONTRACTS_WORKER_RANGE` (default: 1000)
+- `TX_METRICS_WORKER_RANGE` (default: 1000)
 - `TOKEN_WORKER_CONCURRENCY` (default: 1)
 - `EVM_WORKER_CONCURRENCY` (default: 1)
 - `META_WORKER_CONCURRENCY` (default: 1)
@@ -57,6 +57,14 @@ This is the final publish list of environment variables used by the backend. Rai
 - `TX_SCRIPT_INLINE_MAX_BYTES` (default: 0)
   - If `>0`, store `raw.transactions.script` inline only when the script size is <= this limit.
   - Otherwise, scripts are stored as `raw.transactions.script_hash` and de-duplicated in `raw.scripts`.
+
+## Live Derivers (Head Real-time, Blockscout-style)
+
+These run after a raw ingester batch is committed and keep `app.*` tables fresh near the head.
+
+- `ENABLE_LIVE_DERIVERS` (default: true)
+- `LIVE_DERIVERS_CHUNK` (default: 10)
+- `LIVE_DERIVERS_HEAD_BACKFILL_BLOCKS` (default: `META_WORKER_RANGE`)
 
 ## API Query Tuning
 

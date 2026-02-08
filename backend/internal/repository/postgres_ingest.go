@@ -4,10 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,12 +17,10 @@ import (
 
 // SaveBatch atomicially saves a batch of blocks and all related data
 // SaveBatch saves a batch of blocks and related data atomically
-func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, collections []models.Collection, executionResults []models.ExecutionResult, addressActivity []models.AddressTransaction, tokenTransfers []models.TokenTransfer, accountKeys []models.AccountKey, serviceName string, checkpointHeight uint64) error {
+func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, collections []models.Collection, executionResults []models.ExecutionResult, serviceName string, checkpointHeight uint64) error {
 	if len(blocks) == 0 {
 		return nil
 	}
-
-	enableDerivedWrites := os.Getenv("ENABLE_DERIVED_WRITES") == "true"
 
 	minHeight := blocks[0].Height
 	maxHeight := blocks[0].Height
@@ -39,11 +35,6 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 
 	if err := r.EnsureRawPartitions(ctx, minHeight, maxHeight); err != nil {
 		return err
-	}
-	if enableDerivedWrites {
-		if err := r.EnsureAppPartitions(ctx, minHeight, maxHeight); err != nil {
-			return err
-		}
 	}
 
 	dbtx, err := r.db.Begin(ctx)
@@ -677,156 +668,6 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert execution result: %w", err)
-			}
-		}
-	}
-
-	// 4. Insert Account Keys (app schema)
-	if enableDerivedWrites {
-		for _, ak := range accountKeys {
-			// Revocation events update state by (address, key_index).
-			if ak.Revoked && ak.PublicKey == "" {
-				_, err := dbtx.Exec(ctx, `
-					UPDATE app.account_keys
-					SET revoked = TRUE,
-						revoked_at_height = $3,
-						last_updated_height = $3,
-						updated_at = NOW()
-					WHERE address = $1 AND key_index = $2
-					  AND $3 >= last_updated_height`,
-					hexToBytes(ak.Address), ak.KeyIndex, ak.RevokedAtHeight,
-				)
-				if err != nil {
-					return fmt.Errorf("failed to update account key revoke: %w", err)
-				}
-				continue
-			}
-
-			_, err := dbtx.Exec(ctx, `
-				INSERT INTO app.account_keys (
-					address, key_index, public_key,
-					signing_algorithm, hashing_algorithm, weight,
-					revoked, added_at_height, revoked_at_height, last_updated_height,
-					created_at, updated_at
-				)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
-				ON CONFLICT (address, key_index) DO UPDATE SET
-					public_key = EXCLUDED.public_key,
-					signing_algorithm = EXCLUDED.signing_algorithm,
-					hashing_algorithm = EXCLUDED.hashing_algorithm,
-					weight = EXCLUDED.weight,
-					revoked = EXCLUDED.revoked,
-					added_at_height = COALESCE(app.account_keys.added_at_height, EXCLUDED.added_at_height),
-					revoked_at_height = CASE WHEN EXCLUDED.revoked THEN EXCLUDED.revoked_at_height ELSE NULL END,
-					last_updated_height = EXCLUDED.last_updated_height,
-					updated_at = NOW()
-				WHERE EXCLUDED.last_updated_height >= app.account_keys.last_updated_height`,
-				hexToBytes(ak.Address), ak.KeyIndex, hexToBytes(ak.PublicKey),
-				parseSmallInt(ak.SigningAlgorithm), parseSmallInt(ak.HashingAlgorithm), ak.Weight,
-				ak.Revoked, ak.AddedAtHeight, func() *uint64 {
-					if ak.RevokedAtHeight == 0 {
-						return nil
-					}
-					return &ak.RevokedAtHeight
-				}(), ak.LastUpdatedHeight,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to upsert account key: %w", err)
-			}
-		}
-	}
-
-	// 4. Insert Address Activity (app.address_transactions)
-	// NOTE: Check if table 'app.address_transactions' exists. User schema didn't have it.
-	// We'll trust availability for query support.
-	if enableDerivedWrites {
-		for _, aa := range addressActivity {
-			_, err := dbtx.Exec(ctx, `
-			INSERT INTO app.address_transactions (address, transaction_id, block_height, role)
-			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (address, block_height, transaction_id, role) DO NOTHING`,
-				hexToBytes(aa.Address), hexToBytes(aa.TransactionID), aa.BlockHeight, aa.Role,
-			)
-			if err != nil {
-				// Fail softly here if table missing? No, fail hard so I know to fix it.
-				return fmt.Errorf("failed to insert addr tx: %w", err)
-			}
-		}
-	}
-
-	// 5. Update Address Stats
-	// Sort unique addresses to prevent deadlocks
-	if enableDerivedWrites {
-		uniqueAddresses := make(map[string]bool)
-		for _, aa := range addressActivity {
-			uniqueAddresses[aa.Address] = true
-		}
-
-		sortedAddresses := make([]string, 0, len(uniqueAddresses))
-		for addr := range uniqueAddresses {
-			sortedAddresses = append(sortedAddresses, addr)
-		}
-		sort.Strings(sortedAddresses)
-
-		for _, addr := range sortedAddresses {
-			// Find any activity for this address to get the block height
-			var blockHeight uint64
-			for _, aa := range addressActivity {
-				if aa.Address == addr {
-					blockHeight = aa.BlockHeight
-					break
-				}
-			}
-
-			// app.address_stats
-			_, err := dbtx.Exec(ctx, `
-				INSERT INTO app.address_stats (address, tx_count, total_gas_used, last_updated_block, created_at, updated_at)
-				VALUES ($1, 1, 0, $2, NOW(), NOW())
-				ON CONFLICT (address) DO UPDATE SET 
-					tx_count = app.address_stats.tx_count + 1,
-					last_updated_block = GREATEST(app.address_stats.last_updated_block, EXCLUDED.last_updated_block),
-					updated_at = NOW()`,
-				hexToBytes(addr), blockHeight,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to update address stats for %s: %w", addr, err)
-			}
-		}
-	}
-
-	// 6. Track Smart Contracts (app schema)
-	if enableDerivedWrites {
-		for _, e := range events {
-			if strings.Contains(e.Type, "AccountContractAdded") || strings.Contains(e.Type, "AccountContractUpdated") {
-				var payload map[string]interface{}
-				if err := json.Unmarshal(e.Payload, &payload); err == nil {
-					address, _ := payload["address"].(string)
-					name, _ := payload["name"].(string)
-					if name == "" {
-						if v, ok := payload["contract"].(string); ok {
-							name = v
-						}
-					}
-					if name == "" {
-						if v, ok := payload["contractName"].(string); ok {
-							name = v
-						}
-					}
-					if address != "" && name != "" {
-						_, err := dbtx.Exec(ctx, `
-								INSERT INTO app.smart_contracts (address, name, last_updated_height, created_at, updated_at)
-								VALUES ($1, $2, $3, $4, $5)
-								ON CONFLICT (address, name) DO UPDATE SET
-								last_updated_height = EXCLUDED.last_updated_height,
-								version = app.smart_contracts.version + 1,
-								updated_at = EXCLUDED.updated_at`,
-							hexToBytes(address), name, e.BlockHeight, time.Now(), time.Now(),
-						)
-						if err != nil {
-							return fmt.Errorf("failed to track contract %s: %w", name, err)
-						}
-					}
-				}
 			}
 		}
 	}

@@ -183,7 +183,27 @@ func (s *Service) process(ctx context.Context) error {
 		}
 
 		// 5. Define Batch
-		endHeight = startHeight + uint64(s.config.BatchSize) - 1
+		behind := latestHeight - startHeight
+
+		// Blockscout-style behavior: when we're close to the head, prefer small batches so
+		// the UI (websocket) feels real-time. Use larger batches only when we're far behind.
+		batchSize := uint64(s.config.BatchSize)
+		switch {
+		case behind == 0:
+			batchSize = 1
+		case behind <= 3:
+			batchSize = 1
+		case behind <= 20:
+			if batchSize > 5 {
+				batchSize = 5
+			}
+		case behind <= 100:
+			if batchSize > 10 {
+				batchSize = 10
+			}
+		}
+
+		endHeight = startHeight + batchSize - 1
 		if endHeight > latestHeight {
 			endHeight = latestHeight
 		}
@@ -387,9 +407,6 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 	var events []models.Event
 	var collections []models.Collection
 	var executionResults []models.ExecutionResult
-	var addrActivity []models.AddressTransaction
-	var tokenTransfers []models.TokenTransfer
-	var accountKeys []models.AccountKey
 
 	// Ensure sorted by height (should be already, but safety first)
 	sort.Slice(results, func(i, j int) bool {
@@ -424,13 +441,10 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 		events = append(events, res.Events...)
 		collections = append(collections, res.Collections...)
 		executionResults = append(executionResults, res.ExecutionResults...)
-		addrActivity = append(addrActivity, res.AddressActivity...)
-		tokenTransfers = append(tokenTransfers, res.TokenTransfers...)
-		accountKeys = append(accountKeys, res.AccountKeys...)
 	}
 
 	// Use the atomic batch save
-	if err := s.repo.SaveBatch(ctx, blocks, txs, events, collections, executionResults, addrActivity, tokenTransfers, accountKeys, s.config.ServiceName, checkpointHeight); err != nil {
+	if err := s.repo.SaveBatch(ctx, blocks, txs, events, collections, executionResults, s.config.ServiceName, checkpointHeight); err != nil {
 		return err
 	}
 
