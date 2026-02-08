@@ -142,7 +142,15 @@ func classifyTokenEvent(eventType string) (bool, bool) {
 		(strings.Contains(eventType, ".Deposited") || strings.Contains(eventType, ".Withdrawn")) {
 		return true, false
 	}
+	// Many NFT collections emit transfer events as "<Collection>.Deposit"/"<Collection>.Withdraw".
+	if strings.HasSuffix(eventType, ".Deposit") || strings.HasSuffix(eventType, ".Withdraw") {
+		return true, true
+	}
 	if strings.Contains(eventType, ".TokensDeposited") || strings.Contains(eventType, ".TokensWithdrawn") {
+		return true, false
+	}
+	// Some FT contracts emit "<Token>.Deposited"/"<Token>.Withdrawn" (e.g. FiatToken).
+	if strings.HasSuffix(eventType, ".Deposited") || strings.HasSuffix(eventType, ".Withdrawn") {
 		return true, false
 	}
 	return false, false
