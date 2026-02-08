@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"flowscan-clone/internal/models"
@@ -11,7 +12,6 @@ import (
 type TokenTransferWithContract struct {
 	models.TokenTransfer
 	ContractName string
-	TotalCount   int64
 }
 
 type FTVaultSummary struct {
@@ -25,6 +25,29 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 	clauses := []string{"t.is_nft = $1"}
 	args := []interface{}{isNFT}
 	arg := 2
+
+	// Exclude standard wrapper contracts by address. This matches the previous intent of
+	// filtering out events where split_part(e.type, '.', 3) was 'FungibleToken'/'NonFungibleToken',
+	// but avoids joining raw.events in the COUNT query.
+	//
+	// Defaults are mainnet addresses. Override for other networks via env vars.
+	wrapperAddrHex := ""
+	if isNFT {
+		wrapperAddrHex = os.Getenv("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS")
+		if wrapperAddrHex == "" {
+			wrapperAddrHex = "1d7e57aa55817448"
+		}
+	} else {
+		wrapperAddrHex = os.Getenv("FLOW_FUNGIBLE_TOKEN_ADDRESS")
+		if wrapperAddrHex == "" {
+			wrapperAddrHex = "f233dcee88fe0abe"
+		}
+	}
+	if b := hexToBytes(wrapperAddrHex); len(b) > 0 {
+		clauses = append(clauses, fmt.Sprintf("t.token_contract_address <> $%d", arg))
+		args = append(args, b)
+		arg++
+	}
 	if address != "" {
 		clauses = append(clauses, fmt.Sprintf("(t.from_address = $%d OR t.to_address = $%d)", arg, arg))
 		args = append(args, hexToBytes(address))
@@ -45,11 +68,6 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 		args = append(args, *height)
 		arg++
 	}
-	if isNFT {
-		clauses = append(clauses, "COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') <> 'NonFungibleToken'")
-	} else {
-		clauses = append(clauses, "COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') <> 'FungibleToken'")
-	}
 	where := "WHERE " + strings.Join(clauses, " AND ")
 	if limit <= 0 {
 		limit = 20
@@ -57,8 +75,15 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 	if offset < 0 {
 		offset = 0
 	}
-	args = append(args, limit, offset)
 
+	// Count query deliberately avoids window functions; those can trigger shared memory allocation
+	// failures on constrained Postgres instances (we've seen /dev/shm exhaustion on Railway).
+	var total int64
+	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.token_transfers t `+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	listArgs := append(append([]interface{}{}, args...), limit, offset)
 	rows, err := r.db.Query(ctx, `
 		SELECT
 			encode(t.transaction_id, 'hex') AS transaction_id,
@@ -72,25 +97,21 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 			t.is_nft,
 			t.timestamp,
 			t.created_at,
-			COALESCE(NULLIF(split_part(e.type, '.', 3), ''), ''),
-			COUNT(*) OVER() AS total_count
+			COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') AS contract_name
 		FROM app.token_transfers t
-		JOIN raw.tx_lookup l
-			ON l.id = t.transaction_id
 		LEFT JOIN raw.events e
 			ON e.block_height = t.block_height
 			AND e.transaction_id = t.transaction_id
 			AND e.event_index = t.event_index
 		`+where+`
 		ORDER BY t.block_height DESC, t.event_index DESC
-		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
+		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), listArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
 
 	var out []TokenTransferWithContract
-	var total int64
 	for rows.Next() {
 		var t TokenTransferWithContract
 		if err := rows.Scan(
@@ -106,12 +127,13 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 			&t.Timestamp,
 			&t.CreatedAt,
 			&t.ContractName,
-			&t.TotalCount,
 		); err != nil {
 			return nil, 0, err
 		}
-		total = t.TotalCount
 		out = append(out, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
 	}
 	return out, total, nil
 }
