@@ -5,6 +5,7 @@ import { Image, Users, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../../api';
 import { Pagination } from '../../components/Pagination';
+import { RouteErrorBoundary } from '../../components/RouteErrorBoundary';
 
 interface CollectionSearch {
   ownersPage?: number;
@@ -13,12 +14,12 @@ interface CollectionSearch {
 
 export const Route = createFileRoute('/nfts/$nftType')({
   component: NFTCollectionDetail,
-  validateSearch: (search: Record<string, unknown>): CollectionSearch => ({
-    ownersPage: Number(search.ownersPage) || 1,
-    transfersPage: Number(search.transfersPage) || 1,
-  }),
-  loaderDeps: ({ params: { nftType }, search: { ownersPage, transfersPage } }) => ({ nftType, ownersPage, transfersPage }),
-  loader: async ({ deps: { nftType, ownersPage, transfersPage } }) => {
+  // See note in /tokens/$token about SSR + validateSearch.
+  loader: async ({ params, location }) => {
+    const nftType = params.nftType;
+    const sp = new URLSearchParams(location.search);
+    const ownersPage = Number(sp.get('ownersPage') || '1') || 1;
+    const transfersPage = Number(sp.get('transfersPage') || '1') || 1;
     const ownersLimit = 25;
     const transfersLimit = 25;
     const ownersOffset = (ownersPage - 1) * ownersLimit;
@@ -58,6 +59,14 @@ export const Route = createFileRoute('/nfts/$nftType')({
 })
 
 function NFTCollectionDetail() {
+  return (
+    <RouteErrorBoundary title="NFT Page Error">
+      <NFTCollectionDetailInner />
+    </RouteErrorBoundary>
+  );
+}
+
+function NFTCollectionDetailInner() {
   const { collection, owners, ownersMeta, transfers, transfersMeta, nftType, ownersPage, transfersPage } =
     Route.useLoaderData();
   const navigate = Route.useNavigate();
@@ -309,4 +318,3 @@ function NFTCollectionDetail() {
     </div>
   );
 }
-

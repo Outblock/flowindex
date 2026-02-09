@@ -134,7 +134,7 @@ func (r *Repository) UpsertFTTokens(ctx context.Context, tokens []models.FTToken
 	for _, t := range tokens {
 		batch.Queue(`
 			INSERT INTO app.ft_tokens (contract_address, contract_name, name, symbol, decimals, updated_at)
-			VALUES ($1, $2, $3, $4, $5, NOW())
+			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,0), NOW())
 			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, app.ft_tokens.name),
 				symbol = COALESCE(EXCLUDED.symbol, app.ft_tokens.symbol),
@@ -271,7 +271,7 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 	for _, c := range collections {
 		batch.Queue(`
 			INSERT INTO app.nft_collections (contract_address, contract_name, name, symbol, updated_at)
-			VALUES ($1, $2, $3, $4, NOW())
+			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NOW())
 			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, app.nft_collections.name),
 				symbol = COALESCE(EXCLUDED.symbol, app.nft_collections.symbol),

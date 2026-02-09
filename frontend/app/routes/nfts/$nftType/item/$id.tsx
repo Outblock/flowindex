@@ -4,6 +4,7 @@ import { Image, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../../../../api';
 import { Pagination } from '../../../../components/Pagination';
+import { RouteErrorBoundary } from '../../../../components/RouteErrorBoundary';
 
 interface ItemSearch {
   page?: number;
@@ -11,11 +12,11 @@ interface ItemSearch {
 
 export const Route = createFileRoute('/nfts/$nftType/item/$id')({
   component: NFTItem,
-  validateSearch: (search: Record<string, unknown>): ItemSearch => ({
-    page: Number(search.page) || 1,
-  }),
-  loaderDeps: ({ params: { nftType, id }, search: { page } }) => ({ nftType, id, page }),
-  loader: async ({ deps: { nftType, id, page } }) => {
+  loader: async ({ params, location }) => {
+    const nftType = params.nftType;
+    const id = params.id;
+    const sp = new URLSearchParams(location.search);
+    const page = Number(sp.get('page') || '1') || 1;
     const limit = 25;
     const offset = (page - 1) * limit;
     try {
@@ -40,6 +41,14 @@ export const Route = createFileRoute('/nfts/$nftType/item/$id')({
 })
 
 function NFTItem() {
+  return (
+    <RouteErrorBoundary title="NFT Item Page Error">
+      <NFTItemInner />
+    </RouteErrorBoundary>
+  );
+}
+
+function NFTItemInner() {
   const { item, transfers, transfersMeta, nftType, id, page } = Route.useLoaderData();
   const navigate = Route.useNavigate();
 
@@ -193,4 +202,3 @@ function NFTItem() {
     </div>
   );
 }
-

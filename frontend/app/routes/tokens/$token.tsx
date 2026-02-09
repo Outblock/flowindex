@@ -4,6 +4,7 @@ import { Coins, Users, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../../api';
 import { Pagination } from '../../components/Pagination';
+import { RouteErrorBoundary } from '../../components/RouteErrorBoundary';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
@@ -14,12 +15,14 @@ interface TokenSearch {
 
 export const Route = createFileRoute('/tokens/$token')({
   component: TokenDetail,
-  validateSearch: (search: Record<string, unknown>): TokenSearch => ({
-    holdersPage: Number(search.holdersPage) || 1,
-    transfersPage: Number(search.transfersPage) || 1,
-  }),
-  loaderDeps: ({ params: { token }, search: { holdersPage, transfersPage } }) => ({ token, holdersPage, transfersPage }),
-  loader: async ({ deps: { token, holdersPage, transfersPage } }) => {
+  // NOTE: Avoid validateSearch+loaderDeps on param routes in SSR builds.
+  // We observed SSR returning `Content-Length: 0` for `/tokens/:token?...` when using that combo.
+  // Parse search params directly in the loader instead.
+  loader: async ({ params, location }) => {
+    const token = params.token;
+    const sp = new URLSearchParams(location.search);
+    const holdersPage = Number(sp.get('holdersPage') || '1') || 1;
+    const transfersPage = Number(sp.get('transfersPage') || '1') || 1;
     const holdersLimit = 25;
     const transfersLimit = 25;
     const holdersOffset = (holdersPage - 1) * holdersLimit;
@@ -60,6 +63,14 @@ export const Route = createFileRoute('/tokens/$token')({
 })
 
 function TokenDetail() {
+  return (
+    <RouteErrorBoundary title="Token Page Error">
+      <TokenDetailInner />
+    </RouteErrorBoundary>
+  );
+}
+
+function TokenDetailInner() {
   const { token, holders, holdersMeta, transfers, transfersMeta, tokenParam, holdersPage, transfersPage } =
     Route.useLoaderData();
   const navigate = Route.useNavigate();
@@ -276,4 +287,3 @@ function TokenDetail() {
     </div>
   );
 }
-
