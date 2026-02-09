@@ -195,6 +195,7 @@ func (r *Repository) ListFTHoldingsByToken(ctx context.Context, contract, contra
 		       balance::text, COALESCE(last_height,0), updated_at
 		FROM app.ft_holdings
 		WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)
+		  AND balance > 0
 		ORDER BY balance DESC, contract_name ASC
 		LIMIT $3 OFFSET $4`, hexToBytes(contract), contractName, limit, offset)
 	if err != nil {
