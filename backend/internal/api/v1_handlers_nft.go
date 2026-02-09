@@ -34,11 +34,16 @@ func (s *Server) handleFlowListNFTCollections(w http.ResponseWriter, r *http.Req
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := s.repo.CountNFTCollectionSummaries(r.Context())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	out := make([]map[string]interface{}, 0, len(collections))
 	for _, c := range collections {
 		out = append(out, toNFTCollectionOutput(c))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowGetNFTCollection(w http.ResponseWriter, r *http.Request) {

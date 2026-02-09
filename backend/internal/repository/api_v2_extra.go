@@ -47,7 +47,56 @@ func (r *Repository) CountFTHoldingsByAddress(ctx context.Context, address strin
 	if err := r.db.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM app.ft_holdings
-		WHERE address = $1`, hexToBytes(address)).Scan(&total); err != nil {
+		WHERE address = $1
+		  AND balance > 0`, hexToBytes(address)).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *Repository) CountFTTokens(ctx context.Context) (int64, error) {
+	var total int64
+	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.ft_tokens`).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *Repository) CountFTTokenContracts(ctx context.Context) (int64, error) {
+	// Used when app.ft_tokens has not been backfilled yet.
+	var total int64
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM (
+			SELECT DISTINCT
+				t.token_contract_address,
+				COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
+			FROM app.ft_transfers t
+			LEFT JOIN raw.events e
+				ON e.block_height = t.block_height
+				AND e.transaction_id = t.transaction_id
+				AND e.event_index = t.event_index
+			WHERE t.token_contract_address IS NOT NULL
+			  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
+		) x`).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *Repository) CountNFTCollectionSummaries(ctx context.Context) (int64, error) {
+	var total int64
+	if err := r.db.QueryRow(ctx, `
+		WITH counts AS (
+			SELECT contract_address, contract_name
+			FROM app.nft_ownership
+			GROUP BY contract_address, contract_name
+		),
+		unioned AS (
+			SELECT contract_address, contract_name FROM app.nft_collections
+			UNION
+			SELECT contract_address, contract_name FROM counts
+		)
+		SELECT COUNT(*) FROM unioned`).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil

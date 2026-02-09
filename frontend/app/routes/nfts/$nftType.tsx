@@ -15,6 +15,8 @@ interface CollectionSearch {
 export const Route = createFileRoute('/nfts/$nftType')({
   component: NFTCollectionDetail,
   // See note in /tokens/$token about SSR + validateSearch.
+  // But still re-run the loader when pagination params change so URL updates also update data.
+  loaderDeps: ({ params, location }) => ({ nftType: params.nftType, search: location.search }),
   loader: async ({ params, location }) => {
     const nftType = params.nftType;
     const sp = new URLSearchParams(location.search);

@@ -172,6 +172,7 @@ func (r *Repository) ListFTHoldingsByAddress(ctx context.Context, address string
 		       balance::text, COALESCE(last_height,0), updated_at
 		FROM app.ft_holdings
 		WHERE address = $1
+		  AND balance > 0
 		ORDER BY contract_address ASC, contract_name ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
 	if err != nil {

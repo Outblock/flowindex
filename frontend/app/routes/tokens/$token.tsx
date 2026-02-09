@@ -17,6 +17,9 @@ export const Route = createFileRoute('/tokens/$token')({
   // NOTE: Avoid validateSearch+loaderDeps on param routes in SSR builds.
   // We observed SSR returning `Content-Length: 0` for `/tokens/:token?...` when using that combo.
   // Parse search params directly in the loader instead.
+  // However, we still need to re-run the loader when pagination search params change,
+  // otherwise the URL updates but the table does not.
+  loaderDeps: ({ params, location }) => ({ token: params.token, search: location.search }),
   loader: async ({ params, location }) => {
     const token = params.token;
     const sp = new URLSearchParams(location.search);
@@ -181,7 +184,7 @@ function TokenDetailInner() {
                 <AnimatePresence mode="popLayout">
                   {holders.map((h) => {
                     const a = normalizeHex(h?.address);
-                    const bal = Number(h?.balance || 0);
+                    const bal = Math.max(Number(h?.balance || 0), 0);
                     return (
                       <motion.tr
                         layout

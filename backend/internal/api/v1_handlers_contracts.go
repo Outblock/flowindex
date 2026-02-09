@@ -1,13 +1,16 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
+	"github.com/onflow/flow-go-sdk"
 )
 
 func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +162,18 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]map[string]interface{}, 0, len(contracts))
 	for _, c := range contracts {
+		// If we didn't persist contract code (storage pressure), we can still serve it on-demand
+		// from Flow RPC for the detail view.
+		if c.Code == "" && s.client != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			acc, err := s.client.GetAccount(ctx, flow.HexToAddress(c.Address))
+			cancel()
+			if err == nil && acc != nil {
+				if b, ok := acc.Contracts[c.Name]; ok && len(b) > 0 {
+					c.Code = string(b)
+				}
+			}
+		}
 		out = append(out, toContractOutput(c))
 	}
 	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}

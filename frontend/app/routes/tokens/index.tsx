@@ -92,8 +92,8 @@ function Tokens() {
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
           <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Count</p>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            `count` is currently page-sized for this endpoint.
+          <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
+            <NumberFlow value={Number(meta?.count || 0)} format={{ useGrouping: true }} />
           </p>
         </div>
       </motion.div>
@@ -184,4 +184,3 @@ function Tokens() {
     </div>
   );
 }
-

@@ -36,6 +36,13 @@ func (s *Server) handleFlowListFTTokens(w http.ResponseWriter, r *http.Request) 
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	total, err := s.repo.CountFTTokens(r.Context())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	if len(tokens) == 0 {
 		contracts, err := s.repo.ListFTTokenContracts(r.Context(), limit, offset)
 		if err != nil {
@@ -45,12 +52,17 @@ func (s *Server) handleFlowListFTTokens(w http.ResponseWriter, r *http.Request) 
 		for _, row := range contracts {
 			tokens = append(tokens, models.FTToken{ContractAddress: row.Address, ContractName: row.Name})
 		}
+		if total == 0 {
+			if n, err := s.repo.CountFTTokenContracts(r.Context()); err == nil {
+				total = n
+			}
+		}
 	}
 	out := make([]map[string]interface{}, 0, len(tokens))
 	for _, t := range tokens {
 		out = append(out, toFTListOutput(t))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowGetFTToken(w http.ResponseWriter, r *http.Request) {
