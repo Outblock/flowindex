@@ -57,7 +57,7 @@ envsubst '$DNS_RESOLVER $BACKEND_API $BACKEND_WS' < /etc/nginx/templates/default
 
 # Start Nitro SSR server on port 3000
 echo "Starting Nitro SSR server on :3000"
-PORT=3000 node /app/.output/server/index.mjs &
+PORT=3000 bun /app/.output/server/index.mjs &
 SSR_PID=$!
 
 # Start Nginx (public listener on :8080)
