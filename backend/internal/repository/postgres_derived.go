@@ -124,13 +124,14 @@ func (r *Repository) UpsertSmartContracts(ctx context.Context, contracts []model
 	batch := &pgx.Batch{}
 	for _, c := range contracts {
 		batch.Queue(`
-			INSERT INTO app.smart_contracts (address, name, last_updated_height, created_at, updated_at)
-			VALUES ($1, $2, $3, NOW(), NOW())
+			INSERT INTO app.smart_contracts (address, name, code, last_updated_height, created_at, updated_at)
+			VALUES ($1, $2, NULLIF($3, ''), $4, NOW(), NOW())
 			ON CONFLICT (address, name) DO UPDATE SET
 				last_updated_height = EXCLUDED.last_updated_height,
+				code = COALESCE(EXCLUDED.code, app.smart_contracts.code),
 				version = app.smart_contracts.version + 1,
 				updated_at = NOW()`,
-			hexToBytes(c.Address), c.Name, c.BlockHeight,
+			hexToBytes(c.Address), c.Name, c.Code, c.BlockHeight,
 		)
 	}
 
