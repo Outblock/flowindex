@@ -5,7 +5,7 @@ import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
-    ArrowLeft, User, Activity, Wallet, Key, Code, Coins, Image as ImageIcon,
+    ArrowLeft, ArrowRightLeft, User, Activity, Wallet, Key, Code, Coins, Image as ImageIcon,
     FileText, HardDrive, Folder, FolderOpen, File, ChevronRight, ChevronDown
 } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
