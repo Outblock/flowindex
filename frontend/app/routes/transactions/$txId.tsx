@@ -31,25 +31,33 @@ export const Route = createFileRoute('/transactions/$txId')({
                 errorMessage: rawTx.error_message,
                 arguments: rawTx.arguments
             };
-            return { transaction: transformedTx };
+            return { transaction: transformedTx, error: null as string | null };
         } catch (e) {
-            console.error("Failed to load transaction data", e);
-            return { transaction: null };
+            const status = (e as any)?.response?.status;
+            const message = (e as any)?.message;
+            // Avoid logging the full Axios error object (it contains huge request/socket graphs).
+            console.error('Failed to load transaction data', { status, message });
+
+            if (status === 404) {
+                return { transaction: null, error: 'Transaction not found' };
+            }
+
+            return { transaction: null, error: 'Failed to load transaction details' };
         }
     }
 })
 
 function TransactionDetail() {
-    const { transaction: initialTransaction } = Route.useLoaderData();
+    const { transaction: initialTransaction, error: initialError } = Route.useLoaderData();
     const [transaction, setTransaction] = useState<any>(initialTransaction);
     // const [loading, setLoading] = useState(true); // handled by loader
-    const [error, setError] = useState<any>(initialTransaction ? null : 'Transaction not found');
+    const [error, setError] = useState<any>(initialTransaction ? null : (initialError || 'Transaction not found'));
     const [activeTab, setActiveTab] = useState('script');
     const nowTick = useTimeTicker(20000);
 
     useEffect(() => {
         if (!initialTransaction) {
-            setError('Transaction not found');
+            setError(initialError || 'Transaction not found');
         } else {
             setTransaction(initialTransaction);
             setError(null);
