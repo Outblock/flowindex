@@ -27,6 +27,8 @@ export default defineConfig({
     // Nitro is the production server runtime/output (.output/).
     // Force Vite-SSR handler (TanStack Start) instead of the default index.html template renderer.
     nitro({
+      // Railway runs the server under Node (not Bun). Keep build+runtime consistent.
+      preset: 'node-server',
       renderer: {
         handler: resolve(runtimeDir, 'internal/vite/ssr-renderer'),
       },
