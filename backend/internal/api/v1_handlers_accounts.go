@@ -269,20 +269,29 @@ func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	if len(holdings) == 0 {
-		contracts, err := s.repo.ListFTTokenContractsByAddress(r.Context(), address, limit, offset)
+		// Only fall back to contract heuristics when the derived holdings table is not populated yet.
+		// If holdings exist globally, then this address simply has no positive balances in-range.
+		hasAny, err := s.repo.HasAnyFTHoldings(r.Context())
 		if err != nil {
 			writeAPIError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		for _, c := range contracts {
-			holdings = append(holdings, models.FTHolding{
-				Address:         address,
-				ContractAddress: c.Address,
-				ContractName:    c.Name,
-				Balance:         "0",
-			})
+		if !hasAny {
+			contracts, err := s.repo.ListFTTokenContractsByAddress(r.Context(), address, limit, offset)
+			if err != nil {
+				writeAPIError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			for _, c := range contracts {
+				holdings = append(holdings, models.FTHolding{
+					Address:         address,
+					ContractAddress: c.Address,
+					ContractName:    c.Name,
+					Balance:         "0",
+				})
+			}
+			total = int64(len(holdings))
 		}
-		total = int64(len(holdings))
 	}
 	out := make([]map[string]interface{}, 0, len(holdings))
 	for _, h := range holdings {

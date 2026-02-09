@@ -102,6 +102,20 @@ func (r *Repository) CountNFTCollectionSummaries(ctx context.Context) (int64, er
 	return total, nil
 }
 
+func (r *Repository) HasAnyFTHoldings(ctx context.Context) (bool, error) {
+	// Cheap existence check to decide whether to fall back to legacy "contracts-by-address"
+	// heuristics (used when the derived holdings table is not populated yet).
+	var one int
+	err := r.db.QueryRow(ctx, `SELECT 1 FROM app.ft_holdings WHERE balance > 0 LIMIT 1`).Scan(&one)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *Repository) CountNFTCollectionSummariesByOwner(ctx context.Context, owner string) (int64, error) {
 	var total int64
 	if err := r.db.QueryRow(ctx, `
