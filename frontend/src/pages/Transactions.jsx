@@ -172,7 +172,6 @@ export default function Transactions() {
             } catch (e) { console.error(e); }
         };
 
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadTransactions(1);
         refreshStatus();
         const interval = setInterval(refreshStatus, 10000);
