@@ -202,7 +202,9 @@ function NFTCollectionDetailInner() {
               <tbody>
                 <AnimatePresence mode="popLayout">
                   {owners.map((o) => {
-                    const a = normalizeHex(o?.address);
+                    // API returns `owner` (not `address`) for NFT holdings.
+                    // Keep backward-compat with any older shape that used `address`.
+                    const a = normalizeHex(o?.owner || o?.address);
                     const count = Number(o?.count || 0);
                     return (
                       <motion.tr
