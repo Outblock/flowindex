@@ -43,8 +43,12 @@ function Home() {
     const [networkStats, setNetworkStats] = useState<any>(initialNetworkStats);
     const [tps, setTps] = useState(0);
 
-    const [newBlockIds, setNewBlockIds] = useState(new Set());
-    const [newTxIds, setNewTxIds] = useState(new Set());
+    // Avoid scheduling one setTimeout per WS message (can explode under load).
+    // Keep a bounded "highlight until" map and prune it via a single ticker.
+    const [highlightNow, setHighlightNow] = useState(0); // kept for backward compatibility; replaced below
+    const highlightTick = useTimeTicker(1000);
+    const newBlockExpiryRef = useRef<Map<number, number>>(new Map());
+    const newTxExpiryRef = useRef<Map<string, number>>(new Map());
     // Removed unused refs and state
 
     const { isConnected } = useWebSocketStatus();
@@ -56,6 +60,28 @@ function Home() {
     useEffect(() => {
         setHydrated(true);
     }, []);
+
+    useEffect(() => {
+        // Prune highlight maps periodically so they can't grow unbounded under WS load.
+        const now = highlightTick;
+        let changed = false;
+        for (const [height, expiry] of newBlockExpiryRef.current.entries()) {
+            if (expiry <= now) {
+                newBlockExpiryRef.current.delete(height);
+                changed = true;
+            }
+        }
+        for (const [id, expiry] of newTxExpiryRef.current.entries()) {
+            if (expiry <= now) {
+                newTxExpiryRef.current.delete(id);
+                changed = true;
+            }
+        }
+        if (changed) {
+            // Force a rerender so expired highlights disappear even if no new data arrives.
+            setHighlightNow(now);
+        }
+    }, [highlightTick]);
 
     useEffect(() => {
         // Process initial transactions
@@ -254,12 +280,10 @@ function Home() {
                 const filtered = (prev || []).filter((b) => b?.height !== newBlock?.height);
                 return [newBlock, ...filtered].slice(0, 50);
             });
-            setNewBlockIds(prev => new Set(prev).add(newBlock.height));
-            setTimeout(() => setNewBlockIds(prev => {
-                const next = new Set(prev);
-                next.delete(newBlock.height);
-                return next;
-            }), 3000);
+            if (typeof newBlock?.height === 'number') {
+                newBlockExpiryRef.current.set(newBlock.height, Date.now() + 3000);
+                setHighlightNow(Date.now());
+            }
             setStatusRaw(prev => prev ? {
                 ...prev,
                 latest_height: Math.max(prev.latest_height || 0, newBlock.height),
@@ -286,16 +310,11 @@ function Home() {
             });
 
             if (!exists) {
-                setNewTxIds(prev => {
-                    const next = new Set(prev);
-                    next.add(newTx.id);
-                    return next;
-                });
-                setTimeout(() => setNewTxIds(prev => {
-                    const next = new Set(prev);
-                    next.delete(newTx.id);
-                    return next;
-                }), 3000);
+                const id = normalizeTxId(newTx.id);
+                if (id) {
+                    newTxExpiryRef.current.set(id, Date.now() + 3000);
+                    setHighlightNow(Date.now());
+                }
                 setStatusRaw(prev => prev ? {
                     ...prev,
                     total_transactions: (prev.total_transactions || 0) + 1
@@ -584,7 +603,9 @@ function Home() {
                         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-1 relative">
                             <AnimatePresence>
                                 {(blocks || []).map((block) => {
-                                    const isNew = newBlockIds.has(block.height);
+                                    // highlightTick is used so highlight disappears even if no new data arrives.
+                                    const _ = highlightNow; // keep in render dependency
+                                    const isNew = (newBlockExpiryRef.current.get(block.height) ?? 0) > highlightTick;
                                     const blockTimeAbsolute = formatAbsoluteTime(block.timestamp);
                                     const blockTimeText = hydrated
                                         ? formatRelativeTime(block.timestamp, nowTick)
@@ -654,7 +675,8 @@ function Home() {
                         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-1 relative">
                             <AnimatePresence>
                                 {(transactions || []).map((tx) => {
-                                    const isNew = newTxIds.has(tx.id);
+                                    const _ = highlightNow; // keep in render dependency
+                                    const isNew = (newTxExpiryRef.current.get(normalizeTxId(tx.id)) ?? 0) > highlightTick;
                                     const isSealed = tx.status === 'SEALED';
                                     const isError = Boolean(tx.error_message || tx.errorMessage);
                                     const txTimeSource = tx.timestamp || tx.created_at || tx.block_timestamp;

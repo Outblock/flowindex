@@ -7,7 +7,6 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ArrowLeft, Box, CheckCircle, Code, Copy, ExternalLink, FileText, Layers } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
-import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { toast } from 'react-hot-toast';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
@@ -96,6 +95,30 @@ function ContractDetail() {
     const timeRel = createdAt ? formatRelativeTime(createdAt, nowTick) : '';
     const timeAbs = createdAt ? formatAbsoluteTime(createdAt) : '';
 
+    const copyText = async (text: string, successMessage: string) => {
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else if (typeof document !== 'undefined') {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', 'true');
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            } else {
+                throw new Error('Clipboard is unavailable');
+            }
+            toast.success(successMessage);
+        } catch (e) {
+            console.error('Copy failed', e);
+            toast.error('Copy failed');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono selection:bg-nothing-green selection:text-black transition-colors duration-300">
             <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -147,11 +170,14 @@ function ContractDetail() {
                                         <Link to={`/accounts/${contract.address}`} className="text-sm font-mono text-nothing-green-dark dark:text-nothing-green hover:underline break-all">
                                             {contract.address}
                                         </Link>
-                                        <CopyToClipboard text={contract.address} onCopy={() => toast.success('Address copied')}>
-                                            <button className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
-                                                <Copy className="h-3 w-3" />
-                                            </button>
-                                        </CopyToClipboard>
+                                        <button
+                                            type="button"
+                                            onClick={() => copyText(contract.address, 'Address copied')}
+                                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+                                            aria-label="Copy address"
+                                        >
+                                            <Copy className="h-3 w-3" />
+                                        </button>
                                     </div>
                                 </div>
 
@@ -192,11 +218,14 @@ function ContractDetail() {
                                     <Code className="h-4 w-4 text-zinc-500" />
                                     <span className="text-xs uppercase tracking-widest font-bold text-zinc-700 dark:text-zinc-300">Source Code</span>
                                 </div>
-                                <CopyToClipboard text={code} onCopy={() => toast.success('Code copied')}>
-                                    <button className="flex items-center gap-1.5 px-2 py-1 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-sm transition-colors text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
-                                        <Copy className="h-3 w-3" /> Copy
-                                    </button>
-                                </CopyToClipboard>
+                                <button
+                                    type="button"
+                                    onClick={() => copyText(code, 'Code copied')}
+                                    className="flex items-center gap-1.5 px-2 py-1 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-sm transition-colors text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-wider"
+                                    aria-label="Copy source code"
+                                >
+                                    <Copy className="h-3 w-3" /> Copy
+                                </button>
                             </div>
 
                             <div className="flex-1 relative overflow-auto bg-[#1e1e1e]">

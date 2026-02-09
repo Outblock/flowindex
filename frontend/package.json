@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "start": "node .output/server/index.mjs",
-    "preview": "node .output/server/index.mjs",
+    "start": "bun .output/server/index.mjs",
+    "preview": "bun .output/server/index.mjs",
     "lint": "eslint .",
     "prepare": "cd .. && husky"
   },
@@ -25,7 +25,6 @@
     "lucide-react": "^0.563.0",
     "postprocessing": "^6.36.0",
     "react": "^19.2.0",
-    "react-copy-to-clipboard": "^5.1.0",
     "react-dom": "^19.2.0",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.13.0",
