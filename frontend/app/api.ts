@@ -114,6 +114,14 @@ export const api = {
     ),
 
   // Flow FT / NFT (v1)
+  listFlowAccountFTHoldings: (address: string, limit = 25, offset = 0) =>
+    resolveApiBaseUrl().then((base) =>
+      axios.get(`${base}/flow/v1/account/${address}/ft/holding`, { params: { limit, offset } }).then(res => res.data),
+    ),
+  listFlowAccountNFTCollections: (address: string, limit = 25, offset = 0) =>
+    resolveApiBaseUrl().then((base) =>
+      axios.get(`${base}/flow/v1/account/${address}/nft`, { params: { limit, offset } }).then(res => res.data),
+    ),
   listFlowFTTokens: (limit = 25, offset = 0) =>
     resolveApiBaseUrl().then((base) =>
       axios.get(`${base}/flow/v1/ft`, { params: { limit, offset } }).then(res => res.data),
