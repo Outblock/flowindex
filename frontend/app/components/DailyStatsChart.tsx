@@ -10,9 +10,7 @@ export function DailyStatsChart() {
     useEffect(() => {
         const loadStats = async () => {
             try {
-                console.log("Fetching daily stats...");
                 const stats = await api.getDailyStats();
-                console.log("Daily stats response:", stats);
 
                 // Handle null/empty response
                 if (stats && Array.isArray(stats)) {

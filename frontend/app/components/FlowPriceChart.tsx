@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
+import { memo, useMemo } from 'react';
 
 // Mock data generator for the sparkline (since we only have current price)
 // In a real app, we'd fetch historical price data
@@ -15,7 +16,12 @@ const generateSparkline = (currentPrice) => {
     return data;
 };
 
-export function FlowPriceChart({ data }) {
+export const FlowPriceChart = memo(function FlowPriceChart({ data }) {
+    // Hooks must be called unconditionally, even when rendering a skeleton.
+    const price = data?.price ?? 0;
+    // Avoid generating a new random dataset on every parent rerender (blocks/ws updates).
+    const sparklineData = useMemo(() => generateSparkline(price), [price]);
+
     if (!data) {
         return (
             <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-full flex flex-col justify-between animate-pulse">
@@ -35,9 +41,8 @@ export function FlowPriceChart({ data }) {
         );
     }
 
-    const { price, price_change_24h, market_cap } = data;
+    const { price_change_24h, market_cap } = data;
     const isPositive = price_change_24h >= 0;
-    const sparklineData = generateSparkline(price);
 
     return (
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 relative overflow-hidden group hover:border-nothing-green/30 transition-all duration-300">
@@ -85,7 +90,8 @@ export function FlowPriceChart({ data }) {
                             strokeWidth={2}
                             fillOpacity={1}
                             fill="url(#colorPrice)"
-                            isAnimationActive={true}
+                            // Recharts animations can accumulate work when rerendering frequently.
+                            isAnimationActive={false}
                         />
                     </AreaChart>
                 </ResponsiveContainer>
@@ -97,4 +103,4 @@ export function FlowPriceChart({ data }) {
             </div>
         </div>
     );
-}
+});

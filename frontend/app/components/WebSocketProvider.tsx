@@ -21,12 +21,20 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     const connect = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) return;
+        if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+        }
 
         const ws = new WebSocket(WS_URL);
         wsRef.current = ws;
 
         ws.onopen = () => {
             setIsConnected(true);
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+                reconnectTimeoutRef.current = null;
+            }
         };
 
         ws.onmessage = (event) => {
@@ -40,6 +48,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
         ws.onclose = () => {
             setIsConnected(false);
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
             reconnectTimeoutRef.current = setTimeout(() => {
                 if (connectRef.current) {
                     connectRef.current();

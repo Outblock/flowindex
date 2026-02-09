@@ -574,7 +574,7 @@ function Home() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-1 relative">
-                            <AnimatePresence mode='popLayout'>
+                            <AnimatePresence>
                                 {(blocks || []).map((block) => {
                                     const isNew = newBlockIds.has(block.height);
                                     const blockTimeRelative = formatRelativeTime(block.timestamp, nowTick);
@@ -583,7 +583,6 @@ function Home() {
                                     const blockIdShort = formatMiddle(blockIdFull, 12, 8);
                                     return (
                                         <motion.div
-                                            layout
                                             key={block.height}
                                             initial={{ opacity: 0, x: -10 }}
                                             animate={{ opacity: 1, x: 0 }}
@@ -643,7 +642,7 @@ function Home() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-1 relative">
-                            <AnimatePresence mode='popLayout'>
+                            <AnimatePresence>
                                 {(transactions || []).map((tx) => {
                                     const isNew = newTxIds.has(tx.id);
                                     const isSealed = tx.status === 'SEALED';
@@ -690,7 +689,6 @@ function Home() {
 
                                     return (
                                         <motion.div
-                                            layout
                                             key={tx.id}
                                             initial={{ opacity: 0, x: 10 }}
                                             animate={{ opacity: 1, x: 0 }}
