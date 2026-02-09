@@ -10,7 +10,7 @@ function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
-async function resolveApiBaseUrl(): Promise<string> {
+export async function resolveApiBaseUrl(): Promise<string> {
   if (!import.meta.env.SSR) {
     return normalizeBaseUrl(API_URL);
   }

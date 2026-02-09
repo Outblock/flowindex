@@ -8,6 +8,9 @@
     "build": "vite build",
     "start": "bun .output/server/index.mjs",
     "preview": "bun .output/server/index.mjs",
+    "gen:api:v2": "openapi-typescript ../openapi-v2.json -o app/api/openapi.ts",
+    "gen:api:v1": "openapi-typescript ../openapi-v1.json -o app/api/openapi.v1.ts",
+    "gen:api": "npm run gen:api:v2",
     "lint": "eslint .",
     "prepare": "cd .. && husky"
   },
@@ -57,6 +60,8 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "nitro": "3.0.1-alpha.2",
+    "openapi-fetch": "^0.16.0",
+    "openapi-typescript": "^7.12.0",
     "postcss": "^8.5.6",
     "serve-static": "^2.2.1",
     "tailwindcss": "^3.4.19",
