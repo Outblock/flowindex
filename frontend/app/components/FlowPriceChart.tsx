@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
 // Mock data generator for the sparkline (since we only have current price)
 // In a real app, we'd fetch historical price data
@@ -20,6 +20,12 @@ const generateSparkline = (currentPrice) => {
 };
 
 export const FlowPriceChart = memo(function FlowPriceChart({ data }) {
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     // Hooks must be called unconditionally, even when rendering a skeleton.
     const price = data?.price ?? 0;
     // Avoid generating a new random dataset on every parent rerender (blocks/ws updates).
@@ -77,27 +83,31 @@ export const FlowPriceChart = memo(function FlowPriceChart({ data }) {
 
             {/* Sparkline Chart */}
             <div className="h-16 w-full -mx-2 opacity-50 group-hover:opacity-100 transition-opacity duration-500">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={sparklineData}>
-                        <defs>
-                            <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor={isPositive ? "#00ff41" : "#ef4444"} stopOpacity={0.3} />
-                                <stop offset="95%" stopColor={isPositive ? "#00ff41" : "#ef4444"} stopOpacity={0} />
-                            </linearGradient>
-                        </defs>
-                        <YAxis domain={['dataMin', 'dataMax']} hide />
-                        <Area
-                            type="monotone"
-                            dataKey="value"
-                            stroke={isPositive ? "#00ff41" : "#ef4444"}
-                            strokeWidth={2}
-                            fillOpacity={1}
-                            fill="url(#colorPrice)"
-                            // Recharts animations can accumulate work when rerendering frequently.
-                            isAnimationActive={false}
-                        />
-                    </AreaChart>
-                </ResponsiveContainer>
+                {mounted ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={sparklineData}>
+                            <defs>
+                                <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={isPositive ? "#00ff41" : "#ef4444"} stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor={isPositive ? "#00ff41" : "#ef4444"} stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <YAxis domain={['dataMin', 'dataMax']} hide />
+                            <Area
+                                type="monotone"
+                                dataKey="value"
+                                stroke={isPositive ? "#00ff41" : "#ef4444"}
+                                strokeWidth={2}
+                                fillOpacity={1}
+                                fill="url(#colorPrice)"
+                                // Recharts animations can accumulate work when rerendering frequently.
+                                isAnimationActive={false}
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="h-full w-full bg-zinc-100 dark:bg-white/5 rounded-sm" />
+                )}
             </div>
 
             <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-white/5 flex justify-between items-center text-[10px] uppercase tracking-wider text-zinc-500 dark:text-gray-500">
