@@ -15,10 +15,10 @@ SyntaxHighlighter.registerLanguage('cadence', swift);
 
 function AccountDetail() {
   const { address } = useParams();
-  const [account, setAccount] = useState(null);
-  const [transactions, setTransactions] = useState([]);
+  const [account, setAccount] = useState<any>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('info');
   const [activityTab, setActivityTab] = useState('transactions');
 
@@ -27,11 +27,11 @@ function AccountDetail() {
   const [txLoading, setTxLoading] = useState(false);
   const [txCursors, setTxCursors] = useState({ 1: '' });
   const [txHasNext, setTxHasNext] = useState(false);
-  const [tokenTransfers, setTokenTransfers] = useState([]);
+  const [tokenTransfers, setTokenTransfers] = useState<any[]>([]);
   const [tokenCursor, setTokenCursor] = useState('');
   const [tokenHasMore, setTokenHasMore] = useState(false);
   const [tokenLoading, setTokenLoading] = useState(false);
-  const [nftTransfers, setNftTransfers] = useState([]);
+  const [nftTransfers, setNftTransfers] = useState<any[]>([]);
   const [nftCursor, setNftCursor] = useState('');
   const [nftHasMore, setNftHasMore] = useState(false);
   const [nftLoading, setNftLoading] = useState(false);
@@ -40,14 +40,14 @@ function AccountDetail() {
   const [selectedContract, setSelectedContract] = useState('');
   const [selectedContractCode, setSelectedContractCode] = useState('');
   const [contractCodeLoading, setContractCodeLoading] = useState(false);
-  const [contractCodeError, setContractCodeError] = useState(null);
+  const [contractCodeError, setContractCodeError] = useState<any>(null);
 
   // Storage viewer (JSON-CDC via FlowView-compatible scripts)
-  const [storageOverview, setStorageOverview] = useState(null);
-  const [storageSelected, setStorageSelected] = useState(null);
-  const [storageItem, setStorageItem] = useState(null);
+  const [storageOverview, setStorageOverview] = useState<any>(null);
+  const [storageSelected, setStorageSelected] = useState<any>(null);
+  const [storageItem, setStorageItem] = useState<any>(null);
   const [storageLoading, setStorageLoading] = useState(false);
-  const [storageError, setStorageError] = useState(null);
+  const [storageError, setStorageError] = useState<any>(null);
   const [expandedDomains, setExpandedDomains] = useState({ storage: true, public: true, private: false });
 
   const normalizeAddress = (value) => {

@@ -10,8 +10,8 @@ import { formatRelativeTime } from '../lib/time';
 import { useTimeTicker } from '../hooks/useTimeTicker';
 
 export default function Transactions() {
-    const [transactions, setTransactions] = useState([]);
-    const [statusRaw, setStatusRaw] = useState(null);
+    const [transactions, setTransactions] = useState<any[]>([]);
+    const [statusRaw, setStatusRaw] = useState<any>(null);
     const [txPage, setTxPage] = useState(1);
     const [txCursors, setTxCursors] = useState({ 1: '' });
     const [txHasNext, setTxHasNext] = useState(false);

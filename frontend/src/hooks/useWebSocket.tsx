@@ -7,7 +7,7 @@ export function useWebSocketStatus() {
 
 export function useWebSocketMessages() {
   const { subscribe } = useContext(WSMessageContext);
-  const [lastMessage, setLastMessage] = useState(null);
+  const [lastMessage, setLastMessage] = useState<any>(null);
 
   useEffect(() => {
     if (!subscribe) return undefined;

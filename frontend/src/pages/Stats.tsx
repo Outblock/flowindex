@@ -14,7 +14,7 @@ const CHUNK_SIZES = [
 
 export default function Stats() {
     const [activeTab, setActiveTab] = useState('system'); // 'system' or 'mosaic'
-    const [status, setStatus] = useState(null);
+    const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     // State for Speed Calculations
@@ -26,7 +26,7 @@ export default function Stats() {
     // State for Indexing Map
     // Initialize with 100K
     const [chunkSize, setChunkSize] = useState(100000);
-    const [hoveredChunk, setHoveredChunk] = useState(null);
+    const [hoveredChunk, setHoveredChunk] = useState<any>(null);
 
     const processStatus = useCallback((data) => {
         const now = Date.now();

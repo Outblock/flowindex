@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WSStatusContext, WSMessageContext } from '../contexts/WebSocketContext';
 import { WS_URL } from '../api';
 
-export function WebSocketProvider({ children }) {
+export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const [isConnected, setIsConnected] = useState(false);
-    const wsRef = useRef(null);
-    const reconnectTimeoutRef = useRef(null);
-    const listenersRef = useRef(new Set());
-    const connectRef = useRef(null);
+    const wsRef = useRef<WebSocket | null>(null);
+    const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const listenersRef = useRef(new Set<(data: any) => void>());
+    const connectRef = useRef<(() => void) | null>(null);
 
-    const notify = useCallback((payload) => {
+    const notify = useCallback((payload: any) => {
         listenersRef.current.forEach((listener) => {
             try {
                 listener(payload);

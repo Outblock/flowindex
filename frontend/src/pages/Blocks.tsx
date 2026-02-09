@@ -10,8 +10,8 @@ import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 import { useTimeTicker } from '../hooks/useTimeTicker';
 
 export default function Blocks() {
-    const [blocks, setBlocks] = useState([]);
-    const [statusRaw, setStatusRaw] = useState(null);
+    const [blocks, setBlocks] = useState<any[]>([]);
+    const [statusRaw, setStatusRaw] = useState<any>(null);
     const [blockPage, setBlockPage] = useState(1);
     const [blockCursors, setBlockCursors] = useState({ 1: '' });
     const [blockHasNext, setBlockHasNext] = useState(false);
@@ -78,7 +78,7 @@ export default function Blocks() {
     const computeAvgBlockTime = (items) => {
         const withTime = (items || []).filter(b => b?.timestamp);
         if (withTime.length < 2) return 0;
-        const sorted = [...withTime].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        const sorted = [...withTime].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         const newest = new Date(sorted[0].timestamp).getTime();
         const oldest = new Date(sorted[sorted.length - 1].timestamp).getTime();
         const durationSec = Math.max(1, (newest - oldest) / 1000);

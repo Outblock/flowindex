@@ -14,11 +14,11 @@ import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 import { useTimeTicker } from '../hooks/useTimeTicker';
 
 function Home() {
-  const [blocks, setBlocks] = useState([]);
-  const [transactions, setTransactions] = useState([]);
+  const [blocks, setBlocks] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
   // const [loading, setLoading] = useState(true); // Unused
-  const [statusRaw, setStatusRaw] = useState(null);
-  const [networkStats, setNetworkStats] = useState(null); // New state
+  const [statusRaw, setStatusRaw] = useState<any>(null);
+  const [networkStats, setNetworkStats] = useState<any>(null); // New state
   const [tps, setTps] = useState(0);
 
 
@@ -191,7 +191,7 @@ function Home() {
   const computeTpsFromBlocks = (items) => {
     const withTime = (items || []).filter(b => b?.timestamp);
     if (withTime.length < 2) return 0;
-    const sorted = [...withTime].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const sorted = [...withTime].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const newest = new Date(sorted[0].timestamp).getTime();
     const oldest = new Date(sorted[sorted.length - 1].timestamp).getTime();
     const durationSec = Math.max(1, (newest - oldest) / 1000);
@@ -202,7 +202,7 @@ function Home() {
   const computeAvgBlockTime = (items) => {
     const withTime = (items || []).filter(b => b?.timestamp);
     if (withTime.length < 2) return 0;
-    const sorted = [...withTime].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const sorted = [...withTime].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const newest = new Date(sorted[0].timestamp).getTime();
     const oldest = new Date(sorted[sorted.length - 1].timestamp).getTime();
     const durationSec = Math.max(1, (newest - oldest) / 1000);
@@ -283,7 +283,7 @@ function Home() {
 
   // Initial data load + periodic refresh
   useEffect(() => {
-    let active = true;
+    const active = true;
 
     const refreshStatus = async () => {
       try {

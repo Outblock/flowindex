@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api';
 
 export function IndexingStatus() {
-    const [status, setStatus] = useState(null);
+    const [status, setStatus] = useState<any>(null);
 
     useEffect(() => {
         const fetchStatus = async () => {

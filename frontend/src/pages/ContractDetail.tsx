@@ -16,10 +16,10 @@ SyntaxHighlighter.registerLanguage('cadence', swift);
 
 function ContractDetail() {
     const { id } = useParams();
-    const [contract, setContract] = useState(null);
+    const [contract, setContract] = useState<any>(null);
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState<any>(null);
     const nowTick = useTimeTicker(20000);
 
     useEffect(() => {
@@ -45,7 +45,7 @@ function ContractDetail() {
                 // meta has: address, name, identifier
 
                 // If meta doesn't have name field separate, parse identifier
-                let address = meta.address;
+                const address = meta.address;
                 let name = meta.name;
 
                 if (!name && meta.identifier) {
@@ -58,7 +58,7 @@ function ContractDetail() {
                 if (address && name) {
                     try {
                         const codeRes = await api.getAccountContractCode(address, name);
-                        setCode(codeRes); // Assuming API returns string directly or object? API returns string usually for this endpoint based on api.js
+                        setCode(codeRes?.code || '');
                     } catch (e) {
                         console.warn('Failed to fetch code', e);
                         setCode('// Source code not available');

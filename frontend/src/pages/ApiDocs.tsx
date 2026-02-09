@@ -12,7 +12,6 @@ function ApiDocs({ specUrl }) {
         configuration={{
           url: specUrl,
           darkMode: theme === 'dark',
-          defaultTheme: theme,
           showSidebar: true,
           hideDownloadButton: false,
           hideTestRequestButton: false,

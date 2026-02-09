@@ -2,10 +2,10 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 const ThemeContext = createContext({
     theme: 'dark',
-    toggleTheme: () => { },
+    toggleTheme: (_e?: any) => Promise.resolve(),
 });
 
-export function ThemeProvider({ children }) {
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Default to dark mode
     const [theme, setTheme] = useState(() => {
         // Check what's already on the root (from inline script)

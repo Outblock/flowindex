@@ -11,10 +11,10 @@ import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 import { useTimeTicker } from '../hooks/useTimeTicker';
 
 export default function Contracts() {
-  const [contracts, setContracts] = useState([]);
-  const [meta, setMeta] = useState(null);
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [meta, setMeta] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<any>(null);
 
   const [page, setPage] = useState(1);
   const limit = 25;

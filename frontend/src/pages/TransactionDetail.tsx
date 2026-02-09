@@ -13,9 +13,9 @@ SyntaxHighlighter.registerLanguage('cadence', swift);
 
 function TransactionDetail() {
   const { txId } = useParams();
-  const [transaction, setTransaction] = useState(null);
+  const [transaction, setTransaction] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('script');
   const nowTick = useTimeTicker(20000);
 

@@ -3,7 +3,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { api } from '../api';
 
 export function DailyStatsChart() {
-    const [data, setData] = useState([]);
+    const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [rangeDays, setRangeDays] = useState(30);
 
@@ -19,7 +19,7 @@ export function DailyStatsChart() {
                     const chartData = stats.map(s => ({
                         name: s.date,
                         txs: s.tx_count
-                    })).sort((a, b) => new Date(a.name) - new Date(b.name));
+                    })).sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
                     setData(chartData);
                 } else {
                     console.warn("Daily stats is empty or invalid format");

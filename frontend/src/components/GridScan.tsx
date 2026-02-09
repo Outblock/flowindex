@@ -268,6 +268,37 @@ void main(){
 }
 `;
 
+interface GridScanProps {
+    enableWebcam?: boolean;
+    showPreview?: boolean;
+    modelsPath?: string;
+    sensitivity?: number;
+    lineThickness?: number;
+    linesColor?: string;
+    scanColor?: string;
+    scanOpacity?: number;
+    gridScale?: number;
+    lineStyle?: 'solid' | 'dashed' | 'dotted';
+    lineJitter?: number;
+    scanDirection?: 'backward' | 'pingpong' | 'forward';
+    enablePost?: boolean;
+    bloomIntensity?: number;
+    bloomThreshold?: number;
+    bloomSmoothing?: number;
+    chromaticAberration?: number;
+    noiseIntensity?: number;
+    scanGlow?: number;
+    scanSoftness?: number;
+    scanPhaseTaper?: number;
+    scanDuration?: number;
+    scanDelay?: number;
+    enableGyro?: boolean;
+    scanOnClick?: boolean;
+    snapBackDelay?: number;
+    className?: string;
+    style?: React.CSSProperties;
+}
+
 export default function GridScan({
     enableWebcam = false,
     showPreview = false,
@@ -297,7 +328,7 @@ export default function GridScan({
     snapBackDelay = 250,
     className,
     style
-}) {
+}: GridScanProps) {
     const containerRef = useRef(null);
     const videoRef = useRef(null);
 
@@ -376,10 +407,10 @@ export default function GridScan({
                 enableGyro &&
                 typeof window !== 'undefined' &&
                 window.DeviceOrientationEvent &&
-                DeviceOrientationEvent.requestPermission
+                (DeviceOrientationEvent as any).requestPermission
             ) {
                 try {
-                    await DeviceOrientationEvent.requestPermission();
+                    await (DeviceOrientationEvent as any).requestPermission();
                     // eslint-disable-next-line no-empty
                 } catch { }
             }
@@ -817,7 +848,7 @@ function smoothDampVec2(
     const x = omega * deltaTime;
     const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
 
-    let change = current.clone().sub(target);
+    const change = current.clone().sub(target);
     const originalTo = target.clone();
 
     const maxChange = maxSpeed * smoothTime;

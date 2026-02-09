@@ -7,9 +7,9 @@ import { useTimeTicker } from '../hooks/useTimeTicker';
 
 function BlockDetail() {
   const { height } = useParams();
-  const [block, setBlock] = useState(null);
+  const [block, setBlock] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<any>(null);
   const nowTick = useTimeTicker(20000);
 
   useEffect(() => {
