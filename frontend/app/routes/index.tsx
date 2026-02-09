@@ -33,6 +33,8 @@ export const Route = createFileRoute('/')({
 function Home() {
     const { status, networkStats: initialNetworkStats, blocks: initialBlocks, transactions: initialTransactions } = Route.useLoaderData();
 
+    // Prevent SSR hydration mismatch for Date.now()-based UI (relative timestamps, etc).
+    const [hydrated, setHydrated] = useState(false);
     const [blocks, setBlocks] = useState<any[]>((initialBlocks?.items ?? (Array.isArray(initialBlocks) ? initialBlocks : [])) || []);
     const [transactions, setTransactions] = useState<any[]>([]); // Initialize empty, merge later
     // const [loading, setLoading] = useState(true); // Unused
@@ -49,6 +51,10 @@ function Home() {
     const nowTick = useTimeTicker(20000);
     const transactionsRef = useRef<any[]>([]);
     const isConnectedRef = useRef(false);
+
+    useEffect(() => {
+        setHydrated(true);
+    }, []);
 
     useEffect(() => {
         // Process initial transactions
@@ -577,8 +583,10 @@ function Home() {
                             <AnimatePresence>
                                 {(blocks || []).map((block) => {
                                     const isNew = newBlockIds.has(block.height);
-                                    const blockTimeRelative = formatRelativeTime(block.timestamp, nowTick);
                                     const blockTimeAbsolute = formatAbsoluteTime(block.timestamp);
+                                    const blockTimeText = hydrated
+                                        ? formatRelativeTime(block.timestamp, nowTick)
+                                        : blockTimeAbsolute;
                                     const blockIdFull = normalizeHex(block.id || '');
                                     const blockIdShort = formatMiddle(blockIdFull, 12, 8);
                                     return (
@@ -615,7 +623,7 @@ function Home() {
                                                             className="text-[10px] text-gray-600 font-mono uppercase mt-1"
                                                             title={blockTimeAbsolute || ''}
                                                         >
-                                                            {blockTimeRelative || ''}
+                                                            {blockTimeText || ''}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -648,8 +656,10 @@ function Home() {
                                     const isSealed = tx.status === 'SEALED';
                                     const isError = Boolean(tx.error_message || tx.errorMessage);
                                     const txTimeSource = tx.timestamp || tx.created_at || tx.block_timestamp;
-                                    const txTimeRelative = formatRelativeTime(txTimeSource, nowTick);
                                     const txTimeAbsolute = formatAbsoluteTime(txTimeSource);
+                                    const txTimeText = hydrated
+                                        ? formatRelativeTime(txTimeSource, nowTick)
+                                        : txTimeAbsolute;
                                     const txIdFull = normalizeHex(tx.id || '');
                                     const txIdShort = formatMiddle(txIdFull, 12, 8);
 
@@ -730,7 +740,7 @@ function Home() {
                                                             className="text-[10px] text-gray-500 font-mono"
                                                             title={txTimeAbsolute || ''}
                                                         >
-                                                            {txTimeRelative || ''}
+                                                            {txTimeText || ''}
                                                         </span>
                                                         <span className={`mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border ${isError ? 'border-red-500/50 text-red-500 bg-red-500/10' : isSealed ? 'border-nothing-green-dark/50 dark:border-nothing-green/50 text-nothing-green-dark dark:text-nothing-green bg-nothing-green-dark/10 dark:bg-nothing-green/10' : 'border-white/20 text-gray-400 bg-white/5'
                                                             }`}>
