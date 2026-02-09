@@ -31,10 +31,10 @@ export const Route = createFileRoute('/blocks/')({
 
 function Blocks() {
     const { blocksRes, statusRes, page } = Route.useLoaderData();
-    const [blocks, setBlocks] = useState<any[]>(blocksRes?.items ?? (Array.isArray(blocksRes) ? blocksRes : []) || []);
+    const [blocks, setBlocks] = useState<any[]>((blocksRes?.items ?? (Array.isArray(blocksRes) ? blocksRes : [])) || []);
     const [statusRaw, setStatusRaw] = useState<any>(statusRes);
     const [blockPage, setBlockPage] = useState(page);
-    const [blockCursors, setBlockCursors] = useState({ 1: '' });
+    const [blockCursors, setBlockCursors] = useState<Record<number, string>>({ 1: '' });
     const [blockHasNext, setBlockHasNext] = useState(Boolean(blocksRes?.next_cursor));
     const [newBlockIds, setNewBlockIds] = useState(new Set());
 

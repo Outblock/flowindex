@@ -33,7 +33,7 @@ export const Route = createFileRoute('/')({
 function Home() {
     const { status, networkStats: initialNetworkStats, blocks: initialBlocks, transactions: initialTransactions } = Route.useLoaderData();
 
-    const [blocks, setBlocks] = useState<any[]>(initialBlocks?.items ?? (Array.isArray(initialBlocks) ? initialBlocks : []) || []);
+    const [blocks, setBlocks] = useState<any[]>((initialBlocks?.items ?? (Array.isArray(initialBlocks) ? initialBlocks : [])) || []);
     const [transactions, setTransactions] = useState<any[]>([]); // Initialize empty, merge later
     // const [loading, setLoading] = useState(true); // Unused
     const [statusRaw, setStatusRaw] = useState<any>(status);

@@ -15,7 +15,4 @@ export default defineConfig({
       projects: ['./tsconfig.json'],
     }),
   ],
-  ssr: {
-    external: ['node:async_hooks'],
-  },
 })
