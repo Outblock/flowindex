@@ -42,19 +42,19 @@ function Blocks() {
     const { lastMessage } = useWebSocketMessages();
     const nowTick = useTimeTicker(20000);
 
-    const normalizeHex = (value) => {
+    const normalizeHex = (value: string | null | undefined): string => {
         if (!value) return '';
         const lower = String(value).toLowerCase();
         return lower.startsWith('0x') ? lower : `0x${lower}`;
     };
 
-    const formatMiddle = (value, head = 12, tail = 8) => {
+    const formatMiddle = (value: string | null | undefined, head = 12, tail = 8): string => {
         if (!value) return '';
         if (value.length <= head + tail + 3) return value;
         return `${value.slice(0, head)}...${value.slice(-tail)}`;
     };
 
-    const mergeBlocks = (prev, incoming) => {
+    const mergeBlocks = (prev: any[], incoming: any[]): any[] => {
         const byHeight = new Map();
 
         for (const block of prev || []) {
@@ -74,7 +74,7 @@ function Blocks() {
             .slice(0, 50); // Keep reasonable buffer
     };
 
-    const loadBlocks = async (page) => {
+    const loadBlocks = async (page: number) => {
         try {
             const cursor = blockCursors[page] ?? '';
             const res = await api.getBlocks(cursor, 20);
@@ -90,13 +90,13 @@ function Blocks() {
         }
     };
 
-    const handleBlockPageChange = (newPage) => {
+    const handleBlockPageChange = (newPage: number) => {
         setBlockPage(newPage);
         loadBlocks(newPage);
     };
 
     // Stats
-    const computeAvgBlockTime = (items) => {
+    const computeAvgBlockTime = (items: any[]): number => {
         const withTime = (items || []).filter(b => b?.timestamp);
         if (withTime.length < 2) return 0;
         const sorted = [...withTime].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

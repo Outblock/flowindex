@@ -66,31 +66,31 @@ function Home() {
         isConnectedRef.current = isConnected;
     }, [isConnected]);
 
-    const normalizeHex = (value) => {
+    const normalizeHex = (value: string | null | undefined): string => {
         if (!value) return '';
         const lower = String(value).toLowerCase();
         return lower.startsWith('0x') ? lower : `0x${lower}`;
     };
 
-    const formatMiddle = (value, head = 12, tail = 8) => {
+    const formatMiddle = (value: string | null | undefined, head = 12, tail = 8): string => {
         if (!value) return '';
         if (value.length <= head + tail + 3) return value;
         return `${value.slice(0, head)}...${value.slice(-tail)}`;
     };
 
-    const normalizeTxId = (value) => normalizeHex(value).toLowerCase();
+    const normalizeTxId = (value: string | null | undefined): string => normalizeHex(value).toLowerCase();
 
-    const getTxHeight = (tx) => Number(tx?.block_height ?? tx?.blockHeight ?? 0);
-    const getTxIndex = (tx) => Number(tx?.transaction_index ?? tx?.tx_index ?? 0);
+    const getTxHeight = (tx: any): number => Number(tx?.block_height ?? tx?.blockHeight ?? 0);
+    const getTxIndex = (tx: any): number => Number(tx?.transaction_index ?? tx?.tx_index ?? 0);
 
-    const getTxTimestampMs = (tx) => {
+    const getTxTimestampMs = (tx: any): number => {
         const source = tx?.timestamp || tx?.created_at || tx?.block_timestamp;
         if (!source) return 0;
         const ms = new Date(source).getTime();
         return Number.isNaN(ms) ? 0 : ms;
     };
 
-    const statusRank = (status) => {
+    const statusRank = (status: string | null | undefined): number => {
         switch (String(status || '').toUpperCase()) {
             case 'SEALED':
                 return 3;
@@ -103,7 +103,7 @@ function Home() {
         }
     };
 
-    const mergeTx = (existing, incoming) => {
+    const mergeTx = (existing: any, incoming: any): any => {
         if (!existing) return incoming;
         const merged = { ...existing, ...incoming };
 
@@ -131,7 +131,7 @@ function Home() {
         return merged;
     };
 
-    const compareTxDesc = (a, b) => {
+    const compareTxDesc = (a: any, b: any): number => {
         const heightDiff = getTxHeight(b) - getTxHeight(a);
         if (heightDiff !== 0) return heightDiff;
 
@@ -144,7 +144,7 @@ function Home() {
         return normalizeTxId(b?.id).localeCompare(normalizeTxId(a?.id));
     };
 
-    const mergeTransactions = (prev, incoming, { prependNew = false } = {}) => {
+    const mergeTransactions = (prev: any[], incoming: any[], { prependNew = false }: { prependNew?: boolean } = {}): any[] => {
         const map = new Map();
         const order = [];
         const seen = new Set();
@@ -204,7 +204,7 @@ function Home() {
         }
     };
 
-    const computeTpsFromBlocks = (items) => {
+    const computeTpsFromBlocks = (items: any[]): number => {
         const withTime = (items || []).filter(b => b?.timestamp);
         if (withTime.length < 2) return 0;
         const sorted = [...withTime].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -215,7 +215,7 @@ function Home() {
         return totalTxs / durationSec;
     };
 
-    const computeAvgBlockTime = (items) => {
+    const computeAvgBlockTime = (items: any[]): number => {
         const withTime = (items || []).filter(b => b?.timestamp);
         if (withTime.length < 2) return 0;
         const sorted = [...withTime].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

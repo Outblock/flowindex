@@ -16,6 +16,6 @@ export default defineConfig({
     }),
   ],
   ssr: {
-    noExternal: ['@tanstack/react-start', '@tanstack/start-storage-context'],
+    external: ['node:async_hooks'],
   },
 })

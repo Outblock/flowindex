@@ -20,9 +20,11 @@ func (r *Repository) GetRawTransactionsInRange(ctx context.Context, fromHeight, 
 			COALESCE(encode(proposer_address, 'hex'), '') AS proposer_address,
 			COALESCE(encode(payer_address, 'hex'), '') AS payer_address,
 			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(authorizers) a), ARRAY[]::text[]) AS authorizers,
+			COALESCE(raw.transactions.script, raw.scripts.script_text, '') AS script,
 			gas_used,
 			timestamp
 		FROM raw.transactions
+		LEFT JOIN raw.scripts ON raw.scripts.script_hash = raw.transactions.script_hash
 		WHERE block_height >= $1 AND block_height < $2
 		ORDER BY block_height ASC, transaction_index ASC`, fromHeight, toHeight)
 	if err != nil {
@@ -33,7 +35,7 @@ func (r *Repository) GetRawTransactionsInRange(ctx context.Context, fromHeight, 
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.GasUsed, &t.Timestamp); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Script, &t.GasUsed, &t.Timestamp); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)
