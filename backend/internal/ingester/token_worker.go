@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
@@ -13,6 +14,22 @@ import (
 
 type TokenWorker struct {
 	repo *repository.Repository
+}
+
+type tokenLeg struct {
+	TransactionID string
+	BlockHeight   uint64
+	EventIndex    int
+	Timestamp     time.Time
+	ContractAddr  string
+	ContractName  string
+	Amount        string
+	TokenID       string
+	IsNFT         bool
+	Direction     string // withdraw, deposit, direct
+	Owner         string
+	From          string
+	To            string
 }
 
 func NewTokenWorker(repo *repository.Repository) *TokenWorker {
@@ -35,48 +52,57 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	ftTokens := make(map[string]models.FTToken)
 	nftCollections := make(map[string]models.NFTCollection)
 	contracts := make(map[string]models.Contract)
+	legsByTx := make(map[string][]tokenLeg)
 
 	// 2. Parse Events
 	for _, evt := range events {
 		// Filter for Token events
 		if isToken, isNFT := classifyTokenEvent(evt.Type); isToken {
-			transfer := w.parseTokenEvent(evt, isNFT)
-			if transfer != nil {
+			leg := w.parseTokenLeg(evt, isNFT)
+			if leg == nil {
+				continue
+			}
+			legsByTx[leg.TransactionID] = append(legsByTx[leg.TransactionID], *leg)
+		}
+	}
+
+	for _, legs := range legsByTx {
+		transfers := buildTokenTransfers(legs)
+		for _, transfer := range transfers {
+			if transfer.IsNFT {
+				nftTransfers = append(nftTransfers, transfer)
+			} else {
+				ftTransfers = append(ftTransfers, transfer)
+			}
+			contractAddr := strings.TrimSpace(transfer.TokenContractAddress)
+			contractName := strings.TrimSpace(transfer.ContractName)
+			if contractAddr != "" && contractName != "" && !isWrapperContractName(contractName) {
+				key := contractAddr + ":" + contractName
 				if transfer.IsNFT {
-					nftTransfers = append(nftTransfers, *transfer)
+					nftCollections[key] = models.NFTCollection{
+						ContractAddress: contractAddr,
+						ContractName:    contractName,
+					}
+					contracts[key] = models.Contract{
+						ID:              formatContractIdentifier(contractAddr, contractName),
+						Address:         contractAddr,
+						Name:            contractName,
+						Kind:            "NFT",
+						FirstSeenHeight: transfer.BlockHeight,
+						LastSeenHeight:  transfer.BlockHeight,
+					}
 				} else {
-					ftTransfers = append(ftTransfers, *transfer)
-				}
-				contractAddr := strings.TrimSpace(transfer.TokenContractAddress)
-				contractName := strings.TrimSpace(transfer.ContractName)
-				if contractAddr != "" && contractName != "" && !isWrapperContractName(contractName) {
-					key := contractAddr + ":" + contractName
-					if isNFT {
-						nftCollections[key] = models.NFTCollection{
-							ContractAddress: contractAddr,
-							ContractName:    contractName,
-						}
-						contracts[key] = models.Contract{
-							ID:              formatContractIdentifier(contractAddr, contractName),
-							Address:         contractAddr,
-							Name:            contractName,
-							Kind:            "NFT",
-							FirstSeenHeight: transfer.BlockHeight,
-							LastSeenHeight:  transfer.BlockHeight,
-						}
-					} else {
-						ftTokens[key] = models.FTToken{
-							ContractAddress: contractAddr,
-							ContractName:    contractName,
-						}
-						contracts[key] = models.Contract{
-							ID:              formatContractIdentifier(contractAddr, contractName),
-							Address:         contractAddr,
-							Name:            contractName,
-							Kind:            "FT",
-							FirstSeenHeight: transfer.BlockHeight,
-							LastSeenHeight:  transfer.BlockHeight,
-						}
+					ftTokens[key] = models.FTToken{
+						ContractAddress: contractAddr,
+						ContractName:    contractName,
+					}
+					contracts[key] = models.Contract{
+						ID:              formatContractIdentifier(contractAddr, contractName),
+						Address:         contractAddr,
+						Name:            contractName,
+						Kind:            "FT",
+						FirstSeenHeight: transfer.BlockHeight,
+						LastSeenHeight:  transfer.BlockHeight,
 					}
 				}
 			}
@@ -159,16 +185,16 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	return nil
 }
 
-// parseTokenEvent parses a raw event into a TokenTransfer model
-func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.TokenTransfer {
+// parseTokenLeg parses a raw event into a transfer leg for pairing.
+func (w *TokenWorker) parseTokenLeg(evt models.Event, isNFT bool) *tokenLeg {
 	fields, ok := parseCadenceEventFields(evt.Payload)
 	if !ok {
 		return nil
 	}
 
 	amount := extractString(fields["amount"])
-	toAddr := extractAddressFromFields(fields, "to", "toAddress", "recipient", "receiver", "toAccount", "toAddr", "to_address", "depositTo", "depositedTo", "toVault", "newOwner", "account")
-	fromAddr := extractAddressFromFields(fields, "from", "fromAddress", "sender", "fromAccount", "fromAddr", "from_address", "withdrawnFrom", "withdrawFrom", "fromVault", "burnedFrom", "owner", "account")
+	toAddr := extractAddressFromFields(fields, "to", "toAddress", "recipient", "receiver", "toAccount", "toAddr", "to_address", "depositTo", "depositedTo", "toVault", "newOwner")
+	fromAddr := extractAddressFromFields(fields, "from", "fromAddress", "sender", "fromAccount", "fromAddr", "from_address", "withdrawnFrom", "withdrawFrom", "fromVault", "burnedFrom", "owner")
 	tokenID := extractString(fields["id"])
 	if tokenID == "" {
 		tokenID = extractString(fields["tokenId"])
@@ -180,15 +206,10 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.Toke
 	}
 	contractName := parseContractName(evt.Type)
 
-	if isNFT {
-		if amount == "" {
-			amount = "1"
-		}
-	} else if amount == "" {
-		return nil
+	if isNFT && amount == "" {
+		amount = "1"
 	}
-
-	if toAddr == "" && fromAddr == "" {
+	if !isNFT && amount == "" {
 		return nil
 	}
 
@@ -198,19 +219,31 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.Toke
 		}
 	}
 
-	return &models.TokenTransfer{
-		TransactionID:        evt.TransactionID,
-		BlockHeight:          evt.BlockHeight,
-		EventIndex:           evt.EventIndex,
-		TokenContractAddress: contractAddr,
-		ContractName:         contractName,
-		FromAddress:          fromAddr,
-		ToAddress:            toAddr,
-		Amount:               amount,
-		TokenID:              tokenID,
-		IsNFT:                isNFT,
-		Timestamp:            evt.Timestamp,
+	direction := inferTransferDirection(evt.Type, fromAddr, toAddr)
+	if direction == "" {
+		return nil
 	}
+
+	leg := &tokenLeg{
+		TransactionID: evt.TransactionID,
+		BlockHeight:   evt.BlockHeight,
+		EventIndex:    evt.EventIndex,
+		Timestamp:     evt.Timestamp,
+		ContractAddr:  contractAddr,
+		ContractName:  contractName,
+		Amount:        amount,
+		TokenID:       tokenID,
+		IsNFT:         isNFT,
+		Direction:     direction,
+		From:          fromAddr,
+		To:            toAddr,
+	}
+	if direction == "withdraw" {
+		leg.Owner = fromAddr
+	} else if direction == "deposit" {
+		leg.Owner = toAddr
+	}
+	return leg
 }
 
 func includeFeeTransfers() bool {
@@ -249,6 +282,167 @@ func classifyTokenEvent(eventType string) (bool, bool) {
 		return true, false
 	}
 	return false, false
+}
+
+func inferTransferDirection(eventType, fromAddr, toAddr string) string {
+	lower := strings.ToLower(eventType)
+	switch {
+	case strings.Contains(lower, "withdraw"):
+		return "withdraw"
+	case strings.Contains(lower, "deposit"):
+		return "deposit"
+	case fromAddr != "" && toAddr != "":
+		return "direct"
+	case fromAddr != "":
+		return "withdraw"
+	case toAddr != "":
+		return "deposit"
+	default:
+		return ""
+	}
+}
+
+type transferKey struct {
+	ContractAddr string
+	ContractName string
+	Amount       string
+	TokenID      string
+	IsNFT        bool
+}
+
+func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
+	withdrawals := make(map[transferKey][]tokenLeg)
+	deposits := make(map[transferKey][]tokenLeg)
+	out := make([]models.TokenTransfer, 0, len(legs))
+
+	for _, leg := range legs {
+		if leg.Direction == "direct" {
+			out = append(out, models.TokenTransfer{
+				TransactionID:        leg.TransactionID,
+				BlockHeight:          leg.BlockHeight,
+				EventIndex:           leg.EventIndex,
+				TokenContractAddress: leg.ContractAddr,
+				ContractName:         leg.ContractName,
+				FromAddress:          leg.From,
+				ToAddress:            leg.To,
+				Amount:               leg.Amount,
+				TokenID:              leg.TokenID,
+				IsNFT:                leg.IsNFT,
+				Timestamp:            leg.Timestamp,
+			})
+			continue
+		}
+
+		key := transferKey{
+			ContractAddr: leg.ContractAddr,
+			ContractName: leg.ContractName,
+			IsNFT:        leg.IsNFT,
+		}
+		if leg.IsNFT {
+			key.TokenID = leg.TokenID
+		} else {
+			key.Amount = leg.Amount
+		}
+
+		if leg.Direction == "withdraw" {
+			withdrawals[key] = append(withdrawals[key], leg)
+		} else if leg.Direction == "deposit" {
+			deposits[key] = append(deposits[key], leg)
+		}
+	}
+
+	// Pair withdrawals/deposits in event order.
+	for key, outs := range withdrawals {
+		ins := deposits[key]
+		pairs := len(outs)
+		if len(ins) < pairs {
+			pairs = len(ins)
+		}
+		for i := 0; i < pairs; i++ {
+			w := outs[i]
+			d := ins[i]
+			eventIndex := d.EventIndex
+			if eventIndex == 0 {
+				eventIndex = w.EventIndex
+			}
+			ts := d.Timestamp
+			if ts.IsZero() {
+				ts = w.Timestamp
+			}
+			out = append(out, models.TokenTransfer{
+				TransactionID:        w.TransactionID,
+				BlockHeight:          w.BlockHeight,
+				EventIndex:           eventIndex,
+				TokenContractAddress: w.ContractAddr,
+				ContractName:         w.ContractName,
+				FromAddress:          w.Owner,
+				ToAddress:            d.Owner,
+				Amount:               w.Amount,
+				TokenID:              w.TokenID,
+				IsNFT:                w.IsNFT,
+				Timestamp:            ts,
+			})
+		}
+		// Leftovers: mint (deposit only) or burn (withdraw only)
+		if len(outs) > pairs {
+			for _, w := range outs[pairs:] {
+				out = append(out, models.TokenTransfer{
+					TransactionID:        w.TransactionID,
+					BlockHeight:          w.BlockHeight,
+					EventIndex:           w.EventIndex,
+					TokenContractAddress: w.ContractAddr,
+					ContractName:         w.ContractName,
+					FromAddress:          w.Owner,
+					ToAddress:            "",
+					Amount:               w.Amount,
+					TokenID:              w.TokenID,
+					IsNFT:                w.IsNFT,
+					Timestamp:            w.Timestamp,
+				})
+			}
+		}
+		if len(ins) > pairs {
+			for _, d := range ins[pairs:] {
+				out = append(out, models.TokenTransfer{
+					TransactionID:        d.TransactionID,
+					BlockHeight:          d.BlockHeight,
+					EventIndex:           d.EventIndex,
+					TokenContractAddress: d.ContractAddr,
+					ContractName:         d.ContractName,
+					FromAddress:          "",
+					ToAddress:            d.Owner,
+					Amount:               d.Amount,
+					TokenID:              d.TokenID,
+					IsNFT:                d.IsNFT,
+					Timestamp:            d.Timestamp,
+				})
+			}
+		}
+	}
+
+	// Deposits without matching withdrawal key.
+	for key, ins := range deposits {
+		if _, ok := withdrawals[key]; ok {
+			continue
+		}
+		for _, d := range ins {
+			out = append(out, models.TokenTransfer{
+				TransactionID:        d.TransactionID,
+				BlockHeight:          d.BlockHeight,
+				EventIndex:           d.EventIndex,
+				TokenContractAddress: d.ContractAddr,
+				ContractName:         d.ContractName,
+				FromAddress:          "",
+				ToAddress:            d.Owner,
+				Amount:               d.Amount,
+				TokenID:              d.TokenID,
+				IsNFT:                d.IsNFT,
+				Timestamp:            d.Timestamp,
+			})
+		}
+	}
+
+	return out
 }
 
 func parseCadenceEventFields(payload []byte) (map[string]interface{}, bool) {
