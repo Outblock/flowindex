@@ -27,9 +27,13 @@ type TokenContract struct {
 }
 
 func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context, isNFT bool, address, tokenAddress, tokenName, txID string, height *uint64, limit, offset int) ([]TokenTransferWithContract, int64, error) {
-	clauses := []string{"t.is_nft = $1"}
-	args := []interface{}{isNFT}
-	arg := 2
+	table := "app.ft_transfers"
+	if isNFT {
+		table = "app.nft_transfers"
+	}
+	clauses := []string{}
+	args := []interface{}{}
+	arg := 1
 
 	// Exclude standard wrapper contracts by address. This matches the previous intent of
 	// filtering out events where split_part(e.type, '.', 3) was 'FungibleToken'/'NonFungibleToken',
@@ -78,7 +82,10 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 		args = append(args, *height)
 		arg++
 	}
-	where := "WHERE " + strings.Join(clauses, " AND ")
+	where := ""
+	if len(clauses) > 0 {
+		where = "WHERE " + strings.Join(clauses, " AND ")
+	}
 	if limit <= 0 {
 		limit = 20
 	}
@@ -89,7 +96,7 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 	// Count query deliberately avoids window functions; those can trigger shared memory allocation
 	// failures on constrained Postgres instances (we've seen /dev/shm exhaustion on Railway).
 	var total int64
-	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.token_transfers t `+where, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM `+table+` t `+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -101,14 +108,17 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 				COALESCE(encode(t.token_contract_address, 'hex'), '') AS token_contract_address,
 				COALESCE(encode(t.from_address, 'hex'), '') AS from_address,
 				COALESCE(encode(t.to_address, 'hex'), '') AS to_address,
-				COALESCE(t.amount::text, '') AS amount,
-				COALESCE(t.token_id, '') AS token_id,
+				`+func() string {
+			if isNFT {
+				return "''::text AS amount, COALESCE(t.token_id, '') AS token_id"
+			}
+			return "COALESCE(t.amount::text, '') AS amount, ''::text AS token_id"
+		}()+`,
 				t.event_index,
-				t.is_nft,
 				t.timestamp,
-				t.created_at,
+				t.timestamp AS created_at,
 				COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
-			FROM app.token_transfers t
+			FROM `+table+` t
 			LEFT JOIN raw.events e
 				ON e.block_height = t.block_height
 				AND e.transaction_id = t.transaction_id
@@ -133,13 +143,13 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 			&t.Amount,
 			&t.TokenID,
 			&t.EventIndex,
-			&t.IsNFT,
 			&t.Timestamp,
 			&t.CreatedAt,
 			&t.ContractName,
 		); err != nil {
 			return nil, 0, err
 		}
+		t.IsNFT = isNFT
 		out = append(out, t)
 	}
 	if err := rows.Err(); err != nil {
@@ -153,13 +163,12 @@ func (r *Repository) ListFTTokenContractsByAddress(ctx context.Context, address 
 		SELECT DISTINCT
 			encode(t.token_contract_address, 'hex') AS token_contract_address,
 			COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
-		FROM app.token_transfers t
+		FROM app.ft_transfers t
 		LEFT JOIN raw.events e
 			ON e.block_height = t.block_height
 			AND e.transaction_id = t.transaction_id
 			AND e.event_index = t.event_index
-		WHERE t.is_nft = FALSE
-		  AND (t.from_address = $1 OR t.to_address = $1)
+		WHERE (t.from_address = $1 OR t.to_address = $1)
 		  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
 		ORDER BY token_contract_address ASC, contract_name ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
@@ -197,14 +206,13 @@ func (r *Repository) ListFTVaultSummariesByAddress(ctx context.Context, address 
 				END
 			)::text AS balance,
 			MAX(t.block_height) AS last_height
-		FROM app.token_transfers t
+		FROM app.ft_transfers t
 		JOIN raw.tx_lookup l ON l.id = t.transaction_id
 		LEFT JOIN raw.events e
 			ON e.block_height = t.block_height
 			AND e.transaction_id = t.transaction_id
 			AND e.event_index = t.event_index
-		WHERE t.is_nft = FALSE
-		  AND (t.to_address = $1 OR t.from_address = $1)
+		WHERE (t.to_address = $1 OR t.from_address = $1)
 		  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
 		GROUP BY t.token_contract_address, contract_name
 		ORDER BY t.token_contract_address ASC

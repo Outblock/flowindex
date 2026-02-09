@@ -81,12 +81,12 @@ func (r *Repository) ListFTTokenContracts(ctx context.Context, limit, offset int
 		SELECT DISTINCT
 			encode(t.token_contract_address, 'hex') AS token_contract_address,
 			COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
-		FROM app.token_transfers t
+		FROM app.ft_transfers t
 		LEFT JOIN raw.events e
 			ON e.block_height = t.block_height
 			AND e.transaction_id = t.transaction_id
 			AND e.event_index = t.event_index
-		WHERE t.is_nft = FALSE AND t.token_contract_address IS NOT NULL
+		WHERE t.token_contract_address IS NOT NULL
 		  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
 		ORDER BY token_contract_address ASC, contract_name ASC
 		LIMIT $1 OFFSET $2`, limit, offset)

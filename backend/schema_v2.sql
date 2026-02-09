@@ -277,7 +277,7 @@ CREATE TABLE IF NOT EXISTS raw.execution_results (
 -- 4) DERIVED HIGH-VOLUME TABLES (partitioned)
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- 4.1 Token transfers (10M partitions)
+-- 4.1 Token transfers (legacy combined table, kept for backwards compatibility)
 CREATE TABLE IF NOT EXISTS app.token_transfers (
     block_height            BIGINT NOT NULL,
     transaction_id          BYTEA NOT NULL,
@@ -308,6 +308,53 @@ ALTER TABLE IF EXISTS app.token_transfers
   DROP COLUMN IF EXISTS created_at;
 ALTER TABLE IF EXISTS app.token_transfers
   DROP COLUMN IF EXISTS updated_at;
+
+-- 4.1.a FT transfers (10M partitions)
+CREATE TABLE IF NOT EXISTS app.ft_transfers (
+    block_height            BIGINT NOT NULL,
+    transaction_id          BYTEA NOT NULL,
+    event_index             INT NOT NULL,
+    internal_id             BIGSERIAL,
+
+    token_contract_address  BYTEA,
+    contract_name           TEXT,
+    from_address            BYTEA,
+    to_address              BYTEA,
+    amount                  DECIMAL(78, 18),
+
+    timestamp               TIMESTAMPTZ NOT NULL,
+
+    PRIMARY KEY (block_height, transaction_id, event_index)
+) PARTITION BY RANGE (block_height);
+
+CREATE INDEX IF NOT EXISTS idx_ft_transfers_from  ON app.ft_transfers(from_address);
+CREATE INDEX IF NOT EXISTS idx_ft_transfers_to    ON app.ft_transfers(to_address);
+CREATE INDEX IF NOT EXISTS idx_ft_transfers_token ON app.ft_transfers(token_contract_address);
+CREATE INDEX IF NOT EXISTS idx_ft_transfers_height ON app.ft_transfers(block_height DESC, event_index DESC);
+
+-- 4.1.b NFT transfers (10M partitions)
+CREATE TABLE IF NOT EXISTS app.nft_transfers (
+    block_height            BIGINT NOT NULL,
+    transaction_id          BYTEA NOT NULL,
+    event_index             INT NOT NULL,
+    internal_id             BIGSERIAL,
+
+    token_contract_address  BYTEA,
+    contract_name           TEXT,
+    from_address            BYTEA,
+    to_address              BYTEA,
+    token_id                VARCHAR(255),
+
+    timestamp               TIMESTAMPTZ NOT NULL,
+
+    PRIMARY KEY (block_height, transaction_id, event_index)
+) PARTITION BY RANGE (block_height);
+
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_from  ON app.nft_transfers(from_address);
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_to    ON app.nft_transfers(to_address);
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_token ON app.nft_transfers(token_contract_address);
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_height ON app.nft_transfers(block_height DESC, event_index DESC);
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_token_id ON app.nft_transfers(token_id);
 
 ALTER TABLE IF EXISTS app.evm_transactions
   ADD COLUMN IF NOT EXISTS event_index INT;
@@ -473,6 +520,8 @@ SELECT raw.create_partitions('raw.execution_results', 0, 10000000, 5000000);
 -- 10M partitions: [0,10M), [10M,20M)
 SELECT raw.create_partitions('raw.events', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.token_transfers', 0, 20000000, 10000000);
+SELECT raw.create_partitions('app.ft_transfers', 0, 20000000, 10000000);
+SELECT raw.create_partitions('app.nft_transfers', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.evm_transactions', 0, 20000000, 10000000);
 
 COMMIT;

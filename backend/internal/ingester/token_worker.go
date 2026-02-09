@@ -30,7 +30,8 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 		return fmt.Errorf("failed to fetch raw events: %w", err)
 	}
 
-	var transfers []models.TokenTransfer
+	var ftTransfers []models.TokenTransfer
+	var nftTransfers []models.TokenTransfer
 	ftTokens := make(map[string]models.FTToken)
 	nftCollections := make(map[string]models.NFTCollection)
 	contracts := make(map[string]models.Contract)
@@ -41,7 +42,11 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 		if isToken, isNFT := classifyTokenEvent(evt.Type); isToken {
 			transfer := w.parseTokenEvent(evt, isNFT)
 			if transfer != nil {
-				transfers = append(transfers, *transfer)
+				if transfer.IsNFT {
+					nftTransfers = append(nftTransfers, *transfer)
+				} else {
+					ftTransfers = append(ftTransfers, *transfer)
+				}
 				contractAddr := strings.TrimSpace(transfer.TokenContractAddress)
 				contractName := strings.TrimSpace(transfer.ContractName)
 				if contractAddr != "" && contractName != "" && !isWrapperContractName(contractName) {
@@ -79,22 +84,48 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	}
 
 	// 3. Upsert to App DB
-	if len(transfers) > 0 {
-		minH := transfers[0].BlockHeight
-		maxH := transfers[0].BlockHeight
-		for _, t := range transfers[1:] {
-			if t.BlockHeight < minH {
-				minH = t.BlockHeight
+	if len(ftTransfers) > 0 || len(nftTransfers) > 0 {
+		minH, maxH := uint64(0), uint64(0)
+		if len(ftTransfers) > 0 {
+			minH = ftTransfers[0].BlockHeight
+			maxH = ftTransfers[0].BlockHeight
+			for _, t := range ftTransfers[1:] {
+				if t.BlockHeight < minH {
+					minH = t.BlockHeight
+				}
+				if t.BlockHeight > maxH {
+					maxH = t.BlockHeight
+				}
 			}
-			if t.BlockHeight > maxH {
-				maxH = t.BlockHeight
+		}
+		if len(nftTransfers) > 0 {
+			if minH == 0 || nftTransfers[0].BlockHeight < minH {
+				minH = nftTransfers[0].BlockHeight
+			}
+			if nftTransfers[0].BlockHeight > maxH {
+				maxH = nftTransfers[0].BlockHeight
+			}
+			for _, t := range nftTransfers[1:] {
+				if t.BlockHeight < minH {
+					minH = t.BlockHeight
+				}
+				if t.BlockHeight > maxH {
+					maxH = t.BlockHeight
+				}
 			}
 		}
 		if err := w.repo.EnsureAppPartitions(ctx, minH, maxH); err != nil {
 			return fmt.Errorf("failed to ensure token partitions: %w", err)
 		}
-		if err := w.repo.UpsertTokenTransfers(ctx, transfers); err != nil {
-			return fmt.Errorf("failed to upsert transfers: %w", err)
+	}
+	if len(ftTransfers) > 0 {
+		if err := w.repo.UpsertFTTransfers(ctx, ftTransfers); err != nil {
+			return fmt.Errorf("failed to upsert ft transfers: %w", err)
+		}
+	}
+	if len(nftTransfers) > 0 {
+		if err := w.repo.UpsertNFTTransfers(ctx, nftTransfers); err != nil {
+			return fmt.Errorf("failed to upsert nft transfers: %w", err)
 		}
 	}
 	if len(ftTokens) > 0 {

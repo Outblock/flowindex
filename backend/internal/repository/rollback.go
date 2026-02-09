@@ -55,8 +55,11 @@ func (r *Repository) RollbackFromHeight(ctx context.Context, rollbackHeight uint
 	}
 
 	// Derived tables with block_height
-	if _, err := tx.Exec(ctx, "DELETE FROM app.token_transfers WHERE block_height >= $1", rollbackHeight); err != nil {
-		return fmt.Errorf("rollback app.token_transfers: %w", err)
+	if _, err := tx.Exec(ctx, "DELETE FROM app.ft_transfers WHERE block_height >= $1", rollbackHeight); err != nil {
+		return fmt.Errorf("rollback app.ft_transfers: %w", err)
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM app.nft_transfers WHERE block_height >= $1", rollbackHeight); err != nil {
+		return fmt.Errorf("rollback app.nft_transfers: %w", err)
 	}
 	if _, err := tx.Exec(ctx, "DELETE FROM app.evm_transactions WHERE block_height >= $1", rollbackHeight); err != nil {
 		return fmt.Errorf("rollback app.evm_transactions: %w", err)

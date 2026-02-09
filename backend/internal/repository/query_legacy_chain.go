@@ -382,15 +382,27 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 
 			-- 2) Token/NFT transfer participation (from/to)
 			-- Note: written by token_worker from raw.events, so this does not require reindexing.
-			SELECT tt.block_height, tt.transaction_id
-			FROM app.token_transfers tt
-			WHERE tt.from_address = $1
+			SELECT ft.block_height, ft.transaction_id
+			FROM app.ft_transfers ft
+			WHERE ft.from_address = $1
 
 			UNION
 
-			SELECT tt.block_height, tt.transaction_id
-			FROM app.token_transfers tt
-			WHERE tt.to_address = $1
+			SELECT ft.block_height, ft.transaction_id
+			FROM app.ft_transfers ft
+			WHERE ft.to_address = $1
+
+			UNION
+
+			SELECT nt.block_height, nt.transaction_id
+			FROM app.nft_transfers nt
+			WHERE nt.from_address = $1
+
+			UNION
+
+			SELECT nt.block_height, nt.transaction_id
+			FROM app.nft_transfers nt
+			WHERE nt.to_address = $1
 		)
 		SELECT DISTINCT ON (a.block_height, a.transaction_id)
 			encode(t.id, 'hex') AS id,
@@ -442,15 +454,27 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 
 			UNION
 
-			SELECT tt.block_height, tt.transaction_id
-			FROM app.token_transfers tt
-			WHERE tt.from_address = $1
+			SELECT ft.block_height, ft.transaction_id
+			FROM app.ft_transfers ft
+			WHERE ft.from_address = $1
 
 			UNION
 
-			SELECT tt.block_height, tt.transaction_id
-			FROM app.token_transfers tt
-			WHERE tt.to_address = $1
+			SELECT ft.block_height, ft.transaction_id
+			FROM app.ft_transfers ft
+			WHERE ft.to_address = $1
+
+			UNION
+
+			SELECT nt.block_height, nt.transaction_id
+			FROM app.nft_transfers nt
+			WHERE nt.from_address = $1
+
+			UNION
+
+			SELECT nt.block_height, nt.transaction_id
+			FROM app.nft_transfers nt
+			WHERE nt.to_address = $1
 		)
 		SELECT DISTINCT ON (a.block_height, a.transaction_id)
 			encode(t.id, 'hex') AS id,

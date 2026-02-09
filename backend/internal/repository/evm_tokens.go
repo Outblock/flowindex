@@ -32,9 +32,8 @@ func (r *Repository) ListEVMTokenSummaries(ctx context.Context, limit, offset in
 			), 0) AS holder_count,
 			COALESCE((
 				SELECT COUNT(*)
-				FROM app.token_transfers tr
+				FROM app.ft_transfers tr
 				WHERE tr.token_contract_address = t.contract_address
-				  AND tr.is_nft = FALSE
 			), 0) AS transfer_count
 		FROM app.ft_tokens t
 		WHERE octet_length(t.contract_address) = 20
@@ -73,9 +72,8 @@ func (r *Repository) GetEVMTokenSummary(ctx context.Context, address string) (*E
 			), 0) AS holder_count,
 			COALESCE((
 				SELECT COUNT(*)
-				FROM app.token_transfers tr
+				FROM app.ft_transfers tr
 				WHERE tr.token_contract_address = t.contract_address
-				  AND tr.is_nft = FALSE
 			), 0) AS transfer_count
 		FROM app.ft_tokens t
 		WHERE t.contract_address = $1

@@ -150,7 +150,7 @@ type ExecutionResult struct {
 	Timestamp   time.Time       `json:"timestamp"`
 }
 
-// TokenTransfer represents 'token_transfers' (Fungible & NFT)
+// TokenTransfer represents FT/NFT transfers (app.ft_transfers / app.nft_transfers).
 type TokenTransfer struct {
 	ID                   int       `json:"id"`
 	TransactionID        string    `json:"transaction_id"`

@@ -14,20 +14,40 @@ import (
 
 func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address string, limit int) ([]models.TokenTransfer, error) {
 	query := `
-		SELECT tt.internal_id,
-		       encode(tt.transaction_id, 'hex') AS transaction_id,
-		       tt.block_height,
-		       COALESCE(encode(tt.token_contract_address, 'hex'), '') AS token_contract_address,
-		       COALESCE(encode(tt.from_address, 'hex'), '') AS from_address,
-		       COALESCE(encode(tt.to_address, 'hex'), '') AS to_address,
-		       COALESCE(tt.amount::text, '') AS amount,
-		       COALESCE(tt.token_id, '') AS token_id,
-		       tt.event_index,
-		       tt.is_nft,
-		       tt.timestamp,
-		       tt.created_at
-		FROM app.token_transfers tt
-		WHERE tt.from_address = $1 OR tt.to_address = $1
+		SELECT *
+		FROM (
+			SELECT ft.internal_id,
+			       encode(ft.transaction_id, 'hex') AS transaction_id,
+			       ft.block_height,
+			       COALESCE(encode(ft.token_contract_address, 'hex'), '') AS token_contract_address,
+			       COALESCE(encode(ft.from_address, 'hex'), '') AS from_address,
+			       COALESCE(encode(ft.to_address, 'hex'), '') AS to_address,
+			       COALESCE(ft.amount::text, '') AS amount,
+			       ''::text AS token_id,
+			       ft.event_index,
+			       FALSE AS is_nft,
+			       ft.timestamp,
+			       ft.timestamp AS created_at
+			FROM app.ft_transfers ft
+			WHERE ft.from_address = $1 OR ft.to_address = $1
+
+			UNION ALL
+
+			SELECT nt.internal_id,
+			       encode(nt.transaction_id, 'hex') AS transaction_id,
+			       nt.block_height,
+			       COALESCE(encode(nt.token_contract_address, 'hex'), '') AS token_contract_address,
+			       COALESCE(encode(nt.from_address, 'hex'), '') AS from_address,
+			       COALESCE(encode(nt.to_address, 'hex'), '') AS to_address,
+			       '1'::text AS amount,
+			       COALESCE(nt.token_id, '') AS token_id,
+			       nt.event_index,
+			       TRUE AS is_nft,
+			       nt.timestamp,
+			       nt.timestamp AS created_at
+			FROM app.nft_transfers nt
+			WHERE nt.from_address = $1 OR nt.to_address = $1
+		) tt
 		ORDER BY tt.block_height DESC, tt.transaction_id DESC, tt.event_index DESC
 		LIMIT $2`
 
@@ -50,21 +70,41 @@ func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address str
 
 func (r *Repository) GetTokenTransfersByAddressCursor(ctx context.Context, address string, limit int, cursor *TokenTransferCursor) ([]models.TokenTransfer, error) {
 	query := `
-		SELECT tt.internal_id,
-		       encode(tt.transaction_id, 'hex') AS transaction_id,
-		       tt.block_height,
-		       COALESCE(encode(tt.token_contract_address, 'hex'), '') AS token_contract_address,
-		       COALESCE(encode(tt.from_address, 'hex'), '') AS from_address,
-		       COALESCE(encode(tt.to_address, 'hex'), '') AS to_address,
-		       COALESCE(tt.amount::text, '') AS amount,
-		       COALESCE(tt.token_id, '') AS token_id,
-		       tt.event_index,
-		       tt.is_nft,
-		       tt.timestamp,
-		       tt.created_at
-		FROM app.token_transfers tt
-		WHERE (tt.from_address = $1 OR tt.to_address = $1)
-		  AND ($2::bigint IS NULL OR (tt.block_height, tt.transaction_id, tt.event_index) < ($2, $3, $4))
+		SELECT *
+		FROM (
+			SELECT ft.internal_id,
+			       encode(ft.transaction_id, 'hex') AS transaction_id,
+			       ft.block_height,
+			       COALESCE(encode(ft.token_contract_address, 'hex'), '') AS token_contract_address,
+			       COALESCE(encode(ft.from_address, 'hex'), '') AS from_address,
+			       COALESCE(encode(ft.to_address, 'hex'), '') AS to_address,
+			       COALESCE(ft.amount::text, '') AS amount,
+			       ''::text AS token_id,
+			       ft.event_index,
+			       FALSE AS is_nft,
+			       ft.timestamp,
+			       ft.timestamp AS created_at
+			FROM app.ft_transfers ft
+			WHERE ft.from_address = $1 OR ft.to_address = $1
+
+			UNION ALL
+
+			SELECT nt.internal_id,
+			       encode(nt.transaction_id, 'hex') AS transaction_id,
+			       nt.block_height,
+			       COALESCE(encode(nt.token_contract_address, 'hex'), '') AS token_contract_address,
+			       COALESCE(encode(nt.from_address, 'hex'), '') AS from_address,
+			       COALESCE(encode(nt.to_address, 'hex'), '') AS to_address,
+			       '1'::text AS amount,
+			       COALESCE(nt.token_id, '') AS token_id,
+			       nt.event_index,
+			       TRUE AS is_nft,
+			       nt.timestamp,
+			       nt.timestamp AS created_at
+			FROM app.nft_transfers nt
+			WHERE nt.from_address = $1 OR nt.to_address = $1
+		) tt
+		WHERE ($2::bigint IS NULL OR (tt.block_height, tt.transaction_id, tt.event_index) < ($2, $3, $4))
 		ORDER BY tt.block_height DESC, tt.transaction_id DESC, tt.event_index DESC
 		LIMIT $5`
 
@@ -107,9 +147,9 @@ func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address strin
 		       COALESCE(encode(to_address, 'hex'), '') AS to_address,
 		       event_index,
 		       timestamp,
-		       created_at
-		FROM app.token_transfers
-		WHERE (from_address = $1 OR to_address = $1) AND is_nft = TRUE
+		       timestamp AS created_at
+		FROM app.nft_transfers
+		WHERE (from_address = $1 OR to_address = $1)
 		ORDER BY block_height DESC, transaction_id DESC, event_index DESC`, hexToBytes(address))
 	if err != nil {
 		return nil, err
@@ -139,10 +179,9 @@ func (r *Repository) GetNFTTransfersByAddressCursor(ctx context.Context, address
 		       COALESCE(encode(tt.to_address, 'hex'), '') AS to_address,
 		       tt.event_index,
 		       tt.timestamp,
-		       tt.created_at
-		FROM app.token_transfers tt
+		       tt.timestamp AS created_at
+		FROM app.nft_transfers tt
 		WHERE (tt.from_address = $1 OR tt.to_address = $1)
-		  AND tt.is_nft = TRUE
 		  AND ($2::bigint IS NULL OR (tt.block_height, tt.transaction_id, tt.event_index) < ($2, $3, $4))
 		ORDER BY tt.block_height DESC, tt.transaction_id DESC, tt.event_index DESC
 		LIMIT $5`

@@ -215,9 +215,13 @@ func collectTxIDs(txs []models.Transaction) []string {
 
 // Token transfers (FT/NFT)
 func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool, address, token, txID string, height *uint64, limit, offset int) ([]models.TokenTransfer, error) {
-	clauses := []string{"is_nft = $1"}
-	args := []interface{}{isNFT}
-	arg := 2
+	table := "app.ft_transfers"
+	if isNFT {
+		table = "app.nft_transfers"
+	}
+	clauses := []string{}
+	args := []interface{}{}
+	arg := 1
 	if address != "" {
 		clauses = append(clauses, fmt.Sprintf("(from_address = $%d OR to_address = $%d)", arg, arg))
 		args = append(args, hexToBytes(address))
@@ -238,7 +242,10 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 		args = append(args, *height)
 		arg++
 	}
-	where := "WHERE " + strings.Join(clauses, " AND ")
+	where := ""
+	if len(clauses) > 0 {
+		where = "WHERE " + strings.Join(clauses, " AND ")
+	}
 	if limit <= 0 {
 		limit = 20
 	}
@@ -255,13 +262,16 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 			COALESCE(contract_name, '') AS contract_name,
 			COALESCE(encode(from_address, 'hex'), '') AS from_address,
 			COALESCE(encode(to_address, 'hex'), '') AS to_address,
-			amount,
-			COALESCE(token_id, '') AS token_id,
+			`+func() string {
+		if isNFT {
+			return "NULL::numeric AS amount, COALESCE(token_id, '') AS token_id"
+		}
+		return "amount, ''::text AS token_id"
+	}()+`,
 			event_index,
-			is_nft,
 			timestamp,
-			created_at
-		FROM app.token_transfers
+			timestamp AS created_at
+		FROM `+table+`
 		`+where+`
 		ORDER BY block_height DESC, event_index DESC
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
@@ -272,15 +282,20 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 	var out []models.TokenTransfer
 	for rows.Next() {
 		var t models.TokenTransfer
-		if err := rows.Scan(&t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.ContractName, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.IsNFT, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.ContractName, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
+		t.IsNFT = isNFT
 		out = append(out, t)
 	}
 	return out, nil
 }
 
 func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, toHeight uint64, isNFT bool) ([]models.TokenTransfer, error) {
+	table := "app.ft_transfers"
+	if isNFT {
+		table = "app.nft_transfers"
+	}
 	rows, err := r.db.Query(ctx, `
 		SELECT
 			encode(transaction_id, 'hex') AS transaction_id,
@@ -289,15 +304,18 @@ func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, t
 			COALESCE(contract_name, '') AS contract_name,
 			COALESCE(encode(from_address, 'hex'), '') AS from_address,
 			COALESCE(encode(to_address, 'hex'), '') AS to_address,
-			amount,
-			COALESCE(token_id, '') AS token_id,
+			`+func() string {
+		if isNFT {
+			return "NULL::numeric AS amount, COALESCE(token_id, '') AS token_id"
+		}
+		return "amount, ''::text AS token_id"
+	}()+`,
 			event_index,
-			is_nft,
 			timestamp,
-			created_at
-		FROM app.token_transfers
-		WHERE block_height >= $1 AND block_height < $2 AND is_nft = $3
-		ORDER BY block_height ASC, event_index ASC`, fromHeight, toHeight, isNFT)
+			timestamp AS created_at
+		FROM `+table+`
+		WHERE block_height >= $1 AND block_height < $2
+		ORDER BY block_height ASC, event_index ASC`, fromHeight, toHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -305,9 +323,10 @@ func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, t
 	var out []models.TokenTransfer
 	for rows.Next() {
 		var t models.TokenTransfer
-		if err := rows.Scan(&t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.ContractName, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.IsNFT, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.ContractName, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
+		t.IsNFT = isNFT
 		out = append(out, t)
 	}
 	return out, nil

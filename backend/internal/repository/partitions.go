@@ -38,7 +38,10 @@ func (r *Repository) EnsureRawPartitions(ctx context.Context, minHeight, maxHeig
 
 // EnsureAppPartitions creates partitions on-demand for derived tables.
 func (r *Repository) EnsureAppPartitions(ctx context.Context, minHeight, maxHeight uint64) error {
-	if err := r.createPartitions(ctx, "app.token_transfers", minHeight, maxHeight, tokenStep); err != nil {
+	if err := r.createPartitions(ctx, "app.ft_transfers", minHeight, maxHeight, tokenStep); err != nil {
+		return err
+	}
+	if err := r.createPartitions(ctx, "app.nft_transfers", minHeight, maxHeight, tokenStep); err != nil {
 		return err
 	}
 	if err := r.createPartitions(ctx, "app.evm_transactions", minHeight, maxHeight, evmStep); err != nil {

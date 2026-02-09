@@ -222,9 +222,8 @@ func (r *Repository) GetRawEventsInRange(ctx context.Context, fromHeight, toHeig
 	return events, nil
 }
 
-// UpsertTokenTransfers bulk inserts/updates token transfers
-// Used by TokenWorker
-func (r *Repository) UpsertTokenTransfers(ctx context.Context, transfers []models.TokenTransfer) error {
+// UpsertFTTransfers bulk inserts/updates fungible token transfers.
+func (r *Repository) UpsertFTTransfers(ctx context.Context, transfers []models.TokenTransfer) error {
 	if len(transfers) == 0 {
 		return nil
 	}
@@ -232,23 +231,21 @@ func (r *Repository) UpsertTokenTransfers(ctx context.Context, transfers []model
 	batch := &pgx.Batch{}
 	for _, t := range transfers {
 		batch.Queue(`
-			INSERT INTO app.token_transfers (
+			INSERT INTO app.ft_transfers (
 				block_height, transaction_id, event_index,
 				token_contract_address, contract_name, from_address, to_address,
-				amount, token_id, is_nft, timestamp
+				amount, timestamp
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			ON CONFLICT (block_height, transaction_id, event_index) DO UPDATE SET
 				token_contract_address = EXCLUDED.token_contract_address,
-				contract_name = COALESCE(NULLIF(EXCLUDED.contract_name, ''), app.token_transfers.contract_name),
+				contract_name = COALESCE(NULLIF(EXCLUDED.contract_name, ''), app.ft_transfers.contract_name),
 				from_address = EXCLUDED.from_address,
 				to_address = EXCLUDED.to_address,
-				amount = EXCLUDED.amount,
-				token_id = EXCLUDED.token_id,
-				is_nft = EXCLUDED.is_nft`,
+				amount = EXCLUDED.amount`,
 			t.BlockHeight, hexToBytes(t.TransactionID), t.EventIndex,
 			hexToBytes(t.TokenContractAddress), t.ContractName, hexToBytes(t.FromAddress), hexToBytes(t.ToAddress),
-			t.Amount, t.TokenID, t.IsNFT, t.Timestamp,
+			t.Amount, t.Timestamp,
 		)
 	}
 
@@ -256,9 +253,73 @@ func (r *Repository) UpsertTokenTransfers(ctx context.Context, transfers []model
 	defer br.Close()
 
 	for i := 0; i < len(transfers); i++ {
-		_, err := br.Exec()
-		if err != nil {
-			return fmt.Errorf("failed to insert token transfer batch: %w", err)
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("failed to insert ft transfer batch: %w", err)
+		}
+	}
+	return nil
+}
+
+// UpsertNFTTransfers bulk inserts/updates NFT transfers.
+func (r *Repository) UpsertNFTTransfers(ctx context.Context, transfers []models.TokenTransfer) error {
+	if len(transfers) == 0 {
+		return nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, t := range transfers {
+		batch.Queue(`
+			INSERT INTO app.nft_transfers (
+				block_height, transaction_id, event_index,
+				token_contract_address, contract_name, from_address, to_address,
+				token_id, timestamp
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			ON CONFLICT (block_height, transaction_id, event_index) DO UPDATE SET
+				token_contract_address = EXCLUDED.token_contract_address,
+				contract_name = COALESCE(NULLIF(EXCLUDED.contract_name, ''), app.nft_transfers.contract_name),
+				from_address = EXCLUDED.from_address,
+				to_address = EXCLUDED.to_address,
+				token_id = EXCLUDED.token_id`,
+			t.BlockHeight, hexToBytes(t.TransactionID), t.EventIndex,
+			hexToBytes(t.TokenContractAddress), t.ContractName, hexToBytes(t.FromAddress), hexToBytes(t.ToAddress),
+			t.TokenID, t.Timestamp,
+		)
+	}
+
+	br := r.db.SendBatch(ctx, batch)
+	defer br.Close()
+
+	for i := 0; i < len(transfers); i++ {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("failed to insert nft transfer batch: %w", err)
+		}
+	}
+	return nil
+}
+
+// UpsertTokenTransfers keeps legacy callers working by routing to FT/NFT tables.
+func (r *Repository) UpsertTokenTransfers(ctx context.Context, transfers []models.TokenTransfer) error {
+	if len(transfers) == 0 {
+		return nil
+	}
+	ft := make([]models.TokenTransfer, 0)
+	nft := make([]models.TokenTransfer, 0)
+	for _, t := range transfers {
+		if t.IsNFT {
+			nft = append(nft, t)
+		} else {
+			ft = append(ft, t)
+		}
+	}
+	if len(ft) > 0 {
+		if err := r.UpsertFTTransfers(ctx, ft); err != nil {
+			return err
+		}
+	}
+	if len(nft) > 0 {
+		if err := r.UpsertNFTTransfers(ctx, nft); err != nil {
+			return err
 		}
 	}
 	return nil
