@@ -13,19 +13,23 @@ ARG VITE_DOCS_URL
 ENV VITE_DOCS_URL=$VITE_DOCS_URL
 RUN bun run build
 
-# Serve Stage
-FROM nginx:alpine
+# Run Stage (SSR server + Nginx reverse proxy for /api + /ws)
+FROM node:22-alpine
 
-COPY --from=builder /app/dist /usr/share/nginx/html
+WORKDIR /app
 
-# Use templates for env substitution (handled by 20-envsubst-on-templates.sh in nginx image)
+# Nginx for same-origin /api + /ws proxying to the backend service (Railway/Docker).
+RUN apk add --no-cache nginx gettext
+
+# SSR build output produced by Nitro
+COPY --from=builder /app/.output /app/.output
+
+# Nginx config template + entrypoint
 COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
-
-# Custom entrypoint to inject DNS_RESOLVER
 COPY frontend/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 8080
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["nginx", "-g", "daemon off;"]
+CMD []

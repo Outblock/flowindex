@@ -1,4 +1,4 @@
-import { Outlet, createRootRoute, ScrollRestoration } from '@tanstack/react-router'
+import { Outlet, createRootRoute, HeadContent, Scripts, ScrollRestoration } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -49,9 +49,15 @@ function RootDocument({ children }: { children: ReactNode }) {
                 <meta charSet="UTF-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                 <title>FlowScan</title>
+                {/* Runtime (public) config, populated in Docker/Railway via entrypoint envsubst */}
+                <script src="/env.js"></script>
+                {/* Route-scoped CSS + preloads generated from the Start manifest */}
+                <HeadContent />
             </head>
             <body>
                 <div id="root">{children}</div>
+                {/* Router hydration + client entry */}
+                <Scripts />
             </body>
         </html>
     )

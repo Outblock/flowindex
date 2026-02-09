@@ -1,5 +1,11 @@
 #!/bin/sh
 
+# This container runs:
+# 1) Nitro SSR server on 127.0.0.1:3000 (internal)
+# 2) Nginx on :8080 (public) proxying:
+#    - /api + /ws -> backend
+#    - everything else -> Nitro SSR server
+
 # Extract the first nameserver from /etc/resolv.conf
 export DNS_RESOLVER=$(awk '/nameserver/ {print $2}' /etc/resolv.conf | head -n1)
 
@@ -34,13 +40,31 @@ fi
 echo "Backend API: $BACKEND_API"
 echo "Backend WS:  $BACKEND_WS"
 
-# Generate runtime config for the SPA (safe, public values only).
+# Generate runtime config for the app (safe, public values only).
 # This lets us set DOCS_URL without rebuilding the frontend image.
-if [ -f /usr/share/nginx/html/env.template.js ]; then
-    envsubst '$DOCS_URL' < /usr/share/nginx/html/env.template.js > /usr/share/nginx/html/env.js
+if [ -f /app/.output/public/env.template.js ]; then
+    envsubst '$DOCS_URL' < /app/.output/public/env.template.js > /app/.output/public/env.js
     echo "Docs URL:    ${DOCS_URL:-}"
 fi
 
-# Execute the original Nginx entrypoint
-# This will handle envsubst for templates using the DNS_RESOLVER variable we just set
-exec /docker-entrypoint.sh "$@"
+# SSR server-side API calls need an absolute URL. When VITE_API_URL is relative ("/api"),
+# resolve it against the local Nginx listener so we keep same-origin semantics.
+export SSR_API_ORIGIN="${SSR_API_ORIGIN:-http://127.0.0.1:8080}"
+
+# Render nginx template (envsubst) for backend proxy + SSR upstream.
+mkdir -p /etc/nginx/http.d
+envsubst '$DNS_RESOLVER $BACKEND_API $BACKEND_WS' < /etc/nginx/templates/default.conf.template > /etc/nginx/http.d/default.conf
+
+# Start Nitro SSR server on port 3000
+echo "Starting Nitro SSR server on :3000"
+PORT=3000 node /app/.output/server/index.mjs &
+SSR_PID=$!
+
+# Start Nginx (public listener on :8080)
+echo "Starting Nginx on :8080"
+nginx -g "daemon off;" &
+NGINX_PID=$!
+
+trap 'echo "Shutting down..."; kill -TERM "$NGINX_PID" "$SSR_PID" 2>/dev/null; wait "$NGINX_PID" 2>/dev/null; wait "$SSR_PID" 2>/dev/null; exit 0' INT TERM
+
+wait "$NGINX_PID"
