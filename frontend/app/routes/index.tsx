@@ -601,7 +601,7 @@ function Home() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-1 relative">
-                            <AnimatePresence>
+                            <AnimatePresence initial={false} mode="popLayout" presenceAffectsLayout>
                                 {(blocks || []).map((block) => {
                                     // highlightTick is used so highlight disappears even if no new data arrives.
                                     const _ = highlightNow; // keep in render dependency
@@ -615,6 +615,9 @@ function Home() {
                                     return (
                                         <motion.div
                                             key={block.height}
+                                            // Animate other items shifting down when a new one is inserted at the top.
+                                            // Use position-only layout animation to keep cost reasonable.
+                                            layout="position"
                                             initial={{ opacity: 0, x: -10 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             exit={{ opacity: 0, scale: 0.95 }}
@@ -673,7 +676,7 @@ function Home() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col gap-2 pr-1 relative">
-                            <AnimatePresence>
+                            <AnimatePresence initial={false} mode="popLayout" presenceAffectsLayout>
                                 {(transactions || []).map((tx) => {
                                     const _ = highlightNow; // keep in render dependency
                                     const isNew = (newTxExpiryRef.current.get(normalizeTxId(tx.id)) ?? 0) > highlightTick;
@@ -724,6 +727,7 @@ function Home() {
                                     return (
                                         <motion.div
                                             key={tx.id}
+                                            layout="position"
                                             initial={{ opacity: 0, x: 10 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             exit={{ opacity: 0, scale: 0.95 }}
