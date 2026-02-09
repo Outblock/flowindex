@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ type tokenLeg struct {
 	TokenID       string
 	IsNFT         bool
 	Direction     string // withdraw, deposit, direct
+	ResourceID    string // UUID for matching
 	Owner         string
 	From          string
 	To            string
@@ -224,6 +226,20 @@ func (w *TokenWorker) parseTokenLeg(evt models.Event, isNFT bool) *tokenLeg {
 		return nil
 	}
 
+	resourceID := ""
+	if isNFT {
+		resourceID = extractString(fields["uuid"])
+	} else {
+		if direction == "withdraw" {
+			resourceID = extractString(fields["withdrawnUUID"])
+		} else if direction == "deposit" {
+			resourceID = extractString(fields["depositedUUID"])
+		}
+		if resourceID == "" {
+			resourceID = extractString(fields["uuid"])
+		}
+	}
+
 	leg := &tokenLeg{
 		TransactionID: evt.TransactionID,
 		BlockHeight:   evt.BlockHeight,
@@ -235,6 +251,7 @@ func (w *TokenWorker) parseTokenLeg(evt models.Event, isNFT bool) *tokenLeg {
 		TokenID:       tokenID,
 		IsNFT:         isNFT,
 		Direction:     direction,
+		ResourceID:    resourceID,
 		From:          fromAddr,
 		To:            toAddr,
 	}
@@ -308,6 +325,7 @@ type transferKey struct {
 	Amount       string
 	TokenID      string
 	IsNFT        bool
+	ResourceID   string
 }
 
 func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
@@ -333,16 +351,7 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 			continue
 		}
 
-		key := transferKey{
-			ContractAddr: leg.ContractAddr,
-			ContractName: leg.ContractName,
-			IsNFT:        leg.IsNFT,
-		}
-		if leg.IsNFT {
-			key.TokenID = leg.TokenID
-		} else {
-			key.Amount = leg.Amount
-		}
+		key := transferKeyForLeg(leg)
 
 		if leg.Direction == "withdraw" {
 			withdrawals[key] = append(withdrawals[key], leg)
@@ -354,6 +363,8 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 	// Pair withdrawals/deposits in event order.
 	for key, outs := range withdrawals {
 		ins := deposits[key]
+		sort.Slice(outs, func(i, j int) bool { return outs[i].EventIndex < outs[j].EventIndex })
+		sort.Slice(ins, func(i, j int) bool { return ins[i].EventIndex < ins[j].EventIndex })
 		pairs := len(outs)
 		if len(ins) < pairs {
 			pairs = len(ins)
@@ -361,6 +372,14 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 		for i := 0; i < pairs; i++ {
 			w := outs[i]
 			d := ins[i]
+			amount := w.Amount
+			if amount == "" {
+				amount = d.Amount
+			}
+			tokenID := w.TokenID
+			if tokenID == "" {
+				tokenID = d.TokenID
+			}
 			eventIndex := d.EventIndex
 			if eventIndex == 0 {
 				eventIndex = w.EventIndex
@@ -377,8 +396,8 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 				ContractName:         w.ContractName,
 				FromAddress:          w.Owner,
 				ToAddress:            d.Owner,
-				Amount:               w.Amount,
-				TokenID:              w.TokenID,
+				Amount:               amount,
+				TokenID:              tokenID,
 				IsNFT:                w.IsNFT,
 				Timestamp:            ts,
 			})
@@ -425,6 +444,7 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 		if _, ok := withdrawals[key]; ok {
 			continue
 		}
+		sort.Slice(ins, func(i, j int) bool { return ins[i].EventIndex < ins[j].EventIndex })
 		for _, d := range ins {
 			out = append(out, models.TokenTransfer{
 				TransactionID:        d.TransactionID,
@@ -443,6 +463,24 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 	}
 
 	return out
+}
+
+func transferKeyForLeg(leg tokenLeg) transferKey {
+	key := transferKey{
+		ContractAddr: leg.ContractAddr,
+		ContractName: leg.ContractName,
+		IsNFT:        leg.IsNFT,
+	}
+	if leg.ResourceID != "" {
+		key.ResourceID = leg.ResourceID
+		return key
+	}
+	if leg.IsNFT {
+		key.TokenID = leg.TokenID
+		return key
+	}
+	key.Amount = leg.Amount
+	return key
 }
 
 func parseCadenceEventFields(payload []byte) (map[string]interface{}, bool) {
