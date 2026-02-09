@@ -39,11 +39,29 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 
 	accountKeys := w.extractAccountKeys(events)
 	contracts := w.extractContracts(events)
+	contractRegistry := make([]models.Contract, 0, len(contracts))
+	for _, c := range contracts {
+		id := formatContractIdentifier(c.Address, c.Name)
+		if id == "" {
+			continue
+		}
+		contractRegistry = append(contractRegistry, models.Contract{
+			ID:              id,
+			Address:         c.Address,
+			Name:            c.Name,
+			Kind:            "CONTRACT",
+			FirstSeenHeight: c.BlockHeight,
+			LastSeenHeight:  c.BlockHeight,
+		})
+	}
 
 	if err := w.repo.UpsertAccountKeys(ctx, accountKeys); err != nil {
 		return err
 	}
 	if err := w.repo.UpsertSmartContracts(ctx, contracts); err != nil {
+		return err
+	}
+	if err := w.repo.UpsertContracts(ctx, contractRegistry); err != nil {
 		return err
 	}
 

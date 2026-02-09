@@ -415,6 +415,20 @@ CREATE INDEX IF NOT EXISTS idx_account_keys_public_key_active
   WHERE revoked = FALSE;
 
 -- 5.2 Smart Contracts
+CREATE TABLE IF NOT EXISTS app.contracts (
+    id                TEXT PRIMARY KEY, -- A.<address>.<name>
+    address           BYTEA NOT NULL,
+    name              TEXT NOT NULL,
+    kind              TEXT,
+    first_seen_height BIGINT,
+    last_seen_height  BIGINT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (address, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_contracts_address ON app.contracts(address);
+
 CREATE TABLE IF NOT EXISTS app.smart_contracts (
     address             BYTEA NOT NULL,
     name                TEXT NOT NULL,

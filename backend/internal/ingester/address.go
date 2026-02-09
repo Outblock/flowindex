@@ -60,3 +60,14 @@ func normalizeFlowAddress(input string) string {
 func isHexChar(b byte) bool {
 	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f')
 }
+
+func formatContractIdentifier(address, name string) string {
+	addr := normalizeFlowAddress(address)
+	if addr == "" {
+		addr = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(address)), "0x")
+	}
+	if addr == "" || strings.TrimSpace(name) == "" {
+		return ""
+	}
+	return "A." + addr + "." + strings.TrimSpace(name)
+}

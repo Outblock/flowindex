@@ -33,6 +33,7 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	var transfers []models.TokenTransfer
 	ftTokens := make(map[string]models.FTToken)
 	nftCollections := make(map[string]models.NFTCollection)
+	contracts := make(map[string]models.Contract)
 
 	// 2. Parse Events
 	for _, evt := range events {
@@ -50,10 +51,26 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 							ContractAddress: contractAddr,
 							ContractName:    contractName,
 						}
+						contracts[key] = models.Contract{
+							ID:              formatContractIdentifier(contractAddr, contractName),
+							Address:         contractAddr,
+							Name:            contractName,
+							Kind:            "NFT",
+							FirstSeenHeight: transfer.BlockHeight,
+							LastSeenHeight:  transfer.BlockHeight,
+						}
 					} else {
 						ftTokens[key] = models.FTToken{
 							ContractAddress: contractAddr,
 							ContractName:    contractName,
+						}
+						contracts[key] = models.Contract{
+							ID:              formatContractIdentifier(contractAddr, contractName),
+							Address:         contractAddr,
+							Name:            contractName,
+							Kind:            "FT",
+							FirstSeenHeight: transfer.BlockHeight,
+							LastSeenHeight:  transfer.BlockHeight,
 						}
 					}
 				}
@@ -96,6 +113,15 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 		}
 		if err := w.repo.UpsertNFTCollections(ctx, out); err != nil {
 			return fmt.Errorf("failed to upsert nft collections: %w", err)
+		}
+	}
+	if len(contracts) > 0 {
+		out := make([]models.Contract, 0, len(contracts))
+		for _, c := range contracts {
+			out = append(out, c)
+		}
+		if err := w.repo.UpsertContracts(ctx, out); err != nil {
+			return fmt.Errorf("failed to upsert contracts registry: %w", err)
 		}
 	}
 

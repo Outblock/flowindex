@@ -145,6 +145,57 @@ func (r *Repository) UpsertSmartContracts(ctx context.Context, contracts []model
 	return nil
 }
 
+// UpsertContracts inserts/updates contract registry entries.
+func (r *Repository) UpsertContracts(ctx context.Context, rows []models.Contract) error {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, c := range rows {
+		if c.ID == "" || c.Address == "" || c.Name == "" {
+			continue
+		}
+		firstSeen := c.FirstSeenHeight
+		lastSeen := c.LastSeenHeight
+		if firstSeen == 0 {
+			firstSeen = lastSeen
+		}
+		if lastSeen == 0 {
+			lastSeen = firstSeen
+		}
+		batch.Queue(`
+			INSERT INTO app.contracts (
+				id, address, name, kind,
+				first_seen_height, last_seen_height,
+				created_at, updated_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+			ON CONFLICT (id) DO UPDATE SET
+				kind = COALESCE(app.contracts.kind, EXCLUDED.kind),
+				first_seen_height = LEAST(COALESCE(app.contracts.first_seen_height, EXCLUDED.first_seen_height), EXCLUDED.first_seen_height),
+				last_seen_height = GREATEST(COALESCE(app.contracts.last_seen_height, EXCLUDED.last_seen_height), EXCLUDED.last_seen_height),
+				updated_at = NOW()`,
+			c.ID,
+			hexToBytes(c.Address),
+			c.Name,
+			nullIfEmpty(c.Kind),
+			firstSeen,
+			lastSeen,
+		)
+	}
+
+	br := r.db.SendBatch(ctx, batch)
+	defer br.Close()
+
+	for i := 0; i < len(rows); i++ {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("upsert contracts: %w", err)
+		}
+	}
+	return nil
+}
+
 // UpsertAddressTransactions inserts address->tx relations.
 func (r *Repository) UpsertAddressTransactions(ctx context.Context, rows []models.AddressTransaction) error {
 	if len(rows) == 0 {

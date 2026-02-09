@@ -236,6 +236,16 @@ type SmartContract struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// Contract represents app.contracts registry.
+type Contract struct {
+	ID              string `json:"id"`
+	Address         string `json:"address"`
+	Name            string `json:"name"`
+	Kind            string `json:"kind,omitempty"`
+	FirstSeenHeight uint64 `json:"first_seen_height,omitempty"`
+	LastSeenHeight  uint64 `json:"last_seen_height,omitempty"`
+}
+
 // AddressStats represents the address_stats table
 type AddressStats struct {
 	Address            string    `json:"address"`
