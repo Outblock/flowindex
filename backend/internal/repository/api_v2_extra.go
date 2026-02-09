@@ -15,6 +15,11 @@ type NFTCollectionSummary struct {
 	ContractName    string
 	Name            string
 	Symbol          string
+	Description     string
+	ExternalURL     string
+	SquareImage     []byte
+	BannerImage     []byte
+	Socials         []byte
 	Count           int64
 	UpdatedAt       time.Time
 }
@@ -141,6 +146,11 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(COALESCE(c.contract_name, counts.contract_name), '') AS contract_name,
 			COALESCE(c.name, '') AS name,
 			COALESCE(c.symbol, '') AS symbol,
+			COALESCE(c.description, '') AS description,
+			COALESCE(c.external_url, '') AS external_url,
+			COALESCE(c.square_image, 'null'::jsonb) AS square_image,
+			COALESCE(c.banner_image, 'null'::jsonb) AS banner_image,
+			COALESCE(c.socials, 'null'::jsonb) AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
@@ -154,7 +164,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 	var out []NFTCollectionSummary
 	for rows.Next() {
 		var row NFTCollectionSummary
-		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Count, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
@@ -177,6 +187,11 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 				COALESCE(COALESCE(c.contract_name, counts.contract_name), '') AS contract_name,
 				COALESCE(c.name, '') AS name,
 				COALESCE(c.symbol, '') AS symbol,
+				COALESCE(c.description, '') AS description,
+				COALESCE(c.external_url, '') AS external_url,
+				COALESCE(c.square_image, 'null'::jsonb) AS square_image,
+				COALESCE(c.banner_image, 'null'::jsonb) AS banner_image,
+				COALESCE(c.socials, 'null'::jsonb) AS socials,
 				COALESCE(counts.cnt, 0) AS cnt,
 				COALESCE(c.updated_at, NOW()) AS updated_at
 			FROM app.nft_collections c
@@ -184,7 +199,7 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 			WHERE COALESCE(c.contract_address, counts.contract_address) = $1
 			ORDER BY COALESCE(c.contract_name, counts.contract_name) ASC
 			LIMIT 1`, hexToBytes(contract)).
-			Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Count, &row.UpdatedAt)
+			Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.UpdatedAt)
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
@@ -205,13 +220,18 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 			COALESCE(COALESCE(c.contract_name, counts.contract_name), '') AS contract_name,
 			COALESCE(c.name, '') AS name,
 			COALESCE(c.symbol, '') AS symbol,
+			COALESCE(c.description, '') AS description,
+			COALESCE(c.external_url, '') AS external_url,
+			COALESCE(c.square_image, 'null'::jsonb) AS square_image,
+			COALESCE(c.banner_image, 'null'::jsonb) AS banner_image,
+			COALESCE(c.socials, 'null'::jsonb) AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
 		WHERE COALESCE(c.contract_address, counts.contract_address) = $1 AND COALESCE(c.contract_name, counts.contract_name) = $2`,
 		hexToBytes(contract), contractName).
-		Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Count, &row.UpdatedAt)
+		Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -224,12 +244,17 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 func (r *Repository) ListNFTCollectionSummariesByOwner(ctx context.Context, owner string, limit, offset int) ([]NFTCollectionSummary, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(o.contract_address, 'hex') AS contract_address,
-			   COALESCE(o.contract_name,''), COALESCE(c.name,''), COALESCE(c.symbol,''), COUNT(*) AS cnt,
+			   COALESCE(o.contract_name,''), COALESCE(c.name,''), COALESCE(c.symbol,''),
+			   COALESCE(c.description,''), COALESCE(c.external_url,''),
+			   COALESCE(c.square_image, 'null'::jsonb) AS square_image,
+			   COALESCE(c.banner_image, 'null'::jsonb) AS banner_image,
+			   COALESCE(c.socials, 'null'::jsonb) AS socials,
+			   COUNT(*) AS cnt,
 			   COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_ownership o
 		LEFT JOIN app.nft_collections c ON c.contract_address = o.contract_address AND c.contract_name = o.contract_name
 		WHERE o.owner = $1
-		GROUP BY o.contract_address, o.contract_name, c.name, c.symbol, c.updated_at
+		GROUP BY o.contract_address, o.contract_name, c.name, c.symbol, c.description, c.external_url, c.square_image, c.banner_image, c.socials, c.updated_at
 		ORDER BY o.contract_address ASC, o.contract_name ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(owner), limit, offset)
 	if err != nil {
@@ -239,7 +264,7 @@ func (r *Repository) ListNFTCollectionSummariesByOwner(ctx context.Context, owne
 	var out []NFTCollectionSummary
 	for rows.Next() {
 		var row NFTCollectionSummary
-		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Count, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, row)

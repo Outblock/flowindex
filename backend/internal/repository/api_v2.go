@@ -270,13 +270,19 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 	batch := &pgx.Batch{}
 	for _, c := range collections {
 		batch.Queue(`
-			INSERT INTO app.nft_collections (contract_address, contract_name, name, symbol, updated_at)
-			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NOW())
+			INSERT INTO app.nft_collections (contract_address, contract_name, name, symbol, description, external_url, square_image, banner_image, socials, updated_at)
+			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), NULLIF($6,''), $7::jsonb, $8::jsonb, $9::jsonb, NOW())
 			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, app.nft_collections.name),
 				symbol = COALESCE(EXCLUDED.symbol, app.nft_collections.symbol),
+				description = COALESCE(EXCLUDED.description, app.nft_collections.description),
+				external_url = COALESCE(EXCLUDED.external_url, app.nft_collections.external_url),
+				square_image = COALESCE(EXCLUDED.square_image, app.nft_collections.square_image),
+				banner_image = COALESCE(EXCLUDED.banner_image, app.nft_collections.banner_image),
+				socials = COALESCE(EXCLUDED.socials, app.nft_collections.socials),
 				updated_at = NOW()`,
-			hexToBytes(c.ContractAddress), c.ContractName, c.Name, c.Symbol)
+			hexToBytes(c.ContractAddress), c.ContractName, c.Name, c.Symbol, c.Description, c.ExternalURL,
+			nullIfEmptyJSON(c.SquareImage), nullIfEmptyJSON(c.BannerImage), nullIfEmptyJSON(c.Socials))
 	}
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()
@@ -286,6 +292,17 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 		}
 	}
 	return nil
+}
+
+func nullIfEmptyJSON(b []byte) []byte {
+	if len(b) == 0 {
+		return nil
+	}
+	s := strings.TrimSpace(string(b))
+	if s == "" || s == "null" {
+		return nil
+	}
+	return b
 }
 
 func (r *Repository) UpsertNFTOwnership(ctx context.Context, ownership models.NFTOwnership) error {

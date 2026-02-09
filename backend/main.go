@@ -143,6 +143,7 @@ func main() {
 	accountsWorkerRange := getEnvUint("ACCOUNTS_WORKER_RANGE", 1000)
 	ftHoldingsWorkerRange := getEnvUint("FT_HOLDINGS_WORKER_RANGE", 1000)
 	nftOwnershipWorkerRange := getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 1000)
+	tokenMetadataWorkerRange := getEnvUint("TOKEN_METADATA_WORKER_RANGE", 1000)
 	txContractsWorkerRange := getEnvUint("TX_CONTRACTS_WORKER_RANGE", 1000)
 	txMetricsWorkerRange := getEnvUint("TX_METRICS_WORKER_RANGE", 1000)
 	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
@@ -151,6 +152,7 @@ func main() {
 	accountsWorkerConcurrency := getEnvInt("ACCOUNTS_WORKER_CONCURRENCY", 1)
 	ftHoldingsWorkerConcurrency := getEnvInt("FT_HOLDINGS_WORKER_CONCURRENCY", 1)
 	nftOwnershipWorkerConcurrency := getEnvInt("NFT_OWNERSHIP_WORKER_CONCURRENCY", 1)
+	tokenMetadataWorkerConcurrency := getEnvInt("TOKEN_METADATA_WORKER_CONCURRENCY", 1)
 	txContractsWorkerConcurrency := getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1)
 	txMetricsWorkerConcurrency := getEnvInt("TX_METRICS_WORKER_CONCURRENCY", 1)
 
@@ -175,6 +177,7 @@ func main() {
 	enableAccountsWorker := os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false"
 	enableFTHoldingsWorker := os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false"
 	enableNFTOwnershipWorker := os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false"
+	enableTokenMetadataWorker := os.Getenv("ENABLE_TOKEN_METADATA_WORKER") != "false"
 	enableTxContractsWorker := os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false"
 	enableTxMetricsWorker := os.Getenv("ENABLE_TX_METRICS_WORKER") != "false"
 
@@ -201,6 +204,9 @@ func main() {
 		}
 		if enableMetaWorker {
 			processors = append(processors, ingester.NewMetaWorker(repo, flowClient))
+		}
+		if enableTokenMetadataWorker {
+			processors = append(processors, ingester.NewTokenMetadataWorker(repo, flowClient))
 		}
 		if enableTxMetricsWorker {
 			processors = append(processors, ingester.NewTxMetricsWorker(repo))
@@ -252,6 +258,8 @@ func main() {
 	var ftHoldingsWorkers []*ingester.AsyncWorker
 	var nftOwnershipWorkerProcessor *ingester.NFTOwnershipWorker
 	var nftOwnershipWorkers []*ingester.AsyncWorker
+	var tokenMetadataWorkerProcessor *ingester.TokenMetadataWorker
+	var tokenMetadataWorkers []*ingester.AsyncWorker
 	var txContractsWorkerProcessor *ingester.TxContractsWorker
 	var txContractsWorkers []*ingester.AsyncWorker
 	var txMetricsWorkerProcessor *ingester.TxMetricsWorker
@@ -365,6 +373,24 @@ func main() {
 		workerTypes = append(workerTypes, nftOwnershipWorkerProcessor.Name())
 	} else {
 		log.Println("NFT Ownership Worker is DISABLED (ENABLE_NFT_OWNERSHIP_WORKER=false)")
+	}
+
+	if enableTokenMetadataWorker {
+		tokenMetadataWorkerProcessor = ingester.NewTokenMetadataWorker(repo, flowClient)
+		if tokenMetadataWorkerConcurrency < 1 {
+			tokenMetadataWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < tokenMetadataWorkerConcurrency; i++ {
+			tokenMetadataWorkers = append(tokenMetadataWorkers, ingester.NewAsyncWorker(tokenMetadataWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: tokenMetadataWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-token-metadata-%d", hostname, pid, i),
+			}))
+		}
+		workerTypes = append(workerTypes, tokenMetadataWorkerProcessor.Name())
+	} else {
+		log.Println("Token Metadata Worker is DISABLED (ENABLE_TOKEN_METADATA_WORKER=false)")
 	}
 
 	if enableTxContractsWorker {
@@ -545,6 +571,16 @@ func main() {
 
 	if enableNFTOwnershipWorker {
 		for _, worker := range nftOwnershipWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableTokenMetadataWorker {
+		for _, worker := range tokenMetadataWorkers {
 			wg.Add(1)
 			go func(w *ingester.AsyncWorker) {
 				defer wg.Done()

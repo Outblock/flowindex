@@ -117,6 +117,7 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"accounts_worker":      os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false",
 		"ft_holdings_worker":   os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false",
 		"nft_ownership_worker": os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false",
+		"token_metadata_worker": os.Getenv("ENABLE_TOKEN_METADATA_WORKER") != "false",
 		"tx_contracts_worker":  os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false",
 		"tx_metrics_worker":    os.Getenv("ENABLE_TX_METRICS_WORKER") != "false",
 	}
@@ -153,6 +154,10 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"nft_ownership_worker": {
 			"concurrency": getEnvInt("NFT_OWNERSHIP_WORKER_CONCURRENCY", 1),
 			"range":       getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 1000),
+		},
+		"token_metadata_worker": {
+			"concurrency": getEnvInt("TOKEN_METADATA_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("TOKEN_METADATA_WORKER_RANGE", 1000),
 		},
 		"tx_contracts_worker": {
 			"concurrency": getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1),

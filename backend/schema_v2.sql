@@ -382,7 +382,32 @@ ALTER TABLE IF EXISTS app.evm_transactions
   ADD COLUMN IF NOT EXISTS status_code INT;
 ALTER TABLE IF EXISTS app.evm_transactions
   ADD COLUMN IF NOT EXISTS status TEXT;
-UPDATE app.evm_transactions SET event_index = 0 WHERE event_index IS NULL;
+
+-- Backfill `event_index` before enforcing the composite primary key.
+-- In older installs some partitions were created/filled with NULL event_index; adding a PK would fail.
+ALTER TABLE IF EXISTS app.evm_transactions
+  ALTER COLUMN event_index SET DEFAULT 0;
+
+DO $$
+DECLARE
+  part regclass;
+BEGIN
+  IF to_regclass('app.evm_transactions') IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- Parent (should update attached partitions too, but we also update each partition explicitly for safety).
+  EXECUTE 'UPDATE app.evm_transactions SET event_index = 0 WHERE event_index IS NULL';
+
+  FOR part IN
+    SELECT inhrelid::regclass
+    FROM pg_inherits
+    WHERE inhparent = 'app.evm_transactions'::regclass
+  LOOP
+    EXECUTE format('UPDATE %s SET event_index = 0 WHERE event_index IS NULL', part);
+  END LOOP;
+END $$;
+
 DELETE FROM app.evm_transactions WHERE evm_hash IS NULL;
 ALTER TABLE IF EXISTS app.evm_transactions
   DROP CONSTRAINT IF EXISTS evm_transactions_pkey;
@@ -615,6 +640,11 @@ CREATE TABLE IF NOT EXISTS app.nft_collections (
     contract_name    TEXT NOT NULL DEFAULT '',
     name             TEXT,
     symbol           TEXT,
+    description      TEXT,
+    external_url     TEXT,
+    square_image     JSONB,
+    banner_image     JSONB,
+    socials          JSONB,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (contract_address, contract_name)
 );
@@ -647,6 +677,16 @@ ALTER TABLE IF EXISTS app.ft_holdings
 
 ALTER TABLE IF EXISTS app.nft_collections
   ADD COLUMN IF NOT EXISTS contract_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE IF EXISTS app.nft_collections
+  ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE IF EXISTS app.nft_collections
+  ADD COLUMN IF NOT EXISTS external_url TEXT;
+ALTER TABLE IF EXISTS app.nft_collections
+  ADD COLUMN IF NOT EXISTS square_image JSONB;
+ALTER TABLE IF EXISTS app.nft_collections
+  ADD COLUMN IF NOT EXISTS banner_image JSONB;
+ALTER TABLE IF EXISTS app.nft_collections
+  ADD COLUMN IF NOT EXISTS socials JSONB;
 ALTER TABLE IF EXISTS app.nft_collections
   DROP CONSTRAINT IF EXISTS nft_collections_pkey;
 ALTER TABLE IF EXISTS app.nft_collections

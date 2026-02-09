@@ -301,6 +301,11 @@ type NFTCollection struct {
 	ContractName    string    `json:"contract_name,omitempty"`
 	Name            string    `json:"name"`
 	Symbol          string    `json:"symbol"`
+	Description     string          `json:"description,omitempty"`
+	ExternalURL     string          `json:"external_url,omitempty"`
+	SquareImage     json.RawMessage `json:"square_image,omitempty"`
+	BannerImage     json.RawMessage `json:"banner_image,omitempty"`
+	Socials         json.RawMessage `json:"socials,omitempty"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
