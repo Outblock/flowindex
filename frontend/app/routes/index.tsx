@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Activity, TrendingUp, Database } from 'lucide-react';
-import NumberFlow from '@number-flow/react';
+import { SafeNumberFlow } from '../components/SafeNumberFlow';
 import { api } from '../api';
 import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
 import { FlowPriceChart } from '../components/FlowPriceChart';
@@ -450,7 +450,7 @@ function Home() {
                         <div className="space-y-1">
                             <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Latest Block</p>
                             <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white group-hover:text-nothing-green-dark dark:group-hover:text-nothing-green transition-colors">
-                                <NumberFlow
+                                <SafeNumberFlow
                                     value={statusRaw?.latest_height || 0}
                                     format={{ useGrouping: true }}
                                 />
@@ -478,7 +478,7 @@ function Home() {
                         <div className="space-y-1">
                             <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Total TXs</p>
                             <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-                                <NumberFlow
+                                <SafeNumberFlow
                                     value={statusRaw?.total_transactions || 0}
                                     format={{ useGrouping: true }}
                                 />
@@ -497,7 +497,7 @@ function Home() {
                         <div className="space-y-1">
                             <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Network TPS</p>
                             <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-                                <NumberFlow
+                                <SafeNumberFlow
                                     value={tps || 0}
                                     format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                                 />
@@ -545,7 +545,7 @@ function Home() {
                         <div className="space-y-1">
                             <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Total Addresses</p>
                             <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-                                <NumberFlow
+                                <SafeNumberFlow
                                     value={statusRaw?.total_addresses || 0}
                                     format={{ useGrouping: true }}
                                 />
