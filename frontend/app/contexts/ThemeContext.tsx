@@ -8,11 +8,14 @@ const ThemeContext = createContext({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Default to dark mode
     const [theme, setTheme] = useState(() => {
+        // SSR-safe default
+        if (typeof window === 'undefined') return 'dark';
+
         // Check what's already on the root (from inline script)
-        if (typeof window !== 'undefined' && window.document.documentElement.classList.contains('dark')) {
+        if (window.document.documentElement.classList.contains('dark')) {
             return 'dark';
         }
-        const saved = localStorage.getItem('theme');
+        const saved = window.localStorage.getItem('theme');
         return saved || 'dark';
     });
 

@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "start": "vite preview",
-    "preview": "vite preview",
+    "start": "node .output/server/index.mjs",
+    "preview": "node .output/server/index.mjs",
     "lint": "eslint .",
     "prepare": "cd .. && husky"
   },
