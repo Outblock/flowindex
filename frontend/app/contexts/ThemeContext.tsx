@@ -6,18 +6,16 @@ const ThemeContext = createContext({
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    // Default to dark mode
-    const [theme, setTheme] = useState(() => {
-        // SSR-safe default
-        if (typeof window === 'undefined') return 'dark';
+    // IMPORTANT: Keep SSR + first client render deterministic to avoid hydration mismatch.
+    // We always start in dark mode and then reconcile to the saved preference after mount.
+    const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-        // Check what's already on the root (from inline script)
-        if (window.document.documentElement.classList.contains('dark')) {
-            return 'dark';
-        }
+    useEffect(() => {
         const saved = window.localStorage.getItem('theme');
-        return saved || 'dark';
-    });
+        if (saved === 'dark' || saved === 'light') {
+            setTheme(saved);
+        }
+    }, []);
 
     useEffect(() => {
         const root = window.document.documentElement;

@@ -1,11 +1,7 @@
 import { BookOpen, Github, SquareTerminal } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 function getDocsBaseUrl() {
-  if (typeof window !== 'undefined') {
-    const runtime = window.__FLOWSCAN_ENV__?.DOCS_URL;
-    if (runtime) return runtime;
-  }
-
   return import.meta.env.VITE_DOCS_URL;
 }
 
@@ -14,7 +10,17 @@ function stripTrailingSlash(url) {
 }
 
 function Footer() {
-  const docsBase = stripTrailingSlash(getDocsBaseUrl());
+  // IMPORTANT: Keep SSR deterministic. Read runtime overrides after hydration.
+  const [docsBase, setDocsBase] = useState(() => stripTrailingSlash(getDocsBaseUrl()));
+
+  useEffect(() => {
+    const runtime = (window as any).__FLOWSCAN_ENV__?.DOCS_URL;
+    if (typeof runtime === 'string' && runtime.length > 0) {
+      const normalized = stripTrailingSlash(runtime);
+      if (normalized && normalized !== docsBase) setDocsBase(normalized);
+    }
+  }, [docsBase]);
+
   const docsHref = docsBase ? `${docsBase}/docs` : null;
   const apiHref = '/api-docs';
 
