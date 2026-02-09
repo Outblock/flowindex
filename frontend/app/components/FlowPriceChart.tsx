@@ -54,14 +54,14 @@ export function FlowPriceChart({ data }) {
                     </div>
                     <div className="flex items-baseline space-x-3">
                         <span className="text-3xl font-mono font-bold text-zinc-900 dark:text-white tracking-tighter">
-                            ${price.toFixed(3)}
+                            ${price?.toFixed(3) ?? '0.000'}
                         </span>
                         <div className={`flex items-center space-x-1 text-xs font-bold px-1.5 py-0.5 rounded-sm border ${isPositive
                             ? 'text-nothing-green-dark dark:text-nothing-green border-nothing-green-dark/30 dark:border-nothing-green/30 bg-nothing-green/5'
                             : 'text-red-500 border-red-500/30 bg-red-500/5'
                             }`}>
                             {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                            <span>{Math.abs(price_change_24h).toFixed(2)}%</span>
+                            <span>{Math.abs(price_change_24h ?? 0).toFixed(2)}%</span>
                         </div>
                     </div>
                 </div>
@@ -93,7 +93,7 @@ export function FlowPriceChart({ data }) {
 
             <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-white/5 flex justify-between items-center text-[10px] uppercase tracking-wider text-zinc-500 dark:text-gray-500">
                 <span>Market Cap</span>
-                <span className="text-zinc-900 dark:text-white font-mono">${(market_cap / 1000000).toFixed(0)}M</span>
+                <span className="text-zinc-900 dark:text-white font-mono">${((market_cap ?? 0) / 1000000).toFixed(0)}M</span>
             </div>
         </div>
     );
