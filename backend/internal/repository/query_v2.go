@@ -264,7 +264,7 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 			COALESCE(encode(to_address, 'hex'), '') AS to_address,
 			`+func() string {
 		if isNFT {
-			return "NULL::numeric AS amount, COALESCE(token_id, '') AS token_id"
+			return "''::text AS amount, COALESCE(token_id, '') AS token_id"
 		}
 		return "amount, ''::text AS token_id"
 	}()+`,
@@ -306,7 +306,7 @@ func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, t
 			COALESCE(encode(to_address, 'hex'), '') AS to_address,
 			`+func() string {
 		if isNFT {
-			return "NULL::numeric AS amount, COALESCE(token_id, '') AS token_id"
+			return "''::text AS amount, COALESCE(token_id, '') AS token_id"
 		}
 		return "amount, ''::text AS token_id"
 	}()+`,
