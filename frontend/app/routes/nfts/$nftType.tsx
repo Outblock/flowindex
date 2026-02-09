@@ -146,16 +146,24 @@ function NFTCollectionDetailInner() {
           </p>
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Holders</p>
+          <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
+            <NumberFlow value={Number.isFinite(ownersCount) ? ownersCount : 0} format={{ useGrouping: true }} />
+          </p>
+          <div className="mt-2 text-[10px] uppercase tracking-widest text-zinc-500">
+            Page size: {owners.length}
+          </div>
+        </div>
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
           <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Tokens</p>
           <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
             <NumberFlow value={Number.isFinite(tokenCount) ? tokenCount : 0} format={{ useGrouping: true }} />
           </p>
-        </div>
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Owners (Approx)</p>
-          <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-            <NumberFlow value={Number.isFinite(ownerCount) ? ownerCount : 0} format={{ useGrouping: true }} />
-          </p>
+          {Number.isFinite(ownerCount) && ownerCount > 0 ? (
+            <div className="mt-2 text-[10px] uppercase tracking-widest text-zinc-500">
+              Owners (Approx): {ownerCount.toLocaleString()}
+            </div>
+          ) : null}
         </div>
       </motion.div>
 

@@ -5,7 +5,6 @@ import NumberFlow from '@number-flow/react';
 import { api } from '../../api';
 import { Pagination } from '../../components/Pagination';
 import { RouteErrorBoundary } from '../../components/RouteErrorBoundary';
-import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
 interface TokenSearch {
@@ -85,10 +84,7 @@ function TokenDetailInner() {
   const id = String(token?.id || tokenParam);
   const addr = normalizeHex(token?.address);
   const symbol = String(token?.symbol || '');
-  const decimals = Number(token?.decimals || 0);
-  const updatedAt = token?.updated_at || token?.timestamp || '';
-  const rel = updatedAt ? formatRelativeTime(updatedAt, nowTick) : '';
-  const abs = updatedAt ? formatAbsoluteTime(updatedAt) : '';
+  // decimals/updatedAt are not very meaningful for most users; we prioritize holder count instead.
 
   const holdersLimit = 25;
   const holdersOffset = (holdersPage - 1) * holdersLimit;
@@ -147,19 +143,22 @@ function TokenDetailInner() {
           </p>
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Symbol / Decimals</p>
-          <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
-            {symbol || '—'} <span className="text-sm text-zinc-500">/</span>{' '}
-            <NumberFlow value={Number.isFinite(decimals) ? decimals : 0} />
+          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Holders</p>
+          <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
+            <NumberFlow value={Number.isFinite(holdersCount) ? holdersCount : 0} format={{ useGrouping: true }} />
           </p>
-          <div className="mt-2 text-xs text-zinc-500">
-            <div>{rel}</div>
-            <div>{abs}</div>
+          <div className="mt-2 text-[10px] uppercase tracking-widest text-zinc-500">
+            Page size: {holders.length}
           </div>
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Name</p>
-          <p className="text-sm text-zinc-900 dark:text-white break-all">{token?.name || token?.contract_name || '—'}</p>
+          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Name / Symbol</p>
+          <p className="text-sm text-zinc-900 dark:text-white break-all">
+            {token?.name || token?.contract_name || id}
+          </p>
+          <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+            {symbol || '—'}
+          </div>
         </div>
       </motion.div>
 

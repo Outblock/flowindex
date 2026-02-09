@@ -44,10 +44,13 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: ReactNode }) {
     return (
-        <html lang="en">
+        // Default theme is dark; render the initial document in dark mode to avoid a light->dark flash on first paint.
+        // ThemeProvider can still toggle/remove the class after hydration for users who prefer light.
+        <html lang="en" className="dark">
             <head>
                 <meta charSet="UTF-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <meta name="color-scheme" content="dark" />
                 <title>FlowScan</title>
                 {/* Runtime (public) config, populated in Docker/Railway via entrypoint envsubst */}
                 <script src="/env.js"></script>
