@@ -112,4 +112,57 @@ export const api = {
     resolveApiBaseUrl().then((base) =>
       axios.get(`${base}/flow/v1/contract`, { params: { limit, offset, address, identifier } }).then(res => res.data),
     ),
+
+  // Flow FT / NFT (v1)
+  listFlowFTTokens: (limit = 25, offset = 0) =>
+    resolveApiBaseUrl().then((base) =>
+      axios.get(`${base}/flow/v1/ft`, { params: { limit, offset } }).then(res => res.data),
+    ),
+  getFlowFTToken: (token: string) =>
+    resolveApiBaseUrl().then((base) =>
+      axios.get(`${base}/flow/v1/ft/${encodeURIComponent(token)}`).then(res => res.data),
+    ),
+  listFlowFTHoldingsByToken: (token: string, limit = 25, offset = 0) =>
+    resolveApiBaseUrl().then((base) =>
+      axios
+        .get(`${base}/flow/v1/ft/${encodeURIComponent(token)}/holding`, { params: { limit, offset } })
+        .then(res => res.data),
+    ),
+  listFlowFTTransfers: (limit = 25, offset = 0, { token = '', address = '', height = '', transaction_hash = '' } = {}) =>
+    resolveApiBaseUrl().then((base) =>
+      axios
+        .get(`${base}/flow/v1/ft/transfer`, { params: { limit, offset, token, address, height, transaction_hash } })
+        .then(res => res.data),
+    ),
+
+  listFlowNFTCollections: (limit = 25, offset = 0) =>
+    resolveApiBaseUrl().then((base) =>
+      axios.get(`${base}/flow/v1/nft`, { params: { limit, offset } }).then(res => res.data),
+    ),
+  getFlowNFTCollection: (nft_type: string) =>
+    resolveApiBaseUrl().then((base) =>
+      axios.get(`${base}/flow/v1/nft/${encodeURIComponent(nft_type)}`).then(res => res.data),
+    ),
+  listFlowNFTHoldingsByCollection: (nft_type: string, limit = 25, offset = 0) =>
+    resolveApiBaseUrl().then((base) =>
+      axios
+        .get(`${base}/flow/v1/nft/${encodeURIComponent(nft_type)}/holding`, { params: { limit, offset } })
+        .then(res => res.data),
+    ),
+  listFlowNFTTransfers: (limit = 25, offset = 0, { nft_type = '', address = '', height = '', transaction_hash = '' } = {}) =>
+    resolveApiBaseUrl().then((base) =>
+      axios
+        .get(`${base}/flow/v1/nft/transfer`, { params: { limit, offset, nft_type, address, height, transaction_hash } })
+        .then(res => res.data),
+    ),
+  getFlowNFTItem: (nft_type: string, id: string) =>
+    resolveApiBaseUrl().then((base) =>
+      axios.get(`${base}/flow/v1/nft/${encodeURIComponent(nft_type)}/item/${encodeURIComponent(id)}`).then(res => res.data),
+    ),
+  listFlowNFTItemTransfers: (nft_type: string, id: string, limit = 25, offset = 0) =>
+    resolveApiBaseUrl().then((base) =>
+      axios
+        .get(`${base}/flow/v1/nft/${encodeURIComponent(nft_type)}/item/${encodeURIComponent(id)}/transfer`, { params: { limit, offset } })
+        .then(res => res.data),
+    ),
 };

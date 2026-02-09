@@ -107,3 +107,20 @@ func (s *Server) handleFlowNFTItem(w http.ResponseWriter, r *http.Request) {
 	}
 	writeAPIResponse(w, []interface{}{toCombinedNFTDetails(*item)}, nil, nil)
 }
+
+func (s *Server) handleFlowNFTItemTransfers(w http.ResponseWriter, r *http.Request) {
+	collectionAddr, collectionName := parseTokenParam(mux.Vars(r)["nft_type"])
+	id := mux.Vars(r)["id"]
+	limit, offset := parseLimitOffset(r)
+
+	transfers, total, err := s.repo.ListNFTItemTransfers(r.Context(), collectionAddr, collectionName, id, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(transfers))
+	for _, t := range transfers {
+		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, ""))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
+}

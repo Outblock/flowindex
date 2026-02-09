@@ -79,6 +79,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/v1/nft/{nft_type}/holding", s.handleFlowNFTHoldingsByCollection).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/{nft_type}/top-account", s.handleFlowTopNFTAccounts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/nft/{nft_type}/item/{id}", s.handleFlowNFTItem).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/nft/{nft_type}/item/{id}/transfer", s.handleFlowNFTItemTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/contract", s.handleFlowListContracts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/contract/{identifier}", s.handleFlowGetContract).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/contract/{identifier}/{id}", s.handleFlowGetContractVersion).Methods("GET", "OPTIONS")

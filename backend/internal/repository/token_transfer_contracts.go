@@ -101,7 +101,7 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 	}
 
 	listArgs := append(append([]interface{}{}, args...), limit, offset)
-		rows, err := r.db.Query(ctx, `
+	rows, err := r.db.Query(ctx, `
 			SELECT
 				encode(t.transaction_id, 'hex') AS transaction_id,
 				t.block_height,
@@ -109,11 +109,11 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 				COALESCE(encode(t.from_address, 'hex'), '') AS from_address,
 				COALESCE(encode(t.to_address, 'hex'), '') AS to_address,
 				`+func() string {
-			if isNFT {
-				return "''::text AS amount, COALESCE(t.token_id, '') AS token_id"
-			}
-			return "COALESCE(t.amount::text, '') AS amount, ''::text AS token_id"
-		}()+`,
+		if isNFT {
+			return "''::text AS amount, COALESCE(t.token_id, '') AS token_id"
+		}
+		return "COALESCE(t.amount::text, '') AS amount, ''::text AS token_id"
+	}()+`,
 				t.event_index,
 				t.timestamp,
 				t.timestamp AS created_at,
@@ -150,6 +150,92 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 			return nil, 0, err
 		}
 		t.IsNFT = isNFT
+		out = append(out, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
+func (r *Repository) ListNFTItemTransfers(ctx context.Context, tokenAddress, tokenName, tokenID string, limit, offset int) ([]TokenTransferWithContract, int64, error) {
+	clauses := []string{}
+	args := []interface{}{}
+	arg := 1
+
+	if tokenAddress != "" {
+		clauses = append(clauses, fmt.Sprintf("t.token_contract_address = $%d", arg))
+		args = append(args, hexToBytes(tokenAddress))
+		arg++
+	}
+	if tokenName != "" {
+		clauses = append(clauses, fmt.Sprintf("t.contract_name = $%d", arg))
+		args = append(args, tokenName)
+		arg++
+	}
+	if tokenID != "" {
+		clauses = append(clauses, fmt.Sprintf("t.token_id = $%d", arg))
+		args = append(args, tokenID)
+		arg++
+	}
+	where := ""
+	if len(clauses) > 0 {
+		where = "WHERE " + strings.Join(clauses, " AND ")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int64
+	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.nft_transfers t `+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	listArgs := append(append([]interface{}{}, args...), limit, offset)
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			encode(t.transaction_id, 'hex') AS transaction_id,
+			t.block_height,
+			COALESCE(encode(t.token_contract_address, 'hex'), '') AS token_contract_address,
+			COALESCE(encode(t.from_address, 'hex'), '') AS from_address,
+			COALESCE(encode(t.to_address, 'hex'), '') AS to_address,
+			''::text AS amount,
+			COALESCE(t.token_id, '') AS token_id,
+			t.event_index,
+			t.timestamp,
+			t.timestamp AS created_at,
+			COALESCE(NULLIF(t.contract_name, ''), '') AS contract_name
+		FROM app.nft_transfers t
+		`+where+`
+		ORDER BY t.block_height DESC, t.event_index DESC
+		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), listArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var out []TokenTransferWithContract
+	for rows.Next() {
+		var t TokenTransferWithContract
+		if err := rows.Scan(
+			&t.TransactionID,
+			&t.BlockHeight,
+			&t.TokenContractAddress,
+			&t.FromAddress,
+			&t.ToAddress,
+			&t.Amount,
+			&t.TokenID,
+			&t.EventIndex,
+			&t.Timestamp,
+			&t.CreatedAt,
+			&t.ContractName,
+		); err != nil {
+			return nil, 0, err
+		}
+		t.IsNFT = true
 		out = append(out, t)
 	}
 	if err := rows.Err(); err != nil {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Home, Box, ArrowRightLeft, Users, BarChart2, FileText, Layers, Activity, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
+import { Home, Box, ArrowRightLeft, Users, FileText, Layers, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,6 +21,8 @@ export default function Sidebar() {
         { label: 'Home Page', path: '/', icon: Home },
         { label: 'Transactions', path: '/transactions', icon: ArrowRightLeft },
         { label: 'Blocks', path: '/blocks', icon: Box },
+        { label: 'Tokens', path: '/tokens', icon: Coins },
+        { label: 'NFTs', path: '/nfts', icon: Image },
         { label: 'Contracts', path: '/contracts', icon: FileText },
         { label: 'Accounts', path: '/accounts', icon: Users },
         { label: 'Nodes', path: '#', icon: Layers, disabled: true },
