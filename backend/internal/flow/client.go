@@ -152,6 +152,16 @@ func (c *Client) GetAccount(ctx context.Context, address flow.Address) (*flow.Ac
 	return acc, err
 }
 
+func (c *Client) GetAccountAtBlockHeight(ctx context.Context, address flow.Address, blockHeight uint64) (*flow.Account, error) {
+	var acc *flow.Account
+	err := c.withRetry(ctx, func() error {
+		var err error
+		acc, err = c.pickClient().GetAccountAtBlockHeight(ctx, address, blockHeight)
+		return err
+	})
+	return acc, err
+}
+
 func (c *Client) ExecuteScriptAtLatestBlock(ctx context.Context, script []byte, args []cadence.Value) (cadence.Value, error) {
 	var out cadence.Value
 	err := c.withRetry(ctx, func() error {

@@ -4,20 +4,30 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
+	flowclient "flowscan-clone/internal/flow"
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
+
+	"github.com/onflow/flow-go-sdk"
 )
 
 // MetaWorker builds derived indexes from raw tables (addresses, account keys, contracts).
 type MetaWorker struct {
-	repo *repository.Repository
+	repo              *repository.Repository
+	flow              *flowclient.Client
+	storeContractCode bool
 }
 
-func NewMetaWorker(repo *repository.Repository) *MetaWorker {
-	return &MetaWorker{repo: repo}
+func NewMetaWorker(repo *repository.Repository, flow *flowclient.Client) *MetaWorker {
+	// Default: store contract code, because Flow RPC can return it and many APIs expect it.
+	// You can disable this if storage pressure becomes an issue.
+	store := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_CONTRACT_CODE")))
+	storeContractCode := store == "" || store == "1" || store == "true" || store == "yes"
+	return &MetaWorker{repo: repo, flow: flow, storeContractCode: storeContractCode}
 }
 
 func (w *MetaWorker) Name() string {
@@ -38,7 +48,7 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 	}
 
 	accountKeys := w.extractAccountKeys(events)
-	contracts := w.extractContracts(events)
+	contracts := w.extractContracts(ctx, events)
 	contractRegistry := make([]models.Contract, 0, len(contracts))
 	for _, c := range contracts {
 		id := formatContractIdentifier(c.Address, c.Name)
@@ -178,8 +188,15 @@ func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountK
 	return keys
 }
 
-func (w *MetaWorker) extractContracts(events []models.Event) []models.SmartContract {
-	var contracts []models.SmartContract
+func (w *MetaWorker) extractContracts(ctx context.Context, events []models.Event) []models.SmartContract {
+	type contractEvent struct {
+		address string
+		name    string
+		height  uint64
+		code    string
+	}
+
+	var extracted []contractEvent
 	for _, evt := range events {
 		if !strings.Contains(evt.Type, "AccountContractAdded") && !strings.Contains(evt.Type, "AccountContractUpdated") {
 			continue
@@ -192,6 +209,7 @@ func (w *MetaWorker) extractContracts(events []models.Event) []models.SmartContr
 
 		address, _ := payload["address"].(string)
 		name, _ := payload["name"].(string)
+		code, _ := payload["code"].(string) // some nodes/decoders may include this directly
 		if name == "" {
 			if v, ok := payload["contract"].(string); ok {
 				name = v
@@ -207,13 +225,56 @@ func (w *MetaWorker) extractContracts(events []models.Event) []models.SmartContr
 			continue
 		}
 
-		contracts = append(contracts, models.SmartContract{
-			Address:     address,
-			Name:        name,
-			BlockHeight: evt.BlockHeight,
+		extracted = append(extracted, contractEvent{
+			address: address,
+			name:    name,
+			height:  evt.BlockHeight,
+			code:    code,
 		})
 	}
-	return contracts
+
+	// Best-effort: fetch contract source from Access API at the block height where it was
+	// added/updated. This makes /flow/v1/contract return a non-empty "body".
+	if w.storeContractCode && w.flow != nil {
+		type key struct {
+			addr   string
+			height uint64
+		}
+		cache := make(map[key]map[string][]byte)
+		for i := range extracted {
+			if extracted[i].code != "" {
+				continue
+			}
+			k := key{addr: extracted[i].address, height: extracted[i].height}
+			contracts, ok := cache[k]
+			if !ok {
+				acc, err := w.flow.GetAccountAtBlockHeight(ctx, flow.HexToAddress(extracted[i].address), extracted[i].height)
+				if err != nil || acc == nil {
+					cache[k] = nil
+					continue
+				}
+				cache[k] = acc.Contracts
+				contracts = acc.Contracts
+			}
+			if contracts == nil {
+				continue
+			}
+			if b, ok := contracts[extracted[i].name]; ok && len(b) > 0 {
+				extracted[i].code = string(b)
+			}
+		}
+	}
+
+	out := make([]models.SmartContract, 0, len(extracted))
+	for _, c := range extracted {
+		out = append(out, models.SmartContract{
+			Address:     c.address,
+			Name:        c.name,
+			Code:        c.code,
+			BlockHeight: c.height,
+		})
+	}
+	return out
 }
 
 func normalizeAddress(addr string) string {

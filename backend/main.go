@@ -200,7 +200,7 @@ func main() {
 			processors = append(processors, ingester.NewAccountsWorker(repo))
 		}
 		if enableMetaWorker {
-			processors = append(processors, ingester.NewMetaWorker(repo))
+			processors = append(processors, ingester.NewMetaWorker(repo, flowClient))
 		}
 		if enableTxMetricsWorker {
 			processors = append(processors, ingester.NewTxMetricsWorker(repo))
@@ -296,7 +296,7 @@ func main() {
 	}
 
 	if enableMetaWorker {
-		metaWorkerProcessor = ingester.NewMetaWorker(repo)
+		metaWorkerProcessor = ingester.NewMetaWorker(repo, flowClient)
 		if metaWorkerConcurrency < 1 {
 			metaWorkerConcurrency = 1
 		}

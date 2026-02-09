@@ -5,13 +5,16 @@ import { memo, useMemo } from 'react';
 // Mock data generator for the sparkline (since we only have current price)
 // In a real app, we'd fetch historical price data
 const generateSparkline = (currentPrice) => {
+    // IMPORTANT: Must be deterministic for SSR hydration.
+    // Avoid Math.random() or Date-based values here.
+    const base = Number.isFinite(currentPrice) ? currentPrice : 0;
+    const amp = Math.max(Math.abs(base) * 0.02, 0.0005);
     const data = [];
-    let price = currentPrice;
     for (let i = 0; i < 20; i++) {
-        data.unshift({ value: price });
-        // Random walk
-        const change = (Math.random() - 0.5) * (currentPrice * 0.02);
-        price -= change;
+        const a = i * 0.65;
+        const b = i * 1.35;
+        const value = base + (Math.sin(a) * amp) + (Math.sin(b) * amp * 0.25);
+        data.push({ value });
     }
     return data;
 };
