@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Box, ArrowRightLeft, Users, BarChart2, FileText, Layers, Activity, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-// eslint-disable-next-line no-unused-vars
+
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Sidebar() {

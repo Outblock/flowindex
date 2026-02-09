@@ -97,7 +97,7 @@ function TransactionDetail() {
         <div className="border border-yellow-500/30 bg-yellow-50 dark:bg-nothing-dark p-8 max-w-md text-center shadow-sm">
           <XCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-2">Transaction Not Yet Indexed</h2>
-          <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-4">This transaction exists on the blockchain but hasn't been indexed yet.</p>
+          <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-4">This transaction exists on the blockchain but hasn&apos;t been indexed yet.</p>
           <p className="text-zinc-500 text-xs mb-6">
             The indexer is currently processing historical blocks. Please check back in a few minutes.
           </p>

@@ -1,5 +1,5 @@
 import { Zap } from 'lucide-react';
-// eslint-disable-next-line
+
 import { motion } from 'framer-motion';
 import { formatAbsoluteTime } from '../lib/time';
 

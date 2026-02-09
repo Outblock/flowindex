@@ -142,6 +142,7 @@ export default function Transactions() {
                 blockHeight: rawTx.block_height
             };
 
+
             setTransactions(prev => {
                 const merged = mergeTransactions(prev, [newTx], { prependNew: true });
                 return merged.slice(0, 20); // Keep buffer size consistent for view
@@ -159,6 +160,7 @@ export default function Transactions() {
                 total_transactions: (prev.total_transactions || 0) + 1
             } : prev);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lastMessage, txPage]);
 
     // Initial Load
@@ -170,10 +172,12 @@ export default function Transactions() {
             } catch (e) { console.error(e); }
         };
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadTransactions(1);
         refreshStatus();
         const interval = setInterval(refreshStatus, 10000);
         return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (

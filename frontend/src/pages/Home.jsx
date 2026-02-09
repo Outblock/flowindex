@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-// eslint-disable-next-line no-unused-vars
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Activity, TrendingUp, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
@@ -278,6 +278,7 @@ function Home() {
         total_transactions: (prev.total_transactions || 0) + 1
       } : prev);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastMessage]);
 
   // Initial data load + periodic refresh

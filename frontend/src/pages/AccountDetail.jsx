@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
-import { ArrowLeft, User, Activity, Wallet, Key, Code, Coins, Image as ImageIcon, FileText, HardDrive } from 'lucide-react';
 import { Pagination } from '../components/Pagination';
 import NumberFlow from '@number-flow/react';
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import {
+  ArrowLeft, User, Activity, Wallet, Key, Code, Coins, Image as ImageIcon,
+  FileText, HardDrive, Folder, FolderOpen, File, ChevronRight, ChevronDown
+} from 'lucide-react';
+
+SyntaxHighlighter.registerLanguage('cadence', swift);
 
 function AccountDetail() {
   const { address } = useParams();
@@ -40,6 +48,7 @@ function AccountDetail() {
   const [storageItem, setStorageItem] = useState(null);
   const [storageLoading, setStorageLoading] = useState(false);
   const [storageError, setStorageError] = useState(null);
+  const [expandedDomains, setExpandedDomains] = useState({ storage: true, public: true, private: false });
 
   const normalizeAddress = (value) => {
     if (!value) return '';
@@ -132,6 +141,7 @@ function AccountDetail() {
       }
     };
     loadAccountInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address]);
 
   const loadTransactions = async (page) => {
@@ -265,6 +275,7 @@ function AccountDetail() {
     setNftTransfers([]);
     setNftCursor('');
     setNftHasMore(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address]);
 
   useEffect(() => {
@@ -540,9 +551,23 @@ function AccountDetail() {
                       <div className="text-xs text-red-500 dark:text-red-400">{contractCodeError}</div>
                     )}
                     {!contractCodeLoading && !contractCodeError && selectedContractCode && (
-                      <pre className="text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap break-words overflow-x-auto max-h-[420px]">
-                        {selectedContractCode}
-                      </pre>
+                      <div className="rounded-sm overflow-hidden border border-zinc-200 dark:border-white/10">
+                        <SyntaxHighlighter
+                          language="cadence"
+                          style={vscDarkPlus}
+                          customStyle={{
+                            margin: 0,
+                            padding: '1rem',
+                            fontSize: '11px',
+                            lineHeight: '1.5',
+                            maxHeight: '420px',
+                          }}
+                          showLineNumbers={true}
+                          lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: "#555", userSelect: "none" }}
+                        >
+                          {selectedContractCode}
+                        </SyntaxHighlighter>
+                      </div>
                     )}
                   </div>
                 )}
@@ -552,108 +577,124 @@ function AccountDetail() {
             {activeTab === 'storage' && (
               <div className="space-y-4">
                 <h2 className="text-zinc-900 dark:text-white text-sm uppercase tracking-widest mb-6 border-b border-zinc-100 dark:border-white/5 pb-2">
-                  Storage (Experimental)
+                  Storage
                 </h2>
 
                 {storageError && (
-                  <div className="text-xs text-red-500 dark:text-red-400">{storageError}</div>
+                  <div className="text-xs text-red-500 dark:text-red-400 mb-4">{storageError}</div>
                 )}
 
-                {!storageOverview && storageLoading && (
-                  <div className="text-xs text-zinc-500 italic">Loading storage…</div>
+                {(!storageOverview && storageLoading) && (
+                  <div className="text-xs text-zinc-500 italic p-4">Loading storage overview...</div>
                 )}
 
                 {storageOverview && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-1 border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-black/40 p-4 rounded-sm">
-                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3">
-                        Browser
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
+                    {/* Left: File Browser */}
+                    <div className="md:col-span-1 border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-black/40 rounded-sm flex flex-col overflow-hidden">
+                      <div className="p-3 border-b border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">File Browser</span>
+                        <span className="text-[10px] text-zinc-500">
+                          {storageOverview.used ?? '?'} / {storageOverview.capacity ?? '?'}
+                        </span>
                       </div>
+                      <div className="flex-1 overflow-auto p-2 space-y-1">
+                        {/* Domains */}
+                        {['storage', 'public', 'private'].map(domain => {
+                          const paths = domain === 'storage' ? storageOverview.storagePaths
+                            : domain === 'public' ? storageOverview.publicPaths
+                              : domain === 'private' ? storageOverview.privatePaths
+                                : [];
+                          if (!paths || paths.length === 0) return null;
 
-                      <div className="mb-6">
-                        <div className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase tracking-widest mb-1">
-                          Storage Usage
-                        </div>
-                        <div className="text-xs text-zinc-900 dark:text-white font-mono">
-                          {String(storageOverview.used ?? 'N/A')} / {String(storageOverview.capacity ?? 'N/A')}
-                        </div>
-                      </div>
+                          const isExpanded = expandedDomains[domain];
 
-                      <div className="mb-6">
-                        <div className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase tracking-widest mb-2">
-                          Storage Paths
-                        </div>
-                        <div className="max-h-[280px] overflow-auto space-y-1">
-                          {(Array.isArray(storageOverview.storagePaths) ? storageOverview.storagePaths : []).slice(0, 200).map((p) => (
-                            <button
-                              key={String(p)}
-                              type="button"
-                              onClick={() => browseStoragePath(p)}
-                              className={`w-full text-left px-2 py-1 text-xs font-mono border border-zinc-200 dark:border-white/5 hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 hover:bg-zinc-100 dark:hover:bg-black/60 transition-colors rounded-sm ${storageSelected === String(p) ? 'bg-zinc-200 dark:bg-black/70 border-nothing-green-dark/30 dark:border-nothing-green/30' : 'bg-transparent dark:bg-black/30'}`}
-                              title={String(p)}
-                            >
-                              {String(p)}
-                            </button>
-                          ))}
-                          {(Array.isArray(storageOverview.storagePaths) ? storageOverview.storagePaths : []).length === 0 && (
-                            <div className="text-xs text-zinc-500 italic">No storage paths found</div>
-                          )}
-                        </div>
-                      </div>
+                          return (
+                            <div key={domain}>
+                              <button
+                                onClick={() => setExpandedDomains(prev => ({ ...prev, [domain]: !prev[domain] }))}
+                                className="flex items-center gap-2 w-full text-left px-2 py-1.5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-sm transition-colors text-zinc-700 dark:text-zinc-300"
+                              >
+                                {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                {isExpanded ? <FolderOpen className="h-3 w-3 text-nothing-green-dark dark:text-nothing-green" /> : <Folder className="h-3 w-3 text-nothing-green-dark dark:text-nothing-green" />}
+                                <span className="text-xs font-semibold uppercase tracking-wider">/{domain}</span>
+                                <span className="text-[10px] text-zinc-500 ml-auto">({paths.length})</span>
+                              </button>
 
-                      <div>
-                        <div className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase tracking-widest mb-2">
-                          Public Paths
-                        </div>
-                        <div className="max-h-[180px] overflow-auto space-y-1">
-                          {(Array.isArray(storageOverview.publicPaths) ? storageOverview.publicPaths : []).slice(0, 200).map((p) => (
-                            <button
-                              key={String(p)}
-                              type="button"
-                              onClick={() => {
-                                setStorageSelected(String(p));
-                                setStorageItem({ publicPath: String(p) });
-                              }}
-                              className={`w-full text-left px-2 py-1 text-xs font-mono border border-zinc-200 dark:border-white/5 hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 hover:bg-zinc-100 dark:hover:bg-black/60 transition-colors rounded-sm ${storageSelected === String(p) ? 'bg-zinc-200 dark:bg-black/70 border-nothing-green-dark/30 dark:border-nothing-green/30' : 'bg-transparent dark:bg-black/30'}`}
-                              title={String(p)}
-                            >
-                              {String(p)}
-                            </button>
-                          ))}
-                          {(Array.isArray(storageOverview.publicPaths) ? storageOverview.publicPaths : []).length === 0 && (
-                            <div className="text-xs text-zinc-500 italic">No public paths found</div>
-                          )}
-                        </div>
+                              {isExpanded && (
+                                <div className="ml-4 pl-2 border-l border-zinc-200 dark:border-white/5 mt-1 space-y-0.5">
+                                  {paths.map(path => {
+                                    const name = path.split('/').pop();
+                                    const isSelected = storageSelected === path;
+                                    return (
+                                      <button
+                                        key={path}
+                                        onClick={() => {
+                                          if (domain === 'storage') browseStoragePath(path);
+                                          else {
+                                            setStorageSelected(path);
+                                            setStorageItem({ [domain + 'Path']: path });
+                                          }
+                                        }}
+                                        className={`flex items-center gap-2 w-full text-left px-2 py-1 rounded-sm transition-colors text-xs font-mono truncate ${isSelected
+                                          ? 'bg-nothing-green-dark/10 dark:bg-nothing-green/10 text-nothing-green-dark dark:text-nothing-green'
+                                          : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                        title={path}
+                                      >
+                                        <File className="h-3 w-3 flex-shrink-0" />
+                                        <span className="truncate">{name}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
-                    <div className="md:col-span-2 border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-black/40 p-4 relative overflow-hidden rounded-sm">
+                    {/* Right: Content Viewer */}
+                    <div className="md:col-span-2 border border-zinc-200 dark:border-white/10 bg-white dark:bg-black/40 rounded-sm flex flex-col overflow-hidden relative">
                       {storageLoading && (
                         <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
-                          <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin"></div>
+                          <div className="w-8 h-8 border-2 border-dashed border-nothing-green-dark dark:border-nothing-green rounded-full animate-spin"></div>
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between gap-4 mb-3">
-                        <div className="text-[10px] text-zinc-500 uppercase tracking-widest">
-                          Selected
+                      <div className="p-3 border-b border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <FileText className="h-4 w-4 text-zinc-500" />
+                          <span className="text-xs font-mono text-zinc-700 dark:text-zinc-300 truncate" title={storageSelected || ''}>
+                            {storageSelected || 'Select a file'}
+                          </span>
                         </div>
-                        {storageSelected && (
-                          <div className="text-xs text-zinc-900 dark:text-white font-mono truncate max-w-[60%]" title={String(storageSelected)}>
-                            {String(storageSelected)}
+                      </div>
+
+                      <div className="flex-1 overflow-auto bg-zinc-50 dark:bg-[#1e1e1e] relative">
+                        {storageItem ? (
+                          <SyntaxHighlighter
+                            language="json"
+                            style={vscDarkPlus}
+                            customStyle={{
+                              margin: 0,
+                              padding: '1.5rem',
+                              fontSize: '11px',
+                              lineHeight: '1.6',
+                              minHeight: '100%',
+                            }}
+                            showLineNumbers={true}
+                            lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: "#555", userSelect: "none" }}
+                          >
+                            {JSON.stringify(storageItem, null, 2)}
+                          </SyntaxHighlighter>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full text-zinc-400 dark:text-zinc-600">
+                            <HardDrive className="h-12 w-12 mb-4 opacity-20" />
+                            <p className="text-xs uppercase tracking-widest">Select an item to view contents</p>
                           </div>
                         )}
                       </div>
-
-                      {storageItem ? (
-                        <pre className="text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap break-words overflow-x-auto max-h-[520px]">
-                          {JSON.stringify(storageItem, null, 2)}
-                        </pre>
-                      ) : (
-                        <div className="text-xs text-zinc-500 italic">
-                          Select a storage path to view details.
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}

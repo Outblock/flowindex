@@ -198,9 +198,13 @@ export default function Contracts() {
                       className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
                     >
                       <td className="p-4">
-                        <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300" title={identifier}>
+                        <Link
+                          to={`/contracts/${identifier}`}
+                          className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
+                          title={identifier}
+                        >
                           {identifier}
-                        </span>
+                        </Link>
                       </td>
                       <td className="p-4">
                         {addr ? (
