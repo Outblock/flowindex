@@ -4,12 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
-    "build": "npm run build:client && npm run build:server",
-    "build:client": "vite build --outDir dist/client",
-    "build:server": "vite build --ssr app/entry-server.tsx --outDir dist/server",
-    "start": "cross-env NODE_ENV=production node server.js",
-    "preview": "npm run build && npm run start",
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "vite preview",
+    "preview": "vite preview",
     "lint": "eslint .",
     "prepare": "cd .. && husky"
   },
