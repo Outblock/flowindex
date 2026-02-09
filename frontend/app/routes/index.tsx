@@ -11,6 +11,7 @@ import { NetworkStats } from '../components/NetworkStats';
 import { DailyStatsChart } from '../components/DailyStatsChart';
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 import { useTimeTicker } from '../hooks/useTimeTicker';
+import { formatNumber } from '../lib/format';
 
 export const Route = createFileRoute('/')({
     component: Home,
@@ -392,7 +393,7 @@ function Home() {
                                         </p>
                                         {totalHistory > 0 && (
                                             <p className="text-[10px] uppercase tracking-wider text-gray-500">
-                                                Range: {minHeight.toLocaleString()} → {maxHeight.toLocaleString()} (Latest {latestHeight.toLocaleString()})
+                                                Range: {formatNumber(minHeight)} → {formatNumber(maxHeight)} (Latest {formatNumber(latestHeight)})
                                             </p>
                                         )}
                                     </div>
@@ -504,7 +505,7 @@ function Home() {
                                 />
                             </p>
                             <p className="text-[10px] text-zinc-400 dark:text-gray-500 uppercase tracking-widest">
-                                Utilization: {Math.min(100, utilization).toFixed(2)}% (Est. {maxTpsEstimate.toLocaleString()} TPS)
+                                Utilization: {Math.min(100, utilization).toFixed(2)}% (Est. {formatNumber(maxTpsEstimate)} TPS)
                             </p>
                         </div>
                     </div>
@@ -608,7 +609,7 @@ function Home() {
                                                 {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-nothing-green animate-ping" />}
                                                 <div className="flex items-center justify-between h-full">
                                                     <div className="flex flex-col">
-                                                        <span className="text-xs text-nothing-green-dark dark:text-nothing-green font-mono">#{block.height.toLocaleString()}</span>
+                                                        <span className="text-xs text-nothing-green-dark dark:text-nothing-green font-mono">#{formatNumber(block.height)}</span>
                                                         <span
                                                             className="text-[10px] text-gray-500 font-mono hidden sm:inline-block"
                                                             title={blockIdFull || ''}

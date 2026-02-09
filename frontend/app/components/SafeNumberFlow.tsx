@@ -26,7 +26,8 @@ export function SafeNumberFlow(props: Props) {
     if (format?.useGrouping != null) options.useGrouping = format.useGrouping;
     if (format?.minimumFractionDigits != null) options.minimumFractionDigits = format.minimumFractionDigits;
     if (format?.maximumFractionDigits != null) options.maximumFractionDigits = format.maximumFractionDigits;
-    return Number.isFinite(value) ? value.toLocaleString(undefined, options) : String(value);
+    // IMPORTANT: Make SSR deterministic to avoid hydration mismatch.
+    return Number.isFinite(value) ? value.toLocaleString('en-US', options) : String(value);
   }, [value, format?.useGrouping, format?.minimumFractionDigits, format?.maximumFractionDigits]);
 
   if (!mounted) {
@@ -37,4 +38,3 @@ export function SafeNumberFlow(props: Props) {
 
   return <NumberFlow value={value} format={format} className={className} />;
 }
-

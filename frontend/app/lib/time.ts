@@ -31,13 +31,16 @@ export function formatAbsoluteTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
 
-  return new Intl.DateTimeFormat(undefined, {
+  // IMPORTANT: Make SSR deterministic to avoid hydration mismatch.
+  // Use fixed locale + timezone for the first render.
+  return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    timeZoneName: 'short'
+    timeZoneName: 'short',
+    timeZone: 'UTC',
   }).format(date);
 }
