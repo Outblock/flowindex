@@ -3,7 +3,15 @@ import { fontFamily } from "tailwindcss/defaultTheme"
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ["class"],
-  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  // NOTE: This project uses both `app/` (TanStack/Nitro SSR) and `src/` (legacy).
+  // Tailwind v3 generates utilities based on the files listed here; if `app/` is
+  // missing, almost all utilities (e.g. `flex`, `grid`, spacing) get purged and
+  // the UI looks "unstyled" in production.
+  content: [
+    "./index.html",
+    "./app/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
   theme: {
     container: {
       center: true,
