@@ -249,8 +249,9 @@ function Home() {
         if (lastMessage.type === 'new_block') {
             const newBlock = lastMessage.payload;
             setBlocks(prev => {
-                const next = [newBlock, ...(prev || [])];
-                return next.slice(0, 50);
+                // Dedup by height to avoid duplicates on reconnect/replay.
+                const filtered = (prev || []).filter((b) => b?.height !== newBlock?.height);
+                return [newBlock, ...filtered].slice(0, 50);
             });
             setNewBlockIds(prev => new Set(prev).add(newBlock.height));
             setTimeout(() => setNewBlockIds(prev => {
@@ -294,11 +295,11 @@ function Home() {
                     next.delete(newTx.id);
                     return next;
                 }), 3000);
+                setStatusRaw(prev => prev ? {
+                    ...prev,
+                    total_transactions: (prev.total_transactions || 0) + 1
+                } : prev);
             }
-            setStatusRaw(prev => prev ? {
-                ...prev,
-                total_transactions: (prev.total_transactions || 0) + 1
-            } : prev);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lastMessage]);
