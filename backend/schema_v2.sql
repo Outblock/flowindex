@@ -333,6 +333,8 @@ ALTER TABLE IF EXISTS app.evm_transactions
   ADD COLUMN IF NOT EXISTS status_code INT;
 ALTER TABLE IF EXISTS app.evm_transactions
   ADD COLUMN IF NOT EXISTS status TEXT;
+UPDATE app.evm_transactions SET event_index = 0 WHERE event_index IS NULL;
+DELETE FROM app.evm_transactions WHERE evm_hash IS NULL;
 ALTER TABLE IF EXISTS app.evm_transactions
   DROP CONSTRAINT IF EXISTS evm_transactions_pkey;
 ALTER TABLE IF EXISTS app.evm_transactions
