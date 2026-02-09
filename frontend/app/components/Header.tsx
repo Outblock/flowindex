@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { Box, Search } from 'lucide-react';
 import { useWebSocketStatus } from '../hooks/useWebSocket';
 
@@ -8,21 +8,21 @@ function Header() {
   const navigate = useNavigate();
   const { isConnected } = useWebSocketStatus();
 
-  const handleSearch = (e) => {
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const query = searchQuery.trim();
     if (!query) return;
 
     if (/^\d+$/.test(query)) {
-      navigate(`/blocks/${query}`);
+      navigate({ to: '/blocks/$height', params: { height: query } });
     } else if (/^[a-fA-F0-9]{64}$/.test(query)) {
-      navigate(`/transactions/${query}`);
+      navigate({ to: '/transactions/$txId', params: { txId: query } });
     } else if (/^0x[a-fA-F0-9]{16}$/.test(query)) {
-      navigate(`/accounts/${query}`);
+      navigate({ to: '/accounts/$address', params: { address: query } });
     } else if (query.startsWith('0x')) {
-      navigate(`/accounts/${query}`);
+      navigate({ to: '/accounts/$address', params: { address: query } });
     } else {
-      navigate(`/transactions/${query}`);
+      navigate({ to: '/transactions/$txId', params: { txId: query } });
     }
     setSearchQuery('');
   };

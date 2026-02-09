@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '@tanstack/react-router';
 import { Home } from 'lucide-react';
 import GridScan from '../components/GridScan';
 

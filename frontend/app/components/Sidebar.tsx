@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useRouterState } from '@tanstack/react-router';
 import { Home, Box, ArrowRightLeft, Users, BarChart2, FileText, Layers, Activity, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Sidebar() {
-    const location = useLocation();
+    const routerState = useRouterState();
+    const location = routerState.location;
     const { theme, toggleTheme } = useTheme();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-    const isActive = (path) => {
+    const isActive = (path: string) => {
         if (path === '/') return location.pathname === '/';
         return location.pathname.startsWith(path);
     };
