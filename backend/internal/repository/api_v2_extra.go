@@ -29,6 +29,53 @@ type NFTOwnerCount struct {
 	Count int64
 }
 
+func (r *Repository) CountFTHoldingsByToken(ctx context.Context, contract, contractName string) (int64, error) {
+	var total int64
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM app.ft_holdings
+		WHERE contract_address = $1
+		  AND ($2 = '' OR contract_name = $2)
+		  AND balance > 0`, hexToBytes(contract), contractName).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *Repository) CountFTHoldingsByAddress(ctx context.Context, address string) (int64, error) {
+	var total int64
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM app.ft_holdings
+		WHERE address = $1`, hexToBytes(address)).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *Repository) CountNFTCollectionSummariesByOwner(ctx context.Context, owner string) (int64, error) {
+	var total int64
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT (contract_address, contract_name))
+		FROM app.nft_ownership
+		WHERE owner = $1`, hexToBytes(owner)).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *Repository) CountNFTOwnersByCollection(ctx context.Context, collection, contractName string) (int64, error) {
+	var total int64
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT owner)
+		FROM app.nft_ownership
+		WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)`,
+		hexToBytes(collection), contractName).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 type EVMTransactionRecord struct {
 	BlockHeight uint64
 	EVMHash     string

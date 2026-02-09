@@ -259,6 +259,15 @@ func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Requ
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total := int64(0)
+	if len(holdings) > 0 {
+		if t, err := s.repo.CountFTHoldingsByAddress(r.Context(), address); err == nil {
+			total = t
+		} else {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 	if len(holdings) == 0 {
 		contracts, err := s.repo.ListFTTokenContractsByAddress(r.Context(), address, limit, offset)
 		if err != nil {
@@ -273,12 +282,13 @@ func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Requ
 				Balance:         "0",
 			})
 		}
+		total = int64(len(holdings))
 	}
 	out := make([]map[string]interface{}, 0, len(holdings))
 	for _, h := range holdings {
 		out = append(out, toFTHoldingOutput(h, 0))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowAccountFTVaults(w http.ResponseWriter, r *http.Request) {
@@ -327,11 +337,16 @@ func (s *Server) handleFlowAccountNFTCollections(w http.ResponseWriter, r *http.
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := s.repo.CountNFTCollectionSummariesByOwner(r.Context(), address)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	out := make([]map[string]interface{}, 0, len(collections))
 	for _, c := range collections {
 		out = append(out, toNFTCollectionOutput(c))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowAccountFTToken(w http.ResponseWriter, r *http.Request) {

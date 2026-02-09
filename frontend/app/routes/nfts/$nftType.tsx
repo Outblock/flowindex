@@ -82,7 +82,7 @@ function NFTCollectionDetailInner() {
   const id = String(collection?.id || nftType);
   const addr = normalizeHex(collection?.address);
   const tokenCount = Number(collection?.number_of_tokens || 0);
-  const ownerCount = Number(collection?.owner_count || 0);
+  const ownerCount = Number(collection?.owner_count || ownersMeta?.count || 0);
 
   const ownersLimit = 25;
   const ownersOffset = (ownersPage - 1) * ownersLimit;

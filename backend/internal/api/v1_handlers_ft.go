@@ -75,11 +75,16 @@ func (s *Server) handleFlowFTHoldingsByToken(w http.ResponseWriter, r *http.Requ
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := s.repo.CountFTHoldingsByToken(r.Context(), tokenAddr, tokenName)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	out := make([]map[string]interface{}, 0, len(holdings))
 	for _, h := range holdings {
 		out = append(out, toFTHoldingOutput(h, 0))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowTopFTAccounts(w http.ResponseWriter, r *http.Request) {
@@ -90,11 +95,16 @@ func (s *Server) handleFlowTopFTAccounts(w http.ResponseWriter, r *http.Request)
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := s.repo.CountFTHoldingsByToken(r.Context(), tokenAddr, tokenName)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	out := make([]map[string]interface{}, 0, len(holdings))
 	for _, h := range holdings {
 		out = append(out, toFTHoldingOutput(h, 0))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
 
 func (s *Server) handleFlowAccountFTHoldingByToken(w http.ResponseWriter, r *http.Request) {
