@@ -146,6 +146,47 @@ func (r *Repository) UpsertSmartContracts(ctx context.Context, contracts []model
 	return nil
 }
 
+func (r *Repository) ListSmartContractsMissingCode(ctx context.Context, limit int) ([]models.SmartContract, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			encode(address, 'hex') AS address,
+			name,
+			COALESCE(last_updated_height, 0) AS last_updated_height
+		FROM app.smart_contracts
+		WHERE COALESCE(code, '') = ''
+		ORDER BY COALESCE(last_updated_height, 0) DESC, address ASC, name ASC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.SmartContract
+	for rows.Next() {
+		var c models.SmartContract
+		if err := rows.Scan(&c.Address, &c.Name, &c.BlockHeight); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repository) UpdateSmartContractCodeIfEmpty(ctx context.Context, address, name, code string) error {
+	if address == "" || name == "" || code == "" {
+		return nil
+	}
+	_, err := r.db.Exec(ctx, `
+		UPDATE app.smart_contracts
+		SET code = $3, updated_at = NOW()
+		WHERE address = $1 AND name = $2 AND COALESCE(code,'') = ''`,
+		hexToBytes(address), name, code)
+	return err
+}
+
 // UpsertContracts inserts/updates contract registry entries.
 func (r *Repository) UpsertContracts(ctx context.Context, rows []models.Contract) error {
 	if len(rows) == 0 {

@@ -75,6 +75,20 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 		return err
 	}
 
+	// Opportunistic backfill for existing rows that were created before we started persisting
+	// contract code. This is intentionally capped to avoid turning meta_worker into a crawler.
+	if w.storeContractCode && w.flow != nil {
+		perRange := 10
+		if v := strings.TrimSpace(os.Getenv("CONTRACT_CODE_BACKFILL_PER_RANGE")); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				perRange = n
+			}
+		}
+		if perRange > 0 {
+			_ = w.backfillMissingContractCode(ctx, perRange)
+		}
+	}
+
 	return nil
 }
 
@@ -275,6 +289,30 @@ func (w *MetaWorker) extractContracts(ctx context.Context, events []models.Event
 		})
 	}
 	return out
+}
+
+func (w *MetaWorker) backfillMissingContractCode(ctx context.Context, limit int) error {
+	missing, err := w.repo.ListSmartContractsMissingCode(ctx, limit)
+	if err != nil {
+		return err
+	}
+	for _, c := range missing {
+		if c.Address == "" || c.Name == "" || c.BlockHeight == 0 {
+			continue
+		}
+		acc, err := w.flow.GetAccountAtBlockHeight(ctx, flow.HexToAddress(c.Address), c.BlockHeight)
+		if err != nil || acc == nil {
+			continue
+		}
+		b := acc.Contracts[c.Name]
+		if len(b) == 0 {
+			continue
+		}
+		if err := w.repo.UpdateSmartContractCodeIfEmpty(ctx, c.Address, c.Name, string(b)); err != nil {
+			continue
+		}
+	}
+	return nil
 }
 
 func normalizeAddress(addr string) string {
