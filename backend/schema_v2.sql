@@ -285,6 +285,7 @@ CREATE TABLE IF NOT EXISTS app.token_transfers (
     internal_id             BIGSERIAL,
 
     token_contract_address  BYTEA,
+    contract_name           TEXT, -- Flow contract name (disambiguates multiple contracts per address)
     from_address            BYTEA,
     to_address              BYTEA,
     amount                  DECIMAL(78, 18),
@@ -303,23 +304,70 @@ CREATE INDEX IF NOT EXISTS idx_token_transfers_to    ON app.token_transfers(to_a
 CREATE INDEX IF NOT EXISTS idx_token_transfers_token ON app.token_transfers(token_contract_address);
 CREATE INDEX IF NOT EXISTS idx_token_transfers_nft_height ON app.token_transfers(is_nft, block_height DESC, event_index DESC);
 
+ALTER TABLE IF EXISTS app.token_transfers
+  ADD COLUMN IF NOT EXISTS contract_name TEXT;
+
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS event_index INT;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS transaction_index INT;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS nonce BIGINT;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS gas_limit BIGINT;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS gas_used BIGINT;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS gas_price NUMERIC;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS gas_fee_cap NUMERIC;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS gas_tip_cap NUMERIC;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS value NUMERIC;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS tx_type INT;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS chain_id NUMERIC;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS status_code INT;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE IF EXISTS app.evm_transactions
+  DROP CONSTRAINT IF EXISTS evm_transactions_pkey;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD CONSTRAINT evm_transactions_pkey PRIMARY KEY (block_height, transaction_id, event_index, evm_hash);
+
 -- 4.2 EVM transactions/logs (10M partitions)
 CREATE TABLE IF NOT EXISTS app.evm_transactions (
     block_height      BIGINT NOT NULL,
     transaction_id    BYTEA NOT NULL,
-    evm_hash          BYTEA,
+    evm_hash          BYTEA NOT NULL,
+    event_index       INT NOT NULL,
+    transaction_index INT,
     from_address      BYTEA,
     to_address        BYTEA,
-
+    nonce             BIGINT,
+    gas_limit         BIGINT,
+    gas_used          BIGINT,
+    gas_price         NUMERIC,
+    gas_fee_cap       NUMERIC,
+    gas_tip_cap       NUMERIC,
+    value             NUMERIC,
+    tx_type           INT,
+    chain_id          NUMERIC,
     data              TEXT,
     logs              JSONB,                -- can be huge; consider splitting logs to separate table if needed
+    status_code       INT,
+    status            TEXT,
     timestamp         TIMESTAMPTZ NOT NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    PRIMARY KEY (block_height, transaction_id)
+    PRIMARY KEY (block_height, transaction_id, event_index, evm_hash)
 ) PARTITION BY RANGE (block_height);
 
 CREATE INDEX IF NOT EXISTS idx_evm_hash ON app.evm_transactions(evm_hash);
+CREATE INDEX IF NOT EXISTS idx_evm_transactions_tx ON app.evm_transactions(transaction_id);
 
 -- 4.3 EVM tx hash mapping (supports multiple EVM hashes per Cadence tx)
 CREATE TABLE IF NOT EXISTS app.evm_tx_hashes (
@@ -464,11 +512,13 @@ CREATE INDEX IF NOT EXISTS idx_accounts_last_seen
   ON app.accounts (last_seen_height DESC);
 
 CREATE TABLE IF NOT EXISTS app.ft_tokens (
-    contract_address BYTEA PRIMARY KEY,
+    contract_address BYTEA NOT NULL,
+    contract_name    TEXT NOT NULL DEFAULT '',
     name             TEXT,
     symbol           TEXT,
     decimals         INT,
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (contract_address, contract_name)
 );
 
 CREATE TABLE IF NOT EXISTS app.coa_accounts (
@@ -484,31 +534,63 @@ CREATE INDEX IF NOT EXISTS idx_coa_accounts_flow ON app.coa_accounts (flow_addre
 CREATE TABLE IF NOT EXISTS app.ft_holdings (
     address          BYTEA NOT NULL,
     contract_address BYTEA NOT NULL,
+    contract_name    TEXT NOT NULL DEFAULT '',
     balance          NUMERIC(78, 18) NOT NULL DEFAULT 0,
     last_height      BIGINT,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (address, contract_address)
+    PRIMARY KEY (address, contract_address, contract_name)
 );
 CREATE INDEX IF NOT EXISTS idx_ft_holdings_address
   ON app.ft_holdings (address);
 
 CREATE TABLE IF NOT EXISTS app.nft_collections (
-    contract_address BYTEA PRIMARY KEY,
+    contract_address BYTEA NOT NULL,
+    contract_name    TEXT NOT NULL DEFAULT '',
     name             TEXT,
     symbol           TEXT,
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (contract_address, contract_name)
 );
 
 CREATE TABLE IF NOT EXISTS app.nft_ownership (
     contract_address BYTEA NOT NULL,
+    contract_name    TEXT NOT NULL DEFAULT '',
     nft_id           VARCHAR(255) NOT NULL,
     owner            BYTEA,
     last_height      BIGINT,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (contract_address, nft_id)
+    PRIMARY KEY (contract_address, contract_name, nft_id)
 );
 CREATE INDEX IF NOT EXISTS idx_nft_ownership_owner
   ON app.nft_ownership (owner);
+
+ALTER TABLE IF EXISTS app.ft_tokens
+  ADD COLUMN IF NOT EXISTS contract_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE IF EXISTS app.ft_tokens
+  DROP CONSTRAINT IF EXISTS ft_tokens_pkey;
+ALTER TABLE IF EXISTS app.ft_tokens
+  ADD CONSTRAINT ft_tokens_pkey PRIMARY KEY (contract_address, contract_name);
+
+ALTER TABLE IF EXISTS app.ft_holdings
+  ADD COLUMN IF NOT EXISTS contract_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE IF EXISTS app.ft_holdings
+  DROP CONSTRAINT IF EXISTS ft_holdings_pkey;
+ALTER TABLE IF EXISTS app.ft_holdings
+  ADD CONSTRAINT ft_holdings_pkey PRIMARY KEY (address, contract_address, contract_name);
+
+ALTER TABLE IF EXISTS app.nft_collections
+  ADD COLUMN IF NOT EXISTS contract_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE IF EXISTS app.nft_collections
+  DROP CONSTRAINT IF EXISTS nft_collections_pkey;
+ALTER TABLE IF EXISTS app.nft_collections
+  ADD CONSTRAINT nft_collections_pkey PRIMARY KEY (contract_address, contract_name);
+
+ALTER TABLE IF EXISTS app.nft_ownership
+  ADD COLUMN IF NOT EXISTS contract_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE IF EXISTS app.nft_ownership
+  DROP CONSTRAINT IF EXISTS nft_ownership_pkey;
+ALTER TABLE IF EXISTS app.nft_ownership
+  ADD CONSTRAINT nft_ownership_pkey PRIMARY KEY (contract_address, contract_name, nft_id);
 
 CREATE TABLE IF NOT EXISTS app.tx_contracts (
     transaction_id      BYTEA NOT NULL,

@@ -200,6 +200,11 @@ func normalizeTokenParam(token string) string {
 	return address
 }
 
+func parseTokenParam(token string) (address, name string) {
+	address, name, _ = splitContractIdentifier(token)
+	return address, name
+}
+
 func toFlowBlockOutput(b models.Block) map[string]interface{} {
 	return map[string]interface{}{
 		"id":                 b.ID,
@@ -251,10 +256,21 @@ func toFlowTransactionOutput(t models.Transaction, events []models.Event, contra
 }
 
 func toFTListOutput(token models.FTToken) map[string]interface{} {
-	address, name, identifier := splitContractIdentifier(token.ContractAddress)
+	address := token.ContractAddress
+	name := token.ContractName
+	if address == "" || name == "" {
+		addr, nm, _ := splitContractIdentifier(token.ContractAddress)
+		if address == "" {
+			address = addr
+		}
+		if name == "" {
+			name = nm
+		}
+	}
 	if name == "" {
 		name = token.Name
 	}
+	identifier := formatTokenIdentifier(address, name)
 	return map[string]interface{}{
 		"id":            identifier,
 		"address":       formatAddressV1(address),
@@ -268,7 +284,7 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 }
 
 func toFTHoldingOutput(holding models.FTHolding, percentage float64) map[string]interface{} {
-	tokenIdentifier := holding.ContractAddress
+	tokenIdentifier := formatTokenIdentifier(holding.ContractAddress, holding.ContractName)
 	return map[string]interface{}{
 		"address":    formatAddressV1(holding.Address),
 		"token":      tokenIdentifier,
@@ -279,10 +295,10 @@ func toFTHoldingOutput(holding models.FTHolding, percentage float64) map[string]
 
 func toVaultOutput(holding models.FTHolding) map[string]interface{} {
 	return map[string]interface{}{
-		"id":           holding.Address + ":" + holding.ContractAddress,
+		"id":           holding.Address + ":" + formatTokenIdentifier(holding.ContractAddress, holding.ContractName),
 		"vault_id":     0,
 		"address":      formatAddressV1(holding.Address),
-		"token":        holding.ContractAddress,
+		"token":        formatTokenIdentifier(holding.ContractAddress, holding.ContractName),
 		"balance":      parseFloatOrZero(holding.Balance),
 		"block_height": holding.LastHeight,
 		"path":         "",
@@ -290,10 +306,21 @@ func toVaultOutput(holding models.FTHolding) map[string]interface{} {
 }
 
 func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]interface{} {
-	address, name, identifier := splitContractIdentifier(summary.ContractAddress)
+	address := summary.ContractAddress
+	name := summary.ContractName
+	if address == "" || name == "" {
+		addr, nm, _ := splitContractIdentifier(summary.ContractAddress)
+		if address == "" {
+			address = addr
+		}
+		if name == "" {
+			name = nm
+		}
+	}
 	if name == "" {
 		name = summary.Name
 	}
+	identifier := formatTokenIdentifier(address, name)
 	return map[string]interface{}{
 		"id":               identifier,
 		"address":          formatAddressV1(address),
@@ -405,20 +432,32 @@ func cadenceToUint64(val cadence.Value) uint64 {
 }
 
 func toEVMTransactionOutput(rec repository.EVMTransactionRecord) map[string]interface{} {
+	gasPrice := rec.GasPrice
+	if gasPrice == "" {
+		gasPrice = "0"
+	}
+	value := rec.Value
+	if value == "" {
+		value = "0"
+	}
+	status := rec.Status
+	if status == "" {
+		status = "SEALED"
+	}
 	return map[string]interface{}{
 		"block_number": rec.BlockHeight,
 		"hash":         rec.EVMHash,
 		"from":         rec.FromAddress,
 		"to":           rec.ToAddress,
 		"timestamp":    formatTime(rec.Timestamp),
-		"status":       "SEALED",
-		"gas_used":     "0",
-		"gas_limit":    "0",
-		"gas_price":    "0",
-		"value":        "0",
-		"type":         0,
-		"position":     0,
-		"nonce":        0,
+		"status":       status,
+		"gas_used":     strconv.FormatUint(rec.GasUsed, 10),
+		"gas_limit":    strconv.FormatUint(rec.GasLimit, 10),
+		"gas_price":    gasPrice,
+		"value":        value,
+		"type":         rec.TxType,
+		"position":     rec.Position,
+		"nonce":        rec.Nonce,
 	}
 }
 

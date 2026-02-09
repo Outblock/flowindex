@@ -1,20 +1,41 @@
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../api';
-import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
-import { Pagination } from '../components/Pagination';
-import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
-import { useTimeTicker } from '../hooks/useTimeTicker';
+import { api } from '../../api';
+import { useWebSocketMessages, useWebSocketStatus } from '../../hooks/useWebSocket';
+import { Pagination } from '../../components/Pagination';
+import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
+import { useTimeTicker } from '../../hooks/useTimeTicker';
 
-export default function Blocks() {
-    const [blocks, setBlocks] = useState<any[]>([]);
-    const [statusRaw, setStatusRaw] = useState<any>(null);
-    const [blockPage, setBlockPage] = useState(1);
+// Loader to fetch initial blocks and status
+export const Route = createFileRoute('/blocks/')({
+    component: Blocks,
+    loader: async ({ location }) => {
+        const page = Number(new URLSearchParams(location.search).get('page') || '1');
+        // Note: For pagination to work optimally with SSR, we might need to adjust the API or use a search param for cursor
+        // For now, we load the first page's data.
+        try {
+            const [blocksRes, statusRes] = await Promise.all([
+                api.getBlocks('', 20),
+                api.getStatus()
+            ]);
+            return { blocksRes, statusRes, page };
+        } catch (e) {
+            console.error("Failed to load blocks data", e);
+            return { blocksRes: [], statusRes: null, page: 1 };
+        }
+    }
+})
+
+function Blocks() {
+    const { blocksRes, statusRes, page } = Route.useLoaderData();
+    const [blocks, setBlocks] = useState<any[]>(blocksRes?.items ?? (Array.isArray(blocksRes) ? blocksRes : []) || []);
+    const [statusRaw, setStatusRaw] = useState<any>(statusRes);
+    const [blockPage, setBlockPage] = useState(page);
     const [blockCursors, setBlockCursors] = useState({ 1: '' });
-    const [blockHasNext, setBlockHasNext] = useState(false);
+    const [blockHasNext, setBlockHasNext] = useState(Boolean(blocksRes?.next_cursor));
     const [newBlockIds, setNewBlockIds] = useState(new Set());
 
     const { isConnected } = useWebSocketStatus();
@@ -114,7 +135,7 @@ export default function Blocks() {
         }
     }, [lastMessage, blockPage]);
 
-    // Initial Load
+    // Initial Load - handled by loader, but we keep status refresh
     useEffect(() => {
         const refreshStatus = async () => {
             try {
@@ -125,8 +146,10 @@ export default function Blocks() {
             }
         };
 
-        loadBlocks(1);
-        refreshStatus();
+        // loadBlocks(1); // Already loaded by loader
+        if (blocksRes && blocksRes.next_cursor) {
+            setBlockCursors(prev => ({ ...prev, 2: blocksRes.next_cursor }));
+        }
 
         const statusTimer = setInterval(refreshStatus, 10000);
         return () => clearInterval(statusTimer);

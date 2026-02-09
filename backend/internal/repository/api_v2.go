@@ -133,14 +133,14 @@ func (r *Repository) UpsertFTTokens(ctx context.Context, tokens []models.FTToken
 	batch := &pgx.Batch{}
 	for _, t := range tokens {
 		batch.Queue(`
-			INSERT INTO app.ft_tokens (contract_address, name, symbol, decimals, updated_at)
-			VALUES ($1, $2, $3, $4, NOW())
-			ON CONFLICT (contract_address) DO UPDATE SET
+			INSERT INTO app.ft_tokens (contract_address, contract_name, name, symbol, decimals, updated_at)
+			VALUES ($1, $2, $3, $4, $5, NOW())
+			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, app.ft_tokens.name),
 				symbol = COALESCE(EXCLUDED.symbol, app.ft_tokens.symbol),
 				decimals = COALESCE(EXCLUDED.decimals, app.ft_tokens.decimals),
 				updated_at = NOW()`,
-			hexToBytes(t.ContractAddress), t.Name, t.Symbol, t.Decimals)
+			hexToBytes(t.ContractAddress), t.ContractName, t.Name, t.Symbol, t.Decimals)
 	}
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()
@@ -152,24 +152,25 @@ func (r *Repository) UpsertFTTokens(ctx context.Context, tokens []models.FTToken
 	return nil
 }
 
-func (r *Repository) UpsertFTHoldingsDelta(ctx context.Context, address, contract string, delta string, height uint64) error {
+func (r *Repository) UpsertFTHoldingsDelta(ctx context.Context, address, contract, contractName string, delta string, height uint64) error {
 	_, err := r.db.Exec(ctx, `
-		INSERT INTO app.ft_holdings (address, contract_address, balance, last_height, updated_at)
-		VALUES ($1, $2, $3::numeric, $4, NOW())
-		ON CONFLICT (address, contract_address) DO UPDATE SET
+		INSERT INTO app.ft_holdings (address, contract_address, contract_name, balance, last_height, updated_at)
+		VALUES ($1, $2, $3, $4::numeric, $5, NOW())
+		ON CONFLICT (address, contract_address, contract_name) DO UPDATE SET
 			balance = app.ft_holdings.balance + EXCLUDED.balance,
 			last_height = GREATEST(app.ft_holdings.last_height, EXCLUDED.last_height),
 			updated_at = NOW()`,
-		hexToBytes(address), hexToBytes(contract), delta, height)
+		hexToBytes(address), hexToBytes(contract), contractName, delta, height)
 	return err
 }
 
 func (r *Repository) ListFTHoldingsByAddress(ctx context.Context, address string, limit, offset int) ([]models.FTHolding, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(address, 'hex') AS address, encode(contract_address, 'hex') AS contract_address, balance::text, COALESCE(last_height,0), updated_at
+		SELECT encode(address, 'hex') AS address, encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name, '') AS contract_name,
+		       balance::text, COALESCE(last_height,0), updated_at
 		FROM app.ft_holdings
 		WHERE address = $1
-		ORDER BY contract_address ASC
+		ORDER BY contract_address ASC, contract_name ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
 	if err != nil {
 		return nil, err
@@ -178,7 +179,7 @@ func (r *Repository) ListFTHoldingsByAddress(ctx context.Context, address string
 	var out []models.FTHolding
 	for rows.Next() {
 		var h models.FTHolding
-		if err := rows.Scan(&h.Address, &h.ContractAddress, &h.Balance, &h.LastHeight, &h.UpdatedAt); err != nil {
+		if err := rows.Scan(&h.Address, &h.ContractAddress, &h.ContractName, &h.Balance, &h.LastHeight, &h.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, h)
@@ -186,13 +187,14 @@ func (r *Repository) ListFTHoldingsByAddress(ctx context.Context, address string
 	return out, nil
 }
 
-func (r *Repository) ListFTHoldingsByToken(ctx context.Context, contract string, limit, offset int) ([]models.FTHolding, error) {
+func (r *Repository) ListFTHoldingsByToken(ctx context.Context, contract, contractName string, limit, offset int) ([]models.FTHolding, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(address, 'hex') AS address, encode(contract_address, 'hex') AS contract_address, balance::text, COALESCE(last_height,0), updated_at
+		SELECT encode(address, 'hex') AS address, encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name, '') AS contract_name,
+		       balance::text, COALESCE(last_height,0), updated_at
 		FROM app.ft_holdings
-		WHERE contract_address = $1
-		ORDER BY balance DESC
-		LIMIT $2 OFFSET $3`, hexToBytes(contract), limit, offset)
+		WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)
+		ORDER BY balance DESC, contract_name ASC
+		LIMIT $3 OFFSET $4`, hexToBytes(contract), contractName, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +202,7 @@ func (r *Repository) ListFTHoldingsByToken(ctx context.Context, contract string,
 	var out []models.FTHolding
 	for rows.Next() {
 		var h models.FTHolding
-		if err := rows.Scan(&h.Address, &h.ContractAddress, &h.Balance, &h.LastHeight, &h.UpdatedAt); err != nil {
+		if err := rows.Scan(&h.Address, &h.ContractAddress, &h.ContractName, &h.Balance, &h.LastHeight, &h.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, h)
@@ -210,9 +212,9 @@ func (r *Repository) ListFTHoldingsByToken(ctx context.Context, contract string,
 
 func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]models.FTToken, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0), updated_at
+		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0), updated_at
 		FROM app.ft_tokens
-		ORDER BY contract_address ASC
+		ORDER BY contract_address ASC, contract_name ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, err
@@ -221,7 +223,7 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 	var out []models.FTToken
 	for rows.Next() {
 		var t models.FTToken
-		if err := rows.Scan(&t.ContractAddress, &t.Name, &t.Symbol, &t.Decimals, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -229,12 +231,27 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 	return out, nil
 }
 
-func (r *Repository) GetFTToken(ctx context.Context, contract string) (*models.FTToken, error) {
+func (r *Repository) GetFTToken(ctx context.Context, contract, contractName string) (*models.FTToken, error) {
 	var t models.FTToken
+	if contractName == "" {
+		err := r.db.QueryRow(ctx, `
+			SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0), updated_at
+			FROM app.ft_tokens
+			WHERE contract_address = $1`, hexToBytes(contract)).
+			Scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals, &t.UpdatedAt)
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return &t, nil
+	}
 	err := r.db.QueryRow(ctx, `
-		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0), updated_at
+		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0), updated_at
 		FROM app.ft_tokens
-		WHERE contract_address = $1`, hexToBytes(contract)).Scan(&t.ContractAddress, &t.Name, &t.Symbol, &t.Decimals, &t.UpdatedAt)
+		WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(contract), contractName).
+		Scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals, &t.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -253,13 +270,13 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 	batch := &pgx.Batch{}
 	for _, c := range collections {
 		batch.Queue(`
-			INSERT INTO app.nft_collections (contract_address, name, symbol, updated_at)
-			VALUES ($1, $2, $3, NOW())
-			ON CONFLICT (contract_address) DO UPDATE SET
+			INSERT INTO app.nft_collections (contract_address, contract_name, name, symbol, updated_at)
+			VALUES ($1, $2, $3, $4, NOW())
+			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, app.nft_collections.name),
 				symbol = COALESCE(EXCLUDED.symbol, app.nft_collections.symbol),
 				updated_at = NOW()`,
-			hexToBytes(c.ContractAddress), c.Name, c.Symbol)
+			hexToBytes(c.ContractAddress), c.ContractName, c.Name, c.Symbol)
 	}
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()
@@ -273,22 +290,23 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 
 func (r *Repository) UpsertNFTOwnership(ctx context.Context, ownership models.NFTOwnership) error {
 	_, err := r.db.Exec(ctx, `
-		INSERT INTO app.nft_ownership (contract_address, nft_id, owner, last_height, updated_at)
-		VALUES ($1, $2, $3, $4, NOW())
-		ON CONFLICT (contract_address, nft_id) DO UPDATE SET
+		INSERT INTO app.nft_ownership (contract_address, contract_name, nft_id, owner, last_height, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW())
+		ON CONFLICT (contract_address, contract_name, nft_id) DO UPDATE SET
 			owner = EXCLUDED.owner,
 			last_height = GREATEST(app.nft_ownership.last_height, EXCLUDED.last_height),
 			updated_at = NOW()`,
-		hexToBytes(ownership.ContractAddress), ownership.NFTID, nullIfEmptyBytes(hexToBytes(ownership.Owner)), ownership.LastHeight)
+		hexToBytes(ownership.ContractAddress), ownership.ContractName, ownership.NFTID, nullIfEmptyBytes(hexToBytes(ownership.Owner)), ownership.LastHeight)
 	return err
 }
 
 func (r *Repository) ListNFTOwnershipByAddress(ctx context.Context, address string, limit, offset int) ([]models.NFTOwnership, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(contract_address, 'hex') AS contract_address, nft_id, COALESCE(encode(owner, 'hex'), '') AS owner, COALESCE(last_height,0), updated_at
+		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name, '') AS contract_name, nft_id,
+		       COALESCE(encode(owner, 'hex'), '') AS owner, COALESCE(last_height,0), updated_at
 		FROM app.nft_ownership
 		WHERE owner = $1
-		ORDER BY contract_address ASC, nft_id ASC
+		ORDER BY contract_address ASC, contract_name ASC, nft_id ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
 	if err != nil {
 		return nil, err
@@ -297,7 +315,7 @@ func (r *Repository) ListNFTOwnershipByAddress(ctx context.Context, address stri
 	var out []models.NFTOwnership
 	for rows.Next() {
 		var o models.NFTOwnership
-		if err := rows.Scan(&o.ContractAddress, &o.NFTID, &o.Owner, &o.LastHeight, &o.UpdatedAt); err != nil {
+		if err := rows.Scan(&o.ContractAddress, &o.ContractName, &o.NFTID, &o.Owner, &o.LastHeight, &o.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, o)
@@ -307,12 +325,12 @@ func (r *Repository) ListNFTOwnershipByAddress(ctx context.Context, address stri
 
 func (r *Repository) ListNFTOwnershipByCollection(ctx context.Context, collection string, limit, offset int) ([]models.NFTOwnership, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(contract_address, 'hex') AS contract_address, nft_id,
+		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name, '') AS contract_name, nft_id,
 		       COALESCE(encode(owner, 'hex'), '') AS owner,
 		       COALESCE(last_height,0), updated_at
 		FROM app.nft_ownership
 		WHERE contract_address = $1
-		ORDER BY nft_id ASC
+		ORDER BY contract_name ASC, nft_id ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(collection), limit, offset)
 	if err != nil {
 		return nil, err
@@ -321,7 +339,7 @@ func (r *Repository) ListNFTOwnershipByCollection(ctx context.Context, collectio
 	var out []models.NFTOwnership
 	for rows.Next() {
 		var o models.NFTOwnership
-		if err := rows.Scan(&o.ContractAddress, &o.NFTID, &o.Owner, &o.LastHeight, &o.UpdatedAt); err != nil {
+		if err := rows.Scan(&o.ContractAddress, &o.ContractName, &o.NFTID, &o.Owner, &o.LastHeight, &o.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, o)
@@ -329,14 +347,16 @@ func (r *Repository) ListNFTOwnershipByCollection(ctx context.Context, collectio
 	return out, nil
 }
 
-func (r *Repository) GetNFTOwnership(ctx context.Context, collection, nftID string) (*models.NFTOwnership, error) {
+func (r *Repository) GetNFTOwnership(ctx context.Context, collection, contractName, nftID string) (*models.NFTOwnership, error) {
 	var o models.NFTOwnership
 	err := r.db.QueryRow(ctx, `
-		SELECT encode(contract_address, 'hex') AS contract_address, nft_id,
+		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name, '') AS contract_name, nft_id,
 		       COALESCE(encode(owner, 'hex'), '') AS owner,
 		       COALESCE(last_height,0), updated_at
 		FROM app.nft_ownership
-		WHERE contract_address = $1 AND nft_id = $2`, hexToBytes(collection), nftID).Scan(&o.ContractAddress, &o.NFTID, &o.Owner, &o.LastHeight, &o.UpdatedAt)
+		WHERE contract_address = $1 AND nft_id = $2 AND ($3 = '' OR contract_name = $3)`,
+		hexToBytes(collection), nftID, contractName).
+		Scan(&o.ContractAddress, &o.ContractName, &o.NFTID, &o.Owner, &o.LastHeight, &o.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -348,9 +368,9 @@ func (r *Repository) GetNFTOwnership(ctx context.Context, collection, nftID stri
 
 func (r *Repository) ListNFTCollections(ctx context.Context, limit, offset int) ([]models.NFTCollection, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(name,''), COALESCE(symbol,''), updated_at
+		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), updated_at
 		FROM app.nft_collections
-		ORDER BY contract_address ASC
+		ORDER BY contract_address ASC, contract_name ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, err
@@ -359,7 +379,7 @@ func (r *Repository) ListNFTCollections(ctx context.Context, limit, offset int) 
 	var out []models.NFTCollection
 	for rows.Next() {
 		var c models.NFTCollection
-		if err := rows.Scan(&c.ContractAddress, &c.Name, &c.Symbol, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.ContractAddress, &c.ContractName, &c.Name, &c.Symbol, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -367,12 +387,14 @@ func (r *Repository) ListNFTCollections(ctx context.Context, limit, offset int) 
 	return out, nil
 }
 
-func (r *Repository) GetNFTCollection(ctx context.Context, contract string) (*models.NFTCollection, error) {
+func (r *Repository) GetNFTCollection(ctx context.Context, contract, contractName string) (*models.NFTCollection, error) {
 	var c models.NFTCollection
 	err := r.db.QueryRow(ctx, `
-		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(name,''), COALESCE(symbol,''), updated_at
+		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), updated_at
 		FROM app.nft_collections
-		WHERE contract_address = $1`, hexToBytes(contract)).Scan(&c.ContractAddress, &c.Name, &c.Symbol, &c.UpdatedAt)
+		WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)`,
+		hexToBytes(contract), contractName).
+		Scan(&c.ContractAddress, &c.ContractName, &c.Name, &c.Symbol, &c.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}

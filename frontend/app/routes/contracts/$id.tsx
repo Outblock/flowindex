@@ -1,90 +1,80 @@
-
-import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { api } from '../api';
-import { ArrowLeft, Box, CheckCircle, Code, Copy, ExternalLink, FileText, Layers } from 'lucide-react';
-import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
-import { useTimeTicker } from '../hooks/useTimeTicker';
-import { CopyToClipboard } from 'react-copy-to-clipboard';
-import { toast } from 'react-hot-toast';
-
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { useState, useEffect } from 'react';
+import { api } from '../../api';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { ArrowLeft, Box, CheckCircle, Code, Copy, ExternalLink, FileText, Layers } from 'lucide-react';
+import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
+import { useTimeTicker } from '../../hooks/useTimeTicker';
+import { CopyToClipboard } from 'react-copy-to-clipboard';
+import { toast } from 'react-hot-toast';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
+export const Route = createFileRoute('/contracts/$id')({
+    component: ContractDetail,
+    loader: async ({ params }) => {
+        try {
+            const id = params.id;
+            // 1. Fetch contract metadata
+            const listRes = await api.listFlowContracts(1, 0, { identifier: id });
+            const meta = listRes?.data?.[0];
+
+            if (!meta) {
+                return { contract: null, code: null, error: 'Contract not found' };
+            }
+
+            // 2. Fetch contract code
+            let code = '// Source code not available';
+            const address = meta.address;
+            let name = meta.name;
+
+            if (!name && meta.identifier) {
+                const parts = meta.identifier.split('.');
+                if (parts.length >= 3) {
+                    name = parts[2];
+                }
+            }
+
+            if (address && name) {
+                try {
+                    const codeRes = await api.getAccountContractCode(address, name);
+                    code = codeRes?.code || code;
+                } catch (e) {
+                    console.warn('Failed to fetch code', e);
+                }
+            }
+
+            return { contract: meta, code, error: null };
+
+        } catch (e) {
+            console.error("Failed to load contract data", e);
+            return { contract: null, code: null, error: 'Failed to load contract details' };
+        }
+    }
+})
+
 function ContractDetail() {
-    const { id } = useParams();
-    const [contract, setContract] = useState<any>(null);
-    const [code, setCode] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<any>(null);
+    const { id } = Route.useParams();
+    const { contract: initialContract, code: initialCode, error: initialError } = Route.useLoaderData();
+
+    const [contract, setContract] = useState<any>(initialContract);
+    const [code, setCode] = useState(initialCode);
+    const [error, setError] = useState<any>(initialError);
+    // const [loading, setLoading] = useState(true); // handled by loader
     const nowTick = useTimeTicker(20000);
 
     useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                // 1. Fetch contract metadata
-                const listRes = await api.listFlowContracts(1, 0, { identifier: id });
-                const meta = listRes?.data?.[0];
+        if (!initialContract && !initialError) {
+            setError('Contract not found');
+        } else {
+            setContract(initialContract);
+            setCode(initialCode);
+            setError(initialError);
+        }
+    }, [initialContract, initialCode, initialError]);
 
-                if (!meta) {
-                    setError('Contract not found');
-                    setLoading(false);
-                    return;
-                }
-                setContract(meta);
-
-                // 2. Fetch contract code
-                // Identifier format: A.address.Name
-                // We need address and name.
-                // Or meta.address and meta.name (if available)
-                // meta has: address, name, identifier
-
-                // If meta doesn't have name field separate, parse identifier
-                const address = meta.address;
-                let name = meta.name;
-
-                if (!name && meta.identifier) {
-                    const parts = meta.identifier.split('.');
-                    if (parts.length >= 3) {
-                        name = parts[2];
-                    }
-                }
-
-                if (address && name) {
-                    try {
-                        const codeRes = await api.getAccountContractCode(address, name);
-                        setCode(codeRes?.code || '');
-                    } catch (e) {
-                        console.warn('Failed to fetch code', e);
-                        setCode('// Source code not available');
-                    }
-                }
-
-            } catch (err) {
-                console.error('Failed to load contract:', err);
-                setError('Failed to load contract details');
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, [id]);
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center font-mono transition-colors duration-300">
-                <div className="flex flex-col items-center space-y-4">
-                    <div className="w-16 h-16 border-2 border-dashed border-zinc-300 dark:border-zinc-800 border-t-nothing-green-dark dark:border-t-nothing-green rounded-full animate-spin"></div>
-                    <p className="text-nothing-green-dark dark:text-nothing-green text-xs uppercase tracking-[0.2em] animate-pulse">Loading Contract...</p>
-                </div>
-            </div>
-        );
-    }
 
     if (error || !contract) {
         return (
@@ -240,5 +230,3 @@ function ContractDetail() {
         </div>
     );
 }
-
-export default ContractDetail;

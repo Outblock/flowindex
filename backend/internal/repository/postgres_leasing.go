@@ -234,12 +234,13 @@ func (r *Repository) UpsertTokenTransfers(ctx context.Context, transfers []model
 		batch.Queue(`
 			INSERT INTO app.token_transfers (
 				block_height, transaction_id, event_index,
-				token_contract_address, from_address, to_address,
+				token_contract_address, contract_name, from_address, to_address,
 				amount, token_id, is_nft, timestamp, created_at
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
 			ON CONFLICT (block_height, transaction_id, event_index) DO UPDATE SET
 				token_contract_address = EXCLUDED.token_contract_address,
+				contract_name = COALESCE(NULLIF(EXCLUDED.contract_name, ''), app.token_transfers.contract_name),
 				from_address = EXCLUDED.from_address,
 				to_address = EXCLUDED.to_address,
 				amount = EXCLUDED.amount,
@@ -247,7 +248,7 @@ func (r *Repository) UpsertTokenTransfers(ctx context.Context, transfers []model
 				is_nft = EXCLUDED.is_nft,
 				updated_at = NOW()`,
 			t.BlockHeight, hexToBytes(t.TransactionID), t.EventIndex,
-			hexToBytes(t.TokenContractAddress), hexToBytes(t.FromAddress), hexToBytes(t.ToAddress),
+			hexToBytes(t.TokenContractAddress), t.ContractName, hexToBytes(t.FromAddress), hexToBytes(t.ToAddress),
 			t.Amount, t.TokenID, t.IsNFT, t.Timestamp,
 		)
 	}

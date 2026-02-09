@@ -215,37 +215,96 @@ func (r *Repository) UpsertEVMTxHashes(ctx context.Context, rows []models.EVMTxH
 		}
 	}
 
-	type txKey struct {
-		blockHeight uint64
-		transaction string
-	}
-	firstByTx := make(map[txKey]models.EVMTxHash)
-	for _, row := range rows {
-		key := txKey{blockHeight: row.BlockHeight, transaction: row.TransactionID}
-		existing, ok := firstByTx[key]
-		if !ok || row.EventIndex < existing.EventIndex {
-			firstByTx[key] = row
-		}
-	}
-
 	summaryBatch := &pgx.Batch{}
-	for _, row := range firstByTx {
+	for _, row := range rows {
 		ts := row.Timestamp
 		if ts.IsZero() {
 			ts = now
 		}
+		fromAddr := nullIfEmptyBytes(hexToBytes(row.FromAddress))
+		toAddr := nullIfEmptyBytes(hexToBytes(row.ToAddress))
+		var dataVal interface{}
+		if row.Data != "" {
+			dataVal = row.Data
+		}
+		var logsVal interface{}
+		if row.Logs != "" {
+			logsVal = row.Logs
+		}
+		var gasPriceVal interface{}
+		if row.GasPrice != "" {
+			gasPriceVal = row.GasPrice
+		}
+		var gasFeeCapVal interface{}
+		if row.GasFeeCap != "" {
+			gasFeeCapVal = row.GasFeeCap
+		}
+		var gasTipCapVal interface{}
+		if row.GasTipCap != "" {
+			gasTipCapVal = row.GasTipCap
+		}
+		var valueVal interface{}
+		if row.Value != "" {
+			valueVal = row.Value
+		}
+		var chainIDVal interface{}
+		if row.ChainID != "" {
+			chainIDVal = row.ChainID
+		}
+		var statusVal interface{}
+		if row.Status != "" {
+			statusVal = row.Status
+		}
 		summaryBatch.Queue(`
 			INSERT INTO app.evm_transactions (
-				block_height, transaction_id, evm_hash,
+				block_height, transaction_id, evm_hash, event_index, transaction_index,
+				from_address, to_address, nonce, gas_limit, gas_used,
+				gas_price, gas_fee_cap, gas_tip_cap, value, tx_type, chain_id,
+				data, logs, status_code, status,
 				timestamp, created_at
 			)
-			VALUES ($1, $2, $3, $4, NOW())
-			ON CONFLICT (block_height, transaction_id) DO UPDATE SET
-				evm_hash = COALESCE(app.evm_transactions.evm_hash, EXCLUDED.evm_hash),
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+			        $11, $12, $13, $14, $15, $16,
+			        $17, $18, $19, $20,
+			        $21, NOW())
+			ON CONFLICT (block_height, transaction_id, event_index, evm_hash) DO UPDATE SET
+				from_address = COALESCE(app.evm_transactions.from_address, EXCLUDED.from_address),
+				to_address = COALESCE(app.evm_transactions.to_address, EXCLUDED.to_address),
+				nonce = COALESCE(app.evm_transactions.nonce, EXCLUDED.nonce),
+				gas_limit = COALESCE(app.evm_transactions.gas_limit, EXCLUDED.gas_limit),
+				gas_used = COALESCE(app.evm_transactions.gas_used, EXCLUDED.gas_used),
+				gas_price = COALESCE(app.evm_transactions.gas_price, EXCLUDED.gas_price),
+				gas_fee_cap = COALESCE(app.evm_transactions.gas_fee_cap, EXCLUDED.gas_fee_cap),
+				gas_tip_cap = COALESCE(app.evm_transactions.gas_tip_cap, EXCLUDED.gas_tip_cap),
+				value = COALESCE(app.evm_transactions.value, EXCLUDED.value),
+				tx_type = COALESCE(app.evm_transactions.tx_type, EXCLUDED.tx_type),
+				chain_id = COALESCE(app.evm_transactions.chain_id, EXCLUDED.chain_id),
+				data = COALESCE(app.evm_transactions.data, EXCLUDED.data),
+				logs = COALESCE(app.evm_transactions.logs, EXCLUDED.logs),
+				status_code = COALESCE(app.evm_transactions.status_code, EXCLUDED.status_code),
+				status = COALESCE(app.evm_transactions.status, EXCLUDED.status),
+				transaction_index = COALESCE(app.evm_transactions.transaction_index, EXCLUDED.transaction_index),
 				timestamp = EXCLUDED.timestamp`,
 			row.BlockHeight,
 			hexToBytes(row.TransactionID),
 			hexToBytes(row.EVMHash),
+			row.EventIndex,
+			row.TransactionIndex,
+			fromAddr,
+			toAddr,
+			row.Nonce,
+			row.GasLimit,
+			row.GasUsed,
+			gasPriceVal,
+			gasFeeCapVal,
+			gasTipCapVal,
+			valueVal,
+			row.TxType,
+			chainIDVal,
+			dataVal,
+			logsVal,
+			row.StatusCode,
+			statusVal,
 			ts,
 		)
 	}
@@ -253,7 +312,7 @@ func (r *Repository) UpsertEVMTxHashes(ctx context.Context, rows []models.EVMTxH
 	br2 := r.db.SendBatch(ctx, summaryBatch)
 	defer br2.Close()
 
-	for i := 0; i < len(firstByTx); i++ {
+	for i := 0; i < len(rows); i++ {
 		if _, err := br2.Exec(); err != nil {
 			return fmt.Errorf("upsert evm_transactions summary: %w", err)
 		}

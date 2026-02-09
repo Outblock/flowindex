@@ -29,7 +29,12 @@ func (w *FTHoldingsWorker) ProcessRange(ctx context.Context, fromHeight, toHeigh
 
 	for _, t := range events {
 		contract := strings.TrimSpace(t.TokenContractAddress)
+		contractName := strings.TrimSpace(t.ContractName)
 		if contract == "" {
+			continue
+		}
+		if contractName == "" {
+			// Avoid ambiguous holdings when multiple contracts share the same address.
 			continue
 		}
 		amount := strings.TrimSpace(t.Amount)
@@ -38,12 +43,12 @@ func (w *FTHoldingsWorker) ProcessRange(ctx context.Context, fromHeight, toHeigh
 		}
 
 		if addr := normalizeAddressLower(t.FromAddress); addr != "" {
-			if err := w.repo.UpsertFTHoldingsDelta(ctx, addr, contract, negate(amount), t.BlockHeight); err != nil {
+			if err := w.repo.UpsertFTHoldingsDelta(ctx, addr, contract, contractName, negate(amount), t.BlockHeight); err != nil {
 				return err
 			}
 		}
 		if addr := normalizeAddressLower(t.ToAddress); addr != "" {
-			if err := w.repo.UpsertFTHoldingsDelta(ctx, addr, contract, amount, t.BlockHeight); err != nil {
+			if err := w.repo.UpsertFTHoldingsDelta(ctx, addr, contract, contractName, amount, t.BlockHeight); err != nil {
 				return err
 			}
 		}

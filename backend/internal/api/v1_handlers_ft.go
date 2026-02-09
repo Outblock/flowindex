@@ -16,7 +16,8 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addrFilter := normalizeAddr(r.URL.Query().Get("address"))
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, addrFilter, normalizeTokenParam(r.URL.Query().Get("token")), r.URL.Query().Get("transaction_hash"), height, limit, offset)
+	tokenAddr, tokenName := parseTokenParam(r.URL.Query().Get("token"))
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, addrFilter, tokenAddr, tokenName, r.URL.Query().Get("transaction_hash"), height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -41,8 +42,8 @@ func (s *Server) handleFlowListFTTokens(w http.ResponseWriter, r *http.Request) 
 			writeAPIError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		for _, addr := range contracts {
-			tokens = append(tokens, models.FTToken{ContractAddress: addr})
+		for _, row := range contracts {
+			tokens = append(tokens, models.FTToken{ContractAddress: row.Address, ContractName: row.Name})
 		}
 	}
 	out := make([]map[string]interface{}, 0, len(tokens))
@@ -53,23 +54,23 @@ func (s *Server) handleFlowListFTTokens(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleFlowGetFTToken(w http.ResponseWriter, r *http.Request) {
-	token := normalizeTokenParam(mux.Vars(r)["token"])
-	t, err := s.repo.GetFTToken(r.Context(), token)
+	tokenAddr, tokenName := parseTokenParam(mux.Vars(r)["token"])
+	t, err := s.repo.GetFTToken(r.Context(), tokenAddr, tokenName)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if t == nil {
-		writeAPIResponse(w, []interface{}{toFTListOutput(models.FTToken{ContractAddress: token})}, nil, nil)
+		writeAPIResponse(w, []interface{}{toFTListOutput(models.FTToken{ContractAddress: tokenAddr, ContractName: tokenName})}, nil, nil)
 		return
 	}
 	writeAPIResponse(w, []interface{}{toFTListOutput(*t)}, nil, nil)
 }
 
 func (s *Server) handleFlowFTHoldingsByToken(w http.ResponseWriter, r *http.Request) {
-	token := normalizeTokenParam(mux.Vars(r)["token"])
+	tokenAddr, tokenName := parseTokenParam(mux.Vars(r)["token"])
 	limit, offset := parseLimitOffset(r)
-	holdings, err := s.repo.ListFTHoldingsByToken(r.Context(), token, limit, offset)
+	holdings, err := s.repo.ListFTHoldingsByToken(r.Context(), tokenAddr, tokenName, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -82,9 +83,9 @@ func (s *Server) handleFlowFTHoldingsByToken(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleFlowTopFTAccounts(w http.ResponseWriter, r *http.Request) {
-	token := normalizeTokenParam(mux.Vars(r)["token"])
+	tokenAddr, tokenName := parseTokenParam(mux.Vars(r)["token"])
 	limit, offset := parseLimitOffset(r)
-	holdings, err := s.repo.ListFTHoldingsByToken(r.Context(), token, limit, offset)
+	holdings, err := s.repo.ListFTHoldingsByToken(r.Context(), tokenAddr, tokenName, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -98,8 +99,8 @@ func (s *Server) handleFlowTopFTAccounts(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleFlowAccountFTHoldingByToken(w http.ResponseWriter, r *http.Request) {
 	address := normalizeAddr(mux.Vars(r)["address"])
-	token := normalizeTokenParam(mux.Vars(r)["token"])
-	holding, err := s.repo.GetFTHolding(r.Context(), address, token)
+	tokenAddr, tokenName := parseTokenParam(mux.Vars(r)["token"])
+	holding, err := s.repo.GetFTHolding(r.Context(), address, tokenAddr, tokenName)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return

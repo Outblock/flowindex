@@ -1,8 +1,13 @@
+import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Activity, HardDrive, Server, Layers, Info, Square } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { api } from '../api';
+
+export const Route = createFileRoute('/stats')({
+    component: Stats,
+})
 
 const CHUNK_SIZES = [
     { label: '50K', value: 50000 },
@@ -12,7 +17,7 @@ const CHUNK_SIZES = [
     { label: '5M', value: 5000000 },
 ];
 
-export default function Stats() {
+function Stats() {
     const [activeTab, setActiveTab] = useState('system'); // 'system' or 'mosaic'
     const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -20,8 +25,8 @@ export default function Stats() {
     // State for Speed Calculations
     const [historySpeed, setHistorySpeed] = useState(0); // blocks per second
     const [forwardSpeed, setForwardSpeed] = useState(0); // blocks per second
-    const lastHistoryCheckRef = useRef(null); // { time: number, height: number }
-    const lastForwardCheckRef = useRef(null); // { time: number, height: number }
+    const lastHistoryCheckRef = useRef<any>(null); // { time: number, height: number }
+    const lastForwardCheckRef = useRef<any>(null); // { time: number, height: number }
 
     // State for Indexing Map
     // Initialize with 100K
@@ -158,7 +163,7 @@ export default function Stats() {
         // Ensure we have at least one chunk
         const totalChunks = Math.max(1, Math.ceil(chainTip / chunkSize));
         // Generate chunks from 0 to Tip
-        const result = [];
+        const result: any[] = [];
         for (let i = 0; i < totalChunks; i++) {
             const start = i * chunkSize;
             const end = Math.min((i + 1) * chunkSize - 1, chainTip);
@@ -488,22 +493,6 @@ export default function Stats() {
                                     <p className="text-xs text-zinc-500">Adjust the number of blocks each cell represents.</p>
                                 </div>
                                 <div className="flex bg-zinc-100 dark:bg-black/30 p-1 rounded-sm border border-zinc-200 dark:border-white/5 relative">
-                                    {/* Animated Background Pill */}
-                                    <motion.div
-                                        className="absolute top-1 bottom-1 bg-white dark:bg-white/10 shadow-sm rounded-sm z-0"
-                                        layoutId="chunkSizePill"
-                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                        style={{
-                                            width: 50, // Approximation, will need dynamic ref measuring for perfect fit, 
-                                            // but for now let's rely on standard button sizes or just toggle classes which is safer without refs
-                                            // Actually simpler approach: Just animate layout changes of the grid if feasible, 
-                                            // or just use conditional strict styling as before but maybe add a layout transition
-                                        }}
-                                        // Since we can't easily measure width without refs, let's skip the sliding pill 
-                                        // and just use a smooth fade/scale transition on the buttons themselves as requested.
-                                        initial={false}
-                                    />
-
                                     {CHUNK_SIZES.map((size) => (
                                         <button
                                             key={size.value}

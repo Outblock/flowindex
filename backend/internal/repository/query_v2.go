@@ -252,6 +252,7 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 			encode(transaction_id, 'hex') AS transaction_id,
 			block_height,
 			encode(token_contract_address, 'hex') AS token_contract_address,
+			COALESCE(contract_name, '') AS contract_name,
 			COALESCE(encode(from_address, 'hex'), '') AS from_address,
 			COALESCE(encode(to_address, 'hex'), '') AS to_address,
 			amount,
@@ -271,7 +272,7 @@ func (r *Repository) ListTokenTransfersFiltered(ctx context.Context, isNFT bool,
 	var out []models.TokenTransfer
 	for rows.Next() {
 		var t models.TokenTransfer
-		if err := rows.Scan(&t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.IsNFT, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.ContractName, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.IsNFT, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -285,6 +286,7 @@ func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, t
 			encode(transaction_id, 'hex') AS transaction_id,
 			block_height,
 			encode(token_contract_address, 'hex') AS token_contract_address,
+			COALESCE(contract_name, '') AS contract_name,
 			COALESCE(encode(from_address, 'hex'), '') AS from_address,
 			COALESCE(encode(to_address, 'hex'), '') AS to_address,
 			amount,
@@ -303,7 +305,7 @@ func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, t
 	var out []models.TokenTransfer
 	for rows.Next() {
 		var t models.TokenTransfer
-		if err := rows.Scan(&t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.IsNFT, &t.Timestamp, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.TransactionID, &t.BlockHeight, &t.TokenContractAddress, &t.ContractName, &t.FromAddress, &t.ToAddress, &t.Amount, &t.TokenID, &t.EventIndex, &t.IsNFT, &t.Timestamp, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

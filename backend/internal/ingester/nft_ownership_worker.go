@@ -31,9 +31,13 @@ func (w *NFTOwnershipWorker) ProcessRange(ctx context.Context, fromHeight, toHei
 		if t.TokenID == "" || t.TokenContractAddress == "" {
 			continue
 		}
+		if t.ContractName == "" {
+			continue
+		}
 		owner := normalizeAddressLower(t.ToAddress)
 		ownership := models.NFTOwnership{
 			ContractAddress: t.TokenContractAddress,
+			ContractName:    t.ContractName,
 			NFTID:           t.TokenID,
 			Owner:           owner,
 			LastHeight:      t.BlockHeight,

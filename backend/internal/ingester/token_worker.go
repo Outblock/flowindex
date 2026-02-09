@@ -31,6 +31,8 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	}
 
 	var transfers []models.TokenTransfer
+	ftTokens := make(map[string]models.FTToken)
+	nftCollections := make(map[string]models.NFTCollection)
 
 	// 2. Parse Events
 	for _, evt := range events {
@@ -39,6 +41,22 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 			transfer := w.parseTokenEvent(evt, isNFT)
 			if transfer != nil {
 				transfers = append(transfers, *transfer)
+				contractAddr := strings.TrimSpace(transfer.TokenContractAddress)
+				contractName := strings.TrimSpace(transfer.ContractName)
+				if contractAddr != "" && contractName != "" && !isWrapperContractName(contractName) {
+					key := contractAddr + ":" + contractName
+					if isNFT {
+						nftCollections[key] = models.NFTCollection{
+							ContractAddress: contractAddr,
+							ContractName:    contractName,
+						}
+					} else {
+						ftTokens[key] = models.FTToken{
+							ContractAddress: contractAddr,
+							ContractName:    contractName,
+						}
+					}
+				}
 			}
 		}
 	}
@@ -60,6 +78,24 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 		}
 		if err := w.repo.UpsertTokenTransfers(ctx, transfers); err != nil {
 			return fmt.Errorf("failed to upsert transfers: %w", err)
+		}
+	}
+	if len(ftTokens) > 0 {
+		out := make([]models.FTToken, 0, len(ftTokens))
+		for _, t := range ftTokens {
+			out = append(out, t)
+		}
+		if err := w.repo.UpsertFTTokens(ctx, out); err != nil {
+			return fmt.Errorf("failed to upsert ft tokens: %w", err)
+		}
+	}
+	if len(nftCollections) > 0 {
+		out := make([]models.NFTCollection, 0, len(nftCollections))
+		for _, c := range nftCollections {
+			out = append(out, c)
+		}
+		if err := w.repo.UpsertNFTCollections(ctx, out); err != nil {
+			return fmt.Errorf("failed to upsert nft collections: %w", err)
 		}
 	}
 
@@ -85,6 +121,7 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.Toke
 	if contractAddr == "" {
 		contractAddr = parseContractAddress(evt.Type)
 	}
+	contractName := parseContractName(evt.Type)
 
 	if isNFT {
 		if amount == "" {
@@ -109,6 +146,7 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.Toke
 		BlockHeight:          evt.BlockHeight,
 		EventIndex:           evt.EventIndex,
 		TokenContractAddress: contractAddr,
+		ContractName:         contractName,
 		FromAddress:          fromAddr,
 		ToAddress:            toAddr,
 		Amount:               amount,
@@ -298,4 +336,21 @@ func parseContractAddress(eventType string) string {
 		return normalizeFlowAddress(parts[1])
 	}
 	return ""
+}
+
+func parseContractName(eventType string) string {
+	parts := strings.Split(eventType, ".")
+	if len(parts) >= 3 && parts[0] == "A" {
+		return strings.TrimSpace(parts[2])
+	}
+	return ""
+}
+
+func isWrapperContractName(name string) bool {
+	switch name {
+	case "FungibleToken", "NonFungibleToken":
+		return true
+	default:
+		return false
+	}
 }

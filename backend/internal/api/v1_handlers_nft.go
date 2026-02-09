@@ -14,7 +14,8 @@ func (s *Server) handleFlowNFTTransfers(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	addrFilter := normalizeAddr(r.URL.Query().Get("address"))
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, addrFilter, normalizeTokenParam(r.URL.Query().Get("nft_type")), r.URL.Query().Get("transaction_hash"), height, limit, offset)
+	tokenAddr, tokenName := parseTokenParam(r.URL.Query().Get("nft_type"))
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, addrFilter, tokenAddr, tokenName, r.URL.Query().Get("transaction_hash"), height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -41,8 +42,8 @@ func (s *Server) handleFlowListNFTCollections(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleFlowGetNFTCollection(w http.ResponseWriter, r *http.Request) {
-	collection := normalizeTokenParam(mux.Vars(r)["nft_type"])
-	summary, err := s.repo.GetNFTCollectionSummary(r.Context(), collection)
+	collectionAddr, collectionName := parseTokenParam(mux.Vars(r)["nft_type"])
+	summary, err := s.repo.GetNFTCollectionSummary(r.Context(), collectionAddr, collectionName)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -55,9 +56,9 @@ func (s *Server) handleFlowGetNFTCollection(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleFlowNFTHoldingsByCollection(w http.ResponseWriter, r *http.Request) {
-	collection := normalizeTokenParam(mux.Vars(r)["nft_type"])
+	collectionAddr, collectionName := parseTokenParam(mux.Vars(r)["nft_type"])
 	limit, offset := parseLimitOffset(r)
-	rows, total, err := s.repo.ListNFTOwnerCountsByCollection(r.Context(), collection, limit, offset)
+	rows, total, err := s.repo.ListNFTOwnerCountsByCollection(r.Context(), collectionAddr, collectionName, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -68,15 +69,15 @@ func (s *Server) handleFlowNFTHoldingsByCollection(w http.ResponseWriter, r *htt
 		if total > 0 {
 			percentage = float64(row.Count) / float64(total)
 		}
-		out = append(out, toNFTHoldingOutput(row.Owner, row.Count, percentage, collection))
+		out = append(out, toNFTHoldingOutput(row.Owner, row.Count, percentage, formatTokenIdentifier(collectionAddr, collectionName)))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
 
 func (s *Server) handleFlowTopNFTAccounts(w http.ResponseWriter, r *http.Request) {
-	collection := normalizeTokenParam(mux.Vars(r)["nft_type"])
+	collectionAddr, collectionName := parseTokenParam(mux.Vars(r)["nft_type"])
 	limit, offset := parseLimitOffset(r)
-	rows, total, err := s.repo.ListNFTOwnerCountsByCollection(r.Context(), collection, limit, offset)
+	rows, total, err := s.repo.ListNFTOwnerCountsByCollection(r.Context(), collectionAddr, collectionName, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -87,15 +88,15 @@ func (s *Server) handleFlowTopNFTAccounts(w http.ResponseWriter, r *http.Request
 		if total > 0 {
 			percentage = float64(row.Count) / float64(total)
 		}
-		out = append(out, toNFTHoldingOutput(row.Owner, row.Count, percentage, collection))
+		out = append(out, toNFTHoldingOutput(row.Owner, row.Count, percentage, formatTokenIdentifier(collectionAddr, collectionName)))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "total_nfts": total}, nil)
 }
 
 func (s *Server) handleFlowNFTItem(w http.ResponseWriter, r *http.Request) {
-	collection := normalizeTokenParam(mux.Vars(r)["nft_type"])
+	collectionAddr, collectionName := parseTokenParam(mux.Vars(r)["nft_type"])
 	id := mux.Vars(r)["id"]
-	item, err := s.repo.GetNFTOwnership(r.Context(), collection, id)
+	item, err := s.repo.GetNFTOwnership(r.Context(), collectionAddr, collectionName, id)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return

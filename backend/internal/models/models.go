@@ -71,24 +71,50 @@ type Transaction struct {
 
 // EVMTransaction represents details from 'evm_transactions' table
 type EVMTransaction struct {
-	TransactionID string `json:"transaction_id"`
-	EVMHash       string `json:"evm_hash"`
-	FromAddress   string `json:"from_address"`
-	ToAddress     string `json:"to_address"`
-	Value         string `json:"value"`
-	Data          string `json:"data"`
-	GasUsed       uint64 `json:"gas_used"`
-	Logs          []byte `json:"logs"`
+	TransactionID   string `json:"transaction_id"`
+	EVMHash         string `json:"evm_hash"`
+	FromAddress     string `json:"from_address"`
+	ToAddress       string `json:"to_address"`
+	Nonce           uint64 `json:"nonce"`
+	GasLimit        uint64 `json:"gas_limit"`
+	GasUsed         uint64 `json:"gas_used"`
+	GasPrice        string `json:"gas_price"`
+	GasFeeCap       string `json:"gas_fee_cap"`
+	GasTipCap       string `json:"gas_tip_cap"`
+	Value           string `json:"value"`
+	TxType          int    `json:"tx_type"`
+	ChainID         string `json:"chain_id"`
+	Data            string `json:"data"`
+	Logs            []byte `json:"logs"`
+	TransactionIndex int   `json:"transaction_index"`
+	StatusCode      int    `json:"status_code"`
+	Status          string `json:"status"`
 }
 
 // EVMTxHash represents a mapping from a Cadence tx to one or more EVM tx hashes.
 type EVMTxHash struct {
-	BlockHeight   uint64    `json:"block_height"`
-	TransactionID string    `json:"transaction_id"`
-	EVMHash       string    `json:"evm_hash"`
-	EventIndex    int       `json:"event_index"`
-	Timestamp     time.Time `json:"timestamp"`
-	CreatedAt     time.Time `json:"created_at"`
+	BlockHeight      uint64    `json:"block_height"`
+	TransactionID    string    `json:"transaction_id"`
+	EVMHash          string    `json:"evm_hash"`
+	EventIndex       int       `json:"event_index"`
+	TransactionIndex int       `json:"transaction_index,omitempty"`
+	FromAddress      string    `json:"from_address,omitempty"`
+	ToAddress        string    `json:"to_address,omitempty"`
+	Nonce            uint64    `json:"nonce,omitempty"`
+	GasLimit         uint64    `json:"gas_limit,omitempty"`
+	GasUsed          uint64    `json:"gas_used,omitempty"`
+	GasPrice         string    `json:"gas_price,omitempty"`
+	GasFeeCap        string    `json:"gas_fee_cap,omitempty"`
+	GasTipCap        string    `json:"gas_tip_cap,omitempty"`
+	Value            string    `json:"value,omitempty"`
+	TxType           int       `json:"tx_type,omitempty"`
+	ChainID          string    `json:"chain_id,omitempty"`
+	Data             string    `json:"data,omitempty"`
+	Logs             string    `json:"logs,omitempty"`
+	StatusCode       int       `json:"status_code,omitempty"`
+	Status           string    `json:"status,omitempty"`
+	Timestamp        time.Time `json:"timestamp"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 // Event represents the 'events' table
@@ -130,6 +156,7 @@ type TokenTransfer struct {
 	TransactionID        string    `json:"transaction_id"`
 	BlockHeight          uint64    `json:"block_height"`
 	TokenContractAddress string    `json:"token_contract_address"`
+	ContractName         string    `json:"contract_name,omitempty"`
 	FromAddress          string    `json:"from_address"`
 	ToAddress            string    `json:"to_address"`
 	Amount               string    `json:"amount"`
@@ -241,6 +268,7 @@ type AccountCatalog struct {
 // FTToken represents app.ft_tokens
 type FTToken struct {
 	ContractAddress string    `json:"contract_address"`
+	ContractName    string    `json:"contract_name,omitempty"`
 	Name            string    `json:"name"`
 	Symbol          string    `json:"symbol"`
 	Decimals        int       `json:"decimals"`
@@ -251,6 +279,7 @@ type FTToken struct {
 type FTHolding struct {
 	Address         string    `json:"address"`
 	ContractAddress string    `json:"contract_address"`
+	ContractName    string    `json:"contract_name,omitempty"`
 	Balance         string    `json:"balance"`
 	LastHeight      uint64    `json:"last_height"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -259,6 +288,7 @@ type FTHolding struct {
 // NFTCollection represents app.nft_collections
 type NFTCollection struct {
 	ContractAddress string    `json:"contract_address"`
+	ContractName    string    `json:"contract_name,omitempty"`
 	Name            string    `json:"name"`
 	Symbol          string    `json:"symbol"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -267,6 +297,7 @@ type NFTCollection struct {
 // NFTOwnership represents app.nft_ownership
 type NFTOwnership struct {
 	ContractAddress string    `json:"contract_address"`
+	ContractName    string    `json:"contract_name,omitempty"`
 	NFTID           string    `json:"nft_id"`
 	Owner           string    `json:"owner"`
 	LastHeight      uint64    `json:"last_height"`

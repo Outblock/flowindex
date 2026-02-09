@@ -191,7 +191,7 @@ func (s *Server) handleFlowAccountFTTransfers(w http.ResponseWriter, r *http.Req
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, "", "", height, limit, offset)
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, "", "", "", height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -211,7 +211,7 @@ func (s *Server) handleFlowAccountNFTTransfers(w http.ResponseWriter, r *http.Re
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, address, "", "", height, limit, offset)
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, address, "", "", "", height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -268,7 +268,8 @@ func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Requ
 		for _, c := range contracts {
 			holdings = append(holdings, models.FTHolding{
 				Address:         address,
-				ContractAddress: c,
+				ContractAddress: c.Address,
+				ContractName:    c.Name,
 				Balance:         "0",
 			})
 		}
@@ -335,8 +336,8 @@ func (s *Server) handleFlowAccountNFTCollections(w http.ResponseWriter, r *http.
 
 func (s *Server) handleFlowAccountFTToken(w http.ResponseWriter, r *http.Request) {
 	address := normalizeAddr(mux.Vars(r)["address"])
-	token := normalizeTokenParam(mux.Vars(r)["token"])
-	holding, err := s.repo.GetFTHolding(r.Context(), address, token)
+	tokenAddr, tokenName := parseTokenParam(mux.Vars(r)["token"])
+	holding, err := s.repo.GetFTHolding(r.Context(), address, tokenAddr, tokenName)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -351,14 +352,14 @@ func (s *Server) handleFlowAccountFTToken(w http.ResponseWriter, r *http.Request
 
 func (s *Server) handleFlowAccountFTTokenTransfers(w http.ResponseWriter, r *http.Request) {
 	address := normalizeAddr(mux.Vars(r)["address"])
-	token := normalizeTokenParam(mux.Vars(r)["token"])
+	tokenAddr, tokenName := parseTokenParam(mux.Vars(r)["token"])
 	limit, offset := parseLimitOffset(r)
 	height, err := parseHeightParam(r.URL.Query().Get("height"))
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, token, "", height, limit, offset)
+	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, tokenAddr, tokenName, "", height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -372,9 +373,9 @@ func (s *Server) handleFlowAccountFTTokenTransfers(w http.ResponseWriter, r *htt
 
 func (s *Server) handleFlowAccountNFTByCollection(w http.ResponseWriter, r *http.Request) {
 	address := normalizeAddr(mux.Vars(r)["address"])
-	collection := normalizeTokenParam(mux.Vars(r)["nft_type"])
+	collectionAddr, collectionName := parseTokenParam(mux.Vars(r)["nft_type"])
 	limit, offset := parseLimitOffset(r)
-	items, err := s.repo.ListNFTOwnershipByOwnerAndCollection(r.Context(), address, collection, limit, offset)
+	items, err := s.repo.ListNFTOwnershipByOwnerAndCollection(r.Context(), address, collectionAddr, collectionName, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -21,7 +21,12 @@ type FTVaultSummary struct {
 	LastHeight      uint64
 }
 
-func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context, isNFT bool, address, token, txID string, height *uint64, limit, offset int) ([]TokenTransferWithContract, int64, error) {
+type TokenContract struct {
+	Address string
+	Name    string
+}
+
+func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context, isNFT bool, address, tokenAddress, tokenName, txID string, height *uint64, limit, offset int) ([]TokenTransferWithContract, int64, error) {
 	clauses := []string{"t.is_nft = $1"}
 	args := []interface{}{isNFT}
 	arg := 2
@@ -53,9 +58,14 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 		args = append(args, hexToBytes(address))
 		arg++
 	}
-	if token != "" {
+	if tokenAddress != "" {
 		clauses = append(clauses, fmt.Sprintf("t.token_contract_address = $%d", arg))
-		args = append(args, hexToBytes(token))
+		args = append(args, hexToBytes(tokenAddress))
+		arg++
+	}
+	if tokenName != "" {
+		clauses = append(clauses, fmt.Sprintf("t.contract_name = $%d", arg))
+		args = append(args, tokenName)
 		arg++
 	}
 	if txID != "" {
@@ -84,26 +94,26 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 	}
 
 	listArgs := append(append([]interface{}{}, args...), limit, offset)
-	rows, err := r.db.Query(ctx, `
-		SELECT
-			encode(t.transaction_id, 'hex') AS transaction_id,
-			t.block_height,
-			COALESCE(encode(t.token_contract_address, 'hex'), '') AS token_contract_address,
-			COALESCE(encode(t.from_address, 'hex'), '') AS from_address,
-			COALESCE(encode(t.to_address, 'hex'), '') AS to_address,
-			COALESCE(t.amount::text, '') AS amount,
-			COALESCE(t.token_id, '') AS token_id,
-			t.event_index,
-			t.is_nft,
-			t.timestamp,
-			t.created_at,
-			COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') AS contract_name
-		FROM app.token_transfers t
-		LEFT JOIN raw.events e
-			ON e.block_height = t.block_height
-			AND e.transaction_id = t.transaction_id
-			AND e.event_index = t.event_index
-		`+where+`
+		rows, err := r.db.Query(ctx, `
+			SELECT
+				encode(t.transaction_id, 'hex') AS transaction_id,
+				t.block_height,
+				COALESCE(encode(t.token_contract_address, 'hex'), '') AS token_contract_address,
+				COALESCE(encode(t.from_address, 'hex'), '') AS from_address,
+				COALESCE(encode(t.to_address, 'hex'), '') AS to_address,
+				COALESCE(t.amount::text, '') AS amount,
+				COALESCE(t.token_id, '') AS token_id,
+				t.event_index,
+				t.is_nft,
+				t.timestamp,
+				t.created_at,
+				COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
+			FROM app.token_transfers t
+			LEFT JOIN raw.events e
+				ON e.block_height = t.block_height
+				AND e.transaction_id = t.transaction_id
+				AND e.event_index = t.event_index
+			`+where+`
 		ORDER BY t.block_height DESC, t.event_index DESC
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), listArgs...)
 	if err != nil {
@@ -138,24 +148,32 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 	return out, total, nil
 }
 
-func (r *Repository) ListFTTokenContractsByAddress(ctx context.Context, address string, limit, offset int) ([]string, error) {
+func (r *Repository) ListFTTokenContractsByAddress(ctx context.Context, address string, limit, offset int) ([]TokenContract, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT encode(token_contract_address, 'hex') AS token_contract_address
-		FROM app.token_transfers
-		WHERE is_nft = FALSE AND (from_address = $1 OR to_address = $1)
-		ORDER BY token_contract_address ASC
+		SELECT DISTINCT
+			encode(t.token_contract_address, 'hex') AS token_contract_address,
+			COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
+		FROM app.token_transfers t
+		LEFT JOIN raw.events e
+			ON e.block_height = t.block_height
+			AND e.transaction_id = t.transaction_id
+			AND e.event_index = t.event_index
+		WHERE t.is_nft = FALSE
+		  AND (t.from_address = $1 OR t.to_address = $1)
+		  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
+		ORDER BY token_contract_address ASC, contract_name ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []string
+	var out []TokenContract
 	for rows.Next() {
-		var v string
-		if err := rows.Scan(&v); err != nil {
+		var row TokenContract
+		if err := rows.Scan(&row.Address, &row.Name); err != nil {
 			return nil, err
 		}
-		out = append(out, v)
+		out = append(out, row)
 	}
 	return out, nil
 }
@@ -170,7 +188,7 @@ func (r *Repository) ListFTVaultSummariesByAddress(ctx context.Context, address 
 	rows, err := r.db.Query(ctx, `
 		SELECT
 			encode(t.token_contract_address, 'hex') AS token_contract_address,
-			COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') AS contract_name,
+			COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name,
 			SUM(
 				CASE
 					WHEN t.to_address = $1 THEN t.amount::numeric
@@ -187,7 +205,7 @@ func (r *Repository) ListFTVaultSummariesByAddress(ctx context.Context, address 
 			AND e.event_index = t.event_index
 		WHERE t.is_nft = FALSE
 		  AND (t.to_address = $1 OR t.from_address = $1)
-		  AND COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '') <> 'FungibleToken'
+		  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
 		GROUP BY t.token_contract_address, contract_name
 		ORDER BY t.token_contract_address ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)

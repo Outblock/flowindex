@@ -1,20 +1,39 @@
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, XCircle, CheckCircle } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../api';
-import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
-import { Pagination } from '../components/Pagination';
-import { formatRelativeTime } from '../lib/time';
-import { useTimeTicker } from '../hooks/useTimeTicker';
+import { api } from '../../api';
+import { useWebSocketMessages, useWebSocketStatus } from '../../hooks/useWebSocket';
+import { Pagination } from '../../components/Pagination';
+import { formatRelativeTime } from '../../lib/time';
+import { useTimeTicker } from '../../hooks/useTimeTicker';
 
-export default function Transactions() {
-    const [transactions, setTransactions] = useState<any[]>([]);
-    const [statusRaw, setStatusRaw] = useState<any>(null);
-    const [txPage, setTxPage] = useState(1);
+export const Route = createFileRoute('/transactions/')({
+    component: Transactions,
+    loader: async ({ location }) => {
+        const page = Number(new URLSearchParams(location.search).get('page') || '1');
+        try {
+            // For now, load first page data on server
+            const [transactionsRes, statusRes] = await Promise.all([
+                api.getTransactions('', 20),
+                api.getStatus()
+            ]);
+            return { transactionsRes, statusRes, page };
+        } catch (e) {
+            console.error("Failed to load transactions", e);
+            return { transactionsRes: [], statusRes: null, page: 1 };
+        }
+    }
+})
+
+function Transactions() {
+    const { transactionsRes, statusRes, page } = Route.useLoaderData();
+    const [transactions, setTransactions] = useState<any[]>([]); // Initialize empty, will merge in effect
+    const [statusRaw, setStatusRaw] = useState<any>(statusRes);
+    const [txPage, setTxPage] = useState(page);
     const [txCursors, setTxCursors] = useState({ 1: '' });
-    const [txHasNext, setTxHasNext] = useState(false);
+    const [txHasNext, setTxHasNext] = useState(Boolean(transactionsRes?.next_cursor));
     const [newTxIds, setNewTxIds] = useState(new Set());
 
     const { isConnected } = useWebSocketStatus();
@@ -97,6 +116,26 @@ export default function Transactions() {
         return mergedList.slice(0, 50);
     };
 
+    // Initialize transactions from loader data
+    useEffect(() => {
+        const items = transactionsRes?.items ?? (Array.isArray(transactionsRes) ? transactionsRes : []);
+        const transformedTxs = items.map(tx => ({
+            ...tx,
+            type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
+            payer: tx.payer_address || tx.proposer_address,
+            blockHeight: tx.block_height
+        }));
+
+        setTransactions(prev => (page === 1
+            ? mergeTransactions(prev, transformedTxs, { prependNew: false })
+            : mergeTransactions([], transformedTxs, { prependNew: false })));
+
+        if (transactionsRes?.next_cursor) {
+            setTxCursors(prev => ({ ...prev, 2: transactionsRes.next_cursor }));
+        }
+    }, [transactionsRes, page]);
+
+
     const loadTransactions = async (page) => {
         try {
             const cursor = txCursors[page] ?? '';
@@ -163,7 +202,7 @@ export default function Transactions() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lastMessage, txPage]);
 
-    // Initial Load
+    // Initial Load (Status refresh only, TXs loaded via loader/effect)
     useEffect(() => {
         const refreshStatus = async () => {
             try {
@@ -172,7 +211,6 @@ export default function Transactions() {
             } catch (e) { console.error(e); }
         };
 
-        loadTransactions(1);
         refreshStatus();
         const interval = setInterval(refreshStatus, 10000);
         return () => clearInterval(interval);
