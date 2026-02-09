@@ -10,7 +10,11 @@ RUN apk add --no-cache python3 make g++
 
 COPY frontend/package.json frontend/package-lock.json ./
 # Avoid running lifecycle scripts (husky) inside container builds.
-RUN npm ci --ignore-scripts
+# NOTE:
+# - npm v10+ enforces peer deps strictly. Some deps (eg react-copy-to-clipboard@5)
+#   don't declare React 19 support yet. We still build/run fine, so use legacy resolution.
+# - package-lock.json in this repo is not always kept in sync; `npm ci` will fail hard.
+RUN npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 
 COPY frontend/ .
 ARG VITE_API_URL
