@@ -293,8 +293,6 @@ CREATE TABLE IF NOT EXISTS app.token_transfers (
     is_nft                  BOOLEAN DEFAULT FALSE,
 
     timestamp               TIMESTAMPTZ NOT NULL,
-    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     PRIMARY KEY (block_height, transaction_id, event_index)
 ) PARTITION BY RANGE (block_height);
@@ -306,6 +304,10 @@ CREATE INDEX IF NOT EXISTS idx_token_transfers_nft_height ON app.token_transfers
 
 ALTER TABLE IF EXISTS app.token_transfers
   ADD COLUMN IF NOT EXISTS contract_name TEXT;
+ALTER TABLE IF EXISTS app.token_transfers
+  DROP COLUMN IF EXISTS created_at;
+ALTER TABLE IF EXISTS app.token_transfers
+  DROP COLUMN IF EXISTS updated_at;
 
 ALTER TABLE IF EXISTS app.evm_transactions
   ADD COLUMN IF NOT EXISTS event_index INT;

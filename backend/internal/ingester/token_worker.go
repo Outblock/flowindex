@@ -136,8 +136,8 @@ func (w *TokenWorker) parseTokenEvent(evt models.Event, isNFT bool) *models.Toke
 	}
 
 	amount := extractString(fields["amount"])
-	toAddr := extractAddress(fields["to"])
-	fromAddr := extractAddress(fields["from"])
+	toAddr := extractAddressFromFields(fields, "to", "toAddress", "recipient", "receiver", "toAccount", "toAddr", "to_address", "depositTo", "depositedTo", "toVault", "newOwner", "account")
+	fromAddr := extractAddressFromFields(fields, "from", "fromAddress", "sender", "fromAccount", "fromAddr", "from_address", "withdrawnFrom", "withdrawFrom", "fromVault", "burnedFrom", "owner", "account")
 	tokenID := extractString(fields["id"])
 	if tokenID == "" {
 		tokenID = extractString(fields["tokenId"])
@@ -352,8 +352,33 @@ func extractAddress(v interface{}) string {
 		if addr, ok := val["address"]; ok {
 			return normalizeFlowAddress(extractString(addr))
 		}
+		if t, ok := val["type"].(string); ok {
+			switch t {
+			case "Optional":
+				return extractAddress(val["value"])
+			case "Address":
+				return normalizeFlowAddress(extractString(val["value"]))
+			}
+		}
+		if inner, ok := val["value"].(map[string]interface{}); ok {
+			return extractAddress(inner)
+		}
+		if raw, ok := val["value"]; ok {
+			return normalizeFlowAddress(extractString(raw))
+		}
 	}
 	return normalizeFlowAddress(extractString(v))
+}
+
+func extractAddressFromFields(fields map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if v, ok := fields[key]; ok {
+			if addr := extractAddress(v); addr != "" {
+				return addr
+			}
+		}
+	}
+	return ""
 }
 
 func parseContractAddress(eventType string) string {
