@@ -6,16 +6,13 @@ const ThemeContext = createContext({
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    // IMPORTANT: Keep SSR + first client render deterministic to avoid hydration mismatch.
-    // We always start in dark mode and then reconcile to the saved preference after mount.
-    const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-
-    useEffect(() => {
+    // Lazy initializer: reads localStorage on client, defaults to 'dark' on server/SSR.
+    // This avoids calling setState inside an effect (React 19 strict mode violation).
+    const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+        if (typeof window === 'undefined') return 'dark';
         const saved = window.localStorage.getItem('theme');
-        if (saved === 'dark' || saved === 'light') {
-            setTheme(saved);
-        }
-    }, []);
+        return saved === 'light' ? 'light' : 'dark';
+    });
 
     useEffect(() => {
         const root = window.document.documentElement;
@@ -27,14 +24,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('theme', theme);
     }, [theme]);
 
-    const toggleTheme = async () => {
-        if (!document.startViewTransition) {
+    const toggleTheme = async (e?: React.MouseEvent) => {
+        // Fallback if View Transition API not supported or no coordinates
+        if (!document.startViewTransition || !e?.clientX || !e?.clientY) {
             setTheme(prev => prev === 'dark' ? 'light' : 'dark');
             return;
         }
 
-        const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const duration = prefersReduced ? 0 : 320;
+        const x = e.clientX;
+        const y = e.clientY;
+        const endRadius = Math.hypot(
+            Math.max(x, window.innerWidth - x),
+            Math.max(y, window.innerHeight - y),
+        );
 
         const transition = document.startViewTransition(() => {
             setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -42,22 +44,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
         await transition.ready;
 
-        if (duration === 0) return;
-
-        // Left-to-right wipe for smoother, less janky transition.
+        // Animate the new view as an expanding circle from click position
         document.documentElement.animate(
             {
                 clipPath: [
-                    'inset(0 100% 0 0)',
-                    'inset(0 0 0 0)',
+                    `circle(0px at ${x}px ${y}px)`,
+                    `circle(${endRadius}px at ${x}px ${y}px)`,
                 ],
             },
             {
-                duration,
-                easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-                fill: 'both',
+                duration: 800,
+                easing: 'ease-in-out',
                 pseudoElement: '::view-transition-new(root)',
-            }
+            },
         );
     };
 

@@ -28,6 +28,7 @@ SyntaxHighlighter.registerLanguage('cadence', swift);
 
 export const Route = createFileRoute('/accounts/$address')({
     component: AccountDetail,
+    pendingComponent: AccountDetailPending,
     loader: async ({ params }) => {
         try {
             const address = params.address;
@@ -81,6 +82,63 @@ export const Route = createFileRoute('/accounts/$address')({
         }
     }
 })
+
+function AccountDetailPending() {
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono transition-colors duration-300">
+            {/* Top progress bar */}
+            <div className="fixed inset-x-0 top-0 z-[9999] h-[3px] overflow-hidden bg-nothing-green/10">
+                <div
+                    className="h-full w-1/2 bg-nothing-green"
+                    style={{ animation: 'route-pending-bar 1s ease-in-out infinite' }}
+                />
+            </div>
+
+            <div className="container mx-auto px-4 py-8 max-w-6xl">
+                {/* Back button skeleton */}
+                <div className="h-4 w-40 bg-zinc-200 dark:bg-white/5 rounded-sm mb-8 animate-shimmer" />
+
+                {/* Header skeleton */}
+                <div className="border border-zinc-200 dark:border-white/10 p-8 mb-8 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+                    <div className="h-5 w-20 bg-zinc-200 dark:bg-white/10 rounded-sm mb-4 animate-shimmer" />
+                    <div className="h-8 w-72 bg-zinc-200 dark:bg-white/10 rounded-sm animate-shimmer" />
+                </div>
+
+                {/* Stats cards skeleton */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    {[0, 1, 2].map((i) => (
+                        <div key={i} className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+                            <div className="h-3 w-16 bg-zinc-200 dark:bg-white/10 rounded-sm mb-3 animate-shimmer" />
+                            <div className="h-7 w-28 bg-zinc-200 dark:bg-white/10 rounded-sm animate-shimmer" />
+                        </div>
+                    ))}
+                </div>
+
+                {/* Tabs skeleton */}
+                <div className="flex border-b border-zinc-200 dark:border-white/10 mb-0">
+                    {[0, 1, 2, 3].map((i) => (
+                        <div key={i} className="px-6 py-3">
+                            <div className="h-4 w-20 bg-zinc-200 dark:bg-white/10 rounded-sm animate-shimmer" />
+                        </div>
+                    ))}
+                </div>
+
+                {/* Tab content skeleton */}
+                <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[200px] shadow-sm dark:shadow-none">
+                    <div className="h-4 w-36 bg-zinc-200 dark:bg-white/10 rounded-sm mb-6 animate-shimmer" />
+                    <div className="space-y-4">
+                        {[0, 1].map((i) => (
+                            <div key={i}>
+                                <div className="h-3 w-16 bg-zinc-200 dark:bg-white/10 rounded-sm mb-2 animate-shimmer" />
+                                <div className="h-4 w-48 bg-zinc-200 dark:bg-white/10 rounded-sm animate-shimmer" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 function AccountDetail() {
     const { address } = Route.useParams();
@@ -1023,51 +1081,51 @@ function AccountDetail() {
                                     <div className="text-[10px] uppercase tracking-widest text-zinc-500">FT Transfers</div>
                                     {tokenLoading && <div className="text-[10px] text-zinc-500">Loading...</div>}
                                 </div>
-                            <div className="overflow-x-auto">
-                                {tokenTransfers.length > 0 ? (
-                                    <table className="w-full text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
-                                                <th className="p-4 font-normal">Token</th>
-                                                <th className="p-4 font-normal">Amount</th>
-                                                <th className="p-4 font-normal">From</th>
-                                                <th className="p-4 font-normal">To</th>
-                                                <th className="p-4 font-normal text-right">Time</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                            {tokenTransfers.map((tx, i) => (
-                                                <tr key={`${tx.transactionId}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                                    <td className="p-4 font-mono">{tx.token_id?.split('.').pop() || 'Unknown'}</td>
-                                                    <td className="p-4 font-mono font-bold">{parseFloat(tx.amount).toLocaleString()}</td>
-                                                    <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
-                                                        <Link to={`/accounts/${tx.from_address}`}>{formatShort(tx.from_address)}</Link>
-                                                    </td>
-                                                    <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
-                                                        <Link to={`/accounts/${tx.to_address}`}>{formatShort(tx.to_address)}</Link>
-                                                    </td>
-                                                    <td className="p-4 text-right text-zinc-500">
-                                                        {tx.block_timestamp ? new Date(tx.block_timestamp).toLocaleString() : 'N/A'}
-                                                    </td>
+                                <div className="overflow-x-auto">
+                                    {tokenTransfers.length > 0 ? (
+                                        <table className="w-full text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
+                                                    <th className="p-4 font-normal">Token</th>
+                                                    <th className="p-4 font-normal">Amount</th>
+                                                    <th className="p-4 font-normal">From</th>
+                                                    <th className="p-4 font-normal">To</th>
+                                                    <th className="p-4 font-normal text-right">Time</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <div className="text-center text-zinc-500 italic py-8">No token transfers found</div>
-                                )}
-                            </div>
-                            {tokenHasMore && (
-                                <div className="mt-4 text-center">
-                                    <button
-                                        onClick={() => loadTokenTransfers(tokenCursor, true)}
-                                        disabled={tokenLoading}
-                                        className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50"
-                                    >
-                                        {tokenLoading ? 'Loading...' : 'Load More'}
-                                    </button>
+                                            </thead>
+                                            <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                                {tokenTransfers.map((tx, i) => (
+                                                    <tr key={`${tx.transactionId}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                                                        <td className="p-4 font-mono">{tx.token_id?.split('.').pop() || 'Unknown'}</td>
+                                                        <td className="p-4 font-mono font-bold">{parseFloat(tx.amount).toLocaleString()}</td>
+                                                        <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
+                                                            <Link to={`/accounts/${tx.from_address}`}>{formatShort(tx.from_address)}</Link>
+                                                        </td>
+                                                        <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
+                                                            <Link to={`/accounts/${tx.to_address}`}>{formatShort(tx.to_address)}</Link>
+                                                        </td>
+                                                        <td className="p-4 text-right text-zinc-500">
+                                                            {tx.block_timestamp ? new Date(tx.block_timestamp).toLocaleString() : 'N/A'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    ) : (
+                                        <div className="text-center text-zinc-500 italic py-8">No token transfers found</div>
+                                    )}
                                 </div>
-                            )}
+                                {tokenHasMore && (
+                                    <div className="mt-4 text-center">
+                                        <button
+                                            onClick={() => loadTokenTransfers(tokenCursor, true)}
+                                            disabled={tokenLoading}
+                                            className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50"
+                                        >
+                                            {tokenLoading ? 'Loading...' : 'Load More'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             <div>
