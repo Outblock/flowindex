@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useMemo, useState } from 'react';
+import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Image, Users, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
@@ -15,9 +15,6 @@ interface CollectionSearch {
 
 export const Route = createFileRoute('/nfts/$nftType')({
   component: NFTCollectionDetail,
-  // See note in /tokens/$token about SSR + validateSearch.
-  // But still re-run the loader when pagination params change so URL updates also update data.
-  loaderDeps: ({ params, location }) => ({ nftType: params.nftType, search: location?.search ?? '' }),
   loader: async ({ params, location }) => {
     const nftType = params.nftType;
     const sp = new URLSearchParams(location?.search ?? '');
@@ -77,8 +74,15 @@ function NFTCollectionDetailInner() {
   const { collection, owners, ownersMeta, transfers, transfersMeta, nftType, ownersPage, transfersPage } =
     Route.useLoaderData();
   const navigate = Route.useNavigate();
+  const location = useRouterState({ select: (s) => s.location });
 
   const [itemId, setItemId] = useState('');
+  const [ownersState, setOwnersState] = useState(owners);
+  const [ownersMetaState, setOwnersMetaState] = useState(ownersMeta);
+  const [transfersState, setTransfersState] = useState(transfers);
+  const [transfersMetaState, setTransfersMetaState] = useState(transfersMeta);
+  const [isLoading, setIsLoading] = useState(false);
+  const lastKeyRef = useRef<string>('');
 
   const normalizeHex = (value) => {
     if (!value) return '';
@@ -89,23 +93,29 @@ function NFTCollectionDetailInner() {
   const id = String(collection?.id || nftType);
   const addr = normalizeHex(collection?.address);
   const tokenCount = Number(collection?.number_of_tokens || 0);
-  const ownerCount = Number(collection?.owner_count || ownersMeta?.count || 0);
+  const ownerCount = Number(collection?.owner_count || ownersMetaState?.count || 0);
+
+  const sp = new URLSearchParams(location?.search ?? '');
+  const ownersPageFromUrl = Number(sp.get('ownersPage') || ownersPage || 1) || 1;
+  const transfersPageFromUrl = Number(sp.get('transfersPage') || transfersPage || 1) || 1;
 
   const ownersLimit = 25;
-  const ownersOffset = (ownersPage - 1) * ownersLimit;
-  const ownersCount = Number(ownersMeta?.count || 0);
-  const ownersHasNext = ownersCount > 0 ? ownersOffset + ownersLimit < ownersCount : owners.length === ownersLimit;
+  const ownersOffset = (ownersPageFromUrl - 1) * ownersLimit;
+  const ownersCount = Number(ownersMetaState?.count || 0);
+  const ownersHasNext =
+    ownersCount > 0 ? ownersOffset + ownersLimit < ownersCount : ownersState.length === ownersLimit;
 
   const transfersLimit = 25;
-  const transfersOffset = (transfersPage - 1) * transfersLimit;
-  const transfersCount = Number(transfersMeta?.count || 0);
-  const transfersHasNext = transfersCount > 0 ? transfersOffset + transfersLimit < transfersCount : transfers.length === transfersLimit;
+  const transfersOffset = (transfersPageFromUrl - 1) * transfersLimit;
+  const transfersCount = Number(transfersMetaState?.count || 0);
+  const transfersHasNext =
+    transfersCount > 0 ? transfersOffset + transfersLimit < transfersCount : transfersState.length === transfersLimit;
 
   const setOwnersPage = (newPage: number) => {
-    navigate({ search: { ownersPage: newPage, transfersPage } });
+    navigate({ search: { ownersPage: newPage, transfersPage: transfersPageFromUrl } });
   };
   const setTransfersPage = (newPage: number) => {
-    navigate({ search: { ownersPage, transfersPage: newPage } });
+    navigate({ search: { ownersPage: ownersPageFromUrl, transfersPage: newPage } });
   };
 
   const itemLink = useMemo(() => {
@@ -114,8 +124,50 @@ function NFTCollectionDetailInner() {
     return `/nfts/${encodeURIComponent(id)}/item/${encodeURIComponent(trimmed)}`;
   }, [id, itemId]);
 
+  useEffect(() => {
+    setOwnersState(owners);
+    setOwnersMetaState(ownersMeta);
+    setTransfersState(transfers);
+    setTransfersMetaState(transfersMeta);
+  }, [owners, ownersMeta, transfers, transfersMeta, nftType]);
+
+  useEffect(() => {
+    const key = `${nftType}|${ownersPageFromUrl}|${transfersPageFromUrl}`;
+    if (lastKeyRef.current === key) return;
+    lastKeyRef.current = key;
+    let cancelled = false;
+    const fetchPage = async () => {
+      try {
+        setIsLoading(true);
+        await ensureHeyApiConfigured();
+        const [ownersRes, transfersRes] = await Promise.all([
+          getFlowV1NftByNftTypeHolding({ path: { nft_type: nftType }, query: { limit: ownersLimit, offset: ownersOffset } }),
+          getFlowV1NftTransfer({ query: { limit: transfersLimit, offset: transfersOffset, nft_type: nftType } }),
+        ]);
+        if (cancelled) return;
+        setOwnersState(ownersRes?.data?.data || []);
+        setOwnersMetaState(ownersRes?.data?._meta || null);
+        setTransfersState(transfersRes?.data?.data || []);
+        setTransfersMetaState(transfersRes?.data?._meta || null);
+      } catch (e) {
+        console.error('Failed to refresh NFT collection data', e);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    fetchPage();
+    return () => {
+      cancelled = true;
+    };
+  }, [nftType, ownersPageFromUrl, transfersPageFromUrl]);
+
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
+      {isLoading && (
+        <div className="text-xs uppercase tracking-widest text-nothing-green-dark dark:text-nothing-green">
+          Loading...
+        </div>
+      )}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -158,7 +210,7 @@ function NFTCollectionDetailInner() {
             <NumberFlow value={Number.isFinite(ownersCount) ? ownersCount : 0} format={{ useGrouping: true }} />
           </p>
           <div className="mt-2 text-[10px] uppercase tracking-widest text-zinc-500">
-            Page size: {owners.length}
+            Page size: {ownersState.length}
           </div>
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
@@ -216,7 +268,7 @@ function NFTCollectionDetailInner() {
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {owners.map((o) => {
+                  {ownersState.map((o) => {
                     // API returns `owner` (not `address`) for NFT holdings.
                     // Keep backward-compat with any older shape that used `address`.
                     const a = normalizeHex(o?.owner || o?.address);
@@ -247,7 +299,7 @@ function NFTCollectionDetailInner() {
             </table>
           </div>
           <div className="p-4 border-t border-zinc-200 dark:border-white/5">
-            <Pagination currentPage={ownersPage} onPageChange={setOwnersPage} hasNext={ownersHasNext} />
+            <Pagination currentPage={ownersPageFromUrl} onPageChange={setOwnersPage} hasNext={ownersHasNext} />
           </div>
         </div>
 
@@ -268,7 +320,7 @@ function NFTCollectionDetailInner() {
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {transfers.map((t) => {
+                  {transfersState.map((t) => {
                     const tx = String(t?.transaction_hash || '');
                     const from = normalizeHex(t?.sender);
                     const to = normalizeHex(t?.receiver);
@@ -328,7 +380,7 @@ function NFTCollectionDetailInner() {
             </table>
           </div>
           <div className="p-4 border-t border-zinc-200 dark:border-white/5">
-            <Pagination currentPage={transfersPage} onPageChange={setTransfersPage} hasNext={transfersHasNext} />
+            <Pagination currentPage={transfersPageFromUrl} onPageChange={setTransfersPage} hasNext={transfersHasNext} />
           </div>
         </div>
       </div>

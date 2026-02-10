@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
-import { Box, Search } from 'lucide-react';
+import { useNavigate, useRouterState } from '@tanstack/react-router';
+import { Search } from 'lucide-react';
 import { useWebSocketStatus } from '../hooks/useWebSocket';
 
 function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
   const { isConnected } = useWebSocketStatus();
+  const isNavigating = useRouterState({ select: (s) => s.status === 'pending' });
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +29,10 @@ function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-zinc-50/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 py-4 px-6 md:px-8 transition-colors duration-300">
+    <header className="sticky top-0 z-40 relative bg-zinc-50/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 py-4 px-6 md:px-8 transition-colors duration-300">
+      {isNavigating && (
+        <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-nothing-green to-transparent animate-pulse" />
+      )}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
 
         {/* Search Bar - Now on the left/center as the main focus of header since sidebar handles nav */}

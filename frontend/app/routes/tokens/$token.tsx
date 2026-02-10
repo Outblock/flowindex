@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Users, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
@@ -6,7 +7,6 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1FtByToken, getFlowV1FtByTokenHolding, getFlowV1FtTransfer } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 import { RouteErrorBoundary } from '../../components/RouteErrorBoundary';
-import { useTimeTicker } from '../../hooks/useTimeTicker';
 
 interface TokenSearch {
   holdersPage?: number;
@@ -15,12 +15,6 @@ interface TokenSearch {
 
 export const Route = createFileRoute('/tokens/$token')({
   component: TokenDetail,
-  // NOTE: Avoid validateSearch+loaderDeps on param routes in SSR builds.
-  // We observed SSR returning `Content-Length: 0` for `/tokens/:token?...` when using that combo.
-  // Parse search params directly in the loader instead.
-  // However, we still need to re-run the loader when pagination search params change,
-  // otherwise the URL updates but the table does not.
-  loaderDeps: ({ params, location }) => ({ token: params.token, search: location?.search ?? '' }),
   loader: async ({ params, location }) => {
     const token = params.token;
     const sp = new URLSearchParams(location?.search ?? '');
@@ -81,7 +75,14 @@ function TokenDetailInner() {
   const { token, holders, holdersMeta, transfers, transfersMeta, tokenParam, holdersPage, transfersPage } =
     Route.useLoaderData();
   const navigate = Route.useNavigate();
-  const nowTick = useTimeTicker(20000);
+  const location = useRouterState({ select: (s) => s.location });
+
+  const [holdersState, setHoldersState] = useState(holders);
+  const [holdersMetaState, setHoldersMetaState] = useState(holdersMeta);
+  const [transfersState, setTransfersState] = useState(transfers);
+  const [transfersMetaState, setTransfersMetaState] = useState(transfersMeta);
+  const [isLoading, setIsLoading] = useState(false);
+  const lastKeyRef = useRef<string>('');
 
   const normalizeHex = (value) => {
     if (!value) return '';
@@ -94,26 +95,74 @@ function TokenDetailInner() {
   const symbol = String(token?.symbol || '');
   // decimals/updatedAt are not very meaningful for most users; we prioritize holder count instead.
 
+  const sp = new URLSearchParams(location?.search ?? '');
+  const holdersPageFromUrl = Number(sp.get('holdersPage') || holdersPage || 1) || 1;
+  const transfersPageFromUrl = Number(sp.get('transfersPage') || transfersPage || 1) || 1;
+
   const holdersLimit = 25;
-  const holdersOffset = (holdersPage - 1) * holdersLimit;
-  const holdersCount = Number(holdersMeta?.count || 0);
-  const holdersHasNext = holdersCount > 0 ? holdersOffset + holdersLimit < holdersCount : holders.length === holdersLimit;
+  const holdersOffset = (holdersPageFromUrl - 1) * holdersLimit;
+  const holdersCount = Number(holdersMetaState?.count || 0);
+  const holdersHasNext =
+    holdersCount > 0 ? holdersOffset + holdersLimit < holdersCount : holdersState.length === holdersLimit;
 
   const transfersLimit = 25;
-  const transfersOffset = (transfersPage - 1) * transfersLimit;
-  const transfersCount = Number(transfersMeta?.count || 0);
-  const transfersHasNext = transfersCount > 0 ? transfersOffset + transfersLimit < transfersCount : transfers.length === transfersLimit;
+  const transfersOffset = (transfersPageFromUrl - 1) * transfersLimit;
+  const transfersCount = Number(transfersMetaState?.count || 0);
+  const transfersHasNext =
+    transfersCount > 0 ? transfersOffset + transfersLimit < transfersCount : transfersState.length === transfersLimit;
 
   const setHoldersPage = (newPage: number) => {
-    navigate({ search: { holdersPage: newPage, transfersPage } });
+    navigate({ search: { holdersPage: newPage, transfersPage: transfersPageFromUrl } });
   };
 
   const setTransfersPage = (newPage: number) => {
-    navigate({ search: { holdersPage, transfersPage: newPage } });
+    navigate({ search: { holdersPage: holdersPageFromUrl, transfersPage: newPage } });
   };
+
+  useEffect(() => {
+    setHoldersState(holders);
+    setHoldersMetaState(holdersMeta);
+    setTransfersState(transfers);
+    setTransfersMetaState(transfersMeta);
+  }, [holders, holdersMeta, transfers, transfersMeta, tokenParam]);
+
+  useEffect(() => {
+    const key = `${tokenParam}|${holdersPageFromUrl}|${transfersPageFromUrl}`;
+    if (lastKeyRef.current === key) return;
+    lastKeyRef.current = key;
+    let cancelled = false;
+    const fetchPage = async () => {
+      try {
+        setIsLoading(true);
+        await ensureHeyApiConfigured();
+        const [holdersRes, transfersRes] = await Promise.all([
+          getFlowV1FtByTokenHolding({ path: { token: tokenParam }, query: { limit: holdersLimit, offset: holdersOffset } }),
+          getFlowV1FtTransfer({ query: { limit: transfersLimit, offset: transfersOffset, token: tokenParam } }),
+        ]);
+        if (cancelled) return;
+        setHoldersState(holdersRes?.data?.data || []);
+        setHoldersMetaState(holdersRes?.data?._meta || null);
+        setTransfersState(transfersRes?.data?.data || []);
+        setTransfersMetaState(transfersRes?.data?._meta || null);
+      } catch (e) {
+        console.error('Failed to refresh token data', e);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    fetchPage();
+    return () => {
+      cancelled = true;
+    };
+  }, [tokenParam, holdersPageFromUrl, transfersPageFromUrl]);
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
+      {isLoading && (
+        <div className="text-xs uppercase tracking-widest text-nothing-green-dark dark:text-nothing-green">
+          Loading...
+        </div>
+      )}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -156,7 +205,7 @@ function TokenDetailInner() {
             <NumberFlow value={Number.isFinite(holdersCount) ? holdersCount : 0} format={{ useGrouping: true }} />
           </p>
           <div className="mt-2 text-[10px] uppercase tracking-widest text-zinc-500">
-            Page size: {holders.length}
+            Page size: {holdersState.length}
           </div>
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
@@ -187,7 +236,7 @@ function TokenDetailInner() {
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {holders.map((h) => {
+                  {holdersState.map((h) => {
                     const a = normalizeHex(h?.address);
                     const bal = Math.max(Number(h?.balance || 0), 0);
                     return (
@@ -216,7 +265,7 @@ function TokenDetailInner() {
             </table>
           </div>
           <div className="p-4 border-t border-zinc-200 dark:border-white/5">
-            <Pagination currentPage={holdersPage} onPageChange={setHoldersPage} hasNext={holdersHasNext} />
+            <Pagination currentPage={holdersPageFromUrl} onPageChange={setHoldersPage} hasNext={holdersHasNext} />
           </div>
         </div>
 
@@ -238,7 +287,7 @@ function TokenDetailInner() {
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {transfers.map((t) => {
+                  {transfersState.map((t) => {
                     const tx = String(t?.transaction_hash || '');
                     const from = normalizeHex(t?.sender);
                     const to = normalizeHex(t?.receiver);
@@ -287,7 +336,7 @@ function TokenDetailInner() {
             </table>
           </div>
           <div className="p-4 border-t border-zinc-200 dark:border-white/5">
-            <Pagination currentPage={transfersPage} onPageChange={setTransfersPage} hasNext={transfersHasNext} />
+            <Pagination currentPage={transfersPageFromUrl} onPageChange={setTransfersPage} hasNext={transfersHasNext} />
           </div>
         </div>
       </div>
