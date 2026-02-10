@@ -27,40 +27,35 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('theme', theme);
     }, [theme]);
 
-    const toggleTheme = async (e) => {
-        // Fallback or if no event passed (no coordinates)
-        if (!document.startViewTransition || !e?.clientX || !e?.clientY) {
+    const toggleTheme = async () => {
+        if (!document.startViewTransition) {
             setTheme(prev => prev === 'dark' ? 'light' : 'dark');
             return;
         }
 
-        const x = e.clientX;
-        const y = e.clientY;
-        const endRadius = Math.hypot(
-            Math.max(x, window.innerWidth - x),
-            Math.max(y, window.innerHeight - y)
-        );
+        const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const duration = prefersReduced ? 0 : 320;
 
-        // Start the transition
         const transition = document.startViewTransition(() => {
             setTheme(prev => prev === 'dark' ? 'light' : 'dark');
         });
 
-        // Wait for the pseudo-elements to be created
         await transition.ready;
 
-        // Animate the new view (the expanding circle)
+        if (duration === 0) return;
+
+        // Left-to-right wipe for smoother, less janky transition.
         document.documentElement.animate(
             {
                 clipPath: [
-                    `circle(0px at ${x}px ${y}px)`,
-                    `circle(${endRadius}px at ${x}px ${y}px)`,
+                    'inset(0 100% 0 0)',
+                    'inset(0 0 0 0)',
                 ],
             },
             {
-                duration: 500,
-                easing: 'ease-in-out',
-                // Specify which pseudo-element to animate
+                duration,
+                easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+                fill: 'both',
                 pseudoElement: '::view-transition-new(root)',
             }
         );
