@@ -20,10 +20,10 @@ export const Route = createFileRoute('/tokens/$token')({
   // Parse search params directly in the loader instead.
   // However, we still need to re-run the loader when pagination search params change,
   // otherwise the URL updates but the table does not.
-  loaderDeps: ({ params, location }) => ({ token: params.token, search: location.search }),
+  loaderDeps: ({ params, location }) => ({ token: params.token, search: location?.search ?? '' }),
   loader: async ({ params, location }) => {
     const token = params.token;
-    const sp = new URLSearchParams(location.search);
+    const sp = new URLSearchParams(location?.search ?? '');
     const holdersPage = Number(sp.get('holdersPage') || '1') || 1;
     const transfersPage = Number(sp.get('transfersPage') || '1') || 1;
     const holdersLimit = 25;
