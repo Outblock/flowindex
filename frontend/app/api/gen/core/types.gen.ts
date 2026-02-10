@@ -234,6 +234,41 @@ export type GetTransactionsByIdResponses = {
 
 export type GetTransactionsByIdResponse = GetTransactionsByIdResponses[keyof GetTransactionsByIdResponses];
 
+export type GetCoaByAddressData = {
+    body?: never;
+    path: {
+        /**
+         * COA address (0x-prefixed hex).
+         */
+        address: string;
+    };
+    query?: never;
+    url: '/coa/{address}';
+};
+
+export type GetCoaByAddressErrors = {
+    /**
+     * Mapping not found
+     */
+    404: unknown;
+};
+
+export type GetCoaByAddressResponses = {
+    /**
+     * Mapping result
+     */
+    200: {
+        data?: Array<{
+            coa_address?: string;
+            flow_address?: string;
+            transaction_id?: string;
+            block_height?: number;
+        }>;
+    };
+};
+
+export type GetCoaByAddressResponse = GetCoaByAddressResponses[keyof GetCoaByAddressResponses];
+
 export type GetAccountsByAddressData = {
     body?: never;
     path: {

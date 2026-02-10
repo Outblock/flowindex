@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetAccountsByAddressContractsByNameData, GetAccountsByAddressContractsByNameErrors, GetAccountsByAddressContractsByNameResponses, GetAccountsByAddressData, GetAccountsByAddressErrors, GetAccountsByAddressNftTransfersData, GetAccountsByAddressNftTransfersResponses, GetAccountsByAddressResponses, GetAccountsByAddressStatsData, GetAccountsByAddressStatsErrors, GetAccountsByAddressStatsResponses, GetAccountsByAddressStorageData, GetAccountsByAddressStorageItemData, GetAccountsByAddressStorageItemErrors, GetAccountsByAddressStorageItemResponses, GetAccountsByAddressStorageLinksData, GetAccountsByAddressStorageLinksErrors, GetAccountsByAddressStorageLinksResponses, GetAccountsByAddressStorageResponses, GetAccountsByAddressTokenTransfersData, GetAccountsByAddressTokenTransfersResponses, GetAccountsByAddressTransactionsData, GetAccountsByAddressTransactionsErrors, GetAccountsByAddressTransactionsResponses, GetBlocksByIdData, GetBlocksByIdErrors, GetBlocksByIdResponses, GetBlocksData, GetBlocksErrors, GetBlocksResponses, GetHealthData, GetHealthResponses, GetKeysByPublicKeyData, GetKeysByPublicKeyErrors, GetKeysByPublicKeyResponses, GetStatsDailyData, GetStatsDailyResponses, GetStatsNetworkData, GetStatsNetworkResponses, GetStatusData, GetStatusResponses, GetTransactionsByIdData, GetTransactionsByIdErrors, GetTransactionsByIdResponses, GetTransactionsData, GetTransactionsErrors, GetTransactionsResponses } from './types.gen';
+import type { GetAccountsByAddressContractsByNameData, GetAccountsByAddressContractsByNameErrors, GetAccountsByAddressContractsByNameResponses, GetAccountsByAddressData, GetAccountsByAddressErrors, GetAccountsByAddressNftTransfersData, GetAccountsByAddressNftTransfersResponses, GetAccountsByAddressResponses, GetAccountsByAddressStatsData, GetAccountsByAddressStatsErrors, GetAccountsByAddressStatsResponses, GetAccountsByAddressStorageData, GetAccountsByAddressStorageItemData, GetAccountsByAddressStorageItemErrors, GetAccountsByAddressStorageItemResponses, GetAccountsByAddressStorageLinksData, GetAccountsByAddressStorageLinksErrors, GetAccountsByAddressStorageLinksResponses, GetAccountsByAddressStorageResponses, GetAccountsByAddressTokenTransfersData, GetAccountsByAddressTokenTransfersResponses, GetAccountsByAddressTransactionsData, GetAccountsByAddressTransactionsErrors, GetAccountsByAddressTransactionsResponses, GetBlocksByIdData, GetBlocksByIdErrors, GetBlocksByIdResponses, GetBlocksData, GetBlocksErrors, GetBlocksResponses, GetCoaByAddressData, GetCoaByAddressErrors, GetCoaByAddressResponses, GetHealthData, GetHealthResponses, GetKeysByPublicKeyData, GetKeysByPublicKeyErrors, GetKeysByPublicKeyResponses, GetStatsDailyData, GetStatsDailyResponses, GetStatsNetworkData, GetStatsNetworkResponses, GetStatusData, GetStatusResponses, GetTransactionsByIdData, GetTransactionsByIdErrors, GetTransactionsByIdResponses, GetTransactionsData, GetTransactionsErrors, GetTransactionsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -69,6 +69,15 @@ export const getTransactions = <ThrowOnError extends boolean = false>(options?: 
 export const getTransactionsById = <ThrowOnError extends boolean = false>(options: Options<GetTransactionsByIdData, ThrowOnError>) => (options.client ?? client).get<GetTransactionsByIdResponses, GetTransactionsByIdErrors, ThrowOnError>({
     responseType: 'json',
     url: '/transactions/{id}',
+    ...options
+});
+
+/**
+ * Resolve COA address to Flow address
+ */
+export const getCoaByAddress = <ThrowOnError extends boolean = false>(options: Options<GetCoaByAddressData, ThrowOnError>) => (options.client ?? client).get<GetCoaByAddressResponses, GetCoaByAddressErrors, ThrowOnError>({
+    responseType: 'json',
+    url: '/coa/{address}',
     ...options
 });
 

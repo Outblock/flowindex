@@ -246,6 +246,41 @@ paths:
                 additionalProperties: true
         '404':
           description: Not found
+  /coa/{address}:
+    get:
+      tags: [Accounts]
+      summary: Resolve COA address to Flow address
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: COA address (0x-prefixed hex).
+      responses:
+        '200':
+          description: Mapping result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        coa_address:
+                          type: string
+                        flow_address:
+                          type: string
+                        transaction_id:
+                          type: string
+                        block_height:
+                          type: integer
+                          format: int64
+        '404':
+          description: Mapping not found
   /accounts/{address}:
     get:
       tags: [Accounts]

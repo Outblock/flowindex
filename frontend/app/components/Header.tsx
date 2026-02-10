@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { useWebSocketStatus } from '../hooks/useWebSocket';
+import { ensureHeyApiConfigured } from '../api/heyapi';
+import { getCoaByAddress } from '../api/gen/core';
 
 function Header() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -9,15 +11,34 @@ function Header() {
   const { isConnected } = useWebSocketStatus();
   const isNavigating = useRouterState({ select: (s) => s.status === 'pending' });
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = searchQuery.trim();
     if (!query) return;
 
     if (/^\d+$/.test(query)) {
       navigate({ to: '/blocks/$height', params: { height: query } });
+    } else if (/^0x[a-fA-F0-9]{64}$/.test(query)) {
+      // EVM tx hash -> try Flow tx route (backend resolves if mapping exists)
+      navigate({ to: '/transactions/$txId', params: { txId: query } });
     } else if (/^[a-fA-F0-9]{64}$/.test(query)) {
       navigate({ to: '/transactions/$txId', params: { txId: query } });
+    } else if (/^0x[a-fA-F0-9]{40}$/.test(query)) {
+      // COA address -> resolve to Flow address if possible
+      try {
+        await ensureHeyApiConfigured();
+        const res: any = await getCoaByAddress({ path: { address: query } });
+        const payload: any = res?.data;
+        const items = payload?.data ?? (Array.isArray(payload) ? payload : []);
+        const flowAddress = items?.[0]?.flow_address;
+        if (flowAddress) {
+          navigate({ to: '/accounts/$address', params: { address: flowAddress } });
+        } else {
+          navigate({ to: '/accounts/$address', params: { address: query } });
+        }
+      } catch {
+        navigate({ to: '/accounts/$address', params: { address: query } });
+      }
     } else if (/^0x[a-fA-F0-9]{16}$/.test(query)) {
       navigate({ to: '/accounts/$address', params: { address: query } });
     } else if (query.startsWith('0x')) {
