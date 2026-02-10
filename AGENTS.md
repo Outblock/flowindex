@@ -23,6 +23,9 @@ Dev ports:
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:8080`
 
+## Tooling
+- Use `bun` for frontend dependency install, scripts, and generation (not `npm`).
+
 ## Conventions (Important)
 - **Addresses** in DB are stored normalized as lowercase hex without `0x` (e.g. `18eb4ee6b3c026d2`).
 - **EVM hashes** are stored lowercase without `0x` in `raw.tx_lookup.evm_hash`.
@@ -59,4 +62,3 @@ To reduce long-term DB growth:
 ## Security / Open Source Hygiene
 - Do **not** commit secrets (DB URLs, API keys, Railway variables, whitelisted node lists tied to private infra).
 - Use `docs/operations/railway.env.example` for templates and keep it placeholder-only.
-

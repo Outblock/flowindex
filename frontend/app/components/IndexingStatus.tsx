@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../api';
+import { ensureHeyApiConfigured } from '../api/heyapi';
+import { getStatus } from '../api/gen/core';
 
 export function IndexingStatus() {
     const [status, setStatus] = useState<any>(null);
@@ -7,7 +8,8 @@ export function IndexingStatus() {
     useEffect(() => {
         const fetchStatus = async () => {
             try {
-                const res = await api.getStatus();
+                await ensureHeyApiConfigured();
+                const res = await getStatus();
                 setStatus(res.data);
             } catch (e) {
                 console.error("Failed to fetch status", e);

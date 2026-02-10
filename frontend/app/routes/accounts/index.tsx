@@ -2,7 +2,8 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getFlowV1Account } from '../../api/gen/find';
 import { useWebSocketStatus } from '../../hooks/useWebSocket';
 import { Pagination } from '../../components/Pagination';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
@@ -25,10 +26,12 @@ export const Route = createFileRoute('/accounts/')({
         const limit = 20;
         const offset = (page - 1) * limit;
         try {
-            const res = await api.listFlowAccounts(limit, offset, { sort_by: 'block_height' });
+            await ensureHeyApiConfigured();
+            const res = await getFlowV1Account({ query: { limit, offset, sort_by: 'block_height' } });
+            const payload: any = res.data;
             return {
-                accounts: res?.data || [],
-                meta: res?._meta || null,
+                accounts: payload?.data || [],
+                meta: payload?._meta || null,
                 page
             };
         } catch (e) {

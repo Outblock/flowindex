@@ -2,7 +2,8 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Users, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getFlowV1FtByToken, getFlowV1FtByTokenHolding, getFlowV1FtTransfer } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 import { RouteErrorBoundary } from '../../components/RouteErrorBoundary';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -31,19 +32,23 @@ export const Route = createFileRoute('/tokens/$token')({
     const transfersOffset = (transfersPage - 1) * transfersLimit;
 
     try {
+      await ensureHeyApiConfigured();
       const [tokenRes, holdersRes, transfersRes] = await Promise.all([
-        api.getFlowFTToken(token),
-        api.listFlowFTHoldingsByToken(token, holdersLimit, holdersOffset),
-        api.listFlowFTTransfers(transfersLimit, transfersOffset, { token }),
+        getFlowV1FtByToken({ path: { token } }),
+        getFlowV1FtByTokenHolding({ path: { token }, query: { limit: holdersLimit, offset: holdersOffset } }),
+        getFlowV1FtTransfer({ query: { limit: transfersLimit, offset: transfersOffset, token } }),
       ]);
 
-      const tokenRow = (tokenRes?.data && tokenRes.data[0]) || null;
+      const tokenPayload: any = tokenRes?.data;
+      const holdersPayload: any = holdersRes?.data;
+      const transfersPayload: any = transfersRes?.data;
+      const tokenRow = (tokenPayload?.data && tokenPayload.data[0]) || null;
       return {
         token: tokenRow,
-        holders: holdersRes?.data || [],
-        holdersMeta: holdersRes?._meta || null,
-        transfers: transfersRes?.data || [],
-        transfersMeta: transfersRes?._meta || null,
+        holders: holdersPayload?.data || [],
+        holdersMeta: holdersPayload?._meta || null,
+        transfers: transfersPayload?.data || [],
+        transfersMeta: transfersPayload?._meta || null,
         tokenParam: token,
         holdersPage,
         transfersPage,

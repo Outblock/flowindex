@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getBlocks, getStatus } from '../../api/gen/core';
 import { useWebSocketMessages, useWebSocketStatus } from '../../hooks/useWebSocket';
 import { Pagination } from '../../components/Pagination';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
@@ -17,11 +18,12 @@ export const Route = createFileRoute('/blocks/')({
         // Note: For pagination to work optimally with SSR, we might need to adjust the API or use a search param for cursor
         // For now, we load the first page's data.
         try {
+            await ensureHeyApiConfigured();
             const [blocksRes, statusRes] = await Promise.all([
-                api.getBlocks('', 20),
-                api.getStatus()
+                getBlocks({ query: { cursor: '', limit: 20 } }),
+                getStatus()
             ]);
-            return { blocksRes, statusRes, page };
+            return { blocksRes: blocksRes.data, statusRes: statusRes.data, page };
         } catch (e) {
             console.error("Failed to load blocks data", e);
             return { blocksRes: [], statusRes: null, page: 1 };
@@ -77,9 +79,11 @@ function Blocks() {
     const loadBlocks = async (page: number) => {
         try {
             const cursor = blockCursors[page] ?? '';
-            const res = await api.getBlocks(cursor, 20);
-            const items = res?.items ?? (Array.isArray(res) ? res : []);
-            const nextCursor = res?.next_cursor ?? '';
+            await ensureHeyApiConfigured();
+            const res = await getBlocks({ query: { cursor, limit: 20 } });
+            const payload: any = res.data;
+            const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+            const nextCursor = payload?.next_cursor ?? '';
             setBlocks(prev => (page === 1 ? mergeBlocks(prev, items) : items));
             setBlockHasNext(Boolean(nextCursor));
             if (nextCursor) {
@@ -139,8 +143,9 @@ function Blocks() {
     useEffect(() => {
         const refreshStatus = async () => {
             try {
-                const statusRes = await api.getStatus();
-                if (statusRes) setStatusRaw(statusRes);
+                await ensureHeyApiConfigured();
+                const statusRes = await getStatus();
+                if (statusRes?.data) setStatusRaw(statusRes.data);
             } catch (error) {
                 console.error('Failed to fetch status:', error);
             }

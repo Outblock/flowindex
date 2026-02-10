@@ -2,7 +2,8 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Image, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getFlowV1Nft } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -21,8 +22,10 @@ export const Route = createFileRoute('/nfts/')({
     const limit = 25;
     const offset = (page - 1) * limit;
     try {
-      const res = await api.listFlowNFTCollections(limit, offset);
-      return { collections: res?.data || [], meta: res?._meta || null, page };
+      await ensureHeyApiConfigured();
+      const res = await getFlowV1Nft({ query: { limit, offset } });
+      const payload: any = res.data;
+      return { collections: payload?.data || [], meta: payload?._meta || null, page };
     } catch (e) {
       console.error('Failed to load NFT collections', e);
       return { collections: [], meta: null, page };

@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Image, Users, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getFlowV1NftByNftType, getFlowV1NftByNftTypeHolding, getFlowV1NftTransfer } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 import { RouteErrorBoundary } from '../../components/RouteErrorBoundary';
 
@@ -28,18 +29,22 @@ export const Route = createFileRoute('/nfts/$nftType')({
     const transfersOffset = (transfersPage - 1) * transfersLimit;
 
     try {
+      await ensureHeyApiConfigured();
       const [collectionRes, ownersRes, transfersRes] = await Promise.all([
-        api.getFlowNFTCollection(nftType),
-        api.listFlowNFTHoldingsByCollection(nftType, ownersLimit, ownersOffset),
-        api.listFlowNFTTransfers(transfersLimit, transfersOffset, { nft_type: nftType }),
+        getFlowV1NftByNftType({ path: { nft_type: nftType } }),
+        getFlowV1NftByNftTypeHolding({ path: { nft_type: nftType }, query: { limit: ownersLimit, offset: ownersOffset } }),
+        getFlowV1NftTransfer({ query: { limit: transfersLimit, offset: transfersOffset, nft_type: nftType } }),
       ]);
-      const row = (collectionRes?.data && collectionRes.data[0]) || null;
+      const collectionPayload: any = collectionRes?.data;
+      const ownersPayload: any = ownersRes?.data;
+      const transfersPayload: any = transfersRes?.data;
+      const row = (collectionPayload?.data && collectionPayload.data[0]) || null;
       return {
         collection: row,
-        owners: ownersRes?.data || [],
-        ownersMeta: ownersRes?._meta || null,
-        transfers: transfersRes?.data || [],
-        transfersMeta: transfersRes?._meta || null,
+        owners: ownersPayload?.data || [],
+        ownersMeta: ownersPayload?._meta || null,
+        transfers: transfersPayload?.data || [],
+        transfersMeta: transfersPayload?._meta || null,
         nftType,
         ownersPage,
         transfersPage,

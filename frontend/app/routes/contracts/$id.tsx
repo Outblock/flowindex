@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getFlowV1Contract } from '../../api/gen/find';
+import { getAccountsByAddressContractsByName } from '../../api/gen/core';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -17,8 +19,10 @@ export const Route = createFileRoute('/contracts/$id')({
         try {
             const id = params.id;
             // 1. Fetch contract metadata
-            const listRes = await api.listFlowContracts(1, 0, { identifier: id });
-            const meta = listRes?.data?.[0];
+            await ensureHeyApiConfigured();
+            const listRes = await getFlowV1Contract({ query: { limit: 1, offset: 0, identifier: id } });
+            const listPayload: any = listRes?.data;
+            const meta = listPayload?.data?.[0];
 
             if (!meta) {
                 return { contract: null, code: null, error: 'Contract not found' };
@@ -38,8 +42,9 @@ export const Route = createFileRoute('/contracts/$id')({
 
             if (address && name) {
                 try {
-                    const codeRes = await api.getAccountContractCode(address, name);
-                    code = codeRes?.code || code;
+                    const codeRes = await getAccountsByAddressContractsByName({ path: { address, name } });
+                    const codePayload: any = codeRes?.data;
+                    code = codePayload?.code || code;
                 } catch (e) {
                     console.warn('Failed to fetch code', e);
                 }

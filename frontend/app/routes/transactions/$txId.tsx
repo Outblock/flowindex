@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getTransactionsById } from '../../api/gen/core';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -15,7 +16,9 @@ export const Route = createFileRoute('/transactions/$txId')({
     component: TransactionDetail,
     loader: async ({ params }) => {
         try {
-            const rawTx = await api.getTransaction(params.txId);
+            await ensureHeyApiConfigured();
+            const res = await getTransactionsById({ path: { id: params.txId } });
+            const rawTx: any = res.data;
             const transformedTx = {
                 ...rawTx,
                 type: rawTx.type || (rawTx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),

@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, XCircle, CheckCircle } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getStatus, getTransactions } from '../../api/gen/core';
 import { useWebSocketMessages, useWebSocketStatus } from '../../hooks/useWebSocket';
 import { Pagination } from '../../components/Pagination';
 import { formatRelativeTime } from '../../lib/time';
@@ -15,11 +16,12 @@ export const Route = createFileRoute('/transactions/')({
         const page = Number(new URLSearchParams(location.search).get('page') || '1');
         try {
             // For now, load first page data on server
+            await ensureHeyApiConfigured();
             const [transactionsRes, statusRes] = await Promise.all([
-                api.getTransactions('', 20),
-                api.getStatus()
+                getTransactions({ query: { cursor: '', limit: 20 } }),
+                getStatus()
             ]);
-            return { transactionsRes, statusRes, page };
+            return { transactionsRes: transactionsRes.data, statusRes: statusRes.data, page };
         } catch (e) {
             console.error("Failed to load transactions", e);
             return { transactionsRes: [], statusRes: null, page: 1 };
@@ -139,9 +141,10 @@ function Transactions() {
     const loadTransactions = async (page) => {
         try {
             const cursor = txCursors[page] ?? '';
-            const res = await api.getTransactions(cursor, 20);
-            const items = res?.items ?? (Array.isArray(res) ? res : []);
-            const nextCursor = res?.next_cursor ?? '';
+            await ensureHeyApiConfigured();
+            const res = await getTransactions({ query: { cursor, limit: 20 } });
+            const items = res?.data?.items ?? (Array.isArray(res?.data) ? res.data : []);
+            const nextCursor = res?.data?.next_cursor ?? '';
 
             const transformedTxs = items.map(tx => ({
                 ...tx,
@@ -206,8 +209,9 @@ function Transactions() {
     useEffect(() => {
         const refreshStatus = async () => {
             try {
-                const statusRes = await api.getStatus();
-                if (statusRes) setStatusRaw(statusRes);
+                await ensureHeyApiConfigured();
+                const statusRes = await getStatus();
+                if (statusRes?.data) setStatusRaw(statusRes.data);
             } catch (e) { console.error(e); }
         };
 

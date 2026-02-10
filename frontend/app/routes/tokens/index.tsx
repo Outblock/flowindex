@@ -2,7 +2,8 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getFlowV1Ft } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -21,8 +22,10 @@ export const Route = createFileRoute('/tokens/')({
     const limit = 25;
     const offset = (page - 1) * limit;
     try {
-      const res = await api.listFlowFTTokens(limit, offset);
-      return { tokens: res?.data || [], meta: res?._meta || null, page };
+      await ensureHeyApiConfigured();
+      const res = await getFlowV1Ft({ query: { limit, offset } });
+      const payload: any = res.data;
+      return { tokens: payload?.data || [], meta: payload?._meta || null, page };
     } catch (e) {
       console.error('Failed to load tokens', e);
       return { tokens: [], meta: null, page };

@@ -2,7 +2,8 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Image, ArrowRightLeft } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../../../../api';
+import { ensureHeyApiConfigured } from '../../../../api/heyapi';
+import { getFlowV1NftByNftTypeItemById, getFlowV1NftByNftTypeItemByIdTransfer } from '../../../../api/gen/find';
 import { Pagination } from '../../../../components/Pagination';
 import { RouteErrorBoundary } from '../../../../components/RouteErrorBoundary';
 
@@ -20,15 +21,18 @@ export const Route = createFileRoute('/nfts/$nftType/item/$id')({
     const limit = 25;
     const offset = (page - 1) * limit;
     try {
+      await ensureHeyApiConfigured();
       const [itemRes, transfersRes] = await Promise.all([
-        api.getFlowNFTItem(nftType, id),
-        api.listFlowNFTItemTransfers(nftType, id, limit, offset),
+        getFlowV1NftByNftTypeItemById({ path: { nft_type: nftType, id } }),
+        getFlowV1NftByNftTypeItemByIdTransfer({ path: { nft_type: nftType, id }, query: { limit, offset } }),
       ]);
-      const row = (itemRes?.data && itemRes.data[0]) || null;
+      const itemPayload: any = itemRes?.data;
+      const transfersPayload: any = transfersRes?.data;
+      const row = (itemPayload?.data && itemPayload.data[0]) || null;
       return {
         item: row,
-        transfers: transfersRes?.data || [],
-        transfersMeta: transfersRes?._meta || null,
+        transfers: transfersPayload?.data || [],
+        transfersMeta: transfersPayload?._meta || null,
         nftType,
         id,
         page,

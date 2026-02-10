@@ -2502,6 +2502,60 @@
         }
       }
     },
+    "/flow/v1/nft/{nft_type}/item/{id}/transfer": {
+      "get": {
+        "description": "Fetch transfer history for a specific NFT item.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Retrieve NFT item transfer events",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "nft_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/flow.NFTTransfersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/flow/v1/node": {
       "get": {
         "description": "Retrieves a list of nodes from the database based on the parameters provided.",

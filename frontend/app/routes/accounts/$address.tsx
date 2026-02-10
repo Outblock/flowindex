@@ -1,6 +1,20 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import {
+    getAccountsByAddress,
+    getAccountsByAddressTransactions,
+    getAccountsByAddressTokenTransfers,
+    getAccountsByAddressNftTransfers,
+    getAccountsByAddressContractsByName,
+    getAccountsByAddressStorage,
+    getAccountsByAddressStorageLinks,
+    getAccountsByAddressStorageItem,
+} from '../../api/gen/core';
+import {
+    getFlowV1AccountByAddressFtHolding,
+    getFlowV1AccountByAddressNft,
+} from '../../api/gen/find';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -18,8 +32,10 @@ export const Route = createFileRoute('/accounts/$address')({
         try {
             const address = params.address;
             const normalizedAddress = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
-            const accountRes = await api.getAccount(normalizedAddress);
-            const normalizedKeys = (accountRes.keys || []).map((key) => ({
+            await ensureHeyApiConfigured();
+            const accountRes = await getAccountsByAddress({ path: { address: normalizedAddress } });
+            const accountPayload: any = accountRes.data;
+            const normalizedKeys = (accountPayload?.keys || []).map((key) => ({
                 keyIndex: key.keyIndex ?? key.key_index ?? key.index,
                 publicKey: key.publicKey ?? key.public_key ?? '',
                 signingAlgorithm: key.signingAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
@@ -31,9 +47,9 @@ export const Route = createFileRoute('/accounts/$address')({
 
             const initialAccount = {
                 address: normalizedAddress,
-                balance: accountRes.balance,
+                balance: accountPayload?.balance,
                 createdAt: null,
-                contracts: accountRes.contracts || [],
+                contracts: accountPayload?.contracts || [],
                 keys: normalizedKeys
             };
 
@@ -43,8 +59,9 @@ export const Route = createFileRoute('/accounts/$address')({
             let initialTransactions = [];
             try {
                 // Note: using cursor '' for first page
-                const txRes = await api.getAccountTransactions(normalizedAddress, '', 20);
-                const items = txRes?.items ?? (Array.isArray(txRes) ? txRes : []);
+                const txRes = await getAccountsByAddressTransactions({ path: { address: normalizedAddress }, query: { cursor: '', limit: 20 } });
+                const payload: any = txRes.data;
+                const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
                 initialTransactions = (items || []).map(tx => ({
                     ...tx,
                     type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
@@ -216,9 +233,11 @@ function AccountDetail() {
         setTxLoading(true);
         try {
             const cursor = txCursors[page] ?? '';
-            const txRes = await api.getAccountTransactions(normalizedAddress || address, cursor, 20);
-            const items = txRes?.items ?? (Array.isArray(txRes) ? txRes : []);
-            const nextCursor = txRes?.next_cursor ?? '';
+            await ensureHeyApiConfigured();
+            const txRes = await getAccountsByAddressTransactions({ path: { address: normalizedAddress || address }, query: { cursor, limit: 20 } });
+            const payload: any = txRes.data;
+            const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+            const nextCursor = payload?.next_cursor ?? '';
             const accountTxs = (items || [])
                 .map(tx => ({
                     ...tx,
@@ -242,9 +261,11 @@ function AccountDetail() {
     const loadTokenTransfers = async (cursorValue, append) => {
         setTokenLoading(true);
         try {
-            const tokenRes = await api.getAccountTokenTransfers(normalizedAddress || address, cursorValue, 20);
-            const items = tokenRes?.items ?? tokenRes ?? [];
-            const nextCursor = tokenRes?.next_cursor ?? '';
+            await ensureHeyApiConfigured();
+            const tokenRes = await getAccountsByAddressTokenTransfers({ path: { address: normalizedAddress || address }, query: { cursor: cursorValue, limit: 20 } });
+            const payload: any = tokenRes.data;
+            const items = payload?.items ?? payload ?? [];
+            const nextCursor = payload?.next_cursor ?? '';
             setTokenTransfers(prev => (append ? [...prev, ...items] : items));
             setTokenCursor(nextCursor || '');
             setTokenHasMore(Boolean(nextCursor));
@@ -258,9 +279,11 @@ function AccountDetail() {
     const loadNFTTransfers = async (cursorValue, append) => {
         setNftLoading(true);
         try {
-            const nftRes = await api.getAccountNFTTransfers(normalizedAddress || address, cursorValue, 20);
-            const items = nftRes?.items ?? nftRes ?? [];
-            const nextCursor = nftRes?.next_cursor ?? '';
+            await ensureHeyApiConfigured();
+            const nftRes = await getAccountsByAddressNftTransfers({ path: { address: normalizedAddress || address }, query: { cursor: cursorValue, limit: 20 } });
+            const payload: any = nftRes.data;
+            const items = payload?.items ?? payload ?? [];
+            const nextCursor = payload?.next_cursor ?? '';
             setNftTransfers(prev => (append ? [...prev, ...items] : items));
             setNftCursor(nextCursor || '');
             setNftHasMore(Boolean(nextCursor));
@@ -276,8 +299,10 @@ function AccountDetail() {
         try {
             const limit = 25;
             const offset = (page - 1) * limit;
-            const res = await api.listFlowAccountFTHoldings(normalizedAddress || address, limit, offset);
-            const items = res?.data ?? [];
+            await ensureHeyApiConfigured();
+            const res = await getFlowV1AccountByAddressFtHolding({ path: { address: normalizedAddress || address }, query: { limit, offset } });
+            const payload: any = res.data;
+            const items = payload?.data ?? [];
             setFTHoldings(items);
             setFTHoldingsPage(page);
             setFTHoldingsHasNext(items.length === limit);
@@ -293,8 +318,10 @@ function AccountDetail() {
         try {
             const limit = 25;
             const offset = (page - 1) * limit;
-            const res = await api.listFlowAccountNFTCollections(normalizedAddress || address, limit, offset);
-            const items = res?.data ?? [];
+            await ensureHeyApiConfigured();
+            const res = await getFlowV1AccountByAddressNft({ path: { address: normalizedAddress || address }, query: { limit, offset } });
+            const payload: any = res.data;
+            const items = payload?.data ?? [];
             setOwnedNFTCollections(items);
             setOwnedNFTCollectionsPage(page);
             setOwnedNFTCollectionsHasNext(items.length === limit);
@@ -312,8 +339,9 @@ function AccountDetail() {
         setSelectedContract(name);
         setSelectedContractCode('');
         try {
-            const res = await api.getAccountContractCode(normalizedAddress || address, name);
-            setSelectedContractCode(res?.code || '');
+            await ensureHeyApiConfigured();
+            const res = await getAccountsByAddressContractsByName({ path: { address: normalizedAddress || address, name } });
+            setSelectedContractCode(res?.data?.code || '');
         } catch (err) {
             console.error('Failed to load contract code', err);
             setContractCodeError('Failed to load contract code');
@@ -328,8 +356,9 @@ function AccountDetail() {
         setStorageItem(null);
         setStorageSelected(null);
         try {
-            const res = await api.getAccountStorageOverview(normalizedAddress || address);
-            setStorageOverview(decodeCadenceValue(res));
+            await ensureHeyApiConfigured();
+            const res = await getAccountsByAddressStorage({ path: { address: normalizedAddress || address } });
+            setStorageOverview(decodeCadenceValue(res?.data));
         } catch (err) {
             console.error('Failed to load storage overview', err);
             setStorageError('Failed to load storage overview');
@@ -349,8 +378,12 @@ function AccountDetail() {
         setStorageSelected(str);
         setStorageItem(null);
         try {
-            const res = await api.getAccountStorageItem(normalizedAddress || address, identifier, opts);
-            setStorageItem(decodeCadenceValue(res));
+            await ensureHeyApiConfigured();
+            const res = await getAccountsByAddressStorageItem({
+                path: { address: normalizedAddress || address },
+                query: { path: identifier, raw: opts?.raw ?? false, uuid: opts?.uuid ?? '' }
+            });
+            setStorageItem(decodeCadenceValue(res?.data));
         } catch (err) {
             console.error('Failed to browse storage item', err);
             setStorageError('Failed to browse storage item');

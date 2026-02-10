@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Activity, HardDrive, Server, Layers, Info, Square } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../api';
+import { ensureHeyApiConfigured } from '../api/heyapi';
+import { getStatus } from '../api/gen/core';
 
 export const Route = createFileRoute('/stats')({
     component: Stats,
@@ -70,8 +71,9 @@ function Stats() {
 
     const fetchStatus = async () => {
         try {
-            const data = await api.getStatus();
-            processStatus(data);
+            await ensureHeyApiConfigured();
+            const res = await getStatus();
+            processStatus(res.data);
         } catch (error) {
             console.error('Failed to fetch status:', error);
         }

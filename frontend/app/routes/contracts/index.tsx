@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Search, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { api } from '../../api';
+import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { getFlowV1Contract } from '../../api/gen/find';
 import { useWebSocketStatus } from '../../hooks/useWebSocket';
 import { Pagination } from '../../components/Pagination';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
@@ -28,10 +29,12 @@ export const Route = createFileRoute('/contracts/')({
         const limit = 25;
         const offset = (page - 1) * limit;
         try {
-            const res = await api.listFlowContracts(limit, offset, { identifier: query });
+            await ensureHeyApiConfigured();
+            const res = await getFlowV1Contract({ query: { limit, offset, identifier: query } });
+            const payload: any = res.data;
             return {
-                contracts: res?.data || [],
-                meta: res?._meta || null,
+                contracts: payload?.data || [],
+                meta: payload?._meta || null,
                 page,
                 query
             };

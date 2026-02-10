@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { api } from '../api';
+import { ensureHeyApiConfigured } from '../api/heyapi';
+import { getStatsDaily } from '../api/gen/core';
 
 export function DailyStatsChart() {
     const [data, setData] = useState<any[]>([]);
@@ -10,7 +11,9 @@ export function DailyStatsChart() {
     useEffect(() => {
         const loadStats = async () => {
             try {
-                const stats = await api.getDailyStats();
+                await ensureHeyApiConfigured();
+                const res = await getStatsDaily();
+                const stats: any = res?.data;
 
                 // Handle null/empty response
                 if (stats && Array.isArray(stats)) {

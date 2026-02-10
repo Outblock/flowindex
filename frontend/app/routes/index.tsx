@@ -3,7 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Activity, TrendingUp, Database } from 'lucide-react';
 import { SafeNumberFlow } from '../components/SafeNumberFlow';
-import { api } from '../api';
+import { ensureHeyApiConfigured } from '../api/heyapi';
+import { getBlocks, getStatus, getTransactions, getStatsNetwork } from '../api/gen/core';
 import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
 import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
@@ -17,13 +18,19 @@ export const Route = createFileRoute('/')({
     component: Home,
     loader: async () => {
         try {
+            await ensureHeyApiConfigured();
             const [status, networkStats, blocks, transactions] = await Promise.all([
-                api.getStatus(),
-                api.getNetworkStats(),
-                api.getBlocks('', 50),
-                api.getTransactions('', 50)
+                getStatus(),
+                getStatsNetwork(),
+                getBlocks({ query: { cursor: '', limit: 50 } }),
+                getTransactions({ query: { cursor: '', limit: 50 } })
             ]);
-            return { status, networkStats, blocks, transactions };
+            return {
+                status: status.data,
+                networkStats: networkStats.data,
+                blocks: blocks.data,
+                transactions: transactions.data,
+            };
         } catch (e) {
             console.error("Failed to load initial data", e);
             return { status: null, networkStats: null, blocks: [], transactions: [] };
@@ -222,8 +229,9 @@ function Home() {
     // Load Txs (Initial only, no pagination)
     const loadTransactions = async () => {
         try {
-            const res = await api.getTransactions('', 50);
-            const items = res?.items ?? (Array.isArray(res) ? res : []);
+            await ensureHeyApiConfigured();
+            const res = await getTransactions({ query: { cursor: '', limit: 50 } });
+            const items = res?.data?.items ?? (Array.isArray(res?.data) ? res.data : []);
             const transformedTxs = Array.isArray(items) ? items.map(tx => ({
                 ...tx,
                 type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
@@ -330,9 +338,10 @@ function Home() {
 
         const refreshStatus = async () => {
             try {
-                const statusRes = await api.getStatus();
-                if (!active || !statusRes) return;
-                setStatusRaw(statusRes);
+                await ensureHeyApiConfigured();
+                const statusRes = await getStatus();
+                if (!active || !statusRes?.data) return;
+                setStatusRaw(statusRes.data);
             } catch (error) {
                 console.error('Failed to fetch status:', error);
             }
@@ -340,9 +349,10 @@ function Home() {
 
         const refreshNetworkStats = async () => {
             try {
-                const netStatsRes = await api.getNetworkStats();
+                await ensureHeyApiConfigured();
+                const netStatsRes = await getStatsNetwork();
                 if (!active) return;
-                setNetworkStats(netStatsRes);
+                setNetworkStats(netStatsRes?.data ?? null);
             } catch (error) {
                 console.error('Failed to fetch network stats:', error);
             }
