@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, Activity, TrendingUp, Database } from 'lucide-react';
+import { Box, Activity, TrendingUp } from 'lucide-react';
 import { SafeNumberFlow } from '../components/SafeNumberFlow';
 import { ensureHeyApiConfigured } from '../api/heyapi';
 import { getBlocks, getStatus, getTransactions, getStatsNetwork } from '../api/gen/core';
@@ -390,7 +390,6 @@ function Home() {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-nothing-black text-zinc-900 dark:text-nothing-white font-mono selection:bg-nothing-green selection:text-black transition-colors duration-300">
-            <IndexingStatus />
             <div className="border-b border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-nothing-dark/50">
                 <div className="container mx-auto px-4 py-12 space-y-8">
                     {/* Branding / Hero Text */}
@@ -407,40 +406,7 @@ function Home() {
                     </div>
 
                     {/* Indexing Progress Banner */}
-                    <Link
-                        to="/stats"
-                        className="block border border-zinc-200 dark:border-white/10 bg-white dark:bg-nothing-dark/80 hover:border-nothing-green/40 transition-colors"
-                    >
-                        <div className="p-4 md:p-5">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                                        <Database className="h-4 w-4 text-nothing-green-dark dark:text-nothing-green" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 dark:text-gray-400">Indexing Progress</p>
-                                        <p className="text-sm text-zinc-900 dark:text-white">
-                                            {totalHistory > 0 ? `${historyPercent.toFixed(2)}% of full history` : 'Initializing...'}
-                                        </p>
-                                        {totalHistory > 0 && (
-                                            <p className="text-[10px] uppercase tracking-wider text-gray-500">
-                                                Range: {formatNumber(minHeight)} → {formatNumber(maxHeight)} (Latest {formatNumber(latestHeight)})
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="h-2 w-48 bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
-                                        <div
-                                            className="h-full bg-emerald-500 dark:bg-nothing-green"
-                                            style={{ width: `${Math.min(100, historyPercent).toFixed(2)}%` }}
-                                        />
-                                    </div>
-                                    <span className="text-[10px] uppercase tracking-widest text-nothing-green-dark dark:text-nothing-green">View Details →</span>
-                                </div>
-                            </div>
-                        </div>
-                    </Link>
+                    <IndexingStatus />
 
                     {/* New Premium Stats Grid (Flow Pulse) */}
                     <motion.div
