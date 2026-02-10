@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Users, ArrowRightLeft } from 'lucide-react';
-import NumberFlow from '@number-flow/react';
+import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1FtByToken, getFlowV1FtByTokenHolding, getFlowV1FtTransfer } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
@@ -202,7 +202,7 @@ function TokenDetailInner() {
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
           <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Holders</p>
           <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-            <NumberFlow value={Number.isFinite(holdersCount) ? holdersCount : 0} format={{ useGrouping: true }} />
+            <SafeNumberFlow value={Number.isFinite(holdersCount) ? holdersCount : 0} format={{ useGrouping: true }} />
           </p>
           <div className="mt-2 text-[10px] uppercase tracking-widest text-zinc-500">
             Page size: {holdersState.length}
