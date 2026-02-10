@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import {
@@ -22,7 +22,7 @@ import {
     ArrowLeft, ArrowRightLeft, User, Activity, Wallet, Key, Code, Coins, Image as ImageIcon,
     FileText, HardDrive, Folder, FolderOpen, File, ChevronRight, ChevronDown
 } from 'lucide-react';
-import NumberFlow from '@number-flow/react';
+import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -85,6 +85,7 @@ export const Route = createFileRoute('/accounts/$address')({
 function AccountDetail() {
     const { address } = Route.useParams();
     const { account: initialAccount, initialTransactions } = Route.useLoaderData();
+    const location = useRouterState({ select: (s) => s.location });
 
     const [account, setAccount] = useState<any>(initialAccount);
     const [transactions, setTransactions] = useState<any[]>(initialTransactions);
@@ -118,6 +119,67 @@ function AccountDetail() {
     const [ownedNFTCollectionsPage, setOwnedNFTCollectionsPage] = useState(1);
     const [ownedNFTCollectionsHasNext, setOwnedNFTCollectionsHasNext] = useState(false);
     const [ownedNFTCollectionsLoading, setOwnedNFTCollectionsLoading] = useState(false);
+
+    useEffect(() => {
+        const normalizedAddress = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
+        if (account?.address === normalizedAddress) return;
+
+        let cancelled = false;
+        const refreshAccount = async () => {
+            try {
+                await ensureHeyApiConfigured();
+                const accountRes = await getAccountsByAddress({ path: { address: normalizedAddress } });
+                const accountPayload: any = accountRes.data;
+                const normalizedKeys = (accountPayload?.keys || []).map((key) => ({
+                    keyIndex: key.keyIndex ?? key.key_index ?? key.index,
+                    publicKey: key.publicKey ?? key.public_key ?? '',
+                    signingAlgorithm: key.signingAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
+                    hashingAlgorithm: key.hashingAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
+                    weight: key.weight ?? 0,
+                    sequenceNumber: key.sequenceNumber ?? key.sequence_number ?? 0,
+                    revoked: Boolean(key.revoked),
+                }));
+                const nextAccount = {
+                    address: normalizedAddress,
+                    balance: accountPayload?.balance,
+                    createdAt: null,
+                    contracts: accountPayload?.contracts || [],
+                    keys: normalizedKeys
+                };
+
+                const txRes = await getAccountsByAddressTransactions({
+                    path: { address: normalizedAddress },
+                    query: { cursor: '', limit: 20 }
+                });
+                const payload: any = txRes.data;
+                const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+                const initialTx = (items || []).map(tx => ({
+                    ...tx,
+                    type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
+                    payer: tx.payer_address || tx.proposer_address,
+                    proposer: tx.proposer_address,
+                    blockHeight: tx.block_height
+                }));
+
+                if (cancelled) return;
+                setAccount(nextAccount);
+                setTransactions(initialTx);
+                setCurrentPage(1);
+                setTxCursors({ 1: '' });
+                setTxHasNext(Boolean(payload?.next_cursor));
+                setError(null);
+            } catch (e) {
+                if (cancelled) return;
+                console.error('Failed to refresh account route', e);
+                setError('Account not found');
+            }
+        };
+
+        refreshAccount();
+        return () => {
+            cancelled = true;
+        };
+    }, [address, location?.pathname]);
 
     // Contract code viewer
     const [selectedContract, setSelectedContract] = useState('');
@@ -475,7 +537,7 @@ function AccountDetail() {
                     <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark hover:border-nothing-green-dark/50 dark:hover:border-nothing-green/50 transition-colors shadow-sm dark:shadow-none">
                         <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Balance</p>
                         <p className="text-2xl font-bold text-zinc-900 dark:text-white overflow-hidden text-ellipsis flex items-center gap-2">
-                            <NumberFlow
+                            <SafeNumberFlow
                                 value={account.balance || 0}
                                 format={{ minimumFractionDigits: 0, maximumFractionDigits: 4 }}
                             />
