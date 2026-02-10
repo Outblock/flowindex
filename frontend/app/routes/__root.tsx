@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Sidebar from '../components/Sidebar';
-import { IndexingStatus } from '../components/IndexingStatus';
 import { WebSocketProvider } from '../components/WebSocketProvider';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { Toaster } from 'react-hot-toast';
@@ -24,7 +23,6 @@ function RootComponent() {
 
                         {/* Main Content Area */}
                         <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-                            <IndexingStatus />
                             <Header />
                             <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden relative scroll-smooth focus:scroll-auto">
                                 <div className="flex-1 flex flex-col relative">

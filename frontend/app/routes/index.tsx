@@ -10,6 +10,7 @@ import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
 import { NetworkStats } from '../components/NetworkStats';
 import { DailyStatsChart } from '../components/DailyStatsChart';
+import { IndexingStatus } from '../components/IndexingStatus';
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 import { useTimeTicker } from '../hooks/useTimeTicker';
 import { formatNumber } from '../lib/format';
@@ -389,6 +390,7 @@ function Home() {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-nothing-black text-zinc-900 dark:text-nothing-white font-mono selection:bg-nothing-green selection:text-black transition-colors duration-300">
+            <IndexingStatus />
             <div className="border-b border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-nothing-dark/50">
                 <div className="container mx-auto px-4 py-12 space-y-8">
                     {/* Branding / Hero Text */}
