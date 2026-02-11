@@ -455,7 +455,7 @@ function AccountDetail() {
         }
     };
 
-    const NFT_PAGE_SIZE = 12;
+    const NFT_PAGE_SIZE = 30;
 
     const toggleCollectionNFTs = async (storagePath: string, page = 0) => {
         const pathId = storagePath.split('/').pop() || '';
