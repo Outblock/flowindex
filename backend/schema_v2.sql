@@ -438,6 +438,11 @@ CREATE TABLE IF NOT EXISTS app.smart_contracts (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (address, name)
 );
+-- Add columns for existing tables (no-op on fresh installs)
+ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS kind TEXT;
+ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS first_seen_height BIGINT;
+ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS last_seen_height BIGINT;
+
 CREATE INDEX IF NOT EXISTS idx_smart_contracts_kind_first_seen
   ON app.smart_contracts (kind, first_seen_height)
   WHERE kind IS NOT NULL;
@@ -661,10 +666,6 @@ CREATE TABLE IF NOT EXISTS app.status_snapshots (
 );
 
 -- Migration: merge app.contracts into app.smart_contracts
-ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS kind TEXT;
-ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS first_seen_height BIGINT;
-ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS last_seen_height BIGINT;
-
 DO $$ BEGIN
   IF to_regclass('app.contracts') IS NOT NULL THEN
     EXECUTE 'UPDATE app.smart_contracts sc SET kind = c.kind, first_seen_height = c.first_seen_height, last_seen_height = c.last_seen_height FROM app.contracts c WHERE sc.address = c.address AND sc.name = c.name AND sc.kind IS NULL';
