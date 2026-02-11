@@ -17,7 +17,7 @@ import (
 
 // SaveBatch atomicially saves a batch of blocks and all related data
 // SaveBatch saves a batch of blocks and related data atomically
-func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, collections []models.Collection, executionResults []models.ExecutionResult, serviceName string, checkpointHeight uint64) error {
+func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, serviceName string, checkpointHeight uint64) error {
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -558,116 +558,6 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert event: %w", err)
-			}
-		}
-	}
-
-	// 3.1 Insert Collections (if enabled)
-	usedCopyForCollections := false
-	if len(collections) > 0 && strings.ToLower(strings.TrimSpace(os.Getenv("DB_BULK_COPY"))) != "false" {
-		sub, err := dbtx.Begin(ctx)
-		if err == nil {
-			defer sub.Rollback(ctx)
-
-			_, errCopy := sub.CopyFrom(ctx,
-				pgx.Identifier{"raw", "collections"},
-				[]string{
-					"block_height", "id",
-					"guarantor_ids", "signer_ids", "signatures",
-					"transaction_ids", "timestamp",
-				},
-				pgx.CopyFromSlice(len(collections), func(i int) ([]any, error) {
-					c := collections[i]
-					collectionTimestamp := c.Timestamp
-					if collectionTimestamp.IsZero() {
-						if ts, ok := blockTimeByHeight[c.BlockHeight]; ok {
-							collectionTimestamp = ts
-						}
-					}
-					if collectionTimestamp.IsZero() {
-						collectionTimestamp = time.Now()
-					}
-
-					return []any{
-						c.BlockHeight,
-						hexToBytes(c.ID),
-						nil,
-						nil,
-						nil,
-						sliceHexToBytes(c.TransactionIDs),
-						collectionTimestamp,
-					}, nil
-				}),
-			)
-			if errCopy == nil {
-				if err := sub.Commit(ctx); err == nil {
-					usedCopyForCollections = true
-				}
-			}
-
-			if !usedCopyForCollections {
-				_ = sub.Rollback(ctx)
-			}
-		}
-	}
-
-	if !usedCopyForCollections {
-		for _, c := range collections {
-			collectionTimestamp := c.Timestamp
-			if collectionTimestamp.IsZero() {
-				if ts, ok := blockTimeByHeight[c.BlockHeight]; ok {
-					collectionTimestamp = ts
-				}
-			}
-			if collectionTimestamp.IsZero() {
-				collectionTimestamp = time.Now()
-			}
-
-			_, err := dbtx.Exec(ctx, `
-				INSERT INTO raw.collections (
-					block_height, id,
-					guarantor_ids, signer_ids, signatures,
-					transaction_ids, timestamp
-				)
-				VALUES ($1, $2, $3, $4, $5, $6, $7)
-				ON CONFLICT (block_height, id) DO NOTHING`,
-				c.BlockHeight,
-				hexToBytes(c.ID),
-				nil,
-				nil,
-				nil,
-				sliceHexToBytes(c.TransactionIDs),
-				collectionTimestamp,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to insert collection: %w", err)
-			}
-		}
-	}
-
-	// 3.2 Insert Execution Results (if enabled)
-	if len(executionResults) > 0 {
-		for _, er := range executionResults {
-			var payload any
-			if len(er.ChunkData) > 0 {
-				payload = er.ChunkData
-			}
-
-			_, err := dbtx.Exec(ctx, `
-				INSERT INTO raw.execution_results (
-					block_height, id, chunk_data, timestamp
-				)
-				VALUES ($1, $2, $3, $4)
-				ON CONFLICT (block_height, id) DO UPDATE SET
-					chunk_data = COALESCE(EXCLUDED.chunk_data, raw.execution_results.chunk_data),
-					timestamp = EXCLUDED.timestamp`,
-				er.BlockHeight,
-				hexToBytes(er.ID),
-				payload,
-				er.Timestamp,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to insert execution result: %w", err)
 			}
 		}
 	}

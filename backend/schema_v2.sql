@@ -168,13 +168,6 @@ CREATE TABLE IF NOT EXISTS raw.scripts (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- app.contract_code (store contract code by hash)
-CREATE TABLE IF NOT EXISTS app.contract_code (
-    code_hash  VARCHAR(64) PRIMARY KEY, -- SHA-256
-    code_text  TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 -- 3.1.a Block lookup for fast "by id" queries (avoids scanning partitions)
 CREATE TABLE IF NOT EXISTS raw.block_lookup (
     id      BYTEA PRIMARY KEY,
@@ -188,7 +181,6 @@ CREATE INDEX IF NOT EXISTS idx_block_lookup_height ON raw.block_lookup(height);
 CREATE TABLE IF NOT EXISTS raw.transactions (
     block_height      BIGINT NOT NULL,
     id                BYTEA NOT NULL,
-    internal_id       BIGSERIAL,           -- surrogate, not authoritative ordering
     transaction_index INT NOT NULL,
 
     proposer_address  BYTEA,
@@ -237,7 +229,6 @@ CREATE TABLE IF NOT EXISTS raw.events (
     block_height      BIGINT NOT NULL,
     transaction_id    BYTEA NOT NULL,
     event_index       INT NOT NULL,
-    internal_id       BIGSERIAL,
     transaction_index INT,
 
     type              TEXT NOT NULL,
@@ -252,69 +243,15 @@ CREATE TABLE IF NOT EXISTS raw.events (
 
 -- Note: avoid heavy secondary indexes on raw.events in early phase.
 
--- 3.4 Collections (5M partitions)
-CREATE TABLE IF NOT EXISTS raw.collections (
-    block_height   BIGINT NOT NULL,
-    id             BYTEA NOT NULL,
-    guarantor_ids  TEXT[],
-    signer_ids     TEXT[],
-    signatures     JSONB,
-    transaction_ids BYTEA[],
-    timestamp      TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY (block_height, id)
-) PARTITION BY RANGE (block_height);
-
--- 3.5 Execution Results (5M partitions)
-CREATE TABLE IF NOT EXISTS raw.execution_results (
-    block_height BIGINT NOT NULL,
-    id           BYTEA NOT NULL,
-    chunk_data   JSONB,
-    timestamp    TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY (block_height, id)
-) PARTITION BY RANGE (block_height);
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4) DERIVED HIGH-VOLUME TABLES (partitioned)
 -- ─────────────────────────────────────────────────────────────────────────────
-
--- 4.1 Token transfers (legacy combined table, kept for backwards compatibility)
-CREATE TABLE IF NOT EXISTS app.token_transfers (
-    block_height            BIGINT NOT NULL,
-    transaction_id          BYTEA NOT NULL,
-    event_index             INT NOT NULL,
-    internal_id             BIGSERIAL,
-
-    token_contract_address  BYTEA,
-    contract_name           TEXT, -- Flow contract name (disambiguates multiple contracts per address)
-    from_address            BYTEA,
-    to_address              BYTEA,
-    amount                  DECIMAL(78, 18),
-    token_id                VARCHAR(255),
-    is_nft                  BOOLEAN DEFAULT FALSE,
-
-    timestamp               TIMESTAMPTZ NOT NULL,
-
-    PRIMARY KEY (block_height, transaction_id, event_index)
-) PARTITION BY RANGE (block_height);
-
-CREATE INDEX IF NOT EXISTS idx_token_transfers_from  ON app.token_transfers(from_address);
-CREATE INDEX IF NOT EXISTS idx_token_transfers_to    ON app.token_transfers(to_address);
-CREATE INDEX IF NOT EXISTS idx_token_transfers_token ON app.token_transfers(token_contract_address);
-CREATE INDEX IF NOT EXISTS idx_token_transfers_nft_height ON app.token_transfers(is_nft, block_height DESC, event_index DESC);
-
-ALTER TABLE IF EXISTS app.token_transfers
-  ADD COLUMN IF NOT EXISTS contract_name TEXT;
-ALTER TABLE IF EXISTS app.token_transfers
-  DROP COLUMN IF EXISTS created_at;
-ALTER TABLE IF EXISTS app.token_transfers
-  DROP COLUMN IF EXISTS updated_at;
 
 -- 4.1.a FT transfers (10M partitions)
 CREATE TABLE IF NOT EXISTS app.ft_transfers (
     block_height            BIGINT NOT NULL,
     transaction_id          BYTEA NOT NULL,
     event_index             INT NOT NULL,
-    internal_id             BIGSERIAL,
 
     token_contract_address  BYTEA,
     contract_name           TEXT,
@@ -337,7 +274,6 @@ CREATE TABLE IF NOT EXISTS app.nft_transfers (
     block_height            BIGINT NOT NULL,
     transaction_id          BYTEA NOT NULL,
     event_index             INT NOT NULL,
-    internal_id             BIGSERIAL,
 
     token_contract_address  BYTEA,
     contract_name           TEXT,
@@ -488,49 +424,32 @@ CREATE INDEX IF NOT EXISTS idx_account_keys_public_key_active
   ON app.account_keys (public_key)
   WHERE revoked = FALSE;
 
--- 5.2 Smart Contracts
-CREATE TABLE IF NOT EXISTS app.contracts (
-    id                TEXT PRIMARY KEY, -- A.<address>.<name>
-    address           BYTEA NOT NULL,
-    name              TEXT NOT NULL,
-    kind              TEXT,
-    first_seen_height BIGINT,
-    last_seen_height  BIGINT,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (address, name)
-);
-
-CREATE INDEX IF NOT EXISTS idx_contracts_address ON app.contracts(address);
-
+-- 5.2 Smart Contracts (unified: registry + code)
 CREATE TABLE IF NOT EXISTS app.smart_contracts (
     address             BYTEA NOT NULL,
     name                TEXT NOT NULL,
-    code                TEXT,               -- consider hash+dedupe if storage grows fast
+    code                TEXT,
     version             INT DEFAULT 1,
+    kind                TEXT,                -- FT, NFT, CONTRACT
+    first_seen_height   BIGINT,
+    last_seen_height    BIGINT,
     last_updated_height BIGINT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (address, name)
 );
+CREATE INDEX IF NOT EXISTS idx_smart_contracts_kind_first_seen
+  ON app.smart_contracts (kind, first_seen_height)
+  WHERE kind IS NOT NULL;
 
 -- 5.3 Address Stats
 CREATE TABLE IF NOT EXISTS app.address_stats (
     address            BYTEA PRIMARY KEY,
     tx_count           BIGINT DEFAULT 0,
-    token_transfer_count BIGINT DEFAULT 0,
     total_gas_used     BIGINT DEFAULT 0,
     last_updated_block BIGINT,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 5.4 FT metadata
-CREATE TABLE IF NOT EXISTS app.ft_metadata (
-    contract_address BYTEA PRIMARY KEY,
-    token_name       TEXT,
-    token_symbol     TEXT,
-    decimals         INT
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -539,12 +458,9 @@ CREATE TABLE IF NOT EXISTS app.ft_metadata (
 -- 5M partitions: [0,5M), [5M,10M)
 SELECT raw.create_partitions('raw.blocks', 0, 10000000, 5000000);
 SELECT raw.create_partitions('raw.transactions', 0, 10000000, 5000000);
-SELECT raw.create_partitions('raw.collections', 0, 10000000, 5000000);
-SELECT raw.create_partitions('raw.execution_results', 0, 10000000, 5000000);
 
 -- 10M partitions: [0,10M), [10M,20M)
 SELECT raw.create_partitions('raw.events', 0, 20000000, 10000000);
-SELECT raw.create_partitions('app.token_transfers', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.ft_transfers', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.nft_transfers', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.evm_transactions', 0, 20000000, 10000000);
@@ -743,5 +659,17 @@ CREATE TABLE IF NOT EXISTS app.status_snapshots (
     as_of      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (kind)
 );
+
+-- Migration: merge app.contracts into app.smart_contracts
+ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS kind TEXT;
+ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS first_seen_height BIGINT;
+ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS last_seen_height BIGINT;
+
+DO $$ BEGIN
+  IF to_regclass('app.contracts') IS NOT NULL THEN
+    EXECUTE 'UPDATE app.smart_contracts sc SET kind = c.kind, first_seen_height = c.first_seen_height, last_seen_height = c.last_seen_height FROM app.contracts c WHERE sc.address = c.address AND sc.name = c.name AND sc.kind IS NULL';
+    EXECUTE 'DROP TABLE app.contracts';
+  END IF;
+END $$;
 
 COMMIT;

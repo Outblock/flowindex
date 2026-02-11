@@ -187,15 +187,15 @@ func (r *Repository) UpdateSmartContractCodeIfEmpty(ctx context.Context, address
 	return err
 }
 
-// UpsertContracts inserts/updates contract registry entries.
-func (r *Repository) UpsertContracts(ctx context.Context, rows []models.Contract) error {
+// UpsertContractRegistry inserts/updates contract registry entries in the unified smart_contracts table.
+func (r *Repository) UpsertContractRegistry(ctx context.Context, rows []models.SmartContract) error {
 	if len(rows) == 0 {
 		return nil
 	}
 
 	batch := &pgx.Batch{}
 	for _, c := range rows {
-		if c.ID == "" || c.Address == "" || c.Name == "" {
+		if c.Address == "" || c.Name == "" {
 			continue
 		}
 		firstSeen := c.FirstSeenHeight
@@ -207,18 +207,17 @@ func (r *Repository) UpsertContracts(ctx context.Context, rows []models.Contract
 			lastSeen = firstSeen
 		}
 		batch.Queue(`
-			INSERT INTO app.contracts (
-				id, address, name, kind,
+			INSERT INTO app.smart_contracts (
+				address, name, kind,
 				first_seen_height, last_seen_height,
 				created_at, updated_at
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-			ON CONFLICT (id) DO UPDATE SET
-				kind = COALESCE(app.contracts.kind, EXCLUDED.kind),
-				first_seen_height = LEAST(COALESCE(app.contracts.first_seen_height, EXCLUDED.first_seen_height), EXCLUDED.first_seen_height),
-				last_seen_height = GREATEST(COALESCE(app.contracts.last_seen_height, EXCLUDED.last_seen_height), EXCLUDED.last_seen_height),
+			VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+			ON CONFLICT (address, name) DO UPDATE SET
+				kind = COALESCE(app.smart_contracts.kind, EXCLUDED.kind),
+				first_seen_height = LEAST(COALESCE(app.smart_contracts.first_seen_height, EXCLUDED.first_seen_height), EXCLUDED.first_seen_height),
+				last_seen_height = GREATEST(COALESCE(app.smart_contracts.last_seen_height, EXCLUDED.last_seen_height), EXCLUDED.last_seen_height),
 				updated_at = NOW()`,
-			c.ID,
 			hexToBytes(c.Address),
 			c.Name,
 			nullIfEmpty(c.Kind),
@@ -232,7 +231,7 @@ func (r *Repository) UpsertContracts(ctx context.Context, rows []models.Contract
 
 	for i := 0; i < len(rows); i++ {
 		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("upsert contracts: %w", err)
+			return fmt.Errorf("upsert contract registry: %w", err)
 		}
 	}
 	return nil

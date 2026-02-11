@@ -39,12 +39,6 @@ func (r *Repository) RollbackFromHeight(ctx context.Context, rollbackHeight uint
 	if _, err := tx.Exec(ctx, "DELETE FROM raw.blocks WHERE height >= $1", rollbackHeight); err != nil {
 		return fmt.Errorf("rollback raw.blocks: %w", err)
 	}
-	if _, err := tx.Exec(ctx, "DELETE FROM raw.collections WHERE block_height >= $1", rollbackHeight); err != nil {
-		return fmt.Errorf("rollback raw.collections: %w", err)
-	}
-	if _, err := tx.Exec(ctx, "DELETE FROM raw.execution_results WHERE block_height >= $1", rollbackHeight); err != nil {
-		return fmt.Errorf("rollback raw.execution_results: %w", err)
-	}
 
 	// Lookups
 	if _, err := tx.Exec(ctx, "DELETE FROM raw.tx_lookup WHERE block_height >= $1", rollbackHeight); err != nil {

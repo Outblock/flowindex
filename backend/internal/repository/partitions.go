@@ -8,8 +8,6 @@ import (
 const (
 	blocksStep         = uint64(5_000_000)
 	transactionsStep   = uint64(5_000_000)
-	collectionsStep    = uint64(5_000_000)
-	execResultsStep    = uint64(5_000_000)
 	eventsStep         = uint64(10_000_000)
 	tokenStep          = uint64(10_000_000)
 	evmStep            = uint64(10_000_000)
@@ -25,12 +23,6 @@ func (r *Repository) EnsureRawPartitions(ctx context.Context, minHeight, maxHeig
 		return err
 	}
 	if err := r.createPartitions(ctx, "raw.events", minHeight, maxHeight, eventsStep); err != nil {
-		return err
-	}
-	if err := r.createPartitions(ctx, "raw.collections", minHeight, maxHeight, collectionsStep); err != nil {
-		return err
-	}
-	if err := r.createPartitions(ctx, "raw.execution_results", minHeight, maxHeight, execResultsStep); err != nil {
 		return err
 	}
 	return nil

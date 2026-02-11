@@ -102,30 +102,15 @@ func (w *TokenMetadataWorker) ProcessRange(ctx context.Context, fromHeight, toHe
 	// 3) Resolve FT metadata.
 	if len(ftCandidates) > 0 {
 		var updates []models.FTToken
-		addrRows := make(map[string]repository.FTMetadataRow)
 		for _, t := range ftCandidates {
 			md, ok := w.fetchFTMetadata(ctx, t.ContractAddress, t.ContractName)
 			if !ok {
 				continue
 			}
 			updates = append(updates, md)
-			// Denormalized, address-keyed compatibility table.
-			addrRows[md.ContractAddress] = repository.FTMetadataRow{
-				ContractAddress: md.ContractAddress,
-				Name:            md.Name,
-				Symbol:          md.Symbol,
-				Decimals:        md.Decimals,
-			}
 		}
 		if err := w.repo.UpsertFTTokens(ctx, updates); err != nil {
 			return err
-		}
-		if len(addrRows) > 0 {
-			flat := make([]repository.FTMetadataRow, 0, len(addrRows))
-			for _, r := range addrRows {
-				flat = append(flat, r)
-			}
-			_ = w.repo.UpsertFTMetadata(ctx, flat)
 		}
 	}
 
