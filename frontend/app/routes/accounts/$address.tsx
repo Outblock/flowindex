@@ -11,11 +11,11 @@ import { normalizeAddress } from '../../components/account/accountUtils';
 import { AccountActivityTab } from '../../components/account/AccountActivityTab';
 import { AccountTokensTab } from '../../components/account/AccountTokensTab';
 import { AccountNFTsTab } from '../../components/account/AccountNFTsTab';
-import { AccountInfoTab, AccountKeysTab } from '../../components/account/AccountInfoTab';
+import { AccountKeysTab } from '../../components/account/AccountInfoTab';
 import { AccountContractsTab } from '../../components/account/AccountContractsTab';
 import { AccountStorageTab } from '../../components/account/AccountStorageTab';
 
-const VALID_TABS = ['activity', 'tokens', 'nfts', 'info', 'keys', 'contracts', 'storage'] as const;
+const VALID_TABS = ['activity', 'tokens', 'nfts', 'keys', 'contracts', 'storage'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
 export const Route = createFileRoute('/accounts/$address')({
@@ -180,7 +180,6 @@ function AccountDetail() {
         { id: 'activity' as const, label: 'Activity', icon: Activity },
         { id: 'tokens' as const, label: 'Tokens', icon: Coins },
         { id: 'nfts' as const, label: 'NFTs', icon: ImageIcon },
-        { id: 'info' as const, label: 'Account Info', icon: User },
         { id: 'keys' as const, label: 'Public Keys', icon: Key },
         { id: 'contracts' as const, label: `Contracts (${account.contracts?.length || 0})`, icon: FileText },
         { id: 'storage' as const, label: 'Storage', icon: HardDrive },
@@ -242,7 +241,6 @@ function AccountDetail() {
                         {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} />}
                         {activeTab === 'tokens' && <AccountTokensTab address={address} />}
                         {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
-                        {activeTab === 'info' && <AccountInfoTab account={account} />}
                         {activeTab === 'keys' && <AccountKeysTab account={account} />}
                         {activeTab === 'contracts' && <AccountContractsTab address={address} contracts={account.contracts || []} />}
                         {activeTab === 'storage' && <AccountStorageTab address={address} />}
