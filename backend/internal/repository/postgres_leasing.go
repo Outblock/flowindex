@@ -34,34 +34,83 @@ func (r *Repository) AcquireLease(ctx context.Context, workerType string, fromHe
 	return leaseID, nil
 }
 
-// ReclaimLease attempts to reclaim a FAILED lease (Option A: Attempt stays same, Status=ACTIVE)
+// ReclaimLease attempts to reclaim a FAILED or expired ACTIVE lease.
+// It reclaims leases that are either explicitly FAILED or ACTIVE but past their expiry.
+// The attempt cap (20) prevents infinite retries on permanently broken ranges.
 func (r *Repository) ReclaimLease(ctx context.Context, workerType string, fromHeight, toHeight uint64, leasedBy string) (int64, error) {
 	var leaseID int64
-	// Only reclaim if status='FAILED' and attempt is below a safety cap.
-	// If a bug caused repeated failures and we later deploy a fix, we still want
-	// the system to be able to make progress without manual DB intervention.
 	err := r.db.QueryRow(ctx, `
 		UPDATE app.worker_leases
-		SET leased_by = $1, 
-		    lease_expires_at = NOW() + INTERVAL '5 min', 
-		    status = 'ACTIVE'
-		    -- NOTE: attempt count is NOT incremented during Reclaim (Option A)
-		WHERE worker_type = $2 
-		  AND from_height = $3 
-		  AND status = 'FAILED' 
+		SET leased_by = $1,
+		    lease_expires_at = NOW() + INTERVAL '5 min',
+		    status = 'ACTIVE',
+		    attempt = attempt + 1
+		WHERE worker_type = $2
+		  AND from_height = $3
 		  AND attempt < 20
+		  AND (
+		    status = 'FAILED'
+		    OR (status = 'ACTIVE' AND lease_expires_at < NOW())
+		  )
 		RETURNING id`,
 		leasedBy, workerType, fromHeight,
 	).Scan(&leaseID)
 
 	if err == pgx.ErrNoRows {
-		// No matching failed lease found
 		return 0, nil
 	}
 	if err != nil {
 		return 0, err
 	}
 	return leaseID, nil
+}
+
+// ReapExpiredLeases marks expired ACTIVE leases as FAILED so they can be reclaimed.
+// Returns the number of leases reaped.
+func (r *Repository) ReapExpiredLeases(ctx context.Context) (int64, error) {
+	cmd, err := r.db.Exec(ctx, `
+		UPDATE app.worker_leases
+		SET status = 'FAILED',
+		    attempt = attempt + 1,
+		    updated_at = NOW()
+		WHERE status = 'ACTIVE'
+		  AND lease_expires_at < NOW()`)
+	if err != nil {
+		return 0, err
+	}
+	return cmd.RowsAffected(), nil
+}
+
+// CountDeadLeases returns the number of leases that have exhausted all retry attempts.
+func (r *Repository) CountDeadLeases(ctx context.Context) ([]DeadLeaseInfo, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT worker_type, from_height, to_height, attempt
+		FROM app.worker_leases
+		WHERE status = 'FAILED' AND attempt >= 20
+		ORDER BY worker_type, from_height
+		LIMIT 50`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []DeadLeaseInfo
+	for rows.Next() {
+		var d DeadLeaseInfo
+		if err := rows.Scan(&d.WorkerType, &d.FromHeight, &d.ToHeight, &d.Attempt); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// DeadLeaseInfo describes a lease that has permanently failed.
+type DeadLeaseInfo struct {
+	WorkerType string
+	FromHeight uint64
+	ToHeight   uint64
+	Attempt    int
 }
 
 // CompleteLease marks a lease as COMPLETED
@@ -182,6 +231,57 @@ func (r *Repository) AdvanceCheckpointSafe(ctx context.Context, workerType strin
 	}
 
 	return currentHeight, nil
+}
+
+// LeaseGap represents a missing range between completed leases.
+type LeaseGap struct {
+	From uint64
+	To   uint64
+}
+
+// DetectLeaseGaps finds missing ranges between COMPLETED leases for a worker type.
+// It compares the checkpoint to the raw tip and checks for ranges that have no lease at all.
+func (r *Repository) DetectLeaseGaps(ctx context.Context, workerType string) ([]LeaseGap, error) {
+	checkpoint, err := r.GetLastIndexedHeight(ctx, workerType)
+	if err != nil || checkpoint == 0 {
+		return nil, err
+	}
+
+	rawTip, err := r.GetLastIndexedHeight(ctx, "main_ingester")
+	if err != nil || rawTip == 0 {
+		return nil, err
+	}
+
+	// Find ranges below the checkpoint that have no COMPLETED lease.
+	// Use a window function to detect gaps between consecutive completed leases.
+	rows, err := r.db.Query(ctx, `
+		WITH ordered AS (
+			SELECT from_height, to_height,
+			       LAG(to_height) OVER (ORDER BY from_height) AS prev_to
+			FROM app.worker_leases
+			WHERE worker_type = $1 AND status = 'COMPLETED'
+			ORDER BY from_height
+		)
+		SELECT prev_to AS gap_from, from_height AS gap_to
+		FROM ordered
+		WHERE prev_to IS NOT NULL AND from_height > prev_to
+		LIMIT 20`,
+		workerType,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var gaps []LeaseGap
+	for rows.Next() {
+		var g LeaseGap
+		if err := rows.Scan(&g.From, &g.To); err != nil {
+			return nil, err
+		}
+		gaps = append(gaps, g)
+	}
+	return gaps, rows.Err()
 }
 
 // --- Async Worker Data Methods ---
