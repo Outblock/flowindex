@@ -19,6 +19,14 @@ type DefiAsset struct {
 	Symbol string
 }
 
+// numericOrZero returns "0" for empty strings so PostgreSQL NUMERIC columns don't choke.
+func numericOrZero(s string) string {
+	if s == "" {
+		return "0"
+	}
+	return s
+}
+
 // UpsertDefiPairs batch upserts DeFi pair records.
 func (r *Repository) UpsertDefiPairs(ctx context.Context, pairs []models.DefiPair) error {
 	if len(pairs) == 0 {
@@ -42,7 +50,7 @@ func (r *Repository) UpsertDefiPairs(ctx context.Context, pairs []models.DefiPai
 				updated_at = EXCLUDED.updated_at`,
 			p.ID, p.DexKey, p.Asset0ID, p.Asset1ID,
 			p.Asset0Symbol, p.Asset1Symbol, p.FeeBps,
-			p.ReservesAsset0, p.ReservesAsset1, time.Now(),
+			numericOrZero(p.ReservesAsset0), numericOrZero(p.ReservesAsset1), time.Now(),
 		)
 	}
 
@@ -76,8 +84,9 @@ func (r *Repository) UpsertDefiEvents(ctx context.Context, events []models.DefiE
 			ON CONFLICT (block_height, transaction_id, event_index) DO NOTHING`,
 			e.BlockHeight, hexToBytes(e.TransactionID), e.EventIndex,
 			e.PairID, e.EventType, hexToBytes(e.Maker),
-			e.Asset0In, e.Asset0Out, e.Asset1In, e.Asset1Out,
-			e.PriceNative, e.Timestamp,
+			numericOrZero(e.Asset0In), numericOrZero(e.Asset0Out),
+			numericOrZero(e.Asset1In), numericOrZero(e.Asset1Out),
+			numericOrZero(e.PriceNative), e.Timestamp,
 		)
 	}
 
