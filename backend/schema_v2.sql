@@ -704,8 +704,8 @@ END $$;
 CREATE TABLE IF NOT EXISTS app.staking_nodes (
     node_id           TEXT NOT NULL,
     epoch             BIGINT NOT NULL,
-    address           BYTEA NOT NULL,
-    role              SMALLINT NOT NULL,
+    address           BYTEA,
+    role              SMALLINT NOT NULL DEFAULT 0,
     networking_address TEXT,
     tokens_staked     NUMERIC(78,8) DEFAULT 0,
     tokens_committed  NUMERIC(78,8) DEFAULT 0,
@@ -717,6 +717,10 @@ CREATE TABLE IF NOT EXISTS app.staking_nodes (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (node_id, epoch)
 );
+
+-- Allow NULL address for nodes discovered via events that don't include the address
+ALTER TABLE app.staking_nodes ALTER COLUMN address DROP NOT NULL;
+ALTER TABLE app.staking_nodes ALTER COLUMN role SET DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_staking_nodes_epoch ON app.staking_nodes(epoch);
 CREATE INDEX IF NOT EXISTS idx_staking_nodes_address ON app.staking_nodes(address);
