@@ -315,8 +315,9 @@ func (r *Repository) UpsertNFTOwnership(ctx context.Context, ownership models.NF
 		VALUES ($1, $2, $3, $4, $5, NOW())
 		ON CONFLICT (contract_address, contract_name, nft_id) DO UPDATE SET
 			owner = EXCLUDED.owner,
-			last_height = GREATEST(app.nft_ownership.last_height, EXCLUDED.last_height),
-			updated_at = NOW()`,
+			last_height = EXCLUDED.last_height,
+			updated_at = NOW()
+		WHERE EXCLUDED.last_height >= app.nft_ownership.last_height`,
 		hexToBytes(ownership.ContractAddress), ownership.ContractName, ownership.NFTID, nullIfEmptyBytes(hexToBytes(ownership.Owner)), ownership.LastHeight)
 	return err
 }

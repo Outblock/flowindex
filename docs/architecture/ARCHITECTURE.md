@@ -1,6 +1,6 @@
 # FlowScan Clone Architecture
 
-**Last updated:** 2026-02-04
+**Last updated:** 2026-02-12
 
 ## 1. Goals and Scope
 - **Goal:** High-throughput indexing, low-latency queries, and extensible derived data for Flow.
@@ -97,9 +97,29 @@ flowchart TB
 - Upsert/idempotent writes prevent corruption on retries.
 - `raw.indexing_errors` for dedupe + audit.
 
-## 7. Reorg Handling
+## 7. Worker Dependencies and Error Recovery
+See `docs/architecture/indexer-reliability.md` for full details.
+
+### Dependency Chain
+Downstream workers check upstream checkpoints before processing:
+```
+raw ingester → {token, evm, meta, accounts, tx_metrics}
+token_worker → {ft_holdings, nft_ownership, tx_contracts, token_metadata}
+```
+
+### Error Recovery Pipeline
+1. **Worker failure** → lease marked FAILED, logged to `raw.indexing_errors`.
+2. **Lease reaper** (every 30s) → marks expired ACTIVE leases as FAILED.
+3. **Reclaim** → next worker cycle picks up FAILED lease (up to 20 attempts).
+4. **Dead letter** (every 60s) → CRITICAL alert for leases with attempt >= 20.
+5. **LiveDeriver retry** → failed processor+range retried 3× with exponential backoff.
+6. **Gap detection** (every 60s) → finds missing ranges between COMPLETED leases.
+
+## 8. Reorg Handling
 - `MAX_REORG_DEPTH` guards rollback boundaries.
-- Raw/app cleanup stays consistent within rollback range.
+- Surgical rollback: precise DELETE by height, not TRUNCATE.
+- Worker checkpoints clamped with `LEAST()` rather than zeroed.
+- Worker leases overlapping rollback range deleted for re-derivation.
 
 ## 8. API and Pagination
 - REST + WebSocket.

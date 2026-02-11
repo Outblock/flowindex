@@ -339,6 +339,12 @@ func main() {
 		log.Println("Accounts Worker is DISABLED (ENABLE_ACCOUNTS_WORKER=false)")
 	}
 
+	// Downstream workers with dependency enforcement.
+	// These workers read from derived tables produced by upstream workers,
+	// so they must wait for upstream checkpoints before processing a range.
+	tokenWorkerDep := []string{"token_worker"}  // Workers that depend on TokenWorker
+	tokenMetaDeps := []string{"token_worker"}    // TokenMetadata reads app.contracts from TokenWorker
+
 	if enableFTHoldingsWorker {
 		ftHoldingsWorkerProcessor = ingester.NewFTHoldingsWorker(repo)
 		if ftHoldingsWorkerConcurrency < 1 {
@@ -348,8 +354,9 @@ func main() {
 		pid := os.Getpid()
 		for i := 0; i < ftHoldingsWorkerConcurrency; i++ {
 			ftHoldingsWorkers = append(ftHoldingsWorkers, ingester.NewAsyncWorker(ftHoldingsWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: ftHoldingsWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-ft-holdings-%d", hostname, pid, i),
+				RangeSize:    ftHoldingsWorkerRange,
+				WorkerID:     fmt.Sprintf("%s-%d-ft-holdings-%d", hostname, pid, i),
+				Dependencies: tokenWorkerDep,
 			}))
 		}
 		workerTypes = append(workerTypes, ftHoldingsWorkerProcessor.Name())
@@ -366,8 +373,9 @@ func main() {
 		pid := os.Getpid()
 		for i := 0; i < nftOwnershipWorkerConcurrency; i++ {
 			nftOwnershipWorkers = append(nftOwnershipWorkers, ingester.NewAsyncWorker(nftOwnershipWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: nftOwnershipWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-nft-ownership-%d", hostname, pid, i),
+				RangeSize:    nftOwnershipWorkerRange,
+				WorkerID:     fmt.Sprintf("%s-%d-nft-ownership-%d", hostname, pid, i),
+				Dependencies: tokenWorkerDep,
 			}))
 		}
 		workerTypes = append(workerTypes, nftOwnershipWorkerProcessor.Name())
@@ -384,8 +392,9 @@ func main() {
 		pid := os.Getpid()
 		for i := 0; i < tokenMetadataWorkerConcurrency; i++ {
 			tokenMetadataWorkers = append(tokenMetadataWorkers, ingester.NewAsyncWorker(tokenMetadataWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: tokenMetadataWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-token-metadata-%d", hostname, pid, i),
+				RangeSize:    tokenMetadataWorkerRange,
+				WorkerID:     fmt.Sprintf("%s-%d-token-metadata-%d", hostname, pid, i),
+				Dependencies: tokenMetaDeps,
 			}))
 		}
 		workerTypes = append(workerTypes, tokenMetadataWorkerProcessor.Name())
@@ -402,8 +411,9 @@ func main() {
 		pid := os.Getpid()
 		for i := 0; i < txContractsWorkerConcurrency; i++ {
 			txContractsWorkers = append(txContractsWorkers, ingester.NewAsyncWorker(txContractsWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: txContractsWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-tx-contracts-%d", hostname, pid, i),
+				RangeSize:    txContractsWorkerRange,
+				WorkerID:     fmt.Sprintf("%s-%d-tx-contracts-%d", hostname, pid, i),
+				Dependencies: tokenWorkerDep,
 			}))
 		}
 		workerTypes = append(workerTypes, txContractsWorkerProcessor.Name())

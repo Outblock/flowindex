@@ -20,6 +20,17 @@ type heightRange struct {
 	to   uint64
 }
 
+// retryItem tracks a failed processor+range for retry.
+type retryItem struct {
+	processor Processor
+	from      uint64
+	to        uint64
+	attempts  int
+	nextRetry time.Time
+}
+
+const maxLiveRetries = 3
+
 // LiveDeriver runs a set of idempotent processors on newly indexed raw.* ranges.
 //
 // This is the "Blockscout-style" approach: keep the chain head derived tables fresh
@@ -35,6 +46,9 @@ type LiveDeriver struct {
 	mu      sync.Mutex
 	pending *heightRange
 	wakeCh  chan struct{}
+
+	retryMu    sync.Mutex
+	retryQueue []retryItem
 }
 
 func NewLiveDeriver(repo *repository.Repository, processors []Processor, cfg LiveDeriverConfig) *LiveDeriver {
@@ -86,20 +100,24 @@ func (d *LiveDeriver) NotifyRange(fromHeight, toHeight uint64) {
 }
 
 func (d *LiveDeriver) run(ctx context.Context) {
+	retryTicker := time.NewTicker(5 * time.Second)
+	defer retryTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			log.Printf("[live_deriver] Stopping")
 			return
 		case <-d.wakeCh:
-		}
-
-		for {
-			rng := d.takePending()
-			if rng == nil {
-				break
+			for {
+				rng := d.takePending()
+				if rng == nil {
+					break
+				}
+				d.processRange(ctx, rng.from, rng.to)
 			}
-			d.processRange(ctx, rng.from, rng.to)
+		case <-retryTicker.C:
+			d.processRetries(ctx)
 		}
 	}
 }
@@ -134,11 +152,84 @@ func (d *LiveDeriver) processRange(ctx context.Context, fromHeight, toHeight uin
 			if err := p.ProcessRange(ctx, start, end); err != nil {
 				log.Printf("[live_deriver] %s range [%d,%d) failed: %v", p.Name(), start, end, err)
 				_ = d.repo.LogIndexingError(ctx, p.Name(), start, "", "LIVE_DERIVER_ERROR", err.Error(), nil)
+				d.enqueueRetry(p, start, end)
 				continue
 			}
 			if dur := time.Since(began); dur > 2*time.Second {
 				log.Printf("[live_deriver] %s range [%d,%d) took %s", p.Name(), start, end, dur)
 			}
+		}
+	}
+}
+
+// enqueueRetry adds a failed processor+range to the retry queue.
+func (d *LiveDeriver) enqueueRetry(p Processor, from, to uint64) {
+	d.retryMu.Lock()
+	defer d.retryMu.Unlock()
+
+	// Cap the retry queue to prevent unbounded growth
+	if len(d.retryQueue) >= 100 {
+		log.Printf("[live_deriver] Retry queue full, dropping oldest entry")
+		d.retryQueue = d.retryQueue[1:]
+	}
+
+	d.retryQueue = append(d.retryQueue, retryItem{
+		processor: p,
+		from:      from,
+		to:        to,
+		attempts:  1,
+		nextRetry: time.Now().Add(5 * time.Second),
+	})
+}
+
+// processRetries runs any pending retries that are due.
+func (d *LiveDeriver) processRetries(ctx context.Context) {
+	d.retryMu.Lock()
+	if len(d.retryQueue) == 0 {
+		d.retryMu.Unlock()
+		return
+	}
+
+	// Take items that are ready for retry
+	now := time.Now()
+	var ready []retryItem
+	var remaining []retryItem
+	for _, item := range d.retryQueue {
+		if now.After(item.nextRetry) {
+			ready = append(ready, item)
+		} else {
+			remaining = append(remaining, item)
+		}
+	}
+	d.retryQueue = remaining
+	d.retryMu.Unlock()
+
+	for _, item := range ready {
+		if ctx.Err() != nil {
+			return
+		}
+		err := item.processor.ProcessRange(ctx, item.from, item.to)
+		if err != nil {
+			log.Printf("[live_deriver] Retry %d/%d failed for %s [%d,%d): %v",
+				item.attempts+1, maxLiveRetries, item.processor.Name(), item.from, item.to, err)
+			if item.attempts+1 < maxLiveRetries {
+				// Re-enqueue with exponential backoff
+				backoff := time.Duration(1<<uint(item.attempts)) * 5 * time.Second
+				d.retryMu.Lock()
+				d.retryQueue = append(d.retryQueue, retryItem{
+					processor: item.processor,
+					from:      item.from,
+					to:        item.to,
+					attempts:  item.attempts + 1,
+					nextRetry: time.Now().Add(backoff),
+				})
+				d.retryMu.Unlock()
+			} else {
+				log.Printf("[live_deriver] Giving up on %s [%d,%d) after %d attempts — async worker will backfill",
+					item.processor.Name(), item.from, item.to, maxLiveRetries)
+			}
+		} else {
+			log.Printf("[live_deriver] Retry succeeded for %s [%d,%d)", item.processor.Name(), item.from, item.to)
 		}
 	}
 }
