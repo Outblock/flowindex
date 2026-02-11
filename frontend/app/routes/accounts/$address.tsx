@@ -148,7 +148,7 @@ function AccountDetail() {
     const [transactions, setTransactions] = useState<any[]>(initialTransactions);
     // const [loading, setLoading] = useState(true); // handled by loader
     const [error, setError] = useState<any>(initialAccount ? null : 'Account not found');
-    const [activeTab, setActiveTab] = useState<'info' | 'keys' | 'contracts' | 'storage' | 'activity' | 'transfers' | 'tokens' | 'nfts'>('info');
+    const [activeTab, setActiveTab] = useState<'info' | 'keys' | 'contracts' | 'storage' | 'activity' | 'transfers' | 'tokens' | 'nfts'>('activity');
 
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
 
@@ -176,6 +176,9 @@ function AccountDetail() {
     const [fclNFTCollections, setFclNFTCollections] = useState<NFTCollectionInfo[]>([]);
     const [fclNFTsLoading, setFclNFTsLoading] = useState(false);
     const [fclNFTsError, setFclNFTsError] = useState<string | null>(null);
+
+    // NFT collection expand state: { [storagePath]: { nfts, nftCount, loading, error, page } }
+    const [expandedNFTs, setExpandedNFTs] = useState<Record<string, { nfts: any[]; nftCount: number; loading: boolean; error: string | null; page: number }>>({});
 
     useEffect(() => {
         const normalizedAddress = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
@@ -352,6 +355,7 @@ function AccountDetail() {
         setFclTokensError(null);
         setFclNFTCollections([]);
         setFclNFTsError(null);
+        setExpandedNFTs({});
     }, [initialAccount, initialTransactions, address]);
 
 
@@ -449,6 +453,59 @@ function AccountDetail() {
         } finally {
             setFclNFTsLoading(false);
         }
+    };
+
+    const NFT_PAGE_SIZE = 30;
+
+    const toggleCollectionNFTs = async (storagePath: string, page = 0) => {
+        const pathId = storagePath.split('/').pop() || '';
+        if (!pathId) return;
+
+        // If already expanded and clicking again (page 0), collapse
+        const existing = expandedNFTs[storagePath];
+        if (existing && page === 0 && !existing.loading) {
+            setExpandedNFTs(prev => {
+                const next = { ...prev };
+                delete next[storagePath];
+                return next;
+            });
+            return;
+        }
+
+        // Set loading
+        setExpandedNFTs(prev => ({
+            ...prev,
+            [storagePath]: { nfts: existing?.nfts || [], nftCount: existing?.nftCount || 0, loading: true, error: null, page }
+        }));
+
+        try {
+            const { cadenceService } = await import('../../fclConfig');
+            const start = page * NFT_PAGE_SIZE;
+            const end = start + NFT_PAGE_SIZE;
+            const res = await cadenceService.getCollectionCount(normalizedAddress || address, pathId, start, end);
+            const nfts = res?.nfts || [];
+            const nftCount = res?.nftCount || 0;
+            setExpandedNFTs(prev => ({
+                ...prev,
+                [storagePath]: { nfts, nftCount, loading: false, error: null, page }
+            }));
+        } catch (err) {
+            console.error('Failed to load collection NFTs', err);
+            setExpandedNFTs(prev => ({
+                ...prev,
+                [storagePath]: { nfts: [], nftCount: 0, loading: false, error: 'Failed to load NFTs', page }
+            }));
+        }
+    };
+
+    const getNFTThumbnail = (nft: any): string => {
+        const display = nft?.display;
+        if (!display) return '';
+        const thumbnail = display.thumbnail || display;
+        if (typeof thumbnail === 'string') return thumbnail;
+        if (thumbnail?.url) return thumbnail.url;
+        if (thumbnail?.cid) return `https://ipfs.io/ipfs/${thumbnail.cid}${thumbnail.path ? `/${thumbnail.path}` : ''}`;
+        return '';
     };
 
     const loadContractCode = async (name) => {
@@ -615,10 +672,11 @@ function AccountDetail() {
                 <div className="mb-8">
                     <div className="flex flex-wrap border-b border-zinc-200 dark:border-white/10 mb-0">
                         {[
-                            { id: 'info' as const, label: 'Account Info', icon: User },
                             { id: 'activity' as const, label: 'Activity', icon: Activity },
                             { id: 'tokens' as const, label: 'Tokens', icon: Coins },
                             { id: 'nfts' as const, label: 'NFTs', icon: ImageIcon },
+                            { id: 'transfers' as const, label: 'Transfers', icon: ArrowRightLeft },
+                            { id: 'info' as const, label: 'Account Info', icon: User },
                             { id: 'keys' as const, label: 'Public Keys', icon: Key },
                             { id: 'contracts' as const, label: `Contracts (${account.contracts?.length || 0})`, icon: FileText },
                             { id: 'storage' as const, label: 'Storage', icon: HardDrive },
@@ -1190,21 +1248,38 @@ function AccountDetail() {
 
                                 <div className="min-h-[120px] relative">
                                     {fclNFTCollections.length > 0 ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {fclNFTCollections.map((c, i) => (
-                                                <div key={`${c.identifier}-${i}`} className="border border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-black/40 rounded-sm overflow-hidden hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-colors">
-                                                    {c.bannerImageURL && (
-                                                        <div className="h-20 overflow-hidden bg-zinc-200 dark:bg-white/5">
-                                                            <img src={c.bannerImageURL} alt="" className="w-full h-full object-cover" loading="lazy" />
-                                                        </div>
-                                                    )}
-                                                    <div className="p-4">
-                                                        <div className="flex items-start justify-between gap-3 mb-2">
-                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                {c.squareImageURL && (
-                                                                    <img src={c.squareImageURL} alt="" className="w-8 h-8 rounded-sm border border-zinc-200 dark:border-white/10 object-cover flex-shrink-0" loading="lazy" />
-                                                                )}
-                                                                <div className="min-w-0">
+                                        <div className="space-y-4">
+                                            {fclNFTCollections.map((c, i) => {
+                                                const pathId = c.storagePath.split('/').pop() || '';
+                                                const expanded = expandedNFTs[c.storagePath];
+                                                const isExpanded = !!expanded;
+
+                                                return (
+                                                    <div key={`${c.identifier}-${i}`} className="border border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-black/40 rounded-sm overflow-hidden">
+                                                        {/* Collection header — clickable */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleCollectionNFTs(c.storagePath)}
+                                                            className="w-full text-left hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
+                                                        >
+                                                            <div className="p-4 flex items-center gap-3">
+                                                                {isExpanded ? <ChevronDown className="h-4 w-4 text-zinc-500 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-zinc-500 flex-shrink-0" />}
+
+                                                                {/* Square image or placeholder */}
+                                                                {c.squareImageURL ? (
+                                                                    <img
+                                                                        src={c.squareImageURL}
+                                                                        alt=""
+                                                                        className="w-10 h-10 rounded-sm border border-zinc-200 dark:border-white/10 object-cover flex-shrink-0 bg-zinc-200 dark:bg-white/5"
+                                                                        loading="lazy"
+                                                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                                                                    />
+                                                                ) : null}
+                                                                <div className={`w-10 h-10 rounded-sm border border-zinc-200 dark:border-white/10 bg-zinc-200 dark:bg-white/5 flex items-center justify-center flex-shrink-0 ${c.squareImageURL ? 'hidden' : ''}`}>
+                                                                    <ImageIcon className="h-4 w-4 text-zinc-400 dark:text-zinc-600" />
+                                                                </div>
+
+                                                                <div className="min-w-0 flex-1">
                                                                     <div className="text-sm font-mono text-zinc-900 dark:text-white truncate">
                                                                         {c.name || c.contractName}
                                                                     </div>
@@ -1212,30 +1287,122 @@ function AccountDetail() {
                                                                         {c.contractName}
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                            <div className="text-right flex-shrink-0">
-                                                                <div className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{c.count.toLocaleString()}</div>
-                                                                <div className="text-[10px] text-zinc-500">items</div>
-                                                            </div>
-                                                        </div>
 
-                                                        {c.description && (
-                                                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 mb-2">{c.description}</p>
+                                                                <div className="text-right flex-shrink-0">
+                                                                    <div className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{c.count.toLocaleString()}</div>
+                                                                    <div className="text-[10px] text-zinc-500">items</div>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+
+                                                        {/* Expanded NFT grid */}
+                                                        {isExpanded && (
+                                                            <div className="border-t border-zinc-200 dark:border-white/5 p-4">
+                                                                {expanded.loading && expanded.nfts.length === 0 && (
+                                                                    <div className="flex items-center justify-center py-8">
+                                                                        <div className="w-6 h-6 border-2 border-dashed border-nothing-green-dark dark:border-nothing-green rounded-full animate-spin"></div>
+                                                                    </div>
+                                                                )}
+
+                                                                {expanded.error && (
+                                                                    <div className="text-xs text-red-500 dark:text-red-400 text-center py-4">{expanded.error}</div>
+                                                                )}
+
+                                                                {expanded.nfts.length > 0 && (
+                                                                    <>
+                                                                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                                                                            {expanded.nfts.map((nft, ni) => {
+                                                                                const thumb = getNFTThumbnail(nft);
+                                                                                const name = nft?.display?.name || `#${nft?.tokenId ?? ni}`;
+                                                                                return (
+                                                                                    <div key={`${nft?.tokenId ?? ni}`} className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden bg-white dark:bg-black/40 hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-colors group">
+                                                                                        <div className="aspect-square bg-zinc-100 dark:bg-white/5 relative overflow-hidden">
+                                                                                            {thumb ? (
+                                                                                                <img
+                                                                                                    src={thumb}
+                                                                                                    alt={name}
+                                                                                                    className="w-full h-full object-cover"
+                                                                                                    loading="lazy"
+                                                                                                    onError={(e) => {
+                                                                                                        const el = e.target as HTMLImageElement;
+                                                                                                        el.style.display = 'none';
+                                                                                                        el.parentElement!.querySelector('.nft-placeholder')?.classList.remove('hidden');
+                                                                                                    }}
+                                                                                                />
+                                                                                            ) : null}
+                                                                                            <div className={`nft-placeholder absolute inset-0 flex items-center justify-center ${thumb ? 'hidden' : ''}`}>
+                                                                                                <ImageIcon className="h-6 w-6 text-zinc-300 dark:text-zinc-700" />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="p-2">
+                                                                                            <div className="text-[10px] font-mono text-zinc-700 dark:text-zinc-300 truncate" title={name}>
+                                                                                                {name}
+                                                                                            </div>
+                                                                                            <div className="text-[9px] text-zinc-400">#{nft?.tokenId ?? ni}</div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+
+                                                                        {/* Pagination */}
+                                                                        {expanded.nftCount > NFT_PAGE_SIZE && (
+                                                                            <div className="flex items-center justify-between mt-4 pt-3 border-t border-zinc-200 dark:border-white/5">
+                                                                                <button
+                                                                                    disabled={expanded.page <= 0 || expanded.loading}
+                                                                                    onClick={() => toggleCollectionNFTs(c.storagePath, expanded.page - 1)}
+                                                                                    className="px-3 py-1 text-[10px] uppercase tracking-wider border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5"
+                                                                                >
+                                                                                    Previous
+                                                                                </button>
+                                                                                <span className="text-[10px] text-zinc-500">
+                                                                                    {expanded.page * NFT_PAGE_SIZE + 1}–{Math.min((expanded.page + 1) * NFT_PAGE_SIZE, expanded.nftCount)} of {expanded.nftCount.toLocaleString()}
+                                                                                </span>
+                                                                                <button
+                                                                                    disabled={(expanded.page + 1) * NFT_PAGE_SIZE >= expanded.nftCount || expanded.loading}
+                                                                                    onClick={() => toggleCollectionNFTs(c.storagePath, expanded.page + 1)}
+                                                                                    className="px-3 py-1 text-[10px] uppercase tracking-wider border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5"
+                                                                                >
+                                                                                    Next
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </>
+                                                                )}
+
+                                                                {!expanded.loading && !expanded.error && expanded.nfts.length === 0 && (
+                                                                    <div className="text-center text-zinc-500 italic text-xs py-4">No NFTs found in this collection</div>
+                                                                )}
+
+                                                                {expanded.loading && expanded.nfts.length > 0 && (
+                                                                    <div className="flex items-center justify-center py-2 mt-2">
+                                                                        <div className="w-4 h-4 border-2 border-dashed border-nothing-green-dark dark:border-nothing-green rounded-full animate-spin"></div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         )}
 
-                                                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-200 dark:border-white/5">
-                                                            <Link to={`/accounts/${normalizeAddress(c.contractAddress)}`} className="text-[10px] font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                                                {formatShort(c.contractAddress)}
-                                                            </Link>
-                                                            {c.externalURL && (
-                                                                <a href={c.externalURL} target="_blank" rel="noopener noreferrer" className="text-[10px] text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors uppercase tracking-wider">
-                                                                    Website
-                                                                </a>
-                                                            )}
-                                                        </div>
+                                                        {/* Collection footer */}
+                                                        {!isExpanded && (
+                                                            <div className="px-4 pb-3">
+                                                                {c.description && (
+                                                                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1 mb-2">{c.description}</p>
+                                                                )}
+                                                                <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-white/5">
+                                                                    <Link to={`/accounts/${normalizeAddress(c.contractAddress)}`} className="text-[10px] font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
+                                                                        {formatShort(c.contractAddress)}
+                                                                    </Link>
+                                                                    {c.externalURL && (
+                                                                        <a href={c.externalURL} target="_blank" rel="noopener noreferrer" className="text-[10px] text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors uppercase tracking-wider">
+                                                                            Website
+                                                                        </a>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     ) : !fclNFTsLoading ? (
                                         <div className="text-center text-zinc-500 italic py-8">No NFT collections found</div>
