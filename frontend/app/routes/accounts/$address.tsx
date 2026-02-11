@@ -59,9 +59,8 @@ export const Route = createFileRoute('/accounts/$address')({
                 const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
                 initialTransactions = (items || []).map((tx: any) => ({
                     ...tx,
-                    type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
-                    payer: tx.payer_address || tx.proposer_address,
-                    proposer: tx.proposer_address,
+                    payer: tx.payer_address || tx.payer || tx.proposer_address,
+                    proposer: tx.proposer_address || tx.proposer,
                     blockHeight: tx.block_height
                 }));
             } catch (e) {
