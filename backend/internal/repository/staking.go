@@ -26,7 +26,7 @@ func (r *Repository) UpsertStakingEvents(ctx context.Context, events []models.St
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (block_height, transaction_id, event_index) DO NOTHING`,
 			e.BlockHeight, hexToBytes(e.TransactionID), e.EventIndex,
-			e.EventType, e.NodeID, e.DelegatorID, e.Amount, e.Timestamp,
+			e.EventType, e.NodeID, e.DelegatorID, numericOrZero(e.Amount), e.Timestamp,
 		)
 	}
 
@@ -69,8 +69,8 @@ func (r *Repository) UpsertStakingNodes(ctx context.Context, nodes []models.Stak
 				delegator_count = CASE WHEN EXCLUDED.delegator_count > 0 THEN EXCLUDED.delegator_count ELSE app.staking_nodes.delegator_count END,
 				updated_at = EXCLUDED.updated_at`,
 			n.NodeID, n.Epoch, hexToBytes(n.Address), n.Role, n.NetworkingAddress,
-			n.TokensStaked, n.TokensCommitted, n.TokensUnstaking,
-			n.TokensUnstaked, n.TokensRewarded, n.DelegatorCount,
+			numericOrZero(n.TokensStaked), numericOrZero(n.TokensCommitted), numericOrZero(n.TokensUnstaking),
+			numericOrZero(n.TokensUnstaked), numericOrZero(n.TokensRewarded), n.DelegatorCount,
 			n.FirstSeenHeight, time.Now(),
 		)
 	}
@@ -104,7 +104,7 @@ func (r *Repository) UpsertEpochStats(ctx context.Context, stats models.EpochSta
 			total_rewarded = CASE WHEN EXCLUDED.total_rewarded > 0 THEN EXCLUDED.total_rewarded ELSE app.epoch_stats.total_rewarded END,
 			updated_at = EXCLUDED.updated_at`,
 		stats.Epoch, stats.StartHeight, stats.EndHeight, stats.StartTime, stats.EndTime,
-		stats.TotalNodes, stats.TotalStaked, stats.TotalRewarded, time.Now(),
+		stats.TotalNodes, numericOrZero(stats.TotalStaked), numericOrZero(stats.TotalRewarded), time.Now(),
 	)
 	return err
 }
