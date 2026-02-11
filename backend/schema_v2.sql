@@ -264,10 +264,17 @@ CREATE TABLE IF NOT EXISTS app.ft_transfers (
     PRIMARY KEY (block_height, transaction_id, event_index)
 ) PARTITION BY RANGE (block_height);
 
-CREATE INDEX IF NOT EXISTS idx_ft_transfers_from  ON app.ft_transfers(from_address);
-CREATE INDEX IF NOT EXISTS idx_ft_transfers_to    ON app.ft_transfers(to_address);
+-- Composite indexes: eliminate sort for "transfers by address, ordered by recency"
+CREATE INDEX IF NOT EXISTS idx_ft_transfers_from_height
+  ON app.ft_transfers(from_address, block_height DESC, event_index DESC);
+CREATE INDEX IF NOT EXISTS idx_ft_transfers_to_height
+  ON app.ft_transfers(to_address, block_height DESC, event_index DESC);
 CREATE INDEX IF NOT EXISTS idx_ft_transfers_token ON app.ft_transfers(token_contract_address);
 CREATE INDEX IF NOT EXISTS idx_ft_transfers_height ON app.ft_transfers(block_height DESC, event_index DESC);
+
+-- Drop old single-column indexes on existing databases
+DROP INDEX IF EXISTS app.idx_ft_transfers_from;
+DROP INDEX IF EXISTS app.idx_ft_transfers_to;
 
 -- 4.1.b NFT transfers (10M partitions)
 CREATE TABLE IF NOT EXISTS app.nft_transfers (
@@ -286,11 +293,18 @@ CREATE TABLE IF NOT EXISTS app.nft_transfers (
     PRIMARY KEY (block_height, transaction_id, event_index)
 ) PARTITION BY RANGE (block_height);
 
-CREATE INDEX IF NOT EXISTS idx_nft_transfers_from  ON app.nft_transfers(from_address);
-CREATE INDEX IF NOT EXISTS idx_nft_transfers_to    ON app.nft_transfers(to_address);
+-- Composite indexes: eliminate sort for "transfers by address, ordered by recency"
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_from_height
+  ON app.nft_transfers(from_address, block_height DESC, event_index DESC);
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_to_height
+  ON app.nft_transfers(to_address, block_height DESC, event_index DESC);
 CREATE INDEX IF NOT EXISTS idx_nft_transfers_token ON app.nft_transfers(token_contract_address);
 CREATE INDEX IF NOT EXISTS idx_nft_transfers_height ON app.nft_transfers(block_height DESC, event_index DESC);
 CREATE INDEX IF NOT EXISTS idx_nft_transfers_token_id ON app.nft_transfers(token_id);
+
+-- Drop old single-column indexes on existing databases
+DROP INDEX IF EXISTS app.idx_nft_transfers_from;
+DROP INDEX IF EXISTS app.idx_nft_transfers_to;
 
 ALTER TABLE IF EXISTS app.evm_transactions
   ADD COLUMN IF NOT EXISTS event_index INT;
@@ -484,6 +498,10 @@ CREATE TABLE IF NOT EXISTS app.address_transactions (
 );
 CREATE INDEX IF NOT EXISTS idx_address_txs_address_height ON app.address_transactions(address, block_height DESC);
 
+-- Cursor pagination on address_transactions
+CREATE INDEX IF NOT EXISTS idx_address_txs_cursor
+  ON app.address_transactions(address, block_height DESC, transaction_id DESC);
+
 
 CREATE TABLE IF NOT EXISTS app.daily_stats (
     date DATE PRIMARY KEY,
@@ -555,6 +573,10 @@ CREATE TABLE IF NOT EXISTS app.ft_holdings (
 );
 CREATE INDEX IF NOT EXISTS idx_ft_holdings_address
   ON app.ft_holdings (address);
+
+-- FT holdings by token (for holder count queries)
+CREATE INDEX IF NOT EXISTS idx_ft_holdings_token
+  ON app.ft_holdings(contract_address, contract_name) WHERE balance > 0;
 
 CREATE TABLE IF NOT EXISTS app.nft_collections (
     contract_address BYTEA NOT NULL,
@@ -672,5 +694,116 @@ DO $$ BEGIN
     EXECUTE 'DROP TABLE app.contracts';
   END IF;
 END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 9. STAKING TABLES
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS app.staking_nodes (
+    node_id           TEXT NOT NULL,
+    epoch             BIGINT NOT NULL,
+    address           BYTEA NOT NULL,
+    role              SMALLINT NOT NULL,
+    networking_address TEXT,
+    tokens_staked     NUMERIC(78,8) DEFAULT 0,
+    tokens_committed  NUMERIC(78,8) DEFAULT 0,
+    tokens_unstaking  NUMERIC(78,8) DEFAULT 0,
+    tokens_unstaked   NUMERIC(78,8) DEFAULT 0,
+    tokens_rewarded   NUMERIC(78,8) DEFAULT 0,
+    delegator_count   INT DEFAULT 0,
+    first_seen_height BIGINT,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (node_id, epoch)
+);
+
+CREATE INDEX IF NOT EXISTS idx_staking_nodes_epoch ON app.staking_nodes(epoch);
+CREATE INDEX IF NOT EXISTS idx_staking_nodes_address ON app.staking_nodes(address);
+
+CREATE TABLE IF NOT EXISTS app.staking_delegators (
+    delegator_id      INT NOT NULL,
+    node_id           TEXT NOT NULL,
+    address           BYTEA,
+    tokens_committed  NUMERIC(78,8) DEFAULT 0,
+    tokens_staked     NUMERIC(78,8) DEFAULT 0,
+    tokens_unstaking  NUMERIC(78,8) DEFAULT 0,
+    tokens_rewarded   NUMERIC(78,8) DEFAULT 0,
+    tokens_unstaked   NUMERIC(78,8) DEFAULT 0,
+    block_height      BIGINT,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (delegator_id, node_id)
+);
+
+CREATE TABLE IF NOT EXISTS app.staking_events (
+    block_height      BIGINT NOT NULL,
+    transaction_id    BYTEA NOT NULL,
+    event_index       INT NOT NULL,
+    event_type        TEXT NOT NULL,
+    node_id           TEXT,
+    delegator_id      INT,
+    amount            NUMERIC(78,8),
+    timestamp         TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (block_height, transaction_id, event_index)
+) PARTITION BY RANGE (block_height);
+
+CREATE INDEX IF NOT EXISTS idx_staking_events_node ON app.staking_events(node_id);
+CREATE INDEX IF NOT EXISTS idx_staking_events_type ON app.staking_events(event_type, block_height DESC);
+
+CREATE TABLE IF NOT EXISTS app.epoch_stats (
+    epoch              BIGINT PRIMARY KEY,
+    start_height       BIGINT,
+    end_height         BIGINT,
+    start_time         TIMESTAMPTZ,
+    end_time           TIMESTAMPTZ,
+    total_nodes        INT DEFAULT 0,
+    total_staked       NUMERIC(78,8) DEFAULT 0,
+    total_rewarded     NUMERIC(78,8) DEFAULT 0,
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS app.tokenomics_snapshots (
+    id                  BIGSERIAL PRIMARY KEY,
+    total_supply        NUMERIC(78,8),
+    circulating_supply  NUMERIC(78,8),
+    total_staked        NUMERIC(78,8),
+    staking_apy         NUMERIC(10,6),
+    validator_count     INT,
+    delegator_count     INT,
+    as_of               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 10. DEFI TABLES
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS app.defi_pairs (
+    id                TEXT PRIMARY KEY,
+    dex_key           TEXT NOT NULL,
+    asset0_id         TEXT NOT NULL,
+    asset1_id         TEXT NOT NULL,
+    asset0_symbol     TEXT,
+    asset1_symbol     TEXT,
+    fee_bps           INT,
+    reserves_asset0   NUMERIC(78,18) DEFAULT 0,
+    reserves_asset1   NUMERIC(78,18) DEFAULT 0,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS app.defi_events (
+    block_height      BIGINT NOT NULL,
+    transaction_id    BYTEA NOT NULL,
+    event_index       INT NOT NULL,
+    pair_id           TEXT NOT NULL,
+    event_type        TEXT NOT NULL,
+    maker             BYTEA,
+    asset0_in         NUMERIC(78,18) DEFAULT 0,
+    asset0_out        NUMERIC(78,18) DEFAULT 0,
+    asset1_in         NUMERIC(78,18) DEFAULT 0,
+    asset1_out        NUMERIC(78,18) DEFAULT 0,
+    price_native      NUMERIC,
+    timestamp         TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (block_height, transaction_id, event_index)
+) PARTITION BY RANGE (block_height);
+CREATE INDEX IF NOT EXISTS idx_defi_events_pair ON app.defi_events(pair_id, block_height DESC);
+CREATE INDEX IF NOT EXISTS idx_defi_events_type ON app.defi_events(event_type, block_height DESC);
 
 COMMIT;

@@ -191,7 +191,7 @@ func (s *Server) handleFlowAccountFTTransfers(w http.ResponseWriter, r *http.Req
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, "", "", "", height, limit, offset)
+	transfers, hasMore, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, "", "", "", height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -200,7 +200,7 @@ func (s *Server) handleFlowAccountFTTransfers(w http.ResponseWriter, r *http.Req
 	for _, t := range transfers {
 		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
 
 func (s *Server) handleFlowAccountNFTTransfers(w http.ResponseWriter, r *http.Request) {
@@ -211,7 +211,7 @@ func (s *Server) handleFlowAccountNFTTransfers(w http.ResponseWriter, r *http.Re
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, address, "", "", "", height, limit, offset)
+	transfers, hasMore, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, address, "", "", "", height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -220,7 +220,7 @@ func (s *Server) handleFlowAccountNFTTransfers(w http.ResponseWriter, r *http.Re
 	for _, t := range transfers {
 		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, address))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
 
 func (s *Server) handleGetCOAMapping(w http.ResponseWriter, r *http.Request) {
@@ -383,7 +383,7 @@ func (s *Server) handleFlowAccountFTTokenTransfers(w http.ResponseWriter, r *htt
 		writeAPIError(w, http.StatusBadRequest, "invalid height")
 		return
 	}
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, tokenAddr, tokenName, "", height, limit, offset)
+	transfers, hasMore, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, address, tokenAddr, tokenName, "", height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -392,7 +392,7 @@ func (s *Server) handleFlowAccountFTTokenTransfers(w http.ResponseWriter, r *htt
 	for _, t := range transfers {
 		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
 
 func (s *Server) handleFlowAccountNFTByCollection(w http.ResponseWriter, r *http.Request) {

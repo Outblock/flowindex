@@ -146,6 +146,8 @@ func main() {
 	tokenMetadataWorkerRange := getEnvUint("TOKEN_METADATA_WORKER_RANGE", 1000)
 	txContractsWorkerRange := getEnvUint("TX_CONTRACTS_WORKER_RANGE", 1000)
 	txMetricsWorkerRange := getEnvUint("TX_METRICS_WORKER_RANGE", 1000)
+	stakingWorkerRange := getEnvUint("STAKING_WORKER_RANGE", 1000)
+	defiWorkerRange := getEnvUint("DEFI_WORKER_RANGE", 1000)
 	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
 	evmWorkerConcurrency := getEnvInt("EVM_WORKER_CONCURRENCY", 1)
 	metaWorkerConcurrency := getEnvInt("META_WORKER_CONCURRENCY", 1)
@@ -155,6 +157,8 @@ func main() {
 	tokenMetadataWorkerConcurrency := getEnvInt("TOKEN_METADATA_WORKER_CONCURRENCY", 1)
 	txContractsWorkerConcurrency := getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1)
 	txMetricsWorkerConcurrency := getEnvInt("TX_METRICS_WORKER_CONCURRENCY", 1)
+	stakingWorkerConcurrency := getEnvInt("STAKING_WORKER_CONCURRENCY", 1)
+	defiWorkerConcurrency := getEnvInt("DEFI_WORKER_CONCURRENCY", 1)
 
 	if strings.ToLower(os.Getenv("RUN_TX_METRICS_BACKFILL")) == "true" {
 		cfg := repository.TxMetricsBackfillConfig{
@@ -180,6 +184,8 @@ func main() {
 	enableTokenMetadataWorker := os.Getenv("ENABLE_TOKEN_METADATA_WORKER") != "false"
 	enableTxContractsWorker := os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false"
 	enableTxMetricsWorker := os.Getenv("ENABLE_TX_METRICS_WORKER") != "false"
+	enableStakingWorker := os.Getenv("ENABLE_STAKING_WORKER") != "false"
+	enableDefiWorker := os.Getenv("ENABLE_DEFI_WORKER") != "false"
 
 	// Live/head derivers: Blockscout-style "real-time head" materialization.
 	// These processors must be idempotent because they can overlap with backfills.
@@ -210,6 +216,12 @@ func main() {
 		}
 		if enableTxMetricsWorker {
 			processors = append(processors, ingester.NewTxMetricsWorker(repo))
+		}
+		if enableStakingWorker {
+			processors = append(processors, ingester.NewStakingWorker(repo))
+		}
+		if enableDefiWorker {
+			processors = append(processors, ingester.NewDefiWorker(repo))
 		}
 
 		liveDeriver = ingester.NewLiveDeriver(repo, processors, ingester.LiveDeriverConfig{
@@ -264,8 +276,12 @@ func main() {
 	var txContractsWorkers []*ingester.AsyncWorker
 	var txMetricsWorkerProcessor *ingester.TxMetricsWorker
 	var txMetricsWorkers []*ingester.AsyncWorker
+	var stakingWorkerProcessor *ingester.StakingWorker
+	var stakingWorkers []*ingester.AsyncWorker
+	var defiWorkerProcessor *ingester.DefiWorker
+	var defiWorkers []*ingester.AsyncWorker
 
-	workerTypes := make([]string, 0, 8)
+	workerTypes := make([]string, 0, 10)
 
 	if enableTokenWorker {
 		tokenWorkerProcessor = ingester.NewTokenWorker(repo)
@@ -427,6 +443,42 @@ func main() {
 		workerTypes = append(workerTypes, txMetricsWorkerProcessor.Name())
 	} else {
 		log.Println("Tx Metrics Worker is DISABLED (ENABLE_TX_METRICS_WORKER=false)")
+	}
+
+	if enableStakingWorker {
+		stakingWorkerProcessor = ingester.NewStakingWorker(repo)
+		if stakingWorkerConcurrency < 1 {
+			stakingWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < stakingWorkerConcurrency; i++ {
+			stakingWorkers = append(stakingWorkers, ingester.NewAsyncWorker(stakingWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: stakingWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-staking-%d", hostname, pid, i),
+			}))
+		}
+		workerTypes = append(workerTypes, stakingWorkerProcessor.Name())
+	} else {
+		log.Println("Staking Worker is DISABLED (ENABLE_STAKING_WORKER=false)")
+	}
+
+	if enableDefiWorker {
+		defiWorkerProcessor = ingester.NewDefiWorker(repo)
+		if defiWorkerConcurrency < 1 {
+			defiWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < defiWorkerConcurrency; i++ {
+			defiWorkers = append(defiWorkers, ingester.NewAsyncWorker(defiWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize: defiWorkerRange,
+				WorkerID:  fmt.Sprintf("%s-%d-defi-%d", hostname, pid, i),
+			}))
+		}
+		workerTypes = append(workerTypes, defiWorkerProcessor.Name())
+	} else {
+		log.Println("DeFi Worker is DISABLED (ENABLE_DEFI_WORKER=false)")
 	}
 
 	var committer *ingester.CheckpointCommitter
@@ -601,6 +653,26 @@ func main() {
 
 	if enableTxMetricsWorker {
 		for _, worker := range txMetricsWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableStakingWorker {
+		for _, worker := range stakingWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableDefiWorker {
+		for _, worker := range defiWorkers {
 			wg.Add(1)
 			go func(w *ingester.AsyncWorker) {
 				defer wg.Done()

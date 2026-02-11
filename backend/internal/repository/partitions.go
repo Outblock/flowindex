@@ -6,12 +6,14 @@ import (
 )
 
 const (
-	blocksStep         = uint64(5_000_000)
-	transactionsStep   = uint64(5_000_000)
-	eventsStep         = uint64(10_000_000)
-	tokenStep          = uint64(10_000_000)
-	evmStep            = uint64(10_000_000)
-	partitionLookahead = uint64(2)
+	blocksStep           = uint64(5_000_000)
+	transactionsStep     = uint64(5_000_000)
+	eventsStep           = uint64(10_000_000)
+	tokenStep            = uint64(10_000_000)
+	evmStep              = uint64(10_000_000)
+	stakingEventsStep    = uint64(5_000_000)
+	defiEventsStep       = uint64(5_000_000)
+	partitionLookahead   = uint64(2)
 )
 
 // EnsureRawPartitions creates partitions on-demand for raw tables.
@@ -40,6 +42,22 @@ func (r *Repository) EnsureAppPartitions(ctx context.Context, minHeight, maxHeig
 		return err
 	}
 	if err := r.createPartitions(ctx, "app.evm_tx_hashes", minHeight, maxHeight, evmStep); err != nil {
+		return err
+	}
+	return nil
+}
+
+// EnsureStakingPartitions creates partitions on-demand for staking event tables.
+func (r *Repository) EnsureStakingPartitions(ctx context.Context, minHeight, maxHeight uint64) error {
+	if err := r.createPartitions(ctx, "app.staking_events", minHeight, maxHeight, stakingEventsStep); err != nil {
+		return err
+	}
+	return nil
+}
+
+// EnsureDefiPartitions creates partitions on-demand for DeFi event tables.
+func (r *Repository) EnsureDefiPartitions(ctx context.Context, minHeight, maxHeight uint64) error {
+	if err := r.createPartitions(ctx, "app.defi_events", minHeight, maxHeight, defiEventsStep); err != nil {
 		return err
 	}
 	return nil

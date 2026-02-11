@@ -17,7 +17,7 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 	}
 	addrFilter := normalizeAddr(r.URL.Query().Get("address"))
 	tokenAddr, tokenName := parseTokenParam(r.URL.Query().Get("token"))
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, addrFilter, tokenAddr, tokenName, r.URL.Query().Get("transaction_hash"), height, limit, offset)
+	transfers, hasMore, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), false, addrFilter, tokenAddr, tokenName, r.URL.Query().Get("transaction_hash"), height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -26,7 +26,7 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 	for _, t := range transfers {
 		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
 
 func (s *Server) handleFlowListFTTokens(w http.ResponseWriter, r *http.Request) {

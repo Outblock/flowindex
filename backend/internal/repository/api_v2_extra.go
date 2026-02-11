@@ -63,21 +63,8 @@ func (r *Repository) CountFTTokens(ctx context.Context) (int64, error) {
 }
 
 func (r *Repository) CountFTTokenContracts(ctx context.Context) (int64, error) {
-	// Used when app.ft_tokens has not been backfilled yet.
 	var total int64
-	if err := r.db.QueryRow(ctx, `
-		SELECT COUNT(*) FROM (
-			SELECT DISTINCT
-				t.token_contract_address,
-				COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
-			FROM app.ft_transfers t
-			LEFT JOIN raw.events e
-				ON e.block_height = t.block_height
-				AND e.transaction_id = t.transaction_id
-				AND e.event_index = t.event_index
-			WHERE t.token_contract_address IS NOT NULL
-			  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
-		) x`).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.ft_tokens`).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil
@@ -193,17 +180,9 @@ func (r *Repository) GetFTHolding(ctx context.Context, address, contract, contra
 
 func (r *Repository) ListFTTokenContracts(ctx context.Context, limit, offset int) ([]TokenContract, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT
-			encode(t.token_contract_address, 'hex') AS token_contract_address,
-			COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
-		FROM app.ft_transfers t
-		LEFT JOIN raw.events e
-			ON e.block_height = t.block_height
-			AND e.transaction_id = t.transaction_id
-			AND e.event_index = t.event_index
-		WHERE t.token_contract_address IS NOT NULL
-		  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
-		ORDER BY token_contract_address ASC, contract_name ASC
+		SELECT encode(contract_address, 'hex'), COALESCE(contract_name, '')
+		FROM app.ft_tokens
+		ORDER BY contract_address ASC, contract_name ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, err
@@ -405,31 +384,43 @@ func (r *Repository) ListNFTOwnershipByOwnerAndCollection(ctx context.Context, o
 	return out, nil
 }
 
-func (r *Repository) ListNFTOwnerCountsByCollection(ctx context.Context, collection, contractName string, limit, offset int) ([]NFTOwnerCount, int64, error) {
-	var total int64
-	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.nft_ownership WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)`, hexToBytes(collection), contractName).Scan(&total); err != nil {
-		return nil, 0, err
-	}
+func (r *Repository) ListNFTOwnerCountsByCollection(ctx context.Context, collection, contractName string, limit, offset int) ([]NFTOwnerCount, bool, error) {
+	// Fetch limit+1 rows to determine hasMore without a separate COUNT(*) query.
+	fetchLimit := limit + 1
 	rows, err := r.db.Query(ctx, `
 		SELECT COALESCE(encode(owner, 'hex'), '') AS owner, COUNT(*) AS cnt
 		FROM app.nft_ownership
 		WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)
 		GROUP BY owner
 		ORDER BY cnt DESC
-		LIMIT $3 OFFSET $4`, hexToBytes(collection), contractName, limit, offset)
+		LIMIT $3 OFFSET $4`, hexToBytes(collection), contractName, fetchLimit, offset)
 	if err != nil {
-		return nil, 0, err
+		return nil, false, err
 	}
 	defer rows.Close()
 	var out []NFTOwnerCount
 	for rows.Next() {
 		var row NFTOwnerCount
 		if err := rows.Scan(&row.Owner, &row.Count); err != nil {
-			return nil, 0, err
+			return nil, false, err
 		}
 		out = append(out, row)
 	}
-	return out, total, nil
+
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	return out, hasMore, nil
+}
+
+// CountNFTsByCollection returns the total number of NFTs in a collection (for percentage calculations).
+func (r *Repository) CountNFTsByCollection(ctx context.Context, collection, contractName string) (int64, error) {
+	var total int64
+	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.nft_ownership WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)`, hexToBytes(collection), contractName).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (r *Repository) ListEVMTransactions(ctx context.Context, limit, offset int) ([]EVMTransactionRecord, error) {

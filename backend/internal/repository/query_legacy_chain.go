@@ -371,9 +371,14 @@ func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) 
 }
 
 func (r *Repository) GetTransactionsByAddress(ctx context.Context, address string, limit, offset int) ([]models.Transaction, error) {
+	// TODO: After a full reindex, this UNION can be simplified to just query
+	// app.address_transactions, since the token_worker now writes FT_SENDER,
+	// FT_RECEIVER, NFT_SENDER, NFT_RECEIVER roles there. The UNION with
+	// ft_transfers/nft_transfers is kept for backward compatibility with data
+	// indexed before that change.
 	query := `
 		WITH addr_txs AS (
-			-- 1) Signed participation (payer/proposer/authorizer)
+			-- 1) Signed participation (payer/proposer/authorizer) + transfer roles
 			SELECT at.block_height, at.transaction_id
 			FROM app.address_transactions at
 			WHERE at.address = $1
@@ -381,7 +386,7 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 			UNION
 
 			-- 2) Token/NFT transfer participation (from/to)
-			-- Note: written by token_worker from raw.events, so this does not require reindexing.
+			-- Kept for backward compatibility until a full reindex populates transfer roles in address_transactions.
 			SELECT ft.block_height, ft.transaction_id
 			FROM app.ft_transfers ft
 			WHERE ft.from_address = $1
@@ -446,6 +451,9 @@ type AddressTxCursor struct {
 }
 
 func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address string, limit int, cursor *AddressTxCursor) ([]models.Transaction, error) {
+	// TODO: After a full reindex, this UNION can be simplified to just query
+	// app.address_transactions, since the token_worker now writes FT_SENDER,
+	// FT_RECEIVER, NFT_SENDER, NFT_RECEIVER roles there.
 	query := `
 		WITH addr_txs AS (
 			SELECT at.block_height, at.transaction_id

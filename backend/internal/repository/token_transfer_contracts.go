@@ -26,7 +26,7 @@ type TokenContract struct {
 	Name    string
 }
 
-func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context, isNFT bool, address, tokenAddress, tokenName, txID string, height *uint64, limit, offset int) ([]TokenTransferWithContract, int64, error) {
+func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context, isNFT bool, address, tokenAddress, tokenName, txID string, height *uint64, limit, offset int) ([]TokenTransferWithContract, bool, error) {
 	table := "app.ft_transfers"
 	if isNFT {
 		table = "app.nft_transfers"
@@ -93,14 +93,9 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 		offset = 0
 	}
 
-	// Count query deliberately avoids window functions; those can trigger shared memory allocation
-	// failures on constrained Postgres instances (we've seen /dev/shm exhaustion on Railway).
-	var total int64
-	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM `+table+` t `+where, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-
-	listArgs := append(append([]interface{}{}, args...), limit, offset)
+	// Fetch limit+1 rows to determine hasMore without a separate COUNT(*) query.
+	fetchLimit := limit + 1
+	listArgs := append(append([]interface{}{}, args...), fetchLimit, offset)
 	rows, err := r.db.Query(ctx, `
 			SELECT
 				encode(t.transaction_id, 'hex') AS transaction_id,
@@ -123,7 +118,7 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 		ORDER BY t.block_height DESC, t.event_index DESC
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), listArgs...)
 	if err != nil {
-		return nil, 0, err
+		return nil, false, err
 	}
 	defer rows.Close()
 
@@ -143,18 +138,23 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 			&t.CreatedAt,
 			&t.ContractName,
 		); err != nil {
-			return nil, 0, err
+			return nil, false, err
 		}
 		t.IsNFT = isNFT
 		out = append(out, t)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, false, err
 	}
-	return out, total, nil
+
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	return out, hasMore, nil
 }
 
-func (r *Repository) ListNFTItemTransfers(ctx context.Context, tokenAddress, tokenName, tokenID string, limit, offset int) ([]TokenTransferWithContract, int64, error) {
+func (r *Repository) ListNFTItemTransfers(ctx context.Context, tokenAddress, tokenName, tokenID string, limit, offset int) ([]TokenTransferWithContract, bool, error) {
 	clauses := []string{}
 	args := []interface{}{}
 	arg := 1
@@ -185,12 +185,9 @@ func (r *Repository) ListNFTItemTransfers(ctx context.Context, tokenAddress, tok
 		offset = 0
 	}
 
-	var total int64
-	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM app.nft_transfers t `+where, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-
-	listArgs := append(append([]interface{}{}, args...), limit, offset)
+	// Fetch limit+1 rows to determine hasMore without a separate COUNT(*) query.
+	fetchLimit := limit + 1
+	listArgs := append(append([]interface{}{}, args...), fetchLimit, offset)
 	rows, err := r.db.Query(ctx, `
 		SELECT
 			encode(t.transaction_id, 'hex') AS transaction_id,
@@ -209,7 +206,7 @@ func (r *Repository) ListNFTItemTransfers(ctx context.Context, tokenAddress, tok
 		ORDER BY t.block_height DESC, t.event_index DESC
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), listArgs...)
 	if err != nil {
-		return nil, 0, err
+		return nil, false, err
 	}
 	defer rows.Close()
 
@@ -229,15 +226,20 @@ func (r *Repository) ListNFTItemTransfers(ctx context.Context, tokenAddress, tok
 			&t.CreatedAt,
 			&t.ContractName,
 		); err != nil {
-			return nil, 0, err
+			return nil, false, err
 		}
 		t.IsNFT = true
 		out = append(out, t)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, false, err
 	}
-	return out, total, nil
+
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	return out, hasMore, nil
 }
 
 func (r *Repository) ListFTTokenContractsByAddress(ctx context.Context, address string, limit, offset int) ([]TokenContract, error) {

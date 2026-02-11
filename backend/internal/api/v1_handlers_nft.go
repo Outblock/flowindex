@@ -15,7 +15,7 @@ func (s *Server) handleFlowNFTTransfers(w http.ResponseWriter, r *http.Request) 
 	}
 	addrFilter := normalizeAddr(r.URL.Query().Get("address"))
 	tokenAddr, tokenName := parseTokenParam(r.URL.Query().Get("nft_type"))
-	transfers, total, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, addrFilter, tokenAddr, tokenName, r.URL.Query().Get("transaction_hash"), height, limit, offset)
+	transfers, hasMore, err := s.repo.ListTokenTransfersWithContractFiltered(r.Context(), true, addrFilter, tokenAddr, tokenName, r.URL.Query().Get("transaction_hash"), height, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -24,7 +24,7 @@ func (s *Server) handleFlowNFTTransfers(w http.ResponseWriter, r *http.Request) 
 	for _, t := range transfers {
 		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
 
 func (s *Server) handleFlowListNFTCollections(w http.ResponseWriter, r *http.Request) {
@@ -63,12 +63,12 @@ func (s *Server) handleFlowGetNFTCollection(w http.ResponseWriter, r *http.Reque
 func (s *Server) handleFlowNFTHoldingsByCollection(w http.ResponseWriter, r *http.Request) {
 	collectionAddr, collectionName := parseTokenParam(mux.Vars(r)["nft_type"])
 	limit, offset := parseLimitOffset(r)
-	rows, total, err := s.repo.ListNFTOwnerCountsByCollection(r.Context(), collectionAddr, collectionName, limit, offset)
+	rows, hasMore, err := s.repo.ListNFTOwnerCountsByCollection(r.Context(), collectionAddr, collectionName, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	totalOwners, err := s.repo.CountNFTOwnersByCollection(r.Context(), collectionAddr, collectionName)
+	totalNFTs, err := s.repo.CountNFTsByCollection(r.Context(), collectionAddr, collectionName)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -76,23 +76,23 @@ func (s *Server) handleFlowNFTHoldingsByCollection(w http.ResponseWriter, r *htt
 	out := make([]map[string]interface{}, 0, len(rows))
 	for _, row := range rows {
 		percentage := 0.0
-		if total > 0 {
-			percentage = float64(row.Count) / float64(total)
+		if totalNFTs > 0 {
+			percentage = float64(row.Count) / float64(totalNFTs)
 		}
 		out = append(out, toNFTHoldingOutput(row.Owner, row.Count, percentage, formatTokenIdentifier(collectionAddr, collectionName)))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": totalOwners, "total_nfts": total}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore, "total_nfts": totalNFTs}, nil)
 }
 
 func (s *Server) handleFlowTopNFTAccounts(w http.ResponseWriter, r *http.Request) {
 	collectionAddr, collectionName := parseTokenParam(mux.Vars(r)["nft_type"])
 	limit, offset := parseLimitOffset(r)
-	rows, total, err := s.repo.ListNFTOwnerCountsByCollection(r.Context(), collectionAddr, collectionName, limit, offset)
+	rows, hasMore, err := s.repo.ListNFTOwnerCountsByCollection(r.Context(), collectionAddr, collectionName, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	totalOwners, err := s.repo.CountNFTOwnersByCollection(r.Context(), collectionAddr, collectionName)
+	totalNFTs, err := s.repo.CountNFTsByCollection(r.Context(), collectionAddr, collectionName)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -100,12 +100,12 @@ func (s *Server) handleFlowTopNFTAccounts(w http.ResponseWriter, r *http.Request
 	out := make([]map[string]interface{}, 0, len(rows))
 	for _, row := range rows {
 		percentage := 0.0
-		if total > 0 {
-			percentage = float64(row.Count) / float64(total)
+		if totalNFTs > 0 {
+			percentage = float64(row.Count) / float64(totalNFTs)
 		}
 		out = append(out, toNFTHoldingOutput(row.Owner, row.Count, percentage, formatTokenIdentifier(collectionAddr, collectionName)))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": totalOwners, "total_nfts": total}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore, "total_nfts": totalNFTs}, nil)
 }
 
 func (s *Server) handleFlowNFTItem(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +128,7 @@ func (s *Server) handleFlowNFTItemTransfers(w http.ResponseWriter, r *http.Reque
 	id := mux.Vars(r)["id"]
 	limit, offset := parseLimitOffset(r)
 
-	transfers, total, err := s.repo.ListNFTItemTransfers(r.Context(), collectionAddr, collectionName, id, limit, offset)
+	transfers, hasMore, err := s.repo.ListNFTItemTransfers(r.Context(), collectionAddr, collectionName, id, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -137,5 +137,5 @@ func (s *Server) handleFlowNFTItemTransfers(w http.ResponseWriter, r *http.Reque
 	for _, t := range transfers {
 		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, ""))
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }

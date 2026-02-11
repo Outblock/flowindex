@@ -154,6 +154,51 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 			return fmt.Errorf("failed to upsert nft transfers: %w", err)
 		}
 	}
+	// Build address_transaction records for transfer participants so that
+	// GetTransactionsByAddress can find transfers without UNION-ing ft/nft_transfers.
+	var addrTxs []models.AddressTransaction
+	for _, ft := range ftTransfers {
+		if ft.FromAddress != "" {
+			addrTxs = append(addrTxs, models.AddressTransaction{
+				Address:       ft.FromAddress,
+				TransactionID: ft.TransactionID,
+				BlockHeight:   ft.BlockHeight,
+				Role:          "FT_SENDER",
+			})
+		}
+		if ft.ToAddress != "" {
+			addrTxs = append(addrTxs, models.AddressTransaction{
+				Address:       ft.ToAddress,
+				TransactionID: ft.TransactionID,
+				BlockHeight:   ft.BlockHeight,
+				Role:          "FT_RECEIVER",
+			})
+		}
+	}
+	for _, nt := range nftTransfers {
+		if nt.FromAddress != "" {
+			addrTxs = append(addrTxs, models.AddressTransaction{
+				Address:       nt.FromAddress,
+				TransactionID: nt.TransactionID,
+				BlockHeight:   nt.BlockHeight,
+				Role:          "NFT_SENDER",
+			})
+		}
+		if nt.ToAddress != "" {
+			addrTxs = append(addrTxs, models.AddressTransaction{
+				Address:       nt.ToAddress,
+				TransactionID: nt.TransactionID,
+				BlockHeight:   nt.BlockHeight,
+				Role:          "NFT_RECEIVER",
+			})
+		}
+	}
+	if len(addrTxs) > 0 {
+		if err := w.repo.UpsertAddressTransactions(ctx, addrTxs); err != nil {
+			return fmt.Errorf("upsert address txs for transfers: %w", err)
+		}
+	}
+
 	if len(ftTokens) > 0 {
 		out := make([]models.FTToken, 0, len(ftTokens))
 		for _, t := range ftTokens {
