@@ -11,6 +11,7 @@
     "gen:api:core": "bunx @hey-api/openapi-ts -i ../backend/docs/openapi.yaml -o app/api/gen/core -c @hey-api/client-axios",
     "gen:api:find": "bunx @hey-api/openapi-ts -i ../openapi-v2.json -o app/api/gen/find -c @hey-api/client-axios",
     "gen:api": "bun run gen:api:core && bun run gen:api:find",
+    "codegen": "npx cadence-codegen typescript ./cadence ./cadence/cadence.gen.ts",
     "lint": "eslint .",
     "prepare": "cd .. && husky"
   },
@@ -35,9 +36,11 @@
     "recharts": "^3.7.0",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
+    "@onflow/fcl": "^1.21.9",
     "three": "^0.167.1"
   },
   "devDependencies": {
+    "@outblock/cadence-codegen": "^1.0.0",
     "@eslint/js": "^9.39.1",
     "@hey-api/client-axios": "^0.9.1",
     "@hey-api/openapi-ts": "^0.92.3",
