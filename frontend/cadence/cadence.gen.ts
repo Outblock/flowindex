@@ -25,7 +25,7 @@ export interface AuthorizationAccount extends Record<string, any> {
 export type AuthorizationFunction = (account: any) => Promise<AuthorizationAccount>;
 
 /** Network addresses for contract imports */
-export const addresses = {"mainnet":{"0xCapabilityDelegator":"0xd8a7e05a7ac670c0","0xCapabilityFactory":"0xd8a7e05a7ac670c0","0xCapabilityFilter":"0xd8a7e05a7ac670c0","0xCrossVMMetadataViews":"0x1d7e57aa55817448","0xDomains":"0x233eb012d34b0070","0xEVM":"0xe467b9dd11fa00df","0xEVMUtils":"0x1e4aa0b87d10b141","0xFLOAT":"0x2d4c3caffbeab845","0xFiatToken":"0xb19436aae4d94622","0xFind":"0x097bafa4e0b48eef","0xFlowClusterQC":"0x8624b52f9ddcd04a","0xFlowDomainUtils":"0x1b3930856571a52b","0xFlowEVMBridge":"0x1e4aa0b87d10b141","0xFlowEVMBridgeConfig":"0x1e4aa0b87d10b141","0xFlowEVMBridgeUtils":"0x1e4aa0b87d10b141","0xFlowEpoch":"0x8624b52f9ddcd04a","0xFlowFees":"0xf919ee77447b7497","0xFlowIDTableStaking":"0x8624b52f9ddcd04a","0xFlowServiceAccount":"0xe467b9dd11fa00df","0xFlowStakingCollection":"0x8d0e87b65159ae63","0xFlowStorageFees":"0xe467b9dd11fa00df","0xFlowTableStaking":"0x8624b52f9ddcd04a","0xFlowToken":"0x1654653399040a61","0xFlowns":"0x233eb012d34b0070","0xFlowviewAccountBookmark":"0x39b144ab4d348e2b","0xFungibleToken":"0xf233dcee88fe0abe","0xFungibleTokenMetadataViews":"0xf233dcee88fe0abe","0xFungibleTokenSwitchboard":"0xf233dcee88fe0abe","0xHybridCustody":"0xd8a7e05a7ac670c0","0xLockedTokens":"0x8d0e87b65159ae63","0xLostAndFound":"0x473d6a2c37eab5be","0xMetadataViews":"0x1d7e57aa55817448","0xNFTCatalog":"0x49a7cda3a1eecc29","0xNFTRetrieval":"0x49a7cda3a1eecc29","0xNFTStorefrontV2":"0x4eb8a10cb9f87357","0xNonFungibleToken":"0x1d7e57aa55817448","0xScopedFTProviders":"0x1e4aa0b87d10b141","0xStakingCollection":"0x8d0e87b65159ae63","0xStakingProxy":"0x62430cf28c26d095","0xStorageRent":"0x707adbad1428c624","0xStringUtils":"0xa340dc0a4ec828ab","0xSwapError":"0xb78ef7afa52ff906","0xSwapRouter":"0xa6850776a94e6551","0xTransactionGeneration":"0xe52522745adf5c34","0xUSDCFlow":"0xf1ab99c82dee3526","0xViewResolver":"0x1d7e57aa55817448","0xstFlowToken":"0xd6f80565193ad727"},"testnet":{"0xCapabilityDelegator":"0x294e44e1ec6993c6","0xCapabilityFactory":"0x294e44e1ec6993c6","0xCapabilityFilter":"0x294e44e1ec6993c6","0xCrossVMMetadataViews":"0x631e88ae7f1d7c20","0xDomains":"0xb05b2abb42335e88","0xEVM":"0x8c5303eaa26202d6","0xEVMUtils":"0xdfc20aee650fcbdf","0xFLOAT":"0x0afe396ebc8eee65","0xFiatToken":"0xa983fecbed621163","0xFind":"0xa16ab1d0abde3625","0xFlowClusterQC":"0x9eca2b38b18b5dfe","0xFlowEVMBridge":"0xdfc20aee650fcbdf","0xFlowEVMBridgeConfig":"0xdfc20aee650fcbdf","0xFlowEVMBridgeUtils":"0xdfc20aee650fcbdf","0xFlowEpoch":"0x9eca2b38b18b5dfe","0xFlowFees":"0x912d5440f7e3769e","0xFlowIDTableStaking":"0x9eca2b38b18b5dfe","0xFlowServiceAccount":"0x8c5303eaa26202d6","0xFlowStakingCollection":"0x95e019a17d0e23d7","0xFlowStorageFees":"0x8c5303eaa26202d6","0xFlowTableStaking":"0x9eca2b38b18b5dfe","0xFlowToken":"0x7e60df042a9c0868","0xFlowns":"0xb05b2abb42335e88","0xFlowviewAccountBookmark":"0xdc34f5a7b807bcfb","0xFungibleToken":"0x9a0766d93b6608b7","0xFungibleTokenMetadataViews":"0x9a0766d93b6608b7","0xFungibleTokenSwitchboard":"0x9a0766d93b6608b7","0xHybridCustody":"0x294e44e1ec6993c6","0xLockedTokens":"0x95e019a17d0e23d7","0xLostAndFound":"0xbe4635353f55bbd4","0xMetadataViews":"0x631e88ae7f1d7c20","0xNFTCatalog":"0x324c34e1c517e4db","0xNFTRetrieval":"0x324c34e1c517e4db","0xNFTStorefrontV2":"0x2d55b98eb200daef","0xNonFungibleToken":"0x631e88ae7f1d7c20","0xScopedFTProviders":"0xdfc20aee650fcbdf","0xStakingCollection":"0x95e019a17d0e23d7","0xStakingProxy":"0x7aad92e5a0715d21","0xStorageRent":"0xd50084a1a43b1507","0xStringUtils":"0x31ad40c07a2a9788","0xSwapError":"0xddb929038d45d4b3","0xSwapRouter":"0x2f8af5ed05bbde0d","0xTransactionGeneration":"0x830c495357676f8b","0xUSDCFlow":"0x64adf39cbc354fcb","0xViewResolver":"0x631e88ae7f1d7c20","0xstFlowToken":"0xe45c64ecfe31e465"}};
+export const addresses = {"mainnet":{"0xCapabilityDelegator":"0xd8a7e05a7ac670c0","0xCapabilityFactory":"0xd8a7e05a7ac670c0","0xCapabilityFilter":"0xd8a7e05a7ac670c0","0xCrossVMMetadataViews":"0x1d7e57aa55817448","0xDomains":"0x233eb012d34b0070","0xEVM":"0xe467b9dd11fa00df","0xEVMUtils":"0x1e4aa0b87d10b141","0xFLOAT":"0x2d4c3caffbeab845","0xFiatToken":"0xb19436aae4d94622","0xFind":"0x097bafa4e0b48eef","0xFlowEVMBridge":"0x1e4aa0b87d10b141","0xFlowEVMBridgeConfig":"0x1e4aa0b87d10b141","0xFlowEVMBridgeUtils":"0x1e4aa0b87d10b141","0xFlowEpoch":"0x8624b52f9ddcd04a","0xFlowFees":"0xf919ee77447b7497","0xFlowIDTableStaking":"0x8624b52f9ddcd04a","0xFlowStakingCollection":"0x8d0e87b65159ae63","0xFlowTableStaking":"0x8624b52f9ddcd04a","0xFlowToken":"0x1654653399040a61","0xFlowns":"0x233eb012d34b0070","0xFungibleToken":"0xf233dcee88fe0abe","0xFungibleTokenMetadataViews":"0xf233dcee88fe0abe","0xHybridCustody":"0xd8a7e05a7ac670c0","0xLockedTokens":"0x8d0e87b65159ae63","0xLostAndFound":"0x473d6a2c37eab5be","0xMetadataViews":"0x1d7e57aa55817448","0xNonFungibleToken":"0x1d7e57aa55817448","0xScopedFTProviders":"0x1e4aa0b87d10b141","0xStakingCollection":"0x8d0e87b65159ae63","0xStakingProxy":"0x62430cf28c26d095","0xStorageRent":"0x707adbad1428c624","0xSwapError":"0xb78ef7afa52ff906","0xSwapRouter":"0xa6850776a94e6551","0xUSDCFlow":"0xf1ab99c82dee3526","0xViewResolver":"0x1d7e57aa55817448","0xstFlowToken":"0xd6f80565193ad727"},"testnet":{"0xCapabilityDelegator":"0x294e44e1ec6993c6","0xCapabilityFactory":"0x294e44e1ec6993c6","0xCapabilityFilter":"0x294e44e1ec6993c6","0xCrossVMMetadataViews":"0x631e88ae7f1d7c20","0xDomains":"0xb05b2abb42335e88","0xEVM":"0x8c5303eaa26202d6","0xEVMUtils":"0xdfc20aee650fcbdf","0xFLOAT":"0x0afe396ebc8eee65","0xFiatToken":"0xa983fecbed621163","0xFind":"0xa16ab1d0abde3625","0xFlowEVMBridge":"0xdfc20aee650fcbdf","0xFlowEVMBridgeConfig":"0xdfc20aee650fcbdf","0xFlowEVMBridgeUtils":"0xdfc20aee650fcbdf","0xFlowEpoch":"0x9eca2b38b18b5dfe","0xFlowFees":"0x912d5440f7e3769e","0xFlowIDTableStaking":"0x9eca2b38b18b5dfe","0xFlowStakingCollection":"0x95e019a17d0e23d7","0xFlowTableStaking":"0x9eca2b38b18b5dfe","0xFlowToken":"0x7e60df042a9c0868","0xFlowns":"0xb05b2abb42335e88","0xFungibleToken":"0x9a0766d93b6608b7","0xFungibleTokenMetadataViews":"0x9a0766d93b6608b7","0xHybridCustody":"0x294e44e1ec6993c6","0xLockedTokens":"0x95e019a17d0e23d7","0xLostAndFound":"0xbe4635353f55bbd4","0xMetadataViews":"0x631e88ae7f1d7c20","0xNonFungibleToken":"0x631e88ae7f1d7c20","0xScopedFTProviders":"0xdfc20aee650fcbdf","0xStakingCollection":"0x95e019a17d0e23d7","0xStakingProxy":"0x7aad92e5a0715d21","0xStorageRent":"0xd50084a1a43b1507","0xSwapError":"0xddb929038d45d4b3","0xSwapRouter":"0x2f8af5ed05bbde0d","0xUSDCFlow":"0x64adf39cbc354fcb","0xViewResolver":"0x631e88ae7f1d7c20","0xstFlowToken":"0xe45c64ecfe31e465"}};
 
 /** Generated Cadence interface */
 export interface ChildAccountInfo {
@@ -75,13 +75,6 @@ export interface FTVaultInfo {
     balancePath?: string | undefined;
     identifier: string;
     evmAddress?: string | undefined;
-}
-
-/** Generated Cadence interface */
-export interface FlowClusterQCCluster {
-    index: number;
-    nodeWeights: Record<string, number>;
-    totalWeight: number;
 }
 
 /** Generated Cadence interface */
@@ -163,6 +156,23 @@ export interface MetadataViewsMedias {
 }
 
 /** Generated Cadence interface */
+export interface NFTCollection {
+    id: string;
+    path: string;
+    collectionDisplay?: any | undefined;
+    collectionData?: NFTCollectionData | undefined;
+    ids: number[];
+}
+
+/** Generated Cadence interface */
+export interface NFTCollectionData {
+    storagePath: string;
+    publicPath: string;
+    publicCollection: string;
+    publicLinkedType: string;
+}
+
+/** Generated Cadence interface */
 export interface NFTCollectionInfo {
     storagePath: string;
     identifier: string;
@@ -237,6 +247,7 @@ export interface StorageInfo {
 
 export type CapabilityFactoryGetter = any;
 export type CapabilityFilterFilter = any;
+export type FlowClusterQCCluster = any;
 export type Media = any;
 
 type RequestInterceptor = (config: any) => any | Promise<any>;
@@ -594,7 +605,54 @@ access(all) fun main(child: Address): OwnedAccountInfo {
   }
 
   // Tag: CadenceNft
-  public async getCollectionCount(address: string, pathId: string, start: number, end: number): Promise<Record<string, any>> {
+  public async getAllNftCount(address: string): Promise<number> {
+    const code = `
+import NonFungibleToken from 0xNonFungibleToken
+import MetadataViews from 0xMetadataViews
+import ViewResolver from 0xMetadataViews
+
+access(all) fun main(address: Address): Int {
+    let account = getAccount(address)
+    let collectionType = Type<@{NonFungibleToken.Collection}>()
+    var count = 0
+
+    fun eachPath(path: StoragePath, Type: Type): Bool {
+        if Type != nil {
+            if Type.isSubtype(of: collectionType) && !Type.isRecovered {
+                let pathStr = path.toString()
+                let splitArr = pathStr.split(separator: "/")
+                let identifier = splitArr[2]
+
+                var acc = getAuthAccount<auth(Storage) &Account>(address)
+                var obj = acc.storage.borrow<&AnyResource>(from: StoragePath(identifier: identifier)!)!
+                var meta = obj as? &{ViewResolver.ResolverCollection}
+                count = count + meta!.getIDs().length
+            }
+        }
+        return true
+    }
+    account.storage.forEachStored(eachPath)
+
+    return count
+}
+`;
+    let config = {
+      cadence: code.trim(),
+      name: "getAllNftCount",
+      type: "script",
+      args: (arg: any, t: any) => [
+        arg(address, t.Address),
+      ],
+      limit: 9999,
+    };
+    config = await this.runRequestInterceptors(config);
+    let response = await fcl.query(config);
+    const result = await this.runResponseInterceptors(config, response);
+    return result.response;
+  }
+
+
+  public async getAllNfts(address: string, start: number, end: number): Promise<any[]> {
     const code = `
 import NonFungibleToken from 0xNonFungibleToken
 import MetadataViews from 0xMetadataViews
@@ -677,40 +735,164 @@ access(all) fun getNFTDetail(_ resolver: &{ViewResolver.Resolver}, id: UInt64): 
     return res
 }
 
-
-access(all) fun main(address: Address, pathId: String, start: Int, end: Int): {String: AnyStruct} {
-    let account = getAuthAccount<auth(Storage) &Account>(address)
-    let collectionType = Type<@{NonFungibleToken.Collection}>()
+access(all) fun main(address: Address, start: Int, end: Int): [AnyStruct] {
+    var results: [AnyStruct] = []
+    var acc = getAuthAccount<auth(Storage) &Account>(address)
     var index = 0
-    let nftsInfo: [{String: AnyStruct}] = []
 
-    let pubPath = PublicPath(identifier: pathId)!
-    let storagePath = StoragePath(identifier: pathId)!
-    var count = 0
-    let collection = account.storage.borrow<&{NonFungibleToken.Collection}>(from: storagePath)!
-    let ids = collection.getIDs()
-    count = 0
-    let nftCount = ids.length
+    acc.storage.forEachStored(fun (path: StoragePath, type: Type): Bool {
+        if type.isSubtype(of: Type<@{NonFungibleToken.Collection}>()) && !type.isRecovered {
+            var collection = acc.storage.borrow<&{NonFungibleToken.Collection}>(from: path)!
+            let ids = collection.getIDs()
+            for id in ids {
+                if index >= start && index < end {
+                    var resolver = collection.borrowViewResolver(id: id)
 
-    for id in ids {
-        if index >= start && index < end {
-            let resolver = collection.borrowViewResolver(id: id)
-            if resolver != nil {
-                nftsInfo.append(getNFTDetail(resolver!, id: id))
-            } else {
-                let res: {String: AnyStruct} = {}
-                let nft = collection.borrowNFT(id)!
-                res["tokenId"] = nft.id
-                res["display"] = nft.resolveView(Type<MetadataViews.Display>())
-                nftsInfo.append(res)
+                    if resolver != nil {
+                        var res = getNFTDetail(resolver!, id: id)
+                        results.append(res)
+                    } else {
+                        let res: {String: AnyStruct} = {}
+                        let nft = collection.borrowNFT(id)!
+                        res["tokenId"] = nft.id
+                        res["display"] = nft.resolveView(Type<MetadataViews.Display>())
+                        results.append(res)
+                    }
+                }
+                index = index + 1
             }
+        }
+        return true
+    })
+    return results
+}
+`;
+    let config = {
+      cadence: code.trim(),
+      name: "getAllNfts",
+      type: "script",
+      args: (arg: any, t: any) => [
+        arg(address, t.Address),
+        arg(start, t.Int),
+        arg(end, t.Int),
+      ],
+      limit: 9999,
+    };
+    config = await this.runRequestInterceptors(config);
+    let response = await fcl.query(config);
+    const result = await this.runResponseInterceptors(config, response);
+    return result.response;
+  }
 
-            count = count + 1
+
+  public async getCollectionCount(address: string, pathId: string, ids: string[]): Promise<Record<string, any>> {
+    const code = `
+import NonFungibleToken from 0xNonFungibleToken
+    import MetadataViews from 0xMetadataViews
+    import ViewResolver from 0xMetadataViews
+
+   
+    access(all) struct CollectionData {
+      access(all) let storagePath: StoragePath
+      access(all) let publicPath: PublicPath
+      access(all) let publicCollection: Type
+      access(all) let publicLinkedType: Type
+
+      init(
+        storagePath: StoragePath,
+        publicPath: PublicPath,
+        publicCollection: Type,
+        publicLinkedType: Type,
+      ) {
+        self.storagePath = storagePath
+        self.publicPath = publicPath
+        self.publicCollection = publicCollection
+        self.publicLinkedType = publicLinkedType
+      }
+    }
+
+    access(all) fun getNFTDetail(_ resolver: &{ViewResolver.Resolver}, id: UInt64): {String: AnyStruct} {
+      let res: {String: AnyStruct} = {}
+      if resolver != nil {
+        if let rarity = MetadataViews.getRarity(resolver) {
+          res["rarity"] = rarity
+        }
+
+        if let display = MetadataViews.getDisplay(resolver) {
+          res["display"] = display
+        }
+
+        if let editions = MetadataViews.getEditions(resolver) {
+          res["editions"] = editions
+        }
+
+        if let serial = MetadataViews.getSerial(resolver) {
+          res["serial"] = serial
+        }
+
+        if let royalties = MetadataViews.getRoyalties(resolver) {
+          res["royalties"] = royalties
+        }
+
+        if let license = MetadataViews.getLicense(resolver) {
+          res["license"] = license
+        }
+
+        if let medias = MetadataViews.getMedias(resolver) {
+          res["medias"] = medias
+        }
+
+        if let externalURL = MetadataViews.getExternalURL(resolver) {
+          res["externalURL"] = externalURL
+        }
+
+        if let traits = MetadataViews.getTraits(resolver) {
+          res["traits"] = traits
+        }
+
+        if let collectionDisplay = MetadataViews.getNFTCollectionDisplay(resolver) {
+          res["collectionDisplay"] = collectionDisplay
+        }
+
+        if let collectionData = MetadataViews.getNFTCollectionData(resolver) {
+          let data = CollectionData(
+            storagePath: collectionData.storagePath,
+            publicPath: collectionData.publicPath,
+            publicCollection: collectionData.publicCollection,
+            publicLinkedType: collectionData.publicLinkedType,
+          )
+          res["collectionData"] = data
+        }
+      }
+      res["tokenId"] = id
+      return res
+    } 
+
+
+    access(all) fun main(address: Address, pathId: String, ids: [String]): {String: AnyStruct} {
+      let account = getAuthAccount<auth(Storage) &Account>(address)
+      let collectionType = Type<@{NonFungibleToken.Collection}>()
+      var index = 0
+      let nftsInfo: [{String: AnyStruct}] = []
+
+      let pubPath = PublicPath(identifier: pathId)!
+      let storagePath = StoragePath(identifier: pathId)!
+      var count = 0
+      let collection =  account.storage.borrow<&{NonFungibleToken.Collection}>(from: storagePath)!
+      let ids = collection.getIDs()
+      count = ids.length
+      
+      for id in ids {
+        if index >= start && index < end {
+          let resolver = collection.borrowViewResolver(id: id)
+          if resolver != nil {
+            nftsInfo.append(getNFTDetail(resolver!, id: id))
+          }
         }
         index = index + 1
+      }
+      return {"nfts": nftsInfo, "nftCount": count }
     }
-    return {"nfts": nftsInfo, "nftCount": nftCount}
-}
 `;
     let config = {
       cadence: code.trim(),
@@ -719,8 +901,146 @@ access(all) fun main(address: Address, pathId: String, start: Int, end: Int): {S
       args: (arg: any, t: any) => [
         arg(address, t.Address),
         arg(pathId, t.String),
-        arg(start, t.Int),
-        arg(end, t.Int),
+        arg(ids, t.Array(t.String)),
+      ],
+      limit: 9999,
+    };
+    config = await this.runRequestInterceptors(config);
+    let response = await fcl.query(config);
+    const result = await this.runResponseInterceptors(config, response);
+    return result.response;
+  }
+
+
+  public async getCollectionInfo(address: string, pathID: string): Promise<NFTCollection> {
+    const code = `
+import MetadataViews from 0xMetadataViews
+import ViewResolver from 0xViewResolver
+import NonFungibleToken from 0xNonFungibleToken
+
+access(all) struct NFTCollectionData {
+    access(all) let storagePath: StoragePath
+    access(all) let publicPath: PublicPath
+    access(all) let publicCollection: Type
+    access(all) let publicLinkedType: Type
+
+    view init(
+        storagePath: StoragePath,
+        publicPath: PublicPath,
+        publicCollection: Type,
+        publicLinkedType: Type,
+    ) {
+        self.storagePath = storagePath
+        self.publicPath = publicPath
+        self.publicCollection = publicCollection
+        self.publicLinkedType = publicLinkedType
+    }
+}
+
+access(all) struct NFTCollection {
+    access(all) let id: String
+    access(all) let path: String
+    access(all) let collectionDisplay: AnyStruct?
+    access(all) let collectionData: NFTCollectionData?
+    access(all) let ids: [UInt64]
+
+    init(id: String, path: String, collectionDisplay: AnyStruct?, collectionData: NFTCollectionData?, ids: [UInt64]) {
+        self.id = id
+        self.path = path
+        self.collectionDisplay = collectionDisplay
+        self.collectionData = collectionData
+        self.ids = ids
+    }
+}
+
+access(all) fun getDisplay(address: Address, storagePath: StoragePath, publicPath: PublicPath): AnyStruct? {
+    let account = getAuthAccount<auth(Storage) &Account>(address)
+    let resourceType = Type<@AnyResource>()
+    let collectionType = Type<@{NonFungibleToken.Collection}>()
+    let metadataViewType = Type<@{ViewResolver.ResolverCollection}>()
+    var item: AnyStruct? = nil
+
+    if let type = account.storage.type(at: storagePath) {
+        let isResource = type.isSubtype(of: resourceType)
+        let isNFTCollection = type.isSubtype(of: collectionType)
+        let conformedMetadataViews = type.isSubtype(of: metadataViewType)
+
+        var tokenIDs: [UInt64] = []
+        if let collection = account.storage.borrow<&{NonFungibleToken.Collection}>(from: storagePath) {
+            tokenIDs = collection.getIDs()
+
+            if tokenIDs.length > 0 {
+                let resolver = collection.borrowViewResolver(id: tokenIDs[0])
+                if resolver != nil {
+                    if let display = MetadataViews.getNFTCollectionDisplay(resolver!) {
+                        item = display
+                    }
+                }
+            }
+        }
+    }
+
+    return item
+}
+
+access(all) fun getCollectionData(address: Address, storagePath: StoragePath, publicPath: PublicPath): NFTCollectionData? {
+    let account = getAuthAccount<auth(Storage) &Account>(address)
+    let resourceType = Type<@AnyResource>()
+    let collectionType = Type<@{NonFungibleToken.Collection}>()
+    let metadataViewType = Type<@{ViewResolver.ResolverCollection}>()
+    var item: NFTCollectionData? = nil
+
+    if let type = account.storage.type(at: storagePath) {
+        let isResource = type.isSubtype(of: resourceType)
+        let isNFTCollection = type.isSubtype(of: collectionType)
+        let conformedMetadataViews = type.isSubtype(of: metadataViewType)
+
+        var tokenIDs: [UInt64] = []
+        if isNFTCollection && conformedMetadataViews {
+            if let collection = account.storage.borrow<&{NonFungibleToken.Collection}>(from: storagePath) {
+                tokenIDs = collection.getIDs()
+
+                if tokenIDs.length > 0 {
+                    let resolver = collection.borrowViewResolver(id: tokenIDs[0])
+                    if resolver != nil {
+                        if let data = MetadataViews.getNFTCollectionData(resolver!) {
+                            item = NFTCollectionData(
+                                storagePath: data.storagePath,
+                                publicPath: data.publicPath,
+                                publicCollection: data.publicCollection,
+                                publicLinkedType: data.publicLinkedType
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return item
+}
+
+access(all) fun main(address: Address, pathID: String): NFTCollection {
+    let account = getAuthAccount<auth(Storage) &Account>(address)
+    let storagePath = StoragePath(identifier: pathID)!
+    let publicPath = PublicPath(identifier: pathID)!
+    let collection = account.storage.borrow<&{ViewResolver.ResolverCollection}>(from: storagePath)!
+    return NFTCollection(
+        id: account.storage.type(at: storagePath)!.identifier,
+        path: storagePath.toString(),
+        collectionDisplay: getDisplay(address: address, storagePath: storagePath, publicPath: publicPath),
+        collectionData: getCollectionData(address: address, storagePath: storagePath, publicPath: publicPath),
+        ids: collection.getIDs()
+    )
+}
+`;
+    let config = {
+      cadence: code.trim(),
+      name: "getCollectionInfo",
+      type: "script",
+      args: (arg: any, t: any) => [
+        arg(address, t.Address),
+        arg(pathID, t.String),
       ],
       limit: 9999,
     };
@@ -850,6 +1170,276 @@ access(all) fun main(address: Address): [NFTCollectionInfo] {
       type: "script",
       args: (arg: any, t: any) => [
         arg(address, t.Address),
+      ],
+      limit: 9999,
+    };
+    config = await this.runRequestInterceptors(config);
+    let response = await fcl.query(config);
+    const result = await this.runResponseInterceptors(config, response);
+    return result.response;
+  }
+
+
+  public async getNftDetail(address: string, pathId: string, tokenID: number): Promise<Record<string, any>> {
+    const code = `
+import NonFungibleToken from 0xNonFungibleToken
+import MetadataViews from 0xMetadataViews
+import ViewResolver from 0xMetadataViews
+
+
+access(all) struct CollectionData {
+    access(all) let storagePath: StoragePath
+    access(all) let publicPath: PublicPath
+    access(all) let publicCollection: Type
+    access(all) let publicLinkedType: Type
+
+    init(
+        storagePath: StoragePath,
+        publicPath: PublicPath,
+        publicCollection: Type,
+        publicLinkedType: Type,
+    ) {
+        self.storagePath = storagePath
+        self.publicPath = publicPath
+        self.publicCollection = publicCollection
+        self.publicLinkedType = publicLinkedType
+    }
+}
+
+access(all) fun main(address: Address, pathId: String, tokenID: UInt64): {String: AnyStruct} {
+    let account = getAccount(address)
+    let res: {String: AnyStruct} = {}
+
+    let storagePath = StoragePath(identifier: pathId)!
+    let publicPath = PublicPath(identifier: pathId)!
+    let collectionRef = account.capabilities.borrow<&{NonFungibleToken.Collection, ViewResolver.ResolverCollection}>(publicPath)
+    if collectionRef == nil {
+        panic("Get Collection Failed")
+    }
+
+    let type = account.storage.type(at: storagePath)
+    if type == nil {
+        return res
+    }
+
+    let metadataViewType = Type<@{ViewResolver.ResolverCollection}>()
+    let conformedMetadataViews = type!.isSubtype(of: metadataViewType)
+
+    if (!conformedMetadataViews) {
+        return res
+    }
+
+    collectionRef!.borrowNFT(tokenID)
+
+    let resolver = collectionRef!.borrowViewResolver(id: tokenID)!
+    if resolver != nil {
+        if let rarity = MetadataViews.getRarity(resolver) {
+            res["rarity"] = rarity
+        }
+
+        if let display = MetadataViews.getDisplay(resolver) {
+            res["display"] = display
+        }
+
+        if let editions = MetadataViews.getEditions(resolver) {
+            res["editions"] = editions
+        }
+
+        if let serial = MetadataViews.getSerial(resolver) {
+            res["serial"] = serial
+        }
+
+        if let royalties = MetadataViews.getRoyalties(resolver) {
+            res["royalties"] = royalties
+        }
+
+        if let license = MetadataViews.getLicense(resolver) {
+            res["license"] = license
+        }
+
+        if let medias = MetadataViews.getMedias(resolver) {
+            res["medias"] = medias
+        }
+
+        if let externalURL = MetadataViews.getExternalURL(resolver) {
+            res["externalURL"] = externalURL
+        }
+
+        if let traits = MetadataViews.getTraits(resolver) {
+            res["traits"] = traits
+        }
+
+        if let collectionDisplay = MetadataViews.getNFTCollectionDisplay(resolver) {
+            res["collectionDisplay"] = collectionDisplay
+        }
+
+        if let collectionData = MetadataViews.getNFTCollectionData(resolver) {
+            let data = CollectionData(
+                storagePath: collectionData.storagePath,
+                publicPath: collectionData.publicPath,
+                publicCollection: collectionData.publicCollection,
+                publicLinkedType: collectionData.publicLinkedType,
+            )
+            res["collectionData"] = data
+        }
+    }
+    res["tokenId"] = tokenID
+
+    return res
+}
+`;
+    let config = {
+      cadence: code.trim(),
+      name: "getNftDetail",
+      type: "script",
+      args: (arg: any, t: any) => [
+        arg(address, t.Address),
+        arg(pathId, t.String),
+        arg(tokenID, t.UInt64),
+      ],
+      limit: 9999,
+    };
+    config = await this.runRequestInterceptors(config);
+    let response = await fcl.query(config);
+    const result = await this.runResponseInterceptors(config, response);
+    return result.response;
+  }
+
+
+  public async getNftListPublic(address: string, pathId: string, start: number, end: number): Promise<Record<string, any>[]> {
+    const code = `
+import NonFungibleToken from 0xNonFungibleToken
+import MetadataViews from 0xMetadataViews
+import ViewResolver from 0xMetadataViews
+
+
+access(all) struct CollectionData {
+    access(all) let storagePath: StoragePath
+    access(all) let publicPath: PublicPath
+    access(all) let publicCollection: Type
+    access(all) let publicLinkedType: Type
+
+    init(
+        storagePath: StoragePath,
+        publicPath: PublicPath,
+        publicCollection: Type,
+        publicLinkedType: Type,
+    ) {
+        self.storagePath = storagePath
+        self.publicPath = publicPath
+        self.publicCollection = publicCollection
+        self.publicLinkedType = publicLinkedType
+    }
+}
+
+access(all) fun main(address: Address, pathId: String, start: Int, end: Int): [{String: AnyStruct}] {
+    let account = getAccount(address)
+    let nfts: [{String: AnyStruct}] = []
+
+    let storagePath = StoragePath(identifier: pathId)!
+    let publicPath = PublicPath(identifier: pathId)!
+    let collectionRef = account.capabilities.borrow<&{NonFungibleToken.Collection, ViewResolver.ResolverCollection}>(publicPath)
+    if collectionRef == nil {
+        panic("Get Collection Failed")
+    }
+
+    let type = account.storage.type(at: storagePath)
+    if type == nil {
+        return nfts
+    }
+
+    let metadataViewType = Type<@{ViewResolver.ResolverCollection}>()
+    let conformedMetadataViews = type!.isSubtype(of: metadataViewType)
+
+    let tokenIDs = collectionRef!.getIDs()
+
+    if (!conformedMetadataViews || tokenIDs.length == 0) {
+        return nfts
+    }
+
+    for tokenID in tokenIDs {
+        let res: {String: AnyStruct} = {}
+
+        collectionRef!.borrowNFT(tokenID)
+
+        let resolver = collectionRef!.borrowViewResolver(id: tokenID)!
+        if resolver != nil {
+            if let rarity = MetadataViews.getRarity(resolver) {
+                res["rarity"] = rarity
+            }
+
+            if let display = MetadataViews.getDisplay(resolver) {
+                res["display"] = display
+            }
+
+            if let editions = MetadataViews.getEditions(resolver) {
+                res["editions"] = editions
+            }
+
+            if let serial = MetadataViews.getSerial(resolver) {
+                res["serial"] = serial
+            }
+
+            if let royalties = MetadataViews.getRoyalties(resolver) {
+                res["royalties"] = royalties
+            }
+
+            if let license = MetadataViews.getLicense(resolver) {
+                res["license"] = license
+            }
+
+            if let medias = MetadataViews.getMedias(resolver) {
+                res["medias"] = medias
+            }
+
+            if let externalURL = MetadataViews.getExternalURL(resolver) {
+                res["externalURL"] = externalURL
+            }
+
+            if let traits = MetadataViews.getTraits(resolver) {
+                res["traits"] = traits
+            }
+
+            if let collectionDisplay = MetadataViews.getNFTCollectionDisplay(resolver) {
+                res["collectionDisplay"] = collectionDisplay
+            }
+
+            if let collectionData = MetadataViews.getNFTCollectionData(resolver) {
+                let data = CollectionData(
+                    storagePath: collectionData.storagePath,
+                    publicPath: collectionData.publicPath,
+                    publicCollection: collectionData.publicCollection,
+                    publicLinkedType: collectionData.publicLinkedType,
+                )
+                res["collectionData"] = data
+            }
+        }
+        res["tokenId"] = tokenID
+
+        nfts.append(res)
+    }
+    let len = nfts.length
+    var endNum = end
+    if len < start {
+        return []
+    } else {
+        if len < end {
+            endNum = len
+        }
+    }
+
+    return nfts.slice(from: start, upTo: endNum)
+}
+`;
+    let config = {
+      cadence: code.trim(),
+      name: "getNftListPublic",
+      type: "script",
+      args: (arg: any, t: any) => [
+        arg(address, t.Address),
+        arg(pathId, t.String),
+        arg(start, t.Int),
+        arg(end, t.Int),
       ],
       limit: 9999,
     };
