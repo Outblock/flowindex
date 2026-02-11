@@ -21,13 +21,11 @@ import (
 
 // FetchResult holds the data for a single block height
 type FetchResult struct {
-	Height           uint64
-	Block            *models.Block
-	Transactions     []models.Transaction
-	Events           []models.Event
-	Collections      []models.Collection
-	ExecutionResults []models.ExecutionResult
-	Error            error
+	Height       uint64
+	Block        *models.Block
+	Transactions []models.Transaction
+	Events       []models.Event
+	Error        error
 }
 
 // Worker is a stateless helper to fetch data for one height
@@ -66,23 +64,8 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			return result
 		}
 
-		// 1. Get Block Header (+ optional collections)
-		//
-		// Collections are expensive to fetch because they require one RPC call per collection guarantee.
-		// For most explorer pages we can derive everything we need from raw.transactions/events, so we
-		// default to NOT fetching collections unless explicitly enabled.
-		storeCollections := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_COLLECTIONS"))) == "true"
-
-		var (
-			block       *flowsdk.Block
-			collections []*flowsdk.Collection
-		)
-
-		if storeCollections {
-			block, collections, err = pin.GetBlockByHeight(ctx, height)
-		} else {
-			block, err = pin.GetBlockHeaderByHeight(ctx, height)
-		}
+		// 1. Get Block Header
+		block, err := pin.GetBlockHeaderByHeight(ctx, height)
 		if err != nil {
 			if shouldRepin(err) {
 				continue
@@ -94,7 +77,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		// Optional: store heavy block payloads (signatures/seals/guarantees). Most explorer
 		// pages don't need these, and they add significant write + storage overhead.
 		storeBlockPayloads := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_BLOCK_PAYLOADS"))) == "true"
-		storeExecutionResults := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_EXECUTION_RESULTS"))) == "true"
 		var collGuarantees []byte
 		var blockSeals []byte
 		var signatures []byte
@@ -121,50 +103,6 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			BlockStatus:          "BLOCK_SEALED", // Default for indexed blocks
 			ExecutionResultID:    executionResultID,
 			IsSealed:             true,
-		}
-
-		if storeExecutionResults {
-			execResult, execErr := pin.GetExecutionResultForBlockID(ctx, block.ID)
-			if execErr != nil {
-				if shouldRepin(execErr) {
-					continue
-				}
-				log.Printf("[ingester] warn: failed to get execution result for block %s (height=%d): %v", block.ID, height, execErr)
-			} else if execResult != nil {
-				payload, _ := json.Marshal(execResult)
-				if executionResultID == "" {
-					executionResultID = block.ID.String()
-				}
-				result.ExecutionResults = append(result.ExecutionResults, models.ExecutionResult{
-					BlockHeight: block.Height,
-					ID:          executionResultID,
-					ChunkData:   payload,
-					Timestamp:   block.Timestamp,
-				})
-
-				// Keep raw.blocks.execution_result_id consistent with raw.execution_results.id
-				// when seals are not available from the access API.
-				dbBlock.ExecutionResultID = executionResultID
-			}
-		}
-
-		if storeCollections && len(collections) > 0 {
-			result.Collections = make([]models.Collection, 0, len(collections))
-			for _, coll := range collections {
-				if coll == nil {
-					continue
-				}
-				txIDs := make([]string, 0, len(coll.TransactionIDs))
-				for _, tid := range coll.TransactionIDs {
-					txIDs = append(txIDs, tid.String())
-				}
-				result.Collections = append(result.Collections, models.Collection{
-					BlockHeight:    block.Height,
-					ID:             coll.ID().String(),
-					TransactionIDs: txIDs,
-					Timestamp:      block.Timestamp,
-				})
-			}
 		}
 
 		// 2. Fetch All Transactions & Results for the Block (Bulk RPC)

@@ -117,12 +117,8 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 				t.event_index,
 				t.timestamp,
 				t.timestamp AS created_at,
-				COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
+				COALESCE(t.contract_name, '') AS contract_name
 			FROM `+table+` t
-			LEFT JOIN raw.events e
-				ON e.block_height = t.block_height
-				AND e.transaction_id = t.transaction_id
-				AND e.event_index = t.event_index
 			`+where+`
 		ORDER BY t.block_height DESC, t.event_index DESC
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), listArgs...)
@@ -248,14 +244,10 @@ func (r *Repository) ListFTTokenContractsByAddress(ctx context.Context, address 
 	rows, err := r.db.Query(ctx, `
 		SELECT DISTINCT
 			encode(t.token_contract_address, 'hex') AS token_contract_address,
-			COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name
+			COALESCE(t.contract_name, '') AS contract_name
 		FROM app.ft_transfers t
-		LEFT JOIN raw.events e
-			ON e.block_height = t.block_height
-			AND e.transaction_id = t.transaction_id
-			AND e.event_index = t.event_index
 		WHERE (t.from_address = $1 OR t.to_address = $1)
-		  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
+		  AND COALESCE(t.contract_name, '') <> 'FungibleToken'
 		ORDER BY token_contract_address ASC, contract_name ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
 	if err != nil {
@@ -282,26 +274,14 @@ func (r *Repository) ListFTVaultSummariesByAddress(ctx context.Context, address 
 	}
 	rows, err := r.db.Query(ctx, `
 		SELECT
-			encode(t.token_contract_address, 'hex') AS token_contract_address,
-			COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) AS contract_name,
-			SUM(
-				CASE
-					WHEN t.to_address = $1 THEN t.amount::numeric
-					WHEN t.from_address = $1 THEN -t.amount::numeric
-					ELSE 0::numeric
-				END
-			)::text AS balance,
-			MAX(t.block_height) AS last_height
-		FROM app.ft_transfers t
-		JOIN raw.tx_lookup l ON l.id = t.transaction_id
-		LEFT JOIN raw.events e
-			ON e.block_height = t.block_height
-			AND e.transaction_id = t.transaction_id
-			AND e.event_index = t.event_index
-		WHERE (t.to_address = $1 OR t.from_address = $1)
-		  AND COALESCE(NULLIF(t.contract_name, ''), COALESCE(NULLIF(split_part(e.type, '.', 3), ''), '')) <> 'FungibleToken'
-		GROUP BY t.token_contract_address, contract_name
-		ORDER BY t.token_contract_address ASC
+			encode(h.contract_address, 'hex') AS token_contract_address,
+			COALESCE(h.contract_name, '') AS contract_name,
+			h.balance::text AS balance,
+			COALESCE(h.last_height, 0) AS last_height
+		FROM app.ft_holdings h
+		WHERE h.address = $1
+		  AND h.balance <> 0
+		ORDER BY h.contract_address ASC, h.contract_name ASC
 		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
 	if err != nil {
 		return nil, err

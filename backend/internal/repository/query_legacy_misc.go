@@ -16,7 +16,7 @@ func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address str
 	query := `
 		SELECT *
 		FROM (
-			SELECT ft.internal_id,
+			SELECT 0::int,
 			       encode(ft.transaction_id, 'hex') AS transaction_id,
 			       ft.block_height,
 			       COALESCE(encode(ft.token_contract_address, 'hex'), '') AS token_contract_address,
@@ -33,7 +33,7 @@ func (r *Repository) GetTokenTransfersByAddress(ctx context.Context, address str
 
 			UNION ALL
 
-			SELECT nt.internal_id,
+			SELECT 0::int,
 			       encode(nt.transaction_id, 'hex') AS transaction_id,
 			       nt.block_height,
 			       COALESCE(encode(nt.token_contract_address, 'hex'), '') AS token_contract_address,
@@ -72,7 +72,7 @@ func (r *Repository) GetTokenTransfersByAddressCursor(ctx context.Context, addre
 	query := `
 		SELECT *
 		FROM (
-			SELECT ft.internal_id,
+			SELECT 0::int,
 			       encode(ft.transaction_id, 'hex') AS transaction_id,
 			       ft.block_height,
 			       COALESCE(encode(ft.token_contract_address, 'hex'), '') AS token_contract_address,
@@ -89,7 +89,7 @@ func (r *Repository) GetTokenTransfersByAddressCursor(ctx context.Context, addre
 
 			UNION ALL
 
-			SELECT nt.internal_id,
+			SELECT 0::int,
 			       encode(nt.transaction_id, 'hex') AS transaction_id,
 			       nt.block_height,
 			       COALESCE(encode(nt.token_contract_address, 'hex'), '') AS token_contract_address,
@@ -138,7 +138,7 @@ func (r *Repository) GetTokenTransfersByAddressCursor(ctx context.Context, addre
 
 func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address string) ([]models.NFTTransfer, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT internal_id,
+		SELECT 0::int,
 		       encode(transaction_id, 'hex') AS transaction_id,
 		       block_height,
 		       COALESCE(encode(token_contract_address, 'hex'), '') AS token_contract_address,
@@ -170,7 +170,7 @@ func (r *Repository) GetNFTTransfersByAddress(ctx context.Context, address strin
 
 func (r *Repository) GetNFTTransfersByAddressCursor(ctx context.Context, address string, limit int, cursor *TokenTransferCursor) ([]models.NFTTransfer, error) {
 	query := `
-		SELECT tt.internal_id,
+		SELECT 0::int,
 		       encode(tt.transaction_id, 'hex') AS transaction_id,
 		       tt.block_height,
 		       COALESCE(encode(tt.token_contract_address, 'hex'), '') AS token_contract_address,
@@ -218,10 +218,10 @@ func (r *Repository) GetNFTTransfersByAddressCursor(ctx context.Context, address
 func (r *Repository) GetAddressStats(ctx context.Context, address string) (*models.AddressStats, error) {
 	var s models.AddressStats
 	err := r.db.QueryRow(ctx, `
-		SELECT encode(address, 'hex') AS address, tx_count, token_transfer_count, 0, total_gas_used, last_updated_block, created_at, updated_at
+		SELECT encode(address, 'hex') AS address, tx_count, total_gas_used, last_updated_block, created_at, updated_at
 		FROM app.address_stats
 		WHERE address = $1`, hexToBytes(address)).Scan(
-		&s.Address, &s.TxCount, &s.TokenTransferCount, &s.NFTTransferCount, &s.TotalGasUsed, &s.LastUpdatedBlock, &s.CreatedAt, &s.UpdatedAt,
+		&s.Address, &s.TxCount, &s.TotalGasUsed, &s.LastUpdatedBlock, &s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -242,9 +242,6 @@ func (r *Repository) GetContractByAddress(ctx context.Context, address string) (
 	if err != nil {
 		return nil, err
 	}
-	c.ID = 0
-	c.TransactionID = ""
-	c.IsEVM = false
 	return &c, nil
 }
 
