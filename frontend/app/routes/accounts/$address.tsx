@@ -4,18 +4,20 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getAccountsByAddress, getAccountsByAddressTransactions } from '../../api/gen/core';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive
+    FileText, HardDrive, Shield, Lock, Database
 } from 'lucide-react';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import { normalizeAddress } from '../../components/account/accountUtils';
+import type { StakingInfo, StorageInfo } from '../../../cadence/cadence.gen';
 import { AccountActivityTab } from '../../components/account/AccountActivityTab';
 import { AccountTokensTab } from '../../components/account/AccountTokensTab';
 import { AccountNFTsTab } from '../../components/account/AccountNFTsTab';
 import { AccountKeysTab } from '../../components/account/AccountInfoTab';
 import { AccountContractsTab } from '../../components/account/AccountContractsTab';
 import { AccountStorageTab } from '../../components/account/AccountStorageTab';
+import { AccountHybridCustodyTab } from '../../components/account/AccountHybridCustodyTab';
 
-const VALID_TABS = ['activity', 'tokens', 'nfts', 'keys', 'contracts', 'storage'] as const;
+const VALID_TABS = ['activity', 'tokens', 'nfts', 'keys', 'contracts', 'storage', 'custody'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
 export const Route = createFileRoute('/accounts/$address')({
@@ -128,6 +130,35 @@ function AccountDetail() {
 
     const normalizedAddress = normalizeAddress(address);
 
+    const [onChainData, setOnChainData] = useState<{
+        balance?: number; storage?: StorageInfo; staking?: StakingInfo;
+    } | null>(null);
+
+    // Client-side on-chain data (balance, staking, storage)
+    useEffect(() => {
+        setOnChainData(null);
+        const load = async () => {
+            try {
+                const { cadenceService } = await import('../../fclConfig');
+                const [tokenRes, stakingRes] = await Promise.all([
+                    cadenceService.getToken(normalizedAddress).catch(() => null),
+                    cadenceService.getStakingInfo(normalizedAddress).catch(() => null),
+                ]);
+                const flowToken = tokenRes?.tokens?.find((t: any) =>
+                    t.contractName === 'FlowToken' || t.symbol === 'FLOW'
+                );
+                setOnChainData({
+                    balance: flowToken ? Number(flowToken.balance) : undefined,
+                    storage: tokenRes?.storage || undefined,
+                    staking: stakingRes?.stakingInfo || undefined,
+                });
+            } catch (e) {
+                console.error('Failed to load on-chain data', e);
+            }
+        };
+        load();
+    }, [normalizedAddress]);
+
     // Refresh account on route change
     useEffect(() => {
         if (account?.address === normalizedAddress) return;
@@ -182,6 +213,7 @@ function AccountDetail() {
         { id: 'keys' as const, label: 'Public Keys', icon: Key },
         { id: 'contracts' as const, label: `Contracts (${account.contracts?.length || 0})`, icon: FileText },
         { id: 'storage' as const, label: 'Storage', icon: HardDrive },
+        { id: 'custody' as const, label: 'Hybrid Custody', icon: Shield },
     ];
 
     return (
@@ -203,8 +235,9 @@ function AccountDetail() {
                     <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
                         <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Balance</p>
                         <p className="text-2xl font-bold text-zinc-900 dark:text-white">
-                            <SafeNumberFlow value={account.balance != null ? Number(account.balance) / 1e8 : 0} /> <span className="text-sm text-zinc-500">FLOW</span>
+                            <SafeNumberFlow value={onChainData?.balance != null ? onChainData.balance : (account.balance != null ? Number(account.balance) / 1e8 : 0)} /> <span className="text-sm text-zinc-500">FLOW</span>
                         </p>
+                        {onChainData?.balance != null && <p className="text-[9px] text-zinc-400 mt-1">On-chain</p>}
                     </div>
                     <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
                         <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Keys</p>
@@ -215,6 +248,62 @@ function AccountDetail() {
                         <p className="text-2xl font-bold text-zinc-900 dark:text-white">{account.contracts?.length || 0}</p>
                     </div>
                 </div>
+
+                {/* Staking info */}
+                {onChainData?.staking && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        {onChainData.staking.lockedAccountInfo && (
+                            <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+                                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Lock className="h-3 w-3" /> Locked FLOW</p>
+                                <p className="text-2xl font-bold text-zinc-900 dark:text-white">
+                                    <SafeNumberFlow value={Number(onChainData.staking.lockedAccountInfo.lockedBalance)} /> <span className="text-sm text-zinc-500">FLOW</span>
+                                </p>
+                                <p className="text-[9px] text-zinc-400 mt-1">Unlock limit: {Number(onChainData.staking.lockedAccountInfo.unlockLimit).toLocaleString()} FLOW</p>
+                            </div>
+                        )}
+                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Coins className="h-3 w-3" /> Total Staked</p>
+                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">
+                                <SafeNumberFlow value={
+                                    [...(onChainData.staking.nodeInfos || []), ...(onChainData.staking.delegatorInfos || [])]
+                                        .reduce((sum, info) => sum + Number(info.tokensStaked || 0), 0)
+                                } /> <span className="text-sm text-zinc-500">FLOW</span>
+                            </p>
+                            <p className="text-[9px] text-zinc-400 mt-1">
+                                {(onChainData.staking.nodeInfos?.length || 0)} node(s), {(onChainData.staking.delegatorInfos?.length || 0)} delegation(s)
+                            </p>
+                        </div>
+                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Coins className="h-3 w-3" /> Total Rewards</p>
+                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">
+                                <SafeNumberFlow value={
+                                    [...(onChainData.staking.nodeInfos || []), ...(onChainData.staking.delegatorInfos || [])]
+                                        .reduce((sum, info) => sum + Number(info.tokensRewarded || 0), 0)
+                                } /> <span className="text-sm text-zinc-500">FLOW</span>
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Storage info */}
+                {onChainData?.storage && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Database className="h-3 w-3" /> Storage Used</p>
+                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">{onChainData.storage.storageUsedInMB} <span className="text-sm text-zinc-500">MB</span></p>
+                        </div>
+                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Database className="h-3 w-3" /> Storage Capacity</p>
+                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">{onChainData.storage.storageCapacityInMB} <span className="text-sm text-zinc-500">MB</span></p>
+                        </div>
+                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Coins className="h-3 w-3" /> Available Balance</p>
+                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">
+                                <SafeNumberFlow value={Number(onChainData.storage.availableBalanceToUse)} /> <span className="text-sm text-zinc-500">FLOW</span>
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Tabs */}
                 <div className="mb-8">
@@ -243,6 +332,7 @@ function AccountDetail() {
                         {activeTab === 'keys' && <AccountKeysTab account={account} />}
                         {activeTab === 'contracts' && <AccountContractsTab address={address} contracts={account.contracts || []} />}
                         {activeTab === 'storage' && <AccountStorageTab address={address} />}
+                        {activeTab === 'custody' && <AccountHybridCustodyTab address={address} />}
                     </div>
                 </div>
             </div>
