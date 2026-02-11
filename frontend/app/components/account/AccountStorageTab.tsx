@@ -87,19 +87,31 @@ export function AccountStorageTab({ address }: Props) {
                 getAccountsByAddressStorageLinks({ path: { address: normalizedAddress }, query: { domain: 'public' } }),
             ]);
 
-            const storagePayload: any = storageRes.data;
-            const linksPayload: any = linksRes.data;
+            // Both responses are JSON-CDC encoded — decode them first
+            const storageDecoded: any = decodeCadenceValue(storageRes.data);
+            const linksDecoded: any = decodeCadenceValue(linksRes.data);
 
-            const storagePaths = (storagePayload?.paths || []).map((p: any) => typeof p === 'string' ? p : p?.identifier ?? p?.path ?? JSON.stringify(p));
-            const publicPaths = (linksPayload?.public_paths || linksPayload?.publicPaths || []).map((p: any) => typeof p === 'string' ? p : p?.identifier ?? p?.path ?? JSON.stringify(p));
-            const privatePaths = (linksPayload?.private_paths || linksPayload?.privatePaths || []).map((p: any) => typeof p === 'string' ? p : p?.identifier ?? p?.path ?? JSON.stringify(p));
+            // storageDecoded is a dict with keys: storagePaths, publicPaths, capacity, used
+            const extractPaths = (paths: any): string[] => {
+                if (!paths) return [];
+                if (!Array.isArray(paths)) return [];
+                return paths.map((p: any) => {
+                    if (typeof p === 'string') return p;
+                    if (p?.identifier) return p.identifier;
+                    return String(p);
+                });
+            };
+
+            const storagePaths = extractPaths(storageDecoded?.storagePaths);
+            const publicPaths = extractPaths(storageDecoded?.publicPaths || linksDecoded);
+            const privatePaths = extractPaths(storageDecoded?.privatePaths);
 
             setOverview({
                 storagePaths,
                 publicPaths,
                 privatePaths,
-                used: storagePayload?.used ?? storagePayload?.storage_used ?? '?',
-                capacity: storagePayload?.capacity ?? storagePayload?.storage_capacity ?? '?',
+                used: storageDecoded?.used ?? '?',
+                capacity: storageDecoded?.capacity ?? '?',
             });
         } catch (err) {
             console.error('Failed to load storage overview', err);
