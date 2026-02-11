@@ -7,6 +7,9 @@ import {
 } from '../../api/gen/core';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
+
+SyntaxHighlighter.registerLanguage('json', json);
 import {
     HardDrive, Folder, FolderOpen, File, FileText, ChevronRight, ChevronDown
 } from 'lucide-react';
