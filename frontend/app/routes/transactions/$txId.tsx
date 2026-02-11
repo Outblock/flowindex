@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getTransactionsById } from '../../api/gen/core';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces } from 'lucide-react';
@@ -8,7 +8,8 @@ import { useTimeTicker } from '../../hooks/useTimeTicker';
 
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useTheme } from '../../contexts/ThemeContext';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -51,26 +52,14 @@ export const Route = createFileRoute('/transactions/$txId')({
 })
 
 function TransactionDetail() {
-    const { transaction: initialTransaction, error: initialError } = Route.useLoaderData();
-    const [transaction, setTransaction] = useState<any>(initialTransaction);
-    // const [loading, setLoading] = useState(true); // handled by loader
-    const [error, setError] = useState<any>(initialTransaction ? null : (initialError || 'Transaction not found'));
-    const [activeTab, setActiveTab] = useState('script');
+    const { transaction, error: loaderError } = Route.useLoaderData();
+    const error = transaction ? null : (loaderError || 'Transaction not found');
+    const [activeTab, setActiveTab] = useState(() =>
+        transaction?.script ? 'script' : 'events'
+    );
     const nowTick = useTimeTicker(20000);
-
-    useEffect(() => {
-        if (!initialTransaction) {
-            setError(initialError || 'Transaction not found');
-        } else {
-            setTransaction(initialTransaction);
-            setError(null);
-            if (initialTransaction.script) {
-                setActiveTab('script');
-            } else {
-                setActiveTab('events');
-            }
-        }
-    }, [initialTransaction]);
+    const { theme } = useTheme();
+    const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
 
 
     const formatAddress = (addr) => {
@@ -313,8 +302,8 @@ function TransactionDetail() {
                                     {transaction.script ? (
                                         <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden text-[10px]">
                                             <SyntaxHighlighter
-                                                language="swift"
-                                                style={vscDarkPlus}
+                                                language="cadence"
+                                                style={syntaxTheme}
                                                 customStyle={{
                                                     margin: 0,
                                                     padding: '1.5rem',
@@ -322,7 +311,7 @@ function TransactionDetail() {
                                                     lineHeight: '1.6',
                                                 }}
                                                 showLineNumbers={true}
-                                                lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: "#555", userSelect: "none" }}
+                                                lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none" }}
                                             >
                                                 {transaction.script}
                                             </SyntaxHighlighter>
