@@ -1,6 +1,6 @@
 # Backend Structure Map
 
-**Last updated:** 2026-02-06
+**Last updated:** 2026-02-12
 
 ## 1. Layering
 - `raw.*`: source-of-truth chain data from RPC, partitioned by height.
@@ -56,7 +56,11 @@
 - Recent transaction APIs filter those rows by default for explorer UX/perf.
 - `raw.tx_lookup` skip-writes those repeated system rows to avoid ambiguous id lookup.
 
-## 7. Hot Path Query Notes
+## 7. Error Recovery and Reliability
+- Worker dependency enforcement, lease lifecycle, retry queues, rollback strategy.
+- Full documentation: `docs/architecture/indexer-reliability.md`
+
+## 8. Hot Path Query Notes
 - Always use cursor pagination for high-volume endpoints.
 - For "recent tx", query only a latest-height window first (`API_RECENT_TX_WINDOW`, default `20000`).
 - Keep lookup tables (`raw.block_lookup`, `raw.tx_lookup`) small and explicit to avoid cross-partition scans.

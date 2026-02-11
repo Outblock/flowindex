@@ -358,11 +358,13 @@ BEGIN
   END LOOP;
 END $$;
 
-DELETE FROM app.evm_transactions WHERE evm_hash IS NULL;
-ALTER TABLE IF EXISTS app.evm_transactions
-  DROP CONSTRAINT IF EXISTS evm_transactions_pkey;
-ALTER TABLE IF EXISTS app.evm_transactions
-  ADD CONSTRAINT evm_transactions_pkey PRIMARY KEY (block_height, transaction_id, event_index, evm_hash);
+DO $$ BEGIN
+  IF to_regclass('app.evm_transactions') IS NOT NULL THEN
+    DELETE FROM app.evm_transactions WHERE evm_hash IS NULL;
+    ALTER TABLE app.evm_transactions DROP CONSTRAINT IF EXISTS evm_transactions_pkey;
+    ALTER TABLE app.evm_transactions ADD CONSTRAINT evm_transactions_pkey PRIMARY KEY (block_height, transaction_id, event_index, evm_hash);
+  END IF;
+END $$;
 
 -- 4.2 EVM transactions/logs (10M partitions)
 CREATE TABLE IF NOT EXISTS app.evm_transactions (

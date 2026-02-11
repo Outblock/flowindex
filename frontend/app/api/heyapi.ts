@@ -12,8 +12,8 @@ export async function ensureHeyApiConfigured() {
     configuring = (async () => {
       const baseURL = await resolveApiBaseUrl();
       // Make SDK calls throw on errors so existing try/catch patterns work.
-      coreClient.setConfig({ baseURL, throwOnError: true });
-      findClient.setConfig({ baseURL, throwOnError: true });
+      coreClient.setConfig({ baseURL, throwOnError: true, timeout: 8000 });
+      findClient.setConfig({ baseURL, throwOnError: true, timeout: 8000 });
       configured = true;
     })().finally(() => {
       configuring = null;

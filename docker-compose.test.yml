@@ -1,0 +1,72 @@
+services:
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: flowscan
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: flowscan
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+      - ./backend/schema_v2.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U flowscan" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: "no"
+    environment:
+      - DB_URL=postgres://flowscan:secretpassword@db:5432/flowscan?sslmode=disable
+      - FLOW_ACCESS_NODE=access-001.mainnet28.nodes.onflow.org:9000
+      - PORT=8080
+      # Index ~1000 blocks from a recent mainnet height
+      - START_BLOCK=141000000
+      - LATEST_WORKER_COUNT=2
+      - LATEST_BATCH_SIZE=10
+      - ENABLE_HISTORY_INGESTER=false
+      # Enable all async workers to test dependency chain
+      - ENABLE_TOKEN_WORKER=true
+      - ENABLE_EVM_WORKER=true
+      - ENABLE_META_WORKER=true
+      - ENABLE_ACCOUNTS_WORKER=true
+      - ENABLE_FT_HOLDINGS_WORKER=true
+      - ENABLE_NFT_OWNERSHIP_WORKER=true
+      - ENABLE_TOKEN_METADATA_WORKER=true
+      - ENABLE_TX_CONTRACTS_WORKER=true
+      - ENABLE_TX_METRICS_WORKER=true
+      # Workers: range=1000 so ~1000 blocks = 1 lease per worker
+      - TOKEN_WORKER_RANGE=500
+      - EVM_WORKER_RANGE=500
+      - META_WORKER_RANGE=500
+      - ACCOUNTS_WORKER_RANGE=500
+      - FT_HOLDINGS_WORKER_RANGE=500
+      - NFT_OWNERSHIP_WORKER_RANGE=500
+      - TOKEN_METADATA_WORKER_RANGE=500
+      - TX_CONTRACTS_WORKER_RANGE=500
+      - TX_METRICS_WORKER_RANGE=500
+      # Live derivers enabled
+      - ENABLE_LIVE_DERIVERS=true
+      - LIVE_DERIVERS_CHUNK=10
+      - LIVE_DERIVERS_HEAD_BACKFILL_BLOCKS=500
+      # Background jobs
+      - ENABLE_DAILY_STATS=false
+      - ENABLE_PRICE_FEED=false
+      - ENABLE_LOOKUP_REPAIR=false
+      # RPC settings
+      - FLOW_RPC_RPS=10
+      - FLOW_RPC_BURST=20
+      - MAX_REORG_DEPTH=100
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  test_postgres_data:

@@ -28,12 +28,16 @@ type AsyncWorker struct {
 	stopCh            chan struct{}
 	minStartHeight    uint64
 	minStartCheckedAt time.Time
+	// Dependencies lists upstream worker checkpoint names that must reach toHeight
+	// before this worker processes a range. Prevents silent data loss from race conditions.
+	dependencies []string
 }
 
 // Config holds configuration for the AsyncWorker
 type WorkerConfig struct {
-	RangeSize uint64
-	WorkerID  string
+	RangeSize    uint64
+	WorkerID     string
+	Dependencies []string
 }
 
 func NewAsyncWorker(p Processor, repo *repository.Repository, cfg WorkerConfig) *AsyncWorker {
@@ -46,11 +50,12 @@ func NewAsyncWorker(p Processor, repo *repository.Repository, cfg WorkerConfig) 
 	}
 
 	return &AsyncWorker{
-		processor: p,
-		repo:      repo,
-		rangeSize: cfg.RangeSize,
-		workerID:  cfg.WorkerID,
-		stopCh:    make(chan struct{}),
+		processor:    p,
+		repo:         repo,
+		rangeSize:    cfg.RangeSize,
+		workerID:     cfg.WorkerID,
+		stopCh:       make(chan struct{}),
+		dependencies: cfg.Dependencies,
 	}
 }
 
@@ -96,14 +101,6 @@ func (w *AsyncWorker) tryProcessNextRange(ctx context.Context) {
 		return
 	}
 
-	// Alignment: floor(checkpoint / range) * range
-	// If checkpoint is 0 (start), we start at 0.
-	// If checkpoint is 50000, we start at 50000.
-	// Make sure we don't re-process compelted range if checkpoint is exactly on boundary?
-	// Actually, last_height usually implies "processed up to X".
-	// So next range starts at `last_height`?
-	// The plan says: "Start at floor(checkpoint / RANGE_SIZE) * RANGE_SIZE" and then "Priority: Reclaim FAILED" or "Fallback: Increment".
-
 	baseHeight := (checkpointH / w.rangeSize) * w.rangeSize
 	if minStart, err := w.getMinStartHeight(ctx); err == nil && minStart > 0 && checkpointH < minStart {
 		aligned := (minStart / w.rangeSize) * w.rangeSize
@@ -113,12 +110,23 @@ func (w *AsyncWorker) tryProcessNextRange(ctx context.Context) {
 		}
 	}
 
-	// Candidate List:
-	// A. Failed Ranges (Priority) - We don't have a quick query for this yet,
-	//    so we might just rely on the fallback logic or add a query.
-	//    For simplicity in V1: check current baseHeight, then baseHeight + RangeSize...
+	// Dependency gate: check that all upstream workers have progressed past our candidate range.
+	// This prevents silent data loss (e.g. FTHoldingsWorker running before TokenWorker).
+	candidateEnd := baseHeight + w.rangeSize
+	if len(w.dependencies) > 0 && candidateEnd > 0 {
+		for _, dep := range w.dependencies {
+			depH, depErr := w.repo.GetLastIndexedHeight(ctx, dep)
+			if depErr != nil {
+				log.Printf("[%s] Failed to check dependency %s: %v", workerType, dep, depErr)
+				return
+			}
+			if depH < candidateEnd {
+				// Upstream hasn't reached our range yet, wait.
+				return
+			}
+		}
+	}
 
-	// Let's try to acquire baseHeight first (maybe it failed or was never done)
 	if baseHeight+w.rangeSize <= rawTip {
 		if w.attemptRange(ctx, baseHeight) {
 			return // Work done, return to loop immediately to pick up next (or wait ticker)
