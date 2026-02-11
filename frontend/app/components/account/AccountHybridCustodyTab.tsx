@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactFlow, {
     Node, Edge, Position, MarkerType,
-    Background, Controls,
+    Background, BackgroundVariant, Controls,
     useNodesState, useEdgesState,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Link } from '@tanstack/react-router';
-import { User, Shield, ShieldCheck, ShieldAlert, Loader2 } from 'lucide-react';
+import { User, Shield, ShieldCheck, ShieldAlert, Loader2, UserCog, KeyRound } from 'lucide-react';
 import { normalizeAddress } from './accountUtils';
 import type { ManagerInfo, OwnedAccountInfo } from '../../../cadence/cadence.gen';
 
@@ -29,12 +29,15 @@ function AccountNode({ data }: { data: any }) {
         ? 'bg-nothing-green-dark/5 dark:bg-nothing-green/5'
         : 'bg-white dark:bg-zinc-900';
 
-    const IconComp = role === 'parent' ? ShieldCheck : role === 'owned' ? ShieldAlert : User;
+    const IconComp = role === 'parent' ? ShieldCheck : role === 'child' ? UserCog : role === 'owned' ? KeyRound : User;
+    const iconColor = isCurrent ? 'text-nothing-green-dark dark:text-nothing-green' : role === 'parent' ? 'text-blue-500' : 'text-amber-500';
 
     return (
-        <div className={`border-2 ${borderColor} ${bgColor} rounded-sm px-4 py-3 min-w-[180px] shadow-sm font-mono`}>
+        <div className={`border-2 ${borderColor} ${bgColor} rounded-sm px-4 py-3 min-w-[200px] shadow-sm font-mono`}>
             <div className="flex items-center gap-2 mb-1">
-                <IconComp className={`h-4 w-4 flex-shrink-0 ${isCurrent ? 'text-nothing-green-dark dark:text-nothing-green' : role === 'parent' ? 'text-blue-500' : 'text-amber-500'}`} />
+                <div className={`p-1 rounded-sm ${isCurrent ? 'bg-nothing-green-dark/10 dark:bg-nothing-green/10' : role === 'parent' ? 'bg-blue-500/10' : 'bg-amber-500/10'}`}>
+                    <IconComp className={`h-4 w-4 flex-shrink-0 ${iconColor}`} />
+                </div>
                 <span className="text-[10px] uppercase tracking-widest text-zinc-500">{data.label}</span>
             </div>
             {data.displayName && (
@@ -165,11 +168,13 @@ export function AccountHybridCustodyTab({ address }: Props) {
                 id: `e-${id}`,
                 source: id,
                 target: 'current',
+                type: 'smoothstep',
                 animated: true,
-                style: { stroke: '#3b82f6' },
-                markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+                style: { stroke: '#3b82f6', strokeWidth: 2 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6', width: 20, height: 20 },
                 label: p.isClaimed ? 'manages' : 'unclaimed',
-                labelStyle: { fontSize: 10, fill: '#94a3b8' },
+                labelStyle: { fontSize: 10, fill: '#94a3b8', fontFamily: 'monospace' },
+                labelBgStyle: { fill: 'transparent' },
             });
         });
 
@@ -203,11 +208,13 @@ export function AccountHybridCustodyTab({ address }: Props) {
                 id: `e-${id}`,
                 source: 'current',
                 target: id,
+                type: 'smoothstep',
                 animated: true,
-                style: { stroke: '#f59e0b' },
-                markerEnd: { type: MarkerType.ArrowClosed, color: '#f59e0b' },
+                style: { stroke: '#f59e0b', strokeWidth: 2 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: '#f59e0b', width: 20, height: 20 },
                 label: c.isOwned ? 'owns' : 'manages',
-                labelStyle: { fontSize: 10, fill: '#94a3b8' },
+                labelStyle: { fontSize: 10, fill: '#94a3b8', fontFamily: 'monospace' },
+                labelBgStyle: { fill: 'transparent' },
             });
         });
 
@@ -269,7 +276,7 @@ export function AccountHybridCustodyTab({ address }: Props) {
                         nodesConnectable={false}
                         elementsSelectable={false}
                     >
-                        <Background color="#27272a" gap={20} size={1} />
+                        <Background variant={BackgroundVariant.Dots} color="#3f3f46" gap={16} size={1.5} />
                         <Controls
                             showInteractive={false}
                             className="!bg-white dark:!bg-zinc-900 !border-zinc-200 dark:!border-white/10 !shadow-sm [&_button]:!bg-white dark:[&_button]:!bg-zinc-900 [&_button]:!border-zinc-200 dark:[&_button]:!border-white/10 [&_button]:!fill-zinc-600 dark:[&_button]:!fill-zinc-400"
