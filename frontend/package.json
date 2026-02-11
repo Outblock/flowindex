@@ -13,8 +13,7 @@
     "gen:api": "bun run gen:api:core && bun run gen:api:find",
     "lint": "eslint .",
     "prepare": "cd .. && husky",
-    "codegen": "npx cadence-codegen typescript ./cadence ./cadence/cadence.gen.ts",
-    "postinstall": "bun run codegen"
+    "codegen": "npx cadence-codegen typescript ./cadence ./cadence/cadence.gen.ts"
   },
   "dependencies": {
     "@number-flow/react": "^0.5.11",
