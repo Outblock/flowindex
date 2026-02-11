@@ -111,6 +111,23 @@ export function AccountNFTsTab({ address }: Props) {
         return parts.length >= 3 ? parts[2] : id;
     };
 
+    // Deterministic color from string hash for placeholder banners
+    const BANNER_COLORS = [
+        'from-violet-500/30 to-indigo-600/30',
+        'from-emerald-500/30 to-teal-600/30',
+        'from-orange-500/30 to-rose-600/30',
+        'from-sky-500/30 to-cyan-600/30',
+        'from-pink-500/30 to-fuchsia-600/30',
+        'from-amber-500/30 to-yellow-600/30',
+        'from-lime-500/30 to-green-600/30',
+        'from-blue-500/30 to-purple-600/30',
+    ];
+    const getBannerColor = (id: string) => {
+        let hash = 0;
+        for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
+        return BANNER_COLORS[Math.abs(hash) % BANNER_COLORS.length];
+    };
+
     return (
         <div>
             <div className="flex items-center justify-between mb-3">
@@ -135,26 +152,50 @@ export function AccountNFTsTab({ address }: Props) {
 
                             return (
                                 <div key={`${col.id}-${i}`} className="border border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-black/40 rounded-sm overflow-hidden">
-                                    {/* Collection header */}
-                                    <button type="button" onClick={() => toggleCollection(col)} className="w-full text-left hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">
-                                        <div className="p-4 flex items-center gap-3">
-                                            {isExpanded ? <ChevronDown className="h-4 w-4 text-zinc-500 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-zinc-500 flex-shrink-0" />}
-
-                                            {display.squareImage ? (
-                                                <img src={display.squareImage} alt="" className="w-10 h-10 rounded-sm border border-zinc-200 dark:border-white/10 object-cover flex-shrink-0 bg-zinc-200 dark:bg-white/5" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} />
+                                    {/* Banner */}
+                                    <button type="button" onClick={() => toggleCollection(col)} className="w-full text-left group">
+                                        <div className="relative h-24 overflow-hidden">
+                                            {display.bannerImage ? (
+                                                <img
+                                                    src={display.bannerImage}
+                                                    alt=""
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                    loading="lazy"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                                                />
                                             ) : null}
-                                            <div className={`w-10 h-10 rounded-sm border border-zinc-200 dark:border-white/10 bg-zinc-200 dark:bg-white/5 flex items-center justify-center flex-shrink-0 ${display.squareImage ? 'hidden' : ''}`}>
-                                                <ImageIcon className="h-4 w-4 text-zinc-400 dark:text-zinc-600" />
+                                            <div className={`absolute inset-0 bg-gradient-to-br ${getBannerColor(col.id)} ${display.bannerImage ? 'hidden' : ''}`}>
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                                                    <span className="text-4xl font-bold font-mono text-zinc-900 dark:text-white uppercase tracking-[0.3em]">{(display.name || contractName).slice(0, 3)}</span>
+                                                </div>
+                                            </div>
+                                            {/* Gradient overlay for text readability */}
+                                            <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-zinc-50 dark:from-black/80 to-transparent" />
+                                        </div>
+
+                                        {/* Info row overlapping banner bottom */}
+                                        <div className="px-4 pb-3 -mt-6 relative flex items-end gap-3">
+                                            {/* Square avatar */}
+                                            <div className="flex-shrink-0">
+                                                {display.squareImage ? (
+                                                    <img src={display.squareImage} alt="" className="w-12 h-12 rounded-sm border-2 border-white dark:border-zinc-800 object-cover bg-zinc-200 dark:bg-white/5 shadow-sm" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} />
+                                                ) : null}
+                                                <div className={`w-12 h-12 rounded-sm border-2 border-white dark:border-zinc-800 bg-zinc-200 dark:bg-white/10 flex items-center justify-center shadow-sm ${display.squareImage ? 'hidden' : ''}`}>
+                                                    <ImageIcon className="h-5 w-5 text-zinc-400 dark:text-zinc-600" />
+                                                </div>
                                             </div>
 
-                                            <div className="min-w-0 flex-1">
-                                                <div className="text-sm font-mono text-zinc-900 dark:text-white truncate">{display.name || contractName}</div>
+                                            <div className="min-w-0 flex-1 pb-0.5">
+                                                <div className="text-sm font-mono font-semibold text-zinc-900 dark:text-white truncate">{display.name || contractName}</div>
                                                 <div className="text-[10px] text-zinc-500 font-mono truncate" title={col.id}>{contractName}</div>
                                             </div>
 
-                                            <div className="text-right flex-shrink-0">
-                                                <div className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{count.toLocaleString()}</div>
-                                                <div className="text-[10px] text-zinc-500">items</div>
+                                            <div className="text-right flex-shrink-0 pb-0.5 flex items-center gap-2">
+                                                <div>
+                                                    <div className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{count.toLocaleString()}</div>
+                                                    <div className="text-[10px] text-zinc-500">items</div>
+                                                </div>
+                                                {isExpanded ? <ChevronDown className="h-4 w-4 text-zinc-400" /> : <ChevronRight className="h-4 w-4 text-zinc-400" />}
                                             </div>
                                         </div>
                                     </button>
