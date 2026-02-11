@@ -50,10 +50,14 @@ export function AccountNFTsTab({ address }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [address]);
 
-    const getPathId = (col: NFTCollection): string => {
-        // path is like "/public/MomentCollection" — extract identifier
-        const p = col.path || '';
-        return p.split('/').pop() || p;
+    // Calculate global offset for a collection by summing IDs of all preceding collections
+    const getGlobalOffset = (colId: string): number => {
+        let offset = 0;
+        for (const c of collections) {
+            if (c.id === colId) break;
+            offset += c.ids?.length || 0;
+        }
+        return offset;
     };
 
     const toggleCollection = async (col: NFTCollection, page = 0) => {
@@ -73,10 +77,10 @@ export function AccountNFTsTab({ address }: Props) {
 
         try {
             const { cadenceService } = await import('../../fclConfig');
-            const pathId = getPathId(col);
-            const start = page * NFT_PAGE_SIZE;
+            const globalOffset = getGlobalOffset(col.id);
+            const start = globalOffset + page * NFT_PAGE_SIZE;
             const end = start + NFT_PAGE_SIZE;
-            const nfts = await cadenceService.getNftListPublic(normalizedAddress, pathId, start, end);
+            const nfts = await cadenceService.getAllNfts(normalizedAddress, start, end);
             setExpanded(prev => ({
                 ...prev,
                 [key]: { nfts: nfts || [], loading: false, error: null, page }
