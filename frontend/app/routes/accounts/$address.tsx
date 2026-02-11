@@ -11,18 +11,16 @@ import {
     getAccountsByAddressStorageLinks,
     getAccountsByAddressStorageItem,
 } from '../../api/gen/core';
-import {
-    getFlowV1AccountByAddressFtHolding,
-    getFlowV1AccountByAddressNft,
-} from '../../api/gen/find';
+import type { FTVaultInfo, StorageInfo as FCLStorageInfo, NFTCollectionInfo } from '../../../cadence/cadence.gen';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
     ArrowLeft, ArrowRightLeft, User, Activity, Wallet, Key, Code, Coins, Image as ImageIcon,
     FileText, HardDrive, Folder, FolderOpen, File, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
+import { useTheme } from '../../contexts/ThemeContext';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -144,14 +142,15 @@ function AccountDetail() {
     const { address } = Route.useParams();
     const { account: initialAccount, initialTransactions } = Route.useLoaderData();
     const location = useRouterState({ select: (s) => s.location });
+    const { theme } = useTheme();
 
     const [account, setAccount] = useState<any>(initialAccount);
     const [transactions, setTransactions] = useState<any[]>(initialTransactions);
     // const [loading, setLoading] = useState(true); // handled by loader
     const [error, setError] = useState<any>(initialAccount ? null : 'Account not found');
-    const [activeTab, setActiveTab] = useState('info');
-    // Activity panel tabs (requested): Activity first, then Transfers/Tokens/NFTs.
-    const [activityTab, setActivityTab] = useState<'activity' | 'transfers' | 'tokens' | 'nfts'>('activity');
+    const [activeTab, setActiveTab] = useState<'info' | 'keys' | 'contracts' | 'storage' | 'activity' | 'transfers' | 'tokens' | 'nfts'>('info');
+
+    const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -167,16 +166,16 @@ function AccountDetail() {
     const [nftHasMore, setNftHasMore] = useState(false);
     const [nftLoading, setNftLoading] = useState(false);
 
-    // Holdings/Collections (for Tokens/NFTs tabs)
-    const [ftHoldings, setFTHoldings] = useState<any[]>([]);
-    const [ftHoldingsPage, setFTHoldingsPage] = useState(1);
-    const [ftHoldingsHasNext, setFTHoldingsHasNext] = useState(false);
-    const [ftHoldingsLoading, setFTHoldingsLoading] = useState(false);
+    // FCL-based Tokens tab
+    const [fclTokens, setFclTokens] = useState<FTVaultInfo[]>([]);
+    const [fclStorage, setFclStorage] = useState<FCLStorageInfo | null>(null);
+    const [fclTokensLoading, setFclTokensLoading] = useState(false);
+    const [fclTokensError, setFclTokensError] = useState<string | null>(null);
 
-    const [ownedNFTCollections, setOwnedNFTCollections] = useState<any[]>([]);
-    const [ownedNFTCollectionsPage, setOwnedNFTCollectionsPage] = useState(1);
-    const [ownedNFTCollectionsHasNext, setOwnedNFTCollectionsHasNext] = useState(false);
-    const [ownedNFTCollectionsLoading, setOwnedNFTCollectionsLoading] = useState(false);
+    // FCL-based NFTs tab
+    const [fclNFTCollections, setFclNFTCollections] = useState<NFTCollectionInfo[]>([]);
+    const [fclNFTsLoading, setFclNFTsLoading] = useState(false);
+    const [fclNFTsError, setFclNFTsError] = useState<string | null>(null);
 
     useEffect(() => {
         const normalizedAddress = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
@@ -304,6 +303,14 @@ function AccountDetail() {
         return val;
     };
 
+    const formatStorageBytes = (bytes: any): string => {
+        const n = Number(bytes);
+        if (!Number.isFinite(n) || n === 0) return '0 B';
+        if (n < 1024) return `${n} B`;
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+        return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+    };
+
     const normalizedAddress = normalizeAddress(address);
 
     // We rely on loader for initial data, but if params change we might want effect?
@@ -340,12 +347,11 @@ function AccountDetail() {
         setNftCursor('');
         setNftHasMore(false);
 
-        setFTHoldings([]);
-        setFTHoldingsPage(1);
-        setFTHoldingsHasNext(false);
-        setOwnedNFTCollections([]);
-        setOwnedNFTCollectionsPage(1);
-        setOwnedNFTCollectionsHasNext(false);
+        setFclTokens([]);
+        setFclStorage(null);
+        setFclTokensError(null);
+        setFclNFTCollections([]);
+        setFclNFTsError(null);
     }, [initialAccount, initialTransactions, address]);
 
 
@@ -414,41 +420,34 @@ function AccountDetail() {
         }
     };
 
-    const loadFTHoldings = async (page = 1) => {
-        setFTHoldingsLoading(true);
+    const loadFclTokens = async () => {
+        setFclTokensLoading(true);
+        setFclTokensError(null);
         try {
-            const limit = 25;
-            const offset = (page - 1) * limit;
-            await ensureHeyApiConfigured();
-            const res = await getFlowV1AccountByAddressFtHolding({ path: { address: normalizedAddress || address }, query: { limit, offset } });
-            const payload: any = res.data;
-            const items = payload?.data ?? [];
-            setFTHoldings(items);
-            setFTHoldingsPage(page);
-            setFTHoldingsHasNext(items.length === limit);
+            const { cadenceService } = await import('../../fclConfig');
+            const res = await cadenceService.getToken(normalizedAddress || address);
+            setFclTokens(res.tokens || []);
+            setFclStorage(res.storage || null);
         } catch (err) {
-            console.error('Failed to load FT holdings', err);
+            console.error('Failed to load FCL tokens', err);
+            setFclTokensError('Failed to load token data');
         } finally {
-            setFTHoldingsLoading(false);
+            setFclTokensLoading(false);
         }
     };
 
-    const loadOwnedNFTCollections = async (page = 1) => {
-        setOwnedNFTCollectionsLoading(true);
+    const loadFclNFTCollections = async () => {
+        setFclNFTsLoading(true);
+        setFclNFTsError(null);
         try {
-            const limit = 25;
-            const offset = (page - 1) * limit;
-            await ensureHeyApiConfigured();
-            const res = await getFlowV1AccountByAddressNft({ path: { address: normalizedAddress || address }, query: { limit, offset } });
-            const payload: any = res.data;
-            const items = payload?.data ?? [];
-            setOwnedNFTCollections(items);
-            setOwnedNFTCollectionsPage(page);
-            setOwnedNFTCollectionsHasNext(items.length === limit);
+            const { cadenceService } = await import('../../fclConfig');
+            const collections = await cadenceService.getNftCollections(normalizedAddress || address);
+            setFclNFTCollections(collections || []);
         } catch (err) {
-            console.error('Failed to load owned NFT collections', err);
+            console.error('Failed to load NFT collections', err);
+            setFclNFTsError('Failed to load NFT collections');
         } finally {
-            setOwnedNFTCollectionsLoading(false);
+            setFclNFTsLoading(false);
         }
     };
 
@@ -524,18 +523,18 @@ function AccountDetail() {
 
 
     useEffect(() => {
-        if (activityTab === 'transfers') {
+        if (activeTab === 'transfers') {
             if (tokenTransfers.length === 0 && !tokenLoading) loadTokenTransfers('', false);
             if (nftTransfers.length === 0 && !nftLoading) loadNFTTransfers('', false);
         }
-        if (activityTab === 'tokens') {
-            if (ftHoldings.length === 0 && !ftHoldingsLoading) loadFTHoldings(1);
+        if (activeTab === 'tokens') {
+            if (fclTokens.length === 0 && !fclTokensLoading) loadFclTokens();
         }
-        if (activityTab === 'nfts') {
-            if (ownedNFTCollections.length === 0 && !ownedNFTCollectionsLoading) loadOwnedNFTCollections(1);
+        if (activeTab === 'nfts') {
+            if (fclNFTCollections.length === 0 && !fclNFTsLoading) loadFclNFTCollections();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activityTab, address]);
+    }, [activeTab, address]);
 
     useEffect(() => {
         if (activeTab !== 'storage') return;
@@ -612,57 +611,32 @@ function AccountDetail() {
                     </div>
                 </div>
 
-                {/* Tabs for Account Info & Keys */}
+                {/* Tabs */}
                 <div className="mb-8">
-                    <div className="flex border-b border-zinc-200 dark:border-white/10 mb-0">
-                        <button
-                            onClick={() => setActiveTab('info')}
-                            className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'info'
-                                ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
-                                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
-                                }`}
-                        >
-                            <span className="flex items-center gap-2">
-                                <User className={`h-4 w-4 ${activeTab === 'info' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
-                                Account Info
-                            </span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('keys')}
-                            className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'keys'
-                                ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
-                                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
-                                }`}
-                        >
-                            <span className="flex items-center gap-2">
-                                <Key className={`h-4 w-4 ${activeTab === 'keys' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
-                                Public Keys
-                            </span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('contracts')}
-                            className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'contracts'
-                                ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
-                                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
-                                }`}
-                        >
-                            <span className="flex items-center gap-2">
-                                <FileText className={`h-4 w-4 ${activeTab === 'contracts' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
-                                Contracts ({account.contracts ? account.contracts.length : 0})
-                            </span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('storage')}
-                            className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === 'storage'
-                                ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
-                                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
-                                }`}
-                        >
-                            <span className="flex items-center gap-2">
-                                <HardDrive className={`h-4 w-4 ${activeTab === 'storage' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
-                                Storage
-                            </span>
-                        </button>
+                    <div className="flex flex-wrap border-b border-zinc-200 dark:border-white/10 mb-0">
+                        {[
+                            { id: 'info' as const, label: 'Account Info', icon: User },
+                            { id: 'activity' as const, label: 'Activity', icon: Activity },
+                            { id: 'tokens' as const, label: 'Tokens', icon: Coins },
+                            { id: 'nfts' as const, label: 'NFTs', icon: ImageIcon },
+                            { id: 'keys' as const, label: 'Public Keys', icon: Key },
+                            { id: 'contracts' as const, label: `Contracts (${account.contracts?.length || 0})`, icon: FileText },
+                            { id: 'storage' as const, label: 'Storage', icon: HardDrive },
+                        ].map(({ id, label, icon: Icon }) => (
+                            <button
+                                key={id}
+                                onClick={() => setActiveTab(id)}
+                                className={`px-5 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === id
+                                    ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
+                                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
+                                    }`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Icon className={`h-4 w-4 ${activeTab === id ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
+                                    {label}
+                                </span>
+                            </button>
+                        ))}
                     </div>
 
                     <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[200px] shadow-sm dark:shadow-none">
@@ -789,7 +763,7 @@ function AccountDetail() {
                                             <div className="rounded-sm overflow-hidden border border-zinc-200 dark:border-white/10">
                                                 <SyntaxHighlighter
                                                     language="cadence"
-                                                    style={vscDarkPlus}
+                                                    style={syntaxTheme}
                                                     customStyle={{
                                                         margin: 0,
                                                         padding: '1rem',
@@ -798,7 +772,7 @@ function AccountDetail() {
                                                         maxHeight: '420px',
                                                     }}
                                                     showLineNumbers={true}
-                                                    lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: "#555", userSelect: "none" }}
+                                                    lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none" }}
                                                 >
                                                     {selectedContractCode}
                                                 </SyntaxHighlighter>
@@ -830,7 +804,7 @@ function AccountDetail() {
                                             <div className="p-3 border-b border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 flex items-center justify-between">
                                                 <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">File Browser</span>
                                                 <span className="text-[10px] text-zinc-500">
-                                                    {storageOverview.used ?? '?'} / {storageOverview.capacity ?? '?'}
+                                                    {formatStorageBytes(storageOverview.used)} / {formatStorageBytes(storageOverview.capacity)}
                                                 </span>
                                             </div>
                                             <div className="flex-1 overflow-auto p-2 space-y-1">
@@ -906,11 +880,11 @@ function AccountDetail() {
                                                 </div>
                                             </div>
 
-                                            <div className="flex-1 overflow-auto bg-zinc-50 dark:bg-[#1e1e1e] relative">
+                                            <div className={`flex-1 overflow-auto relative ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-zinc-50'}`}>
                                                 {storageItem ? (
                                                     <SyntaxHighlighter
                                                         language="json"
-                                                        style={vscDarkPlus}
+                                                        style={syntaxTheme}
                                                         customStyle={{
                                                             margin: 0,
                                                             padding: '1.5rem',
@@ -919,7 +893,7 @@ function AccountDetail() {
                                                             minHeight: '100%',
                                                         }}
                                                         showLineNumbers={true}
-                                                        lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: "#555", userSelect: "none" }}
+                                                        lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none" }}
                                                     >
                                                         {JSON.stringify(storageItem, null, 2)}
                                                     </SyntaxHighlighter>
@@ -935,385 +909,341 @@ function AccountDetail() {
                                 )}
                             </div>
                         )}
-                    </div>
-                </div>
 
-                {/* Activity */}
-                <div className="border border-zinc-200 dark:border-white/10 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                    <div className="p-6 border-b border-zinc-200 dark:border-white/10 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                        <div className="flex items-center gap-3">
-                            <h2 className="text-zinc-900 dark:text-white text-sm uppercase tracking-widest">Activity</h2>
-                            {activityTab === 'activity' && <span className="text-xs text-zinc-500">{transactions.length} Found</span>}
-                            {activityTab === 'transfers' && (
-                                <span className="text-xs text-zinc-500">{tokenTransfers.length + nftTransfers.length} Found</span>
-                            )}
-                            {activityTab === 'tokens' && <span className="text-xs text-zinc-500">{ftHoldings.length} Found</span>}
-                            {activityTab === 'nfts' && <span className="text-xs text-zinc-500">{ownedNFTCollections.length} Found</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setActivityTab('activity')}
-                                className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors rounded-sm ${activityTab === 'activity'
-                                    ? 'border-nothing-green-dark dark:border-nothing-green text-zinc-900 dark:text-white bg-zinc-100 dark:bg-white/5'
-                                    : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
-                                    }`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <Activity className={`h-3 w-3 ${activityTab === 'activity' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
-                                    Activity
-                                </span>
-                            </button>
-                            <button
-                                onClick={() => setActivityTab('transfers')}
-                                className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors rounded-sm ${activityTab === 'transfers'
-                                    ? 'border-nothing-green-dark dark:border-nothing-green text-zinc-900 dark:text-white bg-zinc-100 dark:bg-white/5'
-                                    : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
-                                    }`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <ArrowRightLeft className={`h-3 w-3 ${activityTab === 'transfers' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
-                                    Transfers
-                                </span>
-                            </button>
-                            <button
-                                onClick={() => setActivityTab('tokens')}
-                                className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors rounded-sm ${activityTab === 'tokens'
-                                    ? 'border-nothing-green-dark dark:border-nothing-green text-zinc-900 dark:text-white bg-zinc-100 dark:bg-white/5'
-                                    : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
-                                    }`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <Coins className={`h-3 w-3 ${activityTab === 'tokens' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
-                                    Tokens
-                                </span>
-                            </button>
-                            <button
-                                onClick={() => setActivityTab('nfts')}
-                                className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors rounded-sm ${activityTab === 'nfts'
-                                    ? 'border-nothing-green-dark dark:border-nothing-green text-zinc-900 dark:text-white bg-zinc-100 dark:bg-white/5'
-                                    : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
-                                    }`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <ImageIcon className={`h-3 w-3 ${activityTab === 'nfts' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
-                                    NFTs
-                                </span>
-                            </button>
-                        </div>
-                    </div>
+                        {activeTab === 'activity' && (
+                            <>
+                                <div className="overflow-x-auto min-h-[200px] relative -mx-6 -mb-6">
+                                    {txLoading && (
+                                        <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
+                                            <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin"></div>
+                                        </div>
+                                    )}
 
-                    {activityTab === 'activity' && (
-                        <>
-                            <div className="overflow-x-auto min-h-[200px] relative">
-                                {txLoading && (
-                                    <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
-                                        <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin"></div>
+                                    {transactions.length > 0 ? (
+                                        <table className="w-full text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
+                                                    <th className="p-4 font-normal">Tx Hash</th>
+                                                    <th className="p-4 font-normal">Type</th>
+                                                    <th className="p-4 font-normal">Role</th>
+                                                    <th className="p-4 font-normal">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                                {transactions.map((tx) => {
+                                                    const role = tx.payer === normalizedAddress ? 'Payer' :
+                                                        tx.proposer === normalizedAddress ? 'Proposer' : 'Authorizer';
+                                                    return (
+                                                        <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group">
+                                                            <td className="p-4">
+                                                                <Link to={`/transactions/${tx.id}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                                    {formatShort(tx.id, 12, 8)}
+                                                                </Link>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <span className="border border-zinc-200 dark:border-white/10 px-2 py-1 rounded-sm text-zinc-600 dark:text-zinc-300 text-[10px] uppercase bg-zinc-100 dark:bg-transparent">
+                                                                    {tx.type}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <span className="text-[10px] uppercase text-zinc-500">{role}</span>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <span className={`text-[10px] uppercase ${tx.status === 'SEALED' ? 'text-zinc-500 dark:text-zinc-400' : 'text-yellow-600 dark:text-yellow-500'}`}>
+                                                                    {tx.status}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    ) : (
+                                        <div className="p-8 text-center text-zinc-500 italic">No transactions found</div>
+                                    )}
+                                </div>
+                                <div className="-mx-6 -mb-6 p-4 flex justify-between items-center border-t border-zinc-200 dark:border-white/5">
+                                    <button
+                                        disabled={currentPage <= 1 || txLoading}
+                                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                        className="px-3 py-1 text-xs border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-50"
+                                    >
+                                        Previous
+                                    </button>
+                                    <span className="text-xs text-zinc-500">Page {currentPage}</span>
+                                    <button
+                                        disabled={!txHasNext || txLoading}
+                                        onClick={() => setCurrentPage(prev => prev + 1)}
+                                        className="px-3 py-1 text-xs border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-50"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {activeTab === 'transfers' && (
+                            <div className="space-y-8">
+                                <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500">FT Transfers</div>
+                                        {tokenLoading && <div className="text-[10px] text-zinc-500">Loading...</div>}
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        {tokenTransfers.length > 0 ? (
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
+                                                        <th className="p-4 font-normal">Token</th>
+                                                        <th className="p-4 font-normal">Amount</th>
+                                                        <th className="p-4 font-normal">From</th>
+                                                        <th className="p-4 font-normal">To</th>
+                                                        <th className="p-4 font-normal text-right">Time</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                                    {tokenTransfers.map((tx, i) => (
+                                                        <tr key={`${tx.transactionId}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                                                            <td className="p-4 font-mono">{tx.token_id?.split('.').pop() || 'Unknown'}</td>
+                                                            <td className="p-4 font-mono font-bold">{parseFloat(tx.amount).toLocaleString()}</td>
+                                                            <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
+                                                                <Link to={`/accounts/${tx.from_address}`}>{formatShort(tx.from_address)}</Link>
+                                                            </td>
+                                                            <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
+                                                                <Link to={`/accounts/${tx.to_address}`}>{formatShort(tx.to_address)}</Link>
+                                                            </td>
+                                                            <td className="p-4 text-right text-zinc-500">
+                                                                {tx.block_timestamp ? new Date(tx.block_timestamp).toLocaleString() : 'N/A'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        ) : (
+                                            <div className="text-center text-zinc-500 italic py-8">No token transfers found</div>
+                                        )}
+                                    </div>
+                                    {tokenHasMore && (
+                                        <div className="mt-4 text-center">
+                                            <button
+                                                onClick={() => loadTokenTransfers(tokenCursor, true)}
+                                                disabled={tokenLoading}
+                                                className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50"
+                                            >
+                                                {tokenLoading ? 'Loading...' : 'Load More'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500">NFT Transfers</div>
+                                        {nftLoading && <div className="text-[10px] text-zinc-500">Loading...</div>}
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        {nftTransfers.length > 0 ? (
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
+                                                        <th className="p-4 font-normal">Collection</th>
+                                                        <th className="p-4 font-normal">ID</th>
+                                                        <th className="p-4 font-normal">From</th>
+                                                        <th className="p-4 font-normal">To</th>
+                                                        <th className="p-4 font-normal text-right">Time</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                                    {nftTransfers.map((tx, i) => (
+                                                        <tr key={`${tx.transactionId}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                                                            <td className="p-4 font-mono">{tx.collection_id?.split('.').pop() || 'Unknown'}</td>
+                                                            <td className="p-4 font-mono">{tx.nft_id}</td>
+                                                            <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
+                                                                <Link to={`/accounts/${tx.from_address}`}>{formatShort(tx.from_address)}</Link>
+                                                            </td>
+                                                            <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
+                                                                <Link to={`/accounts/${tx.to_address}`}>{formatShort(tx.to_address)}</Link>
+                                                            </td>
+                                                            <td className="p-4 text-right text-zinc-500">
+                                                                {tx.block_timestamp ? new Date(tx.block_timestamp).toLocaleString() : 'N/A'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        ) : (
+                                            <div className="text-center text-zinc-500 italic py-8">No NFT transfers found</div>
+                                        )}
+                                    </div>
+                                    {nftHasMore && (
+                                        <div className="mt-4 text-center">
+                                            <button
+                                                onClick={() => loadNFTTransfers(nftCursor, true)}
+                                                disabled={nftLoading}
+                                                className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50"
+                                            >
+                                                {nftLoading ? 'Loading...' : 'Load More'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'tokens' && (
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="text-[10px] uppercase tracking-widest text-zinc-500">Fungible Tokens</div>
+                                    {fclTokensLoading && <div className="text-[10px] text-zinc-500">Loading...</div>}
+                                </div>
+
+                                {fclTokensError && (
+                                    <div className="text-xs text-red-500 dark:text-red-400 mb-4">{fclTokensError}</div>
+                                )}
+
+                                {fclStorage && (
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                        <div className="border border-zinc-200 dark:border-white/5 p-3 bg-zinc-50 dark:bg-black/40 rounded-sm">
+                                            <div className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Storage Used</div>
+                                            <div className="text-xs font-mono text-zinc-900 dark:text-white">{fclStorage.storageUsedInMB} MB</div>
+                                        </div>
+                                        <div className="border border-zinc-200 dark:border-white/5 p-3 bg-zinc-50 dark:bg-black/40 rounded-sm">
+                                            <div className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Capacity</div>
+                                            <div className="text-xs font-mono text-zinc-900 dark:text-white">{fclStorage.storageCapacityInMB} MB</div>
+                                        </div>
+                                        <div className="border border-zinc-200 dark:border-white/5 p-3 bg-zinc-50 dark:bg-black/40 rounded-sm">
+                                            <div className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Locked FLOW</div>
+                                            <div className="text-xs font-mono text-zinc-900 dark:text-white">{fclStorage.lockedFLOWforStorage}</div>
+                                        </div>
+                                        <div className="border border-zinc-200 dark:border-white/5 p-3 bg-zinc-50 dark:bg-black/40 rounded-sm">
+                                            <div className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Available Balance</div>
+                                            <div className="text-xs font-mono text-zinc-900 dark:text-white">{fclStorage.availableBalanceToUse}</div>
+                                        </div>
                                     </div>
                                 )}
 
-                                {transactions.length > 0 ? (
-                                    <table className="w-full text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
-                                                <th className="p-4 font-normal">Tx Hash</th>
-                                                <th className="p-4 font-normal">Type</th>
-                                                <th className="p-4 font-normal">Role</th>
-                                                <th className="p-4 font-normal">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                            {transactions.map((tx) => {
-                                                const role = tx.payer === normalizedAddress ? 'Payer' :
-                                                    tx.proposer === normalizedAddress ? 'Proposer' : 'Authorizer';
-                                                return (
-                                                    <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group">
-                                                        <td className="p-4">
-                                                            <Link to={`/transactions/${tx.id}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
-                                                                {formatShort(tx.id, 12, 8)}
-                                                            </Link>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <span className="border border-zinc-200 dark:border-white/10 px-2 py-1 rounded-sm text-zinc-600 dark:text-zinc-300 text-[10px] uppercase bg-zinc-100 dark:bg-transparent">
-                                                                {tx.type}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <span className="text-[10px] uppercase text-zinc-500">{role}</span>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <span className={`text-[10px] uppercase ${tx.status === 'SEALED' ? 'text-zinc-500 dark:text-zinc-400' : 'text-yellow-600 dark:text-yellow-500'}`}>
-                                                                {tx.status}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <div className="p-8 text-center text-zinc-500 italic">No transactions found</div>
-                                )}
-                            </div>
-                            <div className="p-4 flex justify-between items-center border-t border-zinc-200 dark:border-white/5">
-                                <button
-                                    disabled={currentPage <= 1 || txLoading}
-                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                    className="px-3 py-1 text-xs border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-50"
-                                >
-                                    Previous
-                                </button>
-                                <span className="text-xs text-zinc-500">Page {currentPage}</span>
-                                <button
-                                    disabled={!txHasNext || txLoading}
-                                    onClick={() => setCurrentPage(prev => prev + 1)}
-                                    className="px-3 py-1 text-xs border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-50"
-                                >
-                                    Next
-                                </button>
-                            </div>
-                        </>
-                    )}
-
-                    {activityTab === 'transfers' && (
-                        <div className="p-6 space-y-8">
-                            <div>
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="text-[10px] uppercase tracking-widest text-zinc-500">FT Transfers</div>
-                                    {tokenLoading && <div className="text-[10px] text-zinc-500">Loading...</div>}
-                                </div>
-                                <div className="overflow-x-auto">
-                                    {tokenTransfers.length > 0 ? (
+                                <div className="overflow-x-auto min-h-[120px] relative">
+                                    {fclTokens.length > 0 ? (
                                         <table className="w-full text-left text-xs">
                                             <thead>
                                                 <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
                                                     <th className="p-4 font-normal">Token</th>
-                                                    <th className="p-4 font-normal">Amount</th>
-                                                    <th className="p-4 font-normal">From</th>
-                                                    <th className="p-4 font-normal">To</th>
-                                                    <th className="p-4 font-normal text-right">Time</th>
+                                                    <th className="p-4 font-normal">Contract</th>
+                                                    <th className="p-4 font-normal text-right">Balance</th>
+                                                    <th className="p-4 font-normal">EVM Bridge</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                                {tokenTransfers.map((tx, i) => (
-                                                    <tr key={`${tx.transactionId}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                                        <td className="p-4 font-mono">{tx.token_id?.split('.').pop() || 'Unknown'}</td>
-                                                        <td className="p-4 font-mono font-bold">{parseFloat(tx.amount).toLocaleString()}</td>
-                                                        <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
-                                                            <Link to={`/accounts/${tx.from_address}`}>{formatShort(tx.from_address)}</Link>
+                                                {fclTokens.map((token, i) => (
+                                                    <tr key={`${token.identifier}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                                                        <td className="p-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <div>
+                                                                    <div className="font-mono text-zinc-900 dark:text-white">
+                                                                        {token.name || token.contractName}
+                                                                    </div>
+                                                                    {token.symbol && (
+                                                                        <div className="text-[10px] text-zinc-500">{token.symbol}</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </td>
-                                                        <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
-                                                            <Link to={`/accounts/${tx.to_address}`}>{formatShort(tx.to_address)}</Link>
+                                                        <td className="p-4 font-mono">
+                                                            <Link to={`/accounts/${token.contractAddress}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
+                                                                {formatShort(token.contractAddress)}
+                                                            </Link>
+                                                            <div className="text-[10px] text-zinc-500">{token.contractName}</div>
                                                         </td>
-                                                        <td className="p-4 text-right text-zinc-500">
-                                                            {tx.block_timestamp ? new Date(tx.block_timestamp).toLocaleString() : 'N/A'}
+                                                        <td className="p-4 text-right font-mono font-bold text-zinc-900 dark:text-white">
+                                                            {parseFloat(token.balance).toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                                                        </td>
+                                                        <td className="p-4 font-mono text-[10px]">
+                                                            {token.evmAddress ? (
+                                                                <span className="text-nothing-green-dark dark:text-nothing-green" title={token.evmAddress}>
+                                                                    {token.evmAddress.slice(0, 10)}...{token.evmAddress.slice(-6)}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-zinc-400">—</span>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
-                                    ) : (
-                                        <div className="text-center text-zinc-500 italic py-8">No token transfers found</div>
-                                    )}
+                                    ) : !fclTokensLoading ? (
+                                        <div className="text-center text-zinc-500 italic py-8">No token holdings found</div>
+                                    ) : null}
                                 </div>
-                                {tokenHasMore && (
-                                    <div className="mt-4 text-center">
-                                        <button
-                                            onClick={() => loadTokenTransfers(tokenCursor, true)}
-                                            disabled={tokenLoading}
-                                            className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50"
-                                        >
-                                            {tokenLoading ? 'Loading...' : 'Load More'}
-                                        </button>
-                                    </div>
-                                )}
                             </div>
+                        )}
 
+                        {activeTab === 'nfts' && (
                             <div>
                                 <div className="flex items-center justify-between mb-3">
-                                    <div className="text-[10px] uppercase tracking-widest text-zinc-500">NFT Transfers</div>
-                                    {nftLoading && <div className="text-[10px] text-zinc-500">Loading...</div>}
+                                    <div className="text-[10px] uppercase tracking-widest text-zinc-500">NFT Collections</div>
+                                    {fclNFTsLoading && <div className="text-[10px] text-zinc-500">Loading...</div>}
                                 </div>
-                                <div className="overflow-x-auto">
-                                    {nftTransfers.length > 0 ? (
-                                        <table className="w-full text-left text-xs">
-                                            <thead>
-                                                <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
-                                                    <th className="p-4 font-normal">Collection</th>
-                                                    <th className="p-4 font-normal">ID</th>
-                                                    <th className="p-4 font-normal">From</th>
-                                                    <th className="p-4 font-normal">To</th>
-                                                    <th className="p-4 font-normal text-right">Time</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                                {nftTransfers.map((tx, i) => (
-                                                    <tr key={`${tx.transactionId}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                                        <td className="p-4 font-mono">{tx.collection_id?.split('.').pop() || 'Unknown'}</td>
-                                                        <td className="p-4 font-mono">{tx.nft_id}</td>
-                                                        <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
-                                                            <Link to={`/accounts/${tx.from_address}`}>{formatShort(tx.from_address)}</Link>
-                                                        </td>
-                                                        <td className="p-4 font-mono text-nothing-green-dark dark:text-nothing-green">
-                                                            <Link to={`/accounts/${tx.to_address}`}>{formatShort(tx.to_address)}</Link>
-                                                        </td>
-                                                        <td className="p-4 text-right text-zinc-500">
-                                                            {tx.block_timestamp ? new Date(tx.block_timestamp).toLocaleString() : 'N/A'}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    ) : (
-                                        <div className="text-center text-zinc-500 italic py-8">No NFT transfers found</div>
-                                    )}
+
+                                {fclNFTsError && (
+                                    <div className="text-xs text-red-500 dark:text-red-400 mb-4">{fclNFTsError}</div>
+                                )}
+
+                                <div className="min-h-[120px] relative">
+                                    {fclNFTCollections.length > 0 ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {fclNFTCollections.map((c, i) => (
+                                                <div key={`${c.identifier}-${i}`} className="border border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-black/40 rounded-sm overflow-hidden hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-colors">
+                                                    {c.bannerImageURL && (
+                                                        <div className="h-20 overflow-hidden bg-zinc-200 dark:bg-white/5">
+                                                            <img src={c.bannerImageURL} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                                        </div>
+                                                    )}
+                                                    <div className="p-4">
+                                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                {c.squareImageURL && (
+                                                                    <img src={c.squareImageURL} alt="" className="w-8 h-8 rounded-sm border border-zinc-200 dark:border-white/10 object-cover flex-shrink-0" loading="lazy" />
+                                                                )}
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm font-mono text-zinc-900 dark:text-white truncate">
+                                                                        {c.name || c.contractName}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-zinc-500 font-mono truncate" title={c.identifier}>
+                                                                        {c.contractName}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right flex-shrink-0">
+                                                                <div className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{c.count.toLocaleString()}</div>
+                                                                <div className="text-[10px] text-zinc-500">items</div>
+                                                            </div>
+                                                        </div>
+
+                                                        {c.description && (
+                                                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 mb-2">{c.description}</p>
+                                                        )}
+
+                                                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-200 dark:border-white/5">
+                                                            <Link to={`/accounts/${normalizeAddress(c.contractAddress)}`} className="text-[10px] font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
+                                                                {formatShort(c.contractAddress)}
+                                                            </Link>
+                                                            {c.externalURL && (
+                                                                <a href={c.externalURL} target="_blank" rel="noopener noreferrer" className="text-[10px] text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors uppercase tracking-wider">
+                                                                    Website
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : !fclNFTsLoading ? (
+                                        <div className="text-center text-zinc-500 italic py-8">No NFT collections found</div>
+                                    ) : null}
                                 </div>
-                                {nftHasMore && (
-                                    <div className="mt-4 text-center">
-                                        <button
-                                            onClick={() => loadNFTTransfers(nftCursor, true)}
-                                            disabled={nftLoading}
-                                            className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50"
-                                        >
-                                            {nftLoading ? 'Loading...' : 'Load More'}
-                                        </button>
-                                    </div>
-                                )}
                             </div>
-                        </div>
-                    )}
-
-                    {activityTab === 'nfts' && (
-                        <div className="p-6">
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="text-[10px] uppercase tracking-widest text-zinc-500">Owned Collections</div>
-                                {ownedNFTCollectionsLoading && <div className="text-[10px] text-zinc-500">Loading...</div>}
-                            </div>
-                            <div className="overflow-x-auto min-h-[120px] relative">
-                                {ownedNFTCollections.length > 0 ? (
-                                    <table className="w-full text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
-                                                <th className="p-4 font-normal">Collection</th>
-                                                <th className="p-4 font-normal">Address</th>
-                                                <th className="p-4 font-normal text-right">Tokens</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                            {ownedNFTCollections.map((c, i) => {
-                                                const id = String(c?.id || '');
-                                                const addr = normalizeAddress(c?.address || '');
-                                                const count = Number(c?.number_of_tokens || 0);
-                                                return (
-                                                    <tr key={`${id}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                                        <td className="p-4 font-mono">
-                                                            {id ? (
-                                                                <Link to={`/nfts/${encodeURIComponent(id)}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                                                    {id}
-                                                                </Link>
-                                                            ) : (
-                                                                <span className="text-zinc-500">—</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="p-4 font-mono">
-                                                            {addr ? (
-                                                                <Link to={`/accounts/${addr}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                                                    {formatShort(addr)}
-                                                                </Link>
-                                                            ) : (
-                                                                <span className="text-zinc-500">—</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="p-4 text-right font-mono">{Number.isFinite(count) ? count.toLocaleString() : '0'}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <div className="text-center text-zinc-500 italic py-8">No NFT collections found</div>
-                                )}
-                            </div>
-                            <div className="mt-4 flex justify-between items-center">
-                                <button
-                                    disabled={ownedNFTCollectionsPage <= 1 || ownedNFTCollectionsLoading}
-                                    onClick={() => loadOwnedNFTCollections(Math.max(1, ownedNFTCollectionsPage - 1))}
-                                    className="px-3 py-1 text-xs border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-50"
-                                >
-                                    Previous
-                                </button>
-                                <span className="text-xs text-zinc-500">Page {ownedNFTCollectionsPage}</span>
-                                <button
-                                    disabled={!ownedNFTCollectionsHasNext || ownedNFTCollectionsLoading}
-                                    onClick={() => loadOwnedNFTCollections(ownedNFTCollectionsPage + 1)}
-                                    className="px-3 py-1 text-xs border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-50"
-                                >
-                                    Next
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {activityTab === 'tokens' && (
-                        <div className="p-6">
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="text-[10px] uppercase tracking-widest text-zinc-500">FT Holdings</div>
-                                {ftHoldingsLoading && <div className="text-[10px] text-zinc-500">Loading...</div>}
-                            </div>
-                            <div className="overflow-x-auto min-h-[120px] relative">
-                                {ftHoldings.length > 0 ? (
-                                    <table className="w-full text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
-                                                <th className="p-4 font-normal">Token</th>
-                                                <th className="p-4 font-normal text-right">Balance</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                            {ftHoldings.map((h, i) => {
-                                                const token = String(h?.token || h?.id || '');
-                                                const balance = h?.balance ?? '';
-                                                return (
-                                                    <tr key={`${token}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                                        <td className="p-4 font-mono">
-                                                            {token ? (
-                                                                <Link to={`/tokens/${encodeURIComponent(token)}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                                                    {token}
-                                                                </Link>
-                                                            ) : (
-                                                                <span className="text-zinc-500">—</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="p-4 text-right font-mono font-bold">
-                                                            {typeof balance === 'number' ? balance.toLocaleString() : String(balance || '0')}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <div className="text-center text-zinc-500 italic py-8">No token holdings found</div>
-                                )}
-                            </div>
-                            <div className="mt-4 flex justify-between items-center">
-                                <button
-                                    disabled={ftHoldingsPage <= 1 || ftHoldingsLoading}
-                                    onClick={() => loadFTHoldings(Math.max(1, ftHoldingsPage - 1))}
-                                    className="px-3 py-1 text-xs border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-50"
-                                >
-                                    Previous
-                                </button>
-                                <span className="text-xs text-zinc-500">Page {ftHoldingsPage}</span>
-                                <button
-                                    disabled={!ftHoldingsHasNext || ftHoldingsLoading}
-                                    onClick={() => loadFTHoldings(ftHoldingsPage + 1)}
-                                    className="px-3 py-1 text-xs border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-50"
-                                >
-                                    Next
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

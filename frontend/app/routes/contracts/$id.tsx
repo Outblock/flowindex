@@ -5,8 +5,9 @@ import { getFlowV1Contract } from '../../api/gen/find';
 import { getAccountsByAddressContractsByName } from '../../api/gen/core';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ArrowLeft, Box, CheckCircle, Code, Copy, ExternalLink, FileText, Layers } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { toast } from 'react-hot-toast';
@@ -66,8 +67,9 @@ function ContractDetail() {
     const [contract, setContract] = useState<any>(initialContract);
     const [code, setCode] = useState(initialCode);
     const [error, setError] = useState<any>(initialError);
-    // const [loading, setLoading] = useState(true); // handled by loader
     const nowTick = useTimeTicker(20000);
+    const { theme } = useTheme();
+    const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
 
     useEffect(() => {
         if (!initialContract && !initialError) {
@@ -233,11 +235,11 @@ function ContractDetail() {
                                 </button>
                             </div>
 
-                            <div className="flex-1 relative overflow-auto bg-[#1e1e1e]">
+                            <div className={`flex-1 relative overflow-auto ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-zinc-50'}`}>
                                 {code ? (
                                     <SyntaxHighlighter
                                         language="cadence"
-                                        style={vscDarkPlus}
+                                        style={syntaxTheme}
                                         customStyle={{
                                             margin: 0,
                                             padding: '1.5rem',
@@ -246,7 +248,7 @@ function ContractDetail() {
                                             height: '100%',
                                         }}
                                         showLineNumbers={true}
-                                        lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: "#555", userSelect: "none", textAlign: "right" }}
+                                        lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none", textAlign: "right" }}
                                     >
                                         {code}
                                     </SyntaxHighlighter>
