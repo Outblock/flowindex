@@ -85,10 +85,10 @@ export function AccountTokensTab({ address }: Props) {
                                             <td className="p-4">
                                                 <div className="flex items-center gap-2">
                                                     {logoUrl ? (
-                                                        <img src={logoUrl} alt="" className="w-5 h-5 rounded-full object-cover bg-zinc-200 dark:bg-white/10 flex-shrink-0" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} />
+                                                        <img src={logoUrl} alt="" className="w-8 h-8 rounded-full object-cover bg-zinc-200 dark:bg-white/10 flex-shrink-0" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} />
                                                     ) : null}
-                                                    <div className={`w-5 h-5 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center flex-shrink-0 ${logoUrl ? 'hidden' : ''}`}>
-                                                        <Coins className="h-3 w-3 text-zinc-400" />
+                                                    <div className={`w-8 h-8 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center flex-shrink-0 ${logoUrl ? 'hidden' : ''}`}>
+                                                        <Coins className="h-4 w-4 text-zinc-400" />
                                                     </div>
                                                     <div className="min-w-0">
                                                         <div className="font-mono text-zinc-900 dark:text-white truncate">{t.name || t.contractName}</div>
