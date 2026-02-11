@@ -4,7 +4,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getAccountsByAddress, getAccountsByAddressTransactions } from '../../api/gen/core';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive
+    FileText, HardDrive, ArrowRightLeft, Repeat
 } from 'lucide-react';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import { normalizeAddress } from '../../components/account/accountUtils';
@@ -14,8 +14,10 @@ import { AccountNFTsTab } from '../../components/account/AccountNFTsTab';
 import { AccountKeysTab } from '../../components/account/AccountInfoTab';
 import { AccountContractsTab } from '../../components/account/AccountContractsTab';
 import { AccountStorageTab } from '../../components/account/AccountStorageTab';
+import { AccountFTTransfersTab } from '../../components/account/AccountFTTransfersTab';
+import { AccountNFTTransfersTab } from '../../components/account/AccountNFTTransfersTab';
 
-const VALID_TABS = ['activity', 'tokens', 'nfts', 'keys', 'contracts', 'storage'] as const;
+const VALID_TABS = ['activity', 'ft-transfers', 'nft-transfers', 'tokens', 'nfts', 'keys', 'contracts', 'storage'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
 export const Route = createFileRoute('/accounts/$address')({
@@ -178,6 +180,8 @@ function AccountDetail() {
 
     const tabs = [
         { id: 'activity' as const, label: 'Activity', icon: Activity },
+        { id: 'ft-transfers' as const, label: 'FT Transfers', icon: ArrowRightLeft },
+        { id: 'nft-transfers' as const, label: 'NFT Transfers', icon: Repeat },
         { id: 'tokens' as const, label: 'Tokens', icon: Coins },
         { id: 'nfts' as const, label: 'NFTs', icon: ImageIcon },
         { id: 'keys' as const, label: 'Public Keys', icon: Key },
@@ -239,6 +243,8 @@ function AccountDetail() {
 
                     <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[200px] shadow-sm dark:shadow-none">
                         {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} />}
+                        {activeTab === 'ft-transfers' && <AccountFTTransfersTab address={address} />}
+                        {activeTab === 'nft-transfers' && <AccountNFTTransfersTab address={address} />}
                         {activeTab === 'tokens' && <AccountTokensTab address={address} />}
                         {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
                         {activeTab === 'keys' && <AccountKeysTab account={account} />}
