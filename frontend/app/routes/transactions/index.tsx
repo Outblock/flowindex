@@ -1,14 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, XCircle, CheckCircle } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured, fetchStatus } from '../../api/heyapi';
 import { getFlowV1Transaction } from '../../api/gen/find';
 import { useWebSocketMessages, useWebSocketStatus } from '../../hooks/useWebSocket';
 import { Pagination } from '../../components/Pagination';
-import { formatRelativeTime } from '../../lib/time';
-import { useTimeTicker } from '../../hooks/useTimeTicker';
+import { ActivityRow } from '../../components/TransactionRow';
 
 export const Route = createFileRoute('/transactions/')({
     component: Transactions,
@@ -37,24 +36,16 @@ function Transactions() {
     const [txCursors, setTxCursors] = useState({ 1: '' });
     const [txHasNext, setTxHasNext] = useState(Boolean(transactionsRes?.next_cursor));
     const [newTxIds, setNewTxIds] = useState(new Set());
+    const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
 
     const { isConnected } = useWebSocketStatus();
     const { lastMessage } = useWebSocketMessages();
-    const nowTick = useTimeTicker(20000); // 20s tick
 
-    const normalizeHex = (value) => {
+    const normalizeTxId = (value) => {
         if (!value) return '';
         const lower = String(value).toLowerCase();
-        return lower.startsWith('0x') ? lower : `0x${lower}`;
+        return (lower.startsWith('0x') ? lower : `0x${lower}`).toLowerCase();
     };
-
-    const formatMiddle = (value, head = 12, tail = 8) => {
-        if (!value) return '';
-        if (value.length <= head + tail + 3) return value;
-        return `${value.slice(0, head)}...${value.slice(-tail)}`;
-    };
-
-    const normalizeTxId = (value) => normalizeHex(value).toLowerCase();
 
     const getTxHeight = (tx) => Number(tx?.block_height ?? tx?.blockHeight ?? 0);
     const getTxIndex = (tx) => Number(tx?.transaction_index ?? tx?.tx_index ?? 0);
@@ -269,74 +260,27 @@ function Transactions() {
 
             {/* Transaction List */}
             <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Transaction ID</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Type</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Block</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Age</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <AnimatePresence mode='popLayout'>
-                                {transactions.map((tx) => {
-                                    const isNew = newTxIds.has(tx.id);
-                                    const isSealed = tx.status === 'SEALED';
-                                    const isError = Boolean(tx.error_message || tx.errorMessage);
-                                    const txTimeRelative = formatRelativeTime(tx.timestamp || tx.created_at, nowTick);
-                                    const txIdShort = formatMiddle(normalizeHex(tx.id), 12, 12);
-
-                                    return (
-                                        <motion.tr
-                                            layout
-                                            key={tx.id}
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            className={`border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors ${isNew ? 'bg-nothing-green/10' : ''
-                                                }`}
-                                        >
-                                            <td className="p-4">
-                                                <Link to={`/transactions/${tx.id}`} className="font-mono text-blue-500 hover:underline">
-                                                    {txIdShort}
-                                                </Link>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className="font-mono text-xs uppercase bg-white/10 border border-zinc-200 dark:border-white/10 px-2 py-1 rounded">
-                                                    {tx.type}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">
-                                                <Link to={`/blocks/${tx.block_height}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                                    #{tx.block_height?.toLocaleString()}
-                                                </Link>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <span className="text-sm text-zinc-500">{txTimeRelative}</span>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    {isError ? (
-                                                        <XCircle className="w-4 h-4 text-red-500" />
-                                                    ) : isSealed ? (
-                                                        <CheckCircle className="w-4 h-4 text-nothing-green" />
-                                                    ) : (
-                                                        <div className="w-4 h-4 rounded-full border-2 border-zinc-300 border-t-transparent animate-spin" />
-                                                    )}
-                                                    <span className={`text-xs font-bold uppercase ${isError ? 'text-red-500' : isSealed ? 'text-nothing-green' : 'text-zinc-500'
-                                                        }`}>
-                                                        {isError ? 'Failed' : isSealed ? 'Sealed' : 'Pending'}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                        </motion.tr>
-                                    );
-                                })}
-                            </AnimatePresence>
-                        </tbody>
-                    </table>
+                <div className="space-y-0">
+                    <AnimatePresence mode='popLayout'>
+                        {transactions.map((tx) => {
+                            const isNew = newTxIds.has(tx.id);
+                            return (
+                                <motion.div
+                                    layout
+                                    key={tx.id}
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    className={isNew ? 'bg-nothing-green/10' : ''}
+                                >
+                                    <ActivityRow
+                                        tx={tx}
+                                        expanded={expandedTxId === tx.id}
+                                        onToggle={() => setExpandedTxId(prev => prev === tx.id ? null : tx.id)}
+                                    />
+                                </motion.div>
+                            );
+                        })}
+                    </AnimatePresence>
                 </div>
 
                 <div className="p-4 border-t border-zinc-200 dark:border-white/5">

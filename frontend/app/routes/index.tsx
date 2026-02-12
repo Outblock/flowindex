@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Activity, TrendingUp, Coins, Image } from 'lucide-react';
 import { SafeNumberFlow } from '../components/SafeNumberFlow';
-import { ensureHeyApiConfigured, fetchStatus } from '../api/heyapi';
+import { ensureHeyApiConfigured, fetchStatus, fetchNetworkStats } from '../api/heyapi';
 import { getFlowV1Block, getFlowV1Transaction, getStatusV1Stat, getFlowV1Ft, getFlowV1Nft } from '../api/gen/find';
 import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
 import { FlowPriceChart } from '../components/FlowPriceChart';
@@ -20,8 +20,9 @@ export const Route = createFileRoute('/')({
     loader: async () => {
         try {
             await ensureHeyApiConfigured();
-            const [status, blocks, transactions, tokens, nftCollections] = await Promise.all([
+            const [status, networkStats, blocks, transactions, tokens, nftCollections] = await Promise.all([
                 fetchStatus(),
+                fetchNetworkStats(),
                 getFlowV1Block({ query: { limit: 50, offset: 0 } }),
                 getFlowV1Transaction({ query: { limit: 50, offset: 0 } }),
                 getFlowV1Ft({ query: { limit: 5, offset: 0, sort: 'trending' } }),
@@ -29,7 +30,7 @@ export const Route = createFileRoute('/')({
             ]);
             return {
                 status: status,
-                networkStats: null,
+                networkStats: networkStats,
                 blocks: blocks.data?.data ?? [],
                 transactions: transactions.data?.data ?? [],
                 tokens: tokens.data?.data ?? [],
@@ -351,9 +352,18 @@ function Home() {
             }
         };
 
-        // Removed direct usage of loadBlocks/loadTransactions in favor of loader + websocket updates
+        const refreshNetworkStats = async () => {
+            try {
+                const stats = await fetchNetworkStats();
+                if (!active || !stats) return;
+                setNetworkStats(stats);
+            } catch (error) {
+                console.error('Failed to fetch network stats:', error);
+            }
+        };
 
         const statusTimer = setInterval(refreshStatus, 10000);
+        const networkStatsTimer = setInterval(refreshNetworkStats, 60000);
         // Fallback polling when websocket is unavailable.
         const txRefreshTimer = setInterval(() => {
             if (!isConnectedRef.current) {
@@ -363,6 +373,7 @@ function Home() {
 
         return () => {
             clearInterval(statusTimer);
+            clearInterval(networkStatsTimer);
             clearInterval(txRefreshTimer);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -651,9 +662,9 @@ function Home() {
                                             className="flex items-center space-x-3 px-3 py-3 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors duration-150 border-b border-zinc-100 dark:border-white/5 last:border-b-0"
                                         >
                                             <div className="relative w-6 h-6 flex-shrink-0 bg-zinc-100 dark:bg-white/10 flex items-center justify-center overflow-hidden">
-                                                {nft.logo ? (
+                                                {(nft.square_image || nft.logo) ? (
                                                     <img
-                                                        src={nft.logo}
+                                                        src={nft.square_image || nft.logo}
                                                         alt={nft.display_name || nft.name || ''}
                                                         className="w-6 h-6 object-cover"
                                                         onError={(e) => {
@@ -664,7 +675,7 @@ function Home() {
                                                 ) : null}
                                                 <div
                                                     className="w-6 h-6 bg-nothing-green/20 text-nothing-green-dark dark:text-nothing-green text-[10px] font-bold font-mono items-center justify-center"
-                                                    style={{ display: nft.logo ? 'none' : 'flex' }}
+                                                    style={{ display: (nft.square_image || nft.logo) ? 'none' : 'flex' }}
                                                 >
                                                     {(nft.display_name || nft.name || '?').charAt(0).toUpperCase()}
                                                 </div>

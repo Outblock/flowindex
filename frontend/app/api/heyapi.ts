@@ -28,6 +28,30 @@ export async function fetchStatus(): Promise<any> {
   return res.json();
 }
 
+/** Fetch network stats: price, epoch, tokenomics (combined) */
+export async function fetchNetworkStats(): Promise<any> {
+  await ensureHeyApiConfigured();
+  const [priceRes, epochRes, tokenomicsRes] = await Promise.allSettled([
+    fetch(`${_baseURL}/status/price`).then(r => r.ok ? r.json() : null),
+    fetch(`${_baseURL}/status/epoch/status`).then(r => r.ok ? r.json() : null),
+    fetch(`${_baseURL}/status/tokenomics`).then(r => r.ok ? r.json() : null),
+  ]);
+  const price = priceRes.status === 'fulfilled' ? priceRes.value?.data?.[0] : null;
+  const epoch = epochRes.status === 'fulfilled' ? epochRes.value?.data?.[0] : null;
+  const tokenomics = tokenomicsRes.status === 'fulfilled' ? tokenomicsRes.value?.data?.[0] : null;
+  if (!price && !epoch && !tokenomics) return null;
+  return {
+    price: price?.price ?? 0,
+    price_change_24h: price?.price_change_24h ?? 0,
+    market_cap: price?.market_cap ?? 0,
+    epoch: epoch?.epoch ?? epoch?.current_epoch ?? null,
+    epoch_progress: epoch?.epoch_progress ?? epoch?.progress ?? 0,
+    updated_at: epoch?.updated_at ?? epoch?.as_of ?? null,
+    total_staked: tokenomics?.total_staked ?? 0,
+    active_nodes: tokenomics?.validator_count ?? tokenomics?.active_nodes ?? 0,
+  };
+}
+
 /** Storage API helpers (returns raw Cadence JSON-CDC) */
 export async function fetchAccountStorage(address: string): Promise<any> {
   await ensureHeyApiConfigured();

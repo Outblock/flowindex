@@ -86,6 +86,24 @@ func (s *Server) handleStatusTokenomics(w http.ResponseWriter, r *http.Request) 
 	writeAPIResponse(w, []interface{}{payload}, nil, nil)
 }
 
+func (s *Server) handleStatusPrice(w http.ResponseWriter, r *http.Request) {
+	mp, err := s.repo.GetLatestMarketPrice(r.Context(), "FLOW", "USD")
+	if err != nil {
+		// No price data yet — return empty.
+		writeAPIResponse(w, []interface{}{}, nil, nil)
+		return
+	}
+	writeAPIResponse(w, []interface{}{map[string]interface{}{
+		"asset":             mp.Asset,
+		"currency":          mp.Currency,
+		"price":             mp.Price,
+		"price_change_24h":  mp.PriceChange24h,
+		"market_cap":        mp.MarketCap,
+		"source":            mp.Source,
+		"as_of":             mp.AsOf,
+	}}, nil, nil)
+}
+
 func (s *Server) handleNotImplemented(w http.ResponseWriter, r *http.Request) {
 	writeAPIError(w, http.StatusNotImplemented, "endpoint not implemented yet; see /docs/api for status")
 }
