@@ -1,4 +1,3 @@
-/* eslint-disable */
 import * as fcl from "@onflow/fcl";
 
 /** Generated from Cadence files */
@@ -26,210 +25,216 @@ export interface AuthorizationAccount extends Record<string, any> {
 export type AuthorizationFunction = (account: any) => Promise<AuthorizationAccount>;
 
 /** Network addresses for contract imports */
-export const addresses = { "mainnet": { "0xCapabilityDelegator": "0xd8a7e05a7ac670c0", "0xCapabilityFactory": "0xd8a7e05a7ac670c0", "0xCapabilityFilter": "0xd8a7e05a7ac670c0", "0xCrossVMMetadataViews": "0x1d7e57aa55817448", "0xDomains": "0x233eb012d34b0070", "0xEVM": "0xe467b9dd11fa00df", "0xEVMUtils": "0x1e4aa0b87d10b141", "0xFLOAT": "0x2d4c3caffbeab845", "0xFiatToken": "0xb19436aae4d94622", "0xFind": "0x097bafa4e0b48eef", "0xFlowEVMBridge": "0x1e4aa0b87d10b141", "0xFlowEVMBridgeConfig": "0x1e4aa0b87d10b141", "0xFlowEVMBridgeUtils": "0x1e4aa0b87d10b141", "0xFlowEpoch": "0x8624b52f9ddcd04a", "0xFlowFees": "0xf919ee77447b7497", "0xFlowIDTableStaking": "0x8624b52f9ddcd04a", "0xFlowServiceAccount": "0xe467b9dd11fa00df", "0xFlowStakingCollection": "0x8d0e87b65159ae63", "0xFlowStorageFees": "0xe467b9dd11fa00df", "0xFlowTableStaking": "0x8624b52f9ddcd04a", "0xFlowToken": "0x1654653399040a61", "0xFlowns": "0x233eb012d34b0070", "0xFungibleToken": "0xf233dcee88fe0abe", "0xFungibleTokenMetadataViews": "0xf233dcee88fe0abe", "0xHybridCustody": "0xd8a7e05a7ac670c0", "0xLockedTokens": "0x8d0e87b65159ae63", "0xLostAndFound": "0x473d6a2c37eab5be", "0xMetadataViews": "0x1d7e57aa55817448", "0xNonFungibleToken": "0x1d7e57aa55817448", "0xScopedFTProviders": "0x1e4aa0b87d10b141", "0xStakingCollection": "0x8d0e87b65159ae63", "0xStakingProxy": "0x62430cf28c26d095", "0xStorageRent": "0x707adbad1428c624", "0xSwapError": "0xb78ef7afa52ff906", "0xSwapRouter": "0xa6850776a94e6551", "0xUSDCFlow": "0xf1ab99c82dee3526", "0xViewResolver": "0x1d7e57aa55817448", "0xstFlowToken": "0xd6f80565193ad727" }, "testnet": { "0xCapabilityDelegator": "0x294e44e1ec6993c6", "0xCapabilityFactory": "0x294e44e1ec6993c6", "0xCapabilityFilter": "0x294e44e1ec6993c6", "0xCrossVMMetadataViews": "0x631e88ae7f1d7c20", "0xDomains": "0xb05b2abb42335e88", "0xEVM": "0x8c5303eaa26202d6", "0xEVMUtils": "0xdfc20aee650fcbdf", "0xFLOAT": "0x0afe396ebc8eee65", "0xFiatToken": "0xa983fecbed621163", "0xFind": "0xa16ab1d0abde3625", "0xFlowEVMBridge": "0xdfc20aee650fcbdf", "0xFlowEVMBridgeConfig": "0xdfc20aee650fcbdf", "0xFlowEVMBridgeUtils": "0xdfc20aee650fcbdf", "0xFlowEpoch": "0x9eca2b38b18b5dfe", "0xFlowFees": "0x912d5440f7e3769e", "0xFlowIDTableStaking": "0x9eca2b38b18b5dfe", "0xFlowServiceAccount": "0x8c5303eaa26202d6", "0xFlowStakingCollection": "0x95e019a17d0e23d7", "0xFlowStorageFees": "0x8c5303eaa26202d6", "0xFlowTableStaking": "0x9eca2b38b18b5dfe", "0xFlowToken": "0x7e60df042a9c0868", "0xFlowns": "0xb05b2abb42335e88", "0xFungibleToken": "0x9a0766d93b6608b7", "0xFungibleTokenMetadataViews": "0x9a0766d93b6608b7", "0xHybridCustody": "0x294e44e1ec6993c6", "0xLockedTokens": "0x95e019a17d0e23d7", "0xLostAndFound": "0xbe4635353f55bbd4", "0xMetadataViews": "0x631e88ae7f1d7c20", "0xNonFungibleToken": "0x631e88ae7f1d7c20", "0xScopedFTProviders": "0xdfc20aee650fcbdf", "0xStakingCollection": "0x95e019a17d0e23d7", "0xStakingProxy": "0x7aad92e5a0715d21", "0xStorageRent": "0xd50084a1a43b1507", "0xSwapError": "0xddb929038d45d4b3", "0xSwapRouter": "0x2f8af5ed05bbde0d", "0xUSDCFlow": "0x64adf39cbc354fcb", "0xViewResolver": "0x631e88ae7f1d7c20", "0xstFlowToken": "0xe45c64ecfe31e465" } };
+export const addresses = {"mainnet":{"0xCapabilityDelegator":"0xd8a7e05a7ac670c0","0xCapabilityFactory":"0xd8a7e05a7ac670c0","0xCapabilityFilter":"0xd8a7e05a7ac670c0","0xCrossVMMetadataViews":"0x1d7e57aa55817448","0xDomains":"0x233eb012d34b0070","0xEVM":"0xe467b9dd11fa00df","0xEVMUtils":"0x1e4aa0b87d10b141","0xFLOAT":"0x2d4c3caffbeab845","0xFiatToken":"0xb19436aae4d94622","0xFind":"0x097bafa4e0b48eef","0xFlowEVMBridge":"0x1e4aa0b87d10b141","0xFlowEVMBridgeConfig":"0x1e4aa0b87d10b141","0xFlowEVMBridgeUtils":"0x1e4aa0b87d10b141","0xFlowEpoch":"0x8624b52f9ddcd04a","0xFlowFees":"0xf919ee77447b7497","0xFlowIDTableStaking":"0x8624b52f9ddcd04a","0xFlowServiceAccount":"0xe467b9dd11fa00df","0xFlowStakingCollection":"0x8d0e87b65159ae63","0xFlowStorageFees":"0xe467b9dd11fa00df","0xFlowTableStaking":"0x8624b52f9ddcd04a","0xFlowToken":"0x1654653399040a61","0xFlowns":"0x233eb012d34b0070","0xFungibleToken":"0xf233dcee88fe0abe","0xFungibleTokenMetadataViews":"0xf233dcee88fe0abe","0xHybridCustody":"0xd8a7e05a7ac670c0","0xLockedTokens":"0x8d0e87b65159ae63","0xLostAndFound":"0x473d6a2c37eab5be","0xMetadataViews":"0x1d7e57aa55817448","0xNonFungibleToken":"0x1d7e57aa55817448","0xScopedFTProviders":"0x1e4aa0b87d10b141","0xStakingCollection":"0x8d0e87b65159ae63","0xStakingProxy":"0x62430cf28c26d095","0xStorageRent":"0x707adbad1428c624","0xSwapError":"0xb78ef7afa52ff906","0xSwapRouter":"0xa6850776a94e6551","0xUSDCFlow":"0xf1ab99c82dee3526","0xViewResolver":"0x1d7e57aa55817448","0xstFlowToken":"0xd6f80565193ad727"},"testnet":{"0xCapabilityDelegator":"0x294e44e1ec6993c6","0xCapabilityFactory":"0x294e44e1ec6993c6","0xCapabilityFilter":"0x294e44e1ec6993c6","0xCrossVMMetadataViews":"0x631e88ae7f1d7c20","0xDomains":"0xb05b2abb42335e88","0xEVM":"0x8c5303eaa26202d6","0xEVMUtils":"0xdfc20aee650fcbdf","0xFLOAT":"0x0afe396ebc8eee65","0xFiatToken":"0xa983fecbed621163","0xFind":"0xa16ab1d0abde3625","0xFlowEVMBridge":"0xdfc20aee650fcbdf","0xFlowEVMBridgeConfig":"0xdfc20aee650fcbdf","0xFlowEVMBridgeUtils":"0xdfc20aee650fcbdf","0xFlowEpoch":"0x9eca2b38b18b5dfe","0xFlowFees":"0x912d5440f7e3769e","0xFlowIDTableStaking":"0x9eca2b38b18b5dfe","0xFlowServiceAccount":"0x8c5303eaa26202d6","0xFlowStakingCollection":"0x95e019a17d0e23d7","0xFlowStorageFees":"0x8c5303eaa26202d6","0xFlowTableStaking":"0x9eca2b38b18b5dfe","0xFlowToken":"0x7e60df042a9c0868","0xFlowns":"0xb05b2abb42335e88","0xFungibleToken":"0x9a0766d93b6608b7","0xFungibleTokenMetadataViews":"0x9a0766d93b6608b7","0xHybridCustody":"0x294e44e1ec6993c6","0xLockedTokens":"0x95e019a17d0e23d7","0xLostAndFound":"0xbe4635353f55bbd4","0xMetadataViews":"0x631e88ae7f1d7c20","0xNonFungibleToken":"0x631e88ae7f1d7c20","0xScopedFTProviders":"0xdfc20aee650fcbdf","0xStakingCollection":"0x95e019a17d0e23d7","0xStakingProxy":"0x7aad92e5a0715d21","0xStorageRent":"0xd50084a1a43b1507","0xSwapError":"0xddb929038d45d4b3","0xSwapRouter":"0x2f8af5ed05bbde0d","0xUSDCFlow":"0x64adf39cbc354fcb","0xViewResolver":"0x631e88ae7f1d7c20","0xstFlowToken":"0xe45c64ecfe31e465"}};
 
 /** Generated Cadence interface */
 export interface ChildAccountInfo {
-  factory: CapabilityFactoryGetter;
-  filter: CapabilityFilterFilter;
+    factory: CapabilityFactoryGetter;
+    filter: CapabilityFilterFilter;
 }
 
 /** Generated Cadence interface */
 export interface CollectionData {
-  storagePath: string;
-  publicPath: string;
-  publicCollection: string;
-  publicLinkedType: string;
+    storagePath: string;
+    publicPath: string;
+    publicCollection: string;
+    publicLinkedType: string;
 }
 
 /** Generated Cadence interface */
 export interface DelegatorInfo {
-  id: number;
-  nodeID: string;
-  nodeInfo: NodeInfo;
-  tokensCommitted: string;
-  tokensStaked: string;
-  tokensUnstaking: string;
-  tokensRewarded: string;
-  tokensUnstaked: string;
-  tokensRequestedToUnstake: string;
+    id: number;
+    nodeID: string;
+    nodeInfo: NodeInfo;
+    tokensCommitted: string;
+    tokensStaked: string;
+    tokensUnstaking: string;
+    tokensRewarded: string;
+    tokensUnstaked: string;
+    tokensRequestedToUnstake: string;
 }
 
 /** Generated Cadence interface */
 export interface EpochInfo {
-  currentEpochCounter: number;
-  currentEpochPhase: number;
+    currentEpochCounter: number;
+    currentEpochPhase: number;
 }
 
 /** Generated Cadence interface */
 export interface FTVaultInfo {
-  name?: string | undefined;
-  symbol?: string | undefined;
-  description?: string | undefined;
-  logos?: MetadataViewsMedias | undefined;
-  socials?: Record<string, MetadataViewsExternalURL> | undefined;
-  balance: string;
-  contractAddress: string;
-  contractName: string;
-  storagePath: string;
-  receiverPath?: string | undefined;
-  balancePath?: string | undefined;
-  identifier: string;
-  evmAddress?: string | undefined;
+    name?: string | undefined;
+    symbol?: string | undefined;
+    description?: string | undefined;
+    logos?: MetadataViewsMedias | undefined;
+    socials?: Record<string, MetadataViewsExternalURL> | undefined;
+    balance: string;
+    contractAddress: string;
+    contractName: string;
+    storagePath: string;
+    receiverPath?: string | undefined;
+    balancePath?: string | undefined;
+    identifier: string;
+    evmAddress?: string | undefined;
 }
 
 /** Generated Cadence interface */
 export interface FlowEpochEpochMetadata {
-  counter: number;
-  seed: string;
-  startView: number;
-  endView: number;
-  stakingEndView: number;
-  collectorClusters: FlowClusterQCCluster[];
+    counter: number;
+    seed: string;
+    startView: number;
+    endView: number;
+    stakingEndView: number;
+    collectorClusters: FlowClusterQCCluster[];
 }
 
 /** Generated Cadence interface */
 export interface FlowIDTableStakingDelegatorInfo {
-  id: number;
-  nodeID: string;
-  tokensCommitted: string;
-  tokensStaked: string;
-  tokensUnstaking: string;
-  tokensRewarded: string;
-  tokensUnstaked: string;
-  tokensRequestedToUnstake: string;
+    id: number;
+    nodeID: string;
+    tokensCommitted: string;
+    tokensStaked: string;
+    tokensUnstaking: string;
+    tokensRewarded: string;
+    tokensUnstaked: string;
+    tokensRequestedToUnstake: string;
 }
 
 /** Generated Cadence interface */
 export interface FlowIDTableStakingNodeInfo {
-  id: string;
-  role: number;
-  networkingAddress: string;
-  networkingKey: string;
-  stakingKey: string;
-  tokensStaked: string;
-  tokensCommitted: string;
-  tokensUnstaking: string;
-  tokensUnstaked: string;
-  tokensRewarded: string;
-  delegators: number[];
-  delegatorIDCounter: number;
-  tokensRequestedToUnstake: string;
-  initialWeight: number;
+    id: string;
+    role: number;
+    networkingAddress: string;
+    networkingKey: string;
+    stakingKey: string;
+    tokensStaked: string;
+    tokensCommitted: string;
+    tokensUnstaking: string;
+    tokensUnstaked: string;
+    tokensRewarded: string;
+    delegators: number[];
+    delegatorIDCounter: number;
+    tokensRequestedToUnstake: string;
+    initialWeight: number;
 }
 
 /** Generated Cadence interface */
 export interface FlowStakingCollectionMachineAccountInfo {
-  nodeID: string;
-  role: number;
-  machineAccountVaultProvider: any;
+    nodeID: string;
+    role: number;
+    machineAccountVaultProvider: any;
 }
 
 /** Generated Cadence interface */
 export interface LockedAccountInfo {
-  lockedAddress: string;
-  lockedBalance: string;
-  unlockLimit: string;
+    lockedAddress: string;
+    lockedBalance: string;
+    unlockLimit: string;
 }
 
 /** Generated Cadence interface */
 export interface ManagerInfo {
-  childAccounts: ChildAccountInfo[];
-  ownedAccounts: ChildAccountInfo[];
-  isManagerExists: boolean;
+    childAccounts: ChildAccountInfo[];
+    ownedAccounts: ChildAccountInfo[];
+    isManagerExists: boolean;
 }
 
 /** Generated Cadence interface */
 export interface MetadataViewsDisplay {
-  name: string;
-  description: string;
-  thumbnail: any;
+    name: string;
+    description: string;
+    thumbnail: any;
 }
 
 /** Generated Cadence interface */
 export interface MetadataViewsExternalURL {
-  url: string;
+    url: string;
 }
 
 /** Generated Cadence interface */
 export interface MetadataViewsMedias {
-  items: Media[];
+    items: Media[];
 }
 
 /** Generated Cadence interface */
 export interface NFTCollection {
-  id: string;
-  path: string;
-  collectionDisplay?: any | undefined;
-  collectionData?: NFTCollectionData | undefined;
-  ids: number[];
+    id: string;
+    path: string;
+    collectionDisplay?: any | undefined;
+    collectionData?: NFTCollectionData | undefined;
+    ids: number[];
 }
 
 /** Generated Cadence interface */
 export interface NFTCollectionData {
-  storagePath: string;
-  publicPath: string;
-  publicCollection: string;
-  publicLinkedType: string;
+    storagePath: string;
+    publicPath: string;
+    publicCollection: string;
+    publicLinkedType: string;
 }
 
 /** Generated Cadence interface */
 export interface NodeInfo {
-  id: string;
-  networkingAddress: string;
-  role: number;
-  tokensStaked: string;
-  tokensCommitted: string;
-  tokensUnstaking: string;
-  tokensUnstaked: string;
-  tokensRewarded: string;
-  delegatorIDCounter: number;
-  tokensRequestedToUnstake: string;
-  initialWeight: number;
+    id: string;
+    networkingAddress: string;
+    role: number;
+    tokensStaked: string;
+    tokensCommitted: string;
+    tokensUnstaking: string;
+    tokensUnstaked: string;
+    tokensRewarded: string;
+    delegatorIDCounter: number;
+    tokensRequestedToUnstake: string;
+    initialWeight: number;
 }
 
 /** Generated Cadence interface */
 export interface OwnedAccountInfo {
-  display?: MetadataViewsDisplay | undefined;
-  parents: ParentInfo[];
-  owner?: string | undefined;
-  isOwnedAccountExists: boolean;
+    display?: MetadataViewsDisplay | undefined;
+    parents: ParentInfo[];
+    owner?: string | undefined;
+    isOwnedAccountExists: boolean;
 }
 
 /** Generated Cadence interface */
 export interface ParentInfo {
-  address: string;
-  isClaimed: boolean;
-  childAccount?: ChildAccountInfo | undefined;
+    address: string;
+    isClaimed: boolean;
+    childAccount?: ChildAccountInfo | undefined;
 }
 
 /** Generated Cadence interface */
 export interface Response {
-  tokens: FTVaultInfo[];
-  storage: StorageInfo;
+    tokens: FTVaultInfo[];
+    storage: StorageInfo;
 }
 
 /** Generated Cadence interface */
 export interface Result {
-  stakingInfo?: StakingInfo | undefined;
+    stakingInfo?: StakingInfo | undefined;
 }
 
 /** Generated Cadence interface */
 export interface StakingInfo {
-  epochInfo: EpochInfo;
-  lockedAccountInfo?: LockedAccountInfo | undefined;
-  nodeInfos: NodeInfo[];
-  delegatorInfos: DelegatorInfo[];
-  machineAccounts: Record<string, FlowStakingCollectionMachineAccountInfo>;
+    epochInfo: EpochInfo;
+    lockedAccountInfo?: LockedAccountInfo | undefined;
+    nodeInfos: NodeInfo[];
+    delegatorInfos: DelegatorInfo[];
+    machineAccounts: Record<string, FlowStakingCollectionMachineAccountInfo>;
 }
 
 /** Generated Cadence interface */
 export interface StorageInfo {
-  storageUsedInMB: string;
-  storageAvailableInMB: string;
-  storageCapacityInMB: string;
-  lockedFLOWforStorage: string;
-  availableBalanceToUse: string;
+    storageUsedInMB: string;
+    storageAvailableInMB: string;
+    storageCapacityInMB: string;
+    lockedFLOWforStorage: string;
+    availableBalanceToUse: string;
+}
+
+/** Generated Cadence interface */
+export interface TokenInfo {
+    id: string;
+    balance: string;
 }
 
 export type CapabilityFactoryGetter = any;
@@ -277,7 +282,7 @@ export class CadenceService {
 
 
   // Tag: CadenceDomain
-  public async getAddressOfDomain(name: string, root: string): Promise<string | undefined> {
+  public async getAddressOfDomain(name: string, root: string): Promise<string| undefined> {
     const code = `
 import FlowDomainUtils from 0xFlowbox
 
@@ -326,7 +331,7 @@ access(all) fun main(address: Address): {String: String} {
   }
 
   // Tag: CadenceEvm
-  public async getCoa(flowAddress: string): Promise<string | undefined> {
+  public async getCoa(flowAddress: string): Promise<string| undefined> {
     const code = `
 import EVM from 0xEVM
 
@@ -358,6 +363,146 @@ access(all) fun main(flowAddress: Address): String? {
   }
 
   // Tag: CadenceHybridcustody
+  public async getChildMetadata(parent: string): Promise<Record<string, any>> {
+    const code = `
+import HybridCustody from 0xHybridCustody
+import MetadataViews from 0xMetadataViews
+
+access(all) fun main(parent: Address): {Address: AnyStruct} {
+    let acct = getAuthAccount<auth(Storage) &Account>(parent)
+    let m = acct.storage.borrow<&HybridCustody.Manager>(from: HybridCustody.ManagerStoragePath)
+
+    if m == nil {
+        return {}
+    } else {
+        var data: {Address: AnyStruct} = {}
+        for address in m?.getChildAddresses()! {
+            let c = m?.getChildAccountDisplay(address: address)
+            data.insert(key: address, c)
+        }
+        return data
+    }
+}
+`;
+    let config = {
+      cadence: code.trim(),
+      name: "getChildMetadata",
+      type: "script",
+      args: (arg: any, t: any) => [
+        arg(parent, t.Address),
+      ],
+      limit: 9999,
+    };
+    config = await this.runRequestInterceptors(config);
+    let response = await fcl.query(config);
+    const result = await this.runResponseInterceptors(config, response);
+    return result.response;
+  }
+
+
+  public async getFtAccessibility(parent: string, childAddress: string): Promise<TokenInfo[]> {
+    const code = `
+import HybridCustody from 0xHybridCustody
+import MetadataViews from 0xMetadataViews
+import FungibleToken from 0xFungibleToken
+import NonFungibleToken from 0xNonFungibleToken
+
+access(all) struct TokenInfo {
+  access(all) let id: String
+  access(all) let balance: UFix64
+
+  init(id: String, balance: UFix64) {
+    self.id = id
+    self.balance = balance
+  }
+}
+
+access(all) fun main(parent: Address, childAddress: Address): [TokenInfo] {
+    let manager = getAuthAccount<auth(Storage) &Account>(parent).storage.borrow<auth(HybridCustody.Manage) &HybridCustody.Manager>(from: HybridCustody.ManagerStoragePath) ?? panic ("manager does not exist")
+
+    var typeIdsWithProvider: {Address: [String]} = {}
+
+    var coinInfoList: [TokenInfo] = []
+    let providerType = Type<Capability<&{FungibleToken.Provider}>>()
+    let vaultType: Type = Type<@{FungibleToken.Vault}>()
+
+    let acct = getAuthAccount<auth(Storage, Capabilities) &Account>(childAddress)
+    let foundTypes: [String] = []
+    let vaultBalances: {String: UFix64} = {}
+    let childAcct = manager.borrowAccount(addr: childAddress) ?? panic("child account not found")
+
+    acct.storage.forEachStored(fun (path: StoragePath, type: Type): Bool {
+        if !type.isSubtype(of: providerType){
+            return true
+        }
+
+        let controllers = acct.capabilities.storage.getControllers(forPath: path)
+
+        for c in controllers {
+            if !c.borrowType.isSubtype(of: providerType) {
+                continue
+            }
+
+            if let cap = childAcct.getCapability(controllerID: c.capabilityID, type: providerType) {
+                let providerCap = cap as! Capability<&{NonFungibleToken.Provider}>
+
+                if !providerCap.check(){
+                    continue
+                }
+                foundTypes.append(cap.borrow<&AnyResource>()!.getType().identifier)
+            }
+        }
+        return true
+    })
+    typeIdsWithProvider[childAddress] = foundTypes
+
+    acct.storage.forEachStored(fun (path: StoragePath, type: Type): Bool {
+
+        if typeIdsWithProvider[childAddress] == nil {
+            return true
+        }
+
+        for key in typeIdsWithProvider.keys {
+            for idx, value in typeIdsWithProvider[key]! {
+                let value = typeIdsWithProvider[key]!
+
+                if value[idx] != type.identifier {
+                    continue
+                } else {
+                    if type.isInstance(vaultType) {
+                        continue
+                    }
+                    if let vault = acct.storage.borrow<&{FungibleToken.Balance}>(from: path) {
+                        coinInfoList.append(
+                            TokenInfo(id: type.identifier, balance: vault.balance))
+                    }
+                    continue
+                }
+            }
+        }
+        return true
+    })
+
+    return coinInfoList
+}
+`;
+    let config = {
+      cadence: code.trim(),
+      name: "getFtAccessibility",
+      type: "script",
+      args: (arg: any, t: any) => [
+        arg(parent, t.Address),
+        arg(childAddress, t.Address),
+      ],
+      limit: 9999,
+    };
+    config = await this.runRequestInterceptors(config);
+    let response = await fcl.query(config);
+    const result = await this.runResponseInterceptors(config, response);
+    return result.response;
+  }
+
+
   public async getHcManagerInfo(child: string): Promise<ManagerInfo> {
     const code = `
 import HybridCustody from 0xHybridCustody
@@ -471,6 +616,100 @@ access(all) fun getOwnedAccounts(manager: auth(HybridCustody.Manage) &HybridCust
       type: "script",
       args: (arg: any, t: any) => [
         arg(child, t.Address),
+      ],
+      limit: 9999,
+    };
+    config = await this.runRequestInterceptors(config);
+    let response = await fcl.query(config);
+    const result = await this.runResponseInterceptors(config, response);
+    return result.response;
+  }
+
+
+  public async getNftAccessibility(addr: string): Promise<any> {
+    const code = `
+import HybridCustody from 0xHybridCustody
+import NonFungibleToken from 0xNonFungibleToken
+import MetadataViews from 0xMetadataViews
+import ViewResolver from 0xMetadataViews
+
+access(all) fun main(addr: Address): AnyStruct {
+  let manager = getAuthAccount<auth(Storage) &Account>(addr).storage.borrow<auth(HybridCustody.Manage) &HybridCustody.Manager>(from: HybridCustody.ManagerStoragePath) ?? panic ("manager does not exist")
+
+  var typeIdsWithProvider = {} as {Address: [String]}
+  var nftViews = {} as {Address: {String: [UInt64]}}
+
+  let providerType = Type<auth(NonFungibleToken.Withdraw) &{NonFungibleToken.Provider}>()
+  let collectionType: Type = Type<@{NonFungibleToken.CollectionPublic}>()
+
+  for address in manager.getChildAddresses() {
+    let acct = getAuthAccount<auth(Storage, Capabilities) &Account>(address)
+    let foundTypes: [String] = []
+    let views: {String: [UInt64]} = {}
+    let childAcct = manager.borrowAccount(addr: address) ?? panic("child account not found")
+
+    acct.storage.forEachStored(fun (path: StoragePath, type: Type): Bool {
+
+      let controllers = acct.capabilities.storage.getControllers(forPath: path!)
+      for c in controllers {
+        if !c.borrowType.isSubtype(of: providerType) {
+          continue
+        }
+
+        if let cap = childAcct.getCapability(controllerID: c.capabilityID, type: providerType) {
+          let providerCap = cap as! Capability<&{NonFungibleToken.Provider}>
+
+          if !providerCap.check(){
+            continue
+          }
+          foundTypes.append(cap.borrow<&AnyResource>()!.getType().identifier)
+        }
+      }
+      return true
+    })
+
+    typeIdsWithProvider[address] = foundTypes
+
+    acct.storage.forEachStored(fun (path: StoragePath, type: Type): Bool {
+
+      if typeIdsWithProvider[address] == nil {
+        return true
+      }
+
+      for key in typeIdsWithProvider.keys {
+        for idx, value in typeIdsWithProvider[key]! {
+          let value = typeIdsWithProvider[key]!
+
+          if value[idx] != type.identifier {
+            continue
+          } else {
+            if type.isInstance(collectionType) {
+              continue
+            }
+            if let collection = acct.storage.borrow<&{NonFungibleToken.CollectionPublic, ViewResolver.ResolverCollection}>(from: path) {
+              for id in collection.getIDs() {
+                let nft = collection.borrowNFT(id)!
+                views[nft.getType().identifier] = collection.getIDs()
+                break;
+              }
+            }
+            continue
+          }
+        }
+      }
+      return true
+    })
+    nftViews[address] = views
+  }
+  return nftViews
+}
+`;
+    let config = {
+      cadence: code.trim(),
+      name: "getNftAccessibility",
+      type: "script",
+      args: (arg: any, t: any) => [
+        arg(addr, t.Address),
       ],
       limit: 9999,
     };
@@ -1668,7 +1907,7 @@ access(all) fun main(nodeID: String, delegatorID: UInt32): FlowIDTableStaking.De
   }
 
 
-  public async getEpochMetadata(epochCounter: number): Promise<FlowEpochEpochMetadata | undefined> {
+  public async getEpochMetadata(epochCounter: number): Promise<FlowEpochEpochMetadata| undefined> {
     const code = `
 import FlowEpoch from 0x8624b52f9ddcd04a
 
@@ -2152,5 +2391,4 @@ import FungibleToken from 0xFungibleToken
     let response = await fcl.query(config);
     const result = await this.runResponseInterceptors(config, response);
     return result.response;
-  }
-}
+  }}
