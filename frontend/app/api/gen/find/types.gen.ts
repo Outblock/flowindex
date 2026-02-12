@@ -5089,6 +5089,42 @@ export type GetFlowV1NftByNftTypeHoldingResponses = {
 
 export type GetFlowV1NftByNftTypeHoldingResponse = GetFlowV1NftByNftTypeHoldingResponses[keyof GetFlowV1NftByNftTypeHoldingResponses];
 
+export type GetFlowV1NftByNftTypeItemData = {
+    body?: never;
+    path: {
+        nft_type: string;
+    };
+    query?: {
+        limit?: number;
+        offset?: number;
+    };
+    url: '/flow/v1/nft/{nft_type}/item';
+};
+
+export type GetFlowV1NftByNftTypeItemResponses = {
+    200: unknown;
+};
+
+export type GetFlowV1NftByNftTypeItemResponse = GetFlowV1NftByNftTypeItemResponses[keyof GetFlowV1NftByNftTypeItemResponses];
+
+export type GetFlowV1NftSearchData = {
+    body?: never;
+    path?: never;
+    query?: {
+        q?: string;
+        collection?: string;
+        limit?: number;
+        offset?: number;
+    };
+    url: '/flow/nft/search';
+};
+
+export type GetFlowV1NftSearchResponses = {
+    200: unknown;
+};
+
+export type GetFlowV1NftSearchResponse = GetFlowV1NftSearchResponses[keyof GetFlowV1NftSearchResponses];
+
 export type GetFlowV1NftByNftTypeItemByIdData = {
     body?: never;
     path: {
