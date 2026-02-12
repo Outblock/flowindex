@@ -6,6 +6,7 @@ import { Link } from '@tanstack/react-router';
 import { GlassCard } from '../ui/GlassCard';
 import { cn } from '../../lib/utils';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
+import { ImageWithFallback } from '../ui/ImageWithFallback';
 
 const NFT_PAGE_SIZE = 30;
 
@@ -297,12 +298,21 @@ export function AccountNFTsTab({ address }: Props) {
                                 <div className="flex h-full items-center justify-center text-red-500 text-sm">
                                     {selectedState.error}
                                 </div>
+                            ) : selectedState?.loading && selectedState?.nfts.length === 0 ? (
+                                <div className="flex h-64 items-center justify-center">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                </div>
                             ) : selectedState?.nfts.length === 0 ? (
                                 <div className="flex h-full items-center justify-center text-zinc-500 text-sm italic">
                                     No NFTs found in this collection.
                                 </div>
                             ) : (
-                                <>
+                                <div className="relative min-h-[200px]">
+                                    {selectedState?.loading && (
+                                        <div className="absolute inset-0 z-10 bg-white/50 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-lg transition-all duration-300">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900 dark:border-white"></div>
+                                        </div>
+                                    )}
                                     {layout === 'grid' ? (
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                                             {selectedState?.nfts.map((nft, i) => {
@@ -316,14 +326,12 @@ export function AccountNFTsTab({ address }: Props) {
                                                         onClick={() => setSelectedNft(nft)}
                                                         className="group flex flex-col overflow-hidden border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/5 hover:ring-2 hover:ring-zinc-900 dark:hover:ring-white transition-all duration-300 shadow-sm hover:shadow-md text-left"
                                                     >
-                                                        <div className="aspect-square bg-zinc-100 dark:bg-white/5 relative overflow-hidden">
-                                                            {thumb ? (
-                                                                <img src={thumb} alt={name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
-                                                            ) : (
-                                                                <div className="flex items-center justify-center h-full">
-                                                                    <ImageIcon className="h-8 w-8 text-zinc-300 dark:text-zinc-700" />
-                                                                </div>
-                                                            )}
+                                                        <div className="aspect-square relative overflow-hidden">
+                                                            <ImageWithFallback
+                                                                src={thumb}
+                                                                alt={name}
+                                                                className="w-full h-full transform transition-transform duration-500 group-hover:scale-110"
+                                                            />
                                                         </div>
                                                         <div className="p-3">
                                                             <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate mb-0.5">{name}</div>
@@ -346,14 +354,12 @@ export function AccountNFTsTab({ address }: Props) {
                                                         onClick={() => setSelectedNft(nft)}
                                                         className="w-full flex items-center gap-4 p-2 hover:bg-white dark:hover:bg-white/10 border border-transparent hover:border-zinc-200 dark:hover:border-white/5 transition-all group text-left"
                                                     >
-                                                        <div className="h-12 w-12 bg-zinc-100 dark:bg-white/5 relative overflow-hidden border border-zinc-200 dark:border-white/5">
-                                                            {thumb ? (
-                                                                <img src={thumb} alt={name} className="w-full h-full object-cover" loading="lazy" />
-                                                            ) : (
-                                                                <div className="flex items-center justify-center h-full">
-                                                                    <ImageIcon className="h-5 w-5 text-zinc-300 dark:text-zinc-700" />
-                                                                </div>
-                                                            )}
+                                                        <div className="h-12 w-12 flex-shrink-0 bg-zinc-100 dark:bg-white/5 relative overflow-hidden border border-zinc-200 dark:border-white/5">
+                                                            <ImageWithFallback
+                                                                src={thumb}
+                                                                alt={name}
+                                                                className="w-full h-full"
+                                                            />
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <div className="text-sm font-semibold text-zinc-900 dark:text-white truncate">{name}</div>
@@ -386,7 +392,7 @@ export function AccountNFTsTab({ address }: Props) {
                                             Next
                                         </button>
                                     </div>
-                                </>
+                                </div>
                             )}
                         </div>
                     </GlassCard>
@@ -398,83 +404,127 @@ export function AccountNFTsTab({ address }: Props) {
             </div>
 
             {/* NFT Modal Overlay */}
-            {selectedNft && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                        onClick={() => setSelectedNft(null)}
-                    />
-                    <GlassCard className="relative w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col p-0 z-10 bg-white dark:bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="aspect-square bg-zinc-100 dark:bg-black/20 flex items-center justify-center p-8 relative">
-                            {getNFTThumbnail(selectedNft) ? (
-                                <img
+            {
+                selectedNft && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                            onClick={() => setSelectedNft(null)}
+                        />
+                        <GlassCard className="relative w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col p-0 z-10 bg-white dark:bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-200">
+                            <div className="aspect-square bg-zinc-100 dark:bg-black/20 flex items-center justify-center p-8 relative">
+                                <ImageWithFallback
                                     src={getNFTThumbnail(selectedNft)}
                                     alt={selectedNft?.display?.name}
                                     className="max-w-full max-h-full object-contain shadow-lg"
+                                    fallback={<Package className="w-24 h-24 text-zinc-300 dark:text-zinc-700 opacity-20" />}
                                 />
-                            ) : (
-                                <Package className="w-24 h-24 text-zinc-300 dark:text-zinc-700 opacity-20" />
-                            )}
-                            <button
-                                onClick={() => setSelectedNft(null)}
-                                className="absolute top-4 right-4 p-2 bg-white/50 dark:bg-black/50 hover:bg-white dark:hover:bg-black backdrop-blur-md transition-colors"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                            </button>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto">
-                            <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
-                                {selectedNft?.display?.name || `#${selectedNft?.tokenId}`}
-                            </h2>
-                            <div className="flex items-center gap-2 mb-4">
-                                <span className="bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 px-2 py-1 text-xs font-mono">
-                                    #{selectedNft?.tokenId}
-                                </span>
-                                {selectedCollection && (
-                                    <span className="text-xs text-zinc-500">
-                                        {getDisplayInfo(selectedCollection).name || getContractName(selectedCollection.id)}
-                                    </span>
-                                )}
+                                <button
+                                    onClick={() => setSelectedNft(null)}
+                                    className="absolute top-4 right-4 p-2 bg-white/50 dark:bg-black/50 hover:bg-white dark:hover:bg-black backdrop-blur-md transition-colors"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                                </button>
                             </div>
 
-                            {selectedNft?.display?.description && (
-                                <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">
-                                    {selectedNft.display.description}
-                                </p>
-                            )}
+                            <div className="p-6 overflow-y-auto">
+                                <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
+                                    {selectedNft?.display?.name || `#${selectedNft?.tokenId}`}
+                                </h2>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 px-2 py-1 text-xs font-mono">
+                                        #{selectedNft?.tokenId}
+                                    </span>
+                                    {selectedCollection && (
+                                        <span className="text-xs text-zinc-500">
+                                            {getDisplayInfo(selectedCollection).name || getContractName(selectedCollection.id)}
+                                        </span>
+                                    )}
+                                </div>
 
-                            {/* Metadata / Traits */}
-                            {selectedNft.traits && selectedNft.traits.length > 0 && (
-                                <div className="space-y-3">
-                                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Traits</h3>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                        {selectedNft.traits.map((trait: any, i: number) => (
-                                            <div key={i} className="p-2 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
-                                                <div className="text-[10px] uppercase text-zinc-500 truncate">{trait?.name || trait?.display?.name || 'Trait'}</div>
-                                                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 truncate">
-                                                    {String(trait?.value || trait?.display?.value || '—')}
-                                                </div>
+                                {selectedNft?.display?.description && (
+                                    <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">
+                                        {selectedNft.display.description}
+                                    </p>
+                                )}
+
+                                {/* Key Metadata Grid */}
+                                <div className="grid grid-cols-2 gap-3 mb-6">
+                                    {selectedNft?.serial && (
+                                        <div className="p-3 bg-zinc-50 dark:bg-white/5 rounded-lg border border-zinc-100 dark:border-white/5">
+                                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Serial</div>
+                                            <div className="font-mono text-sm font-semibold">{selectedNft.serial.number}</div>
+                                        </div>
+                                    )}
+                                    {selectedNft?.editions && selectedNft.editions.length > 0 && (
+                                        <div className="p-3 bg-zinc-50 dark:bg-white/5 rounded-lg border border-zinc-100 dark:border-white/5">
+                                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Edition</div>
+                                            <div className="font-mono text-sm font-semibold">
+                                                {selectedNft.editions[0].number}
+                                                <span className="text-zinc-400 font-normal"> / {selectedNft.editions[0].max || '?'}</span>
                                             </div>
-                                        ))}
-                                    </div>
+                                        </div>
+                                    )}
+                                    {selectedNft?.rarity && (
+                                        <div className="p-3 bg-zinc-50 dark:bg-white/5 rounded-lg border border-zinc-100 dark:border-white/5 col-span-2">
+                                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Rarity</div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-bold text-sm">{selectedNft.rarity.description || 'Unknown'}</span>
+                                                {selectedNft.rarity.score && (
+                                                    <span className="text-xs bg-zinc-200 dark:bg-white/10 px-2 py-0.5 rounded-full">
+                                                        Score: {selectedNft.rarity.score}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
 
-                            {/* Raw Metadata Debug (Optional, hidden by default or shown if no traits) */}
-                            {!selectedNft.traits && selectedNft.metadata && (
-                                <div className="space-y-2 mt-4">
-                                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Metadata</h3>
-                                    <pre className="text-[10px] bg-zinc-50 dark:bg-black/20 p-2 overflow-x-auto text-zinc-500">
-                                        {JSON.stringify(selectedNft.metadata, null, 2)}
-                                    </pre>
-                                </div>
-                            )}
-                        </div>
-                    </GlassCard>
-                </div>
-            )}
-        </div>
+                                {/* External Links */}
+                                {selectedNft?.externalURL && (
+                                    <a
+                                        href={selectedNft.externalURL.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-between w-full p-3 mb-6 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
+                                    >
+                                        <span className="text-xs font-semibold uppercase tracking-wider">View External Resource</span>
+                                        <ExternalLink className="w-4 h-4" />
+                                    </a>
+                                )}
+
+                                {/* Metadata / Traits */}
+                                {selectedNft.traits && selectedNft.traits.length > 0 && (
+                                    <div className="space-y-3">
+                                        <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Traits</h3>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                            {selectedNft.traits.map((trait: any, i: number) => (
+                                                <div key={i} className="p-2 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
+                                                    <div className="text-[10px] uppercase text-zinc-500 truncate">{trait?.name || trait?.display?.name || 'Trait'}</div>
+                                                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 truncate">
+                                                        {String(trait?.value || trait?.display?.value || '—')}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Raw Metadata Debug (Optional, hidden by default or shown if no traits) */}
+                                {!selectedNft.traits && selectedNft.metadata && (
+                                    <div className="space-y-2 mt-4">
+                                        <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Metadata</h3>
+                                        <pre className="text-[10px] bg-zinc-50 dark:bg-black/20 p-2 overflow-x-auto text-zinc-500">
+                                            {JSON.stringify(selectedNft.metadata, null, 2)}
+                                        </pre>
+                                    </div>
+                                )}
+                            </div>
+                        </GlassCard>
+                    </div>
+                )
+            }
+        </div >
     );
 }
