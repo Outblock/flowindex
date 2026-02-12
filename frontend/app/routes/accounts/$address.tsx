@@ -50,9 +50,9 @@ export const Route = createFileRoute('/accounts/$address')({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const normalizedKeys = (accountPayload?.keys || []).map((key: any) => ({
                 keyIndex: key.keyIndex ?? key.key_index ?? key.index,
-                publicKey: key.publicKey ?? key.public_key ?? '',
-                signingAlgorithm: key.signingAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
-                hashingAlgorithm: key.hashingAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
+                publicKey: key.publicKey ?? key.public_key ?? key.key ?? '',
+                signingAlgorithm: key.signingAlgorithm ?? key.signatureAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
+                hashingAlgorithm: key.hashingAlgorithm ?? key.hashAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
                 weight: key.weight ?? 0,
                 sequenceNumber: key.sequenceNumber ?? key.sequence_number ?? 0,
                 revoked: Boolean(key.revoked),
@@ -180,9 +180,9 @@ function AccountDetail() {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const keys = (payload?.keys || []).map((key: any) => ({
                     keyIndex: key.keyIndex ?? key.key_index ?? key.index,
-                    publicKey: key.publicKey ?? key.public_key ?? '',
-                    signingAlgorithm: key.signingAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
-                    hashingAlgorithm: key.hashingAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
+                    publicKey: key.publicKey ?? key.public_key ?? key.key ?? '',
+                    signingAlgorithm: key.signingAlgorithm ?? key.signatureAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
+                    hashingAlgorithm: key.hashingAlgorithm ?? key.hashAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
                     weight: key.weight ?? 0,
                     sequenceNumber: key.sequenceNumber ?? key.sequence_number ?? 0,
                     revoked: Boolean(key.revoked),
