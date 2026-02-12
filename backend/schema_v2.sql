@@ -485,6 +485,13 @@ SELECT raw.create_partitions('raw.events', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.ft_transfers', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.nft_transfers', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.evm_transactions', 0, 20000000, 10000000);
+SELECT raw.create_partitions('app.evm_tx_hashes', 0, 20000000, 10000000);
+SELECT raw.create_partitions('app.staking_events', 0, 20000000, 10000000);
+SELECT raw.create_partitions('app.defi_events', 0, 20000000, 10000000);
+
+-- Per-transaction transfer lookups
+CREATE INDEX IF NOT EXISTS idx_ft_transfers_txid ON app.ft_transfers(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_txid ON app.nft_transfers(transaction_id);
 
 COMMIT;
 -- Add missing tables required by backend but not in initial Schema V2

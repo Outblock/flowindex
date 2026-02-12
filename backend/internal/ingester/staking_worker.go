@@ -246,13 +246,9 @@ func (w *StakingWorker) processEpochEvent(
 			}
 		}
 
-		firstView := extractString(fields["firstView"])
-		startHeight := int64(0)
-		if firstView != "" {
-			if h, err := strconv.ParseInt(firstView, 10, 64); err == nil {
-				startHeight = h
-			}
-		}
+		// Use the event's block height as epoch start height.
+		// Note: firstView is a consensus view number, NOT a block height.
+		startHeight := int64(evt.BlockHeight)
 
 		return &models.EpochStats{
 			Epoch:       epoch,

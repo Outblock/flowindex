@@ -90,7 +90,8 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 			if !ok || coaAddr == "" {
 				continue
 			}
-			coaAddr = normalizeAddressLower(coaAddr)
+			// COA addresses may be EVM-length (40 hex) or Flow-length (16 hex).
+			coaAddr = normalizeEVMAddress(coaAddr)
 			if coaAddr == "" {
 				continue
 			}

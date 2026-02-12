@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
@@ -43,11 +44,15 @@ func (w *EVMWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint6
 		dec := json.NewDecoder(bytes.NewReader(evt.Payload))
 		dec.UseNumber()
 		if err := dec.Decode(&payload); err != nil {
+			log.Printf("[evm_worker] skip: JSON decode error at block %d tx %s event %d: %v",
+				evt.BlockHeight, evt.TransactionID, evt.EventIndex, err)
 			continue
 		}
 
 		h := extractEVMHashFromPayload(payload)
 		if h == "" {
+			log.Printf("[evm_worker] skip: no EVM hash in payload at block %d tx %s event %d",
+				evt.BlockHeight, evt.TransactionID, evt.EventIndex)
 			continue
 		}
 		fromAddr, toAddr, dataHex := "", "", ""

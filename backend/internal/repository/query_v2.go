@@ -146,7 +146,7 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 	}
 	txIDBytes := sliceHexToBytes(txIDs)
 	rows, err := r.db.Query(ctx, `
-		SELECT COALESCE(internal_id, 0) AS id,
+		SELECT event_index AS id,
 		       encode(transaction_id, 'hex') AS transaction_id,
 		       transaction_index, type, event_index,
 		       COALESCE(encode(contract_address, 'hex'), '') AS contract_address,
@@ -177,7 +177,7 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 
 func (r *Repository) GetEventsByBlockHeight(ctx context.Context, height uint64) ([]models.Event, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT COALESCE(internal_id, 0) AS id,
+		SELECT event_index AS id,
 		       encode(transaction_id, 'hex') AS transaction_id,
 		       transaction_index, type, event_index,
 		       COALESCE(encode(contract_address, 'hex'), '') AS contract_address,

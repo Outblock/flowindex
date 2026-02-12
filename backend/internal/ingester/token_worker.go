@@ -508,6 +508,11 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 	return out
 }
 
+// transferKeyForLeg builds a grouping key used to pair withdraw/deposit legs.
+// Priority: ResourceID (exact match) > TokenID (NFT) > Amount (FT).
+// Note: FT amount-based pairing may mismatch when multiple independent transfers
+// of the same token and amount occur in one transaction. Within each key group,
+// legs are paired by event_index order which is correct for sequential execution.
 func transferKeyForLeg(leg tokenLeg) transferKey {
 	key := transferKey{
 		ContractAddr: leg.ContractAddr,
