@@ -239,7 +239,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(c.external_url, '') AS external_url,
 			COALESCE(c.square_image, '') AS square_image,
 			COALESCE(c.banner_image, '') AS banner_image,
-			COALESCE(c.socials, 'null'::jsonb) AS socials,
+			COALESCE(c.socials, '') AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
@@ -280,7 +280,7 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 				COALESCE(c.external_url, '') AS external_url,
 				COALESCE(c.square_image, '') AS square_image,
 				COALESCE(c.banner_image, '') AS banner_image,
-				COALESCE(c.socials, 'null'::jsonb) AS socials,
+				COALESCE(c.socials, '') AS socials,
 				COALESCE(counts.cnt, 0) AS cnt,
 				COALESCE(c.updated_at, NOW()) AS updated_at
 			FROM app.nft_collections c
@@ -313,7 +313,7 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 			COALESCE(c.external_url, '') AS external_url,
 			COALESCE(c.square_image, '') AS square_image,
 			COALESCE(c.banner_image, '') AS banner_image,
-			COALESCE(c.socials, 'null'::jsonb) AS socials,
+			COALESCE(c.socials, '') AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
@@ -337,7 +337,7 @@ func (r *Repository) ListNFTCollectionSummariesByOwner(ctx context.Context, owne
 			   COALESCE(c.description,''), COALESCE(c.external_url,''),
 			   COALESCE(c.square_image, '') AS square_image,
 			   COALESCE(c.banner_image, '') AS banner_image,
-			   COALESCE(c.socials, 'null'::jsonb) AS socials,
+			   COALESCE(c.socials, '') AS socials,
 			   COUNT(*) AS cnt,
 			   COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_ownership o

@@ -573,7 +573,7 @@ CREATE TABLE IF NOT EXISTS app.ft_tokens (
     decimals         INT,
     description      TEXT,
     external_url     TEXT,
-    logo             JSONB,
+    logo             TEXT,
     vault_path       TEXT,
     receiver_path    TEXT,
     balance_path     TEXT,
@@ -615,9 +615,9 @@ CREATE TABLE IF NOT EXISTS app.nft_collections (
     symbol           TEXT,
     description      TEXT,
     external_url     TEXT,
-    square_image     JSONB,
-    banner_image     JSONB,
-    socials          JSONB,
+    square_image     TEXT,
+    banner_image     TEXT,
+    socials          TEXT,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (contract_address, contract_name)
 );
@@ -645,7 +645,7 @@ ALTER TABLE IF EXISTS app.ft_tokens
 ALTER TABLE IF EXISTS app.ft_tokens
   ADD COLUMN IF NOT EXISTS external_url TEXT;
 ALTER TABLE IF EXISTS app.ft_tokens
-  ADD COLUMN IF NOT EXISTS logo JSONB;
+  ADD COLUMN IF NOT EXISTS logo TEXT;
 ALTER TABLE IF EXISTS app.ft_tokens
   ADD COLUMN IF NOT EXISTS vault_path TEXT;
 ALTER TABLE IF EXISTS app.ft_tokens
@@ -653,7 +653,7 @@ ALTER TABLE IF EXISTS app.ft_tokens
 ALTER TABLE IF EXISTS app.ft_tokens
   ADD COLUMN IF NOT EXISTS balance_path TEXT;
 ALTER TABLE IF EXISTS app.ft_tokens
-  ADD COLUMN IF NOT EXISTS socials JSONB;
+  ADD COLUMN IF NOT EXISTS socials TEXT;
 
 ALTER TABLE IF EXISTS app.ft_holdings
   ADD COLUMN IF NOT EXISTS contract_name TEXT NOT NULL DEFAULT '';
@@ -669,11 +669,11 @@ ALTER TABLE IF EXISTS app.nft_collections
 ALTER TABLE IF EXISTS app.nft_collections
   ADD COLUMN IF NOT EXISTS external_url TEXT;
 ALTER TABLE IF EXISTS app.nft_collections
-  ADD COLUMN IF NOT EXISTS square_image JSONB;
+  ADD COLUMN IF NOT EXISTS square_image TEXT;
 ALTER TABLE IF EXISTS app.nft_collections
-  ADD COLUMN IF NOT EXISTS banner_image JSONB;
+  ADD COLUMN IF NOT EXISTS banner_image TEXT;
 ALTER TABLE IF EXISTS app.nft_collections
-  ADD COLUMN IF NOT EXISTS socials JSONB;
+  ADD COLUMN IF NOT EXISTS socials TEXT;
 ALTER TABLE IF EXISTS app.nft_collections
   DROP CONSTRAINT IF EXISTS nft_collections_pkey;
 ALTER TABLE IF EXISTS app.nft_collections

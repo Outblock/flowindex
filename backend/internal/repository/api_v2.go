@@ -246,7 +246,7 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 }
 
 const ftTokenSelectCols = `encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0),
-		       COALESCE(description,''), COALESCE(external_url,''), COALESCE(logo, ''), COALESCE(vault_path,''), COALESCE(receiver_path,''), COALESCE(balance_path,''), COALESCE(socials, 'null'::jsonb), updated_at`
+		       COALESCE(description,''), COALESCE(external_url,''), COALESCE(logo, ''), COALESCE(vault_path,''), COALESCE(receiver_path,''), COALESCE(balance_path,''), COALESCE(socials, ''), updated_at`
 
 func scanFTToken(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
@@ -292,7 +292,7 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 	for _, c := range collections {
 		batch.Queue(`
 			INSERT INTO app.nft_collections (contract_address, contract_name, name, symbol, description, external_url, square_image, banner_image, socials, updated_at)
-			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9::jsonb, NOW())
+			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9, NOW())
 			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, app.nft_collections.name),
 				symbol = COALESCE(EXCLUDED.symbol, app.nft_collections.symbol),
