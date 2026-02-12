@@ -21,6 +21,7 @@ type NFTCollectionSummary struct {
 	BannerImage     string
 	Socials         []byte
 	Count           int64
+	HolderCount     int64
 	UpdatedAt       time.Time
 }
 
@@ -226,8 +227,9 @@ func (r *Repository) ListNFTCollectionContracts(ctx context.Context, limit, offs
 func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offset int) ([]NFTCollectionSummary, error) {
 	rows, err := r.db.Query(ctx, `
 		WITH counts AS (
-			SELECT contract_address, contract_name, COUNT(*) AS cnt
+			SELECT contract_address, contract_name, COUNT(*) AS cnt, COUNT(DISTINCT owner) AS holder_cnt
 			FROM app.nft_ownership
+			WHERE owner IS NOT NULL
 			GROUP BY contract_address, contract_name
 		)
 		SELECT
@@ -241,6 +243,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(c.banner_image::text, '') AS banner_image,
 			COALESCE(c.socials::text, '') AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
+			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
@@ -253,7 +256,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 	var out []NFTCollectionSummary
 	for rows.Next() {
 		var row NFTCollectionSummary
-		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, row)

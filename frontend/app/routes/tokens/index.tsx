@@ -1,13 +1,11 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { Coins, Database } from 'lucide-react';
+import { Coins, Database, ExternalLink } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Ft } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
-import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
-import { useTimeTicker } from '../../hooks/useTimeTicker';
 
 interface TokensSearch {
   page?: number;
@@ -61,7 +59,6 @@ function TokenLogo({ logo, symbol }: { logo?: string; symbol: string }) {
 function Tokens() {
   const { tokens, meta, page } = Route.useLoaderData();
   const navigate = Route.useNavigate();
-  const nowTick = useTimeTicker(20000);
 
   const limit = 25;
   const offset = (page - 1) * limit;
@@ -136,8 +133,8 @@ function Tokens() {
               <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Token</th>
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Address</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-center">Decimals</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Updated</th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-right">Holders</th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">EVM Bridge</th>
               </tr>
             </thead>
             <tbody>
@@ -148,11 +145,10 @@ function Tokens() {
                   const symbol = String(t?.symbol || '');
                   const name = String(t?.name || '');
                   const contractName = String(t?.contract_name || '');
-                  const decimals = Number(t?.decimals || 0);
+                  const holderCount = Number(t?.holder_count || 0);
                   const logo = t?.logo || '';
-                  const updatedAt = t?.updated_at || t?.timestamp || '';
-                  const rel = updatedAt ? formatRelativeTime(updatedAt, nowTick) : '';
-                  const abs = updatedAt ? formatAbsoluteTime(updatedAt) : '';
+                  const evmBridged = !!t?.evm_bridged;
+                  const evmAddress = String(t?.evm_address || '');
 
                   return (
                     <motion.tr
@@ -198,16 +194,25 @@ function Tokens() {
                           <span className="text-zinc-500 font-mono text-sm">N/A</span>
                         )}
                       </td>
-                      <td className="p-4 text-center">
-                        <span className="font-mono text-xs bg-zinc-100 dark:bg-white/10 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded-sm">
-                          {Number.isFinite(decimals) ? decimals : 0}
+                      <td className="p-4 text-right">
+                        <span className="font-mono text-sm text-zinc-900 dark:text-white">
+                          {holderCount.toLocaleString()}
                         </span>
                       </td>
                       <td className="p-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-mono text-zinc-900 dark:text-white">{rel}</span>
-                          <span className="text-xs font-mono text-zinc-500">{abs}</span>
-                        </div>
+                        {evmBridged ? (
+                          <a
+                            href={`https://evm.flowindex.dev/address/${evmAddress}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-mono rounded-sm hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors"
+                          >
+                            Bridged
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500">—</span>
+                        )}
                       </td>
                     </motion.tr>
                   );

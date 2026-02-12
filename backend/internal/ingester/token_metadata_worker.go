@@ -168,6 +168,7 @@ func (w *TokenMetadataWorker) fetchFTMetadata(ctx context.Context, contractAddr,
 
 	token.Logo = extractFirstMediaURL(fields["logos"])
 	token.Socials = extractSocials(fields["socials"])
+	token.EVMAddress = cadenceToString(fields["evmAddress"])
 
 	if token.Name == "" && token.Symbol == "" {
 		return models.FTToken{}, false
@@ -469,11 +470,23 @@ func cadenceFTCombinedScript() string {
 
 	ftmdAddr := getEnvOrDefault("FLOW_FUNGIBLE_TOKEN_METADATA_VIEWS_ADDRESS", ftAddr)
 
+	evmBridgeAddr := getEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+
 	return fmt.Sprintf(`
         import ViewResolver from 0x%s
         import FungibleToken from 0x%s
         import FungibleTokenMetadataViews from 0x%s
         import MetadataViews from 0x%s
+        import FlowEVMBridgeConfig from 0x%s
+
+        access(all) fun getEVMAddress(identifier: String): String? {
+            if let type = CompositeType(identifier) {
+                if let address = FlowEVMBridgeConfig.getEVMAddressAssociated(with: type) {
+                    return "0x".concat(address.toString())
+                }
+            }
+            return nil
+        }
 
         access(all) struct FTInfo {
             access(all) let name: String?
@@ -485,13 +498,15 @@ func cadenceFTCombinedScript() string {
             access(all) let storagePath: StoragePath?
             access(all) let receiverPath: PublicPath?
             access(all) let balancePath: PublicPath?
+            access(all) let evmAddress: String?
 
             init(
                 name: String?, symbol: String?, description: String?,
                 externalURL: String?,
                 logos: MetadataViews.Medias?,
                 socials: {String: MetadataViews.ExternalURL}?,
-                storagePath: StoragePath?, receiverPath: PublicPath?, balancePath: PublicPath?
+                storagePath: StoragePath?, receiverPath: PublicPath?, balancePath: PublicPath?,
+                evmAddress: String?
             ) {
                 self.name = name
                 self.symbol = symbol
@@ -502,6 +517,7 @@ func cadenceFTCombinedScript() string {
                 self.storagePath = storagePath
                 self.receiverPath = receiverPath
                 self.balancePath = balancePath
+                self.evmAddress = evmAddress
             }
         }
 
@@ -547,6 +563,9 @@ func cadenceFTCombinedScript() string {
                 extURL = display!.externalURL!.url
             }
 
+            let identifier = "A.".concat(contractAddress.toString().slice(from: 2, upTo: contractAddress.toString().length)).concat(".").concat(contractName).concat(".Vault")
+            let evmAddr = getEVMAddress(identifier: identifier)
+
             return FTInfo(
                 name: display!.name,
                 symbol: display!.symbol,
@@ -556,10 +575,11 @@ func cadenceFTCombinedScript() string {
                 socials: display!.socials,
                 storagePath: data?.storagePath,
                 receiverPath: data?.receiverPath,
-                balancePath: data?.metadataPath
+                balancePath: data?.metadataPath,
+                evmAddress: evmAddr
             )
         }
-    `, viewResolverAddr, ftAddr, ftmdAddr, viewResolverAddr)
+    `, viewResolverAddr, ftAddr, ftmdAddr, viewResolverAddr, evmBridgeAddr)
 }
 
 func getEnvOrDefault(key, def string) string {

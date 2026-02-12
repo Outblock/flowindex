@@ -28,6 +28,15 @@ func safeRawJSON(b []byte) json.RawMessage {
 	return json.RawMessage(b)
 }
 
+// unquoteString strips surrounding JSON quotes from a string value that was
+// stored as a JSON-encoded text (e.g. `"https://..."` → `https://...`).
+func unquoteString(s string) string {
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		s = s[1 : len(s)-1]
+	}
+	return s
+}
+
 func writeAPIResponse(w http.ResponseWriter, data interface{}, meta map[string]interface{}, links map[string]string) {
 	resp := apiEnvelope{
 		Links: links,
@@ -285,8 +294,9 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 		"name":          token.Name,
 		"symbol":        token.Symbol,
 		"decimals":      token.Decimals,
-		"timestamp":     formatTime(token.UpdatedAt),
-		"updated_at":    formatTime(token.UpdatedAt),
+		"holder_count":  token.HolderCount,
+		"evm_address":   token.EVMAddress,
+		"evm_bridged":   token.EVMAddress != "",
 	}
 	if token.Description != "" {
 		out["description"] = token.Description
@@ -358,10 +368,11 @@ func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]i
 		"display_name":     summary.Name,
 		"description":      summary.Description,
 		"external_url":     summary.ExternalURL,
-		"square_image":     summary.SquareImage,
-		"banner_image":     summary.BannerImage,
+		"square_image":     unquoteString(summary.SquareImage),
+		"banner_image":     unquoteString(summary.BannerImage),
 		"socials":          safeRawJSON(summary.Socials),
 		"number_of_tokens": summary.Count,
+		"holder_count":     summary.HolderCount,
 		"timestamp":        formatTime(summary.UpdatedAt),
 		"updated_at":       formatTime(summary.UpdatedAt),
 		"status":           "",
