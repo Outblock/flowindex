@@ -636,6 +636,17 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) enrichAccountTransactions(ctx context.Context, txs []models.Transaction, address string) []map[string]interface{} {
+	// Deduplicate by tx ID (safety net for partitioned table edge cases).
+	seen := make(map[string]bool, len(txs))
+	unique := txs[:0]
+	for _, t := range txs {
+		if !seen[t.ID] {
+			seen[t.ID] = true
+			unique = append(unique, t)
+		}
+	}
+	txs = unique
+
 	txIDs := make([]string, 0, len(txs))
 	for _, t := range txs {
 		txIDs = append(txIDs, t.ID)

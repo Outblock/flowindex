@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import {
@@ -365,13 +365,24 @@ function ActivityRow({ tx, address, expanded, onToggle }: { tx: any; address: st
 
 // --- Main Component ---
 
+// Deduplicate transactions by id, keeping the first occurrence.
+function dedup(txs: any[]): any[] {
+    const seen = new Set<string>();
+    return txs.filter(tx => {
+        if (!tx.id || seen.has(tx.id)) return false;
+        seen.add(tx.id);
+        return true;
+    });
+}
+
 export function AccountActivityTab({ address, initialTransactions, initialNextCursor }: Props) {
     const normalizedAddress = normalizeAddress(address);
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
+    const didFetchRef = useRef(false);
 
     // Transactions state
-    const [transactions, setTransactions] = useState<any[]>(initialTransactions);
+    const [transactions, setTransactions] = useState<any[]>(() => dedup(initialTransactions));
     const [currentPage, setCurrentPage] = useState(1);
     const [txLoading, setTxLoading] = useState(false);
     const [txCursors, setTxCursors] = useState<Record<number, string>>(() => {
@@ -394,7 +405,8 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     const [nftLoading, setNftLoading] = useState(false);
 
     useEffect(() => {
-        setTransactions(initialTransactions);
+        const dedupedTxs = dedup(initialTransactions);
+        setTransactions(dedupedTxs);
         setCurrentPage(1);
         const init: Record<number, string> = { 1: '' };
         if (initialNextCursor) init[2] = initialNextCursor;
@@ -407,6 +419,8 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         setNftTransfers([]);
         setNftCursor('');
         setNftHasMore(false);
+        // Reset fetch guard — if loader provided data, mark as fetched; otherwise allow fallback
+        didFetchRef.current = dedupedTxs.length > 0;
     }, [address, initialTransactions, initialNextCursor]);
 
     // --- Transactions ---
@@ -420,12 +434,12 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             const payload: any = txRes.data;
             const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
             const nextCursor = payload?.next_cursor ?? '';
-            setTransactions(items.map((tx: any) => ({
+            setTransactions(dedup(items.map((tx: any) => ({
                 ...tx,
                 payer: tx.payer_address || tx.payer || tx.proposer_address,
                 proposer: tx.proposer_address || tx.proposer,
                 blockHeight: tx.block_height,
-            })));
+            }))));
             if (nextCursor) {
                 setTxCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
                 setTxHasNext(true);
@@ -438,6 +452,15 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             setTxLoading(false);
         }
     }, [txCursors, normalizedAddress]);
+
+    // Fallback: if loader didn't provide data (e.g., client-side nav failure), fetch page 1
+    useEffect(() => {
+        if (!didFetchRef.current && !txLoading) {
+            didFetchRef.current = true;
+            loadTransactions(1);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [normalizedAddress]);
 
     useEffect(() => {
         if (currentPage > 1) loadTransactions(currentPage);
