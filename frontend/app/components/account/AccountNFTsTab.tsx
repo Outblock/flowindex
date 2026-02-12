@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Package, Image as ImageIcon, ExternalLink, Grid, List as ListIcon } from 'lucide-react';
 import type { NFTCollection } from '../../../cadence/cadence.gen';
-import { normalizeAddress, getNFTThumbnail } from './accountUtils';
+import { normalizeAddress, getNFTThumbnail, getNFTMedia } from './accountUtils';
 import { Link } from '@tanstack/react-router';
 import { GlassCard } from '../ui/GlassCard';
 import { cn } from '../../lib/utils';
@@ -412,16 +412,39 @@ export function AccountNFTsTab({ address }: Props) {
                             onClick={() => setSelectedNft(null)}
                         />
                         <GlassCard className="relative w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col p-0 z-10 bg-white dark:bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-200">
-                            <div className="aspect-square bg-zinc-100 dark:bg-black/20 flex items-center justify-center p-8 relative">
-                                <ImageWithFallback
-                                    src={getNFTThumbnail(selectedNft)}
-                                    alt={selectedNft?.display?.name}
-                                    className="max-w-full max-h-full object-contain shadow-lg"
-                                    fallback={<Package className="w-24 h-24 text-zinc-300 dark:text-zinc-700 opacity-20" />}
-                                />
+                            <div className="w-full bg-zinc-100 dark:bg-black/20 flex items-center justify-center relative overflow-hidden min-h-[300px] md:min-h-[400px]">
+                                {(() => {
+                                    const media = getNFTMedia(selectedNft, selectedCollectionId || '');
+
+                                    if (media.type === 'video') {
+                                        return (
+                                            <video
+                                                src={media.url}
+                                                poster={media.fallbackImage}
+                                                controls
+                                                autoPlay
+                                                loop
+                                                muted
+                                                className="w-full h-full object-contain max-h-[60vh]"
+                                            >
+                                                Your browser does not support the video tag.
+                                            </video>
+                                        );
+                                    }
+
+                                    return (
+                                        <ImageWithFallback
+                                            src={media.url}
+                                            alt={selectedNft?.display?.name}
+                                            className="w-full h-full object-contain max-h-[60vh] shadow-lg"
+                                            fallback={<Package className="w-24 h-24 text-zinc-300 dark:text-zinc-700 opacity-20" />}
+                                        />
+                                    );
+                                })()}
+
                                 <button
                                     onClick={() => setSelectedNft(null)}
-                                    className="absolute top-4 right-4 p-2 bg-white/50 dark:bg-black/50 hover:bg-white dark:hover:bg-black backdrop-blur-md transition-colors"
+                                    className="absolute top-4 right-4 p-2 bg-white/50 dark:bg-black/50 hover:bg-white dark:hover:bg-black backdrop-blur-md transition-colors rounded-full z-20"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
                                 </button>
@@ -494,22 +517,31 @@ export function AccountNFTsTab({ address }: Props) {
                                 )}
 
                                 {/* Metadata / Traits */}
-                                {selectedNft.traits && selectedNft.traits.length > 0 && (
-                                    <div className="space-y-3">
-                                        <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Traits</h3>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                            {selectedNft.traits.map((trait: any, i: number) => (
-                                                <div key={i} className="p-2 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
-                                                    <div className="text-[10px] uppercase text-zinc-500 truncate">{trait?.name || trait?.display?.name || 'Trait'}</div>
-                                                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 truncate">
-                                                        {String(trait?.value || trait?.display?.value || '—')}
-                                                    </div>
+                                {(() => {
+                                    // Handle both direct array (if flattened) and nested struct (from Cadence)
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                    const traitsList = (selectedNft.traits as any)?.traits || selectedNft.traits;
+
+                                    if (Array.isArray(traitsList) && traitsList.length > 0) {
+                                        return (
+                                            <div className="space-y-3">
+                                                <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Traits</h3>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                                    {traitsList.map((trait: any, i: number) => (
+                                                        <div key={i} className="p-2 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
+                                                            <div className="text-[10px] uppercase text-zinc-500 truncate">{trait?.name || trait?.display?.name || 'Trait'}</div>
+                                                            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 truncate">
+                                                                {String(trait?.value || trait?.display?.value || '—')}
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
 
                                 {/* Raw Metadata Debug (Optional, hidden by default or shown if no traits) */}
                                 {!selectedNft.traits && selectedNft.metadata && (
