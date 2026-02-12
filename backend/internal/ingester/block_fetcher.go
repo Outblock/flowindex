@@ -207,7 +207,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			}
 
 			scriptText := string(tx.Script)
-			isEVM := strings.Contains(scriptText, "import EVM")
+			isEVM := false
 
 			dbTx := models.Transaction{
 				ID:                     txID,
@@ -268,8 +268,8 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				}
 				dbEvents = append(dbEvents, dbEvent)
 
-				// Detect EVM Events
-				if strings.Contains(evt.Type, "EVM.") {
+				// Detect EVM Events — only flag as EVM if there is an actual EVM.TransactionExecuted event
+				if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
 					isEVM = true
 				}
 			}
