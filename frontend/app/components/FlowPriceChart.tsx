@@ -1,5 +1,5 @@
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
-import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
+import { AreaChart, Area, ResponsiveContainer, YAxis, Tooltip } from 'recharts';
 import { memo, useEffect, useMemo, useState } from 'react';
 
 // Mock data generator for the sparkline (since we only have current price)
@@ -10,11 +10,14 @@ const generateSparkline = (currentPrice) => {
     const base = Number.isFinite(currentPrice) ? currentPrice : 0;
     const amp = Math.max(Math.abs(base) * 0.02, 0.0005);
     const data = [];
-    for (let i = 0; i < 20; i++) {
+    const total = 20;
+    for (let i = 0; i < total; i++) {
         const a = i * 0.65;
         const b = i * 1.35;
         const value = base + (Math.sin(a) * amp) + (Math.sin(b) * amp * 0.25);
-        data.push({ value });
+        const hoursAgo = total - 1 - i;
+        const label = hoursAgo === 0 ? 'Now' : `${hoursAgo}h ago`;
+        data.push({ value, label });
     }
     return data;
 };
@@ -93,6 +96,20 @@ export const FlowPriceChart = memo(function FlowPriceChart({ data }) {
                                 </linearGradient>
                             </defs>
                             <YAxis domain={['dataMin', 'dataMax']} hide />
+                            <Tooltip
+                                content={({ active, payload }) => {
+                                    if (!active || !payload?.length) return null;
+                                    const val = payload[0].value as number;
+                                    const label = payload[0].payload?.label;
+                                    return (
+                                        <div className="bg-zinc-900 border border-zinc-700 px-2.5 py-1.5 rounded-sm shadow-lg">
+                                            <div className="text-white font-mono text-xs">${val.toFixed(4)}</div>
+                                            {label && <div className="text-zinc-400 font-mono text-[10px] mt-0.5">{label}</div>}
+                                        </div>
+                                    );
+                                }}
+                                cursor={{ stroke: isPositive ? '#00ff41' : '#ef4444', strokeDasharray: '3 3', strokeWidth: 1 }}
+                            />
                             <Area
                                 type="monotone"
                                 dataKey="value"
