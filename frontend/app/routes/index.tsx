@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, Activity, TrendingUp } from 'lucide-react';
+import { Box, Activity, TrendingUp, Coins, Image } from 'lucide-react';
 import { SafeNumberFlow } from '../components/SafeNumberFlow';
 import { ensureHeyApiConfigured, fetchStatus } from '../api/heyapi';
-import { getFlowV1Block, getFlowV1Transaction, getStatusV1Stat } from '../api/gen/find';
+import { getFlowV1Block, getFlowV1Transaction, getStatusV1Stat, getFlowV1Ft, getFlowV1Nft } from '../api/gen/find';
 import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
 import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
@@ -20,26 +20,30 @@ export const Route = createFileRoute('/')({
     loader: async () => {
         try {
             await ensureHeyApiConfigured();
-            const [status, blocks, transactions] = await Promise.all([
+            const [status, blocks, transactions, tokens, nftCollections] = await Promise.all([
                 fetchStatus(),
                 getFlowV1Block({ query: { limit: 50, offset: 0 } }),
-                getFlowV1Transaction({ query: { limit: 50, offset: 0 } })
+                getFlowV1Transaction({ query: { limit: 50, offset: 0 } }),
+                getFlowV1Ft({ query: { limit: 10, offset: 0 } }),
+                getFlowV1Nft({ query: { limit: 10, offset: 0 } }),
             ]);
             return {
                 status: status,
                 networkStats: null,
                 blocks: blocks.data?.data ?? [],
                 transactions: transactions.data?.data ?? [],
+                tokens: tokens.data?.data ?? [],
+                nftCollections: nftCollections.data?.data ?? [],
             };
         } catch (e) {
             console.error("Failed to load initial data", e);
-            return { status: null, networkStats: null, blocks: [], transactions: [] };
+            return { status: null, networkStats: null, blocks: [], transactions: [], tokens: [], nftCollections: [] };
         }
     }
 })
 
 function Home() {
-    const { status, networkStats: initialNetworkStats, blocks: initialBlocks, transactions: initialTransactions } = Route.useLoaderData();
+    const { status, networkStats: initialNetworkStats, blocks: initialBlocks, transactions: initialTransactions, tokens, nftCollections } = Route.useLoaderData();
 
     // Prevent SSR hydration mismatch for Date.now()-based UI (relative timestamps, etc).
     const [hydrated, setHydrated] = useState(false);
@@ -547,6 +551,134 @@ function Home() {
                 >
                     <DailyStatsChart />
                 </motion.div>
+
+                {/* Top Tokens & Top Collections Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Top Tokens */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.3 }}
+                        className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10"
+                    >
+                        <div className="flex items-center justify-between p-6 pb-0">
+                            <div className="flex items-center space-x-3">
+                                <Coins className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
+                                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Top Tokens</h2>
+                            </div>
+                            <Link to="/tokens" className="text-xs text-nothing-green-dark dark:text-nothing-green uppercase tracking-widest hover:underline font-mono">
+                                View All &rarr;
+                            </Link>
+                        </div>
+                        <div className="p-6 pt-4">
+                            {(tokens || []).length === 0 ? (
+                                <p className="text-xs text-zinc-400 dark:text-gray-500 font-mono">No tokens found.</p>
+                            ) : (
+                                <div className="flex flex-col">
+                                    {(tokens || []).slice(0, 10).map((token: any) => (
+                                        <Link
+                                            key={token.id}
+                                            to={`/tokens/${token.id}`}
+                                            className="flex items-center space-x-3 px-3 py-3 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors duration-150 border-b border-zinc-100 dark:border-white/5 last:border-b-0"
+                                        >
+                                            <div className="relative w-6 h-6 flex-shrink-0 bg-zinc-100 dark:bg-white/10 flex items-center justify-center overflow-hidden">
+                                                {token.logo ? (
+                                                    <img
+                                                        src={token.logo}
+                                                        alt={token.name || ''}
+                                                        className="w-6 h-6 object-cover"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).style.display = 'none';
+                                                            ((e.target as HTMLImageElement).nextElementSibling as HTMLElement)!.style.display = 'flex';
+                                                        }}
+                                                    />
+                                                ) : null}
+                                                <div
+                                                    className="w-6 h-6 bg-nothing-green/20 text-nothing-green-dark dark:text-nothing-green text-[10px] font-bold font-mono items-center justify-center"
+                                                    style={{ display: token.logo ? 'none' : 'flex' }}
+                                                >
+                                                    {(token.symbol || token.name || '?').charAt(0).toUpperCase()}
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col min-w-0 flex-1">
+                                                <div className="flex items-center space-x-2">
+                                                    <span className="text-xs font-mono text-zinc-900 dark:text-white truncate">{token.name || 'Unknown'}</span>
+                                                    {token.symbol && (
+                                                        <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500 uppercase">{token.symbol}</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-600 truncate">
+                                                    {token.address ? `A.${token.address}.${token.contract_name || ''}` : token.id}
+                                                </span>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+
+                    {/* Top Collections */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.4 }}
+                        className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10"
+                    >
+                        <div className="flex items-center justify-between p-6 pb-0">
+                            <div className="flex items-center space-x-3">
+                                <Image className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
+                                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Top Collections</h2>
+                            </div>
+                            <Link to="/nfts" className="text-xs text-nothing-green-dark dark:text-nothing-green uppercase tracking-widest hover:underline font-mono">
+                                View All &rarr;
+                            </Link>
+                        </div>
+                        <div className="p-6 pt-4">
+                            {(nftCollections || []).length === 0 ? (
+                                <p className="text-xs text-zinc-400 dark:text-gray-500 font-mono">No collections found.</p>
+                            ) : (
+                                <div className="flex flex-col">
+                                    {(nftCollections || []).slice(0, 10).map((nft: any) => (
+                                        <Link
+                                            key={nft.id}
+                                            to={`/nfts/${nft.id}`}
+                                            className="flex items-center space-x-3 px-3 py-3 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors duration-150 border-b border-zinc-100 dark:border-white/5 last:border-b-0"
+                                        >
+                                            <div className="relative w-6 h-6 flex-shrink-0 bg-zinc-100 dark:bg-white/10 flex items-center justify-center overflow-hidden">
+                                                {nft.logo ? (
+                                                    <img
+                                                        src={nft.logo}
+                                                        alt={nft.display_name || nft.name || ''}
+                                                        className="w-6 h-6 object-cover"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).style.display = 'none';
+                                                            ((e.target as HTMLImageElement).nextElementSibling as HTMLElement)!.style.display = 'flex';
+                                                        }}
+                                                    />
+                                                ) : null}
+                                                <div
+                                                    className="w-6 h-6 bg-nothing-green/20 text-nothing-green-dark dark:text-nothing-green text-[10px] font-bold font-mono items-center justify-center"
+                                                    style={{ display: nft.logo ? 'none' : 'flex' }}
+                                                >
+                                                    {(nft.display_name || nft.name || '?').charAt(0).toUpperCase()}
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col min-w-0 flex-1">
+                                                <span className="text-xs font-mono text-zinc-900 dark:text-white truncate">{nft.display_name || nft.name || 'Unknown'}</span>
+                                            </div>
+                                            {nft.number_of_tokens != null && (
+                                                <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 px-2 py-0.5 rounded-sm flex-shrink-0">
+                                                    {formatNumber(nft.number_of_tokens)} items
+                                                </span>
+                                            )}
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                </div>
 
                 {/* Blocks & Transactions Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

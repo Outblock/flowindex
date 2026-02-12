@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
 import { Coins, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
@@ -33,6 +34,30 @@ export const Route = createFileRoute('/tokens/')({
   },
 })
 
+function TokenLogo({ logo, symbol }: { logo?: string; symbol: string }) {
+  const [failed, setFailed] = useState(false);
+  const letter = (symbol || '?')[0].toUpperCase();
+
+  if (logo && !failed) {
+    return (
+      <img
+        src={logo}
+        alt={symbol}
+        width={32}
+        height={32}
+        className="w-8 h-8 object-contain"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="w-8 h-8 flex items-center justify-center bg-zinc-100 dark:bg-white/10 font-mono text-sm font-bold text-zinc-500 dark:text-zinc-400">
+      {letter}
+    </div>
+  );
+}
+
 function Tokens() {
   const { tokens, meta, page } = Route.useLoaderData();
   const navigate = Route.useNavigate();
@@ -62,12 +87,12 @@ function Tokens() {
         className="flex items-center justify-between"
       >
         <div className="flex items-center space-x-4">
-          <div className="p-3 bg-nothing-green/10 rounded-lg">
+          <div className="p-3 bg-nothing-green/10">
             <Coins className="h-8 w-8 text-nothing-green-dark dark:text-nothing-green" />
           </div>
           <div>
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tighter">Tokens</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Fungible Tokens (FT)</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">Fungible Tokens (FT)</p>
           </div>
         </div>
       </motion.div>
@@ -79,13 +104,13 @@ function Tokens() {
         className="grid grid-cols-1 md:grid-cols-3 gap-6"
       >
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Tokens (Page)</p>
+          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1 font-mono">Total Tokens</p>
           <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-            <NumberFlow value={tokens.length} format={{ useGrouping: true }} />
+            <NumberFlow value={totalCount} format={{ useGrouping: true }} />
           </p>
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Indexed At Height</p>
+          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1 font-mono">Indexed At Height</p>
           <div className="flex items-center gap-2">
             <Database className="w-4 h-4 text-zinc-400" />
             <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
@@ -94,9 +119,12 @@ function Tokens() {
           </div>
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Count</p>
+          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1 font-mono">Page</p>
           <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-            <NumberFlow value={Number(meta?.count || 0)} format={{ useGrouping: true }} />
+            <NumberFlow value={tokens.length} format={{ useGrouping: true }} />
+            <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400 ml-2">
+              of {totalCount.toLocaleString()}
+            </span>
           </p>
         </div>
       </motion.div>
@@ -106,11 +134,10 @@ function Tokens() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Token</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Address</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Symbol</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Decimals</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Updated</th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Token</th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Address</th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-center">Decimals</th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Updated</th>
               </tr>
             </thead>
             <tbody>
@@ -119,7 +146,10 @@ function Tokens() {
                   const id = String(t?.id || t?.token || '');
                   const addr = normalizeHex(t?.address);
                   const symbol = String(t?.symbol || '');
+                  const name = String(t?.name || '');
+                  const contractName = String(t?.contract_name || '');
                   const decimals = Number(t?.decimals || 0);
+                  const logo = t?.logo || '';
                   const updatedAt = t?.updated_at || t?.timestamp || '';
                   const rel = updatedAt ? formatRelativeTime(updatedAt, nowTick) : '';
                   const abs = updatedAt ? formatAbsoluteTime(updatedAt) : '';
@@ -133,43 +163,50 @@ function Tokens() {
                       className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
                     >
                       <td className="p-4">
-                        <Link
-                          to={`/tokens/${encodeURIComponent(id)}`}
-                          className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
-                          title={id}
-                        >
-                          {id}
-                        </Link>
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {t?.name || t?.contract_name || ''}
+                        <div className="flex items-center gap-3">
+                          <TokenLogo logo={logo} symbol={symbol || contractName} />
+                          <div className="min-w-0">
+                            <Link
+                              to={`/tokens/${encodeURIComponent(id)}`}
+                              className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
+                              title={id}
+                            >
+                              {name && symbol ? (
+                                <>
+                                  {name}
+                                  <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">{symbol}</span>
+                                </>
+                              ) : (
+                                symbol || contractName || id
+                              )}
+                            </Link>
+                            <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono truncate" title={id}>
+                              {contractName || id}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="p-4">
                         {addr ? (
                           <Link
                             to={`/accounts/${addr}`}
-                            className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
+                            className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
                           >
                             {addr}
                           </Link>
                         ) : (
-                          <span className="text-zinc-500">N/A</span>
+                          <span className="text-zinc-500 font-mono text-sm">N/A</span>
                         )}
                       </td>
-                      <td className="p-4">
-                        <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300">
-                          {symbol || '—'}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className="font-mono text-sm bg-zinc-100 dark:bg-white/10 px-2 py-1 rounded">
+                      <td className="p-4 text-center">
+                        <span className="font-mono text-xs bg-zinc-100 dark:bg-white/10 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded-sm">
                           {Number.isFinite(decimals) ? decimals : 0}
                         </span>
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col">
-                          <span className="text-sm text-zinc-900 dark:text-white">{rel}</span>
-                          <span className="text-xs text-zinc-500">{abs}</span>
+                          <span className="text-sm font-mono text-zinc-900 dark:text-white">{rel}</span>
+                          <span className="text-xs font-mono text-zinc-500">{abs}</span>
                         </div>
                       </td>
                     </motion.tr>
