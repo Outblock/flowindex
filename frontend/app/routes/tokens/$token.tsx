@@ -183,7 +183,7 @@ function TokenDetailInner() {
                 content={id}
                 variant="ghost"
                 size="xs"
-                className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
               />
             </div>
           </div>
@@ -211,7 +211,7 @@ function TokenDetailInner() {
                 content={addr}
                 variant="ghost"
                 size="xs"
-                className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-2"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1"
               />
             )}
           </p>

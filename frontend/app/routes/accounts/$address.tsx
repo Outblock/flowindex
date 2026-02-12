@@ -232,7 +232,7 @@ function AccountDetail() {
                 <PageHeader
                     title="Account"
                     subtitle={
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                             {normalizedAddress}
                             <CopyButton
                                 content={normalizedAddress}

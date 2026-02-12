@@ -105,7 +105,7 @@ function BlockDetail() {
                                     content={block.id}
                                     variant="ghost"
                                     size="xs"
-                                    className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1"
                                 />
                             </div>
                         </div>
@@ -139,7 +139,7 @@ function BlockDetail() {
                                         content={block.parentId}
                                         variant="ghost"
                                         size="xs"
-                                        className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1"
                                     />
                                 </div>
                             </div>
@@ -193,7 +193,7 @@ function BlockDetail() {
                                                         content={tx.id}
                                                         variant="ghost"
                                                         size="xs"
-                                                        className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1"
                                                     />
                                                 </div>
                                             </td>

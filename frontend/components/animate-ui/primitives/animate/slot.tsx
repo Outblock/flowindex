@@ -1,8 +1,9 @@
+/* eslint-disable react/no-unstable-nested-components */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from 'react';
 import { motion, MotionProps } from 'framer-motion';
 import { cn } from '@/lib/utils'; // Ensure this path is correct or adjust
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mergeRefs<T = any>(...refs: (React.MutableRefObject<T> | React.LegacyRef<T>)[]) {
   return (node: T) => {
     refs.forEach((ref) => {
@@ -16,31 +17,32 @@ function mergeRefs<T = any>(...refs: (React.MutableRefObject<T> | React.LegacyRe
   };
 }
 
-export interface SlotProps extends React.HTMLAttributes<HTMLElement>, MotionProps {
+export interface SlotProps extends Omit<React.HTMLAttributes<HTMLElement>, keyof MotionProps>, MotionProps {
   children?: React.ReactNode;
 }
 
 const Slot = React.forwardRef<HTMLElement, SlotProps>(
   ({ children, ...props }, ref) => {
-    if (!React.isValidElement(children)) {
+    const child = React.isValidElement(children) ? children : null;
+    const childType = child ? child.type : null;
+
+    const isMotion = child && (child.type as any)?.render?.displayName?.startsWith('Motion');
+
+    const Component = React.useMemo(() => {
+      if (!childType) return null;
+      return isMotion ? childType : motion.create(childType as string | React.ComponentType<any>);
+    }, [childType, isMotion]);
+
+    if (!child || !Component) {
       return null;
     }
 
-    const child = children as React.ReactElement;
-
-    // Check if child is already a motion component
-    // strict check for Framer Motion component
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isMotion = (child.type as any)?.render?.displayName?.startsWith('Motion');
-
-    const Component = isMotion ? child.type : motion.create(child.type as string | React.ComponentType<any>);
-
     return (
       <Component
-        {...child.props}
+        {...(child.props as object)}
         {...props}
         ref={mergeRefs((child as any).ref, ref)}
-        className={cn(child.props.className, props.className)}
+        className={cn((child.props as any).className, props.className)}
       />
     );
   }

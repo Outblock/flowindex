@@ -1,19 +1,27 @@
 import * as React from 'react';
 
-function useControlledState({
-  default: defaultValue,
+interface UseControlledStateParams<T> {
+  default?: T;
+  defaultValue?: T;
+  value?: T;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onChange?: (value: T, ...args: any[]) => void;
+}
+
+function useControlledState<T>({
+  default: defaultProp,
+  defaultValue,
   value,
   onChange,
-  defaultValue: _defaultValue,
-}) {
-  const [localValue, setLocalValue] = React.useState(
-    _defaultValue || defaultValue
+}: UseControlledStateParams<T>): [T | undefined, (newValue: T) => void] {
+  const [localValue, setLocalValue] = React.useState<T | undefined>(
+    defaultValue || defaultProp
   );
   const isControlled = value !== undefined;
   const currentValue = isControlled ? value : localValue;
 
   const setValue = React.useCallback(
-    (newValue) => {
+    (newValue: T) => {
       if (!isControlled) {
         setLocalValue(newValue);
       }
