@@ -1,8 +1,8 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "description": "Flow blockchain explorer API.",
-    "title": "Flow Explorer API",
+    "description": "Flow Index API — blockchain explorer and data platform for the Flow network.",
+    "title": "Flow Index API",
     "termsOfService": "http://swagger.io/terms/",
     "contact": {
       "name": "API Support"
@@ -2373,6 +2373,63 @@
         }
       }
     },
+    "/flow/v1/nft/search": {
+      "get": {
+        "description": "Full-text search across NFT items by name, description, or attributes.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Search NFT items",
+        "parameters": [
+          {
+            "description": "Search query string",
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by NFT collection type (e.g. A.xxx.CollectionName)",
+            "name": "collection",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Limit for the number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 100
+            }
+          },
+          {
+            "description": "The number of records to skip (for pagination) (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/flow/v1/nft/{nft_type}": {
       "get": {
         "description": "Retrieve detailed information about a specific non-fungible token (NFT) collection",
@@ -2446,6 +2503,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/flow.NFTHoldingResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/nft/{nft_type}/item": {
+      "get": {
+        "description": "List NFT items belonging to a specific collection, with pagination.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "List items in an NFT collection",
+        "parameters": [
+          {
+            "description": "The NFT collection type identifier (e.g. A.xxx.CollectionName)",
+            "name": "nft_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Limit for the number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 100
+            }
+          },
+          {
+            "description": "The number of records to skip (for pagination) (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -2549,6 +2656,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/flow.NFTTransfersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/key/{publicKey}": {
+      "get": {
+        "description": "Returns all Flow accounts associated with a given public key. A single public key can be linked to multiple accounts.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Search accounts by public key",
+        "parameters": [
+          {
+            "description": "Hex public key (128 hex characters, with or without 0x prefix)",
+            "name": "publicKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max results to return (default 25, max 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 100
+            }
+          },
+          {
+            "description": "Number of results to skip for pagination (default 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }

@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetAccountingV1AccountByAddressData, GetAccountingV1AccountByAddressFtData, GetAccountingV1AccountByAddressFtResponses, GetAccountingV1AccountByAddressFtTransferData, GetAccountingV1AccountByAddressFtTransferResponses, GetAccountingV1AccountByAddressNftData, GetAccountingV1AccountByAddressNftResponses, GetAccountingV1AccountByAddressResponses, GetAccountingV1AccountByAddressTaxReportData, GetAccountingV1AccountByAddressTaxReportResponses, GetAccountingV1AccountByAddressTransactionData, GetAccountingV1AccountByAddressTransactionResponses, GetAccountingV1NftTransferData, GetAccountingV1NftTransferResponses, GetAccountingV1TransactionByIdData, GetAccountingV1TransactionByIdResponses, GetAccountingV1TransactionData, GetAccountingV1TransactionResponses, GetDefiV1AssetData, GetDefiV1AssetResponses, GetDefiV1EventsData, GetDefiV1EventsResponses, GetDefiV1LatestBlockData, GetDefiV1LatestBlockResponses, GetDefiV1LatestSwapData, GetDefiV1LatestSwapResponses, GetDefiV1PairData, GetDefiV1PairResponses, GetFlowV1AccountByAddressData, GetFlowV1AccountByAddressFtByTokenData, GetFlowV1AccountByAddressFtByTokenResponses, GetFlowV1AccountByAddressFtByTokenTransferData, GetFlowV1AccountByAddressFtByTokenTransferResponses, GetFlowV1AccountByAddressFtData, GetFlowV1AccountByAddressFtHoldingData, GetFlowV1AccountByAddressFtHoldingResponses, GetFlowV1AccountByAddressFtResponses, GetFlowV1AccountByAddressFtTransferData, GetFlowV1AccountByAddressFtTransferResponses, GetFlowV1AccountByAddressNftByNftTypeData, GetFlowV1AccountByAddressNftByNftTypeResponses, GetFlowV1AccountByAddressNftData, GetFlowV1AccountByAddressNftResponses, GetFlowV1AccountByAddressResponses, GetFlowV1AccountByAddressTaxReportData, GetFlowV1AccountByAddressTaxReportResponses, GetFlowV1AccountByAddressTransactionData, GetFlowV1AccountByAddressTransactionResponses, GetFlowV1AccountData, GetFlowV1AccountResponses, GetFlowV1BlockByHeightData, GetFlowV1BlockByHeightResponses, GetFlowV1BlockByHeightServiceEventData, GetFlowV1BlockByHeightServiceEventResponses, GetFlowV1BlockByHeightTransactionData, GetFlowV1BlockByHeightTransactionResponses, GetFlowV1BlockData, GetFlowV1BlockResponses, GetFlowV1ContractByIdentifierByIdData, GetFlowV1ContractByIdentifierByIdResponses, GetFlowV1ContractByIdentifierData, GetFlowV1ContractByIdentifierResponses, GetFlowV1ContractData, GetFlowV1ContractResponses, GetFlowV1EvmTokenByAddressData, GetFlowV1EvmTokenByAddressResponses, GetFlowV1EvmTokenData, GetFlowV1EvmTokenResponses, GetFlowV1EvmTransactionByHashData, GetFlowV1EvmTransactionByHashResponses, GetFlowV1EvmTransactionData, GetFlowV1EvmTransactionResponses, GetFlowV1FtByTokenAccountByAddressData, GetFlowV1FtByTokenAccountByAddressResponses, GetFlowV1FtByTokenData, GetFlowV1FtByTokenHoldingData, GetFlowV1FtByTokenHoldingResponses, GetFlowV1FtByTokenResponses, GetFlowV1FtData, GetFlowV1FtResponses, GetFlowV1FtTransferData, GetFlowV1FtTransferResponses, GetFlowV1KeyByPublicKeyData, GetFlowV1KeyByPublicKeyResponses, GetFlowV1NftByNftTypeData, GetFlowV1NftByNftTypeHoldingData, GetFlowV1NftByNftTypeHoldingResponses, GetFlowV1NftByNftTypeItemData, GetFlowV1NftByNftTypeItemResponses, GetFlowV1NftByNftTypeItemByIdData, GetFlowV1NftByNftTypeItemByIdErrors, GetFlowV1NftByNftTypeItemByIdResponses, GetFlowV1NftByNftTypeItemByIdTransferData, GetFlowV1NftByNftTypeItemByIdTransferResponses, GetFlowV1NftByNftTypeResponses, GetFlowV1NftData, GetFlowV1NftResponses, GetFlowV1NftSearchData, GetFlowV1NftSearchResponses, GetFlowV1NftTransferData, GetFlowV1NftTransferResponses, GetFlowV1NodeByNodeIdData, GetFlowV1NodeByNodeIdResponses, GetFlowV1NodeByNodeIdRewardDelegationData, GetFlowV1NodeByNodeIdRewardDelegationResponses, GetFlowV1NodeData, GetFlowV1NodeResponses, GetFlowV1ScheduledTransactionData, GetFlowV1ScheduledTransactionResponses, GetFlowV1TransactionByIdData, GetFlowV1TransactionByIdResponses, GetFlowV1TransactionData, GetFlowV1TransactionResponses, GetStakingV1AccountByAddressFtTransferData, GetStakingV1AccountByAddressFtTransferResponses, GetStakingV1AccountByAddressTransactionData, GetStakingV1AccountByAddressTransactionResponses, GetStakingV1DelegatorData, GetStakingV1DelegatorResponses, GetStakingV1EpochByEpochNodesData, GetStakingV1EpochByEpochNodesResponses, GetStakingV1EpochByEpochRoleByRoleNodesAggregateData, GetStakingV1EpochByEpochRoleByRoleNodesAggregateResponses, GetStakingV1EpochByEpochRoleByRoleNodesCountData, GetStakingV1EpochByEpochRoleByRoleNodesCountResponses, GetStakingV1EpochByEpochRoleByRoleNodesGroupedData, GetStakingV1EpochByEpochRoleByRoleNodesGroupedResponses, GetStakingV1EpochStatsData, GetStakingV1EpochStatsResponses, GetStakingV1FtTransferByAddressData, GetStakingV1FtTransferByAddressResponses, GetStakingV1NodeByNodeIdEventData, GetStakingV1NodeByNodeIdEventResponses, GetStakingV1RewardsPaidData, GetStakingV1RewardsPaidResponses, GetStakingV1RewardsStakingData, GetStakingV1RewardsStakingResponses, GetStakingV1TokenomicsData, GetStakingV1TokenomicsResponses, GetStakingV1TransactionAddressByAddressData, GetStakingV1TransactionAddressByAddressResponses, GetStakingV1TransactionByTransactionIdData, GetStakingV1TransactionByTransactionIdResponses, GetStatusV1CountData, GetStatusV1CountResponses, GetStatusV1EpochStatData, GetStatusV1EpochStatResponses, GetStatusV1EpochStatusData, GetStatusV1EpochStatusResponses, GetStatusV1FlowStatData, GetStatusV1FlowStatResponses, GetStatusV1StatByTimescaleTrendData, GetStatusV1StatByTimescaleTrendResponses, GetStatusV1StatData, GetStatusV1StatResponses, GetStatusV1TokenomicsData, GetStatusV1TokenomicsResponses } from './types.gen';
+import type { GetAccountingV1AccountByAddressData, GetAccountingV1AccountByAddressFtData, GetAccountingV1AccountByAddressFtResponses, GetAccountingV1AccountByAddressFtTransferData, GetAccountingV1AccountByAddressFtTransferResponses, GetAccountingV1AccountByAddressNftData, GetAccountingV1AccountByAddressNftResponses, GetAccountingV1AccountByAddressResponses, GetAccountingV1AccountByAddressTaxReportData, GetAccountingV1AccountByAddressTaxReportResponses, GetAccountingV1AccountByAddressTransactionData, GetAccountingV1AccountByAddressTransactionResponses, GetAccountingV1NftTransferData, GetAccountingV1NftTransferResponses, GetAccountingV1TransactionByIdData, GetAccountingV1TransactionByIdResponses, GetAccountingV1TransactionData, GetAccountingV1TransactionResponses, GetDefiV1AssetData, GetDefiV1AssetResponses, GetDefiV1EventsData, GetDefiV1EventsResponses, GetDefiV1LatestBlockData, GetDefiV1LatestBlockResponses, GetDefiV1LatestSwapData, GetDefiV1LatestSwapResponses, GetDefiV1PairData, GetDefiV1PairResponses, GetFlowV1AccountByAddressData, GetFlowV1AccountByAddressFtByTokenData, GetFlowV1AccountByAddressFtByTokenResponses, GetFlowV1AccountByAddressFtByTokenTransferData, GetFlowV1AccountByAddressFtByTokenTransferResponses, GetFlowV1AccountByAddressFtData, GetFlowV1AccountByAddressFtHoldingData, GetFlowV1AccountByAddressFtHoldingResponses, GetFlowV1AccountByAddressFtResponses, GetFlowV1AccountByAddressFtTransferData, GetFlowV1AccountByAddressFtTransferResponses, GetFlowV1AccountByAddressNftByNftTypeData, GetFlowV1AccountByAddressNftByNftTypeResponses, GetFlowV1AccountByAddressNftData, GetFlowV1AccountByAddressNftResponses, GetFlowV1AccountByAddressResponses, GetFlowV1AccountByAddressTaxReportData, GetFlowV1AccountByAddressTaxReportResponses, GetFlowV1AccountByAddressTransactionData, GetFlowV1AccountByAddressTransactionResponses, GetFlowV1AccountData, GetFlowV1AccountResponses, GetFlowV1BlockByHeightData, GetFlowV1BlockByHeightResponses, GetFlowV1BlockByHeightServiceEventData, GetFlowV1BlockByHeightServiceEventResponses, GetFlowV1BlockByHeightTransactionData, GetFlowV1BlockByHeightTransactionResponses, GetFlowV1BlockData, GetFlowV1BlockResponses, GetFlowV1ContractByIdentifierByIdData, GetFlowV1ContractByIdentifierByIdResponses, GetFlowV1ContractByIdentifierData, GetFlowV1ContractByIdentifierResponses, GetFlowV1ContractData, GetFlowV1ContractResponses, GetFlowV1EvmTokenByAddressData, GetFlowV1EvmTokenByAddressResponses, GetFlowV1EvmTokenData, GetFlowV1EvmTokenResponses, GetFlowV1EvmTransactionByHashData, GetFlowV1EvmTransactionByHashResponses, GetFlowV1EvmTransactionData, GetFlowV1EvmTransactionResponses, GetFlowV1FtByTokenAccountByAddressData, GetFlowV1FtByTokenAccountByAddressResponses, GetFlowV1FtByTokenData, GetFlowV1FtByTokenHoldingData, GetFlowV1FtByTokenHoldingResponses, GetFlowV1FtByTokenResponses, GetFlowV1FtData, GetFlowV1FtResponses, GetFlowV1FtTransferData, GetFlowV1FtTransferResponses, GetFlowV1KeyByPublicKeyData, GetFlowV1KeyByPublicKeyResponses, GetFlowV1NftByNftTypeData, GetFlowV1NftByNftTypeHoldingData, GetFlowV1NftByNftTypeHoldingResponses, GetFlowV1NftByNftTypeItemByIdData, GetFlowV1NftByNftTypeItemByIdErrors, GetFlowV1NftByNftTypeItemByIdResponses, GetFlowV1NftByNftTypeItemByIdTransferData, GetFlowV1NftByNftTypeItemByIdTransferResponses, GetFlowV1NftByNftTypeItemData, GetFlowV1NftByNftTypeItemResponses, GetFlowV1NftByNftTypeResponses, GetFlowV1NftData, GetFlowV1NftResponses, GetFlowV1NftSearchData, GetFlowV1NftSearchResponses, GetFlowV1NftTransferData, GetFlowV1NftTransferResponses, GetFlowV1NodeByNodeIdData, GetFlowV1NodeByNodeIdResponses, GetFlowV1NodeByNodeIdRewardDelegationData, GetFlowV1NodeByNodeIdRewardDelegationResponses, GetFlowV1NodeData, GetFlowV1NodeResponses, GetFlowV1ScheduledTransactionData, GetFlowV1ScheduledTransactionResponses, GetFlowV1TransactionByIdData, GetFlowV1TransactionByIdResponses, GetFlowV1TransactionData, GetFlowV1TransactionResponses, GetStakingV1AccountByAddressFtTransferData, GetStakingV1AccountByAddressFtTransferResponses, GetStakingV1AccountByAddressTransactionData, GetStakingV1AccountByAddressTransactionResponses, GetStakingV1DelegatorData, GetStakingV1DelegatorResponses, GetStakingV1EpochByEpochNodesData, GetStakingV1EpochByEpochNodesResponses, GetStakingV1EpochByEpochRoleByRoleNodesAggregateData, GetStakingV1EpochByEpochRoleByRoleNodesAggregateResponses, GetStakingV1EpochByEpochRoleByRoleNodesCountData, GetStakingV1EpochByEpochRoleByRoleNodesCountResponses, GetStakingV1EpochByEpochRoleByRoleNodesGroupedData, GetStakingV1EpochByEpochRoleByRoleNodesGroupedResponses, GetStakingV1EpochStatsData, GetStakingV1EpochStatsResponses, GetStakingV1FtTransferByAddressData, GetStakingV1FtTransferByAddressResponses, GetStakingV1NodeByNodeIdEventData, GetStakingV1NodeByNodeIdEventResponses, GetStakingV1RewardsPaidData, GetStakingV1RewardsPaidResponses, GetStakingV1RewardsStakingData, GetStakingV1RewardsStakingResponses, GetStakingV1TokenomicsData, GetStakingV1TokenomicsResponses, GetStakingV1TransactionAddressByAddressData, GetStakingV1TransactionAddressByAddressResponses, GetStakingV1TransactionByTransactionIdData, GetStakingV1TransactionByTransactionIdResponses, GetStatusV1CountData, GetStatusV1CountResponses, GetStatusV1EpochStatData, GetStatusV1EpochStatResponses, GetStatusV1EpochStatusData, GetStatusV1EpochStatusResponses, GetStatusV1FlowStatData, GetStatusV1FlowStatResponses, GetStatusV1StatByTimescaleTrendData, GetStatusV1StatByTimescaleTrendResponses, GetStatusV1StatData, GetStatusV1StatResponses, GetStatusV1TokenomicsData, GetStatusV1TokenomicsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -484,6 +484,17 @@ export const getFlowV1NftTransfer = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
+ * Search NFT items
+ *
+ * Full-text search across NFT items by name, description, or attributes.
+ */
+export const getFlowV1NftSearch = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1NftSearchData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1NftSearchResponses, unknown, ThrowOnError>({
+    responseType: 'json',
+    url: '/flow/v1/nft/search',
+    ...options
+});
+
+/**
  * Get NFT collection details
  *
  * Retrieve detailed information about a specific non-fungible token (NFT) collection
@@ -506,20 +517,13 @@ export const getFlowV1NftByNftTypeHolding = <ThrowOnError extends boolean = fals
 });
 
 /**
- * List NFT items in a collection
+ * List items in an NFT collection
+ *
+ * List NFT items belonging to a specific collection, with pagination.
  */
 export const getFlowV1NftByNftTypeItem = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1NftByNftTypeItemData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1NftByNftTypeItemResponses, unknown, ThrowOnError>({
     responseType: 'json',
     url: '/flow/v1/nft/{nft_type}/item',
-    ...options
-});
-
-/**
- * Search NFT items by text
- */
-export const getFlowV1NftSearch = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1NftSearchData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1NftSearchResponses, unknown, ThrowOnError>({
-    responseType: 'json',
-    url: '/flow/v1/nft/search',
     ...options
 });
 
@@ -542,6 +546,17 @@ export const getFlowV1NftByNftTypeItemById = <ThrowOnError extends boolean = fal
 export const getFlowV1NftByNftTypeItemByIdTransfer = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1NftByNftTypeItemByIdTransferData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1NftByNftTypeItemByIdTransferResponses, unknown, ThrowOnError>({
     responseType: 'json',
     url: '/flow/v1/nft/{nft_type}/item/{id}/transfer',
+    ...options
+});
+
+/**
+ * Search accounts by public key
+ *
+ * Searches for all Flow accounts associated with a given public key. A single public key can be linked to multiple accounts.
+ */
+export const getFlowV1KeyByPublicKey = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1KeyByPublicKeyData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1KeyByPublicKeyResponses, unknown, ThrowOnError>({
+    responseType: 'json',
+    url: '/flow/v1/key/{publicKey}',
     ...options
 });
 
@@ -848,16 +863,5 @@ export const getStatusV1StatByTimescaleTrend = <ThrowOnError extends boolean = f
 export const getStatusV1Tokenomics = <ThrowOnError extends boolean = false>(options?: Options<GetStatusV1TokenomicsData, ThrowOnError>) => (options?.client ?? client).get<GetStatusV1TokenomicsResponses, unknown, ThrowOnError>({
     responseType: 'json',
     url: '/status/v1/tokenomics',
-    ...options
-});
-
-/**
- * Search accounts by public key
- *
- * Searches for all Flow accounts associated with a given public key. A single public key can be linked to multiple accounts.
- */
-export const getFlowV1KeyByPublicKey = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1KeyByPublicKeyData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1KeyByPublicKeyResponses, unknown, ThrowOnError>({
-    responseType: 'json',
-    url: '/flow/v1/key/{publicKey}',
     ...options
 });

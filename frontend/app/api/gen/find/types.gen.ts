@@ -5084,6 +5084,41 @@ export type GetFlowV1NftTransferResponses = {
 
 export type GetFlowV1NftTransferResponse = GetFlowV1NftTransferResponses[keyof GetFlowV1NftTransferResponses];
 
+export type GetFlowV1NftSearchData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Search query string
+         */
+        q?: string;
+        /**
+         * Filter by NFT collection type (e.g. A.xxx.CollectionName)
+         */
+        collection?: string;
+        /**
+         * Limit for the number of records to return (Default = 25, Max = 100)
+         */
+        limit?: number;
+        /**
+         * The number of records to skip (for pagination) (Default = 0)
+         */
+        offset?: number;
+    };
+    url: '/flow/v1/nft/search';
+};
+
+export type GetFlowV1NftSearchResponses = {
+    /**
+     * OK
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type GetFlowV1NftSearchResponse = GetFlowV1NftSearchResponses[keyof GetFlowV1NftSearchResponses];
+
 export type GetFlowV1NftByNftTypeData = {
     body?: never;
     path: {
@@ -5138,38 +5173,34 @@ export type GetFlowV1NftByNftTypeHoldingResponse = GetFlowV1NftByNftTypeHoldingR
 export type GetFlowV1NftByNftTypeItemData = {
     body?: never;
     path: {
+        /**
+         * The NFT collection type identifier (e.g. A.xxx.CollectionName)
+         */
         nft_type: string;
     };
     query?: {
+        /**
+         * Limit for the number of records to return (Default = 25, Max = 100)
+         */
         limit?: number;
+        /**
+         * The number of records to skip (for pagination) (Default = 0)
+         */
         offset?: number;
     };
     url: '/flow/v1/nft/{nft_type}/item';
 };
 
 export type GetFlowV1NftByNftTypeItemResponses = {
-    200: unknown;
+    /**
+     * OK
+     */
+    200: {
+        [key: string]: unknown;
+    };
 };
 
 export type GetFlowV1NftByNftTypeItemResponse = GetFlowV1NftByNftTypeItemResponses[keyof GetFlowV1NftByNftTypeItemResponses];
-
-export type GetFlowV1NftSearchData = {
-    body?: never;
-    path?: never;
-    query?: {
-        q?: string;
-        collection?: string;
-        limit?: number;
-        offset?: number;
-    };
-    url: '/flow/v1/nft/search';
-};
-
-export type GetFlowV1NftSearchResponses = {
-    200: unknown;
-};
-
-export type GetFlowV1NftSearchResponse = GetFlowV1NftSearchResponses[keyof GetFlowV1NftSearchResponses];
 
 export type GetFlowV1NftByNftTypeItemByIdData = {
     body?: never;
@@ -5220,6 +5251,36 @@ export type GetFlowV1NftByNftTypeItemByIdTransferResponses = {
 };
 
 export type GetFlowV1NftByNftTypeItemByIdTransferResponse = GetFlowV1NftByNftTypeItemByIdTransferResponses[keyof GetFlowV1NftByNftTypeItemByIdTransferResponses];
+
+export type GetFlowV1KeyByPublicKeyData = {
+    body?: never;
+    path: {
+        /**
+         * The public key to search for (128 hex characters, with optional 0x prefix)
+         */
+        publicKey: string;
+    };
+    query?: {
+        /**
+         * Limit for the number of results to return (Default = 25, Max = 100)
+         */
+        limit?: number;
+        /**
+         * The number of results to skip (for pagination) (Default = 0)
+         */
+        offset?: number;
+    };
+    url: '/flow/v1/key/{publicKey}';
+};
+
+export type GetFlowV1KeyByPublicKeyResponses = {
+    /**
+     * OK
+     */
+    200: FlowKeySearchResponse;
+};
+
+export type GetFlowV1KeyByPublicKeyResponse = GetFlowV1KeyByPublicKeyResponses[keyof GetFlowV1KeyByPublicKeyResponses];
 
 export type GetFlowV1NodeData = {
     body?: never;
@@ -6026,33 +6087,3 @@ export type GetStatusV1TokenomicsResponses = {
 };
 
 export type GetStatusV1TokenomicsResponse = GetStatusV1TokenomicsResponses[keyof GetStatusV1TokenomicsResponses];
-
-export type GetFlowV1KeyByPublicKeyData = {
-    body?: never;
-    path: {
-        /**
-         * The public key to search for (128 hex characters, with optional 0x prefix)
-         */
-        publicKey: string;
-    };
-    query?: {
-        /**
-         * Limit for the number of results to return (Default = 25, Max = 100)
-         */
-        limit?: number;
-        /**
-         * The number of results to skip (for pagination) (Default = 0)
-         */
-        offset?: number;
-    };
-    url: '/flow/v1/key/{publicKey}';
-};
-
-export type GetFlowV1KeyByPublicKeyResponses = {
-    /**
-     * OK
-     */
-    200: FlowKeySearchResponse;
-};
-
-export type GetFlowV1KeyByPublicKeyResponse = GetFlowV1KeyByPublicKeyResponses[keyof GetFlowV1KeyByPublicKeyResponses];
