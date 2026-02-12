@@ -248,7 +248,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
-		ORDER BY contract_address ASC, contract_name ASC
+		ORDER BY COALESCE(counts.holder_cnt, 0) DESC, contract_address ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, err

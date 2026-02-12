@@ -234,7 +234,7 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 			FROM app.ft_holdings WHERE balance > 0
 			GROUP BY contract_address, contract_name
 		) h ON h.contract_address = ft.contract_address AND h.contract_name = ft.contract_name
-		ORDER BY ft.contract_address ASC, ft.contract_name ASC
+		ORDER BY COALESCE(h.holder_count, 0) DESC, ft.contract_address ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, err
