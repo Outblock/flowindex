@@ -7,27 +7,27 @@ import (
 	"flowscan-clone/internal/models"
 )
 
-// ListContractsByKindInRange returns contracts from app.contracts whose first_seen_height
+// ListContractsByKindInRange returns contracts from app.smart_contracts whose first_seen_height
 // falls within [fromHeight, toHeight]. This is useful for "new contract discovered" workflows.
-func (r *Repository) ListContractsByKindInRange(ctx context.Context, kind string, fromHeight, toHeight uint64, limit int) ([]models.Contract, error) {
+func (r *Repository) ListContractsByKindInRange(ctx context.Context, kind string, fromHeight, toHeight uint64, limit int) ([]models.SmartContract, error) {
 	if limit <= 0 {
 		limit = 200
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT id, encode(address, 'hex') AS address, name,
+		SELECT encode(address, 'hex') AS address, name,
 		       COALESCE(kind,''), COALESCE(first_seen_height,0), COALESCE(last_seen_height,0)
-		FROM app.contracts
+		FROM app.smart_contracts
 		WHERE kind = $1 AND first_seen_height >= $2 AND first_seen_height <= $3
-		ORDER BY first_seen_height ASC, id ASC
+		ORDER BY first_seen_height ASC, address ASC, name ASC
 		LIMIT $4`, kind, int64(fromHeight), int64(toHeight), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list contracts by kind/range: %w", err)
 	}
 	defer rows.Close()
-	var out []models.Contract
+	var out []models.SmartContract
 	for rows.Next() {
-		var c models.Contract
-		if err := rows.Scan(&c.ID, &c.Address, &c.Name, &c.Kind, &c.FirstSeenHeight, &c.LastSeenHeight); err != nil {
+		var c models.SmartContract
+		if err := rows.Scan(&c.Address, &c.Name, &c.Kind, &c.FirstSeenHeight, &c.LastSeenHeight); err != nil {
 			return nil, fmt.Errorf("scan contracts by kind/range: %w", err)
 		}
 		out = append(out, c)
