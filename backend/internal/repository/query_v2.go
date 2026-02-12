@@ -462,7 +462,7 @@ func (r *Repository) GetFTTokenMetadataByIdentifiers(ctx context.Context, identi
 		var t models.FTToken
 		err := r.db.QueryRow(ctx, `
 			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0),
-			       COALESCE(logo, ''), COALESCE(description,'')
+			       COALESCE(logo::text, ''), COALESCE(description,'')
 			FROM app.ft_tokens
 			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
 			Scan(&t.Name, &t.Symbol, &t.Decimals, &t.Logo, &t.Description)
@@ -500,7 +500,7 @@ func (r *Repository) GetNFTCollectionMetadataByIdentifiers(ctx context.Context, 
 		var name, symbol, description, squareImage string
 		err := r.db.QueryRow(ctx, `
 			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(description,''),
-			       COALESCE(square_image, '')
+			       COALESCE(square_image::text, '')
 			FROM app.nft_collections
 			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
 			Scan(&name, &symbol, &description, &squareImage)

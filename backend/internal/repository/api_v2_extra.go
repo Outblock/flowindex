@@ -237,9 +237,9 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(c.symbol, '') AS symbol,
 			COALESCE(c.description, '') AS description,
 			COALESCE(c.external_url, '') AS external_url,
-			COALESCE(c.square_image, '') AS square_image,
-			COALESCE(c.banner_image, '') AS banner_image,
-			COALESCE(c.socials, '') AS socials,
+			COALESCE(c.square_image::text, '') AS square_image,
+			COALESCE(c.banner_image::text, '') AS banner_image,
+			COALESCE(c.socials::text, '') AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
@@ -278,9 +278,9 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 				COALESCE(c.symbol, '') AS symbol,
 				COALESCE(c.description, '') AS description,
 				COALESCE(c.external_url, '') AS external_url,
-				COALESCE(c.square_image, '') AS square_image,
-				COALESCE(c.banner_image, '') AS banner_image,
-				COALESCE(c.socials, '') AS socials,
+				COALESCE(c.square_image::text, '') AS square_image,
+				COALESCE(c.banner_image::text, '') AS banner_image,
+				COALESCE(c.socials::text, '') AS socials,
 				COALESCE(counts.cnt, 0) AS cnt,
 				COALESCE(c.updated_at, NOW()) AS updated_at
 			FROM app.nft_collections c
@@ -311,9 +311,9 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 			COALESCE(c.symbol, '') AS symbol,
 			COALESCE(c.description, '') AS description,
 			COALESCE(c.external_url, '') AS external_url,
-			COALESCE(c.square_image, '') AS square_image,
-			COALESCE(c.banner_image, '') AS banner_image,
-			COALESCE(c.socials, '') AS socials,
+			COALESCE(c.square_image::text, '') AS square_image,
+			COALESCE(c.banner_image::text, '') AS banner_image,
+			COALESCE(c.socials::text, '') AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
@@ -335,9 +335,9 @@ func (r *Repository) ListNFTCollectionSummariesByOwner(ctx context.Context, owne
 		SELECT encode(o.contract_address, 'hex') AS contract_address,
 			   COALESCE(o.contract_name,''), COALESCE(c.name,''), COALESCE(c.symbol,''),
 			   COALESCE(c.description,''), COALESCE(c.external_url,''),
-			   COALESCE(c.square_image, '') AS square_image,
-			   COALESCE(c.banner_image, '') AS banner_image,
-			   COALESCE(c.socials, '') AS socials,
+			   COALESCE(c.square_image::text, '') AS square_image,
+			   COALESCE(c.banner_image::text, '') AS banner_image,
+			   COALESCE(c.socials::text, '') AS socials,
 			   COUNT(*) AS cnt,
 			   COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_ownership o

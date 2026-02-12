@@ -246,7 +246,7 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 }
 
 const ftTokenSelectCols = `encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0),
-		       COALESCE(description,''), COALESCE(external_url,''), COALESCE(logo, ''), COALESCE(vault_path,''), COALESCE(receiver_path,''), COALESCE(balance_path,''), COALESCE(socials, ''), updated_at`
+		       COALESCE(description,''), COALESCE(external_url,''), COALESCE(logo::text, ''), COALESCE(vault_path,''), COALESCE(receiver_path,''), COALESCE(balance_path,''), COALESCE(socials::text, ''), updated_at`
 
 func scanFTToken(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
