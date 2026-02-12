@@ -60,11 +60,13 @@ export const Route = createFileRoute('/accounts/$address')({
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let initialTransactions: any[] = [];
+            let initialNextCursor = '';
             try {
                 const txRes = await getAccountsByAddressTransactions({ path: { address: normalized }, query: { cursor: '', limit: 20 } });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const payload: any = txRes.data;
                 const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+                initialNextCursor = payload?.next_cursor ?? '';
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 initialTransactions = (items || []).map((tx: any) => ({
                     ...tx,
@@ -76,10 +78,10 @@ export const Route = createFileRoute('/accounts/$address')({
                 console.error("Failed to prefetch transactions", e);
             }
 
-            return { account: initialAccount, initialTransactions };
+            return { account: initialAccount, initialTransactions, initialNextCursor };
         } catch (e) {
             console.error("Failed to load account data", e);
-            return { account: null, initialTransactions: [] };
+            return { account: null, initialTransactions: [], initialNextCursor: '' };
         }
     }
 })
@@ -106,7 +108,7 @@ function AccountDetailPending() {
 function AccountDetail() {
     const { address } = Route.useParams();
     const { tab: searchTab } = Route.useSearch();
-    const { account: initialAccount, initialTransactions } = Route.useLoaderData();
+    const { account: initialAccount, initialTransactions, initialNextCursor } = Route.useLoaderData();
     const navigate = Route.useNavigate();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -353,7 +355,7 @@ function AccountDetail() {
                     </div>
 
                     <div className="min-h-[500px]">
-                        {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} />}
+                        {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} initialNextCursor={initialNextCursor} />}
                         {activeTab === 'tokens' && <AccountTokensTab address={address} />}
                         {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
                         {activeTab === 'keys' && <AccountKeysTab account={account} />}
