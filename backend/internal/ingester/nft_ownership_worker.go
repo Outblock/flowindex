@@ -31,7 +31,10 @@ func (w *NFTOwnershipWorker) ProcessRange(ctx context.Context, fromHeight, toHei
 		if t.TokenID == "" || t.TokenContractAddress == "" {
 			continue
 		}
-		if t.ContractName == "" {
+		if t.ContractName == "" || t.ContractName == "NonFungibleToken" || t.ContractName == "FungibleToken" {
+			continue
+		}
+		if t.ToAddress == "" {
 			continue
 		}
 		owner := normalizeAddressLower(t.ToAddress)
