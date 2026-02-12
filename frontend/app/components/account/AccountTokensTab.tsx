@@ -44,7 +44,6 @@ export function AccountTokensTab({ address }: Props) {
                     <Coins className="w-4 h-4" />
                     Fungible Tokens ({tokens.length})
                 </h3>
-                {loading && <div className="text-[10px] text-zinc-500 animate-pulse">Syncing...</div>}
             </div>
 
             {error && (
@@ -54,63 +53,80 @@ export function AccountTokensTab({ address }: Props) {
             )}
 
             <div className="flex flex-col gap-3">
-                <AnimatePresence mode="popLayout">
-                    {tokens.map((t: FTVaultInfo, i: number) => {
-                        const logoUrl = getTokenLogoURL(t);
-                        return (
-                            <motion.div
-                                key={`${t.contractAddress}-${t.contractName}`}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: i * 0.05 }}
-                            >
-                                <GlassCard className="hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden p-4 flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-4 min-w-0">
-                                        <div className="flex-shrink-0">
-                                            {logoUrl ? (
-                                                <img
-                                                    src={logoUrl}
-                                                    alt={t.name}
-                                                    className="w-10 h-10 object-cover bg-white dark:bg-white/10 shadow-sm rounded-full"
-                                                    loading="lazy"
-                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
-                                                />
-                                            ) : null}
-                                            <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-inner ${logoUrl ? 'hidden' : ''}`}>
-                                                <Coins className="h-5 w-5 text-zinc-400" />
+                {loading ? (
+                    <div className="flex flex-col gap-3">
+                        {[1, 2, 3].map((i) => (
+                            <GlassCard key={i} className="p-4 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-4 w-full">
+                                    <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-white/5 animate-pulse flex-shrink-0" />
+                                    <div className="space-y-2 flex-1">
+                                        <div className="h-4 w-32 bg-zinc-200 dark:bg-white/5 animate-pulse rounded" />
+                                        <div className="h-3 w-24 bg-zinc-200 dark:bg-white/5 animate-pulse rounded" />
+                                    </div>
+                                </div>
+                                <div className="h-6 w-24 bg-zinc-200 dark:bg-white/5 animate-pulse rounded flex-shrink-0" />
+                            </GlassCard>
+                        ))}
+                    </div>
+                ) : (
+                    <AnimatePresence mode="popLayout">
+                        {tokens.map((t: FTVaultInfo, i: number) => {
+                            const logoUrl = getTokenLogoURL(t);
+                            return (
+                                <motion.div
+                                    key={`${t.contractAddress}-${t.contractName}`}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: i * 0.05 }}
+                                >
+                                    <GlassCard className="hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden p-4 flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-4 min-w-0">
+                                            <div className="flex-shrink-0">
+                                                {logoUrl ? (
+                                                    <img
+                                                        src={logoUrl}
+                                                        alt={t.name}
+                                                        className="w-10 h-10 object-cover bg-white dark:bg-white/10 shadow-sm rounded-full"
+                                                        loading="lazy"
+                                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                                                    />
+                                                ) : null}
+                                                <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-inner ${logoUrl ? 'hidden' : ''}`}>
+                                                    <Coins className="h-5 w-5 text-zinc-400" />
+                                                </div>
+                                            </div>
+
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{t.name || t.contractName}</div>
+                                                    <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{t.symbol}</div>
+                                                </div>
+                                                <div className="flex items-center gap-1 mt-0.5">
+                                                    <Link
+                                                        to="/accounts/$address"
+                                                        params={{ address: normalizeAddress(t.contractAddress) }}
+                                                        className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-1 transition-colors"
+                                                    >
+                                                        {formatShort(t.contractAddress)}
+                                                        <ExternalLink className="w-2.5 h-2.5" />
+                                                    </Link>
+                                                    <span className="text-[10px] text-zinc-300 dark:text-zinc-600">•</span>
+                                                    <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[100px]">{t.contractName}</span>
+                                                </div>
                                             </div>
                                         </div>
 
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{t.name || t.contractName}</div>
-                                                <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{t.symbol}</div>
-                                            </div>
-                                            <div className="flex items-center gap-1 mt-0.5">
-                                                <Link
-                                                    to="/accounts/$address"
-                                                    params={{ address: normalizeAddress(t.contractAddress) }}
-                                                    className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-1 transition-colors"
-                                                >
-                                                    {formatShort(t.contractAddress)}
-                                                    <ExternalLink className="w-2.5 h-2.5" />
-                                                </Link>
-                                                <span className="text-[10px] text-zinc-300 dark:text-zinc-600">•</span>
-                                                <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[100px]">{t.contractName}</span>
+                                        <div className="text-right flex-shrink-0">
+                                            <div className="text-lg font-mono font-bold text-zinc-900 dark:text-white">
+                                                {t.balance != null ? Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
                                             </div>
                                         </div>
-                                    </div>
-
-                                    <div className="text-right flex-shrink-0">
-                                        <div className="text-lg font-mono font-bold text-zinc-900 dark:text-white">
-                                            {t.balance != null ? Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
-                                        </div>
-                                    </div>
-                                </GlassCard>
-                            </motion.div>
-                        );
-                    })}
-                </AnimatePresence>
+                                    </GlassCard>
+                                </motion.div>
+                            );
+                        })}
+                    </AnimatePresence>
+                )}
             </div>
 
             {tokens.length === 0 && !loading && (
