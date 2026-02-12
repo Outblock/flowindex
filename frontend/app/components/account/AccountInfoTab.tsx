@@ -1,4 +1,4 @@
-import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
+
 
 interface Props {
     account: any;
@@ -28,13 +28,8 @@ export function AccountKeysTab({ account }: Props) {
                                     <div className="flex items-start gap-2">
                                         <p className="font-mono text-zinc-900 dark:text-white break-all text-[11px] leading-relaxed flex-1 bg-white dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-2 rounded-sm select-all">
                                             {key.publicKey}
+
                                         </p>
-                                        <CopyButton
-                                            content={key.publicKey}
-                                            variant="ghost"
-                                            size="xs"
-                                            className="h-6 w-6 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
-                                        />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -61,7 +56,8 @@ export function AccountKeysTab({ account }: Props) {
                 </div>
             ) : (
                 <div className="text-center text-zinc-500 italic py-8">No public keys found</div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 }

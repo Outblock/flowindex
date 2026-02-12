@@ -232,13 +232,13 @@ function AccountDetail() {
                 <PageHeader
                     title="Account"
                     subtitle={
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 group">
                             {normalizedAddress}
                             <CopyButton
                                 content={normalizedAddress}
                                 variant="ghost"
                                 size="xs"
-                                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
                             />
                         </div>
                     }

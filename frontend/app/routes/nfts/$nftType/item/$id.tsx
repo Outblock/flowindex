@@ -213,23 +213,35 @@ function NFTItemInner() {
                       return (
                         <motion.tr
                           key={`${tx}-${from}-${to}-${height}`}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
                           className="group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
                         >
-                          <td className="px-6 py-4">
-                            {from ? (
-                              <Link to="/accounts/$address" params={{ address: from }} className="font-mono text-xs text-zinc-600 dark:text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Link to={`/accounts/${from}`} className="font-mono text-xs text-nothing-green-dark dark:text-nothing-green hover:underline">
                                 {from}
                               </Link>
-                            ) : <span className="text-zinc-300 dark:text-zinc-700">—</span>}
+                              <CopyButton
+                                content={from}
+                                variant="ghost"
+                                size="xs"
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                              />
+                            </div>
                           </td>
-                          <td className="px-6 py-4">
-                            {to ? (
-                              <Link to="/accounts/$address" params={{ address: to }} className="font-mono text-xs text-zinc-600 dark:text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Link to={`/accounts/${to}`} className="font-mono text-xs text-nothing-green-dark dark:text-nothing-green hover:underline">
                                 {to}
                               </Link>
-                            ) : <span className="text-zinc-300 dark:text-zinc-700">—</span>}
+                              <CopyButton
+                                content={to}
+                                variant="ghost"
+                                size="xs"
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                              />
+                            </div>
                           </td>
                           <td className="px-6 py-4">
                             {tx ? (
