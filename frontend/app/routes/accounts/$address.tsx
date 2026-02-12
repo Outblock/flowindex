@@ -58,6 +58,7 @@ export const Route = createFileRoute('/accounts/$address')({
                 keys: normalizedKeys
             };
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let initialTransactions: any[] = [];
             try {
                 const txRes = await getAccountsByAddressTransactions({ path: { address: normalized }, query: { cursor: '', limit: 20 } });

@@ -65,7 +65,8 @@ export function AccountNFTsTab({ address }: Props) {
         if (!selectedCollectionId) return;
 
         const currentState = collectionStates[selectedCollectionId];
-        if (currentState?.hasLoaded && !currentState.loading) return;
+        // Prevent infinite loop if already loading, or skip if already loaded
+        if (currentState?.loading || currentState?.hasLoaded) return;
 
         const loadNFTs = async () => {
             setCollectionStates(prev => ({
@@ -85,15 +86,28 @@ export function AccountNFTsTab({ address }: Props) {
                 // Get storage identifier from path
                 // e.g. /storage/MomentCollection -> MomentCollection
                 const collection = collections.find(c => c.id === selectedCollectionId);
-                // In the generated types, storagePath is a string.
-                const storagePath = collection?.collectionData?.storagePath || '';
 
-                let identifier = storagePath;
-                if (storagePath && storagePath.includes('/')) {
-                    identifier = storagePath.split('/').pop() || storagePath;
+                // Robustly handle storagePath (string or object)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const rawPath = collection?.collectionData?.storagePath as any;
+                let identifier = '';
+
+                if (typeof rawPath === 'string') {
+                    identifier = rawPath;
+                } else if (rawPath && typeof rawPath === 'object' && rawPath.identifier) {
+                    identifier = rawPath.identifier;
+                } else if (collection?.path) {
+                    // Fallback to collection path identifier if storage path is missing?
+                    // Usually collection.path is public path e.g. /public/foo
+                    // Trying to guess storage path from public path is risky but better than nothing?
+                    // No, better to error if strict.
                 }
 
-                if (!identifier) throw new Error("Invalid storage path");
+                if (identifier && identifier.includes('/')) {
+                    identifier = identifier.split('/').pop() || identifier;
+                }
+
+                if (!identifier) throw new Error(`Invalid storage path for collection ${selectedCollectionId}`);
 
                 const page = currentState?.page || 0;
                 const start = page * NFT_PAGE_SIZE;
