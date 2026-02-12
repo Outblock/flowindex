@@ -197,7 +197,29 @@ func (w *TokenMetadataWorker) fetchNFTCollectionMetadata(ctx context.Context, co
 	if !ok {
 		return models.NFTCollection{}, false
 	}
-	fields := s.FieldsMappedByName()
+	topFields := s.FieldsMappedByName()
+
+	// Extract EVM address from the wrapper struct.
+	evmAddress := cadenceToString(topFields["evmAddress"])
+
+	// Extract the display struct.
+	displayVal := unwrapOptional(topFields["display"])
+	if displayVal == nil {
+		// Even without display, if we got an EVM address, return partial info.
+		if evmAddress != "" {
+			return models.NFTCollection{
+				ContractAddress: contractAddr,
+				ContractName:    contractName,
+				EVMAddress:      evmAddress,
+			}, true
+		}
+		return models.NFTCollection{}, false
+	}
+	displayStruct, ok := displayVal.(cadence.Struct)
+	if !ok {
+		return models.NFTCollection{}, false
+	}
+	fields := displayStruct.FieldsMappedByName()
 	name := cadenceToString(fields["name"])
 	if name == "" {
 		return models.NFTCollection{}, false
@@ -226,6 +248,7 @@ func (w *TokenMetadataWorker) fetchNFTCollectionMetadata(ctx context.Context, co
 		SquareImage:     extractMediaImageURL(fields["squareImage"]),
 		BannerImage:     extractMediaImageURL(fields["bannerImage"]),
 		Socials:         socials,
+		EVMAddress:      evmAddress,
 	}, true
 }
 
@@ -610,11 +633,33 @@ func cadenceNFTCollectionDisplayScript() string {
 		metadataViewsAddr = "1d7e57aa55817448"
 	}
 
+	evmBridgeAddr := getEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+
 	return fmt.Sprintf(`
         import ViewResolver from 0x%s
         import MetadataViews from 0x%s
+        import FlowEVMBridgeConfig from 0x%s
 
-        access(all) fun main(contractAddress: Address, contractName: String): MetadataViews.NFTCollectionDisplay? {
+        access(all) struct NFTCollectionInfo {
+            access(all) let display: MetadataViews.NFTCollectionDisplay?
+            access(all) let evmAddress: String?
+
+            init(display: MetadataViews.NFTCollectionDisplay?, evmAddress: String?) {
+                self.display = display
+                self.evmAddress = evmAddress
+            }
+        }
+
+        access(all) fun getEVMAddress(identifier: String): String? {
+            if let type = CompositeType(identifier) {
+                if let address = FlowEVMBridgeConfig.getEVMAddressAssociated(with: type) {
+                    return "0x".concat(address.toString())
+                }
+            }
+            return nil
+        }
+
+        access(all) fun main(contractAddress: Address, contractName: String): NFTCollectionInfo? {
             let acct = getAccount(contractAddress)
             let viewResolver = acct.contracts.borrow<&{ViewResolver}>(name: contractName)
             if viewResolver == nil { return nil }
@@ -622,8 +667,12 @@ func cadenceNFTCollectionDisplayScript() string {
                 resourceType: nil,
                 viewType: Type<MetadataViews.NFTCollectionDisplay>()
             ) as! MetadataViews.NFTCollectionDisplay?
-            return display
+
+            let identifier = "A.".concat(contractAddress.toString().slice(from: 2, upTo: contractAddress.toString().length)).concat(".").concat(contractName).concat(".NFT")
+            let evmAddr = getEVMAddress(identifier: identifier)
+
+            return NFTCollectionInfo(display: display, evmAddress: evmAddr)
         }
-    `, viewResolverAddr, metadataViewsAddr)
+    `, viewResolverAddr, metadataViewsAddr, evmBridgeAddr)
 }
 

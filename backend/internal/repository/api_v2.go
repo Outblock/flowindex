@@ -350,8 +350,8 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 	batch := &pgx.Batch{}
 	for _, c := range collections {
 		batch.Queue(`
-			INSERT INTO app.nft_collections (contract_address, contract_name, name, symbol, description, external_url, square_image, banner_image, socials, updated_at)
-			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9, NOW())
+			INSERT INTO app.nft_collections (contract_address, contract_name, name, symbol, description, external_url, square_image, banner_image, socials, evm_address, updated_at)
+			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9, NULLIF($10,''), NOW())
 			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, app.nft_collections.name),
 				symbol = COALESCE(EXCLUDED.symbol, app.nft_collections.symbol),
@@ -360,9 +360,10 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 				square_image = COALESCE(EXCLUDED.square_image, app.nft_collections.square_image),
 				banner_image = COALESCE(EXCLUDED.banner_image, app.nft_collections.banner_image),
 				socials = COALESCE(EXCLUDED.socials, app.nft_collections.socials),
+				evm_address = COALESCE(EXCLUDED.evm_address, app.nft_collections.evm_address),
 				updated_at = NOW()`,
 			hexToBytes(c.ContractAddress), c.ContractName, c.Name, c.Symbol, c.Description, c.ExternalURL,
-			c.SquareImage, c.BannerImage, nullIfEmptyJSON(c.Socials))
+			c.SquareImage, c.BannerImage, nullIfEmptyJSON(c.Socials), c.EVMAddress)
 	}
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()
