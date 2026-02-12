@@ -44,6 +44,7 @@ func (r *Repository) ListFTTokensMissingMetadata(ctx context.Context, limit int)
 		       COALESCE(contract_name,'') AS contract_name
 		FROM app.ft_tokens
 		WHERE COALESCE(name,'') = '' OR COALESCE(symbol,'') = '' OR decimals IS NULL OR decimals = 0
+		   OR logo IS NULL
 		ORDER BY updated_at ASC, contract_address ASC, contract_name ASC
 		LIMIT $1`, limit)
 	if err != nil {

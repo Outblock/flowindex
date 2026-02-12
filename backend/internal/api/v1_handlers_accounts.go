@@ -178,13 +178,18 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 			eventsByTx[e.TransactionID] = append(eventsByTx[e.TransactionID], e)
 		}
 	}
+	// Collect token metadata for icons/symbols.
+	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
+	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
+
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
 		var ts *repository.TransferSummary
 		if s, ok := transferSummaries[t.ID]; ok {
 			ts = &s
 		}
-		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts))
+		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts, ftMeta, nftMeta))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
@@ -202,9 +207,17 @@ func (s *Server) handleFlowAccountFTTransfers(w http.ResponseWriter, r *http.Req
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Batch lookup token metadata.
+	ftIDs := collectTransferTokenIDs(transfers, false)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address))
+		id := formatTokenVaultIdentifier(t.TokenContractAddress, t.ContractName)
+		var m *repository.TokenMetadataInfo
+		if meta, ok := ftMeta[id]; ok {
+			m = &meta
+		}
+		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address, m))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
@@ -222,9 +235,17 @@ func (s *Server) handleFlowAccountNFTTransfers(w http.ResponseWriter, r *http.Re
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Batch lookup collection metadata.
+	nftIDs := collectTransferTokenIDs(transfers, true)
+	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, address))
+		id := formatTokenIdentifier(t.TokenContractAddress, t.ContractName)
+		var m *repository.TokenMetadataInfo
+		if meta, ok := nftMeta[id]; ok {
+			m = &meta
+		}
+		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, address, m))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
@@ -394,11 +415,65 @@ func (s *Server) handleFlowAccountFTTokenTransfers(w http.ResponseWriter, r *htt
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	ftIDs3 := collectTransferTokenIDs(transfers, false)
+	ftMeta3, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs3)
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address))
+		id := formatTokenVaultIdentifier(t.TokenContractAddress, t.ContractName)
+		var m *repository.TokenMetadataInfo
+		if meta, ok := ftMeta3[id]; ok {
+			m = &meta
+		}
+		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address, m))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
+}
+
+func (s *Server) handleFlowAccountScheduledTransactions(w http.ResponseWriter, r *http.Request) {
+	address := normalizeAddr(mux.Vars(r)["address"])
+	limit, offset := parseLimitOffset(r)
+	txs, err := s.repo.GetScheduledTransactionsByAddress(r.Context(), address, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	txIDs := collectTxIDs(txs)
+	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
+	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
+	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
+	transferSummaries, _ := s.repo.GetTransferSummariesByTxIDs(r.Context(), txIDs, address)
+	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
+	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
+
+	out := make([]map[string]interface{}, 0, len(txs))
+	for _, t := range txs {
+		var ts *repository.TransferSummary
+		if s, ok := transferSummaries[t.ID]; ok {
+			ts = &s
+		}
+		out = append(out, toFlowTransactionOutputWithTransfers(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts, ftMeta, nftMeta))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) handleFlowScheduledTransactions(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parseLimitOffset(r)
+	txs, err := s.repo.GetScheduledTransactions(r.Context(), limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	txIDs := collectTxIDs(txs)
+	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
+	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
+	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
+
+	out := make([]map[string]interface{}, 0, len(txs))
+	for _, t := range txs {
+		out = append(out, toFlowTransactionOutputWithTransfers(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID], nil, nil, nil))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
 
 func (s *Server) handleFlowAccountNFTByCollection(w http.ResponseWriter, r *http.Request) {

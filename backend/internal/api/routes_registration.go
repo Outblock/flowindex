@@ -22,6 +22,7 @@ func registerLegacyRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/accounts/{address}/transactions", s.handleGetAccountTransactions).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/token-transfers", s.handleGetAccountTokenTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/nft-transfers", s.handleGetAccountNFTTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounts/{address}/scheduled-transactions", s.handleGetAccountScheduledTransactions).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/stats", s.handleGetAddressStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/contract", s.handleGetContractByAddress).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounts/{address}/contracts/{name}", s.handleGetAccountContractCode).Methods("GET", "OPTIONS")
@@ -93,7 +94,8 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/v1/node", s.handleListNodes).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/node/{node_id}", s.handleGetNode).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/node/{node_id}/reward/delegation", s.handleNotImplemented).Methods("GET", "OPTIONS")
-	r.HandleFunc("/flow/v1/scheduled-transaction", s.handleNotImplemented).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/scheduled-transaction", s.handleFlowScheduledTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/v1/account/{address}/scheduled-transaction", s.handleFlowAccountScheduledTransactions).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/v1/account/{address}/tax-report", s.handleTaxReport).Methods("GET", "OPTIONS")
 }
 

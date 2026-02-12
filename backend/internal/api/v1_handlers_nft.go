@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 
+	"flowscan-clone/internal/repository"
+
 	"github.com/gorilla/mux"
 )
 
@@ -20,9 +22,16 @@ func (s *Server) handleFlowNFTTransfers(w http.ResponseWriter, r *http.Request) 
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	nftIDs := collectTransferTokenIDs(transfers, true)
+	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter))
+		id := formatTokenIdentifier(t.TokenContractAddress, t.ContractName)
+		var m *repository.TokenMetadataInfo
+		if meta, ok := nftMeta[id]; ok {
+			m = &meta
+		}
+		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter, m))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
@@ -133,9 +142,16 @@ func (s *Server) handleFlowNFTItemTransfers(w http.ResponseWriter, r *http.Reque
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	nftIDs2 := collectTransferTokenIDs(transfers, true)
+	nftMeta2, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs2)
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, ""))
+		id := formatTokenIdentifier(t.TokenContractAddress, t.ContractName)
+		var m *repository.TokenMetadataInfo
+		if meta, ok := nftMeta2[id]; ok {
+			m = &meta
+		}
+		out = append(out, toNFTTransferOutput(t.TokenTransfer, t.ContractName, "", m))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }

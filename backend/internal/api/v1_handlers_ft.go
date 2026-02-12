@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"flowscan-clone/internal/models"
+	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
 )
@@ -22,9 +23,16 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	ftIDs := collectTransferTokenIDs(transfers, false)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
 	out := make([]map[string]interface{}, 0, len(transfers))
 	for _, t := range transfers {
-		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter))
+		id := formatTokenVaultIdentifier(t.TokenContractAddress, t.ContractName)
+		var m *repository.TokenMetadataInfo
+		if meta, ok := ftMeta[id]; ok {
+			m = &meta
+		}
+		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter, m))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }

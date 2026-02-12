@@ -133,14 +133,24 @@ func (r *Repository) UpsertFTTokens(ctx context.Context, tokens []models.FTToken
 	batch := &pgx.Batch{}
 	for _, t := range tokens {
 		batch.Queue(`
-			INSERT INTO app.ft_tokens (contract_address, contract_name, name, symbol, decimals, updated_at)
-			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,0), NOW())
+			INSERT INTO app.ft_tokens (contract_address, contract_name, name, symbol, decimals,
+				description, external_url, logo, vault_path, receiver_path, balance_path, socials, updated_at)
+			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,0),
+				NULLIF($6,''), NULLIF($7,''), $8, NULLIF($9,''), NULLIF($10,''), NULLIF($11,''), $12, NOW())
 			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, app.ft_tokens.name),
 				symbol = COALESCE(EXCLUDED.symbol, app.ft_tokens.symbol),
 				decimals = COALESCE(EXCLUDED.decimals, app.ft_tokens.decimals),
+				description = COALESCE(EXCLUDED.description, app.ft_tokens.description),
+				external_url = COALESCE(EXCLUDED.external_url, app.ft_tokens.external_url),
+				logo = COALESCE(EXCLUDED.logo, app.ft_tokens.logo),
+				vault_path = COALESCE(EXCLUDED.vault_path, app.ft_tokens.vault_path),
+				receiver_path = COALESCE(EXCLUDED.receiver_path, app.ft_tokens.receiver_path),
+				balance_path = COALESCE(EXCLUDED.balance_path, app.ft_tokens.balance_path),
+				socials = COALESCE(EXCLUDED.socials, app.ft_tokens.socials),
 				updated_at = NOW()`,
-			hexToBytes(t.ContractAddress), t.ContractName, t.Name, t.Symbol, t.Decimals)
+			hexToBytes(t.ContractAddress), t.ContractName, t.Name, t.Symbol, t.Decimals,
+			t.Description, t.ExternalURL, nullIfEmptyJSON(t.Logo), t.VaultPath, t.ReceiverPath, t.BalancePath, nullIfEmptyJSON(t.Socials))
 	}
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()
@@ -216,7 +226,7 @@ func (r *Repository) ListFTHoldingsByToken(ctx context.Context, contract, contra
 
 func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]models.FTToken, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0), updated_at
+		SELECT `+ftTokenSelectCols+`
 		FROM app.ft_tokens
 		ORDER BY contract_address ASC, contract_name ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
@@ -226,8 +236,8 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 	defer rows.Close()
 	var out []models.FTToken
 	for rows.Next() {
-		var t models.FTToken
-		if err := rows.Scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals, &t.UpdatedAt); err != nil {
+		t, err := scanFTToken(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -235,14 +245,22 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 	return out, nil
 }
 
-func (r *Repository) GetFTToken(ctx context.Context, contract, contractName string) (*models.FTToken, error) {
+const ftTokenSelectCols = `encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0),
+		       COALESCE(description,''), COALESCE(external_url,''), COALESCE(logo, 'null'::jsonb), COALESCE(vault_path,''), COALESCE(receiver_path,''), COALESCE(balance_path,''), COALESCE(socials, 'null'::jsonb), updated_at`
+
+func scanFTToken(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
+	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.UpdatedAt)
+	return t, err
+}
+
+func (r *Repository) GetFTToken(ctx context.Context, contract, contractName string) (*models.FTToken, error) {
 	if contractName == "" {
-		err := r.db.QueryRow(ctx, `
-			SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0), updated_at
+		t, err := scanFTToken(r.db.QueryRow(ctx, `
+			SELECT `+ftTokenSelectCols+`
 			FROM app.ft_tokens
-			WHERE contract_address = $1`, hexToBytes(contract)).
-			Scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals, &t.UpdatedAt)
+			WHERE contract_address = $1`, hexToBytes(contract)).Scan)
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
@@ -251,11 +269,10 @@ func (r *Repository) GetFTToken(ctx context.Context, contract, contractName stri
 		}
 		return &t, nil
 	}
-	err := r.db.QueryRow(ctx, `
-		SELECT encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0), updated_at
+	t, err := scanFTToken(r.db.QueryRow(ctx, `
+		SELECT `+ftTokenSelectCols+`
 		FROM app.ft_tokens
-		WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(contract), contractName).
-		Scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals, &t.UpdatedAt)
+		WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(contract), contractName).Scan)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}

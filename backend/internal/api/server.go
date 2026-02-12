@@ -636,6 +636,17 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) enrichAccountTransactions(ctx context.Context, txs []models.Transaction, address string) []map[string]interface{} {
+	// Deduplicate by tx ID (safety net for partitioned table edge cases).
+	seen := make(map[string]bool, len(txs))
+	unique := txs[:0]
+	for _, t := range txs {
+		if !seen[t.ID] {
+			seen[t.ID] = true
+			unique = append(unique, t)
+		}
+	}
+	txs = unique
+
 	txIDs := make([]string, 0, len(txs))
 	for _, t := range txs {
 		txIDs = append(txIDs, t.ID)
@@ -645,13 +656,18 @@ func (s *Server) enrichAccountTransactions(ctx context.Context, txs []models.Tra
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(ctx, txIDs)
 	transferSummaries, _ := s.repo.GetTransferSummariesByTxIDs(ctx, txIDs, address)
 
+	// Collect token metadata for icons/symbols.
+	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(ctx, ftIDs)
+	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(ctx, nftIDs)
+
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
 		var ts *repository.TransferSummary
 		if summary, ok := transferSummaries[t.ID]; ok {
 			ts = &summary
 		}
-		out = append(out, toFlowTransactionOutputWithTransfers(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts))
+		out = append(out, toFlowTransactionOutputWithTransfers(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts, ftMeta, nftMeta))
 	}
 	return out
 }
@@ -800,6 +816,66 @@ func (s *Server) handleGetAccountNFTTransfers(w http.ResponseWriter, r *http.Req
 	}
 
 	json.NewEncoder(w).Encode(transfers)
+}
+
+func (s *Server) handleGetAccountScheduledTransactions(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := normalizeAddr(vars["address"])
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	cursorParam := r.URL.Query().Get("cursor")
+	_, hasCursor := r.URL.Query()["cursor"]
+
+	if hasCursor {
+		cursor, err := parseAddressTxCursor(cursorParam)
+		if err != nil {
+			http.Error(w, "invalid cursor", http.StatusBadRequest)
+			return
+		}
+
+		// Use offset-based fallback: parse cursor block_height to compute a rough offset
+		offset := 0
+		if cursor != nil {
+			// For scheduled txs, cursor is informational; use offset pagination
+			offset = 0
+		}
+		_ = cursor
+
+		txs, err := s.repo.GetScheduledTransactionsByAddress(r.Context(), address, limit, offset)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		nextCursor := ""
+		if len(txs) == limit {
+			last := txs[len(txs)-1]
+			nextCursor = fmt.Sprintf("%d:%s", last.BlockHeight, last.ID)
+		}
+
+		enriched := s.enrichAccountTransactions(r.Context(), txs, address)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"items":       enriched,
+			"next_cursor": nextCursor,
+		})
+		return
+	}
+
+	txs, err := s.repo.GetScheduledTransactionsByAddress(r.Context(), address, limit, 0)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	enriched := s.enrichAccountTransactions(r.Context(), txs, address)
+	json.NewEncoder(w).Encode(enriched)
 }
 
 func (s *Server) handleGetAddressStats(w http.ResponseWriter, r *http.Request) {

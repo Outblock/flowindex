@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -415,6 +416,179 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		out[txID] = s
 	}
 
+	return out, nil
+}
+
+// TokenMetadataInfo is a lightweight struct for token display info (icon, symbol, name).
+type TokenMetadataInfo struct {
+	Name        string          `json:"name"`
+	Symbol      string          `json:"symbol"`
+	Decimals    int             `json:"decimals"`
+	Logo        json.RawMessage `json:"logo,omitempty"`
+	Description string          `json:"description,omitempty"`
+}
+
+// GetFTTokenMetadataByIdentifiers returns display metadata for a set of token identifiers (e.g. "A.1654653399040a61.FlowToken").
+func (r *Repository) GetFTTokenMetadataByIdentifiers(ctx context.Context, identifiers []string) (map[string]TokenMetadataInfo, error) {
+	out := make(map[string]TokenMetadataInfo, len(identifiers))
+	if len(identifiers) == 0 {
+		return out, nil
+	}
+	// Build unique (address, contract_name) pairs.
+	type key struct{ addr, name string }
+	seen := make(map[key][]string) // key -> original identifiers
+	for _, id := range identifiers {
+		parts := strings.SplitN(id, ".", 3) // A.hex.Name
+		if len(parts) < 3 {
+			continue
+		}
+		addr := strings.TrimPrefix(parts[1], "0x")
+		name := parts[2]
+		k := key{addr, name}
+		seen[k] = append(seen[k], id)
+	}
+
+	for k, origIDs := range seen {
+		var t models.FTToken
+		err := r.db.QueryRow(ctx, `
+			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0),
+			       COALESCE(logo, 'null'::jsonb), COALESCE(description,'')
+			FROM app.ft_tokens
+			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
+			Scan(&t.Name, &t.Symbol, &t.Decimals, &t.Logo, &t.Description)
+		if err != nil {
+			continue // token not found or error, skip
+		}
+		info := TokenMetadataInfo{Name: t.Name, Symbol: t.Symbol, Decimals: t.Decimals, Description: t.Description}
+		if len(t.Logo) > 0 && string(t.Logo) != "null" {
+			info.Logo = t.Logo
+		}
+		for _, origID := range origIDs {
+			out[origID] = info
+		}
+	}
+	return out, nil
+}
+
+// GetNFTCollectionMetadataByIdentifiers returns display metadata for NFT collection identifiers.
+func (r *Repository) GetNFTCollectionMetadataByIdentifiers(ctx context.Context, identifiers []string) (map[string]TokenMetadataInfo, error) {
+	out := make(map[string]TokenMetadataInfo, len(identifiers))
+	if len(identifiers) == 0 {
+		return out, nil
+	}
+	type key struct{ addr, name string }
+	seen := make(map[key][]string)
+	for _, id := range identifiers {
+		parts := strings.SplitN(id, ".", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		addr := strings.TrimPrefix(parts[1], "0x")
+		name := parts[2]
+		k := key{addr, name}
+		seen[k] = append(seen[k], id)
+	}
+
+	for k, origIDs := range seen {
+		var name, symbol, description string
+		var squareImage []byte
+		err := r.db.QueryRow(ctx, `
+			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(description,''),
+			       COALESCE(square_image, 'null'::jsonb)
+			FROM app.nft_collections
+			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
+			Scan(&name, &symbol, &description, &squareImage)
+		if err != nil {
+			continue
+		}
+		info := TokenMetadataInfo{Name: name, Symbol: symbol, Description: description}
+		if len(squareImage) > 0 && string(squareImage) != "null" {
+			info.Logo = squareImage
+		}
+		for _, origID := range origIDs {
+			out[origID] = info
+		}
+	}
+	return out, nil
+}
+
+// GetScheduledTransactionsByAddress returns transactions involving FlowTransactionScheduler for a given address.
+func (r *Repository) GetScheduledTransactionsByAddress(ctx context.Context, address string, limit, offset int) ([]models.Transaction, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT ON (t.block_height, t.id)
+		       encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
+		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
+		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
+		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
+		       t.timestamp, t.timestamp AS created_at,
+		       COALESCE(m.event_count, t.event_count) AS event_count
+		FROM app.tx_contracts tc
+		JOIN app.address_transactions at ON at.transaction_id = tc.transaction_id
+		JOIN raw.transactions t ON t.id = tc.transaction_id AND t.block_height = at.block_height
+		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
+		WHERE at.address = $1 AND tc.contract_identifier LIKE '%FlowTransactionScheduler%'
+		ORDER BY t.block_height DESC, t.id DESC
+		LIMIT $2 OFFSET $3`, hexToBytes(address), limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Transaction
+	for rows.Next() {
+		var t models.Transaction
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// GetScheduledTransactions returns transactions involving FlowTransactionScheduler globally.
+func (r *Repository) GetScheduledTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
+		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
+		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
+		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
+		       t.timestamp, t.timestamp AS created_at,
+		       COALESCE(m.event_count, t.event_count) AS event_count
+		FROM app.tx_contracts tc
+		JOIN raw.transactions t ON t.id = tc.transaction_id
+		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
+		WHERE tc.contract_identifier LIKE '%FlowTransactionScheduler%'
+		ORDER BY t.block_height DESC, t.transaction_index DESC
+		LIMIT $1 OFFSET $2`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Transaction
+	for rows.Next() {
+		var t models.Transaction
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
 	return out, nil
 }
 
