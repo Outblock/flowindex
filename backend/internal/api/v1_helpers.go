@@ -294,9 +294,10 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 		"name":          token.Name,
 		"symbol":        token.Symbol,
 		"decimals":      token.Decimals,
-		"holder_count":  token.HolderCount,
-		"evm_address":   token.EVMAddress,
-		"evm_bridged":   token.EVMAddress != "",
+		"holder_count":    token.HolderCount,
+		"transfer_count":  token.TransferCount,
+		"evm_address":     token.EVMAddress,
+		"evm_bridged":     token.EVMAddress != "",
 	}
 	if token.Description != "" {
 		out["description"] = token.Description
@@ -373,6 +374,7 @@ func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]i
 		"socials":          safeRawJSON(summary.Socials),
 		"number_of_tokens": summary.Count,
 		"holder_count":     summary.HolderCount,
+		"transfer_count":   summary.TransferCount,
 		"timestamp":        formatTime(summary.UpdatedAt),
 		"updated_at":       formatTime(summary.UpdatedAt),
 		"status":           "",

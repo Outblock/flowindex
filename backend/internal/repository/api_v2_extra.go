@@ -22,6 +22,7 @@ type NFTCollectionSummary struct {
 	Socials         []byte
 	Count           int64
 	HolderCount     int64
+	TransferCount   int64
 	UpdatedAt       time.Time
 }
 
@@ -257,6 +258,58 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 	for rows.Next() {
 		var row NFTCollectionSummary
 		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+// ListTrendingNFTCollections returns NFT collections ordered by recent transfer activity.
+func (r *Repository) ListTrendingNFTCollections(ctx context.Context, limit, offset int) ([]NFTCollectionSummary, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH counts AS (
+			SELECT contract_address, contract_name, COUNT(*) AS cnt, COUNT(DISTINCT owner) AS holder_cnt
+			FROM app.nft_ownership
+			WHERE owner IS NOT NULL
+			GROUP BY contract_address, contract_name
+		),
+		max_h AS (
+			SELECT COALESCE(MAX(block_height), 0) AS h FROM app.nft_transfers
+		),
+		recent_activity AS (
+			SELECT token_contract_address, contract_name, COUNT(*) AS tx_count
+			FROM app.nft_transfers, max_h
+			WHERE block_height >= max_h.h - 1000000
+			GROUP BY token_contract_address, contract_name
+		)
+		SELECT
+			COALESCE(encode(COALESCE(c.contract_address, counts.contract_address), 'hex'), '') AS contract_address,
+			COALESCE(COALESCE(c.contract_name, counts.contract_name), '') AS contract_name,
+			COALESCE(c.name, '') AS name,
+			COALESCE(c.symbol, '') AS symbol,
+			COALESCE(c.description, '') AS description,
+			COALESCE(c.external_url, '') AS external_url,
+			COALESCE(c.square_image::text, '') AS square_image,
+			COALESCE(c.banner_image::text, '') AS banner_image,
+			COALESCE(c.socials::text, '') AS socials,
+			COALESCE(counts.cnt, 0) AS cnt,
+			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
+			COALESCE(ra.tx_count, 0) AS transfer_count,
+			COALESCE(c.updated_at, NOW()) AS updated_at
+		FROM app.nft_collections c
+		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
+		LEFT JOIN recent_activity ra ON ra.token_contract_address = COALESCE(c.contract_address, counts.contract_address) AND ra.contract_name = COALESCE(c.contract_name, counts.contract_name)
+		ORDER BY COALESCE(ra.tx_count, 0) DESC, contract_address ASC
+		LIMIT $1 OFFSET $2`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []NFTCollectionSummary
+	for rows.Next() {
+		var row NFTCollectionSummary
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.TransferCount, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, row)

@@ -4846,6 +4846,10 @@ export type GetFlowV1FtData = {
          * The number of to skip (for pagination)}
          */
         offset?: number;
+        /**
+         * Sort order. Use "trending" to sort by recent transfer activity.
+         */
+        sort?: string;
     };
     url: '/flow/v1/ft';
 };
@@ -4993,6 +4997,10 @@ export type GetFlowV1NftData = {
          * Number of records to skip (for pagination) (Default = 0)
          */
         offset?: number;
+        /**
+         * Sort order. Use "trending" to sort by recent transfer activity.
+         */
+        sort?: string;
     };
     url: '/flow/v1/nft';
 };

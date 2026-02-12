@@ -268,6 +268,52 @@ func scanFTTokenWithHolders(scan func(dest ...interface{}) error) (models.FTToke
 	return t, err
 }
 
+func scanFTTokenTrending(scan func(dest ...interface{}) error) (models.FTToken, error) {
+	var t models.FTToken
+	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.UpdatedAt, &t.HolderCount, &t.TransferCount)
+	return t, err
+}
+
+// ListTrendingFTTokens returns FT tokens ordered by recent transfer activity.
+// It counts transfers in the most recent 1M blocks (~2 days on Flow).
+func (r *Repository) ListTrendingFTTokens(ctx context.Context, limit, offset int) ([]models.FTToken, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH max_h AS (
+			SELECT COALESCE(MAX(block_height), 0) AS h FROM app.ft_transfers
+		),
+		recent_activity AS (
+			SELECT token_contract_address, contract_name, COUNT(*) AS tx_count
+			FROM app.ft_transfers, max_h
+			WHERE block_height >= max_h.h - 1000000
+			GROUP BY token_contract_address, contract_name
+		),
+		holders AS (
+			SELECT contract_address, contract_name, COUNT(*) AS holder_count
+			FROM app.ft_holdings WHERE balance > 0
+			GROUP BY contract_address, contract_name
+		)
+		SELECT `+ftTokenSelectCols+`, COALESCE(h.holder_count, 0), COALESCE(ra.tx_count, 0)
+		FROM app.ft_tokens ft
+		LEFT JOIN holders h ON h.contract_address = ft.contract_address AND h.contract_name = ft.contract_name
+		LEFT JOIN recent_activity ra ON ra.token_contract_address = ft.contract_address AND ra.contract_name = ft.contract_name
+		ORDER BY COALESCE(ra.tx_count, 0) DESC, ft.contract_address ASC
+		LIMIT $1 OFFSET $2`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.FTToken
+	for rows.Next() {
+		t, err := scanFTTokenTrending(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
 func (r *Repository) GetFTToken(ctx context.Context, contract, contractName string) (*models.FTToken, error) {
 	if contractName == "" {
 		t, err := scanFTToken(r.db.QueryRow(ctx, `

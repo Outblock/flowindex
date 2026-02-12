@@ -274,6 +274,7 @@ type FTToken struct {
 	Socials         json.RawMessage `json:"socials,omitempty"`
 	EVMAddress      string          `json:"evm_address,omitempty"`
 	HolderCount     int64           `json:"holder_count"`
+	TransferCount   int64           `json:"transfer_count"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
 

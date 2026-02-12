@@ -38,7 +38,14 @@ func (s *Server) handleFlowNFTTransfers(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleFlowListNFTCollections(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
-	collections, err := s.repo.ListNFTCollectionSummaries(r.Context(), limit, offset)
+	sort := r.URL.Query().Get("sort")
+	var collections []repository.NFTCollectionSummary
+	var err error
+	if sort == "trending" {
+		collections, err = s.repo.ListTrendingNFTCollections(r.Context(), limit, offset)
+	} else {
+		collections, err = s.repo.ListNFTCollectionSummaries(r.Context(), limit, offset)
+	}
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return

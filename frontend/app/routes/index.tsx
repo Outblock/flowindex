@@ -24,8 +24,8 @@ export const Route = createFileRoute('/')({
                 fetchStatus(),
                 getFlowV1Block({ query: { limit: 50, offset: 0 } }),
                 getFlowV1Transaction({ query: { limit: 50, offset: 0 } }),
-                getFlowV1Ft({ query: { limit: 10, offset: 0 } }),
-                getFlowV1Nft({ query: { limit: 10, offset: 0 } }),
+                getFlowV1Ft({ query: { limit: 5, offset: 0, sort: 'trending' } }),
+                getFlowV1Nft({ query: { limit: 5, offset: 0, sort: 'trending' } }),
             ]);
             return {
                 status: status,
@@ -564,7 +564,7 @@ function Home() {
                         <div className="flex items-center justify-between p-6 pb-0">
                             <div className="flex items-center space-x-3">
                                 <Coins className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
-                                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Top Tokens</h2>
+                                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Trending Tokens</h2>
                             </div>
                             <Link to="/tokens" className="text-xs text-nothing-green-dark dark:text-nothing-green uppercase tracking-widest hover:underline font-mono">
                                 View All &rarr;
@@ -575,7 +575,7 @@ function Home() {
                                 <p className="text-xs text-zinc-400 dark:text-gray-500 font-mono">No tokens found.</p>
                             ) : (
                                 <div className="flex flex-col">
-                                    {(tokens || []).slice(0, 10).map((token: any) => (
+                                    {(tokens || []).slice(0, 5).map((token: any) => (
                                         <Link
                                             key={token.id}
                                             to={`/tokens/${token.id}`}
@@ -611,6 +611,11 @@ function Home() {
                                                     {token.address ? `A.${token.address}.${token.contract_name || ''}` : token.id}
                                                 </span>
                                             </div>
+                                            {token.transfer_count > 0 && (
+                                                <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 px-2 py-0.5 rounded-sm flex-shrink-0">
+                                                    {formatNumber(token.transfer_count)} txs
+                                                </span>
+                                            )}
                                         </Link>
                                     ))}
                                 </div>
@@ -628,7 +633,7 @@ function Home() {
                         <div className="flex items-center justify-between p-6 pb-0">
                             <div className="flex items-center space-x-3">
                                 <Image className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
-                                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Top Collections</h2>
+                                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Trending Collections</h2>
                             </div>
                             <Link to="/nfts" className="text-xs text-nothing-green-dark dark:text-nothing-green uppercase tracking-widest hover:underline font-mono">
                                 View All &rarr;
@@ -639,7 +644,7 @@ function Home() {
                                 <p className="text-xs text-zinc-400 dark:text-gray-500 font-mono">No collections found.</p>
                             ) : (
                                 <div className="flex flex-col">
-                                    {(nftCollections || []).slice(0, 10).map((nft: any) => (
+                                    {(nftCollections || []).slice(0, 5).map((nft: any) => (
                                         <Link
                                             key={nft.id}
                                             to={`/nfts/${nft.id}`}
@@ -667,11 +672,15 @@ function Home() {
                                             <div className="flex flex-col min-w-0 flex-1">
                                                 <span className="text-xs font-mono text-zinc-900 dark:text-white truncate">{nft.display_name || nft.name || 'Unknown'}</span>
                                             </div>
-                                            {nft.number_of_tokens != null && (
+                                            {nft.transfer_count > 0 ? (
+                                                <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 px-2 py-0.5 rounded-sm flex-shrink-0">
+                                                    {formatNumber(nft.transfer_count)} txs
+                                                </span>
+                                            ) : nft.number_of_tokens != null ? (
                                                 <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 px-2 py-0.5 rounded-sm flex-shrink-0">
                                                     {formatNumber(nft.number_of_tokens)} items
                                                 </span>
-                                            )}
+                                            ) : null}
                                         </Link>
                                     ))}
                                 </div>

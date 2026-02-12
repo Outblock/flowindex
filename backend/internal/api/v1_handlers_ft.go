@@ -39,7 +39,14 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFlowListFTTokens(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
-	tokens, err := s.repo.ListFTTokens(r.Context(), limit, offset)
+	sort := r.URL.Query().Get("sort")
+	var tokens []models.FTToken
+	var err error
+	if sort == "trending" {
+		tokens, err = s.repo.ListTrendingFTTokens(r.Context(), limit, offset)
+	} else {
+		tokens, err = s.repo.ListFTTokens(r.Context(), limit, offset)
+	}
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
