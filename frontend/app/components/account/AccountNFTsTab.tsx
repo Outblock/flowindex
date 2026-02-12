@@ -98,17 +98,25 @@ export function AccountNFTsTab({ address }: Props) {
                 } else if (rawPath && typeof rawPath === 'object' && rawPath.identifier) {
                     identifier = rawPath.identifier;
                 } else if (collection?.path) {
-                    // Fallback to collection path identifier if storage path is missing?
-                    // Usually collection.path is public path e.g. /public/foo
-                    // Trying to guess storage path from public path is risky but better than nothing?
-                    // No, better to error if strict.
+                    // Fallback: extract identifier from public/storage path
+                    // e.g. /public/MomentCollection -> MomentCollection
+                    // e.g. /storage/TopShotCollection -> TopShotCollection
+                    const fallbackPath = typeof collection.path === 'string'
+                        ? collection.path
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        : (collection.path as any)?.identifier || '';
+                    if (fallbackPath) {
+                        identifier = fallbackPath.includes('/')
+                            ? fallbackPath.split('/').pop() || ''
+                            : fallbackPath;
+                    }
                 }
 
                 if (identifier && identifier.includes('/')) {
                     identifier = identifier.split('/').pop() || identifier;
                 }
 
-                if (!identifier) throw new Error(`Invalid storage path for collection ${selectedCollectionId}`);
+                if (!identifier) throw new Error(`No storage path available for ${getContractName(selectedCollectionId)}`);
 
                 const page = currentState?.page || 0;
                 const start = page * NFT_PAGE_SIZE;
