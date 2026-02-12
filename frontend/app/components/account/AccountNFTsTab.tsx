@@ -295,8 +295,26 @@ export function AccountNFTsTab({ address }: Props) {
                                     </div>
                                 </div>
                             ) : selectedState?.error ? (
-                                <div className="flex h-full items-center justify-center text-red-500 text-sm">
-                                    {selectedState.error}
+                                <div className="flex flex-col h-full items-center justify-center gap-4">
+                                    <div className="text-red-500 text-sm font-medium">{selectedState.error}</div>
+                                    <button
+                                        onClick={() => {
+                                            if (!selectedCollectionId) return;
+                                            setCollectionStates(prev => ({
+                                                ...prev,
+                                                [selectedCollectionId]: {
+                                                    ...prev[selectedCollectionId],
+                                                    loading: false,
+                                                    error: null,
+                                                    hasLoaded: false // Trigger useEffect
+                                                }
+                                            }));
+                                        }}
+                                        className="px-4 py-2 bg-zinc-100 dark:bg-white/10 hover:bg-zinc-200 dark:hover:bg-white/20 text-zinc-900 dark:text-white text-xs uppercase tracking-widest rounded-md transition-colors flex items-center gap-2"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 16h5v5" /></svg>
+                                        Retry
+                                    </button>
                                 </div>
                             ) : selectedState?.loading && selectedState?.nfts.length === 0 ? (
                                 <div className="flex h-64 items-center justify-center">
