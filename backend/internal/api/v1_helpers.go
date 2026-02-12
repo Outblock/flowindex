@@ -517,12 +517,18 @@ func transferDirection(addrFilter, from, to string) string {
 	return "deposit"
 }
 
-func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string) map[string]interface{} {
+func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string, meta *repository.TokenMetadataInfo) map[string]interface{} {
 	tokenIdentifier := formatTokenVaultIdentifier(t.TokenContractAddress, contractName)
 	tokenName := ""
 	tokenSymbol := ""
-	tokenLogo := ""
-	if contractName == "FlowToken" {
+	var tokenLogo interface{} = ""
+	if meta != nil && meta.Name != "" {
+		tokenName = meta.Name
+		tokenSymbol = meta.Symbol
+		if len(meta.Logo) > 0 {
+			tokenLogo = json.RawMessage(meta.Logo)
+		}
+	} else if contractName == "FlowToken" {
 		tokenName = "Flow"
 		tokenSymbol = "FLOW"
 		tokenLogo = "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.1654653399040a61.FlowToken/logo.svg"
@@ -552,9 +558,9 @@ func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string)
 	}
 }
 
-func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string) map[string]interface{} {
+func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string, meta *repository.TokenMetadataInfo) map[string]interface{} {
 	nftType := formatTokenIdentifier(t.TokenContractAddress, contractName)
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"transaction_hash": t.TransactionID,
 		"block_height":     t.BlockHeight,
 		"timestamp":        formatTime(t.Timestamp),
@@ -567,6 +573,23 @@ func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string
 		"verified":         false,
 		"is_primary":       false,
 	}
+	if meta != nil {
+		collection := map[string]interface{}{}
+		if meta.Name != "" {
+			collection["name"] = meta.Name
+		}
+		if meta.Symbol != "" {
+			collection["symbol"] = meta.Symbol
+		}
+		if len(meta.Logo) > 0 {
+			collection["image"] = json.RawMessage(meta.Logo)
+		}
+		if meta.Description != "" {
+			collection["description"] = meta.Description
+		}
+		out["collection"] = collection
+	}
+	return out
 }
 
 func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[string]repository.TokenMetadataInfo) map[string]interface{} {
@@ -621,6 +644,25 @@ func toFlowTransactionOutputWithTransfers(t models.Transaction, events []models.
 		out["transfer_summary"] = map[string]interface{}{"ft": []interface{}{}, "nft": []interface{}{}}
 	}
 	return out
+}
+
+// collectTransferTokenIDs extracts unique token identifiers from a transfer list.
+func collectTransferTokenIDs(transfers []repository.TokenTransferWithContract, isNFT bool) []string {
+	seen := make(map[string]bool)
+	var ids []string
+	for _, t := range transfers {
+		var id string
+		if isNFT {
+			id = formatTokenIdentifier(t.TokenContractAddress, t.ContractName)
+		} else {
+			id = formatTokenVaultIdentifier(t.TokenContractAddress, t.ContractName)
+		}
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 // collectTokenIdentifiers extracts all unique FT and NFT token identifiers from a set of transfer summaries.

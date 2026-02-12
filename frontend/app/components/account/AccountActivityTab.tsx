@@ -270,7 +270,9 @@ function ExpandedTransferDetails({ tx, address }: { tx: any; address: string }) 
                 {tx.block_height && <span>Block: <Link to={`/blocks/${tx.block_height}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{tx.block_height}</Link></span>}
                 {tx.proposer && <span>Proposer: <Link to={`/accounts/${normalizeAddress(tx.proposer)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.proposer)}</Link></span>}
                 {tx.payer && tx.payer !== tx.proposer && <span>Payer: <Link to={`/accounts/${normalizeAddress(tx.payer)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.payer)}</Link></span>}
-                {tx.contract_imports?.length > 0 && <span>Contracts: {tx.contract_imports.map((c: string) => formatTokenName(c)).join(', ')}</span>}
+                {tx.contract_imports?.length > 0 && <span>Contracts: {tx.contract_imports.map((c: string, i: number) => (
+                    <span key={c}>{i > 0 && ', '}<Link to={`/contracts/${c}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>{formatTokenName(c)}</Link></span>
+                ))}</span>}
             </div>
         </div>
     );
@@ -548,88 +550,135 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
 
                 {/* Dedicated FT transfer list */}
                 {filterMode === 'ft' && ftTransfers.length > 0 && (
-                    <>
-                        <table className="w-full text-left text-xs">
-                            <thead>
-                                <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
-                                    <th className="p-4 font-normal">Token</th>
-                                    <th className="p-4 font-normal">Amount</th>
-                                    <th className="p-4 font-normal">Direction</th>
-                                    <th className="p-4 font-normal">From</th>
-                                    <th className="p-4 font-normal">To</th>
-                                    <th className="p-4 font-normal text-right">Block</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                {ftTransfers.map((tx: any, i: number) => {
-                                    const dir = tx.direction || (tx.from_address?.toLowerCase().includes(normalizedAddress.replace('0x', '')) ? 'withdraw' : 'deposit');
-                                    return (
-                                        <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                            <td className="p-4 font-mono text-xs">{tx.token?.symbol || tx.token?.name || tx.token_id || tx.type_id || '\u2014'}</td>
-                                            <td className="p-4 font-mono">{tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '\u2014'}</td>
-                                            <td className="p-4">
-                                                {dir === 'withdraw' || dir === 'out'
-                                                    ? <span className="inline-flex items-center gap-1 text-red-500"><ArrowUpRight className="h-3 w-3" /> Sent</span>
-                                                    : <span className="inline-flex items-center gap-1 text-emerald-500"><ArrowDownLeft className="h-3 w-3" /> Received</span>
-                                                }
-                                            </td>
-                                            <td className="p-4">{tx.sender || tx.from_address ? <Link to={`/accounts/${normalizeAddress(tx.sender || tx.from_address)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.sender || tx.from_address)}</Link> : '\u2014'}</td>
-                                            <td className="p-4">{tx.receiver || tx.to_address ? <Link to={`/accounts/${normalizeAddress(tx.receiver || tx.to_address)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.receiver || tx.to_address)}</Link> : '\u2014'}</td>
-                                            <td className="p-4 text-right text-zinc-500">{tx.block_height ?? '\u2014'}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                    <div className="space-y-0">
+                        {ftTransfers.map((tx: any, i: number) => {
+                            const dir = tx.direction || (tx.from_address?.toLowerCase().includes(normalizedAddress.replace('0x', '')) ? 'withdraw' : 'deposit');
+                            const isOut = dir === 'withdraw' || dir === 'out';
+                            const tokenSymbol = tx.token?.symbol || tx.token?.name || formatTokenName(tx.token?.token || '');
+                            const tokenLogo = tx.token?.logo;
+                            const sender = tx.sender || tx.from_address;
+                            const receiver = tx.receiver || tx.to_address;
+                            const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
+                            return (
+                                <div key={i} className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                                    {/* Token icon */}
+                                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center overflow-hidden">
+                                        <TokenIcon logo={tokenLogo} symbol={tokenSymbol} size={28} />
+                                        {!extractLogoUrl(tokenLogo) && <ArrowRightLeft className="h-3.5 w-3.5 text-emerald-500" />}
+                                    </div>
+                                    {/* Main content */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
+                                                {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                                                {isOut ? 'Sent' : 'Received'}
+                                            </span>
+                                            <span className="font-mono text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                                                {tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '\u2014'}
+                                            </span>
+                                            <span className="text-xs text-zinc-500 font-medium">{tokenSymbol}</span>
+                                            {tx.token?.token && (
+                                                <Link to={`/contracts/${tx.token.token}` as any} className="text-[10px] text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green font-mono ml-1">
+                                                    {tx.token.token}
+                                                </Link>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                                            {sender && (
+                                                <span>From <Link to={`/accounts/${normalizeAddress(sender)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(sender)}</Link></span>
+                                            )}
+                                            {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
+                                            {receiver && (
+                                                <span>To <Link to={`/accounts/${normalizeAddress(receiver)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(receiver)}</Link></span>
+                                            )}
+                                            {tx.transaction_hash && (
+                                                <>
+                                                    <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
+                                                    <Link to={`/transactions/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {/* Right side */}
+                                    <div className="flex-shrink-0 text-right">
+                                        <div className="text-[10px] text-zinc-400">{timeStr}</div>
+                                        {tx.block_height && <div className="text-[10px] text-zinc-400 font-mono">#{tx.block_height}</div>}
+                                    </div>
+                                </div>
+                            );
+                        })}
                         {ftHasMore && (
                             <div className="text-center py-3">
                                 <button onClick={() => loadFtTransfers(ftCursor, true)} disabled={ftLoading} className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50">{ftLoading ? 'Loading...' : 'Load More'}</button>
                             </div>
                         )}
-                    </>
+                    </div>
                 )}
 
                 {/* Dedicated NFT transfer list */}
                 {filterMode === 'nft' && nftTransfers.length > 0 && (
-                    <>
-                        <table className="w-full text-left text-xs">
-                            <thead>
-                                <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
-                                    <th className="p-4 font-normal">NFT ID</th>
-                                    <th className="p-4 font-normal">Collection</th>
-                                    <th className="p-4 font-normal">Direction</th>
-                                    <th className="p-4 font-normal">From</th>
-                                    <th className="p-4 font-normal">To</th>
-                                    <th className="p-4 font-normal text-right">Block</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                {nftTransfers.map((tx: any, i: number) => {
-                                    const dir = tx.direction || (tx.from_address?.toLowerCase().includes(normalizedAddress.replace('0x', '')) ? 'withdraw' : 'deposit');
-                                    return (
-                                        <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                            <td className="p-4 font-mono">{tx.nft_id}</td>
-                                            <td className="p-4 font-mono text-zinc-500">{tx.nft_type || tx.type_id || '\u2014'}</td>
-                                            <td className="p-4">
-                                                {dir === 'withdraw' || dir === 'out'
-                                                    ? <span className="inline-flex items-center gap-1 text-red-500"><ArrowUpRight className="h-3 w-3" /> Sent</span>
-                                                    : <span className="inline-flex items-center gap-1 text-emerald-500"><ArrowDownLeft className="h-3 w-3" /> Received</span>
-                                                }
-                                            </td>
-                                            <td className="p-4">{tx.sender || tx.from_address ? <Link to={`/accounts/${normalizeAddress(tx.sender || tx.from_address)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.sender || tx.from_address)}</Link> : '\u2014'}</td>
-                                            <td className="p-4">{tx.receiver || tx.to_address ? <Link to={`/accounts/${normalizeAddress(tx.receiver || tx.to_address)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.receiver || tx.to_address)}</Link> : '\u2014'}</td>
-                                            <td className="p-4 text-right text-zinc-500">{tx.block_height ?? '\u2014'}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                    <div className="space-y-0">
+                        {nftTransfers.map((tx: any, i: number) => {
+                            const dir = tx.direction || (tx.from_address?.toLowerCase().includes(normalizedAddress.replace('0x', '')) ? 'withdraw' : 'deposit');
+                            const isOut = dir === 'withdraw' || dir === 'out';
+                            const collectionName = tx.collection?.name || formatTokenName(tx.nft_type || '');
+                            const collectionImage = tx.collection?.image;
+                            const sender = tx.sender || tx.from_address;
+                            const receiver = tx.receiver || tx.to_address;
+                            const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
+                            return (
+                                <div key={i} className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                                    {/* Collection icon */}
+                                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center overflow-hidden">
+                                        <TokenIcon logo={collectionImage} symbol={collectionName} size={36} />
+                                        {!extractLogoUrl(collectionImage) && <Repeat className="h-4 w-4 text-amber-500" />}
+                                    </div>
+                                    {/* Main content */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
+                                                {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                                                {isOut ? 'Sent' : 'Received'}
+                                            </span>
+                                            <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{collectionName}</span>
+                                            {tx.nft_id && <span className="text-xs text-zinc-500 font-mono">#{tx.nft_id}</span>}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                                            {sender && (
+                                                <span>From <Link to={`/accounts/${normalizeAddress(sender)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(sender)}</Link></span>
+                                            )}
+                                            {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
+                                            {receiver && (
+                                                <span>To <Link to={`/accounts/${normalizeAddress(receiver)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(receiver)}</Link></span>
+                                            )}
+                                            {tx.nft_type && (
+                                                <>
+                                                    <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
+                                                    <Link to={`/contracts/${tx.nft_type}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-[10px]">{tx.nft_type}</Link>
+                                                </>
+                                            )}
+                                            {tx.transaction_hash && (
+                                                <>
+                                                    <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
+                                                    <Link to={`/transactions/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {/* Right side */}
+                                    <div className="flex-shrink-0 text-right">
+                                        <div className="text-[10px] text-zinc-400">{timeStr}</div>
+                                        {tx.block_height && <div className="text-[10px] text-zinc-400 font-mono">#{tx.block_height}</div>}
+                                    </div>
+                                </div>
+                            );
+                        })}
                         {nftHasMore && (
                             <div className="text-center py-3">
                                 <button onClick={() => loadNftTransfers(nftCursor, true)} disabled={nftLoading} className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50">{nftLoading ? 'Loading...' : 'Load More'}</button>
                             </div>
                         )}
-                    </>
+                    </div>
                 )}
 
                 {/* Empty states for dedicated views */}
