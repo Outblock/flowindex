@@ -6,7 +6,7 @@ import {
     getAccountsByAddressTokenTransfers,
     getAccountsByAddressNftTransfers,
 } from '../../api/gen/core';
-import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag } from 'lucide-react';
 import { normalizeAddress, formatShort } from './accountUtils';
 import { formatRelativeTime } from '../../lib/time';
 
@@ -17,12 +17,29 @@ interface Props {
 
 type FilterMode = 'all' | 'ft' | 'nft';
 
-interface TransferSummary {
-    ft: { token: string; amount: string; direction: string }[];
-    nft: { collection: string; count: number; direction: string }[];
+interface FTSummaryItem {
+    token: string;
+    amount: string;
+    direction: string;
+    symbol?: string;
+    name?: string;
+    logo?: any;
 }
 
-function deriveActivityType(tx: any): { type: string; label: string; color: string; bgColor: string } {
+interface NFTSummaryItem {
+    collection: string;
+    count: number;
+    direction: string;
+    name?: string;
+    logo?: any;
+}
+
+interface TransferSummary {
+    ft: FTSummaryItem[];
+    nft: NFTSummaryItem[];
+}
+
+function deriveActivityType(tx: any): { type: string; label: string; color: string; bgColor: string; icon?: string } {
     const tags: string[] = tx.tags || [];
     const imports: string[] = tx.contract_imports || [];
     const summary: TransferSummary | undefined = tx.transfer_summary;
@@ -30,11 +47,20 @@ function deriveActivityType(tx: any): { type: string; label: string; color: stri
     const tagsLower = tags.map(t => t.toLowerCase());
     const importsLower = imports.map(c => c.toLowerCase());
 
-    if (tagsLower.some(t => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated'))) {
+    if (tagsLower.some(t => t.includes('account_created'))) {
+        return { type: 'account', label: 'New Account', color: 'text-cyan-600 dark:text-cyan-400', bgColor: 'border-cyan-300 dark:border-cyan-500/30 bg-cyan-50 dark:bg-cyan-500/10' };
+    }
+    if (tagsLower.some(t => t.includes('key_update'))) {
+        return { type: 'key', label: 'Key Update', color: 'text-orange-600 dark:text-orange-400', bgColor: 'border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10' };
+    }
+    if (tagsLower.some(t => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated') || t.includes('contract_deploy'))) {
         return { type: 'deploy', label: 'Deploy', color: 'text-blue-600 dark:text-blue-400', bgColor: 'border-blue-300 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10' };
     }
     if (tagsLower.some(t => t.includes('evm')) || importsLower.some(c => c.includes('evm'))) {
         return { type: 'evm', label: 'EVM', color: 'text-purple-600 dark:text-purple-400', bgColor: 'border-purple-300 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-500/10' };
+    }
+    if (tagsLower.some(t => t.includes('marketplace'))) {
+        return { type: 'marketplace', label: 'Marketplace', color: 'text-pink-600 dark:text-pink-400', bgColor: 'border-pink-300 dark:border-pink-500/30 bg-pink-50 dark:bg-pink-500/10' };
     }
     if (summary?.nft && summary.nft.length > 0) {
         return { type: 'nft', label: 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
@@ -54,17 +80,89 @@ function formatTokenName(identifier: string): string {
     return parts.length >= 3 ? parts[2] : identifier;
 }
 
+/**
+ * Extract a usable image URL from the Cadence JSON-encoded logo field.
+ * The logo is a MetadataViews.Medias struct encoded as Cadence JSON.
+ * Structure: { type: "Struct", value: { id: "..Medias", fields: [{ name: "items", value: { type: "Array", value: [ { type: "Struct", value: { fields: [{ name: "file", value: ... }, { name: "mediaType", ... }] }} ] }}] }}
+ * We try to find the first HTTP(S) URL from the nested structure.
+ */
+function extractLogoUrl(logo: any): string | null {
+    if (!logo) return null;
+    // If it's already a string URL
+    if (typeof logo === 'string') {
+        if (logo.startsWith('http')) return logo;
+        return null;
+    }
+    // Try to walk the Cadence JSON structure
+    try {
+        const json = typeof logo === 'string' ? JSON.parse(logo) : logo;
+        // Walk through looking for url fields
+        const findUrl = (obj: any): string | null => {
+            if (!obj || typeof obj !== 'object') return null;
+            if (typeof obj.url === 'string' && obj.url.startsWith('http')) return obj.url;
+            if (typeof obj.value === 'string' && obj.value.startsWith('http')) return obj.value;
+            if (Array.isArray(obj)) {
+                for (const item of obj) {
+                    const found = findUrl(item);
+                    if (found) return found;
+                }
+            }
+            if (obj.value && typeof obj.value === 'object') {
+                return findUrl(obj.value);
+            }
+            if (obj.fields && Array.isArray(obj.fields)) {
+                for (const field of obj.fields) {
+                    const found = findUrl(field);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        return findUrl(json);
+    } catch {
+        return null;
+    }
+}
+
+function TokenIcon({ logo, symbol, size = 16 }: { logo?: any; symbol?: string; size?: number }) {
+    const url = extractLogoUrl(logo);
+    if (url) {
+        return (
+            <img
+                src={url}
+                alt={symbol || ''}
+                width={size}
+                height={size}
+                className="rounded-full object-cover flex-shrink-0"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+        );
+    }
+    return null;
+}
+
 function buildSummaryLine(tx: any, normalizedAddress: string): string {
     const summary: TransferSummary | undefined = tx.transfer_summary;
     const imports: string[] = tx.contract_imports || [];
     const tags: string[] = tx.tags || [];
+    const tagsLower = tags.map(t => t.toLowerCase());
+
+    // Account created
+    if (tagsLower.some(t => t.includes('account_created'))) {
+        return 'Created new account';
+    }
+
+    // Key update
+    if (tagsLower.some(t => t.includes('key_update'))) {
+        return 'Updated account key';
+    }
 
     // FT summary
     if (summary?.ft && summary.ft.length > 0) {
         const parts = summary.ft.map(f => {
-            const name = formatTokenName(f.token);
+            const displayName = f.symbol || f.name || formatTokenName(f.token);
             const direction = f.direction === 'out' ? 'Sent' : 'Received';
-            return `${direction} ${Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${name}`;
+            return `${direction} ${Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${displayName}`;
         });
         return parts.join(', ');
     }
@@ -72,15 +170,15 @@ function buildSummaryLine(tx: any, normalizedAddress: string): string {
     // NFT summary
     if (summary?.nft && summary.nft.length > 0) {
         const parts = summary.nft.map(n => {
-            const name = formatTokenName(n.collection);
+            const displayName = n.name || formatTokenName(n.collection);
             const direction = n.direction === 'out' ? 'Sent' : 'Received';
-            return `${direction} ${n.count} ${name}`;
+            return `${direction} ${n.count} ${displayName}`;
         });
         return parts.join(', ');
     }
 
     // Deploy
-    if (tags.some(t => t.toLowerCase().includes('deploy') || t.toLowerCase().includes('contract_added') || t.toLowerCase().includes('contract_updated'))) {
+    if (tagsLower.some(t => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated') || t.includes('contract_deploy'))) {
         const contractNames = imports.map(c => formatTokenName(c)).filter(Boolean);
         return contractNames.length > 0 ? `Deployed ${contractNames.join(', ')}` : 'Contract deployment';
     }
@@ -382,6 +480,9 @@ export function AccountActivityTab({ address, initialTransactions }: Props) {
                                                 {activity.type === 'deploy' && <FileCode className="h-2.5 w-2.5" />}
                                                 {activity.type === 'evm' && <Zap className="h-2.5 w-2.5" />}
                                                 {activity.type === 'contract' && <Box className="h-2.5 w-2.5" />}
+                                                {activity.type === 'account' && <UserPlus className="h-2.5 w-2.5" />}
+                                                {activity.type === 'key' && <Key className="h-2.5 w-2.5" />}
+                                                {activity.type === 'marketplace' && <ShoppingBag className="h-2.5 w-2.5" />}
                                                 {activity.type === 'tx' && <Activity className="h-2.5 w-2.5" />}
                                                 {activity.label}
                                             </span>
@@ -398,9 +499,15 @@ export function AccountActivityTab({ address, initialTransactions }: Props) {
                                                 </span>
                                             </div>
                                             {summaryLine && (
-                                                <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
-                                                    {summaryLine}
-                                                </p>
+                                                <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+                                                    {(() => {
+                                                        const s: TransferSummary | undefined = tx.transfer_summary;
+                                                        const firstLogo = s?.ft?.[0]?.logo || s?.nft?.[0]?.logo;
+                                                        if (firstLogo) return <TokenIcon logo={firstLogo} symbol={s?.ft?.[0]?.symbol || s?.nft?.[0]?.name} size={14} />;
+                                                        return null;
+                                                    })()}
+                                                    <span className="truncate">{summaryLine}</span>
+                                                </div>
                                             )}
                                         </div>
 

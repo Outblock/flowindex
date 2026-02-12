@@ -645,13 +645,18 @@ func (s *Server) enrichAccountTransactions(ctx context.Context, txs []models.Tra
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(ctx, txIDs)
 	transferSummaries, _ := s.repo.GetTransferSummariesByTxIDs(ctx, txIDs, address)
 
+	// Collect token metadata for icons/symbols.
+	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(ctx, ftIDs)
+	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(ctx, nftIDs)
+
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
 		var ts *repository.TransferSummary
 		if summary, ok := transferSummaries[t.ID]; ok {
 			ts = &summary
 		}
-		out = append(out, toFlowTransactionOutputWithTransfers(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts))
+		out = append(out, toFlowTransactionOutputWithTransfers(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts, ftMeta, nftMeta))
 	}
 	return out
 }

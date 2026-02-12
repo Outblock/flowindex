@@ -82,3 +82,4 @@ func hexToBytesOrNull(input string) interface{} {
 	}
 	return b
 }
+

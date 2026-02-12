@@ -178,13 +178,18 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 			eventsByTx[e.TransactionID] = append(eventsByTx[e.TransactionID], e)
 		}
 	}
+	// Collect token metadata for icons/symbols.
+	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
+	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
+
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
 		var ts *repository.TransferSummary
 		if s, ok := transferSummaries[t.ID]; ok {
 			ts = &s
 		}
-		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts))
+		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts, ftMeta, nftMeta))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }

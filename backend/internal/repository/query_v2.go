@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -415,6 +416,99 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		out[txID] = s
 	}
 
+	return out, nil
+}
+
+// TokenMetadataInfo is a lightweight struct for token display info (icon, symbol, name).
+type TokenMetadataInfo struct {
+	Name        string          `json:"name"`
+	Symbol      string          `json:"symbol"`
+	Decimals    int             `json:"decimals"`
+	Logo        json.RawMessage `json:"logo,omitempty"`
+	Description string          `json:"description,omitempty"`
+}
+
+// GetFTTokenMetadataByIdentifiers returns display metadata for a set of token identifiers (e.g. "A.1654653399040a61.FlowToken").
+func (r *Repository) GetFTTokenMetadataByIdentifiers(ctx context.Context, identifiers []string) (map[string]TokenMetadataInfo, error) {
+	out := make(map[string]TokenMetadataInfo, len(identifiers))
+	if len(identifiers) == 0 {
+		return out, nil
+	}
+	// Build unique (address, contract_name) pairs.
+	type key struct{ addr, name string }
+	seen := make(map[key][]string) // key -> original identifiers
+	for _, id := range identifiers {
+		parts := strings.SplitN(id, ".", 3) // A.hex.Name
+		if len(parts) < 3 {
+			continue
+		}
+		addr := strings.TrimPrefix(parts[1], "0x")
+		name := parts[2]
+		k := key{addr, name}
+		seen[k] = append(seen[k], id)
+	}
+
+	for k, origIDs := range seen {
+		var t models.FTToken
+		err := r.db.QueryRow(ctx, `
+			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0),
+			       COALESCE(logo, 'null'::jsonb), COALESCE(description,'')
+			FROM app.ft_tokens
+			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
+			Scan(&t.Name, &t.Symbol, &t.Decimals, &t.Logo, &t.Description)
+		if err != nil {
+			continue // token not found or error, skip
+		}
+		info := TokenMetadataInfo{Name: t.Name, Symbol: t.Symbol, Decimals: t.Decimals, Description: t.Description}
+		if len(t.Logo) > 0 && string(t.Logo) != "null" {
+			info.Logo = t.Logo
+		}
+		for _, origID := range origIDs {
+			out[origID] = info
+		}
+	}
+	return out, nil
+}
+
+// GetNFTCollectionMetadataByIdentifiers returns display metadata for NFT collection identifiers.
+func (r *Repository) GetNFTCollectionMetadataByIdentifiers(ctx context.Context, identifiers []string) (map[string]TokenMetadataInfo, error) {
+	out := make(map[string]TokenMetadataInfo, len(identifiers))
+	if len(identifiers) == 0 {
+		return out, nil
+	}
+	type key struct{ addr, name string }
+	seen := make(map[key][]string)
+	for _, id := range identifiers {
+		parts := strings.SplitN(id, ".", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		addr := strings.TrimPrefix(parts[1], "0x")
+		name := parts[2]
+		k := key{addr, name}
+		seen[k] = append(seen[k], id)
+	}
+
+	for k, origIDs := range seen {
+		var name, symbol, description string
+		var squareImage []byte
+		err := r.db.QueryRow(ctx, `
+			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(description,''),
+			       COALESCE(square_image, 'null'::jsonb)
+			FROM app.nft_collections
+			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
+			Scan(&name, &symbol, &description, &squareImage)
+		if err != nil {
+			continue
+		}
+		info := TokenMetadataInfo{Name: name, Symbol: symbol, Description: description}
+		if len(squareImage) > 0 && string(squareImage) != "null" {
+			info.Logo = squareImage
+		}
+		for _, origID := range origIDs {
+			out[origID] = info
+		}
+	}
 	return out, nil
 }
 

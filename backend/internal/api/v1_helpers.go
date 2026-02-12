@@ -271,7 +271,7 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 		name = token.Name
 	}
 	identifier := formatTokenIdentifier(address, name)
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"id":            identifier,
 		"address":       formatAddressV1(address),
 		"contract_name": name,
@@ -281,6 +281,28 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 		"timestamp":     formatTime(token.UpdatedAt),
 		"updated_at":    formatTime(token.UpdatedAt),
 	}
+	if token.Description != "" {
+		out["description"] = token.Description
+	}
+	if token.ExternalURL != "" {
+		out["external_url"] = token.ExternalURL
+	}
+	if len(token.Logo) > 0 && string(token.Logo) != "null" {
+		out["logo"] = json.RawMessage(token.Logo)
+	}
+	if token.VaultPath != "" {
+		out["vault_path"] = token.VaultPath
+	}
+	if token.ReceiverPath != "" {
+		out["receiver_path"] = token.ReceiverPath
+	}
+	if token.BalancePath != "" {
+		out["balance_path"] = token.BalancePath
+	}
+	if len(token.Socials) > 0 && string(token.Socials) != "null" {
+		out["socials"] = json.RawMessage(token.Socials)
+	}
+	return out
 }
 
 func toFTHoldingOutput(holding models.FTHolding, percentage float64) map[string]interface{} {
@@ -547,22 +569,43 @@ func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string
 	}
 }
 
-func toTransferSummaryOutput(s repository.TransferSummary) map[string]interface{} {
+func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[string]repository.TokenMetadataInfo) map[string]interface{} {
 	ft := make([]map[string]interface{}, 0, len(s.FT))
 	for _, f := range s.FT {
-		ft = append(ft, map[string]interface{}{
+		item := map[string]interface{}{
 			"token":     f.Token,
 			"amount":    f.Amount,
 			"direction": f.Direction,
-		})
+		}
+		if m, ok := ftMeta[f.Token]; ok {
+			if m.Symbol != "" {
+				item["symbol"] = m.Symbol
+			}
+			if m.Name != "" {
+				item["name"] = m.Name
+			}
+			if len(m.Logo) > 0 {
+				item["logo"] = json.RawMessage(m.Logo)
+			}
+		}
+		ft = append(ft, item)
 	}
 	nft := make([]map[string]interface{}, 0, len(s.NFT))
 	for _, n := range s.NFT {
-		nft = append(nft, map[string]interface{}{
+		item := map[string]interface{}{
 			"collection": n.Collection,
 			"count":      n.Count,
 			"direction":  n.Direction,
-		})
+		}
+		if m, ok := nftMeta[n.Collection]; ok {
+			if m.Name != "" {
+				item["name"] = m.Name
+			}
+			if len(m.Logo) > 0 {
+				item["logo"] = json.RawMessage(m.Logo)
+			}
+		}
+		nft = append(nft, item)
 	}
 	return map[string]interface{}{
 		"ft":  ft,
@@ -570,14 +613,35 @@ func toTransferSummaryOutput(s repository.TransferSummary) map[string]interface{
 	}
 }
 
-func toFlowTransactionOutputWithTransfers(t models.Transaction, events []models.Event, contracts []string, tags []string, fee float64, transfers *repository.TransferSummary) map[string]interface{} {
+func toFlowTransactionOutputWithTransfers(t models.Transaction, events []models.Event, contracts []string, tags []string, fee float64, transfers *repository.TransferSummary, ftMeta, nftMeta map[string]repository.TokenMetadataInfo) map[string]interface{} {
 	out := toFlowTransactionOutput(t, events, contracts, tags, fee)
 	if transfers != nil {
-		out["transfer_summary"] = toTransferSummaryOutput(*transfers)
+		out["transfer_summary"] = toTransferSummaryOutput(*transfers, ftMeta, nftMeta)
 	} else {
 		out["transfer_summary"] = map[string]interface{}{"ft": []interface{}{}, "nft": []interface{}{}}
 	}
 	return out
+}
+
+// collectTokenIdentifiers extracts all unique FT and NFT token identifiers from a set of transfer summaries.
+func collectTokenIdentifiers(summaries map[string]repository.TransferSummary) (ftIDs, nftIDs []string) {
+	ftSet := make(map[string]bool)
+	nftSet := make(map[string]bool)
+	for _, s := range summaries {
+		for _, f := range s.FT {
+			if !ftSet[f.Token] {
+				ftSet[f.Token] = true
+				ftIDs = append(ftIDs, f.Token)
+			}
+		}
+		for _, n := range s.NFT {
+			if !nftSet[n.Collection] {
+				nftSet[n.Collection] = true
+				nftIDs = append(nftIDs, n.Collection)
+			}
+		}
+	}
+	return
 }
 
 // --- Accounting + Flow + Status Handlers ---

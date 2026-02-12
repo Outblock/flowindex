@@ -571,6 +571,13 @@ CREATE TABLE IF NOT EXISTS app.ft_tokens (
     name             TEXT,
     symbol           TEXT,
     decimals         INT,
+    description      TEXT,
+    external_url     TEXT,
+    logo             JSONB,
+    vault_path       TEXT,
+    receiver_path    TEXT,
+    balance_path     TEXT,
+    socials          JSONB,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (contract_address, contract_name)
 );
@@ -633,6 +640,20 @@ ALTER TABLE IF EXISTS app.ft_tokens
   DROP CONSTRAINT IF EXISTS ft_tokens_pkey;
 ALTER TABLE IF EXISTS app.ft_tokens
   ADD CONSTRAINT ft_tokens_pkey PRIMARY KEY (contract_address, contract_name);
+ALTER TABLE IF EXISTS app.ft_tokens
+  ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE IF EXISTS app.ft_tokens
+  ADD COLUMN IF NOT EXISTS external_url TEXT;
+ALTER TABLE IF EXISTS app.ft_tokens
+  ADD COLUMN IF NOT EXISTS logo JSONB;
+ALTER TABLE IF EXISTS app.ft_tokens
+  ADD COLUMN IF NOT EXISTS vault_path TEXT;
+ALTER TABLE IF EXISTS app.ft_tokens
+  ADD COLUMN IF NOT EXISTS receiver_path TEXT;
+ALTER TABLE IF EXISTS app.ft_tokens
+  ADD COLUMN IF NOT EXISTS balance_path TEXT;
+ALTER TABLE IF EXISTS app.ft_tokens
+  ADD COLUMN IF NOT EXISTS socials JSONB;
 
 ALTER TABLE IF EXISTS app.ft_holdings
   ADD COLUMN IF NOT EXISTS contract_name TEXT NOT NULL DEFAULT '';

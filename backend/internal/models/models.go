@@ -260,12 +260,19 @@ type AccountCatalog struct {
 
 // FTToken represents app.ft_tokens
 type FTToken struct {
-	ContractAddress string    `json:"contract_address"`
-	ContractName    string    `json:"contract_name,omitempty"`
-	Name            string    `json:"name"`
-	Symbol          string    `json:"symbol"`
-	Decimals        int       `json:"decimals"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ContractAddress string          `json:"contract_address"`
+	ContractName    string          `json:"contract_name,omitempty"`
+	Name            string          `json:"name"`
+	Symbol          string          `json:"symbol"`
+	Decimals        int             `json:"decimals"`
+	Description     string          `json:"description,omitempty"`
+	ExternalURL     string          `json:"external_url,omitempty"`
+	Logo            json.RawMessage `json:"logo,omitempty"`
+	VaultPath       string          `json:"vault_path,omitempty"`
+	ReceiverPath    string          `json:"receiver_path,omitempty"`
+	BalancePath     string          `json:"balance_path,omitempty"`
+	Socials         json.RawMessage `json:"socials,omitempty"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 // FTHolding represents app.ft_holdings
