@@ -70,7 +70,13 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     const [scheduledHasMore, setScheduledHasMore] = useState(false);
     const [scheduledLoading, setScheduledLoading] = useState(false);
 
+    // Reset only when address changes (not on every initialTransactions reference change)
+    const prevAddressRef = useRef(normalizedAddress);
     useEffect(() => {
+        const addressChanged = prevAddressRef.current !== normalizedAddress;
+        prevAddressRef.current = normalizedAddress;
+
+        // Always sync transaction data from loader
         const dedupedTxs = dedup(initialTransactions);
         setTransactions(dedupedTxs);
         setCurrentPage(1);
@@ -79,18 +85,22 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         setTxCursors(init);
         setTxHasNext(!!initialNextCursor);
         setExpandedTxId(null);
-        setFtTransfers([]);
-        setFtCursor('');
-        setFtHasMore(false);
-        setNftTransfers([]);
-        setNftCursor('');
-        setNftHasMore(false);
-        setScheduledTxs([]);
-        setScheduledCursor('');
-        setScheduledHasMore(false);
-        // Reset fetch guard — if loader provided data, mark as fetched; otherwise allow fallback
+
+        // Only reset subtab data when the address actually changes
+        if (addressChanged) {
+            setFtTransfers([]);
+            setFtCursor('');
+            setFtHasMore(false);
+            setNftTransfers([]);
+            setNftCursor('');
+            setNftHasMore(false);
+            setScheduledTxs([]);
+            setScheduledCursor('');
+            setScheduledHasMore(false);
+        }
+
         didFetchRef.current = dedupedTxs.length > 0;
-    }, [address, initialTransactions, initialNextCursor]);
+    }, [address, initialTransactions, initialNextCursor, normalizedAddress]);
 
     // --- Transactions ---
     const loadTransactions = useCallback(async (page: number) => {
@@ -122,13 +132,14 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     }, [txCursors, normalizedAddress]);
 
     // Fallback: if loader didn't provide data (e.g., client-side nav failure), fetch page 1
+    // Only fetch when viewing 'all' activity — subtabs have their own loaders
     useEffect(() => {
-        if (!didFetchRef.current && !txLoading) {
+        if (!didFetchRef.current && !txLoading && filterMode === 'all') {
             didFetchRef.current = true;
             loadTransactions(1);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [normalizedAddress]);
+    }, [normalizedAddress, filterMode]);
 
     useEffect(() => {
         if (currentPage > 1) loadTransactions(currentPage);
