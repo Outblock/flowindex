@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { resolveApiBaseUrl } from '../../api';
 import { normalizeAddress } from './accountUtils';
 import { ActivityRow, dedup } from './AccountActivityTab';
+import { Pagination } from '../Pagination';
 
 interface Props {
     address: string;
@@ -10,14 +11,17 @@ interface Props {
 export function AccountScheduledTab({ address }: Props) {
     const normalizedAddress = normalizeAddress(address);
     const [txs, setTxs] = useState<any[]>([]);
-    const [cursor, setCursor] = useState('');
-    const [hasMore, setHasMore] = useState(false);
     const [loading, setLoading] = useState(false);
     const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [cursors, setCursors] = useState<Record<number, string>>({ 1: '' });
+    const [hasNext, setHasNext] = useState(false);
 
-    const loadScheduledTransactions = async (cursorValue: string, append: boolean) => {
+    const loadPage = useCallback(async (page: number) => {
         setLoading(true);
+        setExpandedTxId(null);
         try {
+            const cursorValue = cursors[page] ?? '';
             const baseUrl = await resolveApiBaseUrl();
             const url = `${baseUrl}/accounts/${normalizedAddress}/scheduled-transactions?cursor=${encodeURIComponent(cursorValue)}&limit=20`;
             const res = await fetch(url);
@@ -29,25 +33,35 @@ export function AccountScheduledTab({ address }: Props) {
                 proposer: tx.proposer_address || tx.proposer,
                 blockHeight: tx.block_height,
             }));
-            setTxs(append ? prev => dedup([...prev, ...mapped]) : dedup(mapped));
+            setTxs(dedup(mapped));
             const next = payload?.next_cursor ?? '';
-            setCursor(next);
-            setHasMore(!!next);
+            if (next) {
+                setCursors(prev => ({ ...prev, [page + 1]: next }));
+                setHasNext(true);
+            } else {
+                setHasNext(false);
+            }
         } catch (err) {
             console.error('Failed to load scheduled transactions', err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [cursors, normalizedAddress]);
 
     useEffect(() => {
         setTxs([]);
-        setCursor('');
-        setHasMore(false);
+        setCurrentPage(1);
+        setCursors({ 1: '' });
+        setHasNext(false);
         setExpandedTxId(null);
-        loadScheduledTransactions('', false);
+        loadPage(1);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [address]);
+
+    useEffect(() => {
+        if (currentPage > 1) loadPage(currentPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage]);
 
     return (
         <div>
@@ -69,17 +83,6 @@ export function AccountScheduledTab({ address }: Props) {
                                 onToggle={() => setExpandedTxId(prev => prev === tx.id ? null : tx.id)}
                             />
                         ))}
-                        {hasMore && (
-                            <div className="text-center py-3">
-                                <button
-                                    onClick={() => loadScheduledTransactions(cursor, true)}
-                                    disabled={loading}
-                                    className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50"
-                                >
-                                    {loading ? 'Loading...' : 'Load More'}
-                                </button>
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -87,6 +90,14 @@ export function AccountScheduledTab({ address }: Props) {
                     <div className="text-center text-zinc-500 italic py-8">No scheduled transactions found</div>
                 )}
             </div>
+
+            {(txs.length > 0 || currentPage > 1) && (
+                <Pagination
+                    currentPage={currentPage}
+                    onPageChange={setCurrentPage}
+                    hasNext={hasNext}
+                />
+            )}
         </div>
     );
 }
