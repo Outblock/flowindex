@@ -19,15 +19,7 @@ function AccountNode({ data }: { data: any }) {
     const isCurrent = data.isCurrent;
     const role = data.role as 'current' | 'parent' | 'child' | 'owned';
 
-    const accentColor = isCurrent
-        ? 'border-nothing-green/40 dark:border-nothing-green/40'
-        : role === 'parent'
-            ? 'border-blue-400/40 dark:border-blue-400/30'
-            : 'border-amber-400/40 dark:border-amber-400/30';
-
-    const bgColor = isCurrent
-        ? 'bg-white dark:bg-zinc-900'
-        : 'bg-white dark:bg-zinc-900';
+    const bgColor = 'bg-white dark:bg-zinc-900';
 
     const IconComp = role === 'parent' ? ShieldCheck : role === 'child' ? UserCog : role === 'owned' ? KeyRound : User;
     const iconColor = isCurrent ? 'text-nothing-green-dark dark:text-nothing-green' : role === 'parent' ? 'text-blue-500' : 'text-amber-500';
@@ -36,7 +28,7 @@ function AccountNode({ data }: { data: any }) {
     const thumbnail = data.thumbnail;
 
     return (
-        <div className={`border ${accentColor} ${bgColor} rounded-lg px-4 py-3 min-w-[220px] max-w-[260px] shadow-sm font-mono relative`}>
+        <div className={`border border-zinc-200 dark:border-white/10 ${bgColor} rounded-lg px-4 py-3 min-w-[220px] max-w-[280px] shadow-sm font-mono relative`}>
             {/* Handles for edges */}
             <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-zinc-300 dark:!bg-zinc-600 !border-0 !-top-1" />
             <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-zinc-300 dark:!bg-zinc-600 !border-0 !-bottom-1" />
@@ -83,17 +75,31 @@ function AccountNode({ data }: { data: any }) {
                 <div className="text-[9px] text-zinc-400 mt-2 line-clamp-1">{data.description}</div>
             )}
 
-            {/* Accessible tokens/NFTs summary */}
-            {data.ftCount > 0 && (
-                <div className="flex items-center gap-1 mt-2 text-[9px] text-zinc-400">
-                    <Coins className="h-3 w-3" />
-                    <span>{data.ftCount} token{data.ftCount !== 1 ? 's' : ''} accessible</span>
+            {/* Accessible tokens detail */}
+            {data.ftTokens && data.ftTokens.length > 0 && (
+                <div className="mt-2 border-t border-zinc-100 dark:border-white/5 pt-2">
+                    <div className="flex items-center gap-1 text-[9px] text-zinc-400 mb-1">
+                        <Coins className="h-3 w-3" />
+                        <span className="font-semibold uppercase tracking-wider">Tokens</span>
+                    </div>
+                    {data.ftTokens.map((ft: any, i: number) => (
+                        <div key={i} className="text-[9px] text-zinc-500 dark:text-zinc-400 truncate pl-4">
+                            {ft.id?.split('.')?.pop() || ft.id}: {Number(ft.balance).toFixed(4)}
+                        </div>
+                    ))}
                 </div>
             )}
             {data.nftCollections && data.nftCollections.length > 0 && (
-                <div className="flex items-center gap-1 mt-1 text-[9px] text-zinc-400">
-                    <ImageIcon className="h-3 w-3" />
-                    <span>{data.nftCollections.length} NFT collection{data.nftCollections.length !== 1 ? 's' : ''}</span>
+                <div className="mt-2 border-t border-zinc-100 dark:border-white/5 pt-2">
+                    <div className="flex items-center gap-1 text-[9px] text-zinc-400 mb-1">
+                        <ImageIcon className="h-3 w-3" />
+                        <span className="font-semibold uppercase tracking-wider">NFTs</span>
+                    </div>
+                    {data.nftCollections.map((col: string, i: number) => (
+                        <div key={i} className="text-[9px] text-zinc-500 dark:text-zinc-400 truncate pl-4">
+                            {col.split('.').pop() || col}
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -153,12 +159,27 @@ export function AccountHybridCustodyTab({ address }: Props) {
             if (manager?.isManagerExists) {
                 promises.push(
                     cadenceService.getChildMetadata(normalizedAddress)
-                        .then((meta: any) => setChildMetadata(meta || {}))
+                        .then((meta: any) => {
+                            if (!meta) return setChildMetadata({});
+                            // Normalize address keys so lookup matches
+                            const normalized: Record<string, any> = {};
+                            for (const [k, v] of Object.entries(meta)) {
+                                normalized[normalizeAddress(k)] = v;
+                            }
+                            setChildMetadata(normalized);
+                        })
                         .catch(() => {})
                 );
                 promises.push(
                     cadenceService.getNftAccessibility(normalizedAddress)
-                        .then((data: any) => setNftAccessibility(data || {}))
+                        .then((data: any) => {
+                            if (!data) return setNftAccessibility({});
+                            const normalized: Record<string, Record<string, number[]>> = {};
+                            for (const [k, v] of Object.entries(data)) {
+                                normalized[normalizeAddress(k)] = v as Record<string, number[]>;
+                            }
+                            setNftAccessibility(normalized);
+                        })
                         .catch(() => {})
                 );
 
@@ -205,8 +226,8 @@ export function AccountHybridCustodyTab({ address }: Props) {
         const totalChildren = children.length + ownedAccounts.length;
 
         // Layout constants
-        const COL_WIDTH = 280;
-        const ROW_HEIGHT = 160;
+        const COL_WIDTH = 300;
+        const ROW_HEIGHT = 200;
         const centerX = Math.max(totalParents, totalChildren, 1) * COL_WIDTH / 2;
 
         // Current account node (center)
@@ -266,10 +287,11 @@ export function AccountHybridCustodyTab({ address }: Props) {
             const display = c.display as any;
             const childAddr = normalizeAddress(c.address);
 
-            // Get metadata from getChildMetadata call
-            const meta = childMetadata[childAddr] || childMetadata[c.address];
+            // Get metadata from getChildMetadata call (keys already normalized)
+            const meta = childMetadata[childAddr];
             const displayName = display?.name || meta?.name || null;
-            const thumbnail = display?.thumbnail || meta?.thumbnail?.url || meta?.thumbnail || null;
+            const rawThumb = display?.thumbnail || meta?.thumbnail;
+            const thumbnail = typeof rawThumb === 'string' ? rawThumb : rawThumb?.url || rawThumb?.cid ? `https://nftstorage.link/ipfs/${rawThumb.cid}` : null;
             const desc = display?.description || meta?.description || null;
 
             // Get accessibility info
@@ -289,7 +311,7 @@ export function AccountHybridCustodyTab({ address }: Props) {
                     displayName,
                     description: desc,
                     thumbnail,
-                    ftCount: childFts.length,
+                    ftTokens: childFts,
                     nftCollections: nftCollectionKeys,
                 },
             });
@@ -316,7 +338,7 @@ export function AccountHybridCustodyTab({ address }: Props) {
         const parents = ownedInfo?.parents?.length || 0;
         const children = ((managerInfo?.childAccounts as any[])?.length || 0) + ((managerInfo?.ownedAccounts as any[])?.length || 0);
         const rows = (parents > 0 ? 1 : 0) + 1 + (children > 0 ? 1 : 0);
-        return Math.max(350, rows * 180 + 80);
+        return Math.max(400, rows * 220 + 80);
     }, [managerInfo, ownedInfo]);
 
     return (
