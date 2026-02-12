@@ -4,7 +4,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getAccountsByAddress, getAccountsByAddressTransactions } from '../../api/gen/core';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Shield, Lock, Database, Copy, Check
+    FileText, HardDrive, Shield, Lock, Database, Copy, Check, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
@@ -15,13 +15,14 @@ import { AccountTokensTab } from '../../components/account/AccountTokensTab';
 import { AccountNFTsTab } from '../../components/account/AccountNFTsTab';
 import { AccountKeysTab } from '../../components/account/AccountInfoTab';
 import { AccountContractsTab } from '../../components/account/AccountContractsTab';
+import { AccountScheduledTab } from '../../components/account/AccountScheduledTab';
 import { AccountStorageTab } from '../../components/account/AccountStorageTab';
 import { AccountHybridCustodyTab } from '../../components/account/AccountHybridCustodyTab';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { cn } from '../../lib/utils';
 
-const VALID_TABS = ['activity', 'tokens', 'nfts', 'keys', 'contracts', 'storage', 'custody'] as const;
+const VALID_TABS = ['activity', 'scheduled', 'tokens', 'nfts', 'keys', 'contracts', 'storage', 'custody'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
 export const Route = createFileRoute('/accounts/$address')({
@@ -210,6 +211,7 @@ function AccountDetail() {
 
     const tabs = [
         { id: 'activity' as const, label: 'Activity', icon: Activity },
+        { id: 'scheduled' as const, label: 'Scheduled', icon: Clock },
         { id: 'tokens' as const, label: 'Tokens', icon: Coins },
         { id: 'nfts' as const, label: 'NFTs', icon: ImageIcon },
         { id: 'keys' as const, label: 'Public Keys', icon: Key },
@@ -356,6 +358,7 @@ function AccountDetail() {
 
                     <div className="min-h-[500px]">
                         {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} initialNextCursor={initialNextCursor} />}
+                        {activeTab === 'scheduled' && <AccountScheduledTab address={address} />}
                         {activeTab === 'tokens' && <AccountTokensTab address={address} />}
                         {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
                         {activeTab === 'keys' && <AccountKeysTab account={account} />}

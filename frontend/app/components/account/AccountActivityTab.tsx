@@ -297,7 +297,7 @@ const activityTypeIcons: Record<string, React.ComponentType<any>> = {
     tx: Activity,
 };
 
-function ActivityRow({ tx, address, expanded, onToggle }: { tx: any; address: string; expanded: boolean; onToggle: () => void }) {
+export function ActivityRow({ tx, address, expanded, onToggle }: { tx: any; address: string; expanded: boolean; onToggle: () => void }) {
     const activity = deriveActivityType(tx);
     const summaryLine = buildSummaryLine(tx);
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
@@ -371,7 +371,7 @@ function ActivityRow({ tx, address, expanded, onToggle }: { tx: any; address: st
 // --- Main Component ---
 
 // Deduplicate transactions by id, keeping the first occurrence.
-function dedup(txs: any[]): any[] {
+export function dedup(txs: any[]): any[] {
     const seen = new Set<string>();
     return txs.filter(tx => {
         if (!tx.id || seen.has(tx.id)) return false;
