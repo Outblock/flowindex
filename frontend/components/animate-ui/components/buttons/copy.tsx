@@ -1,8 +1,7 @@
-
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Copy } from 'lucide-react';
+import { Check, Files } from 'lucide-react';
 
 import { Button as ButtonPrimitive, ButtonProps } from '../../primitives/buttons/button';
 import { cn } from '@/lib/utils';
@@ -23,14 +22,15 @@ const buttonVariants = cva(
         secondary:
           'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80',
         ghost:
-          'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+          'hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-50',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
         default: 'size-9',
-        xs: "size-7 [&_svg:not([class*='size-'])]:size-3.5 rounded-md",
+        xs: "size-6 [&_svg:not([class*='size-'])]:size-3 rounded-md",
         sm: 'size-8 rounded-md',
         lg: 'size-10 rounded-md',
+        icon: 'size-9',
       },
     },
     defaultVariants: {
@@ -84,15 +84,14 @@ function CopyButton({
     }
   }, [onClick, copied, content, setIsCopied, onCopiedChange, delay]);
 
-  const Icon = isCopied ? Check : Copy;
+  const Icon = isCopied ? Check : Files;
 
   return (
     <ButtonPrimitive
-      // @ts-ignore
       data-slot="copy-button"
       className={cn(buttonVariants({ variant, size, className }))}
       onClick={handleCopy}
-      {...props as any}>
+      {...props}>
       <AnimatePresence mode="popLayout">
         <motion.span
           key={isCopied ? 'check' : 'copy'}
@@ -108,4 +107,4 @@ function CopyButton({
   );
 }
 
-export { CopyButton, buttonVariants };
+export { CopyButton };
