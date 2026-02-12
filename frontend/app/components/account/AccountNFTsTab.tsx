@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Package, Image as ImageIcon, ExternalLink, Grid, List as ListIcon } from 'lucide-react';
 import type { NFTCollection } from '../../../cadence/cadence.gen';
 import { normalizeAddress, getNFTThumbnail } from './accountUtils';
@@ -60,16 +60,6 @@ export function AccountNFTsTab({ address }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [normalizedAddress]);
 
-    // Calculate global offset for script compatibility
-    const getGlobalOffset = useCallback((colId: string): number => {
-        let offset = 0;
-        for (const c of collections) {
-            if (c.id === colId) break;
-            offset += c.ids?.length || 0;
-        }
-        return offset;
-    }, [collections]);
-
     // Load NFTs for selected collection
     useEffect(() => {
         if (!selectedCollectionId) return;
@@ -91,11 +81,26 @@ export function AccountNFTsTab({ address }: Props) {
 
             try {
                 const { cadenceService } = await import('../../fclConfig');
-                const globalOffset = getGlobalOffset(selectedCollectionId);
+
+                // Get storage identifier from path
+                // e.g. /storage/MomentCollection -> MomentCollection
+                const collection = collections.find(c => c.id === selectedCollectionId);
+                // In the generated types, storagePath is a string.
+                const storagePath = collection?.collectionData?.storagePath || '';
+
+                let identifier = storagePath;
+                if (storagePath && storagePath.includes('/')) {
+                    identifier = storagePath.split('/').pop() || storagePath;
+                }
+
+                if (!identifier) throw new Error("Invalid storage path");
+
                 const page = currentState?.page || 0;
-                const start = globalOffset + page * NFT_PAGE_SIZE;
+                const start = page * NFT_PAGE_SIZE;
                 const end = start + NFT_PAGE_SIZE;
-                const nfts = await cadenceService.getAllNfts(normalizedAddress, start, end);
+
+                // Use the new optimized method
+                const nfts = await cadenceService.getNftsFromCollection(normalizedAddress, identifier, start, end);
 
                 setCollectionStates(prev => ({
                     ...prev,
@@ -123,7 +128,7 @@ export function AccountNFTsTab({ address }: Props) {
         };
 
         loadNFTs();
-    }, [selectedCollectionId, normalizedAddress, collections, collectionStates, getGlobalOffset]); // Dependent on collections for offset
+    }, [selectedCollectionId, normalizedAddress, collections, collectionStates]); // Removed getGlobalOffset dependency
 
     const handlePageChange = (newPage: number) => {
         if (!selectedCollectionId) return;

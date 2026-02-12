@@ -53,57 +53,57 @@ export function AccountTokensTab({ address }: Props) {
                 </GlassCard>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-3">
                 <AnimatePresence mode="popLayout">
                     {tokens.map((t: FTVaultInfo, i: number) => {
                         const logoUrl = getTokenLogoURL(t);
                         return (
                             <motion.div
                                 key={`${t.contractAddress}-${t.contractName}`}
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.05 }}
                             >
-                                <GlassCard className="h-full hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden">
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="flex items-center gap-3">
+                                <GlassCard className="hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden p-4 flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4 min-w-0">
+                                        <div className="flex-shrink-0">
                                             {logoUrl ? (
                                                 <img
                                                     src={logoUrl}
                                                     alt={t.name}
-                                                    className="w-10 h-10 object-cover bg-white dark:bg-white/10 shadow-sm"
+                                                    className="w-10 h-10 object-cover bg-white dark:bg-white/10 shadow-sm rounded-full"
                                                     loading="lazy"
                                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
                                                 />
                                             ) : null}
-                                            <div className={`w-10 h-10 bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-inner ${logoUrl ? 'hidden' : ''}`}>
+                                            <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-inner ${logoUrl ? 'hidden' : ''}`}>
                                                 <Coins className="h-5 w-5 text-zinc-400" />
                                             </div>
-                                            <div>
-                                                <div className="font-bold text-zinc-900 dark:text-white leading-tight">{t.name || t.contractName}</div>
-                                                <div className="text-[10px] font-mono text-zinc-500">{t.symbol}</div>
+                                        </div>
+
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{t.name || t.contractName}</div>
+                                                <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{t.symbol}</div>
+                                            </div>
+                                            <div className="flex items-center gap-1 mt-0.5">
+                                                <Link
+                                                    to="/accounts/$address"
+                                                    params={{ address: normalizeAddress(t.contractAddress) }}
+                                                    className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-1 transition-colors"
+                                                >
+                                                    {formatShort(t.contractAddress)}
+                                                    <ExternalLink className="w-2.5 h-2.5" />
+                                                </Link>
+                                                <span className="text-[10px] text-zinc-300 dark:text-zinc-600">•</span>
+                                                <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[100px]">{t.contractName}</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="mb-4">
-                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Balance</div>
-                                        <div className="text-xl font-mono font-bold text-zinc-900 dark:text-white break-all">
+                                    <div className="text-right flex-shrink-0">
+                                        <div className="text-lg font-mono font-bold text-zinc-900 dark:text-white">
                                             {t.balance != null ? Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-white/5">
-                                        <Link
-                                            to="/accounts/$address"
-                                            params={{ address: normalizeAddress(t.contractAddress) }}
-                                            className="text-[10px] font-mono text-zinc-500 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-1 transition-colors"
-                                        >
-                                            {formatShort(t.contractAddress)}
-                                            <ExternalLink className="w-3 h-3" />
-                                        </Link>
-                                        <div className="text-[10px] text-zinc-400 font-mono">
-                                            {t.contractName}
                                         </div>
                                     </div>
                                 </GlassCard>

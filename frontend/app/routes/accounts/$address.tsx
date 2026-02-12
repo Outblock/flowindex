@@ -37,7 +37,9 @@ export const Route = createFileRoute('/accounts/$address')({
             const normalized = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
             await ensureHeyApiConfigured();
             const accountRes = await getAccountsByAddress({ path: { address: normalized } });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const accountPayload: any = accountRes.data;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const normalizedKeys = (accountPayload?.keys || []).map((key: any) => ({
                 keyIndex: key.keyIndex ?? key.key_index ?? key.index,
                 publicKey: key.publicKey ?? key.public_key ?? '',
@@ -59,8 +61,10 @@ export const Route = createFileRoute('/accounts/$address')({
             let initialTransactions: any[] = [];
             try {
                 const txRes = await getAccountsByAddressTransactions({ path: { address: normalized }, query: { cursor: '', limit: 20 } });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const payload: any = txRes.data;
                 const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 initialTransactions = (items || []).map((tx: any) => ({
                     ...tx,
                     payer: tx.payer_address || tx.payer || tx.proposer_address,
@@ -104,7 +108,9 @@ function AccountDetail() {
     const { account: initialAccount, initialTransactions } = Route.useLoaderData();
     const navigate = Route.useNavigate();
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [account, setAccount] = useState<any>(initialAccount);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [error, setError] = useState<any>(initialAccount ? null : 'Account not found');
     const activeTab: AccountTab = searchTab || 'activity';
     const setActiveTab = (tab: AccountTab) => {
@@ -134,6 +140,7 @@ function AccountDetail() {
                     cadenceService.getToken(normalizedAddress).catch(() => null),
                     cadenceService.getStakingInfo(normalizedAddress).catch(() => null),
                 ]);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const flowToken = tokenRes?.tokens?.find((t: any) =>
                     t.contractName === 'FlowToken' || t.symbol === 'FLOW'
                 );
@@ -158,7 +165,9 @@ function AccountDetail() {
             try {
                 await ensureHeyApiConfigured();
                 const res = await getAccountsByAddress({ path: { address: normalizedAddress } });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const payload: any = res.data;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const keys = (payload?.keys || []).map((key: any) => ({
                     keyIndex: key.keyIndex ?? key.key_index ?? key.index,
                     publicKey: key.publicKey ?? key.public_key ?? '',
@@ -179,7 +188,7 @@ function AccountDetail() {
         };
         refresh();
         return () => { cancelled = true; };
-    }, [address, normalizedAddress]);
+    }, [address, normalizedAddress, account?.address]);
 
     if (error || !account) {
         return (
@@ -270,10 +279,10 @@ function AccountDetail() {
                         <div className="mt-2">
                             <div className="flex justify-between items-baseline mb-2">
                                 <span className="text-2xl font-bold">
-                                    {Math.round((onChainData?.storage?.storageUsedInMB || 0) * 100) / 100} <span className="text-xs font-normal text-zinc-500">MB</span>
+                                    {Math.round(Number(onChainData?.storage?.storageUsedInMB || 0) * 100) / 100} <span className="text-xs font-normal text-zinc-500">MB</span>
                                 </span>
                                 <span className="text-xs text-zinc-500">
-                                    of {Math.round((onChainData?.storage?.storageCapacityInMB || 0) * 100) / 100} MB
+                                    of {Math.round(Number(onChainData?.storage?.storageCapacityInMB || 0) * 100) / 100} MB
                                 </span>
                             </div>
 
@@ -282,7 +291,7 @@ function AccountDetail() {
                                     className="h-full bg-nothing-green"
                                     initial={{ width: 0 }}
                                     animate={{
-                                        width: `${Math.min(((onChainData?.storage?.storageUsedInMB || 0) / (onChainData?.storage?.storageCapacityInMB || 1)) * 100, 100)}%`
+                                        width: `${Math.min((Number(onChainData?.storage?.storageUsedInMB || 0) / Number(onChainData?.storage?.storageCapacityInMB || 1)) * 100, 100)}%`
                                     }}
                                     transition={{ duration: 1, ease: "easeOut" }}
                                 />
@@ -315,7 +324,7 @@ function AccountDetail() {
                 <div className="space-y-6">
                     {/* Floating Tab Bar */}
                     <div className="sticky top-4 z-50">
-                        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-full shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto relative">
+                        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto relative">
                             {tabs.map(({ id, label, icon: Icon }) => {
                                 const isActive = activeTab === id;
                                 return (
@@ -323,14 +332,14 @@ function AccountDetail() {
                                         key={id}
                                         onClick={() => setActiveTab(id)}
                                         className={cn(
-                                            "relative px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap z-10",
+                                            "relative px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap z-10",
                                             isActive ? "text-white dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
                                         )}
                                     >
                                         {isActive && (
                                             <motion.div
                                                 layoutId="activeTab"
-                                                className="absolute inset-0 bg-zinc-900 dark:bg-white rounded-full -z-10 shadow-md"
+                                                className="absolute inset-0 bg-zinc-900 dark:bg-white -z-10 shadow-md"
                                                 transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                             />
                                         )}
