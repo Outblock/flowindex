@@ -418,12 +418,23 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 			COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
 			COALESCE(t.status, '') AS status,
 			COALESCE(t.error_message, '') AS error_message,
+			COALESCE(t.is_evm, false) AS is_evm,
 			COALESCE(m.gas_used, t.gas_used, 0) AS gas_used,
 			COALESCE(m.event_count, t.event_count, 0) AS event_count,
-			t.timestamp
+			t.timestamp,
+			COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
+			COALESCE(encode(et.from_address, 'hex'), '') AS evm_from,
+			COALESCE(encode(et.to_address, 'hex'), '') AS evm_to,
+			COALESCE(et.value::text, '') AS evm_value
 		FROM addr_txs a
 		JOIN raw.transactions t ON t.id = a.transaction_id AND t.block_height = a.block_height
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
+		LEFT JOIN LATERAL (
+			SELECT evm_hash, from_address, to_address, value
+			FROM app.evm_transactions ev
+			WHERE ev.transaction_id = t.id AND ev.block_height = t.block_height
+			LIMIT 1
+		) et ON true
 		ORDER BY a.block_height DESC, a.transaction_id DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -437,7 +448,7 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 	var txs []models.Transaction
 	for rows.Next() {
 		var t models.Transaction
-		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.GasUsed, &t.EventCount, &t.Timestamp); err != nil {
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers, &t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasUsed, &t.EventCount, &t.Timestamp, &t.EVMHash, &t.EVMFrom, &t.EVMTo, &t.EVMValue); err != nil {
 			return nil, err
 		}
 		txs = append(txs, t)

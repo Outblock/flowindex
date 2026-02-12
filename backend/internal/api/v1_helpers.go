@@ -277,6 +277,21 @@ func toFlowTransactionOutput(t models.Transaction, events []models.Event, contra
 	if len(t.Arguments) > 0 && string(t.Arguments) != "null" {
 		out["arguments"] = t.Arguments
 	}
+	if t.IsEVM {
+		out["is_evm"] = true
+	}
+	if t.EVMHash != "" {
+		out["evm_hash"] = formatAddressV1(t.EVMHash)
+	}
+	if t.EVMFrom != "" {
+		out["evm_from"] = formatAddressV1(t.EVMFrom)
+	}
+	if t.EVMTo != "" {
+		out["evm_to"] = formatAddressV1(t.EVMTo)
+	}
+	if t.EVMValue != "" {
+		out["evm_value"] = t.EVMValue
+	}
 	return out
 }
 
