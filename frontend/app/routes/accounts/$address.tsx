@@ -25,12 +25,19 @@ import { cn } from '../../lib/utils';
 const VALID_TABS = ['activity', 'tokens', 'nfts', 'keys', 'contracts', 'storage', 'custody'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
+const VALID_SUBTABS = ['all', 'ft', 'nft', 'scheduled'] as const;
+type AccountSubTab = (typeof VALID_SUBTABS)[number];
+
 export const Route = createFileRoute('/accounts/$address')({
     component: AccountDetail,
     pendingComponent: AccountDetailPending,
-    validateSearch: (search: Record<string, unknown>): { tab?: AccountTab } => {
+    validateSearch: (search: Record<string, unknown>): { tab?: AccountTab; subtab?: AccountSubTab } => {
         const tab = search.tab as string;
-        return { tab: VALID_TABS.includes(tab as AccountTab) ? (tab as AccountTab) : undefined };
+        const subtab = search.subtab as string;
+        return {
+            tab: VALID_TABS.includes(tab as AccountTab) ? (tab as AccountTab) : undefined,
+            subtab: VALID_SUBTABS.includes(subtab as AccountSubTab) ? (subtab as AccountSubTab) : undefined,
+        };
     },
     loader: async ({ params }) => {
         try {
@@ -108,7 +115,7 @@ function AccountDetailPending() {
 
 function AccountDetail() {
     const { address } = Route.useParams();
-    const { tab: searchTab } = Route.useSearch();
+    const { tab: searchTab, subtab: searchSubTab } = Route.useSearch();
     const { account: initialAccount, initialTransactions, initialNextCursor } = Route.useLoaderData();
     const navigate = Route.useNavigate();
 
@@ -117,8 +124,12 @@ function AccountDetail() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [error, setError] = useState<any>(initialAccount ? null : 'Account not found');
     const activeTab: AccountTab = searchTab || 'activity';
+    const activeSubTab: AccountSubTab | undefined = searchSubTab;
     const setActiveTab = (tab: AccountTab) => {
         navigate({ search: { tab }, replace: true });
+    };
+    const setActiveSubTab = (subtab: AccountSubTab | undefined) => {
+        navigate({ search: { tab: activeTab, subtab }, replace: true });
     };
 
     const normalizedAddress = normalizeAddress(address);
@@ -350,7 +361,7 @@ function AccountDetail() {
                     </div>
 
                     <div className="min-h-[500px]">
-                        {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} initialNextCursor={initialNextCursor} />}
+                        {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} initialNextCursor={initialNextCursor} subtab={activeSubTab} onSubTabChange={setActiveSubTab} />}
                         {activeTab === 'tokens' && <AccountTokensTab address={address} />}
                         {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
                         {activeTab === 'keys' && <AccountKeysTab account={account} />}

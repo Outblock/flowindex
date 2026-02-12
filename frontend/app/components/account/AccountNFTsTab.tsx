@@ -436,7 +436,7 @@ export function AccountNFTsTab({ address }: Props) {
                         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                         onClick={() => setSelectedNft(null)}
                     />
-                    <GlassCard className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row p-0 z-10 bg-white dark:bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-200">
+                    <GlassCard className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row p-0 z-10 bg-white dark:bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-200">
                         {/* Close button — modal top-right */}
                         <button
                             onClick={() => setSelectedNft(null)}
@@ -445,9 +445,9 @@ export function AccountNFTsTab({ address }: Props) {
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
                         </button>
 
-                        {/* Left: Square image container — fills and covers */}
-                        <div className="w-full md:w-1/2 bg-zinc-100 dark:bg-black/20 relative overflow-hidden flex-shrink-0">
-                            <div className="aspect-square w-full">
+                        {/* Left: Forced square image container */}
+                        <div className="w-full md:w-auto md:h-[min(80vh,600px)] md:aspect-square bg-zinc-100 dark:bg-black/20 relative overflow-hidden flex-shrink-0">
+                            <div className="aspect-square w-full h-full">
                                 {(() => {
                                     const media = getNFTMedia(selectedNft, selectedCollectionId || '');
                                     if (media.type === 'video') {
@@ -472,8 +472,8 @@ export function AccountNFTsTab({ address }: Props) {
                             </div>
                         </div>
 
-                        {/* Right: Metadata */}
-                        <div className="w-full md:w-1/2 p-6 overflow-y-auto max-h-[50vh] md:max-h-[90vh]">
+                        {/* Right: Metadata — scrolls independently */}
+                        <div className="flex-1 min-w-0 p-6 overflow-y-auto max-h-[50vh] md:max-h-[min(80vh,600px)]">
                             <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
                                 {selectedNft?.display?.name || `#${selectedNft?.tokenId}`}
                             </h2>

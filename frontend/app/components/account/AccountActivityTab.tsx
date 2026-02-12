@@ -20,19 +20,24 @@ import {
     type TransferSummary,
 } from '../TransactionRow';
 
+type FilterMode = 'all' | 'ft' | 'nft' | 'scheduled';
+
 interface Props {
     address: string;
     initialTransactions: any[];
     initialNextCursor?: string;
+    subtab?: FilterMode;
+    onSubTabChange?: (subtab: FilterMode | undefined) => void;
 }
-
-type FilterMode = 'all' | 'ft' | 'nft' | 'scheduled';
 
 export { ActivityRow, dedup };
 
-export function AccountActivityTab({ address, initialTransactions, initialNextCursor }: Props) {
+export function AccountActivityTab({ address, initialTransactions, initialNextCursor, subtab, onSubTabChange }: Props) {
     const normalizedAddress = normalizeAddress(address);
-    const [filterMode, setFilterMode] = useState<FilterMode>('all');
+    const filterMode: FilterMode = subtab || 'all';
+    const setFilterMode = (mode: FilterMode) => {
+        onSubTabChange?.(mode === 'all' ? undefined : mode);
+    };
     const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
     const didFetchRef = useRef(false);
 
