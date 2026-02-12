@@ -23,6 +23,7 @@ interface FTSummaryItem {
     token: string;
     amount: string;
     direction: string;
+    counterparty?: string;
     symbol?: string;
     name?: string;
     logo?: any;
@@ -32,6 +33,7 @@ interface NFTSummaryItem {
     collection: string;
     count: number;
     direction: string;
+    counterparty?: string;
     name?: string;
     logo?: any;
 }
@@ -150,7 +152,8 @@ function buildSummaryLine(tx: any): string {
         const parts = summary.ft.map(f => {
             const displayName = f.symbol || f.name || formatTokenName(f.token);
             const direction = f.direction === 'out' ? 'Sent' : 'Received';
-            return `${direction} ${Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${displayName}`;
+            const cp = f.counterparty ? ` ${f.direction === 'out' ? 'to' : 'from'} ${formatShort(f.counterparty)}` : '';
+            return `${direction} ${Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${displayName}${cp}`;
         });
         return parts.join(', ');
     }
@@ -159,7 +162,8 @@ function buildSummaryLine(tx: any): string {
         const parts = summary.nft.map(n => {
             const displayName = n.name || formatTokenName(n.collection);
             const direction = n.direction === 'out' ? 'Sent' : 'Received';
-            return `${direction} ${n.count} ${displayName}`;
+            const cp = n.counterparty ? ` ${n.direction === 'out' ? 'to' : 'from'} ${formatShort(n.counterparty)}` : '';
+            return `${direction} ${n.count} ${displayName}${cp}`;
         });
         return parts.join(', ');
     }
@@ -234,6 +238,14 @@ function ExpandedTransferDetails({ tx, address }: { tx: any; address: string }) 
                                         {Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })}
                                     </span>
                                     <span className="text-zinc-500">{displayName}</span>
+                                    {f.counterparty && (
+                                        <span className="text-zinc-400 text-[10px]">
+                                            {isOut ? 'to' : 'from'}{' '}
+                                            <Link to={`/accounts/${f.counterparty}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                                {formatShort(f.counterparty)}
+                                            </Link>
+                                        </span>
+                                    )}
                                     <span className="text-zinc-400 text-[10px] font-mono ml-auto">{f.token}</span>
                                 </div>
                             );
@@ -259,6 +271,14 @@ function ExpandedTransferDetails({ tx, address }: { tx: any; address: string }) 
                                     </span>
                                     <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">{n.count}x</span>
                                     <span className="text-zinc-500">{displayName}</span>
+                                    {n.counterparty && (
+                                        <span className="text-zinc-400 text-[10px]">
+                                            {isOut ? 'to' : 'from'}{' '}
+                                            <Link to={`/accounts/${n.counterparty}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                                {formatShort(n.counterparty)}
+                                            </Link>
+                                        </span>
+                                    )}
                                     <span className="text-zinc-400 text-[10px] font-mono ml-auto">{n.collection}</span>
                                 </div>
                             );

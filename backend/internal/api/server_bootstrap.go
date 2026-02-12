@@ -41,6 +41,7 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 	r.Use(rateLimitMiddleware)
 
 	registerBaseRoutes(r, s)
+	registerAdminRoutes(r, s)
 	registerLegacyRoutes(r, s)
 	registerV1Routes(r, s)
 

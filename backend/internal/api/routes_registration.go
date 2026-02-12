@@ -13,6 +13,10 @@ func registerBaseRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/ws/status", s.handleStatusWebSocket).Methods("GET", "OPTIONS")
 }
 
+func registerAdminRoutes(r *mux.Router, s *Server) {
+	r.HandleFunc("/admin/refetch-token-metadata", s.handleAdminRefetchTokenMetadata).Methods("POST", "OPTIONS")
+}
+
 func registerLegacyRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/blocks", s.handleListBlocks).Methods("GET", "OPTIONS")
 	r.HandleFunc("/blocks/{id}", s.handleGetBlock).Methods("GET", "OPTIONS")

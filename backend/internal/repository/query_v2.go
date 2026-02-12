@@ -335,16 +335,18 @@ func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, t
 
 // FTTransferSummaryItem represents a single FT token aggregation within a transaction.
 type FTTransferSummaryItem struct {
-	Token     string `json:"token"`
-	Amount    string `json:"amount"`
-	Direction string `json:"direction"`
+	Token        string `json:"token"`
+	Amount       string `json:"amount"`
+	Direction    string `json:"direction"`
+	Counterparty string `json:"counterparty,omitempty"`
 }
 
 // NFTTransferSummaryItem represents a single NFT collection aggregation within a transaction.
 type NFTTransferSummaryItem struct {
-	Collection string `json:"collection"`
-	Count      int    `json:"count"`
-	Direction  string `json:"direction"`
+	Collection   string `json:"collection"`
+	Count        int    `json:"count"`
+	Direction    string `json:"direction"`
+	Counterparty string `json:"counterparty,omitempty"`
 }
 
 // TransferSummary holds aggregated FT and NFT transfer info for a single transaction.
@@ -365,11 +367,16 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 
 	// FT transfers: group by (transaction_id, token_contract_address, contract_name, direction)
 	// Exclude generic FungibleToken events (duplicates of specific token events like FlowToken).
+	// Counterparty: when direction='out', show to_address; when 'in', show from_address.
 	ftRows, err := r.db.Query(ctx, `
 		SELECT encode(transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS token,
 		       SUM(CAST(amount AS NUMERIC)) AS total_amount,
-		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction
+		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction,
+		       CASE WHEN from_address = $2
+		            THEN string_agg(DISTINCT encode(to_address, 'hex'), ',')
+		            ELSE string_agg(DISTINCT encode(from_address, 'hex'), ',')
+		       END AS counterparty
 		FROM app.ft_transfers
 		WHERE transaction_id = ANY($1)
 		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
@@ -380,12 +387,12 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 	}
 	defer ftRows.Close()
 	for ftRows.Next() {
-		var txID, token, amount, direction string
-		if err := ftRows.Scan(&txID, &token, &amount, &direction); err != nil {
+		var txID, token, amount, direction, counterparty string
+		if err := ftRows.Scan(&txID, &token, &amount, &direction, &counterparty); err != nil {
 			return nil, err
 		}
 		s := out[txID]
-		s.FT = append(s.FT, FTTransferSummaryItem{Token: token, Amount: amount, Direction: direction})
+		s.FT = append(s.FT, FTTransferSummaryItem{Token: token, Amount: amount, Direction: direction, Counterparty: counterparty})
 		out[txID] = s
 	}
 
@@ -395,7 +402,11 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		SELECT encode(transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS collection,
 		       COUNT(*) AS cnt,
-		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction
+		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction,
+		       CASE WHEN from_address = $2
+		            THEN string_agg(DISTINCT encode(to_address, 'hex'), ',')
+		            ELSE string_agg(DISTINCT encode(from_address, 'hex'), ',')
+		       END AS counterparty
 		FROM app.nft_transfers
 		WHERE transaction_id = ANY($1)
 		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
@@ -406,13 +417,13 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 	}
 	defer nftRows.Close()
 	for nftRows.Next() {
-		var txID, collection, direction string
+		var txID, collection, direction, counterparty string
 		var count int
-		if err := nftRows.Scan(&txID, &collection, &count, &direction); err != nil {
+		if err := nftRows.Scan(&txID, &collection, &count, &direction, &counterparty); err != nil {
 			return nil, err
 		}
 		s := out[txID]
-		s.NFT = append(s.NFT, NFTTransferSummaryItem{Collection: collection, Count: count, Direction: direction})
+		s.NFT = append(s.NFT, NFTTransferSummaryItem{Collection: collection, Count: count, Direction: direction, Counterparty: counterparty})
 		out[txID] = s
 	}
 

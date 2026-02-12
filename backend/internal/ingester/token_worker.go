@@ -71,6 +71,18 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	for _, legs := range legsByTx {
 		transfers := buildTokenTransfers(legs)
 		for _, transfer := range transfers {
+			// Filter out wrapper contract duplicates (FungibleToken/NonFungibleToken
+			// emit generic events alongside specific token events like FlowToken).
+			if isWrapperContractName(transfer.ContractName) {
+				continue
+			}
+			// Filter fee-related transfers AFTER pairing to avoid orphaned legs.
+			if !includeFeeTransfers() {
+				if isFeeVaultAddress(transfer.FromAddress) || isFeeVaultAddress(transfer.ToAddress) {
+					continue
+				}
+			}
+
 			if transfer.IsNFT {
 				nftTransfers = append(nftTransfers, transfer)
 			} else {
@@ -256,12 +268,6 @@ func (w *TokenWorker) parseTokenLeg(evt models.Event, isNFT bool) *tokenLeg {
 	}
 	if !isNFT && amount == "" {
 		return nil
-	}
-
-	if !includeFeeTransfers() {
-		if isFeeVaultAddress(fromAddr) || isFeeVaultAddress(toAddr) {
-			return nil
-		}
 	}
 
 	direction := inferTransferDirection(evt.Type, fromAddr, toAddr)

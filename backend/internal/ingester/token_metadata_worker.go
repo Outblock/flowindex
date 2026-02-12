@@ -136,11 +136,10 @@ func (w *TokenMetadataWorker) fetchFTMetadata(ctx context.Context, contractAddr,
 	addr := flowsdk.HexToAddress(contractAddr)
 	nameVal, _ := cadence.NewString(contractName)
 
-	// 1) Fetch FTVaultData (name, symbol, decimals, paths).
-	ctxVault, cancelVault := context.WithTimeout(ctx, w.scriptTimout)
-	defer cancelVault()
+	ctxExec, cancel := context.WithTimeout(ctx, w.scriptTimout)
+	defer cancel()
 
-	v, err := w.flow.ExecuteScriptAtLatestBlock(ctxVault, []byte(cadenceFTVaultDataScript()), []cadence.Value{
+	v, err := w.flow.ExecuteScriptAtLatestBlock(ctxExec, []byte(cadenceFTCombinedScript()), []cadence.Value{
 		cadence.NewAddress([8]byte(addr)),
 		nameVal,
 	})
@@ -155,91 +154,31 @@ func (w *TokenMetadataWorker) fetchFTMetadata(ctx context.Context, contractAddr,
 	}
 
 	fields := s.FieldsMappedByName()
-	displayVal := unwrapOptional(fields["display"])
-	display, _ := displayVal.(cadence.Struct)
-	displayFields := display.FieldsMappedByName()
-
-	name := cadenceToString(displayFields["name"])
-	symbol := cadenceToString(displayFields["symbol"])
-	if name == "" {
-		name = cadenceToString(fields["name"])
-	}
-	if symbol == "" {
-		symbol = cadenceToString(fields["symbol"])
-	}
-
-	decimals := 0
-	if d, ok := cadenceToInt(fields["decimals"]); ok {
-		decimals = d
-	} else if d, ok := cadenceToInt(displayFields["decimals"]); ok {
-		decimals = d
-	}
-
-	// Basic sanity: don't write empty metadata.
-	if name == "" && symbol == "" && decimals == 0 {
-		return models.FTToken{}, false
-	}
-
-	// Extract vault paths from StoragePath/PublicPath structs.
-	vaultPath := cadencePathToString(fields["storagePath"])
-	receiverPath := cadencePathToString(fields["receiverPath"])
-	balancePath := cadencePathToString(fields["metadataPath"])
-	if balancePath == "" {
-		balancePath = cadencePathToString(fields["providerPath"])
-	}
-
 	token := models.FTToken{
 		ContractAddress: contractAddr,
 		ContractName:    contractName,
-		Name:            name,
-		Symbol:          symbol,
-		Decimals:        decimals,
-		VaultPath:       vaultPath,
-		ReceiverPath:    receiverPath,
-		BalancePath:     balancePath,
+		Name:            cadenceToString(fields["name"]),
+		Symbol:          cadenceToString(fields["symbol"]),
+		Description:     cadenceToString(fields["description"]),
+		ExternalURL:     cadenceToString(fields["externalURL"]),
+		VaultPath:       cadencePathToString(fields["storagePath"]),
+		ReceiverPath:    cadencePathToString(fields["receiverPath"]),
+		BalancePath:     cadencePathToString(fields["balancePath"]),
 	}
 
-	// 2) Fetch FTDisplay (description, external_url, logos).
-	ctxDisplay, cancelDisplay := context.WithTimeout(ctx, w.scriptTimout)
-	defer cancelDisplay()
-
-	dv, err := w.flow.ExecuteScriptAtLatestBlock(ctxDisplay, []byte(cadenceFTDisplayScript()), []cadence.Value{
-		cadence.NewAddress([8]byte(addr)),
-		nameVal,
-	})
-	if err == nil {
-		dv = unwrapOptional(dv)
-		if ds, ok := dv.(cadence.Struct); ok {
-			df := ds.FieldsMappedByName()
-			if desc := cadenceToString(df["description"]); desc != "" {
-				token.Description = desc
-			}
-			// Override name/symbol from FTDisplay if available (more user-friendly).
-			if dn := cadenceToString(df["name"]); dn != "" {
-				token.Name = dn
-			}
-			if dsym := cadenceToString(df["symbol"]); dsym != "" {
-				token.Symbol = dsym
-			}
-			// externalURL is a MetadataViews.ExternalURL struct with a .url field.
-			if extVal := unwrapOptional(df["externalURL"]); extVal != nil {
-				if extStruct, ok := extVal.(cadence.Struct); ok {
-					token.ExternalURL = cadenceToString(extStruct.FieldsMappedByName()["url"])
-				}
-			}
-			// logos is a MetadataViews.Medias struct; encode as JSON for flexible storage.
-			if logosVal := unwrapOptional(df["logos"]); logosVal != nil {
-				if b, err := cadjson.Encode(logosVal); err == nil && len(b) > 0 {
-					token.Logo = b
-				}
-			}
-			// socials is {String: MetadataViews.ExternalURL}
-			if socialsVal := unwrapOptional(df["socials"]); socialsVal != nil {
-				if b, err := cadjson.Encode(socialsVal); err == nil && len(b) > 0 {
-					token.Socials = b
-				}
-			}
+	if logosVal := unwrapOptional(fields["logos"]); logosVal != nil {
+		if b, err := cadjson.Encode(logosVal); err == nil && len(b) > 0 {
+			token.Logo = b
 		}
+	}
+	if socialsVal := unwrapOptional(fields["socials"]); socialsVal != nil {
+		if b, err := cadjson.Encode(socialsVal); err == nil && len(b) > 0 {
+			token.Socials = b
+		}
+	}
+
+	if token.Name == "" && token.Symbol == "" {
+		return models.FTToken{}, false
 	}
 
 	return token, true
@@ -381,79 +320,118 @@ func getEnvIntDefault(key string, def int) int {
 
 // Cadence scripts
 
-func cadenceFTVaultDataScript() string {
-	// Addresses default to mainnet, but can be overridden via env vars.
-	viewResolverAddr := strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_VIEW_RESOLVER_ADDRESS")), "0x")
-	if viewResolverAddr == "" {
-		// ViewResolver is deployed alongside MetadataViews on the Flow NFT address.
-		viewResolverAddr = strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_METADATA_VIEWS_ADDRESS")), "0x")
-	}
-	if viewResolverAddr == "" {
-		viewResolverAddr = strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS")), "0x")
-	}
-	if viewResolverAddr == "" {
-		viewResolverAddr = "1d7e57aa55817448"
-	}
+// cadenceFTCombinedScript returns a single Cadence script that fetches both
+// FTVaultData (paths) and FTDisplay (name, symbol, logos, etc.) in one call.
+// It iterates the contract account's storage to find vaults, then calls vault.resolveView().
+// This approach works for all contracts including those in recovered state.
+func cadenceFTCombinedScript() string {
+	viewResolverAddr := getEnvOrDefault("FLOW_VIEW_RESOLVER_ADDRESS",
+		getEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
+			getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")))
 
-	ftmdAddr := strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_FUNGIBLE_TOKEN_METADATA_VIEWS_ADDRESS")), "0x")
-	if ftmdAddr == "" {
-		// Often co-deployed with FungibleToken.
-		ftmdAddr = strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_FUNGIBLE_TOKEN_ADDRESS")), "0x")
-	}
-	if ftmdAddr == "" {
-		ftmdAddr = "f233dcee88fe0abe"
-	}
+	ftAddr := getEnvOrDefault("FLOW_FUNGIBLE_TOKEN_ADDRESS", "f233dcee88fe0abe")
+
+	ftmdAddr := getEnvOrDefault("FLOW_FUNGIBLE_TOKEN_METADATA_VIEWS_ADDRESS", ftAddr)
 
 	return fmt.Sprintf(`
         import ViewResolver from 0x%s
+        import FungibleToken from 0x%s
         import FungibleTokenMetadataViews from 0x%s
+        import MetadataViews from 0x%s
 
-        access(all) fun main(contractAddress: Address, contractName: String): FungibleTokenMetadataViews.FTVaultData? {
-            let viewResolver = getAccount(contractAddress).contracts.borrow<&{ViewResolver}>(name: contractName)
-                ?? return nil
-            let vaultData = viewResolver.resolveContractView(
-                resourceType: nil,
-                viewType: Type<FungibleTokenMetadataViews.FTVaultData>()
-            ) as! FungibleTokenMetadataViews.FTVaultData?
-            return vaultData
+        access(all) struct FTInfo {
+            access(all) let name: String?
+            access(all) let symbol: String?
+            access(all) let description: String?
+            access(all) let externalURL: String?
+            access(all) let logos: MetadataViews.Medias?
+            access(all) let socials: {String: MetadataViews.ExternalURL}?
+            access(all) let storagePath: StoragePath?
+            access(all) let receiverPath: PublicPath?
+            access(all) let balancePath: PublicPath?
+
+            init(
+                name: String?, symbol: String?, description: String?,
+                externalURL: String?,
+                logos: MetadataViews.Medias?,
+                socials: {String: MetadataViews.ExternalURL}?,
+                storagePath: StoragePath?, receiverPath: PublicPath?, balancePath: PublicPath?
+            ) {
+                self.name = name
+                self.symbol = symbol
+                self.description = description
+                self.externalURL = externalURL
+                self.logos = logos
+                self.socials = socials
+                self.storagePath = storagePath
+                self.receiverPath = receiverPath
+                self.balancePath = balancePath
+            }
         }
-    `, viewResolverAddr, ftmdAddr)
+
+        access(all) fun main(contractAddress: Address, contractName: String): FTInfo? {
+            let displayType = Type<FungibleTokenMetadataViews.FTDisplay>()
+            let dataType = Type<FungibleTokenMetadataViews.FTVaultData>()
+
+            var display: FungibleTokenMetadataViews.FTDisplay? = nil
+            var data: FungibleTokenMetadataViews.FTVaultData? = nil
+
+            // Try 1: Borrow vault from storage and call resolveView.
+            // Safe for recovered contracts (skips them via isRecovered check).
+            let authAcct = getAuthAccount<auth(BorrowValue) &Account>(contractAddress)
+            let ftVaultType = Type<@{FungibleToken.Vault}>()
+            authAcct.storage.forEachStored(fun (path: StoragePath, type: Type): Bool {
+                if type.isRecovered { return true }
+                if !type.isSubtype(of: ftVaultType) { return true }
+                let parts = type.identifier.split(separator: ".")
+                if parts.length < 3 { return true }
+                if parts[2] != contractName { return true }
+                let vault = authAcct.storage.borrow<&{FungibleToken.Vault}>(from: path)
+                if vault == nil { return true }
+                display = vault!.resolveView(displayType) as! FungibleTokenMetadataViews.FTDisplay?
+                data = vault!.resolveView(dataType) as! FungibleTokenMetadataViews.FTVaultData?
+                return false
+            })
+
+            // Try 2: ViewResolver contract borrow fallback.
+            // For contracts that don't have a vault in the deployer's storage.
+            if display == nil {
+                let acct = getAccount(contractAddress)
+                let viewResolver = acct.contracts.borrow<&{ViewResolver}>(name: contractName)
+                if viewResolver != nil {
+                    display = viewResolver!.resolveContractView(resourceType: nil, viewType: displayType) as! FungibleTokenMetadataViews.FTDisplay?
+                    data = viewResolver!.resolveContractView(resourceType: nil, viewType: dataType) as! FungibleTokenMetadataViews.FTVaultData?
+                }
+            }
+
+            if display == nil { return nil }
+
+            var extURL: String? = nil
+            if display!.externalURL != nil {
+                extURL = display!.externalURL!.url
+            }
+
+            return FTInfo(
+                name: display!.name,
+                symbol: display!.symbol,
+                description: display!.description,
+                externalURL: extURL,
+                logos: display!.logos,
+                socials: display!.socials,
+                storagePath: data?.storagePath,
+                receiverPath: data?.receiverPath,
+                balancePath: data?.metadataPath
+            )
+        }
+    `, viewResolverAddr, ftAddr, ftmdAddr, viewResolverAddr)
 }
 
-func cadenceFTDisplayScript() string {
-	viewResolverAddr := strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_VIEW_RESOLVER_ADDRESS")), "0x")
-	if viewResolverAddr == "" {
-		viewResolverAddr = strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_METADATA_VIEWS_ADDRESS")), "0x")
+func getEnvOrDefault(key, def string) string {
+	v := strings.TrimPrefix(strings.TrimSpace(os.Getenv(key)), "0x")
+	if v == "" {
+		return def
 	}
-	if viewResolverAddr == "" {
-		viewResolverAddr = strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS")), "0x")
-	}
-	if viewResolverAddr == "" {
-		viewResolverAddr = "1d7e57aa55817448"
-	}
-
-	ftmdAddr := strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_FUNGIBLE_TOKEN_METADATA_VIEWS_ADDRESS")), "0x")
-	if ftmdAddr == "" {
-		ftmdAddr = strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_FUNGIBLE_TOKEN_ADDRESS")), "0x")
-	}
-	if ftmdAddr == "" {
-		ftmdAddr = "f233dcee88fe0abe"
-	}
-
-	return fmt.Sprintf(`
-        import ViewResolver from 0x%s
-        import FungibleTokenMetadataViews from 0x%s
-
-        access(all) fun main(contractAddress: Address, contractName: String): FungibleTokenMetadataViews.FTDisplay? {
-            let viewResolver = getAccount(contractAddress).contracts.borrow<&{ViewResolver}>(name: contractName)
-                ?? return nil
-            let display = viewResolver.resolveContractView(
-                resourceType: nil,
-                viewType: Type<FungibleTokenMetadataViews.FTDisplay>()
-            ) as! FungibleTokenMetadataViews.FTDisplay?
-            return display
-        }
-    `, viewResolverAddr, ftmdAddr)
+	return v
 }
 
 func cadenceNFTCollectionDisplayScript() string {
@@ -481,9 +459,10 @@ func cadenceNFTCollectionDisplayScript() string {
         import MetadataViews from 0x%s
 
         access(all) fun main(contractAddress: Address, contractName: String): MetadataViews.NFTCollectionDisplay? {
-            let viewResolver = getAccount(contractAddress).contracts.borrow<&{ViewResolver}>(name: contractName)
-                ?? return nil
-            let display = viewResolver.resolveContractView(
+            let acct = getAccount(contractAddress)
+            let viewResolver = acct.contracts.borrow<&{ViewResolver}>(name: contractName)
+            if viewResolver == nil { return nil }
+            let display = viewResolver!.resolveContractView(
                 resourceType: nil,
                 viewType: Type<MetadataViews.NFTCollectionDisplay>()
             ) as! MetadataViews.NFTCollectionDisplay?

@@ -600,6 +600,9 @@ func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[s
 			"amount":    f.Amount,
 			"direction": f.Direction,
 		}
+		if f.Counterparty != "" {
+			item["counterparty"] = formatAddressV1(f.Counterparty)
+		}
 		if m, ok := ftMeta[f.Token]; ok {
 			if m.Symbol != "" {
 				item["symbol"] = m.Symbol
@@ -619,6 +622,9 @@ func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[s
 			"collection": n.Collection,
 			"count":      n.Count,
 			"direction":  n.Direction,
+		}
+		if n.Counterparty != "" {
+			item["counterparty"] = formatAddressV1(n.Counterparty)
 		}
 		if m, ok := nftMeta[n.Collection]; ok {
 			if m.Name != "" {
