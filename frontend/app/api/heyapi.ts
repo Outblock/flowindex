@@ -27,3 +27,25 @@ export async function fetchStatus(): Promise<any> {
   if (!res.ok) throw new Error(`status ${res.status}`);
   return res.json();
 }
+
+/** Storage API helpers (returns raw Cadence JSON-CDC) */
+export async function fetchAccountStorage(address: string): Promise<any> {
+  await ensureHeyApiConfigured();
+  const res = await fetch(`${_baseURL}/flow/account/${address}/storage`);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return res.json();
+}
+
+export async function fetchAccountStorageLinks(address: string, domain = 'public'): Promise<any> {
+  await ensureHeyApiConfigured();
+  const res = await fetch(`${_baseURL}/flow/account/${address}/storage/links?domain=${domain}`);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return res.json();
+}
+
+export async function fetchAccountStorageItem(address: string, path: string): Promise<any> {
+  await ensureHeyApiConfigured();
+  const res = await fetch(`${_baseURL}/flow/account/${address}/storage/item?path=${encodeURIComponent(path)}`);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return res.json();
+}
