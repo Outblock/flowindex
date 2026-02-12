@@ -3,10 +3,11 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getAccountsByAddressContractsByName } from '../../api/gen/core';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
-import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Code, FileText } from 'lucide-react';
-import { useTheme } from '../../contexts/ThemeContext';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Code, FileText, ChevronRight } from 'lucide-react';
 import { normalizeAddress } from './accountUtils';
+import { GlassCard } from '../ui/GlassCard';
+import { motion, AnimatePresence } from 'framer-motion';
 
 SyntaxHighlighter.registerLanguage('swift', swift);
 
@@ -17,23 +18,28 @@ interface Props {
 
 export function AccountContractsTab({ address, contracts }: Props) {
     const normalizedAddress = normalizeAddress(address);
-    const { theme } = useTheme();
-    const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
 
-    const [selectedContract, setSelectedContract] = useState('');
+
+    const [selectedContract, setSelectedContract] = useState<string | null>(null);
     const [contractCode, setContractCode] = useState('');
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const loadContractCode = async (name: string) => {
-        if (!name) return;
+        if (!name || selectedContract === name) {
+            if (selectedContract === name) setSelectedContract(null); // Toggle off
+            return;
+        }
+
         setLoading(true);
         setError(null);
         setSelectedContract(name);
         setContractCode('');
+
         try {
             await ensureHeyApiConfigured();
             const res = await getAccountsByAddressContractsByName({ path: { address: normalizedAddress, name } });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             setContractCode((res?.data as any)?.code || '');
         } catch (err) {
             console.error('Failed to load contract code', err);
@@ -44,65 +50,142 @@ export function AccountContractsTab({ address, contracts }: Props) {
     };
 
     return (
-        <div>
-            <h2 className="text-zinc-900 dark:text-white text-sm uppercase tracking-widest mb-6 border-b border-zinc-100 dark:border-white/5 pb-2">
-                Contracts ({contracts.length})
-            </h2>
+        <div className="space-y-6">
+            <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Deployed Contracts ({contracts.length})
+            </h3>
 
             {contracts.length > 0 ? (
-                <div className="space-y-4">
-                    <div className="flex flex-wrap gap-2">
-                        {contracts.map((name: string) => (
-                            <button
-                                key={name}
-                                onClick={() => loadContractCode(name)}
-                                className={`px-3 py-2 text-xs font-mono border transition-colors rounded-sm ${selectedContract === name
-                                    ? 'border-nothing-green-dark dark:border-nothing-green bg-nothing-green-dark/10 dark:bg-nothing-green/10 text-zinc-900 dark:text-white'
-                                    : 'border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5'
-                                }`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <Code className={`h-3 w-3 ${selectedContract === name ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
-                                    {name}
-                                </span>
-                            </button>
-                        ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Contract List */}
+                    <div className="space-y-3">
+                        <AnimatePresence>
+                            {contracts.map((name: string, i: number) => (
+                                <motion.div
+                                    key={name}
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: i * 0.05 }}
+                                >
+                                    <button
+                                        onClick={() => loadContractCode(name)}
+                                        className={`w-full text-left group relative overflow-hidden transition-all duration-300 border ${selectedContract === name
+                                            ? 'bg-nothing-green/10 border-nothing-green dark:border-nothing-green'
+                                            : 'bg-white/50 dark:bg-zinc-900/50 hover:bg-white dark:hover:bg-white/5 border-zinc-200 dark:border-white/10'
+                                            }`}
+                                    >
+                                        <div className="p-4 flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 ${selectedContract === name
+                                                    ? 'bg-nothing-green text-black'
+                                                    : 'bg-zinc-100 dark:bg-white/5 text-zinc-500'
+                                                    }`}>
+                                                    <Code className="w-4 h-4" />
+                                                </div>
+                                                <span className={`font-mono font-semibold ${selectedContract === name
+                                                    ? 'text-nothing-green-dark dark:text-nothing-green'
+                                                    : 'text-zinc-700 dark:text-zinc-300'
+                                                    }`}>
+                                                    {name}
+                                                </span>
+                                            </div>
+                                            <ChevronRight className={`w-4 h-4 transition-transform ${selectedContract === name ? 'rotate-90 text-nothing-green' : 'text-zinc-400 group-hover:translate-x-1'
+                                                }`} />
+                                        </div>
+                                    </button>
+
+                                    {/* Mobile/Inline rendering for better UX on small screens or just immediate context */}
+                                    <AnimatePresence>
+                                        {selectedContract === name && (
+                                            <motion.div
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                className="overflow-hidden md:hidden"
+                                            >
+                                                <div className="mt-2 bg-zinc-900 rounded-lg overflow-hidden border border-zinc-200 dark:border-white/10 shadow-inner">
+                                                    {loading ? (
+                                                        <div className="p-8 text-center text-xs text-zinc-500 animate-pulse">
+                                                            Loading contract source...
+                                                        </div>
+                                                    ) : error ? (
+                                                        <div className="p-4 text-xs text-red-500">{error}</div>
+                                                    ) : (
+                                                        <SyntaxHighlighter
+                                                            language="swift"
+                                                            style={vscDarkPlus}
+                                                            customStyle={{ margin: 0, padding: '1rem', fontSize: '11px' }}
+                                                            showLineNumbers={true}
+                                                            wrapLines={true}
+                                                        >
+                                                            {contractCode}
+                                                        </SyntaxHighlighter>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
                     </div>
 
-                    {selectedContract && (
-                        <div className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
-                            <div className="flex items-center justify-between bg-zinc-50 dark:bg-white/5 px-4 py-2 border-b border-zinc-200 dark:border-white/10">
-                                <span className="text-xs font-mono text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
-                                    <FileText className="h-3 w-3" />
-                                    {selectedContract}.cdc
-                                </span>
-                                {loading && <span className="text-[10px] text-zinc-500">Loading...</span>}
-                            </div>
-                            {error && <div className="p-4 text-xs text-red-500">{error}</div>}
-                            {contractCode && (
-                                <div className={`${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
-                                    <SyntaxHighlighter
-                                        language="swift"
-                                        style={syntaxTheme}
-                                        customStyle={{
-                                            margin: 0,
-                                            padding: '1rem',
-                                            fontSize: '11px',
-                                            lineHeight: '1.5',
-                                            maxHeight: '420px',
-                                        }}
-                                        showLineNumbers={true}
-                                        lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? '#555' : '#999', userSelect: "none" }}
-                                    >
-                                        {contractCode}
-                                    </SyntaxHighlighter>
+                    {/* Desktop Code Preview (Sticky) */}
+                    <div className="hidden md:block">
+                        <div className="sticky top-24">
+                            <GlassCard className="p-0 overflow-hidden min-h-[400px] flex flex-col">
+                                <div className="p-3 bg-zinc-50 dark:bg-white/5 border-b border-zinc-200 dark:border-white/10 flex items-center justify-between">
+                                    <span className="text-xs font-mono text-zinc-500 flex items-center gap-2">
+                                        <Code className="w-3 h-3" />
+                                        {selectedContract ? `${selectedContract}.cdc` : 'Select a contract'}
+                                    </span>
                                 </div>
-                            )}
+
+                                <div className="flex-1 bg-[#1e1e1e] overflow-auto max-h-[calc(100vh-200px)]">
+                                    {selectedContract ? (
+                                        loading ? (
+                                            <div className="flex items-center justify-center h-full min-h-[300px] text-zinc-500 text-xs animate-pulse">
+                                                Fetching source code...
+                                            </div>
+                                        ) : error ? (
+                                            <div className="p-8 text-center text-red-400 text-xs">
+                                                {error}
+                                            </div>
+                                        ) : (
+                                            <SyntaxHighlighter
+                                                language="swift"
+                                                style={vscDarkPlus}
+                                                customStyle={{
+                                                    margin: 0,
+                                                    padding: '1.5rem',
+                                                    fontSize: '12px',
+                                                    lineHeight: '1.6',
+                                                    background: 'transparent'
+                                                }}
+                                                showLineNumbers={true}
+                                                lineNumberStyle={{ color: '#444', minWidth: '3em' }}
+                                                wrapLines={true}
+                                            >
+                                                {contractCode}
+                                            </SyntaxHighlighter>
+                                        )
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-zinc-600 space-y-4">
+                                            <FileText className="w-12 h-12 opacity-20" />
+                                            <p className="text-xs uppercase tracking-widest">Select a contract to view source</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </GlassCard>
                         </div>
-                    )}
+                    </div>
                 </div>
             ) : (
-                <div className="text-center text-zinc-500 italic py-8">No contracts deployed</div>
+                <GlassCard className="text-center py-12">
+                    <FileText className="w-12 h-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
+                    <div className="text-zinc-500 italic">No contracts deployed</div>
+                </GlassCard>
             )}
         </div>
     );

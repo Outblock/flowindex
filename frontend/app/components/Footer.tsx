@@ -5,7 +5,7 @@ function getDocsBaseUrl() {
   return import.meta.env.VITE_DOCS_URL;
 }
 
-function stripTrailingSlash(url) {
+function stripTrailingSlash(url: string | undefined): string | undefined {
   return typeof url === 'string' ? url.replace(/\/+$/, '') : url;
 }
 
@@ -14,12 +14,14 @@ function Footer() {
   const [docsBase, setDocsBase] = useState(() => stripTrailingSlash(getDocsBaseUrl()));
 
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const runtime = (window as any).__FLOWSCAN_ENV__?.DOCS_URL;
     if (typeof runtime === 'string' && runtime.length > 0) {
       const normalized = stripTrailingSlash(runtime);
-      if (normalized && normalized !== docsBase) setDocsBase(normalized);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDocsBase((prev) => (normalized && normalized !== prev ? normalized : prev));
     }
-  }, [docsBase]);
+  }, []);
 
   const docsHref = docsBase ? `${docsBase}/docs` : null;
   const apiHref = '/api-docs';
@@ -38,7 +40,7 @@ function Footer() {
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-              aria-label="FlowScan Docs"
+              aria-label="Flowindex Docs"
             >
               <BookOpen className="h-4 w-4" />
               <span>Docs</span>
@@ -49,7 +51,7 @@ function Footer() {
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-            aria-label="FlowScan API Reference"
+            aria-label="Flowindex API Reference"
           >
             <SquareTerminal className="h-4 w-4" />
             <span>API</span>

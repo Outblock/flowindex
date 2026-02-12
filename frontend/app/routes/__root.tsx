@@ -49,7 +49,7 @@ function RootDocument({ children }: { children: ReactNode }) {
                 <meta charSet="UTF-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                 <meta name="color-scheme" content="dark" />
-                <title>FlowScan</title>
+                <title>Flowindex</title>
                 {/* Runtime (public) config, populated in Docker/Railway via entrypoint envsubst */}
                 <script src="/env.js"></script>
                 {/* Route-scoped CSS + preloads generated from the Start manifest */}
