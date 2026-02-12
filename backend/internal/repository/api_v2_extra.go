@@ -23,6 +23,7 @@ type NFTCollectionSummary struct {
 	Count           int64
 	HolderCount     int64
 	TransferCount   int64
+	EVMAddress      string
 	UpdatedAt       time.Time
 }
 
@@ -245,6 +246,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(c.socials::text, '') AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
+			COALESCE(c.evm_address, '') AS evm_address,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
@@ -257,7 +259,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 	var out []NFTCollectionSummary
 	for rows.Next() {
 		var row NFTCollectionSummary
-		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
@@ -296,6 +298,7 @@ func (r *Repository) ListTrendingNFTCollections(ctx context.Context, limit, offs
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
 			COALESCE(ra.tx_count, 0) AS transfer_count,
+			COALESCE(c.evm_address, '') AS evm_address,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
@@ -309,7 +312,7 @@ func (r *Repository) ListTrendingNFTCollections(ctx context.Context, limit, offs
 	var out []NFTCollectionSummary
 	for rows.Next() {
 		var row NFTCollectionSummary
-		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.TransferCount, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.TransferCount, &row.EVMAddress, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, row)

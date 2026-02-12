@@ -300,6 +300,7 @@ type NFTCollection struct {
 	BannerImage     string          `json:"banner_image,omitempty"`
 	Socials         json.RawMessage `json:"socials,omitempty"`
 	PublicPath      string          `json:"public_path,omitempty"`
+	EVMAddress      string          `json:"evm_address,omitempty"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
 

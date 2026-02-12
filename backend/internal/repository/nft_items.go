@@ -335,3 +335,74 @@ func (r *Repository) SearchNFTItems(ctx context.Context, query, contractAddr, co
 	}
 	return out, hasMore, nil
 }
+
+// --- Reconciliation methods ---
+
+// OwnerCollectionCount represents a (owner, collection) pair with its DB-side NFT count.
+type OwnerCollectionCount struct {
+	Owner           string
+	ContractAddress string
+	ContractName    string
+	Count           int
+}
+
+// ListTopOwnerCollections returns the largest (owner, collection) pairs by NFT count.
+func (r *Repository) ListTopOwnerCollections(ctx context.Context, limit int) ([]OwnerCollectionCount, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(owner, 'hex'), encode(contract_address, 'hex'), COALESCE(contract_name, ''), COUNT(*) AS cnt
+		FROM app.nft_ownership
+		WHERE owner IS NOT NULL
+		GROUP BY owner, contract_address, contract_name
+		ORDER BY cnt DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []OwnerCollectionCount
+	for rows.Next() {
+		var o OwnerCollectionCount
+		if err := rows.Scan(&o.Owner, &o.ContractAddress, &o.ContractName, &o.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, nil
+}
+
+// ListNFTIDsByOwnerCollection returns all NFT IDs we think this owner has in this collection.
+func (r *Repository) ListNFTIDsByOwnerCollection(ctx context.Context, owner, contractAddr, contractName string) ([]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT nft_id FROM app.nft_ownership
+		WHERE owner = $1 AND contract_address = $2 AND contract_name = $3
+		ORDER BY nft_id`,
+		hexToBytes(owner), hexToBytes(contractAddr), contractName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// DeleteNFTOwnershipBatch removes stale ownership records in batch.
+func (r *Repository) DeleteNFTOwnershipBatch(ctx context.Context, contractAddr, contractName string, nftIDs []string) (int64, error) {
+	if len(nftIDs) == 0 {
+		return 0, nil
+	}
+	tag, err := r.db.Exec(ctx, `
+		DELETE FROM app.nft_ownership
+		WHERE contract_address = $1 AND contract_name = $2 AND nft_id = ANY($3)`,
+		hexToBytes(contractAddr), contractName, nftIDs)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}

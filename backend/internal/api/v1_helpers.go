@@ -399,6 +399,8 @@ func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]i
 		"number_of_tokens": summary.Count,
 		"holder_count":     summary.HolderCount,
 		"transfer_count":   summary.TransferCount,
+		"evm_address":      summary.EVMAddress,
+		"evm_bridged":      summary.EVMAddress != "",
 		"timestamp":        formatTime(summary.UpdatedAt),
 		"updated_at":       formatTime(summary.UpdatedAt),
 		"status":           "",

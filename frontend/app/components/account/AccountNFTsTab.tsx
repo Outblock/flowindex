@@ -429,160 +429,150 @@ export function AccountNFTsTab({ address }: Props) {
                 )}
             </div>
 
-            {/* NFT Modal Overlay */}
-            {
-                selectedNft && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <div
-                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                            onClick={() => setSelectedNft(null)}
-                        />
-                        <GlassCard className="relative w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col p-0 z-10 bg-white dark:bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-200">
-                            <div className="w-full bg-zinc-100 dark:bg-black/20 flex items-center justify-center relative overflow-hidden min-h-[300px] md:min-h-[400px]">
-                                {(() => {
-                                    const media = getNFTMedia(selectedNft, selectedCollectionId || '');
-
-                                    if (media.type === 'video') {
-                                        return (
-                                            <video
-                                                src={media.url}
-                                                poster={media.fallbackImage}
-                                                controls
-                                                autoPlay
-                                                loop
-                                                muted
-                                                className="w-full h-full object-contain max-h-[60vh]"
-                                            >
-                                                Your browser does not support the video tag.
-                                            </video>
-                                        );
-                                    }
-
+            {/* NFT Modal Overlay — horizontal on desktop, stacked on mobile */}
+            {selectedNft && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setSelectedNft(null)}
+                    />
+                    <GlassCard className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row p-0 z-10 bg-white dark:bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-200">
+                        {/* Left: Image / Video */}
+                        <div className="w-full md:w-1/2 bg-zinc-100 dark:bg-black/20 flex items-center justify-center relative overflow-hidden min-h-[250px] md:min-h-0 md:max-h-[90vh]">
+                            {(() => {
+                                const media = getNFTMedia(selectedNft, selectedCollectionId || '');
+                                if (media.type === 'video') {
                                     return (
-                                        <ImageWithFallback
+                                        <video
                                             src={media.url}
-                                            alt={selectedNft?.display?.name}
-                                            className="w-full h-full object-contain max-h-[60vh] shadow-lg"
-                                            fallback={<Package className="w-24 h-24 text-zinc-300 dark:text-zinc-700 opacity-20" />}
+                                            poster={media.fallbackImage}
+                                            controls autoPlay loop muted
+                                            className="w-full h-full object-contain max-h-[40vh] md:max-h-[85vh]"
                                         />
                                     );
-                                })()}
+                                }
+                                return (
+                                    <ImageWithFallback
+                                        src={media.url}
+                                        alt={selectedNft?.display?.name}
+                                        className="w-full h-full object-contain max-h-[40vh] md:max-h-[85vh]"
+                                        fallback={<Package className="w-24 h-24 text-zinc-300 dark:text-zinc-700 opacity-20" />}
+                                    />
+                                );
+                            })()}
+                            <button
+                                onClick={() => setSelectedNft(null)}
+                                className="absolute top-3 right-3 p-2 bg-white/50 dark:bg-black/50 hover:bg-white dark:hover:bg-black backdrop-blur-md transition-colors rounded-full z-20"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                        </div>
 
-                                <button
-                                    onClick={() => setSelectedNft(null)}
-                                    className="absolute top-4 right-4 p-2 bg-white/50 dark:bg-black/50 hover:bg-white dark:hover:bg-black backdrop-blur-md transition-colors rounded-full z-20"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                                </button>
+                        {/* Right: Metadata */}
+                        <div className="w-full md:w-1/2 p-6 overflow-y-auto max-h-[50vh] md:max-h-[90vh]">
+                            <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
+                                {selectedNft?.display?.name || `#${selectedNft?.tokenId}`}
+                            </h2>
+                            <div className="flex items-center gap-2 mb-4 flex-wrap">
+                                <span className="bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 px-2 py-1 text-xs font-mono">
+                                    #{selectedNft?.tokenId}
+                                </span>
+                                {selectedCollection && (
+                                    <span className="text-xs text-zinc-500">
+                                        {getDisplayInfo(selectedCollection).name || getContractName(selectedCollection.id)}
+                                    </span>
+                                )}
                             </div>
 
-                            <div className="p-6 overflow-y-auto">
-                                <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
-                                    {selectedNft?.display?.name || `#${selectedNft?.tokenId}`}
-                                </h2>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <span className="bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 px-2 py-1 text-xs font-mono">
-                                        #{selectedNft?.tokenId}
-                                    </span>
-                                    {selectedCollection && (
-                                        <span className="text-xs text-zinc-500">
-                                            {getDisplayInfo(selectedCollection).name || getContractName(selectedCollection.id)}
-                                        </span>
-                                    )}
-                                </div>
+                            {selectedNft?.display?.description && (
+                                <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-5 leading-relaxed">
+                                    {selectedNft.display.description}
+                                </p>
+                            )}
 
-                                {selectedNft?.display?.description && (
-                                    <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">
-                                        {selectedNft.display.description}
-                                    </p>
+                            {/* Key Metadata Grid */}
+                            <div className="grid grid-cols-2 gap-2 mb-5">
+                                {selectedNft?.serial && (
+                                    <div className="p-2.5 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
+                                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5">Serial</div>
+                                        <div className="font-mono text-sm font-semibold">{selectedNft.serial.number}</div>
+                                    </div>
                                 )}
-
-                                {/* Key Metadata Grid */}
-                                <div className="grid grid-cols-2 gap-3 mb-6">
-                                    {selectedNft?.serial && (
-                                        <div className="p-3 bg-zinc-50 dark:bg-white/5 rounded-lg border border-zinc-100 dark:border-white/5">
-                                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Serial</div>
-                                            <div className="font-mono text-sm font-semibold">{selectedNft.serial.number}</div>
+                                {selectedNft?.editions && selectedNft.editions.length > 0 && (
+                                    <div className="p-2.5 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
+                                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5">Edition</div>
+                                        <div className="font-mono text-sm font-semibold">
+                                            {selectedNft.editions[0].number}
+                                            <span className="text-zinc-400 font-normal"> / {selectedNft.editions[0].max || '?'}</span>
                                         </div>
-                                    )}
-                                    {selectedNft?.editions && selectedNft.editions.length > 0 && (
-                                        <div className="p-3 bg-zinc-50 dark:bg-white/5 rounded-lg border border-zinc-100 dark:border-white/5">
-                                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Edition</div>
-                                            <div className="font-mono text-sm font-semibold">
-                                                {selectedNft.editions[0].number}
-                                                <span className="text-zinc-400 font-normal"> / {selectedNft.editions[0].max || '?'}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {selectedNft?.rarity && (
-                                        <div className="p-3 bg-zinc-50 dark:bg-white/5 rounded-lg border border-zinc-100 dark:border-white/5 col-span-2">
-                                            <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Rarity</div>
-                                            <div className="flex items-center justify-between">
-                                                <span className="font-bold text-sm">{selectedNft.rarity.description || 'Unknown'}</span>
-                                                {selectedNft.rarity.score && (
-                                                    <span className="text-xs bg-zinc-200 dark:bg-white/10 px-2 py-0.5 rounded-full">
-                                                        Score: {selectedNft.rarity.score}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* External Links */}
-                                {selectedNft?.externalURL && (
-                                    <a
-                                        href={selectedNft.externalURL.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center justify-between w-full p-3 mb-6 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
-                                    >
-                                        <span className="text-xs font-semibold uppercase tracking-wider">View External Resource</span>
-                                        <ExternalLink className="w-4 h-4" />
-                                    </a>
+                                    </div>
                                 )}
-
-                                {/* Metadata / Traits */}
-                                {(() => {
-                                    // Handle both direct array (if flattened) and nested struct (from Cadence)
-                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                    const traitsList = (selectedNft.traits as any)?.traits || selectedNft.traits;
-
-                                    if (Array.isArray(traitsList) && traitsList.length > 0) {
-                                        return (
-                                            <div className="space-y-3">
-                                                <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Traits</h3>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                                    {traitsList.map((trait: any, i: number) => (
-                                                        <div key={i} className="p-2 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
-                                                            <div className="text-[10px] uppercase text-zinc-500 truncate">{trait?.name || trait?.display?.name || 'Trait'}</div>
-                                                            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 truncate">
-                                                                {String(trait?.value || trait?.display?.value || '—')}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                })()}
-
-                                {/* Raw Metadata Debug (Optional, hidden by default or shown if no traits) */}
-                                {!selectedNft.traits && selectedNft.metadata && (
-                                    <div className="space-y-2 mt-4">
-                                        <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Metadata</h3>
-                                        <pre className="text-[10px] bg-zinc-50 dark:bg-black/20 p-2 overflow-x-auto text-zinc-500">
-                                            {JSON.stringify(selectedNft.metadata, null, 2)}
-                                        </pre>
+                                {selectedNft?.rarity && (
+                                    <div className="p-2.5 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5 col-span-2">
+                                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5">Rarity</div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-bold text-sm">{selectedNft.rarity.description || 'Unknown'}</span>
+                                            {selectedNft.rarity.score && (
+                                                <span className="text-xs bg-zinc-200 dark:bg-white/10 px-2 py-0.5 rounded-full">
+                                                    Score: {selectedNft.rarity.score}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
-                        </GlassCard>
-                    </div>
-                )
-            }
+
+                            {/* External Links */}
+                            {selectedNft?.externalURL && (
+                                <a
+                                    href={selectedNft.externalURL.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between w-full p-2.5 mb-5 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors text-xs font-semibold uppercase tracking-wider"
+                                >
+                                    <span>View External Resource</span>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                            )}
+
+                            {/* Traits */}
+                            {(() => {
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                const traitsList = (selectedNft.traits as any)?.traits || selectedNft.traits;
+                                if (Array.isArray(traitsList) && traitsList.length > 0) {
+                                    return (
+                                        <div className="space-y-2">
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Traits</h3>
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                                {traitsList.map((trait: any, i: number) => (
+                                                    <div key={i} className="p-2 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
+                                                        <div className="text-[10px] uppercase text-zinc-500 truncate">{trait?.name || trait?.display?.name || 'Trait'}</div>
+                                                        <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 truncate">
+                                                            {String(trait?.value || trait?.display?.value || '\u2014')}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+
+                            {/* Raw Metadata fallback */}
+                            {!selectedNft.traits && selectedNft.metadata && (
+                                <div className="space-y-2 mt-4">
+                                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Metadata</h3>
+                                    <pre className="text-[10px] bg-zinc-50 dark:bg-black/20 p-2 overflow-x-auto text-zinc-500">
+                                        {JSON.stringify(selectedNft.metadata, null, 2)}
+                                    </pre>
+                                </div>
+                            )}
+                        </div>
+                    </GlassCard>
+                </div>
+            )}
         </div >
     );
 }

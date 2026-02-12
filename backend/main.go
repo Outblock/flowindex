@@ -149,6 +149,7 @@ func main() {
 	stakingWorkerRange := getEnvUint("STAKING_WORKER_RANGE", 1000)
 	defiWorkerRange := getEnvUint("DEFI_WORKER_RANGE", 1000)
 	nftItemMetadataWorkerRange := getEnvUint("NFT_ITEM_METADATA_WORKER_RANGE", 1000)
+	nftReconcilerRange := getEnvUint("NFT_RECONCILER_RANGE", 1000)
 	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
 	evmWorkerConcurrency := getEnvInt("EVM_WORKER_CONCURRENCY", 1)
 	metaWorkerConcurrency := getEnvInt("META_WORKER_CONCURRENCY", 1)
@@ -161,6 +162,7 @@ func main() {
 	stakingWorkerConcurrency := getEnvInt("STAKING_WORKER_CONCURRENCY", 1)
 	defiWorkerConcurrency := getEnvInt("DEFI_WORKER_CONCURRENCY", 1)
 	nftItemMetadataWorkerConcurrency := getEnvInt("NFT_ITEM_METADATA_WORKER_CONCURRENCY", 1)
+	nftReconcilerConcurrency := getEnvInt("NFT_RECONCILER_CONCURRENCY", 1)
 
 	if strings.ToLower(os.Getenv("RUN_TX_METRICS_BACKFILL")) == "true" {
 		cfg := repository.TxMetricsBackfillConfig{
@@ -189,6 +191,7 @@ func main() {
 	enableStakingWorker := os.Getenv("ENABLE_STAKING_WORKER") != "false"
 	enableDefiWorker := os.Getenv("ENABLE_DEFI_WORKER") != "false"
 	enableNFTItemMetadataWorker := os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false"
+	enableNFTReconciler := os.Getenv("ENABLE_NFT_RECONCILER") != "false"
 
 	// Live/head derivers: Blockscout-style "real-time head" materialization.
 	// These processors must be idempotent because they can overlap with backfills.
@@ -285,6 +288,8 @@ func main() {
 	var defiWorkers []*ingester.AsyncWorker
 	var nftItemMetadataWorkerProcessor *ingester.NFTItemMetadataWorker
 	var nftItemMetadataWorkers []*ingester.AsyncWorker
+	var nftReconcilerProcessor *ingester.NFTOwnershipReconciler
+	var nftReconcilerWorkers []*ingester.AsyncWorker
 
 	workerTypes := make([]string, 0, 10)
 
@@ -517,6 +522,25 @@ func main() {
 		log.Println("NFT Item Metadata Worker is DISABLED (ENABLE_NFT_ITEM_METADATA_WORKER=false)")
 	}
 
+	if enableNFTReconciler {
+		nftReconcilerProcessor = ingester.NewNFTOwnershipReconciler(repo, flowClient)
+		if nftReconcilerConcurrency < 1 {
+			nftReconcilerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < nftReconcilerConcurrency; i++ {
+			nftReconcilerWorkers = append(nftReconcilerWorkers, ingester.NewAsyncWorker(nftReconcilerProcessor, repo, ingester.WorkerConfig{
+				RangeSize:    nftReconcilerRange,
+				WorkerID:     fmt.Sprintf("%s-%d-nft-reconciler-%d", hostname, pid, i),
+				Dependencies: nftOwnershipDep,
+			}))
+		}
+		workerTypes = append(workerTypes, nftReconcilerProcessor.Name())
+	} else {
+		log.Println("NFT Ownership Reconciler is DISABLED (ENABLE_NFT_RECONCILER=false)")
+	}
+
 	var committer *ingester.CheckpointCommitter
 	if len(workerTypes) > 0 {
 		committer = ingester.NewCheckpointCommitter(repo, workerTypes)
@@ -719,6 +743,16 @@ func main() {
 
 	if enableNFTItemMetadataWorker {
 		for _, worker := range nftItemMetadataWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableNFTReconciler {
+		for _, worker := range nftReconcilerWorkers {
 			wg.Add(1)
 			go func(w *ingester.AsyncWorker) {
 				defer wg.Done()

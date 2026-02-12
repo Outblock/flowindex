@@ -892,4 +892,6 @@ ALTER TABLE IF EXISTS app.nft_collections ADD COLUMN IF NOT EXISTS public_path T
 
 ALTER TABLE IF EXISTS app.ft_tokens ADD COLUMN IF NOT EXISTS evm_address TEXT DEFAULT '';
 
+ALTER TABLE IF EXISTS app.nft_collections ADD COLUMN IF NOT EXISTS evm_address TEXT DEFAULT '';
+
 COMMIT;
