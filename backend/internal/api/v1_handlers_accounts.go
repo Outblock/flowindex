@@ -282,6 +282,37 @@ func (s *Server) handleGetCOAMapping(w http.ResponseWriter, r *http.Request) {
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
 }
 
+func (s *Server) handleFlowSearchByPublicKey(w http.ResponseWriter, r *http.Request) {
+	publicKey := mux.Vars(r)["publicKey"]
+	if publicKey == "" {
+		writeAPIError(w, http.StatusBadRequest, "publicKey is required")
+		return
+	}
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
+	limit, offset := parseLimitOffset(r)
+	keys, hasMore, err := s.repo.ListAccountsByPublicKey(r.Context(), publicKey, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, map[string]interface{}{
+			"address":            formatAddressV1(k.Address),
+			"key_index":          k.KeyIndex,
+			"public_key":         k.PublicKey,
+			"signing_algorithm":  k.SigningAlgorithm,
+			"hashing_algorithm":  k.HashingAlgorithm,
+			"weight":             k.Weight,
+			"revoked":            k.Revoked,
+		})
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
+}
+
 func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Request) {
 	address := normalizeAddr(mux.Vars(r)["address"])
 	limit, offset := parseLimitOffset(r)

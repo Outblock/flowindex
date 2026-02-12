@@ -3985,6 +3985,55 @@
           }
         }
       }
+    },
+    "/flow/v1/key/{publicKey}": {
+      "get": {
+        "description": "Searches for all Flow accounts associated with a given public key. A single public key can be linked to multiple accounts.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Search accounts by public key",
+        "parameters": [
+          {
+            "description": "The public key to search for (128 hex characters, with optional 0x prefix)",
+            "name": "publicKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Limit for the number of results to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 100
+            }
+          },
+          {
+            "description": "The number of results to skip (for pagination) (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/flow.KeySearchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "tags": [
@@ -4872,6 +4921,66 @@
           },
           "error": {
             "description": "Error contains details about any error that occurred"
+          }
+        }
+      },
+      "flow.KeySearchResponse": {
+        "type": "object",
+        "properties": {
+          "_links": {
+            "description": "Links provides URLs for navigating between pages of results",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "_meta": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "data": {
+            "description": "Data contains the list of account keys matching the public key",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/flow.AccountKeyOutput"
+            }
+          },
+          "error": {
+            "description": "Error contains details about any error that occurred"
+          }
+        }
+      },
+      "flow.AccountKeyOutput": {
+        "description": "Represents an account key associated with a public key.",
+        "type": "object",
+        "properties": {
+          "address": {
+            "description": "The Flow address that owns this key",
+            "type": "string"
+          },
+          "key_index": {
+            "description": "The key index on the account",
+            "type": "integer"
+          },
+          "public_key": {
+            "description": "The public key (hex encoded)",
+            "type": "string"
+          },
+          "signing_algorithm": {
+            "description": "The signing algorithm (e.g. ECDSA_P256, ECDSA_secp256k1)",
+            "type": "string"
+          },
+          "hashing_algorithm": {
+            "description": "The hashing algorithm (e.g. SHA2_256, SHA3_256)",
+            "type": "string"
+          },
+          "weight": {
+            "description": "The key weight (0-1000)",
+            "type": "integer"
+          },
+          "revoked": {
+            "description": "Whether this key has been revoked",
+            "type": "boolean"
           }
         }
       },

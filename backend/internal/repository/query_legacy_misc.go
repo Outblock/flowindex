@@ -446,3 +446,42 @@ func (r *Repository) GetAddressByPublicKey(ctx context.Context, publicKey string
 	}
 	return address, err
 }
+
+// ListAccountsByPublicKey returns all account keys matching the given public key.
+func (r *Repository) ListAccountsByPublicKey(ctx context.Context, publicKey string, limit, offset int) ([]models.AccountKey, bool, error) {
+	publicKey = strings.TrimSpace(publicKey)
+	publicKey = strings.TrimPrefix(strings.ToLower(publicKey), "0x")
+	if publicKey == "" {
+		return nil, false, nil
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(address, 'hex') AS address, key_index, encode(public_key, 'hex') AS public_key,
+		       signing_algorithm, hashing_algorithm, weight, revoked,
+		       added_at_height, COALESCE(revoked_at_height, 0), last_updated_height
+		FROM app.account_keys
+		WHERE public_key = $1
+		ORDER BY revoked ASC, last_updated_height DESC
+		LIMIT $2 OFFSET $3`, hexToBytes(publicKey), limit+1, offset)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+
+	var results []models.AccountKey
+	for rows.Next() {
+		var k models.AccountKey
+		if err := rows.Scan(&k.Address, &k.KeyIndex, &k.PublicKey,
+			&k.SigningAlgorithm, &k.HashingAlgorithm, &k.Weight, &k.Revoked,
+			&k.AddedAtHeight, &k.RevokedAtHeight, &k.LastUpdatedHeight); err != nil {
+			return nil, false, err
+		}
+		results = append(results, k)
+	}
+
+	hasMore := len(results) > limit
+	if hasMore {
+		results = results[:limit]
+	}
+	return results, hasMore, nil
+}

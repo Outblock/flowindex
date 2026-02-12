@@ -15,6 +15,14 @@ function Header() {
     const query = searchQuery.trim();
     if (!query) return;
 
+    // Public key: 128 hex chars (with optional 0x prefix)
+    if (/^(0x)?[a-fA-F0-9]{128}$/.test(query)) {
+      const key = query.replace(/^0x/i, '');
+      navigate({ to: '/key/$publicKey', params: { publicKey: key } });
+      setSearchQuery('');
+      return;
+    }
+
     if (/^\d+$/.test(query)) {
       navigate({ to: '/blocks/$height', params: { height: query } });
     } else if (/^0x[a-fA-F0-9]{64}$/.test(query)) {
@@ -69,7 +77,7 @@ function Header() {
           <div className="relative group">
             <input
               type="text"
-              placeholder="Search by block / tx / address"
+              placeholder="Search by block / tx / address / public key"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-5 py-3 bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 text-zinc-900 dark:text-white text-sm placeholder-zinc-500 focus:border-nothing-green/50 focus:bg-white dark:focus:bg-black/50 focus:outline-none rounded-sm transition-all"

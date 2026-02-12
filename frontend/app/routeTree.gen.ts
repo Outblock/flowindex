@@ -23,6 +23,7 @@ import { Route as AccountsIndexRouteImport } from './routes/accounts/index'
 import { Route as TransactionsTxIdRouteImport } from './routes/transactions/$txId'
 import { Route as TokensTokenRouteImport } from './routes/tokens/$token'
 import { Route as NftsNftTypeRouteImport } from './routes/nfts/$nftType'
+import { Route as KeyPublicKeyRouteImport } from './routes/key/$publicKey'
 import { Route as ContractsIdRouteImport } from './routes/contracts/$id'
 import { Route as BlocksHeightRouteImport } from './routes/blocks/$height'
 import { Route as AccountsAddressRouteImport } from './routes/accounts/$address'
@@ -98,6 +99,11 @@ const NftsNftTypeRoute = NftsNftTypeRouteImport.update({
   path: '/nfts/$nftType',
   getParentRoute: () => rootRouteImport,
 } as any)
+const KeyPublicKeyRoute = KeyPublicKeyRouteImport.update({
+  id: '/key/$publicKey',
+  path: '/key/$publicKey',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContractsIdRoute = ContractsIdRouteImport.update({
   id: '/contracts/$id',
   path: '/contracts/$id',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/accounts/$address': typeof AccountsAddressRoute
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
+  '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
@@ -147,6 +154,7 @@ export interface FileRoutesByTo {
   '/accounts/$address': typeof AccountsAddressRoute
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
+  '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
@@ -168,6 +176,7 @@ export interface FileRoutesById {
   '/accounts/$address': typeof AccountsAddressRoute
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
+  '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
     | '/accounts/$address'
     | '/blocks/$height'
     | '/contracts/$id'
+    | '/key/$publicKey'
     | '/nfts/$nftType'
     | '/tokens/$token'
     | '/transactions/$txId'
@@ -210,6 +220,7 @@ export interface FileRouteTypes {
     | '/accounts/$address'
     | '/blocks/$height'
     | '/contracts/$id'
+    | '/key/$publicKey'
     | '/nfts/$nftType'
     | '/tokens/$token'
     | '/transactions/$txId'
@@ -230,6 +241,7 @@ export interface FileRouteTypes {
     | '/accounts/$address'
     | '/blocks/$height'
     | '/contracts/$id'
+    | '/key/$publicKey'
     | '/nfts/$nftType'
     | '/tokens/$token'
     | '/transactions/$txId'
@@ -251,6 +263,7 @@ export interface RootRouteChildren {
   AccountsAddressRoute: typeof AccountsAddressRoute
   BlocksHeightRoute: typeof BlocksHeightRoute
   ContractsIdRoute: typeof ContractsIdRoute
+  KeyPublicKeyRoute: typeof KeyPublicKeyRoute
   NftsNftTypeRoute: typeof NftsNftTypeRouteWithChildren
   TokensTokenRoute: typeof TokensTokenRoute
   TransactionsTxIdRoute: typeof TransactionsTxIdRoute
@@ -363,6 +376,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NftsNftTypeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/key/$publicKey': {
+      id: '/key/$publicKey'
+      path: '/key/$publicKey'
+      fullPath: '/key/$publicKey'
+      preLoaderRoute: typeof KeyPublicKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/contracts/$id': {
       id: '/contracts/$id'
       path: '/contracts/$id'
@@ -414,6 +434,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountsAddressRoute: AccountsAddressRoute,
   BlocksHeightRoute: BlocksHeightRoute,
   ContractsIdRoute: ContractsIdRoute,
+  KeyPublicKeyRoute: KeyPublicKeyRoute,
   NftsNftTypeRoute: NftsNftTypeRouteWithChildren,
   TokensTokenRoute: TokensTokenRoute,
   TransactionsTxIdRoute: TransactionsTxIdRoute,

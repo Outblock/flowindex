@@ -611,6 +611,60 @@ export type FlowAccountsResponse = {
     error?: unknown;
 };
 
+export type FlowKeySearchResponse = {
+    /**
+     * Links provides URLs for navigating between pages of results
+     */
+    _links?: {
+        [key: string]: string;
+    };
+    _meta?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Data contains the list of account keys matching the public key
+     */
+    data?: Array<FlowAccountKeyOutput>;
+    /**
+     * Error contains details about any error that occurred
+     */
+    error?: unknown;
+};
+
+/**
+ * Represents an account key associated with a public key.
+ */
+export type FlowAccountKeyOutput = {
+    /**
+     * The Flow address that owns this key
+     */
+    address?: string;
+    /**
+     * The key index on the account
+     */
+    key_index?: number;
+    /**
+     * The public key (hex encoded)
+     */
+    public_key?: string;
+    /**
+     * The signing algorithm (e.g. ECDSA_P256, ECDSA_secp256k1)
+     */
+    signing_algorithm?: string;
+    /**
+     * The hashing algorithm (e.g. SHA2_256, SHA3_256)
+     */
+    hashing_algorithm?: string;
+    /**
+     * The key weight (0-1000)
+     */
+    weight?: number;
+    /**
+     * Whether this key has been revoked
+     */
+    revoked?: boolean;
+};
+
 /**
  * Contains key-value pairs for arguments passed in the transaction.
  */
@@ -4846,10 +4900,6 @@ export type GetFlowV1FtData = {
          * The number of to skip (for pagination)}
          */
         offset?: number;
-        /**
-         * Sort order. Use "trending" to sort by recent transfer activity.
-         */
-        sort?: string;
     };
     url: '/flow/v1/ft';
 };
@@ -4997,10 +5047,6 @@ export type GetFlowV1NftData = {
          * Number of records to skip (for pagination) (Default = 0)
          */
         offset?: number;
-        /**
-         * Sort order. Use "trending" to sort by recent transfer activity.
-         */
-        sort?: string;
     };
     url: '/flow/v1/nft';
 };
@@ -5088,42 +5134,6 @@ export type GetFlowV1NftByNftTypeHoldingResponses = {
 };
 
 export type GetFlowV1NftByNftTypeHoldingResponse = GetFlowV1NftByNftTypeHoldingResponses[keyof GetFlowV1NftByNftTypeHoldingResponses];
-
-export type GetFlowV1NftByNftTypeItemData = {
-    body?: never;
-    path: {
-        nft_type: string;
-    };
-    query?: {
-        limit?: number;
-        offset?: number;
-    };
-    url: '/flow/v1/nft/{nft_type}/item';
-};
-
-export type GetFlowV1NftByNftTypeItemResponses = {
-    200: unknown;
-};
-
-export type GetFlowV1NftByNftTypeItemResponse = GetFlowV1NftByNftTypeItemResponses[keyof GetFlowV1NftByNftTypeItemResponses];
-
-export type GetFlowV1NftSearchData = {
-    body?: never;
-    path?: never;
-    query?: {
-        q?: string;
-        collection?: string;
-        limit?: number;
-        offset?: number;
-    };
-    url: '/flow/nft/search';
-};
-
-export type GetFlowV1NftSearchResponses = {
-    200: unknown;
-};
-
-export type GetFlowV1NftSearchResponse = GetFlowV1NftSearchResponses[keyof GetFlowV1NftSearchResponses];
 
 export type GetFlowV1NftByNftTypeItemByIdData = {
     body?: never;
@@ -5980,3 +5990,33 @@ export type GetStatusV1TokenomicsResponses = {
 };
 
 export type GetStatusV1TokenomicsResponse = GetStatusV1TokenomicsResponses[keyof GetStatusV1TokenomicsResponses];
+
+export type GetFlowV1KeyByPublicKeyData = {
+    body?: never;
+    path: {
+        /**
+         * The public key to search for (128 hex characters, with optional 0x prefix)
+         */
+        publicKey: string;
+    };
+    query?: {
+        /**
+         * Limit for the number of results to return (Default = 25, Max = 100)
+         */
+        limit?: number;
+        /**
+         * The number of results to skip (for pagination) (Default = 0)
+         */
+        offset?: number;
+    };
+    url: '/flow/v1/key/{publicKey}';
+};
+
+export type GetFlowV1KeyByPublicKeyResponses = {
+    /**
+     * OK
+     */
+    200: FlowKeySearchResponse;
+};
+
+export type GetFlowV1KeyByPublicKeyResponse = GetFlowV1KeyByPublicKeyResponses[keyof GetFlowV1KeyByPublicKeyResponses];

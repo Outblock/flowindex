@@ -430,7 +430,7 @@ paths:
                 $ref: '#/components/schemas/ContractCodeResponse'
         '404':
           description: Not found
-  /accounts/{address}/storage:
+  /flow/account/{address}/storage:
     get:
       tags: [Storage]
       summary: Get storage paths overview (JSON-CDC)
@@ -454,7 +454,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CadenceJSON'
-  /accounts/{address}/storage/links:
+  /flow/account/{address}/storage/links:
     get:
       tags: [Storage]
       summary: List public/private links (JSON-CDC)
@@ -479,7 +479,7 @@ paths:
                 $ref: '#/components/schemas/CadenceJSON'
         '400':
           description: Invalid domain
-  /accounts/{address}/storage/item:
+  /flow/account/{address}/storage/item:
     get:
       tags: [Storage]
       summary: Get best-effort storage item type (JSON-CDC)
@@ -540,24 +540,68 @@ paths:
   /keys/{publicKey}:
     get:
       tags: [Accounts]
-      summary: Resolve a Flow address by public key (best effort)
+      summary: Search accounts by public key
+      description: Returns all Flow accounts associated with a given public key. A single public key can be linked to multiple accounts (e.g., custodial wallets).
       parameters:
         - name: publicKey
           in: path
           required: true
           schema:
             type: string
-          description: Hex public key (with or without 0x prefix).
+          description: Hex public key (128 hex characters, with or without 0x prefix).
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            maximum: 100
+          description: Max results to return (default 25, max 100).
+        - name: offset
+          in: query
+          schema:
+            type: integer
+          description: Number of results to skip for pagination (default 0).
       responses:
         '200':
-          description: Address
+          description: Paginated list of account keys matching the public key
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  address:
-                    type: string
-                required: [address]
-        '404':
-          description: Not found
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        address:
+                          type: string
+                          description: Flow address owning this key
+                        key_index:
+                          type: integer
+                          description: Key index on the account
+                        public_key:
+                          type: string
+                          description: The public key (hex encoded)
+                        signing_algorithm:
+                          type: string
+                          description: Signing algorithm (e.g. ECDSA_P256)
+                        hashing_algorithm:
+                          type: string
+                          description: Hashing algorithm (e.g. SHA3_256)
+                        weight:
+                          type: integer
+                          description: Key weight (0-1000)
+                        revoked:
+                          type: boolean
+                          description: Whether this key has been revoked
+                  _meta:
+                    type: object
+                    properties:
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+                      count:
+                        type: integer
+                      has_more:
+                        type: boolean

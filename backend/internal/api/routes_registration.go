@@ -31,6 +31,9 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/transaction/{id}", s.handleFlowGetTransaction).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account", s.handleFlowListAccounts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}", s.handleFlowGetAccount).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/account/{address}/storage", s.handleGetAccountStorage).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/account/{address}/storage/links", s.handleGetAccountStorageLinks).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/account/{address}/storage/item", s.handleGetAccountStorageItem).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/transaction", s.handleFlowAccountTransactions).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/ft/transfer", s.handleFlowAccountFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/nft/transfer", s.handleFlowAccountNFTTransfers).Methods("GET", "OPTIONS")
@@ -71,6 +74,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/scheduled-transaction", s.handleFlowScheduledTransactions).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/scheduled-transaction", s.handleFlowAccountScheduledTransactions).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/tax-report", s.handleTaxReport).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/key/{publicKey}", s.handleFlowSearchByPublicKey).Methods("GET", "OPTIONS")
 }
 
 func registerAccountingRoutes(r *mux.Router, s *Server) {
