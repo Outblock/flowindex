@@ -363,6 +363,7 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 	addrBytes := hexToBytes(address)
 
 	// FT transfers: group by (transaction_id, token_contract_address, contract_name, direction)
+	// Exclude generic FungibleToken events (duplicates of specific token events like FlowToken).
 	ftRows, err := r.db.Query(ctx, `
 		SELECT encode(transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS token,
@@ -370,6 +371,7 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction
 		FROM app.ft_transfers
 		WHERE transaction_id = ANY($1)
+		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
 		GROUP BY transaction_id, token_contract_address, contract_name,
 		         CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes)
 	if err != nil {
@@ -387,6 +389,7 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 	}
 
 	// NFT transfers: group by (transaction_id, token_contract_address, contract_name, direction)
+	// Exclude generic NonFungibleToken events (duplicates of specific collection events).
 	nftRows, err := r.db.Query(ctx, `
 		SELECT encode(transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS collection,
@@ -394,6 +397,7 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction
 		FROM app.nft_transfers
 		WHERE transaction_id = ANY($1)
+		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
 		GROUP BY transaction_id, token_contract_address, contract_name,
 		         CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes)
 	if err != nil {
