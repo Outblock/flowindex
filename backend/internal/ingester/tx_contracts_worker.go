@@ -60,6 +60,9 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 					ContractIdentifier: identifier,
 					Source:             "script_import",
 				})
+				if strings.Contains(identifier, "FlowTransactionScheduler") {
+					addTag(tx.ID, "SCHEDULED_TX")
+				}
 			}
 		}
 	}
@@ -95,6 +98,8 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 				addTag(evt.TransactionID, "ACCOUNT_CREATED")
 			case strings.Contains(evt.Type, "AccountKeyAdded") || strings.Contains(evt.Type, "AccountKeyRemoved"):
 				addTag(evt.TransactionID, "KEY_UPDATE")
+			case strings.Contains(evt.Type, "FlowTransactionScheduler"):
+				addTag(evt.TransactionID, "SCHEDULED_TX")
 			}
 		}
 	}

@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { resolveApiBaseUrl } from '../../api';
 import {
     getAccountsByAddressTransactions,
     getAccountsByAddressTokenTransfers,
     getAccountsByAddressNftTransfers,
 } from '../../api/gen/core';
-import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import { normalizeAddress, formatShort } from './accountUtils';
 import { formatRelativeTime } from '../../lib/time';
 
@@ -16,7 +17,7 @@ interface Props {
     initialNextCursor?: string;
 }
 
-type FilterMode = 'all' | 'ft' | 'nft';
+type FilterMode = 'all' | 'ft' | 'nft' | 'scheduled';
 
 interface FTSummaryItem {
     token: string;
@@ -53,6 +54,9 @@ function deriveActivityType(tx: any): { type: string; label: string; color: stri
     }
     if (tagsLower.some(t => t.includes('key_update'))) {
         return { type: 'key', label: 'Key Update', color: 'text-orange-600 dark:text-orange-400', bgColor: 'border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10' };
+    }
+    if (tagsLower.some(t => t.includes('scheduled'))) {
+        return { type: 'scheduled', label: 'Scheduled', color: 'text-indigo-600 dark:text-indigo-400', bgColor: 'border-indigo-300 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/10' };
     }
     if (tagsLower.some(t => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated') || t.includes('contract_deploy'))) {
         return { type: 'deploy', label: 'Deploy', color: 'text-blue-600 dark:text-blue-400', bgColor: 'border-blue-300 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10' };
@@ -289,6 +293,7 @@ const activityTypeIcons: Record<string, React.ComponentType<any>> = {
     account: UserPlus,
     key: Key,
     marketplace: ShoppingBag,
+    scheduled: Clock,
     tx: Activity,
 };
 
@@ -404,6 +409,12 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     const [nftHasMore, setNftHasMore] = useState(false);
     const [nftLoading, setNftLoading] = useState(false);
 
+    // Scheduled transactions state (lazy-loaded)
+    const [scheduledTxs, setScheduledTxs] = useState<any[]>([]);
+    const [scheduledCursor, setScheduledCursor] = useState('');
+    const [scheduledHasMore, setScheduledHasMore] = useState(false);
+    const [scheduledLoading, setScheduledLoading] = useState(false);
+
     useEffect(() => {
         const dedupedTxs = dedup(initialTransactions);
         setTransactions(dedupedTxs);
@@ -419,6 +430,9 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         setNftTransfers([]);
         setNftCursor('');
         setNftHasMore(false);
+        setScheduledTxs([]);
+        setScheduledCursor('');
+        setScheduledHasMore(false);
         // Reset fetch guard — if loader provided data, mark as fetched; otherwise allow fallback
         didFetchRef.current = dedupedTxs.length > 0;
     }, [address, initialTransactions, initialNextCursor]);
@@ -505,10 +519,37 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         }
     };
 
+    // --- Scheduled Transactions (lazy) ---
+    const loadScheduledTransactions = async (cursorValue: string, append: boolean) => {
+        setScheduledLoading(true);
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const url = `${baseUrl}/accounts/${normalizedAddress}/scheduled-transactions?cursor=${encodeURIComponent(cursorValue)}&limit=20`;
+            const res = await fetch(url);
+            const payload: any = await res.json();
+            const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+            const mapped = items.map((tx: any) => ({
+                ...tx,
+                payer: tx.payer_address || tx.payer || tx.proposer_address,
+                proposer: tx.proposer_address || tx.proposer,
+                blockHeight: tx.block_height,
+            }));
+            setScheduledTxs(append ? prev => dedup([...prev, ...mapped]) : dedup(mapped));
+            const next = payload?.next_cursor ?? '';
+            setScheduledCursor(next);
+            setScheduledHasMore(!!next);
+        } catch (err) {
+            console.error('Failed to load scheduled transactions', err);
+        } finally {
+            setScheduledLoading(false);
+        }
+    };
+
     // Auto-load dedicated transfer lists when filter switches
     useEffect(() => {
         if (filterMode === 'ft' && ftTransfers.length === 0 && !ftLoading) loadFtTransfers('', false);
         if (filterMode === 'nft' && nftTransfers.length === 0 && !nftLoading) loadNftTransfers('', false);
+        if (filterMode === 'scheduled' && scheduledTxs.length === 0 && !scheduledLoading) loadScheduledTransactions('', false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filterMode, address]);
 
@@ -527,9 +568,10 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         { id: 'all' as const, label: 'All Activity', icon: Activity },
         { id: 'ft' as const, label: 'FT Transfers', icon: ArrowRightLeft },
         { id: 'nft' as const, label: 'NFT Transfers', icon: Repeat },
+        { id: 'scheduled' as const, label: 'Scheduled', icon: Clock },
     ];
 
-    const isLoading = filterMode === 'all' ? txLoading : filterMode === 'ft' ? ftLoading : nftLoading;
+    const isLoading = filterMode === 'all' ? txLoading : filterMode === 'ft' ? ftLoading : filterMode === 'nft' ? nftLoading : scheduledLoading;
 
     return (
         <div>
@@ -565,7 +607,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
 
             {/* === Unified Activity Feed === */}
             <div className="overflow-x-auto min-h-[200px] relative">
-                {isLoading && (filterMode === 'all' ? true : (filterMode === 'ft' ? ftTransfers.length === 0 : nftTransfers.length === 0)) && (
+                {isLoading && (filterMode === 'all' ? true : (filterMode === 'ft' ? ftTransfers.length === 0 : filterMode === 'nft' ? nftTransfers.length === 0 : scheduledTxs.length === 0)) && (
                     <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
                         <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin" />
                     </div>
@@ -704,12 +746,35 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                     </div>
                 )}
 
+                {/* Scheduled transactions list */}
+                {filterMode === 'scheduled' && scheduledTxs.length > 0 && (
+                    <div className="space-y-0">
+                        {scheduledTxs.map((tx) => (
+                            <ActivityRow
+                                key={tx.id}
+                                tx={tx}
+                                address={normalizedAddress}
+                                expanded={expandedTxId === tx.id}
+                                onToggle={() => setExpandedTxId(prev => prev === tx.id ? null : tx.id)}
+                            />
+                        ))}
+                        {scheduledHasMore && (
+                            <div className="text-center py-3">
+                                <button onClick={() => loadScheduledTransactions(scheduledCursor, true)} disabled={scheduledLoading} className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50">{scheduledLoading ? 'Loading...' : 'Load More'}</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Empty states for dedicated views */}
                 {filterMode === 'ft' && ftTransfers.length === 0 && !ftLoading && (
                     <div className="text-center text-zinc-500 italic py-8">No FT transfers found</div>
                 )}
                 {filterMode === 'nft' && nftTransfers.length === 0 && !nftLoading && (
                     <div className="text-center text-zinc-500 italic py-8">No NFT transfers found</div>
+                )}
+                {filterMode === 'scheduled' && scheduledTxs.length === 0 && !scheduledLoading && (
+                    <div className="text-center text-zinc-500 italic py-8">No scheduled transactions found</div>
                 )}
 
                 {/* Unified timeline (filterMode === 'all') */}
