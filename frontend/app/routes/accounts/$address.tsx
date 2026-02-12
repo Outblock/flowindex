@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getAccountsByAddress, getAccountsByAddressTransactions } from '../../api/gen/core';
@@ -16,6 +16,9 @@ import { AccountKeysTab } from '../../components/account/AccountInfoTab';
 import { AccountContractsTab } from '../../components/account/AccountContractsTab';
 import { AccountStorageTab } from '../../components/account/AccountStorageTab';
 import { AccountHybridCustodyTab } from '../../components/account/AccountHybridCustodyTab';
+import { PageHeader } from '../../components/ui/PageHeader';
+import { GlassCard } from '../../components/ui/GlassCard';
+import { cn } from '../../lib/utils';
 
 const VALID_TABS = ['activity', 'tokens', 'nfts', 'keys', 'contracts', 'storage', 'custody'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
@@ -81,35 +84,14 @@ function AccountDetailPending() {
             <div className="fixed inset-x-0 top-0 z-[9999] h-[3px] overflow-hidden bg-nothing-green/10">
                 <div className="h-full w-1/2 bg-nothing-green" style={{ animation: 'route-pending-bar 1s ease-in-out infinite' }} />
             </div>
-            <div className="max-w-6xl mx-auto px-4 pt-24 pb-16">
-                <div className="flex items-center gap-4 mb-8 animate-shimmer">
-                    <div className="h-8 w-8 bg-zinc-200 dark:bg-white/10 rounded-sm" />
-                    <div className="h-6 w-64 bg-zinc-200 dark:bg-white/10 rounded-sm" />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="max-w-7xl mx-auto px-4 pt-8 pb-16">
+                <div className="h-64 rounded-2xl bg-zinc-200 dark:bg-white/5 animate-pulse mb-8" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     {[0, 1, 2].map((i) => (
-                        <div key={i} className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none animate-shimmer">
-                            <div className="h-3 w-20 bg-zinc-200 dark:bg-white/10 rounded-sm mb-3" />
-                            <div className="h-8 w-32 bg-zinc-200 dark:bg-white/10 rounded-sm" />
-                        </div>
+                        <div key={i} className="h-32 rounded-xl bg-zinc-200 dark:bg-white/5 animate-pulse" />
                     ))}
                 </div>
-                <div className="flex gap-2 mb-0 border-b border-zinc-200 dark:border-white/10 pb-0">
-                    {[0, 1, 2, 3].map((i) => (
-                        <div key={i} className="h-10 w-24 bg-zinc-200 dark:bg-white/10 rounded-sm animate-shimmer" />
-                    ))}
-                </div>
-                <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[200px] shadow-sm dark:shadow-none">
-                    <div className="h-4 w-36 bg-zinc-200 dark:bg-white/10 rounded-sm mb-6 animate-shimmer" />
-                    <div className="space-y-4">
-                        {[0, 1].map((i) => (
-                            <div key={i}>
-                                <div className="h-3 w-16 bg-zinc-200 dark:bg-white/10 rounded-sm mb-2 animate-shimmer" />
-                                <div className="h-4 w-48 bg-zinc-200 dark:bg-white/10 rounded-sm animate-shimmer" />
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                <div className="h-96 rounded-xl bg-zinc-200 dark:bg-white/5 animate-pulse" />
             </div>
         </div>
     );
@@ -119,7 +101,7 @@ function AccountDetail() {
     const { address } = Route.useParams();
     const { tab: searchTab } = Route.useSearch();
     const { account: initialAccount, initialTransactions } = Route.useLoaderData();
-    const navigate = useNavigate();
+    const navigate = Route.useNavigate();
 
     const [account, setAccount] = useState<any>(initialAccount);
     const [error, setError] = useState<any>(initialAccount ? null : 'Account not found');
@@ -194,14 +176,14 @@ function AccountDetail() {
     if (error || !account) {
         return (
             <div className="min-h-screen bg-white dark:bg-black flex items-center justify-center font-mono transition-colors duration-300">
-                <div className="border border-red-500/30 bg-red-50 dark:bg-nothing-dark p-8 max-w-md text-center shadow-sm">
-                    <User className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                    <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-2">Account Not Found</h2>
-                    <p className="text-zinc-600 dark:text-zinc-500 text-xs mb-6">The requested account could not be located.</p>
-                    <Link to="/" className="inline-block w-full border border-zinc-200 dark:border-white/20 hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-900 dark:text-white text-xs uppercase tracking-widest py-3 transition-all">
+                <GlassCard className="p-12 text-center max-w-lg mx-auto">
+                    <User className="h-16 w-16 text-red-500 mx-auto mb-6" />
+                    <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-4">Account Not Found</h2>
+                    <p className="text-zinc-600 dark:text-zinc-400 mb-8">The requested account could not be located on the network.</p>
+                    <Link to="/" className="inline-block w-full border border-zinc-200 dark:border-white/20 hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-900 dark:text-white text-sm uppercase tracking-widest py-4 rounded-lg transition-all">
                         Return to Dashboard
                     </Link>
-                </div>
+                </GlassCard>
             </div>
         );
     }
@@ -216,116 +198,108 @@ function AccountDetail() {
         { id: 'custody' as const, label: 'Hybrid Custody', icon: Shield },
     ];
 
+    const balanceValue = onChainData?.balance != null ? onChainData.balance : (account.balance != null ? Number(account.balance) / 1e8 : 0);
+    const stakedValue = [...(onChainData?.staking?.nodeInfos || []), ...(onChainData?.staking?.delegatorInfos || [])]
+        .reduce((sum, info) => sum + Number(info.tokensStaked || 0), 0);
+
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono transition-colors duration-300">
-            <div className="max-w-6xl mx-auto px-4 pt-24 pb-16">
-                {/* Header */}
-                <div className="flex items-center gap-4 mb-8">
-                    <Link to="/" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Link>
-                    <div>
-                        <h1 className="text-xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Account</h1>
-                        <p className="text-xs font-mono text-zinc-500 mt-1">{account.address}</p>
-                    </div>
-                </div>
+        <div className="min-h-screen bg-gray-50/50 dark:bg-black text-zinc-900 dark:text-white font-mono transition-colors duration-300 selection:bg-nothing-green selection:text-black">
+            <div className="max-w-7xl mx-auto px-4 pt-12 pb-24">
 
-                {/* Summary cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                    <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Balance</p>
-                        <p className="text-2xl font-bold text-zinc-900 dark:text-white">
-                            <SafeNumberFlow value={onChainData?.balance != null ? onChainData.balance : (account.balance != null ? Number(account.balance) / 1e8 : 0)} /> <span className="text-sm text-zinc-500">FLOW</span>
-                        </p>
-                        {onChainData?.balance != null && <p className="text-[9px] text-zinc-400 mt-1">On-chain</p>}
-                    </div>
-                    <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Keys</p>
-                        <p className="text-2xl font-bold text-zinc-900 dark:text-white">{account.keys?.length || 0}</p>
-                    </div>
-                    <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Contracts</p>
-                        <p className="text-2xl font-bold text-zinc-900 dark:text-white">{account.contracts?.length || 0}</p>
-                    </div>
-                </div>
+                <Link to="/" className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-6 group">
+                    <ArrowLeft className="h-4 w-4 transform group-hover:-translate-x-1 transition-transform" />
+                    <span className="text-xs uppercase tracking-widest">Back to Dashboard</span>
+                </Link>
 
-                {/* Staking info */}
-                {onChainData?.staking && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        {onChainData.staking.lockedAccountInfo && (
-                            <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Lock className="h-3 w-3" /> Locked FLOW</p>
-                                <p className="text-2xl font-bold text-zinc-900 dark:text-white">
-                                    <SafeNumberFlow value={Number(onChainData.staking.lockedAccountInfo.lockedBalance)} /> <span className="text-sm text-zinc-500">FLOW</span>
-                                </p>
-                                <p className="text-[9px] text-zinc-400 mt-1">Unlock limit: {Number(onChainData.staking.lockedAccountInfo.unlockLimit).toLocaleString()} FLOW</p>
+                <PageHeader
+                    title="Account"
+                    subtitle={account.address}
+                >
+                    <div className="flex gap-3">
+                        <div className="text-right">
+                            <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Balance</div>
+                            <div className="text-2xl md:text-3xl font-bold">
+                                <SafeNumberFlow value={balanceValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
                             </div>
-                        )}
-                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Coins className="h-3 w-3" /> Total Staked</p>
-                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">
-                                <SafeNumberFlow value={
-                                    [...(onChainData.staking.nodeInfos || []), ...(onChainData.staking.delegatorInfos || [])]
-                                        .reduce((sum, info) => sum + Number(info.tokensStaked || 0), 0)
-                                } /> <span className="text-sm text-zinc-500">FLOW</span>
-                            </p>
-                            <p className="text-[9px] text-zinc-400 mt-1">
+                        </div>
+                    </div>
+                </PageHeader>
+
+                {/* Overview Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+                    <GlassCard className="p-6 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Coins className="h-12 w-12" />
+                        </div>
+                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Total Staked</p>
+                        <p className="text-2xl font-bold">
+                            <SafeNumberFlow value={stakedValue} />
+                        </p>
+                        {onChainData?.staking && (
+                            <p className="text-[10px] text-zinc-400 mt-2">
                                 {(onChainData.staking.nodeInfos?.length || 0)} node(s), {(onChainData.staking.delegatorInfos?.length || 0)} delegation(s)
                             </p>
-                        </div>
-                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Coins className="h-3 w-3" /> Total Rewards</p>
-                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">
-                                <SafeNumberFlow value={
-                                    [...(onChainData.staking.nodeInfos || []), ...(onChainData.staking.delegatorInfos || [])]
-                                        .reduce((sum, info) => sum + Number(info.tokensRewarded || 0), 0)
-                                } /> <span className="text-sm text-zinc-500">FLOW</span>
-                            </p>
-                        </div>
-                    </div>
-                )}
+                        )}
+                    </GlassCard>
 
-                {/* Storage info */}
-                {onChainData?.storage && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Database className="h-3 w-3" /> Storage Used</p>
-                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">{onChainData.storage.storageUsedInMB} <span className="text-sm text-zinc-500">MB</span></p>
+                    <GlassCard className="p-6 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Database className="h-12 w-12" />
                         </div>
-                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Database className="h-3 w-3" /> Storage Capacity</p>
-                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">{onChainData.storage.storageCapacityInMB} <span className="text-sm text-zinc-500">MB</span></p>
-                        </div>
-                        <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1"><Coins className="h-3 w-3" /> Available Balance</p>
-                            <p className="text-2xl font-bold text-zinc-900 dark:text-white">
-                                <SafeNumberFlow value={Number(onChainData.storage.availableBalanceToUse)} /> <span className="text-sm text-zinc-500">FLOW</span>
-                            </p>
-                        </div>
-                    </div>
-                )}
+                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Storage Used</p>
+                        <p className="text-2xl font-bold">
+                            {onChainData?.storage?.storageUsedInMB ?? 0} <span className="text-sm text-zinc-500 font-normal">MB</span>
+                        </p>
+                        <p className="text-[10px] text-zinc-400 mt-2">
+                            Capacity: {onChainData?.storage?.storageCapacityInMB ?? 0} MB
+                        </p>
+                    </GlassCard>
 
-                {/* Tabs */}
-                <div className="mb-8">
-                    <div className="flex flex-wrap border-b border-zinc-200 dark:border-white/10 mb-0">
-                        {tabs.map(({ id, label, icon: Icon }) => (
-                            <button
-                                key={id}
-                                onClick={() => setActiveTab(id)}
-                                className={`px-5 py-3 text-xs uppercase tracking-widest transition-colors ${activeTab === id
-                                    ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
-                                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
-                                }`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <Icon className={`h-4 w-4 ${activeTab === id ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
+                    <GlassCard className="p-6 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Key className="h-12 w-12" />
+                        </div>
+                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Keys</p>
+                        <p className="text-2xl font-bold">
+                            {account.keys?.length || 0}
+                        </p>
+                    </GlassCard>
+
+                    <GlassCard className="p-6 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <FileText className="h-12 w-12" />
+                        </div>
+                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Contracts</p>
+                        <p className="text-2xl font-bold">
+                            {account.contracts?.length || 0}
+                        </p>
+                    </GlassCard>
+                </div>
+
+                {/* Tabs & Content */}
+                <div className="space-y-6">
+                    {/* Floating Tab Bar */}
+                    <div className="sticky top-4 z-50">
+                        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-full shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto">
+                            {tabs.map(({ id, label, icon: Icon }) => (
+                                <button
+                                    key={id}
+                                    onClick={() => setActiveTab(id)}
+                                    className={cn(
+                                        "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap",
+                                        activeTab === id
+                                            ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-md"
+                                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5"
+                                    )}
+                                >
+                                    <Icon className="h-3.5 w-3.5" />
                                     {label}
-                                </span>
-                            </button>
-                        ))}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[200px] shadow-sm dark:shadow-none">
+                    <div className="min-h-[500px]">
                         {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} />}
                         {activeTab === 'tokens' && <AccountTokensTab address={address} />}
                         {activeTab === 'nfts' && <AccountNFTsTab address={address} />}

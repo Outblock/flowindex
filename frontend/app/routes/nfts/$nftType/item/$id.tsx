@@ -1,15 +1,14 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
-import { Image, ArrowRightLeft } from 'lucide-react';
+import { Package, ArrowRightLeft, ExternalLink, Calendar, Hash, User, Shield } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured } from '../../../../api/heyapi';
 import { getFlowV1NftByNftTypeItemById, getFlowV1NftByNftTypeItemByIdTransfer } from '../../../../api/gen/find';
 import { Pagination } from '../../../../components/Pagination';
 import { RouteErrorBoundary } from '../../../../components/RouteErrorBoundary';
-
-interface ItemSearch {
-  page?: number;
-}
+import { PageHeader } from '../../../../components/ui/PageHeader';
+import { GlassCard } from '../../../../components/ui/GlassCard';
+import { getNFTThumbnail, normalizeAddress } from '../../../../components/account/accountUtils';
 
 export const Route = createFileRoute('/nfts/$nftType/item/$id')({
   component: NFTItem,
@@ -47,7 +46,11 @@ export const Route = createFileRoute('/nfts/$nftType/item/$id')({
 function NFTItem() {
   return (
     <RouteErrorBoundary title="NFT Item Page Error">
-      <NFTItemInner />
+      <div className="min-h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono transition-colors duration-300">
+        <div className="max-w-7xl mx-auto px-4 pt-8 pb-16">
+          <NFTItemInner />
+        </div>
+      </div>
     </RouteErrorBoundary>
   );
 }
@@ -56,13 +59,11 @@ function NFTItemInner() {
   const { item, transfers, transfersMeta, nftType, id, page } = Route.useLoaderData();
   const navigate = Route.useNavigate();
 
-  const normalizeHex = (value) => {
-    if (!value) return '';
-    const lower = String(value).toLowerCase();
-    return lower.startsWith('0x') ? lower : `0x${lower}`;
-  };
-
-  const owner = normalizeHex(item?.current_owner || item?.owner || item?.address || '');
+  const owner = normalizeAddress(item?.current_owner || item?.owner || item?.address || '');
+  const display = item?.display;
+  const name = display?.name || `#${id}`;
+  const description = display?.description;
+  const thumbnail = getNFTThumbnail(item);
 
   const limit = 25;
   const offset = (page - 1) * limit;
@@ -73,136 +74,187 @@ function NFTItemInner() {
     navigate({ search: { page: newPage } });
   };
 
+  const collectionName = nftType.split('.').pop() || nftType;
+
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+    <>
+      <PageHeader
+        title={name}
+        subtitle={`${collectionName} • #${id}`}
+        backgroundImage={thumbnail}
       >
-        <div className="flex items-center space-x-4">
-          <div className="p-3 bg-nothing-green/10 rounded-lg">
-            <Image className="h-8 w-8 text-nothing-green-dark dark:text-nothing-green" />
+        <div className="flex gap-2">
+          <Link
+            to="/nfts/$nftType"
+            params={{ nftType: String(nftType) }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 backdrop-blur-md text-sm font-semibold text-white transition-colors"
+          >
+            <Package className="w-4 h-4" />
+            View Collection
+          </Link>
+        </div>
+      </PageHeader>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Column: Image & Quick Stats */}
+        <div className="lg:col-span-5 space-y-6">
+          <GlassCard className="overflow-hidden p-0 bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10">
+            <div className="aspect-square relative flex items-center justify-center p-8 bg-zinc-100 dark:bg-black/20">
+              {thumbnail ? (
+                <img
+                  src={thumbnail}
+                  alt={name}
+                  className="w-full h-full object-contain rounded-lg shadow-2xl"
+                />
+              ) : (
+                <Package className="w-32 h-32 text-zinc-300 dark:text-zinc-700 opacity-20" />
+              )}
+            </div>
+          </GlassCard>
+
+          <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Collection</p>
+            <Link
+              to="/nfts/$nftType"
+              params={{ nftType: String(nftType) }}
+              className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline break-all"
+            >
+              {String(nftType)}
+            </Link>
           </div>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tighter">
-              NFT Item
-            </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono break-all">
-              {String(nftType)} #{String(id)}
+          <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Current Owner</p>
+            <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
+              {owner ? (
+                <Link to="/accounts/$address" params={{ address: owner }} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
+                  {owner}
+                </Link>
+              ) : (
+                '—'
+              )}
             </p>
           </div>
         </div>
-      </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-      >
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Collection</p>
-          <Link
-            to={`/nfts/${encodeURIComponent(String(nftType))}`}
-            className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline break-all"
-          >
-            {String(nftType)}
-          </Link>
-        </div>
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Current Owner</p>
-          <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
-            {owner ? (
-              <Link to={`/accounts/${owner}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
-                {owner}
-              </Link>
-            ) : (
-              '—'
-            )}
-          </p>
-        </div>
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Transfers</p>
-          <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-            <NumberFlow value={Number.isFinite(total) ? total : transfers.length} format={{ useGrouping: true }} />
-          </p>
-        </div>
-      </motion.div>
+        {/* Right Column: Metadata & History */}
+        <div className="lg:col-span-7 space-y-8">
+          {description && (
+            <GlassCard>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2">
+                Description
+              </h3>
+              <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                {description}
+              </p>
+            </GlassCard>
+          )}
 
-      <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden shadow-sm dark:shadow-none">
-        <div className="p-4 border-b border-zinc-200 dark:border-white/5 flex items-center gap-2">
-          <ArrowRightLeft className="w-4 h-4 text-zinc-500" />
-          <span className="text-xs uppercase tracking-widest font-semibold text-zinc-600 dark:text-zinc-300">Transfer History</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">From</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">To</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Tx</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Height</th>
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence mode="popLayout">
-                {transfers.map((t) => {
-                  const tx = String(t?.transaction_hash || '');
-                  const from = normalizeHex(t?.sender);
-                  const to = normalizeHex(t?.receiver);
-                  const height = Number(t?.block_height || 0);
-                  return (
-                    <motion.tr
-                      layout
-                      key={`${tx}-${from}-${to}-${height}`}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
-                    >
-                      <td className="p-4">
-                        {from ? (
-                          <Link to={`/accounts/${from}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
-                            {from.slice(0, 14)}...
-                          </Link>
-                        ) : (
-                          <span className="text-zinc-500">—</span>
-                        )}
+          {/* Traits / Attributes if available */}
+          {item?.traits && item?.traits.length > 0 && (
+            <GlassCard>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-4 flex items-center gap-2">
+                <Hash className="w-4 h-4" />
+                Traits
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {item.traits.map((trait: any, i: number) => (
+                  <div key={i} className="p-3 rounded-lg bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5 flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500 truncate mb-1">
+                      {trait.name || trait.display?.name}
+                    </span>
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                      {String(trait.value || trait.display?.value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
+
+          {/* Transfer History */}
+          <GlassCard className="p-0 overflow-hidden">
+            <div className="p-6 border-b border-zinc-200 dark:border-white/10 flex items-center justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                <ArrowRightLeft className="w-4 h-4" />
+                Transfer History
+                <span className="ml-2 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-white/10 text-xs text-zinc-600 dark:text-zinc-400">
+                  <NumberFlow value={Number.isFinite(total) ? total : transfers.length} />
+                </span>
+              </h3>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-zinc-50/50 dark:bg-white/5">
+                  <tr>
+                    <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">From</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">To</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Transaction</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider text-right">Block</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                  <AnimatePresence mode="popLayout">
+                    {transfers.map((t: any) => {
+                      const tx = String(t?.transaction_hash || '');
+                      const from = normalizeAddress(t?.sender);
+                      const to = normalizeAddress(t?.receiver);
+                      const height = Number(t?.block_height || 0);
+
+                      return (
+                        <motion.tr
+                          key={`${tx}-${from}-${to}-${height}`}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
+                        >
+                          <td className="px-6 py-4">
+                            {from ? (
+                              <Link to="/accounts/$address" params={{ address: from }} className="font-mono text-xs text-zinc-600 dark:text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors">
+                                {from}
+                              </Link>
+                            ) : <span className="text-zinc-300 dark:text-zinc-700">—</span>}
+                          </td>
+                          <td className="px-6 py-4">
+                            {to ? (
+                              <Link to="/accounts/$address" params={{ address: to }} className="font-mono text-xs text-zinc-600 dark:text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors">
+                                {to}
+                              </Link>
+                            ) : <span className="text-zinc-300 dark:text-zinc-700">—</span>}
+                          </td>
+                          <td className="px-6 py-4">
+                            {tx ? (
+                              <Link to="/transactions/$txId" params={{ txId: normalizeAddress(tx) }} className="font-mono text-xs text-nothing-green-dark dark:text-nothing-green hover:underline">
+                                {normalizeAddress(tx).slice(0, 18)}...
+                              </Link>
+                            ) : <span className="text-zinc-300 dark:text-zinc-700">—</span>}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <span className="font-mono text-xs text-zinc-500">
+                              {height.toLocaleString()}
+                            </span>
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
+                  </AnimatePresence>
+                  {transfers.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic text-sm">
+                        No transfer history found
                       </td>
-                      <td className="p-4">
-                        {to ? (
-                          <Link to={`/accounts/${to}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
-                            {to.slice(0, 14)}...
-                          </Link>
-                        ) : (
-                          <span className="text-zinc-500">—</span>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        {tx ? (
-                          <Link to={`/transactions/${normalizeHex(tx)}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                            {normalizeHex(tx).slice(0, 18)}...
-                          </Link>
-                        ) : (
-                          <span className="text-zinc-500">—</span>
-                        )}
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className="font-mono text-sm bg-zinc-100 dark:bg-white/10 px-2 py-1 rounded">
-                          {Number.isFinite(height) ? height.toLocaleString() : '0'}
-                        </span>
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
-        <div className="p-4 border-t border-zinc-200 dark:border-white/5">
-          <Pagination currentPage={page} onPageChange={setPage} hasNext={hasNext} />
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-4 border-t border-zinc-200 dark:border-white/10 bg-zinc-50/30 dark:bg-white/5">
+              <Pagination currentPage={page} onPageChange={setPage} hasNext={hasNext} />
+            </div>
+          </GlassCard>
         </div>
       </div>
-    </div>
+    </>
   );
 }
