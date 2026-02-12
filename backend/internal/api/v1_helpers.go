@@ -251,24 +251,33 @@ func toFlowTransactionOutput(t models.Transaction, events []models.Event, contra
 	for _, e := range events {
 		evOut = append(evOut, toFlowEventOutput(e))
 	}
-	return map[string]interface{}{
-		"id":                t.ID,
-		"block_height":      t.BlockHeight,
-		"transaction_index": t.TransactionIndex,
-		"timestamp":         t.Timestamp.UTC().Format(time.RFC3339),
-		"payer":             formatAddressV1(t.PayerAddress),
-		"proposer":          formatAddressV1(t.ProposerAddress),
-		"authorizers":       formatAddressListV1(t.Authorizers),
-		"status":            t.Status,
-		"error":             t.ErrorMessage,
-		"gas_used":          t.GasUsed,
-		"event_count":       t.EventCount,
-		"events":            evOut,
-		"contract_imports":  contracts,
-		"contract_outputs":  []string{},
-		"tags":              tags,
-		"fee":               fee,
+	out := map[string]interface{}{
+		"id":                         t.ID,
+		"block_height":               t.BlockHeight,
+		"transaction_index":          t.TransactionIndex,
+		"timestamp":                  t.Timestamp.UTC().Format(time.RFC3339),
+		"payer":                      formatAddressV1(t.PayerAddress),
+		"proposer":                   formatAddressV1(t.ProposerAddress),
+		"proposer_key_index":         t.ProposerKeyIndex,
+		"proposer_sequence_number":   t.ProposerSequenceNumber,
+		"authorizers":                formatAddressListV1(t.Authorizers),
+		"status":                     t.Status,
+		"error":                      t.ErrorMessage,
+		"gas_used":                   t.GasUsed,
+		"event_count":                t.EventCount,
+		"events":                     evOut,
+		"contract_imports":           contracts,
+		"contract_outputs":           []string{},
+		"tags":                       tags,
+		"fee":                        fee,
 	}
+	if t.Script != "" {
+		out["script"] = t.Script
+	}
+	if len(t.Arguments) > 0 && string(t.Arguments) != "null" {
+		out["arguments"] = t.Arguments
+	}
+	return out
 }
 
 func toFTListOutput(token models.FTToken) map[string]interface{} {

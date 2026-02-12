@@ -208,6 +208,10 @@ CREATE TABLE IF NOT EXISTS raw.transactions (
 -- Ensure column exists on older installs (safe no-op for new DBs).
 ALTER TABLE IF EXISTS raw.transactions
   ADD COLUMN IF NOT EXISTS script_hash VARCHAR(64);
+ALTER TABLE IF EXISTS raw.transactions
+  ADD COLUMN IF NOT EXISTS proposer_key_index INT;
+ALTER TABLE IF EXISTS raw.transactions
+  ADD COLUMN IF NOT EXISTS proposer_sequence_number BIGINT;
 
 -- 3.2.a Tx lookup for fast "by tx id" queries
 CREATE TABLE IF NOT EXISTS raw.tx_lookup (
