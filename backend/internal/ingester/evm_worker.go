@@ -193,7 +193,7 @@ func decodeEVMTransactionPayload(payload []byte) (decodedEVMTx, bool) {
 	}
 
 	var signer types.Signer
-	if chainID := tx.ChainId(); chainID != nil {
+	if chainID := tx.ChainId(); chainID != nil && chainID.Sign() > 0 {
 		signer = types.LatestSignerForChainID(chainID)
 	} else {
 		signer = types.HomesteadSigner{}
