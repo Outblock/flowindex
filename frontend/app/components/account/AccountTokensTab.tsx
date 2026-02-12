@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Coins } from 'lucide-react';
-import type { FTVaultInfo, StorageInfo as FCLStorageInfo } from '../../../cadence/cadence.gen';
+import { Coins, ArrowRight, ExternalLink } from 'lucide-react';
+import type { FTVaultInfo } from '../../../cadence/cadence.gen';
 import { normalizeAddress, formatShort, getTokenLogoURL } from './accountUtils';
+import { GlassCard } from '../ui/GlassCard';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
     address: string;
@@ -12,7 +14,6 @@ export function AccountTokensTab({ address }: Props) {
     const normalizedAddress = normalizeAddress(address);
 
     const [tokens, setTokens] = useState<FTVaultInfo[]>([]);
-    const [storage, setStorage] = useState<FCLStorageInfo | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +24,6 @@ export function AccountTokensTab({ address }: Props) {
             const { cadenceService } = await import('../../fclConfig');
             const res = await cadenceService.getToken(normalizedAddress);
             setTokens(res?.tokens || []);
-            setStorage(res?.storage || null);
         } catch (err) {
             console.error('Failed to load token data', err);
             setError('Failed to load token data');
@@ -38,86 +38,87 @@ export function AccountTokensTab({ address }: Props) {
     }, [address]);
 
     return (
-        <div>
-            <div className="flex items-center justify-between mb-3">
-                <div className="text-[10px] uppercase tracking-widest text-zinc-500">Fungible Tokens</div>
-                {loading && <div className="text-[10px] text-zinc-500">Loading...</div>}
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 flex items-center gap-2">
+                    <Coins className="w-4 h-4" />
+                    Fungible Tokens ({tokens.length})
+                </h3>
+                {loading && <div className="text-[10px] text-zinc-500 animate-pulse">Syncing...</div>}
             </div>
 
-            {error && <div className="text-xs text-red-500 dark:text-red-400 mb-4">{error}</div>}
-
-            {/* Storage summary */}
-            {storage && (
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                    <div className="border border-zinc-200 dark:border-white/5 p-3 bg-zinc-50 dark:bg-black/40 rounded-sm">
-                        <div className="text-[9px] uppercase tracking-widest text-zinc-500 mb-1">Used</div>
-                        <div className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{storage.storageUsedInMB}</div>
-                    </div>
-                    <div className="border border-zinc-200 dark:border-white/5 p-3 bg-zinc-50 dark:bg-black/40 rounded-sm">
-                        <div className="text-[9px] uppercase tracking-widest text-zinc-500 mb-1">Capacity</div>
-                        <div className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{storage.storageCapacityInMB}</div>
-                    </div>
-                    <div className="border border-zinc-200 dark:border-white/5 p-3 bg-zinc-50 dark:bg-black/40 rounded-sm">
-                        <div className="text-[9px] uppercase tracking-widest text-zinc-500 mb-1">Available</div>
-                        <div className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{storage.storageAvailableInMB}</div>
-                    </div>
-                </div>
+            {error && (
+                <GlassCard className="border-red-200 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/10">
+                    <div className="text-xs text-red-500 dark:text-red-400">{error}</div>
+                </GlassCard>
             )}
 
-            {/* Token table */}
-            <div className="min-h-[120px] relative">
-                {tokens.length > 0 ? (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
-                            <thead>
-                                <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
-                                    <th className="p-4 font-normal">Token</th>
-                                    <th className="p-4 font-normal">Contract</th>
-                                    <th className="p-4 font-normal text-right">Balance</th>
-                                    <th className="p-4 font-normal">EVM Bridge</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                {tokens.map((t: any, i: number) => {
-                                    const logoUrl = getTokenLogoURL(t);
-                                    return (
-                                        <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-2">
-                                                    {logoUrl ? (
-                                                        <img src={logoUrl} alt="" className="w-8 h-8 rounded-full object-cover bg-zinc-200 dark:bg-white/10 flex-shrink-0" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }} />
-                                                    ) : null}
-                                                    <div className={`w-8 h-8 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center flex-shrink-0 ${logoUrl ? 'hidden' : ''}`}>
-                                                        <Coins className="h-4 w-4 text-zinc-400" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="font-mono text-zinc-900 dark:text-white truncate">{t.name || t.contractName}</div>
-                                                        {t.symbol && <div className="text-[10px] text-zinc-500">{t.symbol}</div>}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <Link to={`/accounts/${normalizeAddress(t.contractAddress)}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                                    {formatShort(t.contractAddress)}
-                                                </Link>
-                                                <div className="text-[10px] text-zinc-500">{t.contractName}</div>
-                                            </td>
-                                            <td className="p-4 text-right font-mono font-bold text-zinc-900 dark:text-white">
-                                                {t.balance != null ? Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
-                                            </td>
-                                            <td className="p-4 font-mono text-zinc-500 text-[10px]">
-                                                {t.evmAddress || '—'}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : !loading ? (
-                    <div className="text-center text-zinc-500 italic py-8">No tokens found</div>
-                ) : null}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <AnimatePresence mode="popLayout">
+                    {tokens.map((t: FTVaultInfo, i: number) => {
+                        const logoUrl = getTokenLogoURL(t);
+                        return (
+                            <motion.div
+                                key={`${t.contractAddress}-${t.contractName}`}
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: i * 0.05 }}
+                            >
+                                <GlassCard className="h-full hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            {logoUrl ? (
+                                                <img
+                                                    src={logoUrl}
+                                                    alt={t.name}
+                                                    className="w-10 h-10 object-cover bg-white dark:bg-white/10 shadow-sm"
+                                                    loading="lazy"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                                                />
+                                            ) : null}
+                                            <div className={`w-10 h-10 bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-inner ${logoUrl ? 'hidden' : ''}`}>
+                                                <Coins className="h-5 w-5 text-zinc-400" />
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-zinc-900 dark:text-white leading-tight">{t.name || t.contractName}</div>
+                                                <div className="text-[10px] font-mono text-zinc-500">{t.symbol}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Balance</div>
+                                        <div className="text-xl font-mono font-bold text-zinc-900 dark:text-white break-all">
+                                            {t.balance != null ? Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-white/5">
+                                        <Link
+                                            to="/accounts/$address"
+                                            params={{ address: normalizeAddress(t.contractAddress) }}
+                                            className="text-[10px] font-mono text-zinc-500 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-1 transition-colors"
+                                        >
+                                            {formatShort(t.contractAddress)}
+                                            <ExternalLink className="w-3 h-3" />
+                                        </Link>
+                                        <div className="text-[10px] text-zinc-400 font-mono">
+                                            {t.contractName}
+                                        </div>
+                                    </div>
+                                </GlassCard>
+                            </motion.div>
+                        );
+                    })}
+                </AnimatePresence>
             </div>
+
+            {tokens.length === 0 && !loading && (
+                <GlassCard className="text-center py-12">
+                    <Coins className="w-12 h-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
+                    <div className="text-zinc-500 italic">No fungible tokens found</div>
+                </GlassCard>
+            )}
         </div>
     );
 }

@@ -130,7 +130,7 @@ export default function Sidebar() {
                                 className="flex flex-col whitespace-nowrap overflow-hidden"
                             >
                                 <span className="text-2xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic leading-none">
-                                    flow<span className="text-nothing-green">scan</span>
+                                    flow<span className="text-nothing-green">index</span>
                                 </span>
                             </motion.div>
                         )}

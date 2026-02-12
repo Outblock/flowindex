@@ -17,7 +17,7 @@ export function GlassCard({ children, className, intensity = 'medium', ...props 
     return (
         <div
             className={cn(
-                "rounded-xl border shadow-sm transition-all duration-300",
+                "border shadow-sm transition-all duration-300",
                 intensityStyles[intensity],
                 className
             )}

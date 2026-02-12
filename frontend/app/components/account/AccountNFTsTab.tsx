@@ -14,6 +14,7 @@ interface Props {
 }
 
 interface CollectionState {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     nfts: any[];
     loading: boolean;
     error: string | null;
@@ -29,6 +30,8 @@ export function AccountNFTsTab({ address }: Props) {
     const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
     const [collectionStates, setCollectionStates] = useState<Record<string, CollectionState>>({});
     const [layout, setLayout] = useState<'grid' | 'list'>('grid');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [selectedNft, setSelectedNft] = useState<any | null>(null);
 
     // Load Collections
     useEffect(() => {
@@ -134,6 +137,7 @@ export function AccountNFTsTab({ address }: Props) {
     const selectedState = selectedCollectionId ? collectionStates[selectedCollectionId] : null;
 
     const getDisplayInfo = (col: NFTCollection) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const d = col.collectionDisplay as any;
         if (!d) return { name: null, description: null, squareImage: null, bannerImage: null, externalURL: null };
         return {
@@ -170,7 +174,7 @@ export function AccountNFTsTab({ address }: Props) {
 
     return (
         <div className="flex flex-col lg:flex-row gap-6 items-start h-[calc(100vh-200px)] min-h-[600px]">
-            {/* Sidebar: Collection List */}
+            {/* Sidebar: Collection List (unchanged) */}
             <GlassCard className="w-full lg:w-80 flex-shrink-0 flex flex-col h-full overflow-hidden p-0 bg-white/50 dark:bg-black/40">
                 <div className="p-4 border-b border-zinc-200 dark:border-white/10 bg-zinc-50/50 dark:bg-white/5 backdrop-blur-sm">
                     <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Collections ({collections.length})</h3>
@@ -186,13 +190,13 @@ export function AccountNFTsTab({ address }: Props) {
                                 key={col.id}
                                 onClick={() => setSelectedCollectionId(col.id)}
                                 className={cn(
-                                    "w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all duration-200 group",
+                                    "w-full flex items-center gap-3 p-3 text-left transition-all duration-200 group",
                                     isSelected
                                         ? "bg-white dark:bg-white/10 shadow-sm ring-1 ring-zinc-200 dark:ring-white/10"
                                         : "hover:bg-zinc-100 dark:hover:bg-white/5"
                                 )}
                             >
-                                <div className="h-10 w-10 rounded-md overflow-hidden bg-zinc-200 dark:bg-white/10 flex-shrink-0 border border-black/5 dark:border-white/10">
+                                <div className="h-10 w-10 overflow-hidden bg-zinc-200 dark:bg-white/10 flex-shrink-0 border border-black/5 dark:border-white/10">
                                     {display.squareImage ? (
                                         <img src={display.squareImage} alt="" className="w-full h-full object-cover" />
                                     ) : (
@@ -216,10 +220,10 @@ export function AccountNFTsTab({ address }: Props) {
             </GlassCard>
 
             {/* Main Content: NFT Grid */}
-            <div className="flex-1 h-full flex flex-col min-w-0">
+            <div className="flex-1 h-full flex flex-col min-w-0 relative">
                 {selectedCollection ? (
                     <GlassCard className="h-full flex flex-col overflow-hidden p-0 bg-white/50 dark:bg-black/40">
-                        {/* Collection Header */}
+                        {/* Collection Header (unchanged) */}
                         <div className="relative h-32 md:h-48 flex-shrink-0 bg-zinc-100 dark:bg-white/5 overflow-hidden border-b border-zinc-200 dark:border-white/10">
                             {getDisplayInfo(selectedCollection).bannerImage && (
                                 <img
@@ -249,11 +253,11 @@ export function AccountNFTsTab({ address }: Props) {
                                     </div>
 
                                     {/* View Toggle */}
-                                    <div className="flex bg-white/50 dark:bg-black/50 backdrop-blur-md rounded-lg p-1 border border-zinc-200 dark:border-white/10 shadow-sm">
-                                        <button onClick={() => setLayout('grid')} className={cn("p-1.5 rounded-md transition-colors", layout === 'grid' ? "bg-white dark:bg-white/20 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5")}>
+                                    <div className="flex bg-white/50 dark:bg-black/50 backdrop-blur-md p-1 border border-zinc-200 dark:border-white/10 shadow-sm">
+                                        <button onClick={() => setLayout('grid')} className={cn("p-1.5 transition-colors", layout === 'grid' ? "bg-white dark:bg-white/20 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5")}>
                                             <Grid className="h-4 w-4 text-zinc-700 dark:text-zinc-300" />
                                         </button>
-                                        <button onClick={() => setLayout('list')} className={cn("p-1.5 rounded-md transition-colors", layout === 'list' ? "bg-white dark:bg-white/20 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5")}>
+                                        <button onClick={() => setLayout('list')} className={cn("p-1.5 transition-colors", layout === 'list' ? "bg-white dark:bg-white/20 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5")}>
                                             <ListIcon className="h-4 w-4 text-zinc-700 dark:text-zinc-300" />
                                         </button>
                                     </div>
@@ -288,11 +292,10 @@ export function AccountNFTsTab({ address }: Props) {
                                                 const nftId = nft?.tokenId ?? String(i);
 
                                                 return (
-                                                    <Link
+                                                    <button
                                                         key={nftId}
-                                                        to="/nfts/$nftType/item/$id"
-                                                        params={{ nftType: selectedCollection.id, id: nftId }}
-                                                        className="group flex flex-col rounded-xl overflow-hidden border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/5 hover:ring-2 hover:ring-zinc-900 dark:hover:ring-white transition-all duration-300 shadow-sm hover:shadow-md"
+                                                        onClick={() => setSelectedNft(nft)}
+                                                        className="group flex flex-col overflow-hidden border border-zinc-200 dark:border-white/5 bg-white dark:bg-white/5 hover:ring-2 hover:ring-zinc-900 dark:hover:ring-white transition-all duration-300 shadow-sm hover:shadow-md text-left"
                                                     >
                                                         <div className="aspect-square bg-zinc-100 dark:bg-white/5 relative overflow-hidden">
                                                             {thumb ? (
@@ -307,7 +310,7 @@ export function AccountNFTsTab({ address }: Props) {
                                                             <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate mb-0.5">{name}</div>
                                                             <div className="text-[10px] text-zinc-500 font-mono">#{nftId}</div>
                                                         </div>
-                                                    </Link>
+                                                    </button>
                                                 );
                                             })}
                                         </div>
@@ -319,13 +322,12 @@ export function AccountNFTsTab({ address }: Props) {
                                                 const nftId = nft?.tokenId ?? String(i);
 
                                                 return (
-                                                    <Link
+                                                    <button
                                                         key={nftId}
-                                                        to="/nfts/$nftType/item/$id"
-                                                        params={{ nftType: selectedCollection.id, id: nftId }}
-                                                        className="flex items-center gap-4 p-2 rounded-lg hover:bg-white dark:hover:bg-white/10 border border-transparent hover:border-zinc-200 dark:hover:border-white/5 transition-all group"
+                                                        onClick={() => setSelectedNft(nft)}
+                                                        className="w-full flex items-center gap-4 p-2 hover:bg-white dark:hover:bg-white/10 border border-transparent hover:border-zinc-200 dark:hover:border-white/5 transition-all group text-left"
                                                     >
-                                                        <div className="h-12 w-12 rounded-md bg-zinc-100 dark:bg-white/5 relative overflow-hidden border border-zinc-200 dark:border-white/5">
+                                                        <div className="h-12 w-12 bg-zinc-100 dark:bg-white/5 relative overflow-hidden border border-zinc-200 dark:border-white/5">
                                                             {thumb ? (
                                                                 <img src={thumb} alt={name} className="w-full h-full object-cover" loading="lazy" />
                                                             ) : (
@@ -339,7 +341,7 @@ export function AccountNFTsTab({ address }: Props) {
                                                             <div className="text-xs text-zinc-500 line-clamp-1">{nft?.display?.description}</div>
                                                         </div>
                                                         <div className="text-xs font-mono text-zinc-500">#{nftId}</div>
-                                                    </Link>
+                                                    </button>
                                                 );
                                             })}
                                         </div>
@@ -350,7 +352,7 @@ export function AccountNFTsTab({ address }: Props) {
                                         <button
                                             disabled={!selectedState || selectedState.page <= 0 || selectedState.loading}
                                             onClick={() => handlePageChange((selectedState?.page || 0) - 1)}
-                                            className="px-4 py-2 text-xs uppercase tracking-widest border border-zinc-200 dark:border-white/10 rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                            className="px-4 py-2 text-xs uppercase tracking-widest border border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                                         >
                                             Previous
                                         </button>
@@ -359,9 +361,8 @@ export function AccountNFTsTab({ address }: Props) {
                                         </span>
                                         <button
                                             disabled={!selectedState || ((selectedState.nfts.length < NFT_PAGE_SIZE) && (selectedCollection.ids?.length || 0) <= NFT_PAGE_SIZE) || selectedState.loading}
-                                            // Note: Simple logic for next button disable, ideally check total count vs current offset
                                             onClick={() => handlePageChange((selectedState?.page || 0) + 1)}
-                                            className="px-4 py-2 text-xs uppercase tracking-widest border border-zinc-200 dark:border-white/10 rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                            className="px-4 py-2 text-xs uppercase tracking-widest border border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                                         >
                                             Next
                                         </button>
@@ -376,6 +377,85 @@ export function AccountNFTsTab({ address }: Props) {
                     </div>
                 )}
             </div>
+
+            {/* NFT Modal Overlay */}
+            {selectedNft && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setSelectedNft(null)}
+                    />
+                    <GlassCard className="relative w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col p-0 z-10 bg-white dark:bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="aspect-square bg-zinc-100 dark:bg-black/20 flex items-center justify-center p-8 relative">
+                            {getNFTThumbnail(selectedNft) ? (
+                                <img
+                                    src={getNFTThumbnail(selectedNft)}
+                                    alt={selectedNft?.display?.name}
+                                    className="max-w-full max-h-full object-contain shadow-lg"
+                                />
+                            ) : (
+                                <Package className="w-24 h-24 text-zinc-300 dark:text-zinc-700 opacity-20" />
+                            )}
+                            <button
+                                onClick={() => setSelectedNft(null)}
+                                className="absolute top-4 right-4 p-2 bg-white/50 dark:bg-black/50 hover:bg-white dark:hover:bg-black backdrop-blur-md transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto">
+                            <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
+                                {selectedNft?.display?.name || `#${selectedNft?.tokenId}`}
+                            </h2>
+                            <div className="flex items-center gap-2 mb-4">
+                                <span className="bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 px-2 py-1 text-xs font-mono">
+                                    #{selectedNft?.tokenId}
+                                </span>
+                                {selectedCollection && (
+                                    <span className="text-xs text-zinc-500">
+                                        {getDisplayInfo(selectedCollection).name || getContractName(selectedCollection.id)}
+                                    </span>
+                                )}
+                            </div>
+
+                            {selectedNft?.display?.description && (
+                                <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">
+                                    {selectedNft.display.description}
+                                </p>
+                            )}
+
+                            {/* Metadata / Traits */}
+                            {selectedNft.traits && selectedNft.traits.length > 0 && (
+                                <div className="space-y-3">
+                                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Traits</h3>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                        {selectedNft.traits.map((trait: any, i: number) => (
+                                            <div key={i} className="p-2 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
+                                                <div className="text-[10px] uppercase text-zinc-500 truncate">{trait?.name || trait?.display?.name || 'Trait'}</div>
+                                                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 truncate">
+                                                    {String(trait?.value || trait?.display?.value || '—')}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Raw Metadata Debug (Optional, hidden by default or shown if no traits) */}
+                            {!selectedNft.traits && selectedNft.metadata && (
+                                <div className="space-y-2 mt-4">
+                                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Metadata</h3>
+                                    <pre className="text-[10px] bg-zinc-50 dark:bg-black/20 p-2 overflow-x-auto text-zinc-500">
+                                        {JSON.stringify(selectedNft.metadata, null, 2)}
+                                    </pre>
+                                </div>
+                            )}
+                        </div>
+                    </GlassCard>
+                </div>
+            )}
         </div>
     );
 }

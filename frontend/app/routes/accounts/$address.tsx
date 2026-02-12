@@ -4,8 +4,9 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getAccountsByAddress, getAccountsByAddressTransactions } from '../../api/gen/core';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Shield, Lock, Database
+    FileText, HardDrive, Shield, Lock, Database, Copy, Check
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import { normalizeAddress } from '../../components/account/accountUtils';
 import type { StakingInfo, StorageInfo } from '../../../cadence/cadence.gen';
@@ -116,6 +117,13 @@ function AccountDetail() {
         balance?: number; storage?: StorageInfo; staking?: StakingInfo;
     } | null>(null);
 
+    const [copied, setCopied] = useState(false);
+    const handleCopy = () => {
+        navigator.clipboard.writeText(normalizedAddress);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     // Client-side on-chain data (balance, staking, storage)
     useEffect(() => {
         setOnChainData(null);
@@ -213,7 +221,18 @@ function AccountDetail() {
 
                 <PageHeader
                     title="Account"
-                    subtitle={account.address}
+                    subtitle={
+                        <div className="flex items-center gap-2">
+                            {normalizedAddress}
+                            <button
+                                onClick={handleCopy}
+                                className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                                title="Copy Address"
+                            >
+                                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                        </div>
+                    }
                 >
                     <div className="flex gap-3">
                         <div className="text-right">
@@ -247,12 +266,28 @@ function AccountDetail() {
                             <Database className="h-12 w-12" />
                         </div>
                         <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Storage Used</p>
-                        <p className="text-2xl font-bold">
-                            {onChainData?.storage?.storageUsedInMB ?? 0} <span className="text-sm text-zinc-500 font-normal">MB</span>
-                        </p>
-                        <p className="text-[10px] text-zinc-400 mt-2">
-                            Capacity: {onChainData?.storage?.storageCapacityInMB ?? 0} MB
-                        </p>
+
+                        <div className="mt-2">
+                            <div className="flex justify-between items-baseline mb-2">
+                                <span className="text-2xl font-bold">
+                                    {Math.round((onChainData?.storage?.storageUsedInMB || 0) * 100) / 100} <span className="text-xs font-normal text-zinc-500">MB</span>
+                                </span>
+                                <span className="text-xs text-zinc-500">
+                                    of {Math.round((onChainData?.storage?.storageCapacityInMB || 0) * 100) / 100} MB
+                                </span>
+                            </div>
+
+                            <div className="h-2 w-full bg-zinc-100 dark:bg-white/10 rounded-full overflow-hidden">
+                                <motion.div
+                                    className="h-full bg-nothing-green"
+                                    initial={{ width: 0 }}
+                                    animate={{
+                                        width: `${Math.min(((onChainData?.storage?.storageUsedInMB || 0) / (onChainData?.storage?.storageCapacityInMB || 1)) * 100, 100)}%`
+                                    }}
+                                    transition={{ duration: 1, ease: "easeOut" }}
+                                />
+                            </div>
+                        </div>
                     </GlassCard>
 
                     <GlassCard className="p-6 relative overflow-hidden group">
@@ -280,22 +315,30 @@ function AccountDetail() {
                 <div className="space-y-6">
                     {/* Floating Tab Bar */}
                     <div className="sticky top-4 z-50">
-                        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-full shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto">
-                            {tabs.map(({ id, label, icon: Icon }) => (
-                                <button
-                                    key={id}
-                                    onClick={() => setActiveTab(id)}
-                                    className={cn(
-                                        "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap",
-                                        activeTab === id
-                                            ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-md"
-                                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5"
-                                    )}
-                                >
-                                    <Icon className="h-3.5 w-3.5" />
-                                    {label}
-                                </button>
-                            ))}
+                        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-full shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto relative">
+                            {tabs.map(({ id, label, icon: Icon }) => {
+                                const isActive = activeTab === id;
+                                return (
+                                    <button
+                                        key={id}
+                                        onClick={() => setActiveTab(id)}
+                                        className={cn(
+                                            "relative px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap z-10",
+                                            isActive ? "text-white dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                                        )}
+                                    >
+                                        {isActive && (
+                                            <motion.div
+                                                layoutId="activeTab"
+                                                className="absolute inset-0 bg-zinc-900 dark:bg-white rounded-full -z-10 shadow-md"
+                                                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                            />
+                                        )}
+                                        <Icon className="h-3.5 w-3.5" />
+                                        {label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
