@@ -1,0 +1,356 @@
+$ eslint .
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/api/gen/core/client/client.gen.ts
+   32:7  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+   66:3  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+   68:5  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+  106:7  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+  123:7  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/api/gen/core/client/utils.gen.ts
+   66:21  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+   91:21  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+  169:11  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+  170:31  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+  184:44  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+  191:11  error    Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/api/gen/core/core/bodySerializer.gen.ts
+   7:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   7:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  42:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  42:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  68:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  68:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/api/gen/core/core/serverSentEvents.gen.ts
+  215:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/api/gen/find/client/client.gen.ts
+   32:7  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+   66:3  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+   68:5  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+  106:7  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+  123:7  error  Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/api/gen/find/client/utils.gen.ts
+   66:21  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+   91:21  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+  169:11  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+  170:31  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+  184:44  warning  Unexpected any. Specify a different type                                                                                                                       @typescript-eslint/no-explicit-any
+  191:11  error    Include a description after the "@ts-expect-error" directive to explain why the @ts-expect-error is necessary. The description must be 3 characters or longer  @typescript-eslint/ban-ts-comment
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/api/gen/find/core/bodySerializer.gen.ts
+   7:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   7:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  42:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  42:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  68:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  68:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/api/gen/find/core/serverSentEvents.gen.ts
+  215:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/DailyStatsChart.tsx
+   7:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  16:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/FlowPriceChart.tsx
+  26:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/FlowPriceChart.tsx:26:9
+  24 |
+  25 |     useEffect(() => {
+> 26 |         setMounted(true);
+     |         ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  27 |     }, []);
+  28 |
+  29 |     // Hooks must be called unconditionally, even when rendering a skeleton  react-hooks/set-state-in-effect
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/GridScan.tsx
+  410:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  413:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/Header.tsx
+  30:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  31:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/IndexingStatus.tsx
+  9:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/RouteErrorBoundary.tsx
+  25:5  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/SafeNumberFlow.tsx
+  21:5   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/SafeNumberFlow.tsx:21:5
+  19 |
+  20 |   useEffect(() => {
+> 21 |     setMounted(true);
+     |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  22 |   }, []);
+  23 |
+  24 |   const fallbackText = useMemo(() => {                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      react-hooks/set-state-in-effect
+  24:32  error  Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `format`, but the source dependencies were [value, format?.useGrouping, format?.minimumFractionDigits, format?.maximumFractionDigits]. Inferred less specific property than source.
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/SafeNumberFlow.tsx:24:32
+  22 |   }, []);
+  23 |
+> 24 |   const fallbackText = useMemo(() => {
+     |                                ^^^^^^^
+> 25 |     const options: Intl.NumberFormatOptions = {};
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 26 |     if (format?.useGrouping != null) options.useGrouping = format.useGrouping;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 27 |     if (format?.minimumFractionDigits != null) options.minimumFractionDigits = format.minimumFractionDigits;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 28 |     if (format?.maximumFractionDigits != null) options.maximumFractionDigits = format.maximumFractionDigits;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 29 |     // IMPORTANT: Make SSR deterministic to avoid hydration mismatch.
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |     return Number.isFinite(value) ? value.toLocaleString('en-US', options) : String(value);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |   }, [value, format?.useGrouping, format?.minimumFractionDigits, format?.maximumFractionDigits]);
+     | ^^^^ Could not preserve existing manual memoization
+  32 |
+  33 |   if (!mounted) {
+  34 |     // NumberFlow is animation/layout-heavy and has been observed to cause React hydration mismatches  react-hooks/preserve-manual-memoization
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/WebSocketProvider.tsx
+   9:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  12:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/account/AccountActivityTab.tsx
+   14:26   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   24:54   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   31:52   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   37:54   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   62:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:52   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   95:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  114:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  134:24   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  142:31   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  206:95   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  258:59   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  262:146  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  263:142  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  302:60   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  306:146  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  307:142  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/account/AccountFTTransfersTab.tsx
+  14:48   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  24:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  68:49   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  73:122  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:118  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/account/AccountHybridCustodyTab.tsx
+   18:40   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+   50:56   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  117:25   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  117:64   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  118:30   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  118:69   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  119:24   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  121:15   error    'hasManager' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  @typescript-eslint/no-unused-vars
+  122:15   error    'hasOwned' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u    @typescript-eslint/no-unused-vars
+  183:33   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  184:38   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  191:42   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  225:97   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  225:150  warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  230:58   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  230:113  warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  298:64   warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  298:124  warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/account/AccountInfoTab.tsx
+   5:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  35:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/account/AccountNFTTransfersTab.tsx
+  14:48   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  24:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  68:49   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  73:122  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:118  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/account/AccountStorageTab.tsx
+   19:33  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   19:39  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   38:46  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   40:36  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   65:46  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   66:46  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   67:12  error    'rawItem' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  @typescript-eslint/no-unused-vars
+   67:44  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   68:52  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   69:50  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   71:40  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   94:35  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   95:33  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+   98:42  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  101:38  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  137:24  warning  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/components/account/accountUtils.ts
+    3:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+    9:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   16:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   16:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   28:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   37:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   41:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   75:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   84:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   91:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   99:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  111:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/contexts/ThemeContext.tsx
+  5:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/contexts/WebSocketContext.tsx
+  4:79  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/fclConfig.ts
+  17:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/hooks/useWebSocket.tsx
+  10:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/router.tsx
+  4:10  warning  Fast refresh only works when a file only exports components. Move your component(s) to a separate file  react-refresh/only-export-components
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/accounts/$address.tsx
+  61:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/accounts/index.tsx
+  31:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/blocks/$height.tsx
+  15:29  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-explicit-any
+  36:40  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-explicit-any
+  38:40  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-explicit-any
+  44:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/blocks/$height.tsx:44:13
+  42 |     useEffect(() => {
+  43 |         if (!initialBlock) {
+> 44 |             setError('Block not found');
+     |             ^^^^^^^^ Avoid calling setState() directly within an effect
+  45 |         } else {
+  46 |             setBlock(initialBlock);
+  47 |             setError(null);  react-hooks/set-state-in-effect
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/blocks/index.tsx
+   36:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   37:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   84:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  103:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/contracts/$id.tsx
+  25:32  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  47:40  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  64:13  error    'id' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  @typescript-eslint/no-unused-vars
+  67:46  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  69:40  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/contracts/index.tsx
+  34:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/index.tsx
+   47:42   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+   48:54   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+   50:48   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+   51:54   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+   65:36   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  104:8    warning  React Hook useEffect has a missing dependency: 'mergeTransactions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  124:30   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  125:29   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  127:35   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  147:32   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  147:47   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  147:53   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  175:31   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  175:39   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  188:38   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  188:55   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  188:118  warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  249:42   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  260:41   warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/nfts/$nftType.tsx
+   35:32  warning  Unexpected any. Specify a different type                                                                                                 @typescript-eslint/no-explicit-any
+   36:28  warning  Unexpected any. Specify a different type                                                                                                 @typescript-eslint/no-explicit-any
+   37:31  warning  Unexpected any. Specify a different type                                                                                                 @typescript-eslint/no-explicit-any
+  162:6   warning  React Hook useEffect has missing dependencies: 'ownersOffset' and 'transfersOffset'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/nfts/$nftType/item/$id.tsx
+   28:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  198:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/nfts/index.tsx
+  27:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/stats.tsx
+   23:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   30:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   35:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  168:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/tokens/$token.tsx
+   36:27  warning  Unexpected any. Specify a different type                                                                                                  @typescript-eslint/no-explicit-any
+   37:29  warning  Unexpected any. Specify a different type                                                                                                  @typescript-eslint/no-explicit-any
+   38:31  warning  Unexpected any. Specify a different type                                                                                                  @typescript-eslint/no-explicit-any
+  157:6   warning  React Hook useEffect has missing dependencies: 'holdersOffset' and 'transfersOffset'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/tokens/index.tsx
+  27:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/transactions/$txId.tsx
+  22:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  40:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  41:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/hao/clawd/agents/fw-cs/flowscan-clone/frontend/app/routes/transactions/index.tsx
+   34:54  warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+   35:48  warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  138:8   warning  React Hook useEffect has a missing dependency: 'mergeTransactions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  221:9   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+✖ 194 problems (20 errors, 174 warnings)
+  0 errors and 2 warnings potentially fixable with the `--fix` option.
+
+error: script "lint" exited with code 1
