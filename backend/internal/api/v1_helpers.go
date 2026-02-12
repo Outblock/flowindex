@@ -287,8 +287,8 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 	if token.ExternalURL != "" {
 		out["external_url"] = token.ExternalURL
 	}
-	if len(token.Logo) > 0 && string(token.Logo) != "null" {
-		out["logo"] = json.RawMessage(token.Logo)
+	if token.Logo != "" {
+		out["logo"] = token.Logo
 	}
 	if token.VaultPath != "" {
 		out["vault_path"] = token.VaultPath
@@ -351,8 +351,8 @@ func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]i
 		"display_name":     summary.Name,
 		"description":      summary.Description,
 		"external_url":     summary.ExternalURL,
-		"square_image":     json.RawMessage(summary.SquareImage),
-		"banner_image":     json.RawMessage(summary.BannerImage),
+		"square_image":     summary.SquareImage,
+		"banner_image":     summary.BannerImage,
 		"socials":          json.RawMessage(summary.Socials),
 		"number_of_tokens": summary.Count,
 		"timestamp":        formatTime(summary.UpdatedAt),
@@ -525,8 +525,8 @@ func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string,
 	if meta != nil && meta.Name != "" {
 		tokenName = meta.Name
 		tokenSymbol = meta.Symbol
-		if len(meta.Logo) > 0 {
-			tokenLogo = json.RawMessage(meta.Logo)
+		if meta.Logo != "" {
+			tokenLogo = meta.Logo
 		}
 	} else if contractName == "FlowToken" {
 		tokenName = "Flow"
@@ -581,8 +581,8 @@ func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string
 		if meta.Symbol != "" {
 			collection["symbol"] = meta.Symbol
 		}
-		if len(meta.Logo) > 0 {
-			collection["image"] = json.RawMessage(meta.Logo)
+		if meta.Logo != "" {
+			collection["image"] = meta.Logo
 		}
 		if meta.Description != "" {
 			collection["description"] = meta.Description
@@ -610,8 +610,8 @@ func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[s
 			if m.Name != "" {
 				item["name"] = m.Name
 			}
-			if len(m.Logo) > 0 {
-				item["logo"] = json.RawMessage(m.Logo)
+			if m.Logo != "" {
+				item["logo"] = m.Logo
 			}
 		}
 		ft = append(ft, item)
@@ -630,8 +630,8 @@ func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[s
 			if m.Name != "" {
 				item["name"] = m.Name
 			}
-			if len(m.Logo) > 0 {
-				item["logo"] = json.RawMessage(m.Logo)
+			if m.Logo != "" {
+				item["logo"] = m.Logo
 			}
 		}
 		nft = append(nft, item)

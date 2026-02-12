@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
-import { getAccountsByAddressNftTransfers } from '../../api/gen/core';
+import { getFlowV1NftTransfer } from '../../api/gen/find';
 import { normalizeAddress, formatShort } from './accountUtils';
 
 interface Props {
@@ -19,14 +19,15 @@ export function AccountNFTTransfersTab({ address }: Props) {
     const loadTransfers = async (cursorValue: string, append: boolean) => {
         setLoading(true);
         try {
+            const offset = cursorValue ? parseInt(cursorValue, 10) : 0;
             await ensureHeyApiConfigured();
-            const res = await getAccountsByAddressNftTransfers({ path: { address: normalizedAddress }, query: { cursor: cursorValue, limit: 20 } });
+            const res = await getFlowV1NftTransfer({ query: { address: normalizedAddress, offset, limit: 20 } });
             const payload: any = res.data;
-            const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+            const items = payload?.data ?? [];
             setTransfers(append ? prev => [...prev, ...items] : items);
-            const next = payload?.next_cursor ?? '';
-            setCursor(next);
-            setHasMore(!!next);
+            const nextOffset = items.length >= 20 ? String(offset + 20) : '';
+            setCursor(nextOffset);
+            setHasMore(!!nextOffset);
         } catch (err) {
             console.error('Failed to load NFT transfers', err);
         } finally {

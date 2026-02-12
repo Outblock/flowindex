@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
-import { getAccountsByAddress, getAccountsByAddressTransactions } from '../../api/gen/core';
+import { getFlowV1AccountByAddress, getFlowV1AccountByAddressTransaction } from '../../api/gen/find';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
     FileText, HardDrive, Shield, Lock, Database, Check, Clock
@@ -38,9 +38,9 @@ export const Route = createFileRoute('/accounts/$address')({
             const address = params.address;
             const normalized = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
             await ensureHeyApiConfigured();
-            const accountRes = await getAccountsByAddress({ path: { address: normalized } });
+            const accountRes = await getFlowV1AccountByAddress({ path: { address: normalized } });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const accountPayload: any = accountRes.data;
+            const accountPayload: any = (accountRes.data as any)?.data?.[0] ?? null;
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const normalizedKeys = (accountPayload?.keys || []).map((key: any) => ({
                 keyIndex: key.keyIndex ?? key.key_index ?? key.index,
@@ -64,11 +64,11 @@ export const Route = createFileRoute('/accounts/$address')({
             let initialTransactions: any[] = [];
             let initialNextCursor = '';
             try {
-                const txRes = await getAccountsByAddressTransactions({ path: { address: normalized }, query: { cursor: '', limit: 20 } });
+                const txRes = await getFlowV1AccountByAddressTransaction({ path: { address: normalized }, query: { offset: 0, limit: 20 } });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const payload: any = txRes.data;
-                const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
-                initialNextCursor = payload?.next_cursor ?? '';
+                const items = payload?.data ?? [];
+                initialNextCursor = items.length >= 20 ? '20' : '';
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 initialTransactions = (items || []).map((tx: any) => ({
                     ...tx,
@@ -164,9 +164,9 @@ function AccountDetail() {
         const refresh = async () => {
             try {
                 await ensureHeyApiConfigured();
-                const res = await getAccountsByAddress({ path: { address: normalizedAddress } });
+                const res = await getFlowV1AccountByAddress({ path: { address: normalizedAddress } });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const payload: any = res.data;
+                const payload: any = (res.data as any)?.data?.[0] ?? null;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const keys = (payload?.keys || []).map((key: any) => ({
                     keyIndex: key.keyIndex ?? key.key_index ?? key.index,

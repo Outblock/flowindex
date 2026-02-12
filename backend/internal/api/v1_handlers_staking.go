@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"flowscan-clone/internal/models"
 
@@ -180,4 +181,120 @@ func epochStatsToMap(s models.EpochStats) map[string]interface{} {
 		"total_rewarded": parseFloatOrZero(s.TotalRewarded),
 		"updated_at":     formatTime(s.UpdatedAt),
 	}
+}
+
+// handleStakingDelegators handles GET /staking/delegator
+func (s *Server) handleStakingDelegators(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parseLimitOffset(r)
+	nodeID := strings.TrimSpace(r.URL.Query().Get("node_id"))
+
+	delegators, err := s.repo.ListStakingDelegators(r.Context(), nodeID, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	out := make([]interface{}, 0, len(delegators))
+	for _, d := range delegators {
+		out = append(out, map[string]interface{}{
+			"delegator_id":     d.DelegatorID,
+			"node_id":          d.NodeID,
+			"address":          formatAddressV1(d.Address),
+			"tokens_committed": parseFloatOrZero(d.TokensCommitted),
+			"tokens_staked":    parseFloatOrZero(d.TokensStaked),
+			"tokens_unstaking": parseFloatOrZero(d.TokensUnstaking),
+			"tokens_rewarded":  parseFloatOrZero(d.TokensRewarded),
+			"tokens_unstaked":  parseFloatOrZero(d.TokensUnstaked),
+			"updated_at":       formatTime(d.UpdatedAt),
+		})
+	}
+
+	writeAPIResponse(w, out, map[string]interface{}{
+		"limit":  limit,
+		"offset": offset,
+	}, nil)
+}
+
+// handleStakingAccountFTTransfers handles GET /staking/account/{address}/ft/transfer
+func (s *Server) handleStakingAccountFTTransfers(w http.ResponseWriter, r *http.Request) {
+	s.handleFlowAccountFTTransfers(w, r)
+}
+
+// handleStakingAccountTransactions handles GET /staking/account/{address}/transaction
+func (s *Server) handleStakingAccountTransactions(w http.ResponseWriter, r *http.Request) {
+	s.handleFlowAccountTransactions(w, r)
+}
+
+// handleStakingRewardsPaid handles GET /staking/rewards/paid
+func (s *Server) handleStakingRewardsPaid(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parseLimitOffset(r)
+
+	events, err := s.repo.ListStakingEventsByType(r.Context(), "RewardsPaid", limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	out := make([]interface{}, 0, len(events))
+	for _, e := range events {
+		out = append(out, map[string]interface{}{
+			"block_height":   e.BlockHeight,
+			"transaction_id": e.TransactionID,
+			"event_index":    e.EventIndex,
+			"event_type":     e.EventType,
+			"node_id":        e.NodeID,
+			"delegator_id":   e.DelegatorID,
+			"amount":         e.Amount,
+			"timestamp":      formatTime(e.Timestamp),
+		})
+	}
+
+	writeAPIResponse(w, out, map[string]interface{}{
+		"limit":  limit,
+		"offset": offset,
+	}, nil)
+}
+
+// handleStakingRewardsStaking handles GET /staking/rewards/staking
+func (s *Server) handleStakingRewardsStaking(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parseLimitOffset(r)
+
+	events, err := s.repo.ListStakingEventsByTypeLike(r.Context(), "%Staked", limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	out := make([]interface{}, 0, len(events))
+	for _, e := range events {
+		out = append(out, map[string]interface{}{
+			"block_height":   e.BlockHeight,
+			"transaction_id": e.TransactionID,
+			"event_index":    e.EventIndex,
+			"event_type":     e.EventType,
+			"node_id":        e.NodeID,
+			"delegator_id":   e.DelegatorID,
+			"amount":         e.Amount,
+			"timestamp":      formatTime(e.Timestamp),
+		})
+	}
+
+	writeAPIResponse(w, out, map[string]interface{}{
+		"limit":  limit,
+		"offset": offset,
+	}, nil)
+}
+
+// handleStakingTokenomics handles GET /staking/tokenomics
+func (s *Server) handleStakingTokenomics(w http.ResponseWriter, r *http.Request) {
+	snapshot, err := s.repo.GetLatestTokenomicsSnapshot(r.Context())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if snapshot == nil {
+		writeAPIResponse(w, []interface{}{}, nil, nil)
+		return
+	}
+	writeAPIResponse(w, []interface{}{snapshot}, nil, nil)
 }

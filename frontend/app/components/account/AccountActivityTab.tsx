@@ -3,10 +3,10 @@ import { Link } from '@tanstack/react-router';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { resolveApiBaseUrl } from '../../api';
 import {
-    getAccountsByAddressTransactions,
-    getAccountsByAddressTokenTransfers,
-    getAccountsByAddressNftTransfers,
-} from '../../api/gen/core';
+    getFlowV1AccountByAddressTransaction,
+    getFlowV1AccountByAddressFtTransfer,
+    getFlowV1NftTransfer,
+} from '../../api/gen/find';
 import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import { normalizeAddress, formatShort } from './accountUtils';
 import { formatRelativeTime } from '../../lib/time';
@@ -462,20 +462,19 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         setTxLoading(true);
         setExpandedTxId(null);
         try {
-            const cursor = txCursors[page] ?? '';
+            const offset = (page - 1) * 20;
             await ensureHeyApiConfigured();
-            const txRes = await getAccountsByAddressTransactions({ path: { address: normalizedAddress }, query: { cursor, limit: 20 } });
+            const txRes = await getFlowV1AccountByAddressTransaction({ path: { address: normalizedAddress }, query: { offset, limit: 20 } });
             const payload: any = txRes.data;
-            const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
-            const nextCursor = payload?.next_cursor ?? '';
+            const items = payload?.data ?? [];
             setTransactions(dedup(items.map((tx: any) => ({
                 ...tx,
                 payer: tx.payer_address || tx.payer || tx.proposer_address,
                 proposer: tx.proposer_address || tx.proposer,
                 blockHeight: tx.block_height,
             }))));
-            if (nextCursor) {
-                setTxCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
+            if (items.length >= 20) {
+                setTxCursors(prev => ({ ...prev, [page + 1]: String(offset + 20) }));
                 setTxHasNext(true);
             } else {
                 setTxHasNext(false);
@@ -505,14 +504,15 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     const loadFtTransfers = async (cursorValue: string, append: boolean) => {
         setFtLoading(true);
         try {
+            const offset = cursorValue ? parseInt(cursorValue, 10) : 0;
             await ensureHeyApiConfigured();
-            const res = await getAccountsByAddressTokenTransfers({ path: { address: normalizedAddress }, query: { cursor: cursorValue, limit: 20 } });
+            const res = await getFlowV1AccountByAddressFtTransfer({ path: { address: normalizedAddress }, query: { offset, limit: 20 } });
             const payload: any = res.data;
-            const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+            const items = payload?.data ?? [];
             setFtTransfers(append ? prev => [...prev, ...items] : items);
-            const next = payload?.next_cursor ?? '';
-            setFtCursor(next);
-            setFtHasMore(!!next);
+            const nextOffset = items.length >= 20 ? String(offset + 20) : '';
+            setFtCursor(nextOffset);
+            setFtHasMore(!!nextOffset);
         } catch (err) {
             console.error('Failed to load FT transfers', err);
         } finally {
@@ -524,14 +524,15 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     const loadNftTransfers = async (cursorValue: string, append: boolean) => {
         setNftLoading(true);
         try {
+            const offset = cursorValue ? parseInt(cursorValue, 10) : 0;
             await ensureHeyApiConfigured();
-            const res = await getAccountsByAddressNftTransfers({ path: { address: normalizedAddress }, query: { cursor: cursorValue, limit: 20 } });
+            const res = await getFlowV1NftTransfer({ query: { address: normalizedAddress, offset, limit: 20 } });
             const payload: any = res.data;
-            const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+            const items = payload?.data ?? [];
             setNftTransfers(append ? prev => [...prev, ...items] : items);
-            const next = payload?.next_cursor ?? '';
-            setNftCursor(next);
-            setNftHasMore(!!next);
+            const nextOffset = items.length >= 20 ? String(offset + 20) : '';
+            setNftCursor(nextOffset);
+            setNftHasMore(!!nextOffset);
         } catch (err) {
             console.error('Failed to load NFT transfers', err);
         } finally {

@@ -2,7 +2,6 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Contract } from '../../api/gen/find';
-import { getAccountsByAddressContractsByName } from '../../api/gen/core';
 import { resolveApiBaseUrl } from '../../api';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
@@ -66,9 +65,12 @@ export const Route = createFileRoute('/contracts/$id')({
 
             if (address && name) {
                 try {
-                    const codeRes = await getAccountsByAddressContractsByName({ path: { address, name } });
-                    const codePayload: any = codeRes?.data;
-                    code = codePayload?.code || code;
+                    const baseUrl = await resolveApiBaseUrl();
+                    const codeRes = await fetch(`${baseUrl}/flow/account/${encodeURIComponent(address)}/contract/${encodeURIComponent(name)}`);
+                    if (codeRes.ok) {
+                        const codePayload: any = await codeRes.json();
+                        code = codePayload?.code || code;
+                    }
                 } catch (e) {
                     console.warn('Failed to fetch code', e);
                 }
@@ -125,7 +127,7 @@ function ContractDetail() {
         setTxLoading(true);
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/v1/contract/${encodeURIComponent(id)}/transaction?limit=20&offset=${offset}`);
+            const res = await fetch(`${baseUrl}/flow/contract/${encodeURIComponent(id)}/transaction?limit=20&offset=${offset}`);
             const payload = await res.json();
             const items = payload?.data ?? [];
             setTransactions(append ? prev => [...prev, ...items] : items);
@@ -143,7 +145,7 @@ function ContractDetail() {
         setVersionsLoading(true);
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/v1/contract/${encodeURIComponent(id)}/version?limit=50`);
+            const res = await fetch(`${baseUrl}/flow/contract/${encodeURIComponent(id)}/version?limit=50`);
             const payload = await res.json();
             const items = payload?.data ?? [];
             setVersions(items);
@@ -158,7 +160,7 @@ function ContractDetail() {
     const loadVersionCode = async (version: number): Promise<string> => {
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/v1/contract/${encodeURIComponent(id)}/version/${version}`);
+            const res = await fetch(`${baseUrl}/flow/contract/${encodeURIComponent(id)}/version/${version}`);
             const payload = await res.json();
             const items = payload?.data;
             if (Array.isArray(items) && items.length > 0) {

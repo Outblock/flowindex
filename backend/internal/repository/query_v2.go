@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -432,11 +431,11 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 
 // TokenMetadataInfo is a lightweight struct for token display info (icon, symbol, name).
 type TokenMetadataInfo struct {
-	Name        string          `json:"name"`
-	Symbol      string          `json:"symbol"`
-	Decimals    int             `json:"decimals"`
-	Logo        json.RawMessage `json:"logo,omitempty"`
-	Description string          `json:"description,omitempty"`
+	Name        string `json:"name"`
+	Symbol      string `json:"symbol"`
+	Decimals    int    `json:"decimals"`
+	Logo        string `json:"logo,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // GetFTTokenMetadataByIdentifiers returns display metadata for a set of token identifiers (e.g. "A.1654653399040a61.FlowToken").
@@ -463,17 +462,14 @@ func (r *Repository) GetFTTokenMetadataByIdentifiers(ctx context.Context, identi
 		var t models.FTToken
 		err := r.db.QueryRow(ctx, `
 			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0),
-			       COALESCE(logo, 'null'::jsonb), COALESCE(description,'')
+			       COALESCE(logo, ''), COALESCE(description,'')
 			FROM app.ft_tokens
 			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
 			Scan(&t.Name, &t.Symbol, &t.Decimals, &t.Logo, &t.Description)
 		if err != nil {
 			continue // token not found or error, skip
 		}
-		info := TokenMetadataInfo{Name: t.Name, Symbol: t.Symbol, Decimals: t.Decimals, Description: t.Description}
-		if len(t.Logo) > 0 && string(t.Logo) != "null" {
-			info.Logo = t.Logo
-		}
+		info := TokenMetadataInfo{Name: t.Name, Symbol: t.Symbol, Decimals: t.Decimals, Description: t.Description, Logo: t.Logo}
 		for _, origID := range origIDs {
 			out[origID] = info
 		}
@@ -501,21 +497,17 @@ func (r *Repository) GetNFTCollectionMetadataByIdentifiers(ctx context.Context, 
 	}
 
 	for k, origIDs := range seen {
-		var name, symbol, description string
-		var squareImage []byte
+		var name, symbol, description, squareImage string
 		err := r.db.QueryRow(ctx, `
 			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(description,''),
-			       COALESCE(square_image, 'null'::jsonb)
+			       COALESCE(square_image, '')
 			FROM app.nft_collections
 			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
 			Scan(&name, &symbol, &description, &squareImage)
 		if err != nil {
 			continue
 		}
-		info := TokenMetadataInfo{Name: name, Symbol: symbol, Description: description}
-		if len(squareImage) > 0 && string(squareImage) != "null" {
-			info.Logo = squareImage
-		}
+		info := TokenMetadataInfo{Name: name, Symbol: symbol, Description: description, Logo: squareImage}
 		for _, origID := range origIDs {
 			out[origID] = info
 		}

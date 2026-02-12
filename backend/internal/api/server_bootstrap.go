@@ -42,14 +42,7 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 
 	registerBaseRoutes(r, s)
 	registerAdminRoutes(r, s)
-	registerLegacyRoutes(r, s)
-	registerV1Routes(r, s)
-
-	v1 := r.PathPrefix("/api/v1").Subrouter()
-	registerV1Routes(v1, s)
-
-	v2 := r.PathPrefix("/api/v2").Subrouter()
-	registerV2Routes(v2, s)
+	registerAPIRoutes(r, s)
 
 	s.httpServer = &http.Server{
 		Addr:    ":" + port,

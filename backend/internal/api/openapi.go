@@ -94,25 +94,23 @@ func (c *openapiCache) renderYAML(paths []string) ([]byte, error) {
 	return out, nil
 }
 
-var (
-	openapiDefault openapiCache
-	openapiV1      openapiCache
-	openapiV2      openapiCache
-)
+var openapiDefault openapiCache
 
-func (s *Server) handleOpenAPIYAML(w http.ResponseWriter, r *http.Request) {
-	paths := []string{
+func specPaths() []string {
+	return []string{
 		strings.TrimSpace(os.Getenv("OPENAPI_SPEC_PATH")),
-		"openapi-v2.json",
-		"api.json",
 		"openapi.json",
+		"api.json",
 		"docs/openapi.json",
 		"openapi.yaml",
 		"docs/openapi.yaml",
 		"openapi.yml",
 		"docs/openapi.yml",
 	}
-	out, err := openapiDefault.renderYAML(paths)
+}
+
+func (s *Server) handleOpenAPIYAML(w http.ResponseWriter, r *http.Request) {
+	out, err := openapiDefault.renderYAML(specPaths())
 	if err != nil {
 		http.Error(w, "openapi spec not found", http.StatusNotFound)
 		return
@@ -122,50 +120,9 @@ func (s *Server) handleOpenAPIYAML(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
-	paths := []string{
-		strings.TrimSpace(os.Getenv("OPENAPI_SPEC_PATH")),
-		"openapi-v2.json",
-		"api.json",
-		"openapi.json",
-		"docs/openapi.json",
-		"openapi.yaml",
-		"docs/openapi.yaml",
-		"openapi.yml",
-		"docs/openapi.yml",
-	}
-	openapiJSON, err := openapiDefault.renderJSON(paths)
+	out, err := openapiDefault.renderJSON(specPaths())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write(openapiJSON)
-}
-
-func (s *Server) handleOpenAPIV1JSON(w http.ResponseWriter, r *http.Request) {
-	paths := []string{
-		strings.TrimSpace(os.Getenv("OPENAPI_V1_SPEC_PATH")),
-		"openapi-v1.json",
-		"find-api.json",
-	}
-	out, err := openapiV1.renderJSON(paths)
-	if err != nil {
-		http.Error(w, "openapi v1 spec not found", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write(out)
-}
-
-func (s *Server) handleOpenAPIV2JSON(w http.ResponseWriter, r *http.Request) {
-	paths := []string{
-		strings.TrimSpace(os.Getenv("OPENAPI_V2_SPEC_PATH")),
-		"openapi-v2.json",
-		"api.json",
-	}
-	out, err := openapiV2.renderJSON(paths)
-	if err != nil {
-		http.Error(w, "openapi v2 spec not found", http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

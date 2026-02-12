@@ -12,7 +12,7 @@ export const Route = createFileRoute('/scheduled/')({
     loader: async () => {
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/v1/scheduled-transaction?limit=20&offset=0`);
+            const res = await fetch(`${baseUrl}/flow/scheduled-transaction?limit=20&offset=0`);
             const payload = await res.json();
             return { initialData: payload };
         } catch (e) {
@@ -56,7 +56,7 @@ function ScheduledTransactions() {
         try {
             const offset = (page - 1) * 20;
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/v1/scheduled-transaction?limit=20&offset=${offset}`);
+            const res = await fetch(`${baseUrl}/flow/scheduled-transaction?limit=20&offset=${offset}`);
             const payload = await res.json();
             setTransactions(payload?.data || []);
             const meta = payload?.meta;

@@ -3,8 +3,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Database } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { ensureHeyApiConfigured } from '../../api/heyapi';
-import { getBlocks, getStatus } from '../../api/gen/core';
+import { ensureHeyApiConfigured, fetchStatus } from '../../api/heyapi';
+import { getFlowV1Block } from '../../api/gen/find';
 import { useWebSocketMessages, useWebSocketStatus } from '../../hooks/useWebSocket';
 import { Pagination } from '../../components/Pagination';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
@@ -20,10 +20,10 @@ export const Route = createFileRoute('/blocks/')({
         try {
             await ensureHeyApiConfigured();
             const [blocksRes, statusRes] = await Promise.all([
-                getBlocks({ query: { cursor: '', limit: 20 } }),
-                getStatus()
+                getFlowV1Block({ query: { limit: 20, offset: 0 } }),
+                fetchStatus()
             ]);
-            return { blocksRes: blocksRes.data, statusRes: statusRes.data, page };
+            return { blocksRes: blocksRes.data?.data ?? [], statusRes: statusRes, page };
         } catch (e) {
             console.error("Failed to load blocks data", e);
             return { blocksRes: [], statusRes: null, page: 1 };
@@ -33,11 +33,11 @@ export const Route = createFileRoute('/blocks/')({
 
 function Blocks() {
     const { blocksRes, statusRes, page } = Route.useLoaderData();
-    const [blocks, setBlocks] = useState<any[]>((blocksRes?.items ?? (Array.isArray(blocksRes) ? blocksRes : [])) || []);
+    const [blocks, setBlocks] = useState<any[]>(Array.isArray(blocksRes) ? blocksRes : []);
     const [statusRaw, setStatusRaw] = useState<any>(statusRes);
     const [blockPage, setBlockPage] = useState(page);
     const [blockCursors, setBlockCursors] = useState<Record<number, string>>({ 1: '' });
-    const [blockHasNext, setBlockHasNext] = useState(Boolean(blocksRes?.next_cursor));
+    const [blockHasNext, setBlockHasNext] = useState(blocksRes.length >= 20);
     const [newBlockIds, setNewBlockIds] = useState(new Set());
 
     const { isConnected } = useWebSocketStatus();
@@ -78,17 +78,12 @@ function Blocks() {
 
     const loadBlocks = async (page: number) => {
         try {
-            const cursor = blockCursors[page] ?? '';
+            const offset = (page - 1) * 20;
             await ensureHeyApiConfigured();
-            const res = await getBlocks({ query: { cursor, limit: 20 } });
-            const payload: any = res.data;
-            const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
-            const nextCursor = payload?.next_cursor ?? '';
+            const res = await getFlowV1Block({ query: { limit: 20, offset } });
+            const items = res.data?.data ?? [];
             setBlocks(prev => (page === 1 ? mergeBlocks(prev, items) : items));
-            setBlockHasNext(Boolean(nextCursor));
-            if (nextCursor) {
-                setBlockCursors(prev => ({ ...prev, [page + 1]: nextCursor }));
-            }
+            setBlockHasNext(items.length >= 20);
         } catch (err) {
             console.error("Failed to load blocks", err);
         }
@@ -144,17 +139,12 @@ function Blocks() {
         const refreshStatus = async () => {
             try {
                 await ensureHeyApiConfigured();
-                const statusRes = await getStatus();
-                if (statusRes?.data) setStatusRaw(statusRes.data);
+                const status = await fetchStatus();
+                if (status) setStatusRaw(status);
             } catch (error) {
                 console.error('Failed to fetch status:', error);
             }
         };
-
-        // loadBlocks(1); // Already loaded by loader
-        if (blocksRes && blocksRes.next_cursor) {
-            setBlockCursors(prev => ({ ...prev, 2: blocksRes.next_cursor }));
-        }
 
         const statusTimer = setInterval(refreshStatus, 10000);
         return () => clearInterval(statusTimer);

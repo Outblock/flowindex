@@ -3,8 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Activity, TrendingUp } from 'lucide-react';
 import { SafeNumberFlow } from '../components/SafeNumberFlow';
-import { ensureHeyApiConfigured } from '../api/heyapi';
-import { getBlocks, getStatus, getTransactions, getStatsNetwork } from '../api/gen/core';
+import { ensureHeyApiConfigured, fetchStatus } from '../api/heyapi';
+import { getFlowV1Block, getFlowV1Transaction, getStatusV1Stat } from '../api/gen/find';
 import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
 import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
@@ -20,17 +20,16 @@ export const Route = createFileRoute('/')({
     loader: async () => {
         try {
             await ensureHeyApiConfigured();
-            const [status, networkStats, blocks, transactions] = await Promise.all([
-                getStatus(),
-                getStatsNetwork(),
-                getBlocks({ query: { cursor: '', limit: 50 } }),
-                getTransactions({ query: { cursor: '', limit: 50 } })
+            const [status, blocks, transactions] = await Promise.all([
+                fetchStatus(),
+                getFlowV1Block({ query: { limit: 50, offset: 0 } }),
+                getFlowV1Transaction({ query: { limit: 50, offset: 0 } })
             ]);
             return {
-                status: status.data,
-                networkStats: networkStats.data,
-                blocks: blocks.data,
-                transactions: transactions.data,
+                status: status,
+                networkStats: null,
+                blocks: blocks.data?.data ?? [],
+                transactions: transactions.data?.data ?? [],
             };
         } catch (e) {
             console.error("Failed to load initial data", e);
@@ -44,7 +43,7 @@ function Home() {
 
     // Prevent SSR hydration mismatch for Date.now()-based UI (relative timestamps, etc).
     const [hydrated, setHydrated] = useState(false);
-    const [blocks, setBlocks] = useState<any[]>((initialBlocks?.items ?? (Array.isArray(initialBlocks) ? initialBlocks : [])) || []);
+    const [blocks, setBlocks] = useState<any[]>(initialBlocks || []);
     const [transactions, setTransactions] = useState<any[]>([]); // Initialize empty, merge later
     // const [loading, setLoading] = useState(true); // Unused
     const [statusRaw, setStatusRaw] = useState<any>(status);
@@ -93,7 +92,7 @@ function Home() {
 
     useEffect(() => {
         // Process initial transactions
-        const items = initialTransactions?.items ?? (Array.isArray(initialTransactions) ? initialTransactions : []);
+        const items = Array.isArray(initialTransactions) ? initialTransactions : [];
         const transformedTxs = Array.isArray(items) ? items.map(tx => ({
             ...tx,
             type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
@@ -231,8 +230,8 @@ function Home() {
     const loadTransactions = async () => {
         try {
             await ensureHeyApiConfigured();
-            const res = await getTransactions({ query: { cursor: '', limit: 50 } });
-            const items = res?.data?.items ?? (Array.isArray(res?.data) ? res.data : []);
+            const res = await getFlowV1Transaction({ query: { limit: 50, offset: 0 } });
+            const items = res?.data?.data ?? [];
             const transformedTxs = Array.isArray(items) ? items.map(tx => ({
                 ...tx,
                 type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
@@ -340,29 +339,17 @@ function Home() {
         const refreshStatus = async () => {
             try {
                 await ensureHeyApiConfigured();
-                const statusRes = await getStatus();
-                if (!active || !statusRes?.data) return;
-                setStatusRaw(statusRes.data);
+                const statusRes = await fetchStatus();
+                if (!active || !statusRes) return;
+                setStatusRaw(statusRes);
             } catch (error) {
                 console.error('Failed to fetch status:', error);
-            }
-        };
-
-        const refreshNetworkStats = async () => {
-            try {
-                await ensureHeyApiConfigured();
-                const netStatsRes = await getStatsNetwork();
-                if (!active) return;
-                setNetworkStats(netStatsRes?.data ?? null);
-            } catch (error) {
-                console.error('Failed to fetch network stats:', error);
             }
         };
 
         // Removed direct usage of loadBlocks/loadTransactions in favor of loader + websocket updates
 
         const statusTimer = setInterval(refreshStatus, 10000);
-        const netStatsTimer = setInterval(refreshNetworkStats, 300000);
         // Fallback polling when websocket is unavailable.
         const txRefreshTimer = setInterval(() => {
             if (!isConnectedRef.current) {
@@ -372,7 +359,6 @@ function Home() {
 
         return () => {
             clearInterval(statusTimer);
-            clearInterval(netStatsTimer);
             clearInterval(txRefreshTimer);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps

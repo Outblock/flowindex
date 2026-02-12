@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ensureHeyApiConfigured } from '../api/heyapi';
-import { getStatsDaily } from '../api/gen/core';
+import { getStatusV1Stat } from '../api/gen/find';
 
 export function DailyStatsChart() {
     const [data, setData] = useState<any[]>([]);
@@ -12,15 +12,25 @@ export function DailyStatsChart() {
         const loadStats = async () => {
             try {
                 await ensureHeyApiConfigured();
-                const res = await getStatsDaily();
-                const stats: any = res?.data;
+                // getStatusV1Stat returns {data: [{metric, number, time, timescale}]}
+                // We request daily transaction stats for the last 180 days.
+                const fromDate = new Date();
+                fromDate.setDate(fromDate.getDate() - 180);
+                const res = await getStatusV1Stat({
+                    query: {
+                        from: fromDate.toISOString().split('T')[0],
+                        metric: 'transactions',
+                        timescale: 'daily',
+                    },
+                });
+                const stats: any = (res?.data as any)?.data;
 
                 // Handle null/empty response
                 if (stats && Array.isArray(stats)) {
-                    const chartData = stats.map(s => ({
-                        name: s.date,
-                        txs: s.tx_count
-                    })).sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
+                    const chartData = stats.map((s: any) => ({
+                        name: s.time ? s.time.split('T')[0] : '',
+                        txs: s.number || 0,
+                    })).sort((a: any, b: any) => new Date(a.name).getTime() - new Date(b.name).getTime());
                     setData(chartData);
                 } else {
                     console.warn("Daily stats is empty or invalid format");

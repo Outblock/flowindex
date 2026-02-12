@@ -1,26 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Database } from 'lucide-react';
-import { ensureHeyApiConfigured } from '../api/heyapi';
-import { getStatus } from '../api/gen/core';
+import { ensureHeyApiConfigured, fetchStatus } from '../api/heyapi';
 import { formatNumber } from '../lib/format';
 
 export function IndexingStatus() {
     const [status, setStatus] = useState<any>(null);
 
     useEffect(() => {
-        const fetchStatus = async () => {
+        const loadStatus = async () => {
             try {
                 await ensureHeyApiConfigured();
-                const res = await getStatus();
-                setStatus(res.data);
+                const data = await fetchStatus();
+                setStatus(data);
             } catch (e) {
                 console.error("Failed to fetch status", e);
             }
         };
 
-        fetchStatus();
-        const interval = setInterval(fetchStatus, 5000);
+        loadStatus();
+        const interval = setInterval(loadStatus, 5000);
         return () => clearInterval(interval);
     }, []);
 

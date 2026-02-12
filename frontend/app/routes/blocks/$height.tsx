@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
-import { getBlocksById } from '../../api/gen/core';
+import { getFlowV1BlockByHeight } from '../../api/gen/find';
 import { ArrowLeft, Box, Clock, Hash, Activity, ArrowRightLeft, User, Coins, Image as ImageIcon } from 'lucide-react';
 import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
@@ -12,8 +12,9 @@ export const Route = createFileRoute('/blocks/$height')({
     loader: async ({ params }) => {
         try {
             await ensureHeyApiConfigured();
-            const res = await getBlocksById({ path: { id: params.height } });
-            const rawBlock: any = res.data;
+            const res = await getFlowV1BlockByHeight({ path: { height: params.height } });
+            const rawBlock: any = res.data?.data?.[0] ?? res.data?.data ?? null;
+            if (!rawBlock) return { block: null };
             const transformedBlock = {
                 ...rawBlock,
                 transactions: (rawBlock.transactions || []).map(tx => ({

@@ -166,7 +166,7 @@ func (w *TokenMetadataWorker) fetchFTMetadata(ctx context.Context, contractAddr,
 		BalancePath:     cadencePathToString(fields["balancePath"]),
 	}
 
-	token.Logo = extractMediaURLs(fields["logos"])
+	token.Logo = extractFirstMediaURL(fields["logos"])
 	token.Socials = extractSocials(fields["socials"])
 
 	if token.Name == "" && token.Symbol == "" {
@@ -210,16 +210,6 @@ func (w *TokenMetadataWorker) fetchNFTCollectionMetadata(ctx context.Context, co
 		}
 	}
 
-	// Extract image URLs from Media structs
-	squareImageURL := extractMediaImageURL(fields["squareImage"])
-	bannerImageURL := extractMediaImageURL(fields["bannerImage"])
-	var squareImage, bannerImage []byte
-	if squareImageURL != "" {
-		squareImage, _ = json.Marshal(squareImageURL)
-	}
-	if bannerImageURL != "" {
-		bannerImage, _ = json.Marshal(bannerImageURL)
-	}
 	socials := extractSocials(fields["socials"])
 
 	// Many NFT contracts don't expose a "symbol" in standard views. Use contract name as fallback.
@@ -232,8 +222,8 @@ func (w *TokenMetadataWorker) fetchNFTCollectionMetadata(ctx context.Context, co
 		Symbol:          symbol,
 		Description:     description,
 		ExternalURL:     externalURL,
-		SquareImage:     squareImage,
-		BannerImage:     bannerImage,
+		SquareImage:     extractMediaImageURL(fields["squareImage"]),
+		BannerImage:     extractMediaImageURL(fields["bannerImage"]),
 		Socials:         socials,
 	}, true
 }
@@ -269,6 +259,38 @@ func cadencePathToString(v cadence.Value) string {
 	}
 	// Fallback: try as string.
 	return cadenceToString(v)
+}
+
+// extractFirstMediaURL extracts the first URL from a MetadataViews.Medias value.
+// Returns a plain URL string (e.g., "https://example.com/logo.svg").
+func extractFirstMediaURL(v cadence.Value) string {
+	v = unwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	s, ok := v.(cadence.Struct)
+	if !ok {
+		return ""
+	}
+	items := unwrapOptional(s.FieldsMappedByName()["items"])
+	if items == nil {
+		return ""
+	}
+	arr, ok := items.(cadence.Array)
+	if !ok {
+		return ""
+	}
+	for _, elem := range arr.Values {
+		media, ok := unwrapOptional(elem).(cadence.Struct)
+		if !ok {
+			continue
+		}
+		url := extractMediaFileURL(media.FieldsMappedByName()["file"])
+		if url != "" {
+			return url
+		}
+	}
+	return ""
 }
 
 // extractMediaURLs extracts URLs from a MetadataViews.Medias cadence value.

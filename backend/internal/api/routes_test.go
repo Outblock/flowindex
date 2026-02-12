@@ -15,7 +15,7 @@ type openapiSpec struct {
 	Paths map[string]map[string]struct{} `json:"paths"`
 }
 
-var pathParamRegex = regexp.MustCompile(`\\{[^}]+\\}`)
+var pathParamRegex = regexp.MustCompile(`\{[^}]+\}`)
 
 func samplePath(p string) string {
 	return pathParamRegex.ReplaceAllStringFunc(p, func(param string) string {
@@ -56,16 +56,13 @@ func assertRoutesFromSpec(t *testing.T, router *mux.Router, prefix string, spec 
 	}
 }
 
-func TestV1RoutesFromSpec(t *testing.T) {
+func TestRoutesFromSpec(t *testing.T) {
+	specPath := "../../../openapi.json"
+	if _, err := os.Stat(specPath); os.IsNotExist(err) {
+		t.Skip("openapi.json not found, skipping route spec test")
+	}
 	server := NewServer(nil, nil, "0", 0)
 	router := server.httpServer.Handler.(*mux.Router)
-	spec := loadSpec(t, "../../../openapi-v1.json")
-	assertRoutesFromSpec(t, router, "/api/v1", spec)
-}
-
-func TestV2RoutesFromSpec(t *testing.T) {
-	server := NewServer(nil, nil, "0", 0)
-	router := server.httpServer.Handler.(*mux.Router)
-	spec := loadSpec(t, "../../../openapi-v2.json")
-	assertRoutesFromSpec(t, router, "/api/v2", spec)
+	spec := loadSpec(t, specPath)
+	assertRoutesFromSpec(t, router, "", spec)
 }

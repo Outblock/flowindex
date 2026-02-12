@@ -118,7 +118,7 @@ func fetchFTMetadataViaClient(ctx context.Context, client FlowClient, contractAd
 		BalancePath:     adminCadencePathToString(fields["balancePath"]),
 	}
 
-	token.Logo = adminExtractMediaURLs(fields["logos"])
+	token.Logo = adminExtractFirstMediaURL(fields["logos"])
 	token.Socials = adminExtractSocials(fields["socials"])
 
 	if token.Name == "" && token.Symbol == "" {
@@ -163,15 +163,6 @@ func fetchNFTCollectionMetadataViaClient(ctx context.Context, client FlowClient,
 		}
 	}
 
-	squareImageURL := adminExtractMediaImageURL(fields["squareImage"])
-	bannerImageURL := adminExtractMediaImageURL(fields["bannerImage"])
-	var squareImage, bannerImage []byte
-	if squareImageURL != "" {
-		squareImage, _ = json.Marshal(squareImageURL)
-	}
-	if bannerImageURL != "" {
-		bannerImage, _ = json.Marshal(bannerImageURL)
-	}
 	socials := adminExtractSocials(fields["socials"])
 
 	symbol := contractName
@@ -183,8 +174,8 @@ func fetchNFTCollectionMetadataViaClient(ctx context.Context, client FlowClient,
 		Symbol:          symbol,
 		Description:     description,
 		ExternalURL:     externalURL,
-		SquareImage:     squareImage,
-		BannerImage:     bannerImage,
+		SquareImage:     adminExtractMediaImageURL(fields["squareImage"]),
+		BannerImage:     adminExtractMediaImageURL(fields["bannerImage"]),
 		Socials:         socials,
 	}, true
 }
@@ -406,6 +397,36 @@ func adminNFTCollectionDisplayScript() string {
 }
 
 // --- Cadence value extraction helpers (admin-prefixed to avoid collision with ingester) ---
+
+func adminExtractFirstMediaURL(v cadence.Value) string {
+	v = adminUnwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	s, ok := v.(cadence.Struct)
+	if !ok {
+		return ""
+	}
+	items := adminUnwrapOptional(s.FieldsMappedByName()["items"])
+	if items == nil {
+		return ""
+	}
+	arr, ok := items.(cadence.Array)
+	if !ok {
+		return ""
+	}
+	for _, elem := range arr.Values {
+		media, ok := adminUnwrapOptional(elem).(cadence.Struct)
+		if !ok {
+			continue
+		}
+		url := adminExtractMediaFileURL(media.FieldsMappedByName()["file"])
+		if url != "" {
+			return url
+		}
+	}
+	return ""
+}
 
 func adminExtractMediaURLs(v cadence.Value) []byte {
 	v = adminUnwrapOptional(v)

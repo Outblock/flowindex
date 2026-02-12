@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
-import { getAccountsByAddressContractsByName } from '../../api/gen/core';
+import { getFlowV1ContractByIdentifier } from '../../api/gen/find';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -38,9 +38,12 @@ export function AccountContractsTab({ address, contracts }: Props) {
 
         try {
             await ensureHeyApiConfigured();
-            const res = await getAccountsByAddressContractsByName({ path: { address: normalizedAddress, name } });
+            const addr = normalizedAddress.replace(/^0x/, '');
+            const identifier = `A.${addr}.${name}`;
+            const res = await getFlowV1ContractByIdentifier({ path: { identifier } });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            setContractCode((res?.data as any)?.code || '');
+            const contract = (res?.data as any)?.data?.[0];
+            setContractCode(contract?.body || '');
         } catch (err) {
             console.error('Failed to load contract code', err);
             setError('Failed to load contract code');

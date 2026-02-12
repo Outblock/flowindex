@@ -150,7 +150,7 @@ func (r *Repository) UpsertFTTokens(ctx context.Context, tokens []models.FTToken
 				socials = COALESCE(EXCLUDED.socials, app.ft_tokens.socials),
 				updated_at = NOW()`,
 			hexToBytes(t.ContractAddress), t.ContractName, t.Name, t.Symbol, t.Decimals,
-			t.Description, t.ExternalURL, nullIfEmptyJSON(t.Logo), t.VaultPath, t.ReceiverPath, t.BalancePath, nullIfEmptyJSON(t.Socials))
+			t.Description, t.ExternalURL, nullIfEmpty(t.Logo), t.VaultPath, t.ReceiverPath, t.BalancePath, nullIfEmptyJSON(t.Socials))
 	}
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()
@@ -246,7 +246,7 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 }
 
 const ftTokenSelectCols = `encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name,''), COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0),
-		       COALESCE(description,''), COALESCE(external_url,''), COALESCE(logo, 'null'::jsonb), COALESCE(vault_path,''), COALESCE(receiver_path,''), COALESCE(balance_path,''), COALESCE(socials, 'null'::jsonb), updated_at`
+		       COALESCE(description,''), COALESCE(external_url,''), COALESCE(logo, ''), COALESCE(vault_path,''), COALESCE(receiver_path,''), COALESCE(balance_path,''), COALESCE(socials, 'null'::jsonb), updated_at`
 
 func scanFTToken(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
@@ -292,7 +292,7 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 	for _, c := range collections {
 		batch.Queue(`
 			INSERT INTO app.nft_collections (contract_address, contract_name, name, symbol, description, external_url, square_image, banner_image, socials, updated_at)
-			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), NULLIF($6,''), $7::jsonb, $8::jsonb, $9::jsonb, NOW())
+			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), NULLIF($6,''), NULLIF($7,''), NULLIF($8,''), $9::jsonb, NOW())
 			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(EXCLUDED.name, app.nft_collections.name),
 				symbol = COALESCE(EXCLUDED.symbol, app.nft_collections.symbol),
@@ -303,7 +303,7 @@ func (r *Repository) UpsertNFTCollections(ctx context.Context, collections []mod
 				socials = COALESCE(EXCLUDED.socials, app.nft_collections.socials),
 				updated_at = NOW()`,
 			hexToBytes(c.ContractAddress), c.ContractName, c.Name, c.Symbol, c.Description, c.ExternalURL,
-			nullIfEmptyJSON(c.SquareImage), nullIfEmptyJSON(c.BannerImage), nullIfEmptyJSON(c.Socials))
+			c.SquareImage, c.BannerImage, nullIfEmptyJSON(c.Socials))
 	}
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()

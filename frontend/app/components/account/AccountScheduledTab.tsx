@@ -23,7 +23,7 @@ export function AccountScheduledTab({ address }: Props) {
         try {
             const cursorValue = cursors[page] ?? '';
             const baseUrl = await resolveApiBaseUrl();
-            const url = `${baseUrl}/accounts/${normalizedAddress}/scheduled-transactions?cursor=${encodeURIComponent(cursorValue)}&limit=20`;
+            const url = `${baseUrl}/flow/account/${normalizedAddress}/scheduled-transaction?cursor=${encodeURIComponent(cursorValue)}&limit=20`;
             const res = await fetch(url);
             const payload: any = await res.json();
             const items = payload?.items ?? (Array.isArray(payload) ? payload : []);

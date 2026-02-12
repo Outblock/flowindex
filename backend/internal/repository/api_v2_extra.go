@@ -17,8 +17,8 @@ type NFTCollectionSummary struct {
 	Symbol          string
 	Description     string
 	ExternalURL     string
-	SquareImage     []byte
-	BannerImage     []byte
+	SquareImage     string
+	BannerImage     string
 	Socials         []byte
 	Count           int64
 	UpdatedAt       time.Time
@@ -237,8 +237,8 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(c.symbol, '') AS symbol,
 			COALESCE(c.description, '') AS description,
 			COALESCE(c.external_url, '') AS external_url,
-			COALESCE(c.square_image, 'null'::jsonb) AS square_image,
-			COALESCE(c.banner_image, 'null'::jsonb) AS banner_image,
+			COALESCE(c.square_image, '') AS square_image,
+			COALESCE(c.banner_image, '') AS banner_image,
 			COALESCE(c.socials, 'null'::jsonb) AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
@@ -278,8 +278,8 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 				COALESCE(c.symbol, '') AS symbol,
 				COALESCE(c.description, '') AS description,
 				COALESCE(c.external_url, '') AS external_url,
-				COALESCE(c.square_image, 'null'::jsonb) AS square_image,
-				COALESCE(c.banner_image, 'null'::jsonb) AS banner_image,
+				COALESCE(c.square_image, '') AS square_image,
+				COALESCE(c.banner_image, '') AS banner_image,
 				COALESCE(c.socials, 'null'::jsonb) AS socials,
 				COALESCE(counts.cnt, 0) AS cnt,
 				COALESCE(c.updated_at, NOW()) AS updated_at
@@ -311,8 +311,8 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 			COALESCE(c.symbol, '') AS symbol,
 			COALESCE(c.description, '') AS description,
 			COALESCE(c.external_url, '') AS external_url,
-			COALESCE(c.square_image, 'null'::jsonb) AS square_image,
-			COALESCE(c.banner_image, 'null'::jsonb) AS banner_image,
+			COALESCE(c.square_image, '') AS square_image,
+			COALESCE(c.banner_image, '') AS banner_image,
 			COALESCE(c.socials, 'null'::jsonb) AS socials,
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(c.updated_at, NOW()) AS updated_at
@@ -335,8 +335,8 @@ func (r *Repository) ListNFTCollectionSummariesByOwner(ctx context.Context, owne
 		SELECT encode(o.contract_address, 'hex') AS contract_address,
 			   COALESCE(o.contract_name,''), COALESCE(c.name,''), COALESCE(c.symbol,''),
 			   COALESCE(c.description,''), COALESCE(c.external_url,''),
-			   COALESCE(c.square_image, 'null'::jsonb) AS square_image,
-			   COALESCE(c.banner_image, 'null'::jsonb) AS banner_image,
+			   COALESCE(c.square_image, '') AS square_image,
+			   COALESCE(c.banner_image, '') AS banner_image,
 			   COALESCE(c.socials, 'null'::jsonb) AS socials,
 			   COUNT(*) AS cnt,
 			   COALESCE(c.updated_at, NOW()) AS updated_at

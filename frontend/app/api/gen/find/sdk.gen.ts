@@ -25,7 +25,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
  */
 export const getAccountingV1AccountByAddress = <ThrowOnError extends boolean = false>(options: Options<GetAccountingV1AccountByAddressData, ThrowOnError>) => (options.client ?? client).get<GetAccountingV1AccountByAddressResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/accounting/v1/account/{address}',
+    url: '/accounting/account/{address}',
     ...options
 });
 
@@ -36,7 +36,7 @@ export const getAccountingV1AccountByAddress = <ThrowOnError extends boolean = f
  */
 export const getAccountingV1AccountByAddressFt = <ThrowOnError extends boolean = false>(options: Options<GetAccountingV1AccountByAddressFtData, ThrowOnError>) => (options.client ?? client).get<GetAccountingV1AccountByAddressFtResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/accounting/v1/account/{address}/ft',
+    url: '/accounting/account/{address}/ft',
     ...options
 });
 
@@ -47,7 +47,7 @@ export const getAccountingV1AccountByAddressFt = <ThrowOnError extends boolean =
  */
 export const getAccountingV1AccountByAddressFtTransfer = <ThrowOnError extends boolean = false>(options: Options<GetAccountingV1AccountByAddressFtTransferData, ThrowOnError>) => (options.client ?? client).get<GetAccountingV1AccountByAddressFtTransferResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/accounting/v1/account/{address}/ft/transfer',
+    url: '/accounting/account/{address}/ft/transfer',
     ...options
 });
 
@@ -56,7 +56,7 @@ export const getAccountingV1AccountByAddressFtTransfer = <ThrowOnError extends b
  */
 export const getAccountingV1AccountByAddressNft = <ThrowOnError extends boolean = false>(options: Options<GetAccountingV1AccountByAddressNftData, ThrowOnError>) => (options.client ?? client).get<GetAccountingV1AccountByAddressNftResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/accounting/v1/account/{address}/nft',
+    url: '/accounting/account/{address}/nft',
     ...options
 });
 
@@ -67,7 +67,7 @@ export const getAccountingV1AccountByAddressNft = <ThrowOnError extends boolean 
  */
 export const getAccountingV1AccountByAddressTaxReport = <ThrowOnError extends boolean = false>(options: Options<GetAccountingV1AccountByAddressTaxReportData, ThrowOnError>) => (options.client ?? client).get<GetAccountingV1AccountByAddressTaxReportResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/accounting/v1/account/{address}/tax-report',
+    url: '/accounting/account/{address}/tax-report',
     ...options
 });
 
@@ -76,7 +76,7 @@ export const getAccountingV1AccountByAddressTaxReport = <ThrowOnError extends bo
  */
 export const getAccountingV1AccountByAddressTransaction = <ThrowOnError extends boolean = false>(options: Options<GetAccountingV1AccountByAddressTransactionData, ThrowOnError>) => (options.client ?? client).get<GetAccountingV1AccountByAddressTransactionResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/accounting/v1/account/{address}/transaction',
+    url: '/accounting/account/{address}/transaction',
     ...options
 });
 
@@ -87,7 +87,7 @@ export const getAccountingV1AccountByAddressTransaction = <ThrowOnError extends 
  */
 export const getAccountingV1NftTransfer = <ThrowOnError extends boolean = false>(options?: Options<GetAccountingV1NftTransferData, ThrowOnError>) => (options?.client ?? client).get<GetAccountingV1NftTransferResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/accounting/v1/nft/transfer',
+    url: '/accounting/nft/transfer',
     ...options
 });
 
@@ -98,7 +98,7 @@ export const getAccountingV1NftTransfer = <ThrowOnError extends boolean = false>
  */
 export const getAccountingV1Transaction = <ThrowOnError extends boolean = false>(options?: Options<GetAccountingV1TransactionData, ThrowOnError>) => (options?.client ?? client).get<GetAccountingV1TransactionResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/accounting/v1/transaction',
+    url: '/accounting/transaction',
     ...options
 });
 
@@ -109,7 +109,7 @@ export const getAccountingV1Transaction = <ThrowOnError extends boolean = false>
  */
 export const getAccountingV1TransactionById = <ThrowOnError extends boolean = false>(options: Options<GetAccountingV1TransactionByIdData, ThrowOnError>) => (options.client ?? client).get<GetAccountingV1TransactionByIdResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/accounting/v1/transaction/{id}',
+    url: '/accounting/transaction/{id}',
     ...options
 });
 
@@ -120,7 +120,7 @@ export const getAccountingV1TransactionById = <ThrowOnError extends boolean = fa
  */
 export const getDefiV1Asset = <ThrowOnError extends boolean = false>(options: Options<GetDefiV1AssetData, ThrowOnError>) => (options.client ?? client).get<GetDefiV1AssetResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/defi/v1/asset',
+    url: '/defi/asset',
     ...options
 });
 
@@ -131,7 +131,7 @@ export const getDefiV1Asset = <ThrowOnError extends boolean = false>(options: Op
  */
 export const getDefiV1Events = <ThrowOnError extends boolean = false>(options: Options<GetDefiV1EventsData, ThrowOnError>) => (options.client ?? client).get<GetDefiV1EventsResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/defi/v1/events',
+    url: '/defi/events',
     ...options
 });
 
@@ -142,7 +142,7 @@ export const getDefiV1Events = <ThrowOnError extends boolean = false>(options: O
  */
 export const getDefiV1LatestBlock = <ThrowOnError extends boolean = false>(options?: Options<GetDefiV1LatestBlockData, ThrowOnError>) => (options?.client ?? client).get<GetDefiV1LatestBlockResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/defi/v1/latest-block',
+    url: '/defi/latest-block',
     ...options
 });
 
@@ -153,7 +153,7 @@ export const getDefiV1LatestBlock = <ThrowOnError extends boolean = false>(optio
  */
 export const getDefiV1LatestSwap = <ThrowOnError extends boolean = false>(options: Options<GetDefiV1LatestSwapData, ThrowOnError>) => (options.client ?? client).get<GetDefiV1LatestSwapResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/defi/v1/latest-swap',
+    url: '/defi/latest-swap',
     ...options
 });
 
@@ -164,7 +164,7 @@ export const getDefiV1LatestSwap = <ThrowOnError extends boolean = false>(option
  */
 export const getDefiV1Pair = <ThrowOnError extends boolean = false>(options: Options<GetDefiV1PairData, ThrowOnError>) => (options.client ?? client).get<GetDefiV1PairResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/defi/v1/pair',
+    url: '/defi/pair',
     ...options
 });
 
@@ -175,7 +175,7 @@ export const getDefiV1Pair = <ThrowOnError extends boolean = false>(options: Opt
  */
 export const getFlowV1Account = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1AccountData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1AccountResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account',
+    url: '/flow/account',
     ...options
 });
 
@@ -186,7 +186,7 @@ export const getFlowV1Account = <ThrowOnError extends boolean = false>(options?:
  */
 export const getFlowV1AccountByAddress = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}',
+    url: '/flow/account/{address}',
     ...options
 });
 
@@ -197,7 +197,7 @@ export const getFlowV1AccountByAddress = <ThrowOnError extends boolean = false>(
  */
 export const getFlowV1AccountByAddressFt = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressFtData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressFtResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}/ft',
+    url: '/flow/account/{address}/ft',
     ...options
 });
 
@@ -208,7 +208,7 @@ export const getFlowV1AccountByAddressFt = <ThrowOnError extends boolean = false
  */
 export const getFlowV1AccountByAddressFtHolding = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressFtHoldingData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressFtHoldingResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}/ft/holding',
+    url: '/flow/account/{address}/ft/holding',
     ...options
 });
 
@@ -219,7 +219,7 @@ export const getFlowV1AccountByAddressFtHolding = <ThrowOnError extends boolean 
  */
 export const getFlowV1AccountByAddressFtTransfer = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressFtTransferData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressFtTransferResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}/ft/transfer',
+    url: '/flow/account/{address}/ft/transfer',
     ...options
 });
 
@@ -230,7 +230,7 @@ export const getFlowV1AccountByAddressFtTransfer = <ThrowOnError extends boolean
  */
 export const getFlowV1AccountByAddressFtByToken = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressFtByTokenData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressFtByTokenResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}/ft/{token}',
+    url: '/flow/account/{address}/ft/{token}',
     ...options
 });
 
@@ -241,7 +241,7 @@ export const getFlowV1AccountByAddressFtByToken = <ThrowOnError extends boolean 
  */
 export const getFlowV1AccountByAddressFtByTokenTransfer = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressFtByTokenTransferData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressFtByTokenTransferResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}/ft/{token}/transfer',
+    url: '/flow/account/{address}/ft/{token}/transfer',
     ...options
 });
 
@@ -250,7 +250,7 @@ export const getFlowV1AccountByAddressFtByTokenTransfer = <ThrowOnError extends 
  */
 export const getFlowV1AccountByAddressNft = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressNftData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressNftResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}/nft',
+    url: '/flow/account/{address}/nft',
     ...options
 });
 
@@ -261,7 +261,7 @@ export const getFlowV1AccountByAddressNft = <ThrowOnError extends boolean = fals
  */
 export const getFlowV1AccountByAddressNftByNftType = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressNftByNftTypeData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressNftByNftTypeResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}/nft/{nft_type}',
+    url: '/flow/account/{address}/nft/{nft_type}',
     ...options
 });
 
@@ -272,7 +272,7 @@ export const getFlowV1AccountByAddressNftByNftType = <ThrowOnError extends boole
  */
 export const getFlowV1AccountByAddressTaxReport = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressTaxReportData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressTaxReportResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}/tax-report',
+    url: '/flow/account/{address}/tax-report',
     ...options
 });
 
@@ -281,7 +281,7 @@ export const getFlowV1AccountByAddressTaxReport = <ThrowOnError extends boolean 
  */
 export const getFlowV1AccountByAddressTransaction = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1AccountByAddressTransactionData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1AccountByAddressTransactionResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/account/{address}/transaction',
+    url: '/flow/account/{address}/transaction',
     ...options
 });
 
@@ -292,7 +292,7 @@ export const getFlowV1AccountByAddressTransaction = <ThrowOnError extends boolea
  */
 export const getFlowV1Block = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1BlockData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1BlockResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/block',
+    url: '/flow/block',
     ...options
 });
 
@@ -303,7 +303,7 @@ export const getFlowV1Block = <ThrowOnError extends boolean = false>(options?: O
  */
 export const getFlowV1BlockByHeight = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1BlockByHeightData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1BlockByHeightResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/block/{height}',
+    url: '/flow/block/{height}',
     ...options
 });
 
@@ -314,7 +314,7 @@ export const getFlowV1BlockByHeight = <ThrowOnError extends boolean = false>(opt
  */
 export const getFlowV1BlockByHeightServiceEvent = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1BlockByHeightServiceEventData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1BlockByHeightServiceEventResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/block/{height}/service-event',
+    url: '/flow/block/{height}/service-event',
     ...options
 });
 
@@ -325,7 +325,7 @@ export const getFlowV1BlockByHeightServiceEvent = <ThrowOnError extends boolean 
  */
 export const getFlowV1BlockByHeightTransaction = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1BlockByHeightTransactionData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1BlockByHeightTransactionResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/block/{height}/transaction',
+    url: '/flow/block/{height}/transaction',
     ...options
 });
 
@@ -336,7 +336,7 @@ export const getFlowV1BlockByHeightTransaction = <ThrowOnError extends boolean =
  */
 export const getFlowV1Contract = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1ContractData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1ContractResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/contract',
+    url: '/flow/contract',
     ...options
 });
 
@@ -347,7 +347,7 @@ export const getFlowV1Contract = <ThrowOnError extends boolean = false>(options?
  */
 export const getFlowV1ContractByIdentifier = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1ContractByIdentifierData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1ContractByIdentifierResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/contract/{identifier}',
+    url: '/flow/contract/{identifier}',
     ...options
 });
 
@@ -358,7 +358,7 @@ export const getFlowV1ContractByIdentifier = <ThrowOnError extends boolean = fal
  */
 export const getFlowV1ContractByIdentifierById = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1ContractByIdentifierByIdData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1ContractByIdentifierByIdResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/contract/{identifier}/{id}',
+    url: '/flow/contract/{identifier}/{id}',
     ...options
 });
 
@@ -369,7 +369,7 @@ export const getFlowV1ContractByIdentifierById = <ThrowOnError extends boolean =
  */
 export const getFlowV1EvmToken = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1EvmTokenData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1EvmTokenResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/evm/token',
+    url: '/flow/evm/token',
     ...options
 });
 
@@ -380,7 +380,7 @@ export const getFlowV1EvmToken = <ThrowOnError extends boolean = false>(options?
  */
 export const getFlowV1EvmTokenByAddress = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1EvmTokenByAddressData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1EvmTokenByAddressResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/evm/token/{address}',
+    url: '/flow/evm/token/{address}',
     ...options
 });
 
@@ -391,7 +391,7 @@ export const getFlowV1EvmTokenByAddress = <ThrowOnError extends boolean = false>
  */
 export const getFlowV1EvmTransaction = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1EvmTransactionData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1EvmTransactionResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/evm/transaction',
+    url: '/flow/evm/transaction',
     ...options
 });
 
@@ -402,7 +402,7 @@ export const getFlowV1EvmTransaction = <ThrowOnError extends boolean = false>(op
  */
 export const getFlowV1EvmTransactionByHash = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1EvmTransactionByHashData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1EvmTransactionByHashResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/evm/transaction/{hash}',
+    url: '/flow/evm/transaction/{hash}',
     ...options
 });
 
@@ -413,7 +413,7 @@ export const getFlowV1EvmTransactionByHash = <ThrowOnError extends boolean = fal
  */
 export const getFlowV1Ft = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1FtData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1FtResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/ft',
+    url: '/flow/ft',
     ...options
 });
 
@@ -424,7 +424,7 @@ export const getFlowV1Ft = <ThrowOnError extends boolean = false>(options?: Opti
  */
 export const getFlowV1FtTransfer = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1FtTransferData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1FtTransferResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/ft/transfer',
+    url: '/flow/ft/transfer',
     ...options
 });
 
@@ -435,7 +435,7 @@ export const getFlowV1FtTransfer = <ThrowOnError extends boolean = false>(option
  */
 export const getFlowV1FtByToken = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1FtByTokenData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1FtByTokenResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/ft/{token}',
+    url: '/flow/ft/{token}',
     ...options
 });
 
@@ -446,7 +446,7 @@ export const getFlowV1FtByToken = <ThrowOnError extends boolean = false>(options
  */
 export const getFlowV1FtByTokenAccountByAddress = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1FtByTokenAccountByAddressData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1FtByTokenAccountByAddressResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/ft/{token}/account/{address}',
+    url: '/flow/ft/{token}/account/{address}',
     ...options
 });
 
@@ -457,7 +457,7 @@ export const getFlowV1FtByTokenAccountByAddress = <ThrowOnError extends boolean 
  */
 export const getFlowV1FtByTokenHolding = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1FtByTokenHoldingData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1FtByTokenHoldingResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/ft/{token}/holding',
+    url: '/flow/ft/{token}/holding',
     ...options
 });
 
@@ -468,7 +468,7 @@ export const getFlowV1FtByTokenHolding = <ThrowOnError extends boolean = false>(
  */
 export const getFlowV1Nft = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1NftData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1NftResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/nft',
+    url: '/flow/nft',
     ...options
 });
 
@@ -479,7 +479,7 @@ export const getFlowV1Nft = <ThrowOnError extends boolean = false>(options?: Opt
  */
 export const getFlowV1NftTransfer = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1NftTransferData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1NftTransferResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/nft/transfer',
+    url: '/flow/nft/transfer',
     ...options
 });
 
@@ -490,7 +490,7 @@ export const getFlowV1NftTransfer = <ThrowOnError extends boolean = false>(optio
  */
 export const getFlowV1NftByNftType = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1NftByNftTypeData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1NftByNftTypeResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/nft/{nft_type}',
+    url: '/flow/nft/{nft_type}',
     ...options
 });
 
@@ -501,7 +501,7 @@ export const getFlowV1NftByNftType = <ThrowOnError extends boolean = false>(opti
  */
 export const getFlowV1NftByNftTypeHolding = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1NftByNftTypeHoldingData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1NftByNftTypeHoldingResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/nft/{nft_type}/holding',
+    url: '/flow/nft/{nft_type}/holding',
     ...options
 });
 
@@ -512,7 +512,7 @@ export const getFlowV1NftByNftTypeHolding = <ThrowOnError extends boolean = fals
  */
 export const getFlowV1NftByNftTypeItemById = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1NftByNftTypeItemByIdData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1NftByNftTypeItemByIdResponses, GetFlowV1NftByNftTypeItemByIdErrors, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/nft/{nft_type}/item/{id}',
+    url: '/flow/nft/{nft_type}/item/{id}',
     ...options
 });
 
@@ -523,7 +523,7 @@ export const getFlowV1NftByNftTypeItemById = <ThrowOnError extends boolean = fal
  */
 export const getFlowV1NftByNftTypeItemByIdTransfer = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1NftByNftTypeItemByIdTransferData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1NftByNftTypeItemByIdTransferResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/nft/{nft_type}/item/{id}/transfer',
+    url: '/flow/nft/{nft_type}/item/{id}/transfer',
     ...options
 });
 
@@ -534,7 +534,7 @@ export const getFlowV1NftByNftTypeItemByIdTransfer = <ThrowOnError extends boole
  */
 export const getFlowV1Node = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1NodeData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1NodeResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/node',
+    url: '/flow/node',
     ...options
 });
 
@@ -545,7 +545,7 @@ export const getFlowV1Node = <ThrowOnError extends boolean = false>(options?: Op
  */
 export const getFlowV1NodeByNodeId = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1NodeByNodeIdData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1NodeByNodeIdResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/node/{node_id}',
+    url: '/flow/node/{node_id}',
     ...options
 });
 
@@ -556,7 +556,7 @@ export const getFlowV1NodeByNodeId = <ThrowOnError extends boolean = false>(opti
  */
 export const getFlowV1NodeByNodeIdRewardDelegation = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1NodeByNodeIdRewardDelegationData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1NodeByNodeIdRewardDelegationResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/node/{node_id}/reward/delegation',
+    url: '/flow/node/{node_id}/reward/delegation',
     ...options
 });
 
@@ -567,7 +567,7 @@ export const getFlowV1NodeByNodeIdRewardDelegation = <ThrowOnError extends boole
  */
 export const getFlowV1ScheduledTransaction = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1ScheduledTransactionData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1ScheduledTransactionResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/scheduled-transaction',
+    url: '/flow/scheduled-transaction',
     ...options
 });
 
@@ -578,7 +578,7 @@ export const getFlowV1ScheduledTransaction = <ThrowOnError extends boolean = fal
  */
 export const getFlowV1Transaction = <ThrowOnError extends boolean = false>(options?: Options<GetFlowV1TransactionData, ThrowOnError>) => (options?.client ?? client).get<GetFlowV1TransactionResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/transaction',
+    url: '/flow/transaction',
     ...options
 });
 
@@ -589,7 +589,7 @@ export const getFlowV1Transaction = <ThrowOnError extends boolean = false>(optio
  */
 export const getFlowV1TransactionById = <ThrowOnError extends boolean = false>(options: Options<GetFlowV1TransactionByIdData, ThrowOnError>) => (options.client ?? client).get<GetFlowV1TransactionByIdResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/flow/v1/transaction/{id}',
+    url: '/flow/transaction/{id}',
     ...options
 });
 
@@ -600,7 +600,7 @@ export const getFlowV1TransactionById = <ThrowOnError extends boolean = false>(o
  */
 export const getStakingV1AccountByAddressFtTransfer = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1AccountByAddressFtTransferData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1AccountByAddressFtTransferResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/account/{address}/ft/transfer',
+    url: '/staking/account/{address}/ft/transfer',
     ...options
 });
 
@@ -609,7 +609,7 @@ export const getStakingV1AccountByAddressFtTransfer = <ThrowOnError extends bool
  */
 export const getStakingV1AccountByAddressTransaction = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1AccountByAddressTransactionData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1AccountByAddressTransactionResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/account/{address}/transaction',
+    url: '/staking/account/{address}/transaction',
     ...options
 });
 
@@ -620,7 +620,7 @@ export const getStakingV1AccountByAddressTransaction = <ThrowOnError extends boo
  */
 export const getStakingV1Delegator = <ThrowOnError extends boolean = false>(options?: Options<GetStakingV1DelegatorData, ThrowOnError>) => (options?.client ?? client).get<GetStakingV1DelegatorResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/delegator',
+    url: '/staking/delegator',
     ...options
 });
 
@@ -631,7 +631,7 @@ export const getStakingV1Delegator = <ThrowOnError extends boolean = false>(opti
  */
 export const getStakingV1EpochStats = <ThrowOnError extends boolean = false>(options?: Options<GetStakingV1EpochStatsData, ThrowOnError>) => (options?.client ?? client).get<GetStakingV1EpochStatsResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/epoch/stats',
+    url: '/staking/epoch/stats',
     ...options
 });
 
@@ -642,7 +642,7 @@ export const getStakingV1EpochStats = <ThrowOnError extends boolean = false>(opt
  */
 export const getStakingV1EpochByEpochNodes = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1EpochByEpochNodesData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1EpochByEpochNodesResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/epoch/{epoch}/nodes',
+    url: '/staking/epoch/{epoch}/nodes',
     ...options
 });
 
@@ -653,7 +653,7 @@ export const getStakingV1EpochByEpochNodes = <ThrowOnError extends boolean = fal
  */
 export const getStakingV1EpochByEpochRoleByRoleNodesAggregate = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1EpochByEpochRoleByRoleNodesAggregateData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1EpochByEpochRoleByRoleNodesAggregateResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/epoch/{epoch}/role/{role}/nodes/aggregate',
+    url: '/staking/epoch/{epoch}/role/{role}/nodes/aggregate',
     ...options
 });
 
@@ -664,7 +664,7 @@ export const getStakingV1EpochByEpochRoleByRoleNodesAggregate = <ThrowOnError ex
  */
 export const getStakingV1EpochByEpochRoleByRoleNodesCount = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1EpochByEpochRoleByRoleNodesCountData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1EpochByEpochRoleByRoleNodesCountResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/epoch/{epoch}/role/{role}/nodes/count',
+    url: '/staking/epoch/{epoch}/role/{role}/nodes/count',
     ...options
 });
 
@@ -675,7 +675,7 @@ export const getStakingV1EpochByEpochRoleByRoleNodesCount = <ThrowOnError extend
  */
 export const getStakingV1EpochByEpochRoleByRoleNodesGrouped = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1EpochByEpochRoleByRoleNodesGroupedData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1EpochByEpochRoleByRoleNodesGroupedResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/epoch/{epoch}/role/{role}/nodes/grouped',
+    url: '/staking/epoch/{epoch}/role/{role}/nodes/grouped',
     ...options
 });
 
@@ -686,7 +686,7 @@ export const getStakingV1EpochByEpochRoleByRoleNodesGrouped = <ThrowOnError exte
  */
 export const getStakingV1FtTransferByAddress = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1FtTransferByAddressData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1FtTransferByAddressResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/ft_transfer/{address}',
+    url: '/staking/ft_transfer/{address}',
     ...options
 });
 
@@ -697,7 +697,7 @@ export const getStakingV1FtTransferByAddress = <ThrowOnError extends boolean = f
  */
 export const getStakingV1NodeByNodeIdEvent = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1NodeByNodeIdEventData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1NodeByNodeIdEventResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/node/{node_id}/event',
+    url: '/staking/node/{node_id}/event',
     ...options
 });
 
@@ -708,7 +708,7 @@ export const getStakingV1NodeByNodeIdEvent = <ThrowOnError extends boolean = fal
  */
 export const getStakingV1RewardsPaid = <ThrowOnError extends boolean = false>(options?: Options<GetStakingV1RewardsPaidData, ThrowOnError>) => (options?.client ?? client).get<GetStakingV1RewardsPaidResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/rewards/paid',
+    url: '/staking/rewards/paid',
     ...options
 });
 
@@ -719,7 +719,7 @@ export const getStakingV1RewardsPaid = <ThrowOnError extends boolean = false>(op
  */
 export const getStakingV1RewardsStaking = <ThrowOnError extends boolean = false>(options?: Options<GetStakingV1RewardsStakingData, ThrowOnError>) => (options?.client ?? client).get<GetStakingV1RewardsStakingResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/rewards/staking',
+    url: '/staking/rewards/staking',
     ...options
 });
 
@@ -730,7 +730,7 @@ export const getStakingV1RewardsStaking = <ThrowOnError extends boolean = false>
  */
 export const getStakingV1Tokenomics = <ThrowOnError extends boolean = false>(options?: Options<GetStakingV1TokenomicsData, ThrowOnError>) => (options?.client ?? client).get<GetStakingV1TokenomicsResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/tokenomics',
+    url: '/staking/tokenomics',
     ...options
 });
 
@@ -741,7 +741,7 @@ export const getStakingV1Tokenomics = <ThrowOnError extends boolean = false>(opt
  */
 export const getStakingV1TransactionAddressByAddress = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1TransactionAddressByAddressData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1TransactionAddressByAddressResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/transaction/address/{address}',
+    url: '/staking/transaction/address/{address}',
     ...options
 });
 
@@ -752,7 +752,7 @@ export const getStakingV1TransactionAddressByAddress = <ThrowOnError extends boo
  */
 export const getStakingV1TransactionByTransactionId = <ThrowOnError extends boolean = false>(options: Options<GetStakingV1TransactionByTransactionIdData, ThrowOnError>) => (options.client ?? client).get<GetStakingV1TransactionByTransactionIdResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/staking/v1/transaction/{transaction_id}',
+    url: '/staking/transaction/{transaction_id}',
     ...options
 });
 
@@ -763,7 +763,7 @@ export const getStakingV1TransactionByTransactionId = <ThrowOnError extends bool
  */
 export const getStatusV1Count = <ThrowOnError extends boolean = false>(options?: Options<GetStatusV1CountData, ThrowOnError>) => (options?.client ?? client).get<GetStatusV1CountResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/status/v1/count',
+    url: '/status/count',
     ...options
 });
 
@@ -774,7 +774,7 @@ export const getStatusV1Count = <ThrowOnError extends boolean = false>(options?:
  */
 export const getStatusV1EpochStat = <ThrowOnError extends boolean = false>(options?: Options<GetStatusV1EpochStatData, ThrowOnError>) => (options?.client ?? client).get<GetStatusV1EpochStatResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/status/v1/epoch/stat',
+    url: '/status/epoch/stat',
     ...options
 });
 
@@ -785,7 +785,7 @@ export const getStatusV1EpochStat = <ThrowOnError extends boolean = false>(optio
  */
 export const getStatusV1EpochStatus = <ThrowOnError extends boolean = false>(options?: Options<GetStatusV1EpochStatusData, ThrowOnError>) => (options?.client ?? client).get<GetStatusV1EpochStatusResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/status/v1/epoch/status',
+    url: '/status/epoch/status',
     ...options
 });
 
@@ -796,7 +796,7 @@ export const getStatusV1EpochStatus = <ThrowOnError extends boolean = false>(opt
  */
 export const getStatusV1FlowStat = <ThrowOnError extends boolean = false>(options?: Options<GetStatusV1FlowStatData, ThrowOnError>) => (options?.client ?? client).get<GetStatusV1FlowStatResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/status/v1/flow/stat',
+    url: '/status/flow/stat',
     ...options
 });
 
@@ -807,7 +807,7 @@ export const getStatusV1FlowStat = <ThrowOnError extends boolean = false>(option
  */
 export const getStatusV1Stat = <ThrowOnError extends boolean = false>(options: Options<GetStatusV1StatData, ThrowOnError>) => (options.client ?? client).get<GetStatusV1StatResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/status/v1/stat',
+    url: '/status/stat',
     ...options
 });
 
@@ -818,7 +818,7 @@ export const getStatusV1Stat = <ThrowOnError extends boolean = false>(options: O
  */
 export const getStatusV1StatByTimescaleTrend = <ThrowOnError extends boolean = false>(options: Options<GetStatusV1StatByTimescaleTrendData, ThrowOnError>) => (options.client ?? client).get<GetStatusV1StatByTimescaleTrendResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/status/v1/stat/{timescale}/trend',
+    url: '/status/stat/{timescale}/trend',
     ...options
 });
 
@@ -829,6 +829,6 @@ export const getStatusV1StatByTimescaleTrend = <ThrowOnError extends boolean = f
  */
 export const getStatusV1Tokenomics = <ThrowOnError extends boolean = false>(options?: Options<GetStatusV1TokenomicsData, ThrowOnError>) => (options?.client ?? client).get<GetStatusV1TokenomicsResponses, unknown, ThrowOnError>({
     responseType: 'json',
-    url: '/status/v1/tokenomics',
+    url: '/status/tokenomics',
     ...options
 });

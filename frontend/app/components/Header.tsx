@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { useWebSocketStatus } from '../hooks/useWebSocket';
-import { ensureHeyApiConfigured } from '../api/heyapi';
-import { getCoaByAddress } from '../api/gen/core';
+import { resolveApiBaseUrl } from '../api';
 
 function Header() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,14 +24,20 @@ function Header() {
       navigate({ to: '/transactions/$txId', params: { txId: query } });
     } else if (/^0x[a-fA-F0-9]{40}$/.test(query)) {
       // COA address -> resolve to Flow address if possible
+      // NOTE: The legacy /coa/{address} route was removed. Using manual fetch
+      // against /flow/account/{address} which may include COA mapping data.
       try {
-        await ensureHeyApiConfigured();
-        const res: any = await getCoaByAddress({ path: { address: query } });
-        const payload: any = res?.data;
-        const items = payload?.data ?? (Array.isArray(payload) ? payload : []);
-        const flowAddress = items?.[0]?.flow_address;
-        if (flowAddress) {
-          navigate({ to: '/accounts/$address', params: { address: flowAddress } });
+        const baseUrl = await resolveApiBaseUrl();
+        const res = await fetch(`${baseUrl}/flow/account/${encodeURIComponent(query)}`);
+        if (res.ok) {
+          const payload = await res.json();
+          const items = payload?.data ?? (Array.isArray(payload) ? payload : []);
+          const flowAddress = items?.[0]?.flow_address;
+          if (flowAddress) {
+            navigate({ to: '/accounts/$address', params: { address: flowAddress } });
+          } else {
+            navigate({ to: '/accounts/$address', params: { address: query } });
+          }
         } else {
           navigate({ to: '/accounts/$address', params: { address: query } });
         }

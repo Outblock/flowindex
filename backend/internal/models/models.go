@@ -267,7 +267,7 @@ type FTToken struct {
 	Decimals        int             `json:"decimals"`
 	Description     string          `json:"description,omitempty"`
 	ExternalURL     string          `json:"external_url,omitempty"`
-	Logo            json.RawMessage `json:"logo,omitempty"`
+	Logo            string          `json:"logo,omitempty"`
 	VaultPath       string          `json:"vault_path,omitempty"`
 	ReceiverPath    string          `json:"receiver_path,omitempty"`
 	BalancePath     string          `json:"balance_path,omitempty"`
@@ -287,16 +287,16 @@ type FTHolding struct {
 
 // NFTCollection represents app.nft_collections
 type NFTCollection struct {
-	ContractAddress string    `json:"contract_address"`
-	ContractName    string    `json:"contract_name,omitempty"`
-	Name            string    `json:"name"`
-	Symbol          string    `json:"symbol"`
+	ContractAddress string          `json:"contract_address"`
+	ContractName    string          `json:"contract_name,omitempty"`
+	Name            string          `json:"name"`
+	Symbol          string          `json:"symbol"`
 	Description     string          `json:"description,omitempty"`
 	ExternalURL     string          `json:"external_url,omitempty"`
-	SquareImage     json.RawMessage `json:"square_image,omitempty"`
-	BannerImage     json.RawMessage `json:"banner_image,omitempty"`
+	SquareImage     string          `json:"square_image,omitempty"`
+	BannerImage     string          `json:"banner_image,omitempty"`
 	Socials         json.RawMessage `json:"socials,omitempty"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 // NFTOwnership represents app.nft_ownership

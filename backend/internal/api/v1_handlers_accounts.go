@@ -1,15 +1,19 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
 	"github.com/onflow/cadence"
+	cadjson "github.com/onflow/cadence/encoding/json"
 	flowsdk "github.com/onflow/flow-go-sdk"
 )
 
@@ -490,4 +494,45 @@ func (s *Server) handleFlowAccountNFTByCollection(w http.ResponseWriter, r *http
 		out = append(out, toCombinedNFTDetails(item))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) executeCadenceScript(ctx context.Context, script string, args []cadence.Value) ([]byte, error) {
+	ctxExec, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	v, err := s.client.ExecuteScriptAtLatestBlock(ctxExec, []byte(script), args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute script: %w", err)
+	}
+
+	b, err := cadjson.Encode(v)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode cadence value: %w", err)
+	}
+	return b, nil
+}
+
+func cadenceStorageOverviewScript() string {
+	return `
+		access(all) fun main(address: Address): {String: AnyStruct} {
+			let account = getAccount(address)
+
+			var storagePaths: [StoragePath] = []
+			for p in account.storage.storagePaths {
+				storagePaths.append(p)
+			}
+
+			var publicPaths: [PublicPath] = []
+			for p in account.storage.publicPaths {
+				publicPaths.append(p)
+			}
+
+			return {
+				"used": account.storage.used,
+				"capacity": account.storage.capacity,
+				"storagePaths": storagePaths,
+				"publicPaths": publicPaths
+			}
+		}
+	`
 }
