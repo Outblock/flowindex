@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getBlocksById } from '../../api/gen/core';
 import { ArrowLeft, Box, Clock, Hash, Activity, ArrowRightLeft, User, Coins, Image as ImageIcon } from 'lucide-react';
+import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
@@ -100,6 +101,12 @@ function BlockDetail() {
                             <div className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-widest">
                                 <Hash className="w-3 h-3" />
                                 <span className="break-all">{block.id}</span>
+                                <CopyButton
+                                    content={block.id}
+                                    variant="ghost"
+                                    size="xs"
+                                    className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                />
                             </div>
                         </div>
 
@@ -126,7 +133,15 @@ function BlockDetail() {
                         <div className="space-y-6">
                             <div className="group">
                                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Parent Hash</p>
-                                <code className="text-sm text-zinc-600 dark:text-zinc-400 break-all">{block.parentId}</code>
+                                <div className="flex items-center gap-2">
+                                    <code className="text-sm text-zinc-600 dark:text-zinc-400 break-all">{block.parentId}</code>
+                                    <CopyButton
+                                        content={block.parentId}
+                                        variant="ghost"
+                                        size="xs"
+                                        className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                    />
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="group">
@@ -170,9 +185,17 @@ function BlockDetail() {
                                     {block.transactions.map((tx) => (
                                         <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group">
                                             <td className="p-4">
-                                                <Link to={`/transactions/${tx.id}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
-                                                    {tx.id.slice(0, 16)}...
-                                                </Link>
+                                                <div className="flex items-center gap-2">
+                                                    <Link to={`/transactions/${tx.id}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                        {tx.id.slice(0, 16)}...
+                                                    </Link>
+                                                    <CopyButton
+                                                        content={tx.id}
+                                                        variant="ghost"
+                                                        size="xs"
+                                                        className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                                    />
+                                                </div>
                                             </td>
                                             <td className="p-4">
                                                 <span className="border border-zinc-200 dark:border-white/10 px-2 py-1 rounded-sm text-zinc-600 dark:text-zinc-300 text-[10px] uppercase bg-zinc-50 dark:bg-transparent">

@@ -7,12 +7,12 @@ import { resolveApiBaseUrl } from '../../api';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { ArrowLeft, Box, Code, Copy, FileText, Layers, Activity, GitCompare } from 'lucide-react';
+import { ArrowLeft, Box, Code, FileText, Layers, Activity, GitCompare } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
-import { toast } from 'react-hot-toast';
 import { normalizeAddress, formatShort } from '../../components/account/accountUtils';
+import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -214,29 +214,7 @@ function ContractDetail() {
     const timeRel = createdAt ? formatRelativeTime(createdAt, nowTick) : '';
     const timeAbs = createdAt ? formatAbsoluteTime(createdAt) : '';
 
-    const copyText = async (text: string, successMessage: string) => {
-        try {
-            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(text);
-            } else if (typeof document !== 'undefined') {
-                const textarea = document.createElement('textarea');
-                textarea.value = text;
-                textarea.setAttribute('readonly', 'true');
-                textarea.style.position = 'fixed';
-                textarea.style.left = '-9999px';
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-            } else {
-                throw new Error('Clipboard is unavailable');
-            }
-            toast.success(successMessage);
-        } catch (e) {
-            console.error('Copy failed', e);
-            toast.error('Copy failed');
-        }
-    };
+
 
     const tabs = [
         { id: 'source' as const, label: 'Source Code', icon: Code },
@@ -336,14 +314,12 @@ function ContractDetail() {
                                         <Link to={`/accounts/${contract.address}`} className="text-sm font-mono text-nothing-green-dark dark:text-nothing-green hover:underline break-all">
                                             {contract.address}
                                         </Link>
-                                        <button
-                                            type="button"
-                                            onClick={() => copyText(contract.address, 'Address copied')}
-                                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
-                                            aria-label="Copy address"
-                                        >
-                                            <Copy className="h-3 w-3" />
-                                        </button>
+                                        <CopyButton
+                                            content={contract.address}
+                                            variant="ghost"
+                                            size="xs"
+                                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                        />
                                     </div>
                                 </div>
 
@@ -396,14 +372,12 @@ function ContractDetail() {
                                 ))}
                                 {activeTab === 'source' && (
                                     <div className="ml-auto">
-                                        <button
-                                            type="button"
-                                            onClick={() => copyText(code || '', 'Code copied')}
+                                        <CopyButton
+                                            content={code || ''}
+                                            variant="ghost"
+                                            size="xs"
                                             className="flex items-center gap-1.5 px-2 py-1 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-sm transition-colors text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-wider"
-                                            aria-label="Copy source code"
-                                        >
-                                            <Copy className="h-3 w-3" /> Copy
-                                        </button>
+                                        />
                                     </div>
                                 )}
                             </div>

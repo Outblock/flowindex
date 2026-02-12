@@ -4,7 +4,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getAccountsByAddress, getAccountsByAddressTransactions } from '../../api/gen/core';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Shield, Lock, Database, Copy, Check, Clock
+    FileText, HardDrive, Shield, Lock, Database, Check, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
@@ -19,6 +19,7 @@ import { AccountScheduledTab } from '../../components/account/AccountScheduledTa
 import { AccountStorageTab } from '../../components/account/AccountStorageTab';
 import { AccountHybridCustodyTab } from '../../components/account/AccountHybridCustodyTab';
 import { PageHeader } from '../../components/ui/PageHeader';
+import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { cn } from '../../lib/utils';
 
@@ -127,12 +128,7 @@ function AccountDetail() {
         balance?: number; storage?: StorageInfo; staking?: StakingInfo;
     } | null>(null);
 
-    const [copied, setCopied] = useState(false);
-    const handleCopy = () => {
-        navigator.clipboard.writeText(normalizedAddress);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
+
 
     // Client-side on-chain data (balance, staking, storage)
     useEffect(() => {
@@ -238,13 +234,12 @@ function AccountDetail() {
                     subtitle={
                         <div className="flex items-center gap-2">
                             {normalizedAddress}
-                            <button
-                                onClick={handleCopy}
-                                className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
-                                title="Copy Address"
-                            >
-                                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                            </button>
+                            <CopyButton
+                                content={normalizedAddress}
+                                variant="ghost"
+                                size="xs"
+                                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                            />
                         </div>
                     }
                 >

@@ -29,6 +29,7 @@
     },
     "include": [
         "app",
+        "components",
         ".vinxi/types"
     ],
     "exclude": [

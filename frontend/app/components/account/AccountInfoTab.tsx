@@ -1,28 +1,10 @@
-import { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 
 interface Props {
     account: any;
 }
 
-function CopyButton({ text }: { text: string }) {
-    const [copied, setCopied] = useState(false);
-    const handleCopy = () => {
-        navigator.clipboard.writeText(text).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        });
-    };
-    return (
-        <button
-            onClick={handleCopy}
-            className="inline-flex items-center justify-center h-5 w-5 rounded-sm text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors flex-shrink-0"
-            title="Copy to clipboard"
-        >
-            {copied ? <Check className="h-3 w-3 text-nothing-green-dark dark:text-nothing-green" /> : <Copy className="h-3 w-3" />}
-        </button>
-    );
-}
+
 
 export function AccountKeysTab({ account }: Props) {
     return (
@@ -47,7 +29,12 @@ export function AccountKeysTab({ account }: Props) {
                                         <p className="font-mono text-zinc-900 dark:text-white break-all text-[11px] leading-relaxed flex-1 bg-white dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-2 rounded-sm select-all">
                                             {key.publicKey}
                                         </p>
-                                        <CopyButton text={key.publicKey} />
+                                        <CopyButton
+                                            content={key.publicKey}
+                                            variant="ghost"
+                                            size="xs"
+                                            className="h-6 w-6 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                                        />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

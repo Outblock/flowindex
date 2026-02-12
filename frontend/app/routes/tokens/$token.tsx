@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Users, ArrowRightLeft } from 'lucide-react';
+import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1FtByToken, getFlowV1FtByTokenHolding, getFlowV1FtTransfer } from '../../api/gen/find';
@@ -176,7 +177,15 @@ function TokenDetailInner() {
             <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tighter">
               Token
             </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono break-all">{id}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono break-all">{id}</p>
+              <CopyButton
+                content={id}
+                variant="ghost"
+                size="xs"
+                className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              />
+            </div>
           </div>
         </div>
       </motion.div>
@@ -196,6 +205,14 @@ function TokenDetailInner() {
               </Link>
             ) : (
               'N/A'
+            )}
+            {addr && (
+              <CopyButton
+                content={addr}
+                variant="ghost"
+                size="xs"
+                className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-2"
+              />
             )}
           </p>
         </div>

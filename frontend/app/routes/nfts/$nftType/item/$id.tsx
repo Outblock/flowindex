@@ -9,6 +9,7 @@ import { RouteErrorBoundary } from '../../../../components/RouteErrorBoundary';
 import { PageHeader } from '../../../../components/ui/PageHeader';
 import { GlassCard } from '../../../../components/ui/GlassCard';
 import { getNFTThumbnail, normalizeAddress } from '../../../../components/account/accountUtils';
+import { CopyButton } from '../../../../../components/animate-ui/components/buttons/copy';
 
 export const Route = createFileRoute('/nfts/$nftType/item/$id')({
   component: NFTItem,
@@ -126,9 +127,17 @@ function NFTItemInner() {
             <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Current Owner</p>
             <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
               {owner ? (
-                <Link to="/accounts/$address" params={{ address: owner }} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
-                  {owner}
-                </Link>
+                <>
+                  <Link to="/accounts/$address" params={{ address: owner }} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
+                    {owner}
+                  </Link>
+                  <CopyButton
+                    content={owner}
+                    variant="ghost"
+                    size="xs"
+                    className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-2"
+                  />
+                </>
               ) : (
                 '—'
               )}
