@@ -132,13 +132,13 @@ function TransactionDetail() {
                             )}
                         </div>
 
-                        <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white mb-2 break-all flex items-center gap-1">
+                        <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white mb-2 break-all flex items-center gap-1 group">
                             {transaction.is_evm ? transaction.evm_hash : transaction.id}
                             <CopyButton
                                 content={transaction.is_evm ? transaction.evm_hash : transaction.id}
                                 variant="ghost"
                                 size="xs"
-                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
                             />
                         </h1>
                         <p className="text-zinc-500 text-xs uppercase tracking-widest">
@@ -172,13 +172,13 @@ function TransactionDetail() {
                             <div className="space-y-6">
                                 <div className="group">
                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Flow Transaction ID</p>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1 group">
                                         <code className="text-sm text-zinc-600 dark:text-zinc-300 break-all">{transaction.id}</code>
                                         <CopyButton
                                             content={transaction.id}
                                             variant="ghost"
                                             size="xs"
-                                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
                                         />
                                     </div>
                                 </div>
@@ -213,7 +213,7 @@ function TransactionDetail() {
                                 {/* Payer Section */}
                                 <div className="group">
                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Payer</p>
-                                    <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 flex items-center justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-colors rounded-sm">
+                                    <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 flex items-center justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-colors rounded-sm group">
                                         <div className="flex items-center gap-1">
                                             <Link to={`/accounts/${formatAddress(transaction.payer)}` as any} className="text-sm text-nothing-green-dark dark:text-nothing-green hover:underline break-all font-mono">
                                                 {formatAddress(transaction.payer)}
@@ -222,7 +222,7 @@ function TransactionDetail() {
                                                 content={formatAddress(transaction.payer)}
                                                 variant="ghost"
                                                 size="xs"
-                                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
                                             />
                                         </div>
                                         <span className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase tracking-wider px-2 py-0.5 bg-zinc-200 dark:bg-white/5 rounded-sm">
@@ -242,7 +242,7 @@ function TransactionDetail() {
                                                 <span className="text-[10px] text-zinc-400 font-mono">Key: <span className="text-zinc-600 dark:text-white">{transaction.proposerKeyIndex}</span></span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-1 group">
                                             <Link to={`/accounts/${formatAddress(transaction.proposer)}` as any} className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white break-all font-mono">
                                                 {formatAddress(transaction.proposer)}
                                             </Link>
@@ -250,7 +250,7 @@ function TransactionDetail() {
                                                 content={formatAddress(transaction.proposer)}
                                                 variant="ghost"
                                                 size="xs"
-                                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
                                             />
                                         </div>
                                     </div>
@@ -265,7 +265,7 @@ function TransactionDetail() {
                                         </div>
                                         <div className="flex flex-col gap-2">
                                             {transaction.authorizers.map((auth, idx) => (
-                                                <div key={`${auth}-${idx}`} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm flex items-center gap-1">
+                                                <div key={`${auth}-${idx}`} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm flex items-center gap-1 group">
                                                     <Link to={`/accounts/${formatAddress(auth)}` as any} className="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white break-all font-mono block">
                                                         {formatAddress(auth)}
                                                     </Link>
@@ -273,7 +273,7 @@ function TransactionDetail() {
                                                         content={formatAddress(auth)}
                                                         variant="ghost"
                                                         size="xs"
-                                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
                                                     />
                                                 </div>
                                             ))}

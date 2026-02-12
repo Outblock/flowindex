@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Files } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
 
 import { Button as ButtonPrimitive, ButtonProps } from '../../primitives/buttons/button';
 import { cn } from '@/lib/utils';
@@ -27,7 +27,7 @@ const buttonVariants = cva(
       },
       size: {
         default: 'size-9',
-        xs: "size-6 [&_svg:not([class*='size-'])]:size-3 rounded-md",
+        xs: "size-5 [&_svg:not([class*='size-'])]:size-3 p-0 rounded-sm",
         sm: 'size-8 rounded-md',
         lg: 'size-10 rounded-md',
         icon: 'size-9',
@@ -84,7 +84,7 @@ function CopyButton({
     }
   }, [onClick, copied, content, setIsCopied, onCopiedChange, delay]);
 
-  const Icon = isCopied ? Check : Files;
+  const Icon = isCopied ? Check : Copy;
 
   return (
     <ButtonPrimitive

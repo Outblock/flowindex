@@ -310,7 +310,7 @@ function ContractDetail() {
                             <div className="space-y-4">
                                 <div className="group">
                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Address</p>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1 group">
                                         <Link to={`/accounts/${contract.address}`} className="text-sm font-mono text-nothing-green-dark dark:text-nothing-green hover:underline break-all">
                                             {contract.address}
                                         </Link>
@@ -318,7 +318,7 @@ function ContractDetail() {
                                             content={contract.address}
                                             variant="ghost"
                                             size="xs"
-                                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
                                         />
                                     </div>
                                 </div>

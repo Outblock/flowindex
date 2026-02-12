@@ -265,9 +265,17 @@ function TokenDetailInner() {
                         className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
                       >
                         <td className="p-4">
-                          <Link to={`/accounts/${a}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                            {a}
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link to={`/accounts/${a}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
+                              {a}
+                            </Link>
+                            <CopyButton
+                              content={a}
+                              variant="ghost"
+                              size="xs"
+                              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                            />
+                          </div>
                         </td>
                         <td className="p-4 text-right">
                           <span className="font-mono text-sm bg-zinc-100 dark:bg-white/10 px-2 py-1 rounded">
@@ -318,24 +326,48 @@ function TokenDetailInner() {
                         className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
                       >
                         <td className="p-4">
-                          <Link to={`/transactions/${normalizeHex(tx)}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                            {normalizeHex(tx).slice(0, 18)}...
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link to={`/transactions/${normalizeHex(tx)}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
+                              {normalizeHex(tx).slice(0, 18)}...
+                            </Link>
+                            <CopyButton
+                              content={normalizeHex(tx)}
+                              variant="ghost"
+                              size="xs"
+                              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                            />
+                          </div>
                         </td>
                         <td className="p-4">
                           {from ? (
-                            <Link to={`/accounts/${from}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
-                              {from.slice(0, 14)}...
-                            </Link>
+                            <div className="flex items-center gap-2">
+                              <Link to={`/accounts/${from}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
+                                {from.slice(0, 14)}...
+                              </Link>
+                              <CopyButton
+                                content={from}
+                                variant="ghost"
+                                size="xs"
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                              />
+                            </div>
                           ) : (
                             <span className="text-zinc-500">—</span>
                           )}
                         </td>
                         <td className="p-4">
                           {to ? (
-                            <Link to={`/accounts/${to}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
-                              {to.slice(0, 14)}...
-                            </Link>
+                            <div className="flex items-center gap-2">
+                              <Link to={`/accounts/${to}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
+                                {to.slice(0, 14)}...
+                              </Link>
+                              <CopyButton
+                                content={to}
+                                variant="ghost"
+                                size="xs"
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                              />
+                            </div>
                           ) : (
                             <span className="text-zinc-500">—</span>
                           )}

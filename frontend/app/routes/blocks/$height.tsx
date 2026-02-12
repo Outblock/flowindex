@@ -98,14 +98,14 @@ function BlockDetail() {
                             <h1 className="text-4xl md:text-5xl font-bold text-zinc-900 dark:text-white mb-2">
                                 #{block.height.toLocaleString()}
                             </h1>
-                            <div className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-widest">
+                            <div className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-widest group">
                                 <Hash className="w-3 h-3" />
                                 <span className="break-all">{block.id}</span>
                                 <CopyButton
                                     content={block.id}
                                     variant="ghost"
                                     size="xs"
-                                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1"
+                                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                 />
                             </div>
                         </div>
@@ -133,13 +133,13 @@ function BlockDetail() {
                         <div className="space-y-6">
                             <div className="group">
                                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Parent Hash</p>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 group">
                                     <code className="text-sm text-zinc-600 dark:text-zinc-400 break-all">{block.parentId}</code>
                                     <CopyButton
                                         content={block.parentId}
                                         variant="ghost"
                                         size="xs"
-                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1"
+                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                     />
                                 </div>
                             </div>
