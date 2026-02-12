@@ -129,7 +129,48 @@ func (s *Server) handleFlowNFTItem(w http.ResponseWriter, r *http.Request) {
 		writeAPIResponse(w, []interface{}{}, nil, nil)
 		return
 	}
-	writeAPIResponse(w, []interface{}{toCombinedNFTDetails(*item)}, nil, nil)
+	out := toCombinedNFTDetails(*item)
+	// Enrich with metadata from nft_items if available.
+	meta, _ := s.repo.GetNFTItem(r.Context(), collectionAddr, collectionName, id)
+	if meta != nil {
+		enrichNFTItemOutput(out, meta)
+	}
+	writeAPIResponse(w, []interface{}{out}, nil, nil)
+}
+
+func (s *Server) handleFlowNFTCollectionItems(w http.ResponseWriter, r *http.Request) {
+	collectionAddr, collectionName := parseTokenParam(mux.Vars(r)["nft_type"])
+	limit, offset := parseLimitOffset(r)
+	items, hasMore, err := s.repo.ListNFTItems(r.Context(), collectionAddr, collectionName, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		out = append(out, toNFTItemOutput(item))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
+}
+
+func (s *Server) handleFlowNFTSearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		writeAPIResponse(w, []interface{}{}, map[string]interface{}{"limit": 0, "offset": 0, "count": 0, "has_more": false}, nil)
+		return
+	}
+	collectionAddr, collectionName := parseTokenParam(r.URL.Query().Get("collection"))
+	limit, offset := parseLimitOffset(r)
+	items, hasMore, err := s.repo.SearchNFTItems(r.Context(), query, collectionAddr, collectionName, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		out = append(out, toNFTItemOutput(item))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
 
 func (s *Server) handleFlowNFTItemTransfers(w http.ResponseWriter, r *http.Request) {

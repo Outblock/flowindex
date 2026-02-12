@@ -21,6 +21,13 @@ type apiEnvelope struct {
 	Error interface{}            `json:"error,omitempty"`
 }
 
+func safeRawJSON(b []byte) json.RawMessage {
+	if len(b) == 0 || string(b) == "" || string(b) == "null" {
+		return json.RawMessage(`null`)
+	}
+	return json.RawMessage(b)
+}
+
 func writeAPIResponse(w http.ResponseWriter, data interface{}, meta map[string]interface{}, links map[string]string) {
 	resp := apiEnvelope{
 		Links: links,
@@ -353,7 +360,7 @@ func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]i
 		"external_url":     summary.ExternalURL,
 		"square_image":     summary.SquareImage,
 		"banner_image":     summary.BannerImage,
-		"socials":          json.RawMessage(summary.Socials),
+		"socials":          safeRawJSON(summary.Socials),
 		"number_of_tokens": summary.Count,
 		"timestamp":        formatTime(summary.UpdatedAt),
 		"updated_at":       formatTime(summary.UpdatedAt),
@@ -690,6 +697,78 @@ func collectTokenIdentifiers(summaries map[string]repository.TransferSummary) (f
 		}
 	}
 	return
+}
+
+func toNFTItemOutput(item models.NFTItem) map[string]interface{} {
+	nftType := formatTokenIdentifier(item.ContractAddress, item.ContractName)
+	out := map[string]interface{}{
+		"id":            item.NFTID,
+		"nft_id":        item.NFTID,
+		"nft_type":      nftType,
+		"name":          item.Name,
+		"description":   item.Description,
+		"thumbnail":     item.Thumbnail,
+		"external_url":  item.ExternalURL,
+		"updated_at":    formatTime(item.UpdatedAt),
+	}
+	if item.SerialNumber != nil {
+		out["serial_number"] = *item.SerialNumber
+	}
+	if item.EditionName != "" {
+		out["edition_name"] = item.EditionName
+	}
+	if item.EditionNumber != nil {
+		out["edition_number"] = *item.EditionNumber
+	}
+	if item.EditionMax != nil {
+		out["edition_max"] = *item.EditionMax
+	}
+	if item.RarityScore != "" {
+		out["rarity_score"] = item.RarityScore
+	}
+	if item.RarityDescription != "" {
+		out["rarity_description"] = item.RarityDescription
+	}
+	if len(item.Traits) > 0 && string(item.Traits) != "null" {
+		out["traits"] = json.RawMessage(item.Traits)
+	}
+	return out
+}
+
+func enrichNFTItemOutput(out map[string]interface{}, meta *models.NFTItem) {
+	if meta.Name != "" {
+		out["name"] = meta.Name
+	}
+	if meta.Description != "" {
+		out["description"] = meta.Description
+	}
+	if meta.Thumbnail != "" {
+		out["thumbnail"] = meta.Thumbnail
+	}
+	if meta.ExternalURL != "" {
+		out["external_url"] = meta.ExternalURL
+	}
+	if meta.SerialNumber != nil {
+		out["serial_number"] = *meta.SerialNumber
+	}
+	if meta.EditionName != "" {
+		out["edition_name"] = meta.EditionName
+	}
+	if meta.EditionNumber != nil {
+		out["edition_number"] = *meta.EditionNumber
+	}
+	if meta.EditionMax != nil {
+		out["edition_max"] = *meta.EditionMax
+	}
+	if meta.RarityScore != "" {
+		out["rarity_score"] = meta.RarityScore
+	}
+	if meta.RarityDescription != "" {
+		out["rarity_description"] = meta.RarityDescription
+	}
+	if len(meta.Traits) > 0 && string(meta.Traits) != "null" {
+		out["traits"] = json.RawMessage(meta.Traits)
+	}
 }
 
 // --- Accounting + Flow + Status Handlers ---

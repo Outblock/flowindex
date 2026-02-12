@@ -854,4 +854,38 @@ CREATE TABLE IF NOT EXISTS app.defi_events (
 CREATE INDEX IF NOT EXISTS idx_defi_events_pair ON app.defi_events(pair_id, block_height DESC);
 CREATE INDEX IF NOT EXISTS idx_defi_events_type ON app.defi_events(event_type, block_height DESC);
 
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 11. NFT ITEM METADATA
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS app.nft_items (
+    contract_address   BYTEA NOT NULL,
+    contract_name      TEXT NOT NULL DEFAULT '',
+    nft_id             VARCHAR(255) NOT NULL,
+    name               TEXT,
+    description        TEXT,
+    thumbnail          TEXT,
+    external_url       TEXT,
+    serial_number      BIGINT,
+    edition_name       TEXT,
+    edition_number     BIGINT,
+    edition_max        BIGINT,
+    rarity_score       TEXT,
+    rarity_description TEXT,
+    traits             JSONB,
+    metadata_error     TEXT,
+    retries            INT NOT NULL DEFAULT 0,
+    refetch_after      TIMESTAMPTZ,
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    search_tsv         TSVECTOR,
+    PRIMARY KEY (contract_address, contract_name, nft_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_nft_items_search ON app.nft_items USING GIN (search_tsv);
+CREATE INDEX IF NOT EXISTS idx_nft_items_collection ON app.nft_items (contract_address, contract_name);
+
+ALTER TABLE IF EXISTS app.nft_collections ADD COLUMN IF NOT EXISTS public_path TEXT;
+
+ALTER TABLE IF EXISTS app.ft_tokens ADD COLUMN IF NOT EXISTS evm_address TEXT DEFAULT '';
+
 COMMIT;

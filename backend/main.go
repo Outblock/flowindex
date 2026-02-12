@@ -148,6 +148,7 @@ func main() {
 	txMetricsWorkerRange := getEnvUint("TX_METRICS_WORKER_RANGE", 1000)
 	stakingWorkerRange := getEnvUint("STAKING_WORKER_RANGE", 1000)
 	defiWorkerRange := getEnvUint("DEFI_WORKER_RANGE", 1000)
+	nftItemMetadataWorkerRange := getEnvUint("NFT_ITEM_METADATA_WORKER_RANGE", 1000)
 	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
 	evmWorkerConcurrency := getEnvInt("EVM_WORKER_CONCURRENCY", 1)
 	metaWorkerConcurrency := getEnvInt("META_WORKER_CONCURRENCY", 1)
@@ -159,6 +160,7 @@ func main() {
 	txMetricsWorkerConcurrency := getEnvInt("TX_METRICS_WORKER_CONCURRENCY", 1)
 	stakingWorkerConcurrency := getEnvInt("STAKING_WORKER_CONCURRENCY", 1)
 	defiWorkerConcurrency := getEnvInt("DEFI_WORKER_CONCURRENCY", 1)
+	nftItemMetadataWorkerConcurrency := getEnvInt("NFT_ITEM_METADATA_WORKER_CONCURRENCY", 1)
 
 	if strings.ToLower(os.Getenv("RUN_TX_METRICS_BACKFILL")) == "true" {
 		cfg := repository.TxMetricsBackfillConfig{
@@ -186,6 +188,7 @@ func main() {
 	enableTxMetricsWorker := os.Getenv("ENABLE_TX_METRICS_WORKER") != "false"
 	enableStakingWorker := os.Getenv("ENABLE_STAKING_WORKER") != "false"
 	enableDefiWorker := os.Getenv("ENABLE_DEFI_WORKER") != "false"
+	enableNFTItemMetadataWorker := os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false"
 
 	// Live/head derivers: Blockscout-style "real-time head" materialization.
 	// These processors must be idempotent because they can overlap with backfills.
@@ -280,6 +283,8 @@ func main() {
 	var stakingWorkers []*ingester.AsyncWorker
 	var defiWorkerProcessor *ingester.DefiWorker
 	var defiWorkers []*ingester.AsyncWorker
+	var nftItemMetadataWorkerProcessor *ingester.NFTItemMetadataWorker
+	var nftItemMetadataWorkers []*ingester.AsyncWorker
 
 	workerTypes := make([]string, 0, 10)
 
@@ -491,6 +496,27 @@ func main() {
 		log.Println("DeFi Worker is DISABLED (ENABLE_DEFI_WORKER=false)")
 	}
 
+	nftOwnershipDep := []string{"nft_ownership_worker"}
+
+	if enableNFTItemMetadataWorker {
+		nftItemMetadataWorkerProcessor = ingester.NewNFTItemMetadataWorker(repo, flowClient)
+		if nftItemMetadataWorkerConcurrency < 1 {
+			nftItemMetadataWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < nftItemMetadataWorkerConcurrency; i++ {
+			nftItemMetadataWorkers = append(nftItemMetadataWorkers, ingester.NewAsyncWorker(nftItemMetadataWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize:    nftItemMetadataWorkerRange,
+				WorkerID:     fmt.Sprintf("%s-%d-nft-item-meta-%d", hostname, pid, i),
+				Dependencies: nftOwnershipDep,
+			}))
+		}
+		workerTypes = append(workerTypes, nftItemMetadataWorkerProcessor.Name())
+	} else {
+		log.Println("NFT Item Metadata Worker is DISABLED (ENABLE_NFT_ITEM_METADATA_WORKER=false)")
+	}
+
 	var committer *ingester.CheckpointCommitter
 	if len(workerTypes) > 0 {
 		committer = ingester.NewCheckpointCommitter(repo, workerTypes)
@@ -683,6 +709,16 @@ func main() {
 
 	if enableDefiWorker {
 		for _, worker := range defiWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableNFTItemMetadataWorker {
+		for _, worker := range nftItemMetadataWorkers {
 			wg.Add(1)
 			go func(w *ingester.AsyncWorker) {
 				defer wg.Done()

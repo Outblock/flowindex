@@ -272,6 +272,8 @@ type FTToken struct {
 	ReceiverPath    string          `json:"receiver_path,omitempty"`
 	BalancePath     string          `json:"balance_path,omitempty"`
 	Socials         json.RawMessage `json:"socials,omitempty"`
+	EVMAddress      string          `json:"evm_address,omitempty"`
+	HolderCount     int64           `json:"holder_count"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
@@ -296,7 +298,29 @@ type NFTCollection struct {
 	SquareImage     string          `json:"square_image,omitempty"`
 	BannerImage     string          `json:"banner_image,omitempty"`
 	Socials         json.RawMessage `json:"socials,omitempty"`
+	PublicPath      string          `json:"public_path,omitempty"`
 	UpdatedAt       time.Time       `json:"updated_at"`
+}
+
+// NFTItem represents app.nft_items
+type NFTItem struct {
+	ContractAddress   string          `json:"contract_address"`
+	ContractName      string          `json:"contract_name,omitempty"`
+	NFTID             string          `json:"nft_id"`
+	Name              string          `json:"name,omitempty"`
+	Description       string          `json:"description,omitempty"`
+	Thumbnail         string          `json:"thumbnail,omitempty"`
+	ExternalURL       string          `json:"external_url,omitempty"`
+	SerialNumber      *int64          `json:"serial_number,omitempty"`
+	EditionName       string          `json:"edition_name,omitempty"`
+	EditionNumber     *int64          `json:"edition_number,omitempty"`
+	EditionMax        *int64          `json:"edition_max,omitempty"`
+	RarityScore       string          `json:"rarity_score,omitempty"`
+	RarityDescription string          `json:"rarity_description,omitempty"`
+	Traits            json.RawMessage `json:"traits,omitempty"`
+	MetadataError     string          `json:"-"`
+	Retries           int             `json:"-"`
+	UpdatedAt         time.Time       `json:"updated_at"`
 }
 
 // NFTOwnership represents app.nft_ownership
