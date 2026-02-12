@@ -13,7 +13,6 @@ import (
 	"flowscan-clone/internal/models"
 
 	"github.com/onflow/cadence"
-	cadjson "github.com/onflow/cadence/encoding/json"
 	flowsdk "github.com/onflow/flow-go-sdk"
 )
 
@@ -119,16 +118,8 @@ func fetchFTMetadataViaClient(ctx context.Context, client FlowClient, contractAd
 		BalancePath:     adminCadencePathToString(fields["balancePath"]),
 	}
 
-	if logosVal := adminUnwrapOptional(fields["logos"]); logosVal != nil {
-		if b, err := cadjson.Encode(logosVal); err == nil && len(b) > 0 {
-			token.Logo = b
-		}
-	}
-	if socialsVal := adminUnwrapOptional(fields["socials"]); socialsVal != nil {
-		if b, err := cadjson.Encode(socialsVal); err == nil && len(b) > 0 {
-			token.Socials = b
-		}
-	}
+	token.Logo = adminExtractMediaURLs(fields["logos"])
+	token.Socials = adminExtractSocials(fields["socials"])
 
 	if token.Name == "" && token.Symbol == "" {
 		return models.FTToken{}, false
@@ -172,16 +163,16 @@ func fetchNFTCollectionMetadataViaClient(ctx context.Context, client FlowClient,
 		}
 	}
 
-	var squareImage, bannerImage, socials []byte
-	if v := adminUnwrapOptional(fields["squareImage"]); v != nil {
-		squareImage, _ = cadjson.Encode(v)
+	squareImageURL := adminExtractMediaImageURL(fields["squareImage"])
+	bannerImageURL := adminExtractMediaImageURL(fields["bannerImage"])
+	var squareImage, bannerImage []byte
+	if squareImageURL != "" {
+		squareImage, _ = json.Marshal(squareImageURL)
 	}
-	if v := adminUnwrapOptional(fields["bannerImage"]); v != nil {
-		bannerImage, _ = cadjson.Encode(v)
+	if bannerImageURL != "" {
+		bannerImage, _ = json.Marshal(bannerImageURL)
 	}
-	if v := adminUnwrapOptional(fields["socials"]); v != nil {
-		socials, _ = cadjson.Encode(v)
-	}
+	socials := adminExtractSocials(fields["socials"])
 
 	symbol := contractName
 
@@ -412,4 +403,118 @@ func adminNFTCollectionDisplayScript() string {
             return display
         }
     `, adminViewResolverAddr(), metadataViewsAddr)
+}
+
+// --- Cadence value extraction helpers (admin-prefixed to avoid collision with ingester) ---
+
+func adminExtractMediaURLs(v cadence.Value) []byte {
+	v = adminUnwrapOptional(v)
+	if v == nil {
+		return nil
+	}
+	s, ok := v.(cadence.Struct)
+	if !ok {
+		return nil
+	}
+	items := adminUnwrapOptional(s.FieldsMappedByName()["items"])
+	if items == nil {
+		return nil
+	}
+	arr, ok := items.(cadence.Array)
+	if !ok {
+		return nil
+	}
+	type mediaItem struct {
+		URL       string `json:"url"`
+		MediaType string `json:"mediaType,omitempty"`
+	}
+	var result []mediaItem
+	for _, elem := range arr.Values {
+		media, ok := adminUnwrapOptional(elem).(cadence.Struct)
+		if !ok {
+			continue
+		}
+		mf := media.FieldsMappedByName()
+		url := adminExtractMediaFileURL(mf["file"])
+		if url == "" {
+			continue
+		}
+		mt := adminCadenceToString(mf["mediaType"])
+		result = append(result, mediaItem{URL: url, MediaType: mt})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(result)
+	return b
+}
+
+func adminExtractMediaFileURL(v cadence.Value) string {
+	v = adminUnwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	s, ok := v.(cadence.Struct)
+	if !ok {
+		return adminCadenceToString(v)
+	}
+	fields := s.FieldsMappedByName()
+	if url := adminCadenceToString(fields["url"]); url != "" {
+		return url
+	}
+	if cid := adminCadenceToString(fields["cid"]); cid != "" {
+		path := adminCadenceToString(fields["path"])
+		if path != "" {
+			return "https://ipfs.io/ipfs/" + cid + "/" + path
+		}
+		return "https://ipfs.io/ipfs/" + cid
+	}
+	return ""
+}
+
+func adminExtractMediaImageURL(v cadence.Value) string {
+	v = adminUnwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	s, ok := v.(cadence.Struct)
+	if !ok {
+		return ""
+	}
+	return adminExtractMediaFileURL(s.FieldsMappedByName()["file"])
+}
+
+func adminExtractSocials(v cadence.Value) []byte {
+	v = adminUnwrapOptional(v)
+	if v == nil {
+		return nil
+	}
+	dict, ok := v.(cadence.Dictionary)
+	if !ok {
+		return nil
+	}
+	result := make(map[string]string)
+	for _, pair := range dict.Pairs {
+		key := adminCadenceToString(pair.Key)
+		if key == "" {
+			continue
+		}
+		val := adminUnwrapOptional(pair.Value)
+		if val == nil {
+			continue
+		}
+		if st, ok := val.(cadence.Struct); ok {
+			url := adminCadenceToString(st.FieldsMappedByName()["url"])
+			if url != "" {
+				result[key] = url
+			}
+		} else if s := adminCadenceToString(val); s != "" {
+			result[key] = s
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(result)
+	return b
 }

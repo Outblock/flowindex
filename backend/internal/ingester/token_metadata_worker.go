@@ -2,6 +2,7 @@ package ingester
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,7 +14,6 @@ import (
 	"flowscan-clone/internal/repository"
 
 	"github.com/onflow/cadence"
-	cadjson "github.com/onflow/cadence/encoding/json"
 	flowsdk "github.com/onflow/flow-go-sdk"
 )
 
@@ -166,16 +166,8 @@ func (w *TokenMetadataWorker) fetchFTMetadata(ctx context.Context, contractAddr,
 		BalancePath:     cadencePathToString(fields["balancePath"]),
 	}
 
-	if logosVal := unwrapOptional(fields["logos"]); logosVal != nil {
-		if b, err := cadjson.Encode(logosVal); err == nil && len(b) > 0 {
-			token.Logo = b
-		}
-	}
-	if socialsVal := unwrapOptional(fields["socials"]); socialsVal != nil {
-		if b, err := cadjson.Encode(socialsVal); err == nil && len(b) > 0 {
-			token.Socials = b
-		}
-	}
+	token.Logo = extractMediaURLs(fields["logos"])
+	token.Socials = extractSocials(fields["socials"])
 
 	if token.Name == "" && token.Symbol == "" {
 		return models.FTToken{}, false
@@ -218,16 +210,17 @@ func (w *TokenMetadataWorker) fetchNFTCollectionMetadata(ctx context.Context, co
 		}
 	}
 
-	var squareImage, bannerImage, socials []byte
-	if v := unwrapOptional(fields["squareImage"]); v != nil {
-		squareImage, _ = cadjson.Encode(v)
+	// Extract image URLs from Media structs
+	squareImageURL := extractMediaImageURL(fields["squareImage"])
+	bannerImageURL := extractMediaImageURL(fields["bannerImage"])
+	var squareImage, bannerImage []byte
+	if squareImageURL != "" {
+		squareImage, _ = json.Marshal(squareImageURL)
 	}
-	if v := unwrapOptional(fields["bannerImage"]); v != nil {
-		bannerImage, _ = cadjson.Encode(v)
+	if bannerImageURL != "" {
+		bannerImage, _ = json.Marshal(bannerImageURL)
 	}
-	if v := unwrapOptional(fields["socials"]); v != nil {
-		socials, _ = cadjson.Encode(v)
-	}
+	socials := extractSocials(fields["socials"])
 
 	// Many NFT contracts don't expose a "symbol" in standard views. Use contract name as fallback.
 	symbol := contractName
@@ -276,6 +269,127 @@ func cadencePathToString(v cadence.Value) string {
 	}
 	// Fallback: try as string.
 	return cadenceToString(v)
+}
+
+// extractMediaURLs extracts URLs from a MetadataViews.Medias cadence value.
+// Returns JSON like [{"url":"https://...","mediaType":"image/svg+xml"}]
+func extractMediaURLs(v cadence.Value) []byte {
+	v = unwrapOptional(v)
+	if v == nil {
+		return nil
+	}
+	s, ok := v.(cadence.Struct)
+	if !ok {
+		return nil
+	}
+	items := unwrapOptional(s.FieldsMappedByName()["items"])
+	if items == nil {
+		return nil
+	}
+	arr, ok := items.(cadence.Array)
+	if !ok {
+		return nil
+	}
+	type mediaItem struct {
+		URL       string `json:"url"`
+		MediaType string `json:"mediaType,omitempty"`
+	}
+	var result []mediaItem
+	for _, elem := range arr.Values {
+		media, ok := unwrapOptional(elem).(cadence.Struct)
+		if !ok {
+			continue
+		}
+		mf := media.FieldsMappedByName()
+		url := extractMediaFileURL(mf["file"])
+		if url == "" {
+			continue
+		}
+		mt := cadenceToString(mf["mediaType"])
+		result = append(result, mediaItem{URL: url, MediaType: mt})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(result)
+	return b
+}
+
+// extractMediaFileURL extracts URL from MetadataViews.HTTPFile or IPFSFile.
+func extractMediaFileURL(v cadence.Value) string {
+	v = unwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	s, ok := v.(cadence.Struct)
+	if !ok {
+		return cadenceToString(v)
+	}
+	fields := s.FieldsMappedByName()
+	// HTTPFile has "url" field
+	if url := cadenceToString(fields["url"]); url != "" {
+		return url
+	}
+	// IPFSFile has "cid" field
+	if cid := cadenceToString(fields["cid"]); cid != "" {
+		path := cadenceToString(fields["path"])
+		if path != "" {
+			return "https://ipfs.io/ipfs/" + cid + "/" + path
+		}
+		return "https://ipfs.io/ipfs/" + cid
+	}
+	return ""
+}
+
+// extractMediaImageURL extracts URL from a single MetadataViews.Media value.
+// Used for squareImage/bannerImage which are single Media structs.
+func extractMediaImageURL(v cadence.Value) string {
+	v = unwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	s, ok := v.(cadence.Struct)
+	if !ok {
+		return ""
+	}
+	return extractMediaFileURL(s.FieldsMappedByName()["file"])
+}
+
+// extractSocials extracts a {String: ExternalURL} dictionary into {"key":"url"} JSON.
+func extractSocials(v cadence.Value) []byte {
+	v = unwrapOptional(v)
+	if v == nil {
+		return nil
+	}
+	dict, ok := v.(cadence.Dictionary)
+	if !ok {
+		return nil
+	}
+	result := make(map[string]string)
+	for _, pair := range dict.Pairs {
+		key := cadenceToString(pair.Key)
+		if key == "" {
+			continue
+		}
+		val := unwrapOptional(pair.Value)
+		if val == nil {
+			continue
+		}
+		// ExternalURL is a struct with "url" field
+		if st, ok := val.(cadence.Struct); ok {
+			url := cadenceToString(st.FieldsMappedByName()["url"])
+			if url != "" {
+				result[key] = url
+			}
+		} else if s := cadenceToString(val); s != "" {
+			result[key] = s
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(result)
+	return b
 }
 
 func cadenceToInt(v cadence.Value) (int, bool) {
@@ -471,9 +585,3 @@ func cadenceNFTCollectionDisplayScript() string {
     `, viewResolverAddr, metadataViewsAddr)
 }
 
-// For debugging: produce a JSON-CDC encoding of a Cadence value.
-// Not used in hot path, but handy when extending field extraction.
-func _encodeCadenceJSON(v cadence.Value) string {
-	b, _ := cadjson.Encode(v)
-	return string(b)
-}
