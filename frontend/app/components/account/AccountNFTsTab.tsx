@@ -437,35 +437,39 @@ export function AccountNFTsTab({ address }: Props) {
                         onClick={() => setSelectedNft(null)}
                     />
                     <GlassCard className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row p-0 z-10 bg-white dark:bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-200">
-                        {/* Left: Image / Video */}
-                        <div className="w-full md:w-1/2 bg-zinc-100 dark:bg-black/20 flex items-center justify-center relative overflow-hidden min-h-[250px] md:min-h-0 md:max-h-[90vh]">
-                            {(() => {
-                                const media = getNFTMedia(selectedNft, selectedCollectionId || '');
-                                if (media.type === 'video') {
+                        {/* Close button — modal top-right */}
+                        <button
+                            onClick={() => setSelectedNft(null)}
+                            className="absolute top-3 right-3 p-2 bg-white/80 dark:bg-black/60 hover:bg-white dark:hover:bg-black backdrop-blur-md transition-colors rounded-full z-20"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                        </button>
+
+                        {/* Left: Square image container */}
+                        <div className="w-full md:w-1/2 bg-zinc-100 dark:bg-black/20 flex items-center justify-center relative overflow-hidden flex-shrink-0">
+                            <div className="aspect-square w-full relative">
+                                {(() => {
+                                    const media = getNFTMedia(selectedNft, selectedCollectionId || '');
+                                    if (media.type === 'video') {
+                                        return (
+                                            <video
+                                                src={media.url}
+                                                poster={media.fallbackImage}
+                                                controls autoPlay loop muted
+                                                className="absolute inset-0 w-full h-full object-contain"
+                                            />
+                                        );
+                                    }
                                     return (
-                                        <video
+                                        <ImageWithFallback
                                             src={media.url}
-                                            poster={media.fallbackImage}
-                                            controls autoPlay loop muted
-                                            className="w-full h-full object-contain max-h-[40vh] md:max-h-[85vh]"
+                                            alt={selectedNft?.display?.name}
+                                            className="absolute inset-0 w-full h-full object-contain"
+                                            fallback={<Package className="w-24 h-24 text-zinc-300 dark:text-zinc-700 opacity-20" />}
                                         />
                                     );
-                                }
-                                return (
-                                    <ImageWithFallback
-                                        src={media.url}
-                                        alt={selectedNft?.display?.name}
-                                        className="w-full h-full object-contain max-h-[40vh] md:max-h-[85vh]"
-                                        fallback={<Package className="w-24 h-24 text-zinc-300 dark:text-zinc-700 opacity-20" />}
-                                    />
-                                );
-                            })()}
-                            <button
-                                onClick={() => setSelectedNft(null)}
-                                className="absolute top-3 right-3 p-2 bg-white/50 dark:bg-black/50 hover:bg-white dark:hover:bg-black backdrop-blur-md transition-colors rounded-full z-20"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                            </button>
+                                })()}
+                            </div>
                         </div>
 
                         {/* Right: Metadata */}
