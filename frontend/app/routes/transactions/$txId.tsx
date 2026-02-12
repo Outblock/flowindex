@@ -10,6 +10,7 @@ import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '../../contexts/ThemeContext';
+import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -131,8 +132,14 @@ function TransactionDetail() {
                             )}
                         </div>
 
-                        <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white mb-2 break-all">
+                        <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white mb-2 break-all flex items-center gap-3">
                             {transaction.is_evm ? transaction.evm_hash : transaction.id}
+                            <CopyButton
+                                content={transaction.is_evm ? transaction.evm_hash : transaction.id}
+                                variant="ghost"
+                                size="xs"
+                                className="h-8 w-8 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                            />
                         </h1>
                         <p className="text-zinc-500 text-xs uppercase tracking-widest">
                             {transaction.is_evm ? 'EVM Hash' : 'Transaction ID'}
@@ -165,7 +172,15 @@ function TransactionDetail() {
                             <div className="space-y-6">
                                 <div className="group">
                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Flow Transaction ID</p>
-                                    <code className="text-sm text-zinc-600 dark:text-zinc-300 break-all">{transaction.id}</code>
+                                    <div className="flex items-center gap-2">
+                                        <code className="text-sm text-zinc-600 dark:text-zinc-300 break-all">{transaction.id}</code>
+                                        <CopyButton
+                                            content={transaction.id}
+                                            variant="ghost"
+                                            size="xs"
+                                            className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                        />
+                                    </div>
                                 </div>
                                 <div className="group">
                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Timestamp</p>
@@ -202,6 +217,12 @@ function TransactionDetail() {
                                         <Link to={`/accounts/${formatAddress(transaction.payer)}`} className="text-sm text-nothing-green-dark dark:text-nothing-green hover:underline break-all font-mono">
                                             {formatAddress(transaction.payer)}
                                         </Link>
+                                        <CopyButton
+                                            content={formatAddress(transaction.payer)}
+                                            variant="ghost"
+                                            size="xs"
+                                            className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-2"
+                                        />
                                         <span className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase tracking-wider px-2 py-0.5 bg-zinc-200 dark:bg-white/5 rounded-sm">
                                             Fee Payer
                                         </span>
@@ -219,9 +240,17 @@ function TransactionDetail() {
                                                 <span className="text-[10px] text-zinc-400 font-mono">Key: <span className="text-zinc-600 dark:text-white">{transaction.proposerKeyIndex}</span></span>
                                             </div>
                                         </div>
-                                        <Link to={`/accounts/${formatAddress(transaction.proposer)}`} className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white break-all font-mono">
-                                            {formatAddress(transaction.proposer)}
-                                        </Link>
+                                        <div className="flex items-center justify-between">
+                                            <Link to={`/accounts/${formatAddress(transaction.proposer)}`} className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white break-all font-mono">
+                                                {formatAddress(transaction.proposer)}
+                                            </Link>
+                                            <CopyButton
+                                                content={formatAddress(transaction.proposer)}
+                                                variant="ghost"
+                                                size="xs"
+                                                className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
@@ -234,10 +263,16 @@ function TransactionDetail() {
                                         </div>
                                         <div className="flex flex-col gap-2">
                                             {transaction.authorizers.map((auth, idx) => (
-                                                <div key={`${auth}-${idx}`} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm">
+                                                <div key={`${auth}-${idx}`} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm flex items-center justify-between">
                                                     <Link to={`/accounts/${formatAddress(auth)}`} className="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white break-all font-mono block">
                                                         {formatAddress(auth)}
                                                     </Link>
+                                                    <CopyButton
+                                                        content={formatAddress(auth)}
+                                                        variant="ghost"
+                                                        size="xs"
+                                                        className="h-4 w-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                                    />
                                                 </div>
                                             ))}
                                         </div>
@@ -294,35 +329,6 @@ function TransactionDetail() {
                     <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[300px] shadow-sm dark:shadow-none">
                         {activeTab === 'script' && (
                             <div className="space-y-8">
-                                {/* Script */}
-                                <div className="font-mono">
-                                    <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <Braces className="h-4 w-4" /> Cadence Script
-                                    </h3>
-                                    {transaction.script ? (
-                                        <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden text-[10px]">
-                                            <SyntaxHighlighter
-                                                language="cadence"
-                                                style={syntaxTheme}
-                                                customStyle={{
-                                                    margin: 0,
-                                                    padding: '1.5rem',
-                                                    fontSize: '11px',
-                                                    lineHeight: '1.6',
-                                                }}
-                                                showLineNumbers={true}
-                                                lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none" }}
-                                            >
-                                                {transaction.script}
-                                            </SyntaxHighlighter>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center h-24 text-zinc-600 border border-zinc-200 dark:border-white/5 border-dashed rounded-sm">
-                                            <p className="text-xs uppercase tracking-widest">No Script Content Available</p>
-                                        </div>
-                                    )}
-                                </div>
-
                                 {/* Arguments */}
                                 <div className="font-mono">
                                     <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -409,6 +415,35 @@ function TransactionDetail() {
                                         </div>
                                     ) : (
                                         <div className="text-xs text-zinc-600 italic px-2">No arguments provided</div>
+                                    )}
+                                </div>
+
+                                {/* Script */}
+                                <div className="font-mono">
+                                    <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                        <Braces className="h-4 w-4" /> Cadence Script
+                                    </h3>
+                                    {transaction.script ? (
+                                        <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden text-[10px]">
+                                            <SyntaxHighlighter
+                                                language="swift"
+                                                style={syntaxTheme}
+                                                customStyle={{
+                                                    margin: 0,
+                                                    padding: '1.5rem',
+                                                    fontSize: '11px',
+                                                    lineHeight: '1.6',
+                                                }}
+                                                showLineNumbers={true}
+                                                lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none" }}
+                                            >
+                                                {transaction.script}
+                                            </SyntaxHighlighter>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-24 text-zinc-600 border border-zinc-200 dark:border-white/5 border-dashed rounded-sm">
+                                            <p className="text-xs uppercase tracking-widest">No Script Content Available</p>
+                                        </div>
                                     )}
                                 </div>
                             </div>
