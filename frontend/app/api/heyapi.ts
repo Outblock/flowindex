@@ -6,12 +6,26 @@ let configured = false;
 let configuring: Promise<void> | null = null;
 let _baseURL = '';
 
+/**
+ * The OpenAPI SDK generates paths with /v1/ segments (e.g. /flow/v1/block)
+ * but the backend routes have no /v1/ (e.g. /flow/block).
+ * In production Nginx strips this; in local dev we strip via Axios interceptor.
+ */
+const V1_RE = /\/(flow|accounting|status|defi|staking)\/v1\//;
+
 export async function ensureHeyApiConfigured() {
   if (configured) return;
   if (!configuring) {
     configuring = (async () => {
       _baseURL = await resolveApiBaseUrl();
       findClient.setConfig({ baseURL: _baseURL, throwOnError: true, timeout: 8000 });
+      // Install interceptor on the SDK's own Axios instance to strip /v1/ from paths
+      findClient.instance.interceptors.request.use((config) => {
+        if (config.url) {
+          config.url = config.url.replace(V1_RE, '/$1/');
+        }
+        return config;
+      });
       configured = true;
     })().finally(() => {
       configuring = null;
@@ -28,6 +42,22 @@ export async function fetchStatus(): Promise<any> {
   return res.json();
 }
 
+/** Fetch Flow price from CoinGecko as fallback when backend has no data */
+async function fetchPriceFromCoinGecko(): Promise<{ price: number; price_change_24h: number; market_cap: number } | null> {
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=flow&vs_currencies=usd&include_24hr_change=true&include_market_cap=true');
+    if (!res.ok) return null;
+    const data = await res.json();
+    const flow = data?.flow;
+    if (!flow) return null;
+    return {
+      price: flow.usd ?? 0,
+      price_change_24h: flow.usd_24h_change ?? 0,
+      market_cap: flow.usd_market_cap ?? 0,
+    };
+  } catch { return null; }
+}
+
 /** Fetch network stats: price, epoch, tokenomics (combined) */
 export async function fetchNetworkStats(): Promise<any> {
   await ensureHeyApiConfigured();
@@ -36,9 +66,15 @@ export async function fetchNetworkStats(): Promise<any> {
     fetch(`${_baseURL}/status/epoch/status`).then(r => r.ok ? r.json() : null),
     fetch(`${_baseURL}/status/tokenomics`).then(r => r.ok ? r.json() : null),
   ]);
-  const price = priceRes.status === 'fulfilled' ? priceRes.value?.data?.[0] : null;
+  let price = priceRes.status === 'fulfilled' ? priceRes.value?.data?.[0] : null;
   const epoch = epochRes.status === 'fulfilled' ? epochRes.value?.data?.[0] : null;
   const tokenomics = tokenomicsRes.status === 'fulfilled' ? tokenomicsRes.value?.data?.[0] : null;
+
+  // Fallback: fetch price from CoinGecko if backend has no data
+  if (!price) {
+    price = await fetchPriceFromCoinGecko();
+  }
+
   if (!price && !epoch && !tokenomics) return null;
   return {
     price: price?.price ?? 0,

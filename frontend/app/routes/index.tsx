@@ -231,6 +231,21 @@ function Home() {
         return merged.slice(0, 50);
     };
 
+    // Load Blocks (client-side fallback when SSR loader fails)
+    const loadBlocks = async () => {
+        try {
+            await ensureHeyApiConfigured();
+            const res = await getFlowV1Block({ query: { limit: 50, offset: 0 } });
+            const items = res?.data?.data ?? [];
+            if (Array.isArray(items) && items.length) {
+                setBlocks(items);
+                setTps(computeTpsFromBlocks(items));
+            }
+        } catch (err) {
+            console.error("Failed to load blocks", err);
+        }
+    };
+
     // Load Txs (Initial only, no pagination)
     const loadTransactions = async () => {
         try {
@@ -361,6 +376,11 @@ function Home() {
                 console.error('Failed to fetch network stats:', error);
             }
         };
+
+        // Immediate fetch on mount (SSR may have failed if no local backend)
+        if (!networkStats) refreshNetworkStats();
+        if (!initialBlocks?.length) loadBlocks();
+        if (!initialTransactions?.length) loadTransactions();
 
         const statusTimer = setInterval(refreshStatus, 10000);
         const networkStatsTimer = setInterval(refreshNetworkStats, 60000);

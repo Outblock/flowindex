@@ -28,8 +28,8 @@ export function DailyStatsChart() {
                 // Handle null/empty response
                 if (stats && Array.isArray(stats)) {
                     const chartData = stats.map((s: any) => ({
-                        name: s.time ? s.time.split('T')[0] : '',
-                        txs: s.number || 0,
+                        name: (s.date || s.time || '').split('T')[0],
+                        txs: s.tx_count ?? s.number ?? 0,
                     })).sort((a: any, b: any) => new Date(a.name).getTime() - new Date(b.name).getTime());
                     setData(chartData);
                 } else {
