@@ -463,6 +463,20 @@ CREATE INDEX IF NOT EXISTS idx_smart_contracts_kind_first_seen
   ON app.smart_contracts (kind, first_seen_height)
   WHERE kind IS NOT NULL;
 
+-- 5.2b Contract Version History
+CREATE TABLE IF NOT EXISTS app.contract_versions (
+    address         BYTEA NOT NULL,
+    name            TEXT NOT NULL,
+    version         INT NOT NULL,
+    code            TEXT,
+    block_height    BIGINT NOT NULL,
+    transaction_id  BYTEA,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (address, name, version)
+);
+CREATE INDEX IF NOT EXISTS idx_contract_versions_height
+  ON app.contract_versions(address, name, block_height DESC);
+
 -- 5.3 Address Stats
 CREATE TABLE IF NOT EXISTS app.address_stats (
     address            BYTEA PRIMARY KEY,

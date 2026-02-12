@@ -73,6 +73,12 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 		return err
 	}
 
+	// Store contract version history for each add/update event.
+	contractVersions := w.extractContractVersions(events, contracts)
+	for _, cv := range contractVersions {
+		_ = w.repo.InsertContractVersion(ctx, cv.Address, cv.Name, cv.Code, cv.BlockHeight, cv.TransactionID)
+	}
+
 	// Opportunistic backfill for existing rows that were created before we started persisting
 	// contract code. This is intentionally capped to avoid turning meta_worker into a crawler.
 	if w.storeContractCode && w.flow != nil {
@@ -287,6 +293,51 @@ func (w *MetaWorker) extractContracts(ctx context.Context, events []models.Event
 		})
 	}
 	return out
+}
+
+func (w *MetaWorker) extractContractVersions(events []models.Event, contracts []models.SmartContract) []models.ContractVersion {
+	// Build a map from (address, name) -> code from the already-extracted contracts.
+	type key struct{ addr, name string }
+	codeMap := make(map[key]string)
+	for _, c := range contracts {
+		codeMap[key{c.Address, c.Name}] = c.Code
+	}
+
+	var versions []models.ContractVersion
+	for _, evt := range events {
+		if !strings.Contains(evt.Type, "AccountContractAdded") && !strings.Contains(evt.Type, "AccountContractUpdated") {
+			continue
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+			continue
+		}
+		address, _ := payload["address"].(string)
+		name, _ := payload["name"].(string)
+		if name == "" {
+			if v, ok := payload["contract"].(string); ok {
+				name = v
+			}
+		}
+		if name == "" {
+			if v, ok := payload["contractName"].(string); ok {
+				name = v
+			}
+		}
+		address = normalizeFlowAddress(address)
+		if address == "" || name == "" {
+			continue
+		}
+		code := codeMap[key{address, name}]
+		versions = append(versions, models.ContractVersion{
+			Address:       address,
+			Name:          name,
+			Code:          code,
+			BlockHeight:   evt.BlockHeight,
+			TransactionID: evt.TransactionID,
+		})
+	}
+	return versions
 }
 
 func (w *MetaWorker) backfillMissingContractCode(ctx context.Context, limit int) error {

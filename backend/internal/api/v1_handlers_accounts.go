@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"flowscan-clone/internal/models"
+	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
 	"github.com/onflow/cadence"
@@ -169,6 +170,7 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
+	transferSummaries, _ := s.repo.GetTransferSummariesByTxIDs(r.Context(), txIDs, address)
 	eventsByTx := make(map[string][]models.Event)
 	if includeEvents {
 		events, _ := s.repo.GetEventsByTransactionIDs(r.Context(), txIDs)
@@ -178,7 +180,11 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 	}
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
-		out = append(out, toFlowTransactionOutput(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
+		var ts *repository.TransferSummary
+		if s, ok := transferSummaries[t.ID]; ok {
+			ts = &s
+		}
+		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }

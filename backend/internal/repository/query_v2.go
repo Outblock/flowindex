@@ -331,3 +331,124 @@ func (r *Repository) GetTokenTransfersByRange(ctx context.Context, fromHeight, t
 	}
 	return out, nil
 }
+
+// FTTransferSummaryItem represents a single FT token aggregation within a transaction.
+type FTTransferSummaryItem struct {
+	Token     string `json:"token"`
+	Amount    string `json:"amount"`
+	Direction string `json:"direction"`
+}
+
+// NFTTransferSummaryItem represents a single NFT collection aggregation within a transaction.
+type NFTTransferSummaryItem struct {
+	Collection string `json:"collection"`
+	Count      int    `json:"count"`
+	Direction  string `json:"direction"`
+}
+
+// TransferSummary holds aggregated FT and NFT transfer info for a single transaction.
+type TransferSummary struct {
+	FT  []FTTransferSummaryItem  `json:"ft"`
+	NFT []NFTTransferSummaryItem `json:"nft"`
+}
+
+// GetTransferSummariesByTxIDs returns a map of transaction ID -> TransferSummary.
+// The address parameter is used to determine direction (withdraw vs deposit).
+func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []string, address string) (map[string]TransferSummary, error) {
+	if len(txIDs) == 0 {
+		return map[string]TransferSummary{}, nil
+	}
+	out := make(map[string]TransferSummary, len(txIDs))
+	txIDBytes := sliceHexToBytes(txIDs)
+	addrBytes := hexToBytes(address)
+
+	// FT transfers: group by (transaction_id, token_contract_address, contract_name, direction)
+	ftRows, err := r.db.Query(ctx, `
+		SELECT encode(transaction_id, 'hex') AS tx_id,
+		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS token,
+		       SUM(CAST(amount AS NUMERIC)) AS total_amount,
+		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction
+		FROM app.ft_transfers
+		WHERE transaction_id = ANY($1)
+		GROUP BY transaction_id, token_contract_address, contract_name,
+		         CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer ftRows.Close()
+	for ftRows.Next() {
+		var txID, token, amount, direction string
+		if err := ftRows.Scan(&txID, &token, &amount, &direction); err != nil {
+			return nil, err
+		}
+		s := out[txID]
+		s.FT = append(s.FT, FTTransferSummaryItem{Token: token, Amount: amount, Direction: direction})
+		out[txID] = s
+	}
+
+	// NFT transfers: group by (transaction_id, token_contract_address, contract_name, direction)
+	nftRows, err := r.db.Query(ctx, `
+		SELECT encode(transaction_id, 'hex') AS tx_id,
+		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS collection,
+		       COUNT(*) AS cnt,
+		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction
+		FROM app.nft_transfers
+		WHERE transaction_id = ANY($1)
+		GROUP BY transaction_id, token_contract_address, contract_name,
+		         CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer nftRows.Close()
+	for nftRows.Next() {
+		var txID, collection, direction string
+		var count int
+		if err := nftRows.Scan(&txID, &collection, &count, &direction); err != nil {
+			return nil, err
+		}
+		s := out[txID]
+		s.NFT = append(s.NFT, NFTTransferSummaryItem{Collection: collection, Count: count, Direction: direction})
+		out[txID] = s
+	}
+
+	return out, nil
+}
+
+// GetTransactionsByContract returns transactions that interact with a given contract identifier.
+func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIdentifier string, limit, offset int) ([]models.Transaction, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
+		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
+		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
+		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
+		       t.timestamp, t.timestamp AS created_at,
+		       COALESCE(m.event_count, t.event_count) AS event_count
+		FROM app.tx_contracts tc
+		JOIN raw.transactions t ON t.id = tc.transaction_id
+		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
+		WHERE tc.contract_identifier = $1
+		ORDER BY t.block_height DESC, t.transaction_index DESC
+		LIMIT $2 OFFSET $3`, contractIdentifier, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Transaction
+	for rows.Next() {
+		var t models.Transaction
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}

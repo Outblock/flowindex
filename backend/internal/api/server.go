@@ -635,6 +635,27 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+func (s *Server) enrichAccountTransactions(ctx context.Context, txs []models.Transaction, address string) []map[string]interface{} {
+	txIDs := make([]string, 0, len(txs))
+	for _, t := range txs {
+		txIDs = append(txIDs, t.ID)
+	}
+	contracts, _ := s.repo.GetTxContractsByTransactionIDs(ctx, txIDs)
+	tags, _ := s.repo.GetTxTagsByTransactionIDs(ctx, txIDs)
+	feesByTx, _ := s.repo.GetTransactionFeesByIDs(ctx, txIDs)
+	transferSummaries, _ := s.repo.GetTransferSummariesByTxIDs(ctx, txIDs, address)
+
+	out := make([]map[string]interface{}, 0, len(txs))
+	for _, t := range txs {
+		var ts *repository.TransferSummary
+		if summary, ok := transferSummaries[t.ID]; ok {
+			ts = &summary
+		}
+		out = append(out, toFlowTransactionOutputWithTransfers(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts))
+	}
+	return out
+}
+
 func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	// Sanitize address (remove 0x, lowercase) matching DB format
@@ -663,8 +684,9 @@ func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Req
 			nextCursor = fmt.Sprintf("%d:%s", last.BlockHeight, last.ID)
 		}
 
+		enriched := s.enrichAccountTransactions(r.Context(), txs, address)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"items":       txs,
+			"items":       enriched,
 			"next_cursor": nextCursor,
 		})
 		return
@@ -676,7 +698,8 @@ func (s *Server) handleGetAccountTransactions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	json.NewEncoder(w).Encode(txs)
+	enriched := s.enrichAccountTransactions(r.Context(), txs, address)
+	json.NewEncoder(w).Encode(enriched)
 }
 
 func (s *Server) handleGetAccountTokenTransfers(w http.ResponseWriter, r *http.Request) {

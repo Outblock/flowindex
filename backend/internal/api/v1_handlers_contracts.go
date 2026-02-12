@@ -184,6 +184,107 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFlowGetContractVersion(w http.ResponseWriter, r *http.Request) {
-	// TODO: versions are not modeled yet; reuse latest for now.
-	s.handleFlowGetContract(w, r)
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
+	identifier := mux.Vars(r)["identifier"]
+	versionStr := mux.Vars(r)["id"]
+
+	address, name, _ := splitContractIdentifier(identifier)
+	if address == "" || name == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid contract identifier")
+		return
+	}
+
+	version, err := strconv.Atoi(versionStr)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid version number")
+		return
+	}
+
+	v, err := s.repo.GetContractVersion(r.Context(), address, name, version)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if v == nil {
+		writeAPIError(w, http.StatusNotFound, "version not found")
+		return
+	}
+
+	out := map[string]interface{}{
+		"address":        formatAddressV1(v.Address),
+		"name":           v.Name,
+		"version":        v.Version,
+		"code":           v.Code,
+		"block_height":   v.BlockHeight,
+		"transaction_id": v.TransactionID,
+		"created_at":     formatTime(v.CreatedAt),
+	}
+	writeAPIResponse(w, []interface{}{out}, nil, nil)
+}
+
+func (s *Server) handleContractTransactions(w http.ResponseWriter, r *http.Request) {
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
+	identifier := mux.Vars(r)["identifier"]
+	limit, offset := parseLimitOffset(r)
+
+	_, _, fullIdentifier := splitContractIdentifier(identifier)
+	if fullIdentifier == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid contract identifier")
+		return
+	}
+
+	txs, err := s.repo.GetTransactionsByContract(r.Context(), fullIdentifier, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	txIDs := collectTxIDs(txs)
+	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
+	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
+	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
+
+	out := make([]map[string]interface{}, 0, len(txs))
+	for _, t := range txs {
+		out = append(out, toFlowTransactionOutput(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) handleContractVersionList(w http.ResponseWriter, r *http.Request) {
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
+	identifier := mux.Vars(r)["identifier"]
+	limit, offset := parseLimitOffset(r)
+
+	address, name, _ := splitContractIdentifier(identifier)
+	if address == "" || name == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid contract identifier")
+		return
+	}
+
+	versions, err := s.repo.ListContractVersions(r.Context(), address, name, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	out := make([]map[string]interface{}, 0, len(versions))
+	for _, v := range versions {
+		out = append(out, map[string]interface{}{
+			"version":        v.Version,
+			"block_height":   v.BlockHeight,
+			"transaction_id": v.TransactionID,
+			"created_at":     formatTime(v.CreatedAt),
+		})
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }

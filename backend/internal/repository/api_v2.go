@@ -680,6 +680,70 @@ func (r *Repository) GetTxTagsByTransactionIDs(ctx context.Context, txIDs []stri
 	return out, nil
 }
 
+// --- Contract Versions ---
+
+// InsertContractVersion inserts a new contract version, auto-incrementing the version number.
+func (r *Repository) InsertContractVersion(ctx context.Context, address, name, code string, blockHeight uint64, transactionID string) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO app.contract_versions (address, name, version, code, block_height, transaction_id)
+		SELECT $1, $2,
+		       COALESCE(MAX(version), 0) + 1,
+		       $3, $4, $5
+		FROM app.contract_versions
+		WHERE address = $1 AND name = $2
+		ON CONFLICT (address, name, version) DO NOTHING`,
+		hexToBytes(address), name, code, blockHeight, hexToBytesOrNull(transactionID))
+	return err
+}
+
+// ListContractVersions returns version metadata (without code) for a contract.
+func (r *Repository) ListContractVersions(ctx context.Context, address, name string, limit, offset int) ([]models.ContractVersion, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(address, 'hex') AS address, name, version, block_height,
+		       COALESCE(encode(transaction_id, 'hex'), '') AS transaction_id,
+		       created_at
+		FROM app.contract_versions
+		WHERE address = $1 AND name = $2
+		ORDER BY version DESC
+		LIMIT $3 OFFSET $4`, hexToBytes(address), name, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.ContractVersion
+	for rows.Next() {
+		var v models.ContractVersion
+		if err := rows.Scan(&v.Address, &v.Name, &v.Version, &v.BlockHeight, &v.TransactionID, &v.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// GetContractVersion returns a specific version with code.
+func (r *Repository) GetContractVersion(ctx context.Context, address, name string, version int) (*models.ContractVersion, error) {
+	var v models.ContractVersion
+	err := r.db.QueryRow(ctx, `
+		SELECT encode(address, 'hex') AS address, name, version, COALESCE(code, '') AS code, block_height,
+		       COALESCE(encode(transaction_id, 'hex'), '') AS transaction_id,
+		       created_at
+		FROM app.contract_versions
+		WHERE address = $1 AND name = $2 AND version = $3`,
+		hexToBytes(address), name, version).Scan(
+		&v.Address, &v.Name, &v.Version, &v.Code, &v.BlockHeight, &v.TransactionID, &v.CreatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
 // --- Status snapshots ---
 
 func (r *Repository) UpsertStatusSnapshot(ctx context.Context, kind string, payload []byte, asOf time.Time) error {

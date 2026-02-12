@@ -220,6 +220,17 @@ type SmartContract struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+// ContractVersion represents a single version of a contract's code.
+type ContractVersion struct {
+	Address       string    `json:"address"`
+	Name          string    `json:"name"`
+	Version       int       `json:"version"`
+	Code          string    `json:"code,omitempty"`
+	BlockHeight   uint64    `json:"block_height"`
+	TransactionID string    `json:"transaction_id,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 // AddressStats represents the address_stats table
 type AddressStats struct {
 	Address          string    `json:"address"`

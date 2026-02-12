@@ -3,23 +3,47 @@ import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Contract } from '../../api/gen/find';
 import { getAccountsByAddressContractsByName } from '../../api/gen/core';
+import { resolveApiBaseUrl } from '../../api';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { ArrowLeft, Box, CheckCircle, Code, Copy, ExternalLink, FileText, Layers } from 'lucide-react';
+import { ArrowLeft, Box, Code, Copy, FileText, Layers, Activity, GitCompare } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { toast } from 'react-hot-toast';
+import { normalizeAddress, formatShort } from '../../components/account/accountUtils';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
+
+type ContractTab = 'source' | 'transactions' | 'versions';
+
+interface ContractVersion {
+    version: number;
+    block_height: number;
+    transaction_id: string;
+    created_at: string;
+    code?: string;
+}
+
+interface ContractTransaction {
+    id: string;
+    block_height: number;
+    timestamp: string;
+    status: string;
+    payer: string;
+    proposer: string;
+    gas_used: number;
+    tags: string[];
+    contract_imports: string[];
+    fee: number;
+}
 
 export const Route = createFileRoute('/contracts/$id')({
     component: ContractDetail,
     loader: async ({ params }) => {
         try {
             const id = params.id;
-            // 1. Fetch contract metadata
             await ensureHeyApiConfigured();
             const listRes = await getFlowV1Contract({ query: { limit: 1, offset: 0, identifier: id } });
             const listPayload: any = listRes?.data;
@@ -29,7 +53,6 @@ export const Route = createFileRoute('/contracts/$id')({
                 return { contract: null, code: null, error: 'Contract not found' };
             }
 
-            // 2. Fetch contract code
             let code = '// Source code not available';
             const address = meta.address;
             let name = meta.name;
@@ -67,9 +90,25 @@ function ContractDetail() {
     const [contract, setContract] = useState<any>(initialContract);
     const [code, setCode] = useState(initialCode);
     const [error, setError] = useState<any>(initialError);
+    const [activeTab, setActiveTab] = useState<ContractTab>('source');
     const nowTick = useTimeTicker(20000);
     const { theme } = useTheme();
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
+
+    // Transactions state
+    const [transactions, setTransactions] = useState<ContractTransaction[]>([]);
+    const [txLoading, setTxLoading] = useState(false);
+    const [txOffset, setTxOffset] = useState(0);
+    const [txHasMore, setTxHasMore] = useState(false);
+
+    // Versions state
+    const [versions, setVersions] = useState<ContractVersion[]>([]);
+    const [versionsLoading, setVersionsLoading] = useState(false);
+    const [diffVersionA, setDiffVersionA] = useState<number | null>(null);
+    const [diffVersionB, setDiffVersionB] = useState<number | null>(null);
+    const [diffCodeA, setDiffCodeA] = useState<string>('');
+    const [diffCodeB, setDiffCodeB] = useState<string>('');
+    const [diffLoading, setDiffLoading] = useState(false);
 
     useEffect(() => {
         if (!initialContract && !initialError) {
@@ -81,6 +120,79 @@ function ContractDetail() {
         }
     }, [initialContract, initialCode, initialError]);
 
+    // Load transactions for this contract
+    const loadContractTransactions = async (offset: number, append: boolean) => {
+        setTxLoading(true);
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const res = await fetch(`${baseUrl}/flow/v1/contract/${encodeURIComponent(id)}/transaction?limit=20&offset=${offset}`);
+            const payload = await res.json();
+            const items = payload?.data ?? [];
+            setTransactions(append ? prev => [...prev, ...items] : items);
+            setTxHasMore(items.length >= 20);
+            setTxOffset(offset + items.length);
+        } catch (err) {
+            console.error('Failed to load contract transactions', err);
+        } finally {
+            setTxLoading(false);
+        }
+    };
+
+    // Load version history
+    const loadVersions = async () => {
+        setVersionsLoading(true);
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const res = await fetch(`${baseUrl}/flow/v1/contract/${encodeURIComponent(id)}/version?limit=50`);
+            const payload = await res.json();
+            const items = payload?.data ?? [];
+            setVersions(items);
+        } catch (err) {
+            console.error('Failed to load contract versions', err);
+        } finally {
+            setVersionsLoading(false);
+        }
+    };
+
+    // Load version code for diff
+    const loadVersionCode = async (version: number): Promise<string> => {
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const res = await fetch(`${baseUrl}/flow/v1/contract/${encodeURIComponent(id)}/version/${version}`);
+            const payload = await res.json();
+            const items = payload?.data;
+            if (Array.isArray(items) && items.length > 0) {
+                return items[0].code || '';
+            }
+            return '';
+        } catch {
+            return '';
+        }
+    };
+
+    // Auto-load on tab switch
+    useEffect(() => {
+        if (activeTab === 'transactions' && transactions.length === 0 && !txLoading) {
+            loadContractTransactions(0, false);
+        }
+        if (activeTab === 'versions' && versions.length === 0 && !versionsLoading) {
+            loadVersions();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
+
+    // Load diff when both versions selected
+    useEffect(() => {
+        if (diffVersionA != null && diffVersionB != null && diffVersionA !== diffVersionB) {
+            setDiffLoading(true);
+            Promise.all([loadVersionCode(diffVersionA), loadVersionCode(diffVersionB)])
+                .then(([a, b]) => {
+                    setDiffCodeA(a);
+                    setDiffCodeB(b);
+                })
+                .finally(() => setDiffLoading(false));
+        }
+    }, [diffVersionA, diffVersionB]);
 
     if (error || !contract) {
         return (
@@ -124,6 +236,53 @@ function ContractDetail() {
             console.error('Copy failed', e);
             toast.error('Copy failed');
         }
+    };
+
+    const tabs = [
+        { id: 'source' as const, label: 'Source Code', icon: Code },
+        { id: 'transactions' as const, label: 'Transactions', icon: Activity },
+        { id: 'versions' as const, label: 'Version History', icon: GitCompare },
+    ];
+
+    // Simple unified diff display
+    const renderDiff = () => {
+        if (!diffCodeA && !diffCodeB) return null;
+        const linesA = diffCodeA.split('\n');
+        const linesB = diffCodeB.split('\n');
+        const maxLines = Math.max(linesA.length, linesB.length);
+        const diffLines: { type: 'same' | 'removed' | 'added'; line: string }[] = [];
+
+        for (let i = 0; i < maxLines; i++) {
+            const a = linesA[i] ?? '';
+            const b = linesB[i] ?? '';
+            if (a === b) {
+                diffLines.push({ type: 'same', line: a });
+            } else {
+                if (i < linesA.length) diffLines.push({ type: 'removed', line: a });
+                if (i < linesB.length) diffLines.push({ type: 'added', line: b });
+            }
+        }
+
+        return (
+            <div className="font-mono text-[11px] overflow-auto max-h-[600px]">
+                {diffLines.map((dl, i) => (
+                    <div
+                        key={i}
+                        className={`px-4 py-0.5 whitespace-pre ${dl.type === 'removed'
+                            ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                            : dl.type === 'added'
+                                ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                                : 'text-zinc-600 dark:text-zinc-400'
+                            }`}
+                    >
+                        <span className="inline-block w-6 text-right mr-3 text-zinc-400 select-none">
+                            {dl.type === 'removed' ? '-' : dl.type === 'added' ? '+' : ' '}
+                        </span>
+                        {dl.line}
+                    </div>
+                ))}
+            </div>
+        );
     };
 
     return (
@@ -217,47 +376,249 @@ function ContractDetail() {
                         </div>
                     </div>
 
-                    {/* Code */}
+                    {/* Main Content Area */}
                     <div className="lg:col-span-2">
-                        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-0 rounded-sm overflow-hidden shadow-sm dark:shadow-none flex flex-col h-full min-h-[500px]">
-                            <div className="border-b border-zinc-200 dark:border-white/10 px-4 py-3 flex items-center justify-between bg-zinc-50 dark:bg-white/5">
-                                <div className="flex items-center gap-2">
-                                    <Code className="h-4 w-4 text-zinc-500" />
-                                    <span className="text-xs uppercase tracking-widest font-bold text-zinc-700 dark:text-zinc-300">Source Code</span>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => copyText(code, 'Code copied')}
-                                    className="flex items-center gap-1.5 px-2 py-1 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-sm transition-colors text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-wider"
-                                    aria-label="Copy source code"
-                                >
-                                    <Copy className="h-3 w-3" /> Copy
-                                </button>
-                            </div>
-
-                            <div className={`flex-1 relative overflow-auto ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-zinc-50'}`}>
-                                {code ? (
-                                    <SyntaxHighlighter
-                                        language="cadence"
-                                        style={syntaxTheme}
-                                        customStyle={{
-                                            margin: 0,
-                                            padding: '1.5rem',
-                                            fontSize: '11px',
-                                            lineHeight: '1.6',
-                                            height: '100%',
-                                        }}
-                                        showLineNumbers={true}
-                                        lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none", textAlign: "right" }}
+                        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden shadow-sm dark:shadow-none flex flex-col min-h-[500px]">
+                            {/* Tab bar */}
+                            <div className="border-b border-zinc-200 dark:border-white/10 px-4 py-0 flex items-center gap-0 bg-zinc-50 dark:bg-white/5">
+                                {tabs.map(({ id, label, icon: Icon }) => (
+                                    <button
+                                        key={id}
+                                        onClick={() => setActiveTab(id)}
+                                        className={`flex items-center gap-2 px-4 py-3 text-xs uppercase tracking-widest border-b-2 transition-colors ${activeTab === id
+                                            ? 'border-nothing-green-dark dark:border-nothing-green text-zinc-900 dark:text-white font-bold'
+                                            : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                                            }`}
                                     >
-                                        {code}
-                                    </SyntaxHighlighter>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center p-12 text-zinc-500">
-                                        <p className="text-xs uppercase tracking-widest">Loading Source Code...</p>
+                                        <Icon className="h-3.5 w-3.5" />
+                                        {label}
+                                    </button>
+                                ))}
+                                {activeTab === 'source' && (
+                                    <div className="ml-auto">
+                                        <button
+                                            type="button"
+                                            onClick={() => copyText(code || '', 'Code copied')}
+                                            className="flex items-center gap-1.5 px-2 py-1 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-sm transition-colors text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-wider"
+                                            aria-label="Copy source code"
+                                        >
+                                            <Copy className="h-3 w-3" /> Copy
+                                        </button>
                                     </div>
                                 )}
                             </div>
+
+                            {/* Source Code Tab */}
+                            {activeTab === 'source' && (
+                                <div className={`flex-1 relative overflow-auto ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-zinc-50'}`}>
+                                    {code ? (
+                                        <SyntaxHighlighter
+                                            language="cadence"
+                                            style={syntaxTheme}
+                                            customStyle={{
+                                                margin: 0,
+                                                padding: '1.5rem',
+                                                fontSize: '11px',
+                                                lineHeight: '1.6',
+                                                height: '100%',
+                                            }}
+                                            showLineNumbers={true}
+                                            lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none", textAlign: "right" }}
+                                        >
+                                            {code}
+                                        </SyntaxHighlighter>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center p-12 text-zinc-500">
+                                            <p className="text-xs uppercase tracking-widest">Loading Source Code...</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Transactions Tab */}
+                            {activeTab === 'transactions' && (
+                                <div className="flex-1 overflow-auto">
+                                    {txLoading && transactions.length === 0 && (
+                                        <div className="flex items-center justify-center p-12">
+                                            <div className="w-8 h-8 border-2 border-dashed border-zinc-400 rounded-full animate-spin" />
+                                        </div>
+                                    )}
+                                    {transactions.length > 0 && (
+                                        <table className="w-full text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
+                                                    <th className="p-3 font-normal">Tx Hash</th>
+                                                    <th className="p-3 font-normal">Status</th>
+                                                    <th className="p-3 font-normal">Block</th>
+                                                    <th className="p-3 font-normal">Fee</th>
+                                                    <th className="p-3 font-normal text-right">Time</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                                {transactions.map((tx) => (
+                                                    <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                                                        <td className="p-3">
+                                                            <Link to={`/transactions/${tx.id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                                {formatShort(tx.id, 10, 6)}
+                                                            </Link>
+                                                        </td>
+                                                        <td className="p-3">
+                                                            <span className={`text-[10px] uppercase ${tx.status === 'SEALED' ? 'text-zinc-400' : tx.status === 'EXPIRED' ? 'text-red-500' : 'text-yellow-600'}`}>
+                                                                {tx.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3">
+                                                            <Link to={`/blocks/${tx.block_height}` as any} className="text-zinc-600 dark:text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green font-mono">
+                                                                {tx.block_height?.toLocaleString()}
+                                                            </Link>
+                                                        </td>
+                                                        <td className="p-3 font-mono text-zinc-500">
+                                                            {tx.fee ? `${Number(tx.fee).toFixed(4)}` : '—'}
+                                                        </td>
+                                                        <td className="p-3 text-right text-[10px] text-zinc-400">
+                                                            {tx.timestamp ? formatRelativeTime(tx.timestamp, nowTick) : '—'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                    {txHasMore && (
+                                        <div className="text-center py-3 border-t border-zinc-100 dark:border-white/5">
+                                            <button
+                                                onClick={() => loadContractTransactions(txOffset, true)}
+                                                disabled={txLoading}
+                                                className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50 uppercase tracking-widest"
+                                            >
+                                                {txLoading ? 'Loading...' : 'Load More'}
+                                            </button>
+                                        </div>
+                                    )}
+                                    {transactions.length === 0 && !txLoading && (
+                                        <div className="flex flex-col items-center justify-center p-12 text-zinc-500">
+                                            <Activity className="h-8 w-8 mb-3 opacity-30" />
+                                            <p className="text-xs uppercase tracking-widest">No transactions found</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Version History Tab */}
+                            {activeTab === 'versions' && (
+                                <div className="flex-1 overflow-auto">
+                                    {versionsLoading && versions.length === 0 && (
+                                        <div className="flex items-center justify-center p-12">
+                                            <div className="w-8 h-8 border-2 border-dashed border-zinc-400 rounded-full animate-spin" />
+                                        </div>
+                                    )}
+                                    {versions.length > 0 && (
+                                        <div>
+                                            {/* Version selection for diff */}
+                                            <div className="px-4 py-3 border-b border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5">
+                                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Select two versions to compare</p>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    {versions.map(v => (
+                                                        <button
+                                                            key={v.version}
+                                                            onClick={() => {
+                                                                if (diffVersionA == null) {
+                                                                    setDiffVersionA(v.version);
+                                                                } else if (diffVersionB == null && v.version !== diffVersionA) {
+                                                                    setDiffVersionB(v.version);
+                                                                } else {
+                                                                    setDiffVersionA(v.version);
+                                                                    setDiffVersionB(null);
+                                                                    setDiffCodeA('');
+                                                                    setDiffCodeB('');
+                                                                }
+                                                            }}
+                                                            className={`px-2 py-1 text-[10px] font-mono border rounded-sm transition-colors ${v.version === diffVersionA
+                                                                ? 'border-red-400 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                                                                : v.version === diffVersionB
+                                                                    ? 'border-green-400 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                                                                    : 'border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5'
+                                                                }`}
+                                                        >
+                                                            v{v.version}
+                                                        </button>
+                                                    ))}
+                                                    {(diffVersionA != null || diffVersionB != null) && (
+                                                        <button
+                                                            onClick={() => { setDiffVersionA(null); setDiffVersionB(null); setDiffCodeA(''); setDiffCodeB(''); }}
+                                                            className="px-2 py-1 text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 uppercase tracking-wider"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Diff view */}
+                                            {diffVersionA != null && diffVersionB != null && (
+                                                <div className="border-b border-zinc-200 dark:border-white/5">
+                                                    <div className="px-4 py-2 bg-zinc-50 dark:bg-white/5 text-[10px] text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                                                        <GitCompare className="h-3 w-3" />
+                                                        Diff: v{Math.min(diffVersionA, diffVersionB)} → v{Math.max(diffVersionA, diffVersionB)}
+                                                    </div>
+                                                    {diffLoading ? (
+                                                        <div className="flex items-center justify-center p-8">
+                                                            <div className="w-6 h-6 border-2 border-dashed border-zinc-400 rounded-full animate-spin" />
+                                                        </div>
+                                                    ) : (
+                                                        renderDiff()
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Version list */}
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-zinc-200 dark:border-white/5 text-zinc-500 uppercase tracking-wider bg-zinc-50 dark:bg-white/5">
+                                                        <th className="p-3 font-normal">Version</th>
+                                                        <th className="p-3 font-normal">Block Height</th>
+                                                        <th className="p-3 font-normal">Transaction</th>
+                                                        <th className="p-3 font-normal text-right">Time</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                                    {versions.map((v) => (
+                                                        <tr key={v.version} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                                                            <td className="p-3">
+                                                                <span className="inline-flex items-center gap-1.5">
+                                                                    <Layers className="h-3 w-3 text-zinc-400" />
+                                                                    <span className="font-mono font-bold">v{v.version}</span>
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3">
+                                                                <Link to={`/blocks/${v.block_height}` as any} className="text-zinc-600 dark:text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green font-mono">
+                                                                    {v.block_height?.toLocaleString()}
+                                                                </Link>
+                                                            </td>
+                                                            <td className="p-3">
+                                                                {v.transaction_id ? (
+                                                                    <Link to={`/transactions/${v.transaction_id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                                        {formatShort(v.transaction_id, 10, 6)}
+                                                                    </Link>
+                                                                ) : '—'}
+                                                            </td>
+                                                            <td className="p-3 text-right text-[10px] text-zinc-400">
+                                                                {v.created_at ? formatRelativeTime(v.created_at, nowTick) : '—'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                    {versions.length === 0 && !versionsLoading && (
+                                        <div className="flex flex-col items-center justify-center p-12 text-zinc-500">
+                                            <GitCompare className="h-8 w-8 mb-3 opacity-30" />
+                                            <p className="text-xs uppercase tracking-widest">No version history available</p>
+                                            <p className="text-[10px] text-zinc-400 mt-1">Version tracking starts from first indexed contract update</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

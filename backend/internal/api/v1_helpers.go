@@ -547,4 +547,37 @@ func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string
 	}
 }
 
+func toTransferSummaryOutput(s repository.TransferSummary) map[string]interface{} {
+	ft := make([]map[string]interface{}, 0, len(s.FT))
+	for _, f := range s.FT {
+		ft = append(ft, map[string]interface{}{
+			"token":     f.Token,
+			"amount":    f.Amount,
+			"direction": f.Direction,
+		})
+	}
+	nft := make([]map[string]interface{}, 0, len(s.NFT))
+	for _, n := range s.NFT {
+		nft = append(nft, map[string]interface{}{
+			"collection": n.Collection,
+			"count":      n.Count,
+			"direction":  n.Direction,
+		})
+	}
+	return map[string]interface{}{
+		"ft":  ft,
+		"nft": nft,
+	}
+}
+
+func toFlowTransactionOutputWithTransfers(t models.Transaction, events []models.Event, contracts []string, tags []string, fee float64, transfers *repository.TransferSummary) map[string]interface{} {
+	out := toFlowTransactionOutput(t, events, contracts, tags, fee)
+	if transfers != nil {
+		out["transfer_summary"] = toTransferSummaryOutput(*transfers)
+	} else {
+		out["transfer_summary"] = map[string]interface{}{"ft": []interface{}{}, "nft": []interface{}{}}
+	}
+	return out
+}
+
 // --- Accounting + Flow + Status Handlers ---

@@ -74,3 +74,11 @@ func nullIfEmptyBytes(value []byte) interface{} {
 	}
 	return value
 }
+
+func hexToBytesOrNull(input string) interface{} {
+	b := hexToBytes(input)
+	if len(b) == 0 {
+		return nil
+	}
+	return b
+}
