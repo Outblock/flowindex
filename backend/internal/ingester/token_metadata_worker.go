@@ -668,8 +668,26 @@ func cadenceNFTCollectionDisplayScript() string {
                 viewType: Type<MetadataViews.NFTCollectionDisplay>()
             ) as! MetadataViews.NFTCollectionDisplay?
 
-            let identifier = "A.".concat(contractAddress.toString().slice(from: 2, upTo: contractAddress.toString().length)).concat(".").concat(contractName).concat(".NFT")
-            let evmAddr = getEVMAddress(identifier: identifier)
+            // Discover the actual NFT type from NFTCollectionData view.
+            // This handles legacy contracts where the NFT resource isn't named "NFT"
+            // (e.g., TopShot.Moment, AllDay.MomentNFT, etc.)
+            var evmAddr: String? = nil
+            let collectionData = viewResolver!.resolveContractView(
+                resourceType: nil,
+                viewType: Type<MetadataViews.NFTCollectionData>()
+            ) as! MetadataViews.NFTCollectionData?
+            if collectionData != nil {
+                // storedNFTType gives us the concrete NFT type (e.g. A.<addr>.TopShot.Moment)
+                let nftTypeId = collectionData!.storedNFTType.identifier
+                evmAddr = getEVMAddress(identifier: nftTypeId)
+            }
+
+            // Fallback: try standard ".NFT" identifier
+            if evmAddr == nil {
+                let addrHex = contractAddress.toString().slice(from: 2, upTo: contractAddress.toString().length)
+                let standardId = "A.".concat(addrHex).concat(".").concat(contractName).concat(".NFT")
+                evmAddr = getEVMAddress(identifier: standardId)
+            }
 
             return NFTCollectionInfo(display: display, evmAddress: evmAddr)
         }

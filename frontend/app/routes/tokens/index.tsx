@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { Coins, Database, ExternalLink } from 'lucide-react';
+import { Coins, Database } from 'lucide-react';
+import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Ft } from '../../api/gen/find';
@@ -134,7 +135,6 @@ function Tokens() {
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Token</th>
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Address</th>
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-right">Holders</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">EVM Bridge</th>
               </tr>
             </thead>
             <tbody>
@@ -147,7 +147,6 @@ function Tokens() {
                   const contractName = String(t?.contract_name || '');
                   const holderCount = Number(t?.holder_count || 0);
                   const logo = t?.logo || '';
-                  const evmBridged = !!t?.evm_bridged;
                   const evmAddress = String(t?.evm_address || '');
 
                   return (
@@ -162,20 +161,23 @@ function Tokens() {
                         <div className="flex items-center gap-3">
                           <TokenLogo logo={logo} symbol={symbol || contractName} />
                           <div className="min-w-0">
-                            <Link
-                              to={`/tokens/${encodeURIComponent(id)}`}
-                              className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
-                              title={id}
-                            >
-                              {name && symbol ? (
-                                <>
-                                  {name}
-                                  <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">{symbol}</span>
-                                </>
-                              ) : (
-                                symbol || contractName || id
-                              )}
-                            </Link>
+                            <div className="flex items-center gap-1.5">
+                              <Link
+                                to={`/tokens/${encodeURIComponent(id)}`}
+                                className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline truncate"
+                                title={id}
+                              >
+                                {name && symbol ? (
+                                  <>
+                                    {name}
+                                    <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">{symbol}</span>
+                                  </>
+                                ) : (
+                                  symbol || contractName || id
+                                )}
+                              </Link>
+                              {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
+                            </div>
                             <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono truncate" title={id}>
                               {contractName || id}
                             </div>
@@ -198,21 +200,6 @@ function Tokens() {
                         <span className="font-mono text-sm text-zinc-900 dark:text-white">
                           {holderCount.toLocaleString()}
                         </span>
-                      </td>
-                      <td className="p-4">
-                        {evmBridged ? (
-                          <a
-                            href={`https://evm.flowindex.dev/address/${evmAddress}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-mono rounded-sm hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors"
-                          >
-                            Bridged
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ) : (
-                          <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500">—</span>
-                        )}
                       </td>
                     </motion.tr>
                   );

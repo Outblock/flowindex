@@ -310,7 +310,7 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
     const summaryLine = buildSummaryLine(tx);
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
     const IconComp = activityTypeIcons[activity.type] || Activity;
-    const hasDetails = tx.transfer_summary?.ft?.length > 0 || tx.transfer_summary?.nft?.length > 0 || tx.is_evm || tx.evm_hash || tx.gas_used;
+    const hasDetails = !!(tx.transfer_summary?.ft?.length || tx.transfer_summary?.nft?.length || tx.is_evm || tx.evm_hash || tx.gas_used);
 
     return (
         <div className={`border-b border-zinc-100 dark:border-white/5 transition-colors ${expanded ? 'bg-zinc-50/50 dark:bg-white/[0.02]' : ''}`}>
@@ -345,9 +345,20 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                         >
                             {formatShort(tx.id, 12, 8)}
                         </Link>
-                        <span className={`text-[10px] uppercase ${tx.status === 'SEALED' ? 'text-zinc-400' : tx.status === 'EXPIRED' ? 'text-red-500' : 'text-yellow-600 dark:text-yellow-500'}`}>
-                            {tx.status}
-                        </span>
+                        {tx.status && tx.status !== 'SEALED' && (
+                            <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-sm border ${
+                                tx.error_message || tx.status === 'EXPIRED'
+                                    ? 'text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10'
+                                    : 'text-yellow-600 dark:text-yellow-500 border-yellow-300 dark:border-yellow-500/30 bg-yellow-50 dark:bg-yellow-500/10'
+                            }`}>
+                                {tx.status}
+                            </span>
+                        )}
+                        {tx.error_message && tx.status === 'SEALED' && (
+                            <span className="text-[10px] uppercase px-1.5 py-0.5 rounded-sm border text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
+                                ERROR
+                            </span>
+                        )}
                     </div>
                     {summaryLine && (
                         <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
