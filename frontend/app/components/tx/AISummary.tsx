@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Sparkles, Loader2, Shield, ShieldAlert, ShieldCheck, AlertTriangle, Lightbulb, ChevronDown } from 'lucide-react';
+import { Sparkles, Loader2, Shield, ShieldAlert, ShieldCheck, AlertTriangle, Lightbulb, ChevronDown, Maximize2, X } from 'lucide-react';
 import ReactFlow, {
     Node,
     Edge,
@@ -303,6 +303,7 @@ export default function AISummary({ transaction }: { transaction: any }) {
     const [data, setData] = useState<AISummaryData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [flowModal, setFlowModal] = useState(false);
     const { theme } = useTheme();
     const isDark = theme === 'dark';
 
@@ -461,21 +462,68 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 </p>
             </div>
 
-            {/* React Flow diagram */}
+            {/* React Flow diagram — inline preview + modal expand */}
             {initialNodes.length > 0 && (
-                <div>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Asset Flow</p>
-                    <div
-                        className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden"
-                        style={{ height: Math.max(250, Math.ceil(initialNodes.length / 2) * 100 + 80) }}
-                    >
-                        <FlowDiagram
-                            initialNodes={initialNodes}
-                            initialEdges={initialEdges}
-                            isDark={isDark}
-                        />
+                <>
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Asset Flow</p>
+                            <button
+                                onClick={() => setFlowModal(true)}
+                                className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] text-zinc-500 hover:text-zinc-900 dark:hover:text-white uppercase tracking-widest border border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/30 rounded-sm transition-colors"
+                            >
+                                <Maximize2 className="w-3 h-3" />
+                                Expand
+                            </button>
+                        </div>
+                        <div
+                            className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden cursor-pointer"
+                            style={{ height: Math.max(250, Math.ceil(initialNodes.length / 2) * 100 + 80) }}
+                            onClick={() => setFlowModal(true)}
+                        >
+                            <FlowDiagram
+                                initialNodes={initialNodes}
+                                initialEdges={initialEdges}
+                                isDark={isDark}
+                            />
+                        </div>
                     </div>
-                </div>
+
+                    {/* Fullscreen modal */}
+                    {flowModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+                            {/* Backdrop */}
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setFlowModal(false)} />
+                            {/* Modal */}
+                            <div className="relative w-[95vw] h-[85vh] max-w-[1400px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-sm shadow-2xl flex flex-col">
+                                {/* Header */}
+                                <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-200 dark:border-white/10 flex-shrink-0">
+                                    <div className="flex items-center gap-3">
+                                        <Sparkles className="w-4 h-4 text-purple-500" />
+                                        <span className="text-xs text-zinc-700 dark:text-zinc-300 uppercase tracking-widest font-bold">Asset Flow</span>
+                                        <span className="text-[10px] text-zinc-400 font-mono">
+                                            {data?.flows?.length || 0} flow{(data?.flows?.length || 0) !== 1 ? 's' : ''} · {initialNodes.length} address{initialNodes.length !== 1 ? 'es' : ''}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => setFlowModal(false)}
+                                        className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/10 rounded-sm transition-colors"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                {/* Flow diagram — full size */}
+                                <div className="flex-1 min-h-0">
+                                    <FlowDiagram
+                                        initialNodes={initialNodes}
+                                        initialEdges={initialEdges}
+                                        isDark={isDark}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );
