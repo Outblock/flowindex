@@ -19,7 +19,7 @@ export default function Sidebar() {
 
     const navItems = [
         { label: 'Home Page', path: '/', icon: Home },
-        { label: 'Transactions', path: '/transactions', icon: ArrowRightLeft },
+        { label: 'Transactions', path: '/tx', icon: ArrowRightLeft },
         { label: 'Blocks', path: '/blocks', icon: Box },
         { label: 'Tokens', path: '/tokens', icon: Coins },
         { label: 'NFTs', path: '/nfts', icon: Image },

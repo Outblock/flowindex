@@ -245,7 +245,7 @@ function NFTItemInner() {
                           </td>
                           <td className="px-6 py-4">
                             {tx ? (
-                              <Link to="/transactions/$txId" params={{ txId: normalizeAddress(tx) }} className="font-mono text-xs text-nothing-green-dark dark:text-nothing-green hover:underline">
+                              <Link to="/tx/$txId" params={{ txId: normalizeAddress(tx) }} className="font-mono text-xs text-nothing-green-dark dark:text-nothing-green hover:underline">
                                 {normalizeAddress(tx).slice(0, 18)}...
                               </Link>
                             ) : <span className="text-zinc-300 dark:text-zinc-700">—</span>}

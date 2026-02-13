@@ -590,6 +590,62 @@ func (r *Repository) GetEVMTransactionByHash(ctx context.Context, hash string) (
 	return &row, nil
 }
 
+func (r *Repository) GetEVMTransactionsByCadenceTx(ctx context.Context, txID string, blockHeight uint64) ([]EVMTransactionRecord, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			block_height,
+			COALESCE(encode(evm_hash, 'hex'), ''),
+			COALESCE(encode(from_address, 'hex'), ''),
+			COALESCE(encode(to_address, 'hex'), ''),
+			COALESCE(nonce, 0),
+			COALESCE(gas_limit, 0),
+			COALESCE(gas_used, 0),
+			COALESCE(gas_price::text, ''),
+			COALESCE(gas_fee_cap::text, ''),
+			COALESCE(gas_tip_cap::text, ''),
+			COALESCE(value::text, ''),
+			COALESCE(tx_type, 0),
+			COALESCE(chain_id::text, ''),
+			COALESCE(transaction_index, 0),
+			COALESCE(status_code, 0),
+			COALESCE(status, ''),
+			timestamp
+		FROM app.evm_transactions
+		WHERE transaction_id = $1 AND block_height = $2
+		ORDER BY event_index`, hexToBytes(txID), blockHeight)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []EVMTransactionRecord
+	for rows.Next() {
+		var row EVMTransactionRecord
+		if err := rows.Scan(
+			&row.BlockHeight,
+			&row.EVMHash,
+			&row.FromAddress,
+			&row.ToAddress,
+			&row.Nonce,
+			&row.GasLimit,
+			&row.GasUsed,
+			&row.GasPrice,
+			&row.GasFeeCap,
+			&row.GasTipCap,
+			&row.Value,
+			&row.TxType,
+			&row.ChainID,
+			&row.Position,
+			&row.StatusCode,
+			&row.Status,
+			&row.Timestamp,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
 func (r *Repository) ErrNotImplemented(msg string) error {
 	return fmt.Errorf("not implemented: %s", msg)
 }

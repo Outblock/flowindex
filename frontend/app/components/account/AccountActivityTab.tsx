@@ -326,7 +326,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                                             {tx.transaction_hash && (
                                                 <>
                                                     <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
-                                                    <Link to={`/transactions/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
+                                                    <Link to={`/tx/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
                                                 </>
                                             )}
                                         </div>
@@ -392,7 +392,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                                             {tx.transaction_hash && (
                                                 <>
                                                     <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
-                                                    <Link to={`/transactions/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
+                                                    <Link to={`/tx/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
                                                 </>
                                             )}
                                         </div>

@@ -13,6 +13,7 @@ import { Route as StatsRouteImport } from './routes/stats'
 import { Route as ApiDocsRouteImport } from './routes/api-docs'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TxIndexRouteImport } from './routes/tx/index'
 import { Route as TransactionsIndexRouteImport } from './routes/transactions/index'
 import { Route as TokensIndexRouteImport } from './routes/tokens/index'
 import { Route as ScheduledIndexRouteImport } from './routes/scheduled/index'
@@ -20,6 +21,7 @@ import { Route as NftsIndexRouteImport } from './routes/nfts/index'
 import { Route as ContractsIndexRouteImport } from './routes/contracts/index'
 import { Route as BlocksIndexRouteImport } from './routes/blocks/index'
 import { Route as AccountsIndexRouteImport } from './routes/accounts/index'
+import { Route as TxTxIdRouteImport } from './routes/tx/$txId'
 import { Route as TransactionsTxIdRouteImport } from './routes/transactions/$txId'
 import { Route as TokensTokenRouteImport } from './routes/tokens/$token'
 import { Route as NftsNftTypeRouteImport } from './routes/nfts/$nftType'
@@ -47,6 +49,11 @@ const SplatRoute = SplatRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TxIndexRoute = TxIndexRouteImport.update({
+  id: '/tx/',
+  path: '/tx/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TransactionsIndexRoute = TransactionsIndexRouteImport.update({
@@ -82,6 +89,11 @@ const BlocksIndexRoute = BlocksIndexRouteImport.update({
 const AccountsIndexRoute = AccountsIndexRouteImport.update({
   id: '/accounts/',
   path: '/accounts/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TxTxIdRoute = TxTxIdRouteImport.update({
+  id: '/tx/$txId',
+  path: '/tx/$txId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TransactionsTxIdRoute = TransactionsTxIdRouteImport.update({
@@ -137,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
+  '/tx/$txId': typeof TxTxIdRoute
   '/accounts/': typeof AccountsIndexRoute
   '/blocks/': typeof BlocksIndexRoute
   '/contracts/': typeof ContractsIndexRoute
@@ -144,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/scheduled/': typeof ScheduledIndexRoute
   '/tokens/': typeof TokensIndexRoute
   '/transactions/': typeof TransactionsIndexRoute
+  '/tx/': typeof TxIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
 export interface FileRoutesByTo {
@@ -158,6 +172,7 @@ export interface FileRoutesByTo {
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
+  '/tx/$txId': typeof TxTxIdRoute
   '/accounts': typeof AccountsIndexRoute
   '/blocks': typeof BlocksIndexRoute
   '/contracts': typeof ContractsIndexRoute
@@ -165,6 +180,7 @@ export interface FileRoutesByTo {
   '/scheduled': typeof ScheduledIndexRoute
   '/tokens': typeof TokensIndexRoute
   '/transactions': typeof TransactionsIndexRoute
+  '/tx': typeof TxIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
 export interface FileRoutesById {
@@ -180,6 +196,7 @@ export interface FileRoutesById {
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
+  '/tx/$txId': typeof TxTxIdRoute
   '/accounts/': typeof AccountsIndexRoute
   '/blocks/': typeof BlocksIndexRoute
   '/contracts/': typeof ContractsIndexRoute
@@ -187,6 +204,7 @@ export interface FileRoutesById {
   '/scheduled/': typeof ScheduledIndexRoute
   '/tokens/': typeof TokensIndexRoute
   '/transactions/': typeof TransactionsIndexRoute
+  '/tx/': typeof TxIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
 export interface FileRouteTypes {
@@ -203,6 +221,7 @@ export interface FileRouteTypes {
     | '/nfts/$nftType'
     | '/tokens/$token'
     | '/transactions/$txId'
+    | '/tx/$txId'
     | '/accounts/'
     | '/blocks/'
     | '/contracts/'
@@ -210,6 +229,7 @@ export interface FileRouteTypes {
     | '/scheduled/'
     | '/tokens/'
     | '/transactions/'
+    | '/tx/'
     | '/nfts/$nftType/item/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -224,6 +244,7 @@ export interface FileRouteTypes {
     | '/nfts/$nftType'
     | '/tokens/$token'
     | '/transactions/$txId'
+    | '/tx/$txId'
     | '/accounts'
     | '/blocks'
     | '/contracts'
@@ -231,6 +252,7 @@ export interface FileRouteTypes {
     | '/scheduled'
     | '/tokens'
     | '/transactions'
+    | '/tx'
     | '/nfts/$nftType/item/$id'
   id:
     | '__root__'
@@ -245,6 +267,7 @@ export interface FileRouteTypes {
     | '/nfts/$nftType'
     | '/tokens/$token'
     | '/transactions/$txId'
+    | '/tx/$txId'
     | '/accounts/'
     | '/blocks/'
     | '/contracts/'
@@ -252,6 +275,7 @@ export interface FileRouteTypes {
     | '/scheduled/'
     | '/tokens/'
     | '/transactions/'
+    | '/tx/'
     | '/nfts/$nftType/item/$id'
   fileRoutesById: FileRoutesById
 }
@@ -267,6 +291,7 @@ export interface RootRouteChildren {
   NftsNftTypeRoute: typeof NftsNftTypeRouteWithChildren
   TokensTokenRoute: typeof TokensTokenRoute
   TransactionsTxIdRoute: typeof TransactionsTxIdRoute
+  TxTxIdRoute: typeof TxTxIdRoute
   AccountsIndexRoute: typeof AccountsIndexRoute
   BlocksIndexRoute: typeof BlocksIndexRoute
   ContractsIndexRoute: typeof ContractsIndexRoute
@@ -274,6 +299,7 @@ export interface RootRouteChildren {
   ScheduledIndexRoute: typeof ScheduledIndexRoute
   TokensIndexRoute: typeof TokensIndexRoute
   TransactionsIndexRoute: typeof TransactionsIndexRoute
+  TxIndexRoute: typeof TxIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -304,6 +330,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tx/': {
+      id: '/tx/'
+      path: '/tx'
+      fullPath: '/tx/'
+      preLoaderRoute: typeof TxIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/transactions/': {
@@ -353,6 +386,13 @@ declare module '@tanstack/react-router' {
       path: '/accounts'
       fullPath: '/accounts/'
       preLoaderRoute: typeof AccountsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tx/$txId': {
+      id: '/tx/$txId'
+      path: '/tx/$txId'
+      fullPath: '/tx/$txId'
+      preLoaderRoute: typeof TxTxIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/transactions/$txId': {
@@ -438,6 +478,7 @@ const rootRouteChildren: RootRouteChildren = {
   NftsNftTypeRoute: NftsNftTypeRouteWithChildren,
   TokensTokenRoute: TokensTokenRoute,
   TransactionsTxIdRoute: TransactionsTxIdRoute,
+  TxTxIdRoute: TxTxIdRoute,
   AccountsIndexRoute: AccountsIndexRoute,
   BlocksIndexRoute: BlocksIndexRoute,
   ContractsIndexRoute: ContractsIndexRoute,
@@ -445,6 +486,7 @@ const rootRouteChildren: RootRouteChildren = {
   ScheduledIndexRoute: ScheduledIndexRoute,
   TokensIndexRoute: TokensIndexRoute,
   TransactionsIndexRoute: TransactionsIndexRoute,
+  TxIndexRoute: TxIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

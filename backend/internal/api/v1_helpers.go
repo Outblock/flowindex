@@ -246,7 +246,7 @@ func toFlowEventOutput(e models.Event) map[string]interface{} {
 	}
 }
 
-func toFlowTransactionOutput(t models.Transaction, events []models.Event, contracts []string, tags []string, fee float64) map[string]interface{} {
+func toFlowTransactionOutput(t models.Transaction, events []models.Event, contracts []string, tags []string, fee float64, evmExecs ...[]repository.EVMTransactionRecord) map[string]interface{} {
 	evOut := make([]map[string]interface{}, 0, len(events))
 	for _, e := range events {
 		evOut = append(evOut, toFlowEventOutput(e))
@@ -291,6 +291,13 @@ func toFlowTransactionOutput(t models.Transaction, events []models.Event, contra
 	}
 	if t.EVMValue != "" {
 		out["evm_value"] = t.EVMValue
+	}
+	if len(evmExecs) > 0 && len(evmExecs[0]) > 0 {
+		execs := make([]map[string]interface{}, 0, len(evmExecs[0]))
+		for _, rec := range evmExecs[0] {
+			execs = append(execs, toEVMTransactionOutput(rec))
+		}
+		out["evm_executions"] = execs
 	}
 	return out
 }
