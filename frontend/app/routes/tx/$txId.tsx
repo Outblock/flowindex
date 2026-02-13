@@ -344,7 +344,7 @@ function TransactionDetail() {
                                 revealDirection="start"
                                 speed={60}
                                 maxIterations={30}
-                                characters="0123456789abcdef"
+                                characters="█▓▒░╳╱╲◆◇●○■□▪▫#@$%&*!?~^"
                                 startEncrypted
                                 className="font-mono"
                             />
