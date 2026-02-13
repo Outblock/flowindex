@@ -24,6 +24,9 @@ const ARC_INTERVAL = 3000;
 const ARC_LIFE = 2000;
 const ARC_SEGMENTS = 64;
 
+const COUNTRIES_URL =
+  'https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson';
+
 function latLonToVec3(lat: number, lon: number, radius: number): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180);
   const theta = (lon + 180) * (Math.PI / 180);
@@ -51,12 +54,51 @@ function greatCircleArc(a: THREE.Vector3, b: THREE.Vector3, segments: number, el
   return pts;
 }
 
+// Parse GeoJSON coordinates into arrays of rings (each ring = array of [lon,lat])
+function extractRings(geometry: any): number[][][] {
+  const rings: number[][][] = [];
+  if (geometry.type === 'Polygon') {
+    for (const ring of geometry.coordinates) rings.push(ring);
+  } else if (geometry.type === 'MultiPolygon') {
+    for (const polygon of geometry.coordinates) {
+      for (const ring of polygon) rings.push(ring);
+    }
+  }
+  return rings;
+}
+
+function buildCountryLines(geojson: any, radius: number): THREE.LineSegments {
+  const vertices: number[] = [];
+
+  for (const feature of geojson.features) {
+    const rings = extractRings(feature.geometry);
+    for (const ring of rings) {
+      for (let i = 0; i < ring.length - 1; i++) {
+        const a = latLonToVec3(ring[i][1], ring[i][0], radius);
+        const b = latLonToVec3(ring[i + 1][1], ring[i + 1][0], radius);
+        vertices.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  const mat = new THREE.LineBasicMaterial({
+    color: 0x00e599,
+    transparent: true,
+    opacity: 0.22,
+  });
+  return new THREE.LineSegments(geo, mat);
+}
+
 export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+
+    let disposed = false;
 
     // --- Renderer ---
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -70,25 +112,43 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.set(0, 0, 4.6);
 
-    // --- Globe sphere (dark with subtle grid) ---
+    // --- Pivot group (everything that rotates) ---
+    const pivot = new THREE.Group();
+    scene.add(pivot);
+
+    // --- Globe sphere (dark solid) ---
     const globeGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
     const globeMat = new THREE.MeshBasicMaterial({
-      color: 0x0a0a0a,
+      color: 0x080808,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.92,
     });
     const globeMesh = new THREE.Mesh(globeGeo, globeMat);
-    scene.add(globeMesh);
+    pivot.add(globeMesh);
 
-    // Wireframe overlay for lat/lon grid feel
+    // Subtle lat/lon grid (very faint, behind country lines)
     const wireGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.001, 36, 18);
     const wireMat = new THREE.MeshBasicMaterial({
       color: 0x00e599,
       wireframe: true,
       transparent: true,
-      opacity: 0.06,
+      opacity: 0.03,
     });
-    scene.add(new THREE.Mesh(wireGeo, wireMat));
+    pivot.add(new THREE.Mesh(wireGeo, wireMat));
+
+    // --- Country outlines (async load) ---
+    const countryDisposables: THREE.LineSegments[] = [];
+    fetch(COUNTRIES_URL)
+      .then((r) => r.json())
+      .then((geojson) => {
+        if (disposed) return;
+        const lines = buildCountryLines(geojson, GLOBE_RADIUS * 1.002);
+        countryDisposables.push(lines);
+        pivot.add(lines);
+      })
+      .catch(() => {
+        // Silently fail — globe still works without country outlines
+      });
 
     // --- Node dots ---
     const maxStake = Math.max(...nodes.map((n) => n.tokens_staked), 1);
@@ -106,7 +166,7 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
       mesh.scale.setScalar(size);
       dotGroup.add(mesh);
     }
-    scene.add(dotGroup);
+    pivot.add(dotGroup);
 
     // --- Glow ring around globe ---
     const ringGeo = new THREE.RingGeometry(GLOBE_RADIUS * 1.01, GLOBE_RADIUS * 1.06, 128);
@@ -118,7 +178,7 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.lookAt(camera.position);
-    scene.add(ring);
+    pivot.add(ring);
 
     // --- Postprocessing ---
     const composer = new EffectComposer(renderer);
@@ -134,7 +194,7 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     // --- Arcs ---
     const geoNodes = nodes.filter((n) => n.lat !== 0 || n.lon !== 0);
     const arcGroup = new THREE.Group();
-    scene.add(arcGroup);
+    pivot.add(arcGroup);
 
     interface ArcData {
       line: THREE.Line;
@@ -171,7 +231,6 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
           (arcs[i].line.material as THREE.Material).dispose();
           arcs.splice(i, 1);
         } else {
-          // Fade in first 30%, hold, fade out last 30%
           const t = age / ARC_LIFE;
           let opacity: number;
           if (t < 0.3) opacity = t / 0.3;
@@ -179,7 +238,6 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
           else opacity = 1;
           (arcs[i].line.material as THREE.LineBasicMaterial).opacity = opacity * 0.6;
 
-          // Draw-in effect: only show portion of the arc proportional to age
           const drawRange = Math.min(Math.floor((t / 0.4) * (ARC_SEGMENTS + 1)), ARC_SEGMENTS + 1);
           arcs[i].line.geometry.setDrawRange(0, drawRange);
         }
@@ -191,18 +249,6 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     let prevMouse = { x: 0, y: 0 };
     let rotVelX = 0;
     let rotVelY = 0;
-    const pivot = new THREE.Group();
-    pivot.add(dotGroup);
-    pivot.add(globeMesh);
-    pivot.add(new THREE.Mesh(wireGeo, wireMat));
-    pivot.add(arcGroup);
-    pivot.add(ring);
-    scene.add(pivot);
-
-    // Remove individually added items since they're now in pivot
-    scene.children = scene.children.filter(
-      (c) => c === pivot || c === camera,
-    );
 
     const onPointerDown = (e: PointerEvent) => {
       isDragging = true;
@@ -240,7 +286,6 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     });
     ro.observe(container);
 
-    // Initial size
     const rect = container.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
       camera.aspect = rect.width / rect.height;
@@ -255,10 +300,8 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
       raf = requestAnimationFrame(animate);
       const now = performance.now();
 
-      // Auto-rotate
       if (!isDragging) {
         pivot.rotation.y += 0.0015;
-        // Dampen drag velocity
         rotVelX *= 0.95;
         rotVelY *= 0.95;
         pivot.rotation.y += rotVelY;
@@ -266,7 +309,6 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
         pivot.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pivot.rotation.x));
       }
 
-      // Arcs
       if (now - lastArc > ARC_INTERVAL) {
         spawnArc(now);
         lastArc = now;
@@ -281,16 +323,21 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
 
     // --- Cleanup ---
     return () => {
+      disposed = true;
       cancelAnimationFrame(raf);
       ro.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
 
-      // Dispose arcs
       for (const a of arcs) {
         a.line.geometry.dispose();
         (a.line.material as THREE.Material).dispose();
+      }
+
+      for (const seg of countryDisposables) {
+        seg.geometry.dispose();
+        (seg.material as THREE.Material).dispose();
       }
 
       dotGroup.children.forEach((c) => {
