@@ -21,6 +21,21 @@ type TransactionFilter struct {
 
 // ListTransactionsFiltered returns transactions using basic filters.
 func (r *Repository) ListTransactionsFiltered(ctx context.Context, f TransactionFilter) ([]models.Transaction, error) {
+	if f.Limit <= 0 {
+		f.Limit = 20
+	}
+	if f.Offset < 0 {
+		f.Offset = 0
+	}
+
+	// Fast path: no filters → use tx_lookup (non-partitioned, indexed) to find
+	// latest tx IDs, then join raw.transactions with known heights for partition pruning.
+	hasFilters := f.Height != nil || f.Payer != "" || f.Proposer != "" || f.Authorizer != "" || f.Status != ""
+	if !hasFilters {
+		return r.listLatestTransactions(ctx, f.Limit, f.Offset)
+	}
+
+	// Slow path: filtered query directly on partitioned table.
 	clauses := []string{}
 	args := []interface{}{}
 	arg := 1
@@ -56,13 +71,6 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 		where = "WHERE " + strings.Join(clauses, " AND ")
 	}
 
-	if f.Limit <= 0 {
-		f.Limit = 20
-	}
-	if f.Offset < 0 {
-		f.Offset = 0
-	}
-
 	args = append(args, f.Limit, f.Offset)
 
 	rows, err := r.db.Query(ctx, `
@@ -96,6 +104,47 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 			continue
 		}
 		seen[t.ID] = true
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// listLatestTransactions uses tx_lookup (non-partitioned, B-tree on block_height)
+// to quickly find the most recent tx IDs, then joins raw.transactions with the
+// known block_height for each row so PostgreSQL can prune partitions.
+func (r *Repository) listLatestTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH latest AS (
+			SELECT id, block_height, transaction_index
+			FROM raw.tx_lookup
+			ORDER BY block_height DESC, transaction_index DESC
+			LIMIT $1 OFFSET $2
+		)
+		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
+		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
+		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
+		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
+		       t.timestamp, t.timestamp AS created_at,
+		       COALESCE(m.event_count, t.event_count) AS event_count
+		FROM latest l
+		JOIN raw.transactions t ON t.id = l.id AND t.block_height = l.block_height
+		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
+		ORDER BY t.block_height DESC, t.transaction_index DESC`,
+		limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.Transaction
+	for rows.Next() {
+		var t models.Transaction
+		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			return nil, err
+		}
 		out = append(out, t)
 	}
 	return out, nil
