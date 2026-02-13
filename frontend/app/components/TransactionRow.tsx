@@ -347,14 +347,14 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                         </Link>
                         {tx.status && tx.status !== 'SEALED' && (
                             <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-sm border ${
-                                tx.error_message || tx.status === 'EXPIRED'
+                                (tx.error_message || tx.error) || tx.status === 'EXPIRED'
                                     ? 'text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10'
                                     : 'text-yellow-600 dark:text-yellow-500 border-yellow-300 dark:border-yellow-500/30 bg-yellow-50 dark:bg-yellow-500/10'
                             }`}>
                                 {tx.status}
                             </span>
                         )}
-                        {tx.error_message && tx.status === 'SEALED' && (
+                        {(tx.error_message || tx.error) && tx.status === 'SEALED' && (
                             <span className="text-[10px] uppercase px-1.5 py-0.5 rounded-sm border text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
                                 ERROR
                             </span>
