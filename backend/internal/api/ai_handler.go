@@ -73,11 +73,16 @@ func (s *Server) handleAITxSummary(w http.ResponseWriter, r *http.Request) {
 
 	txJSON, _ := json.Marshal(req)
 
-	systemPrompt := `You are a blockchain analyst for the Flow blockchain. Given transaction metadata as JSON, return ONLY valid JSON with two fields:
-1. "summary": A concise 1-3 sentence human-readable explanation of what this transaction did. Mention specific tokens, amounts, addresses (truncated), and protocols when available.
-2. "flows": An array of asset flow objects representing token movements. Each object has: "from" (address), "fromLabel" (short label like "User" or protocol name), "to" (address), "toLabel", "token" (symbol), "amount" (string).
-If there are no meaningful token flows, return an empty flows array.
-Do NOT wrap the JSON in markdown code fences. Return raw JSON only.`
+	systemPrompt := `You analyze Flow blockchain transactions. Return ONLY raw JSON (no markdown fences).
+
+Rules:
+- "summary": ONE short sentence. State what happened (e.g. "Minted 1,000 JOSHIN tokens" or "Swapped 50 FLOW for 120 USDC on IncrementFi"). Do NOT explain fee mechanics or internal plumbing.
+- "flows": Array of ACTUAL token movements from ft_transfers/defi_events data ONLY. Each object: {"from":"0xRealAddr","fromLabel":"short name","to":"0xRealAddr","toLabel":"short name","token":"SYMBOL","amount":"123.45"}
+  - Use real addresses and real amounts from the input data. Never use placeholders like "Fee Amount" or "Transaction Signer".
+  - SKIP routine fee deposits/withdrawals (FlowToken fee movements to 0xf919ee77447b7497 or FlowFees).
+  - If no meaningful user-initiated token transfers exist, return empty flows array [].
+
+Output format: {"summary":"...","flows":[...]}`
 
 	userContent := fmt.Sprintf("Analyze this Flow blockchain transaction:\n%s", string(txJSON))
 
