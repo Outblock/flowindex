@@ -25,6 +25,7 @@ const ARC_LIFE = 2400;
 const ARCS_PER_SPAWN = 2;
 const MAX_CONCURRENT_ARCS = 8;
 const ARC_SEGMENTS = 64;
+const SURFACE_DOT_COUNT = 18000;
 
 const COUNTRIES_URL =
   'https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson';
@@ -56,6 +57,34 @@ function greatCircleArc(a: THREE.Vector3, b: THREE.Vector3, segments: number, el
   return pts;
 }
 
+// Fibonacci sphere — evenly distributed points on sphere surface
+function buildSurfaceDots(count: number, radius: number): THREE.Points {
+  const positions = new Float32Array(count * 3);
+  const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
+  for (let i = 0; i < count; i++) {
+    const theta = (2 * Math.PI * i) / goldenRatio;
+    const phi = Math.acos(1 - (2 * (i + 0.5)) / count);
+    const x = radius * Math.sin(phi) * Math.cos(theta);
+    const y = radius * Math.cos(phi);
+    const z = radius * Math.sin(phi) * Math.sin(theta);
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0x1a3a2a,
+    size: 0.006,
+    transparent: true,
+    opacity: 0.6,
+    sizeAttenuation: true,
+  });
+  return new THREE.Points(geo, mat);
+}
+
 // Parse GeoJSON coordinates into arrays of rings (each ring = array of [lon,lat])
 function extractRings(geometry: any): number[][][] {
   const rings: number[][][] = [];
@@ -76,7 +105,6 @@ function buildCountryDots(geojson: any, radius: number): THREE.Points {
     const rings = extractRings(feature.geometry);
     for (const ring of rings) {
       for (let i = 0; i < ring.length - 1; i++) {
-        // Interpolate between vertices to create dense dots along borders
         const steps = 4;
         for (let s = 0; s <= steps; s++) {
           const t = s / steps;
@@ -95,7 +123,7 @@ function buildCountryDots(geojson: any, radius: number): THREE.Points {
     color: 0x00e599,
     size: 0.008,
     transparent: true,
-    opacity: 0.4,
+    opacity: 0.35,
     sizeAttenuation: true,
   });
   return new THREE.Points(geo, mat);
@@ -126,17 +154,21 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     const pivot = new THREE.Group();
     scene.add(pivot);
 
-    // --- Globe sphere (dark solid) ---
+    // --- Globe sphere (dark solid base) ---
     const globeGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
     const globeMat = new THREE.MeshBasicMaterial({
-      color: 0x080808,
+      color: 0x050505,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.95,
     });
     const globeMesh = new THREE.Mesh(globeGeo, globeMat);
     pivot.add(globeMesh);
 
-    // --- Country border dots (async load) ---
+    // --- Surface dot grid (fibonacci sphere — fills entire globe uniformly) ---
+    const surfaceDots = buildSurfaceDots(SURFACE_DOT_COUNT, GLOBE_RADIUS * 1.001);
+    pivot.add(surfaceDots);
+
+    // --- Country border dots (async load, brighter than surface dots) ---
     const countryDisposables: THREE.Points[] = [];
     fetch(COUNTRIES_URL)
       .then((r) => r.json())
@@ -146,9 +178,7 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
         countryDisposables.push(dots);
         pivot.add(dots);
       })
-      .catch(() => {
-        // Silently fail — globe still works without country dots
-      });
+      .catch(() => {});
 
     // --- Node dots ---
     const maxStake = Math.max(...nodes.map((n) => n.tokens_staked), 1);
@@ -168,25 +198,13 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     }
     pivot.add(dotGroup);
 
-    // --- Glow ring around globe ---
-    const ringGeo = new THREE.RingGeometry(GLOBE_RADIUS * 1.01, GLOBE_RADIUS * 1.06, 128);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0x00e599,
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.DoubleSide,
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.lookAt(camera.position);
-    pivot.add(ring);
-
-    // --- Postprocessing ---
+    // --- Postprocessing (subtle bloom — only node dots & arcs glow) ---
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new BloomEffect({
-      intensity: 1.5,
-      luminanceThreshold: 0.1,
-      luminanceSmoothing: 0.7,
+      intensity: 0.6,
+      luminanceThreshold: 0.35,
+      luminanceSmoothing: 0.4,
       mipmapBlur: true,
     });
     composer.addPass(new EffectPass(camera, bloom));
@@ -316,8 +334,6 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
       }
       updateArcs(now);
 
-      ring.lookAt(camera.position);
-
       composer.render();
     };
     animate();
@@ -348,10 +364,10 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
         }
       });
       dotGeo.dispose();
+      surfaceDots.geometry.dispose();
+      (surfaceDots.material as THREE.Material).dispose();
       globeGeo.dispose();
       globeMat.dispose();
-      ringGeo.dispose();
-      ringMat.dispose();
       composer.dispose();
       renderer.dispose();
       if (renderer.domElement.parentElement) {
