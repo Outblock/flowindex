@@ -39,20 +39,20 @@ export function NotFoundPage({ icon: Icon, title, description, hint, identifier 
 
                     {/* Identifier */}
                     {identifier && (
-                        <p className="text-sm font-mono text-zinc-400 break-all">
+                        <p className="text-[11px] font-mono text-zinc-500 break-all px-4">
                             {identifier}
                         </p>
                     )}
 
                     {/* Description */}
-                    <p className="text-base text-zinc-300 font-mono leading-relaxed">
+                    <p className="text-sm text-zinc-400 font-mono leading-relaxed">
                         {description}
                     </p>
 
                     {/* Hint */}
                     {hint && (
-                        <div className="flex items-center justify-center gap-2 text-sm text-zinc-400">
-                            <Search className="w-3.5 h-3.5 animate-pulse" />
+                        <div className="flex items-center justify-center gap-2 text-xs text-zinc-500">
+                            <Search className="w-3 h-3 animate-pulse" />
                             <span>{hint}</span>
                         </div>
                     )}
