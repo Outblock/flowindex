@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1TransactionById } from '../../api/gen/find';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
@@ -55,8 +55,9 @@ export const Route = createFileRoute('/tx/$txId')({
 function TransactionDetail() {
     const { transaction, error: loaderError } = Route.useLoaderData();
     const error = transaction ? null : (loaderError || 'Transaction not found');
+    const hasTransfers = transaction?.ft_transfers?.length > 0 || transaction?.defi_events?.length > 0;
     const [activeTab, setActiveTab] = useState(() =>
-        transaction?.script ? 'script' : 'events'
+        hasTransfers ? 'transfers' : (transaction?.script ? 'script' : 'events')
     );
     const nowTick = useTimeTicker(20000);
     const { theme } = useTheme();
@@ -309,6 +310,20 @@ function TransactionDetail() {
                 {/* Tabs Section */}
                 <div className="mt-12">
                     <div className="flex border-b border-zinc-200 dark:border-white/10 mb-0 overflow-x-auto">
+                        {hasTransfers && (
+                            <button
+                                onClick={() => setActiveTab('transfers')}
+                                className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'transfers'
+                                    ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
+                                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
+                                    }`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <ArrowRightLeft className={`h-4 w-4 ${activeTab === 'transfers' ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
+                                    Transfers
+                                </span>
+                            </button>
+                        )}
                         <button
                             onClick={() => setActiveTab('script')}
                             className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'script'
@@ -350,6 +365,167 @@ function TransactionDetail() {
                     </div>
 
                     <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[300px] shadow-sm dark:shadow-none">
+                        {activeTab === 'transfers' && (
+                            <div className="space-y-6">
+                                {/* DeFi Swap Events */}
+                                {transaction.defi_events?.length > 0 && (
+                                    <div>
+                                        <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <Repeat className="h-4 w-4" /> Swap
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {transaction.defi_events.map((swap: any, idx: number) => {
+                                                const a0In = parseFloat(swap.asset0_in) || 0;
+                                                const a1In = parseFloat(swap.asset1_in) || 0;
+                                                const a0Out = parseFloat(swap.asset0_out) || 0;
+                                                const a1Out = parseFloat(swap.asset1_out) || 0;
+
+                                                const fromToken = a0In > 0 ? {
+                                                    symbol: swap.asset0_symbol || swap.asset0_id?.split('.').pop() || '?',
+                                                    name: swap.asset0_name, logo: swap.asset0_logo, amount: a0In, id: swap.asset0_id,
+                                                } : {
+                                                    symbol: swap.asset1_symbol || swap.asset1_id?.split('.').pop() || '?',
+                                                    name: swap.asset1_name, logo: swap.asset1_logo, amount: a1In, id: swap.asset1_id,
+                                                };
+                                                const toToken = a1Out > 0 ? {
+                                                    symbol: swap.asset1_symbol || swap.asset1_id?.split('.').pop() || '?',
+                                                    name: swap.asset1_name, logo: swap.asset1_logo, amount: a1Out, id: swap.asset1_id,
+                                                } : {
+                                                    symbol: swap.asset0_symbol || swap.asset0_id?.split('.').pop() || '?',
+                                                    name: swap.asset0_name, logo: swap.asset0_logo, amount: a0Out, id: swap.asset0_id,
+                                                };
+
+                                                return (
+                                                    <div key={idx} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-4 rounded-sm">
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest bg-zinc-200 dark:bg-white/10 px-2 py-0.5 rounded">
+                                                                {swap.dex || 'DEX'}
+                                                            </span>
+                                                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                                                                {swap.event_type}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                {fromToken.logo ? (
+                                                                    <img src={fromToken.logo} alt="" className="w-8 h-8 rounded-full border border-zinc-200 dark:border-white/10" />
+                                                                ) : (
+                                                                    <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center text-[10px] font-bold text-zinc-500">
+                                                                        {fromToken.symbol?.slice(0, 2)}
+                                                                    </div>
+                                                                )}
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm font-mono font-medium text-zinc-900 dark:text-white truncate">
+                                                                        {fromToken.amount.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-zinc-500 uppercase">{fromToken.symbol}</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-nothing-green/10 dark:bg-nothing-green/20 flex items-center justify-center">
+                                                                <ArrowRight className="w-4 h-4 text-nothing-green-dark dark:text-nothing-green" />
+                                                            </div>
+                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                {toToken.logo ? (
+                                                                    <img src={toToken.logo} alt="" className="w-8 h-8 rounded-full border border-zinc-200 dark:border-white/10" />
+                                                                ) : (
+                                                                    <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center text-[10px] font-bold text-zinc-500">
+                                                                        {toToken.symbol?.slice(0, 2)}
+                                                                    </div>
+                                                                )}
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm font-mono font-medium text-zinc-900 dark:text-white truncate">
+                                                                        {toToken.amount.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-zinc-500 uppercase">{toToken.symbol}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {swap.pair_id && (
+                                                            <div className="mt-2 text-[10px] text-zinc-400 font-mono">
+                                                                Route: {swap.pair_id}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* FT Token Transfers */}
+                                {transaction.ft_transfers?.length > 0 && (
+                                    <div>
+                                        <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <Coins className="h-4 w-4" /> Token Transfers ({transaction.ft_transfers.length})
+                                        </h3>
+                                        <div className="divide-y divide-zinc-100 dark:divide-white/5 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
+                                            {transaction.ft_transfers.map((ft: any, idx: number) => (
+                                                <div key={idx} className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors">
+                                                    <div className="flex-shrink-0">
+                                                        {ft.token_logo ? (
+                                                            <img src={ft.token_logo} alt="" className="w-7 h-7 rounded-full border border-zinc-200 dark:border-white/10" />
+                                                        ) : (
+                                                            <div className="w-7 h-7 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center">
+                                                                <Coins className="w-3.5 h-3.5 text-emerald-500" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">
+                                                                {ft.amount != null ? Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
+                                                            </span>
+                                                            <span className="text-[10px] text-zinc-500 font-medium uppercase">
+                                                                {ft.token_symbol || ft.token?.split('.').pop() || ''}
+                                                            </span>
+                                                            {ft.is_cross_vm && (
+                                                                <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                                                    <Globe className="w-2.5 h-2.5" />
+                                                                    Cross-VM
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
+                                                            {ft.from_address && (
+                                                                <span>
+                                                                    From{' '}
+                                                                    <Link to={`/accounts/${ft.from_address}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                                        {ft.from_address?.slice(0, 8)}...{ft.from_address?.slice(-4)}
+                                                                    </Link>
+                                                                    {ft.from_coa_flow_address && (
+                                                                        <span className="text-purple-500 ml-1">(COA → <Link to={`/accounts/${ft.from_coa_flow_address}` as any} className="hover:underline font-mono">{ft.from_coa_flow_address?.slice(0, 8)}...</Link>)</span>
+                                                                    )}
+                                                                </span>
+                                                            )}
+                                                            {ft.from_address && ft.to_address && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
+                                                            {ft.to_address && (
+                                                                <span>
+                                                                    To{' '}
+                                                                    <Link to={`/accounts/${ft.to_address}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                                        {ft.to_address?.slice(0, 8)}...{ft.to_address?.slice(-4)}
+                                                                    </Link>
+                                                                    {ft.to_coa_flow_address && (
+                                                                        <span className="text-purple-500 ml-1">(COA → <Link to={`/accounts/${ft.to_coa_flow_address}` as any} className="hover:underline font-mono">{ft.to_coa_flow_address?.slice(0, 8)}...</Link>)</span>
+                                                                    )}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!hasTransfers && (
+                                    <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
+                                        <ArrowRightLeft className="h-8 w-8 mb-2 opacity-20" />
+                                        <p className="text-xs uppercase tracking-widest">No Token Transfers</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {activeTab === 'script' && (
                             <div className="space-y-8">
                                 {/* Arguments */}
