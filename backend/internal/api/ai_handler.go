@@ -13,8 +13,6 @@ import (
 
 var hexAddrRe = regexp.MustCompile(`^(?:0x)?[0-9a-fA-F]{8,40}$`)
 
-// looksLikeAddress checks if a string looks like a real blockchain address
-// (hex with optional 0x prefix, 8-40 chars). Rejects placeholders like "Transaction Signer".
 func looksLikeAddress(s string) bool {
 	return hexAddrRe.MatchString(s)
 }
@@ -79,11 +77,14 @@ type aiFlow struct {
 }
 
 type aiTxSummaryResponse struct {
-	Summary string   `json:"summary"`
-	Flows   []aiFlow `json:"flows"`
+	Summary   string   `json:"summary"`
+	Flows     []aiFlow `json:"flows"`
+	RiskScore int      `json:"risk_score"`
+	RiskLabel string   `json:"risk_label"`
+	Tips      []string `json:"tips"`
 }
 
-// JSON Schema for structured output — guarantees valid response
+// JSON Schema for structured output
 var txSummarySchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
@@ -104,8 +105,14 @@ var txSummarySchema = map[string]any{
 				"additionalProperties": false,
 			},
 		},
+		"risk_score": map[string]any{"type": "integer"},
+		"risk_label": map[string]any{"type": "string"},
+		"tips": map[string]any{
+			"type":  "array",
+			"items": map[string]any{"type": "string"},
+		},
 	},
-	"required":             []string{"summary", "flows"},
+	"required":             []string{"summary", "flows", "risk_score", "risk_label", "tips"},
 	"additionalProperties": false,
 }
 
@@ -124,36 +131,58 @@ func (s *Server) handleAITxSummary(w http.ResponseWriter, r *http.Request) {
 
 	txJSON, _ := json.Marshal(req)
 
-	systemPrompt := `You are an expert analyst for the **Flow blockchain**. Flow uses **Cadence**, a resource-oriented smart contract language. Transactions emit typed events like A.{address}.{ContractName}.{EventName} with structured payloads.
+	systemPrompt := `You are an expert security analyst for the **Flow blockchain**. Flow uses **Cadence**, a resource-oriented smart contract language. Transactions emit typed events like A.{address}.{ContractName}.{EventName} with structured payloads.
 
 Key Cadence event patterns:
-- TokensMinted: a new token mint (amount in event payload)
+- TokensMinted: new token mint (amount in event payload)
 - TokensDeposited / TokensWithdrawn: token movements (amount + to/from in payload)
 - Deposit / Withdrawn on FungibleToken: standard FT transfers
-- FlowFees.FeesDeducted: routine tx fees (IGNORE these)
-- FlowToken.TokensWithdrawn/Deposited to 0xf919ee77447b7497: fee payments (IGNORE)
+- AccountKeyAdded / AccountKeyRemoved: key management (HIGH RISK if unexpected)
+- FlowFees.FeesDeducted: routine tx fees (IGNORE in flows)
+- FlowToken to 0xf919ee77447b7497: fee payments (IGNORE in flows)
 
 The input includes:
-- "script": the full Cadence transaction script
+- "script": full Cadence transaction script
 - "events": emitted events WITH payload values
-- "ft_transfers": pre-parsed FT transfers (may be empty for mints)
+- "ft_transfers": pre-parsed FT transfers
 - "activity_type"/"activity_label": pre-classified tx type
-- "preliminary_summary": basic one-line summary from our frontend
+- "preliminary_summary": basic one-line summary
 - "contract_imports": Cadence contracts used
 
-Rules for "summary":
-- 1-2 concise sentences using **markdown**: bold token names, amounts, protocol names with **bold**.
-- Use backticks for contract names like ` + "`JOSHIN`" + `.
-- Improve on "preliminary_summary" — add specifics from script and events (e.g. mint amounts, recipients).
-- NEVER explain fee mechanics or internal gas plumbing.
+=== SUMMARY ===
+- 1-2 concise sentences with **markdown**: **bold** for token names, amounts, protocol names.
+- Backticks for contract names like ` + "`JOSHIN`" + `.
+- Add specifics from script and events. NEVER explain fee mechanics.
 
-Rules for "flows":
-- Extract from ft_transfers first. If ft_transfers is empty, extract from events (e.g. TokensMinted → show mint flow from contract to recipient).
-- Each flow must use REAL 0x hex addresses from the data and REAL numeric amounts from event values.
-- NEVER use placeholders. If you cannot determine a real address or amount, omit that flow.
-- SKIP FlowFees and routine fee movements entirely.
-- For mints: from=contract address, fromLabel=contract name, to=recipient, toLabel="Minter", token=symbol, amount=minted amount.
-- Return empty array [] only if truly no meaningful token movement occurred.`
+=== FLOWS ===
+- Extract from ft_transfers first. If empty, extract from events (TokensMinted, TokensDeposited, etc.).
+- REAL 0x hex addresses, REAL numeric amounts only. NEVER use placeholders.
+- SKIP FlowFees and routine fee movements.
+- For mints: from=contract address, fromLabel=contract name, to=recipient, toLabel="Minter".
+- Empty array [] if no meaningful token movement.
+
+=== RISK SCORE (0-100) ===
+Evaluate transaction safety:
+- 0-20 (Safe): Normal transfers, mints, swaps, standard DeFi operations
+- 21-50 (Caution): Unusual patterns, large transfers, unfamiliar contracts
+- 51-80 (Warning): Key changes, authorization changes, bulk withdrawals, interacting with unverified contracts
+- 81-100 (Dangerous): Draining ALL tokens from account, adding attacker keys + removing owner keys, unauthorized authorizer patterns, known phishing contract signatures, destroying resources/vaults
+
+Key risk indicators:
+- AccountKeyAdded + AccountKeyRemoved in same tx = potential account takeover
+- Withdrawing ALL of a token balance = potential drain attack
+- Script removes keys with full weight (1000) = ownership transfer
+- Multiple high-value token withdrawals to unknown addresses
+- Script modifies AuthAccount capabilities in suspicious ways
+
+=== RISK LABEL ===
+One of: "Safe", "Caution", "Warning", "Dangerous"
+
+=== TIPS ===
+1-3 short actionable tips for the user:
+- For safe txs: brief confirmation like "Standard token mint, no concerns."
+- For risky txs: specific warnings like "This tx removes your account key — verify you authorized this."
+- Always mention what the user should verify or be aware of.`
 
 	userContent := fmt.Sprintf("Analyze this Flow blockchain transaction:\n%s", string(txJSON))
 
@@ -208,7 +237,6 @@ Rules for "flows":
 		return
 	}
 
-	// Check for refusal or empty content
 	if anthropicResp.StopReason == "refusal" {
 		http.Error(w, `{"error":"AI refused to process this transaction"}`, http.StatusUnprocessableEntity)
 		return
@@ -227,19 +255,24 @@ Rules for "flows":
 		return
 	}
 
-	// Validate summary
 	if result.Summary == "" {
 		http.Error(w, `{"error":"AI returned empty summary"}`, http.StatusBadGateway)
 		return
 	}
 
-	// Validate and filter flows — only keep entries with real addresses and amounts
+	// Clamp risk score
+	if result.RiskScore < 0 {
+		result.RiskScore = 0
+	} else if result.RiskScore > 100 {
+		result.RiskScore = 100
+	}
+
+	// Validate and filter flows
 	validated := make([]aiFlow, 0, len(result.Flows))
 	for _, f := range result.Flows {
 		if f.From == "" || f.To == "" || f.Token == "" || f.Amount == "" {
 			continue
 		}
-		// Must look like real addresses (0x prefix or hex) — reject placeholders
 		if !looksLikeAddress(f.From) || !looksLikeAddress(f.To) {
 			continue
 		}

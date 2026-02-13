@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, Shield, ShieldAlert, ShieldCheck, AlertTriangle, Lightbulb } from 'lucide-react';
 import ReactFlow, {
     Node,
     Edge,
@@ -8,11 +8,13 @@ import ReactFlow, {
     Background,
     BackgroundVariant,
     Controls,
+    useNodesState,
+    useEdgesState,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { resolveApiBaseUrl } from '../../api';
 import { formatShort } from '../account/accountUtils';
-import { deriveActivityType, buildSummaryLine } from '../TransactionRow';
+import { deriveActivityType, buildSummaryLine, extractLogoUrl } from '../TransactionRow';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface Flow {
@@ -27,6 +29,9 @@ interface Flow {
 interface AISummaryData {
     summary: string;
     flows: Flow[];
+    risk_score: number;
+    risk_label: string;
+    tips: string[];
 }
 
 /* ── Lightweight inline markdown → React ── */
@@ -34,13 +39,11 @@ interface AISummaryData {
 function InlineMarkdown({ text }: { text: string }) {
     if (!text) return null;
 
-    // Process bold, code, and links via sequential replacement
     const tokens: Array<{ type: 'text' | 'bold' | 'code' | 'link'; value: string; href?: string }> = [];
     const pattern = /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)/g;
     let lastIdx = 0;
     let m: RegExpExecArray | null;
 
-    // Reset regex state
     pattern.lastIndex = 0;
 
     while ((m = pattern.exec(text)) !== null) {
@@ -78,9 +81,74 @@ function InlineMarkdown({ text }: { text: string }) {
     );
 }
 
+/* ── Risk badge ── */
+
+function RiskBadge({ score, label }: { score: number; label: string }) {
+    let color: string;
+    let bg: string;
+    let border: string;
+    let Icon: typeof Shield;
+
+    if (score <= 20) {
+        color = 'text-green-600 dark:text-green-400';
+        bg = 'bg-green-50 dark:bg-green-500/10';
+        border = 'border-green-200 dark:border-green-500/20';
+        Icon = ShieldCheck;
+    } else if (score <= 50) {
+        color = 'text-yellow-600 dark:text-yellow-400';
+        bg = 'bg-yellow-50 dark:bg-yellow-500/10';
+        border = 'border-yellow-200 dark:border-yellow-500/20';
+        Icon = Shield;
+    } else if (score <= 80) {
+        color = 'text-orange-600 dark:text-orange-400';
+        bg = 'bg-orange-50 dark:bg-orange-500/10';
+        border = 'border-orange-200 dark:border-orange-500/20';
+        Icon = AlertTriangle;
+    } else {
+        color = 'text-red-600 dark:text-red-400';
+        bg = 'bg-red-50 dark:bg-red-500/10';
+        border = 'border-red-200 dark:border-red-500/20';
+        Icon = ShieldAlert;
+    }
+
+    return (
+        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-sm border ${bg} ${border}`}>
+            <Icon className={`w-4 h-4 ${color}`} />
+            <span className={`text-xs font-bold uppercase tracking-widest ${color}`}>{label}</span>
+            <span className={`text-[10px] font-mono ${color}`}>{score}/100</span>
+        </div>
+    );
+}
+
+/* ── Build token icon map from transaction data ── */
+
+function buildTokenIconMap(transaction: any): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const ft of transaction.ft_transfers || []) {
+        const symbol = ft.token_symbol || ft.token?.split('.')?.pop();
+        const logo = ft.token_logo;
+        if (symbol && logo) {
+            const url = typeof logo === 'string' && logo.startsWith('http') ? logo : extractLogoUrl(logo);
+            if (url) map.set(symbol, url);
+        }
+    }
+    for (const swap of transaction.defi_events || []) {
+        for (const key of ['asset0_logo', 'asset1_logo']) {
+            const symKey = key.replace('_logo', '_symbol');
+            const sym = swap[symKey];
+            const logo = swap[key];
+            if (sym && logo) {
+                const url = typeof logo === 'string' && logo.startsWith('http') ? logo : extractLogoUrl(logo);
+                if (url) map.set(sym, url);
+            }
+        }
+    }
+    return map;
+}
+
 /* ── Layout: assign (x,y) per unique address, left-to-right ── */
 
-function layoutGraph(flows: Flow[], isDark: boolean): { nodes: Node[]; edges: Edge[] } {
+function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<string, string>): { nodes: Node[]; edges: Edge[] } {
     const seen = new Map<string, { label: string; isSource: boolean; isTarget: boolean }>();
     for (const f of flows) {
         if (!seen.has(f.from)) seen.set(f.from, { label: f.fromLabel || formatShort(f.from, 8, 4), isSource: true, isTarget: false });
@@ -112,6 +180,7 @@ function layoutGraph(flows: Flow[], isDark: boolean): { nodes: Node[]; edges: Ed
         background: isDark ? '#18181b' : '#ffffff',
         color: isDark ? '#e4e4e7' : '#27272a',
         boxShadow: isDark ? '0 1px 3px rgba(0,0,0,0.4)' : '0 1px 3px rgba(0,0,0,0.08)',
+        cursor: 'grab',
     };
 
     const placeColumn = (addrs: string[], col: number): Node[] =>
@@ -132,6 +201,7 @@ function layoutGraph(flows: Flow[], isDark: boolean): { nodes: Node[]; edges: Ed
             position: { x: col * colWidth, y: row * rowHeight },
             sourcePosition: Position.Right,
             targetPosition: Position.Left,
+            draggable: true,
             style: nodeStyle,
         }));
 
@@ -145,11 +215,13 @@ function layoutGraph(flows: Flow[], isDark: boolean): { nodes: Node[]; edges: Ed
 
     const edges: Edge[] = flows.map((f, i) => {
         const amountStr = Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 8 });
+        const iconUrl = tokenIcons.get(f.token);
+        const labelText = iconUrl ? `  ${amountStr} ${f.token}` : `${amountStr} ${f.token}`;
         return {
             id: `e-${i}`,
             source: f.from,
             target: f.to,
-            label: `${amountStr} ${f.token}`,
+            label: labelText,
             labelStyle: { fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, fill: accentColor },
             labelBgStyle: { fill: isDark ? '#18181b' : '#ffffff', fillOpacity: 0.95, rx: 4, ry: 4 },
             labelBgPadding: [8, 4] as [number, number],
@@ -162,7 +234,61 @@ function layoutGraph(flows: Flow[], isDark: boolean): { nodes: Node[]; edges: Ed
     return { nodes, edges };
 }
 
-/* ── Component ── */
+/* ── Flow diagram wrapper using controlled state for drag support ── */
+
+function FlowDiagram({ initialNodes, initialEdges, isDark, tokenIcons, flows }: {
+    initialNodes: Node[];
+    initialEdges: Edge[];
+    isDark: boolean;
+    tokenIcons: Map<string, string>;
+    flows: Flow[];
+}) {
+    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+    return (
+        <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            fitView
+            fitViewOptions={{ padding: 0.3 }}
+            nodesDraggable
+            nodesConnectable={false}
+            panOnDrag
+            zoomOnScroll
+            zoomOnPinch
+            zoomOnDoubleClick
+            minZoom={0.3}
+            maxZoom={2}
+            proOptions={{ hideAttribution: true }}
+        >
+            <Background
+                variant={BackgroundVariant.Dots}
+                gap={16}
+                size={1}
+                color={isDark ? '#333' : '#ddd'}
+                style={{ backgroundColor: isDark ? '#09090b' : '#fafafa' }}
+            />
+            <Controls
+                showInteractive={false}
+                className="!bg-white dark:!bg-zinc-800 !border-zinc-200 dark:!border-white/10 !shadow-sm [&>button]:!border-zinc-200 dark:[&>button]:!border-white/10 [&>button]:!bg-white dark:[&>button]:!bg-zinc-800 [&>button>svg]:!fill-zinc-600 dark:[&>button>svg]:!fill-zinc-400"
+            />
+            {/* Token icon overlays on edges */}
+            {flows.map((f, i) => {
+                const iconUrl = tokenIcons.get(f.token);
+                if (!iconUrl) return null;
+                // Icon rendered as a foreignObject overlay isn't possible with ReactFlow edges,
+                // so we show token icons inline in the edge label area via SVG defs — skipped for now.
+                // The token symbol text label already identifies the token.
+                return null;
+            })}
+        </ReactFlow>
+    );
+}
+
+/* ── Main Component ── */
 
 export default function AISummary({ transaction }: { transaction: any }) {
     const [data, setData] = useState<AISummaryData | null>(null);
@@ -170,6 +296,8 @@ export default function AISummary({ transaction }: { transaction: any }) {
     const [error, setError] = useState<string | null>(null);
     const { theme } = useTheme();
     const isDark = theme === 'dark';
+
+    const tokenIcons = useMemo(() => buildTokenIconMap(transaction), [transaction]);
 
     const handleSummarize = useCallback(async () => {
         setLoading(true);
@@ -231,6 +359,7 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 throw new Error('Invalid response format');
             }
             if (!Array.isArray(d.flows)) d.flows = [];
+            if (!Array.isArray(d.tips)) d.tips = [];
 
             setData(d);
         } catch (e: any) {
@@ -240,10 +369,10 @@ export default function AISummary({ transaction }: { transaction: any }) {
         }
     }, [transaction]);
 
-    const { nodes, edges } = useMemo(() => {
-        if (!data?.flows?.length) return { nodes: [], edges: [] };
-        return layoutGraph(data.flows, isDark);
-    }, [data, isDark]);
+    const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
+        if (!data?.flows?.length) return { nodes: [] as Node[], edges: [] as Edge[] };
+        return layoutGraph(data.flows, isDark, tokenIcons);
+    }, [data, isDark, tokenIcons]);
 
     /* ── Button state ── */
     if (!data && !loading && !error) {
@@ -286,59 +415,57 @@ export default function AISummary({ transaction }: { transaction: any }) {
     /* ── Result ── */
     return (
         <div className="space-y-4">
-            {/* Header */}
-            <div className="flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-                <span className="text-[10px] text-purple-600 dark:text-purple-400 uppercase tracking-widest font-bold">
-                    AI Summary
-                </span>
-                <span className="text-[9px] bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                    Beta
-                </span>
+            {/* Header + Risk badge */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 uppercase tracking-widest font-bold">
+                        AI Summary
+                    </span>
+                    <span className="text-[9px] bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                        Beta
+                    </span>
+                </div>
+                {data && <RiskBadge score={data.risk_score} label={data.risk_label} />}
             </div>
 
-            {/* Summary text with inline markdown */}
+            {/* Summary text */}
             <div className="bg-purple-50 dark:bg-purple-500/5 border border-purple-200 dark:border-purple-500/20 p-3 rounded-sm">
                 <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
                     <InlineMarkdown text={data?.summary || ''} />
                 </p>
             </div>
 
+            {/* Tips */}
+            {data && data.tips.length > 0 && (
+                <div className="bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/10 p-3 rounded-sm space-y-1.5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                        <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Tips</span>
+                    </div>
+                    {data.tips.map((tip, i) => (
+                        <p key={i} className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed pl-5">
+                            <InlineMarkdown text={tip} />
+                        </p>
+                    ))}
+                </div>
+            )}
+
             {/* React Flow diagram */}
-            {nodes.length > 0 && (
+            {initialNodes.length > 0 && (
                 <div>
                     <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Asset Flow</p>
                     <div
                         className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden"
-                        style={{ height: Math.max(250, Math.ceil(nodes.length / 2) * 100 + 80) }}
+                        style={{ height: Math.max(250, Math.ceil(initialNodes.length / 2) * 100 + 80) }}
                     >
-                        <ReactFlow
-                            nodes={nodes}
-                            edges={edges}
-                            fitView
-                            fitViewOptions={{ padding: 0.3 }}
-                            nodesDraggable
-                            nodesConnectable={false}
-                            panOnDrag
-                            zoomOnScroll
-                            zoomOnPinch
-                            zoomOnDoubleClick
-                            minZoom={0.3}
-                            maxZoom={2}
-                            proOptions={{ hideAttribution: true }}
-                        >
-                            <Background
-                                variant={BackgroundVariant.Dots}
-                                gap={16}
-                                size={1}
-                                color={isDark ? '#333' : '#ddd'}
-                                style={{ backgroundColor: isDark ? '#09090b' : '#fafafa' }}
-                            />
-                            <Controls
-                                showInteractive={false}
-                                className="!bg-white dark:!bg-zinc-800 !border-zinc-200 dark:!border-white/10 !shadow-sm [&>button]:!border-zinc-200 dark:[&>button]:!border-white/10 [&>button]:!bg-white dark:[&>button]:!bg-zinc-800 [&>button>svg]:!fill-zinc-600 dark:[&>button>svg]:!fill-zinc-400"
-                            />
-                        </ReactFlow>
+                        <FlowDiagram
+                            initialNodes={initialNodes}
+                            initialEdges={initialEdges}
+                            isDark={isDark}
+                            tokenIcons={tokenIcons}
+                            flows={data?.flows || []}
+                        />
                     </div>
                 </div>
             )}
