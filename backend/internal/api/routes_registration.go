@@ -12,7 +12,14 @@ func registerBaseRoutes(r *mux.Router, s *Server) {
 }
 
 func registerAdminRoutes(r *mux.Router, s *Server) {
-	r.HandleFunc("/admin/refetch-token-metadata", s.handleAdminRefetchTokenMetadata).Methods("POST", "OPTIONS")
+	admin := r.PathPrefix("/admin").Subrouter()
+	admin.Use(adminAuthMiddleware)
+	admin.HandleFunc("/refetch-token-metadata", s.handleAdminRefetchTokenMetadata).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/refetch-bridge", s.handleAdminRefetchBridge).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/ft", s.handleAdminListFTTokens).Methods("GET", "OPTIONS")
+	admin.HandleFunc("/ft/{identifier}", s.handleAdminUpdateFTToken).Methods("PUT", "PATCH", "OPTIONS")
+	admin.HandleFunc("/nft", s.handleAdminListNFTCollections).Methods("GET", "OPTIONS")
+	admin.HandleFunc("/nft/{identifier}", s.handleAdminUpdateNFTCollection).Methods("PUT", "PATCH", "OPTIONS")
 }
 
 func registerAPIRoutes(r *mux.Router, s *Server) {

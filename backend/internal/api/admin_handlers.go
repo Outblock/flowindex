@@ -80,6 +80,111 @@ func (s *Server) handleAdminRefetchTokenMetadata(w http.ResponseWriter, r *http.
 	})
 }
 
+// handleAdminRefetchBridge re-checks EVM bridge addresses for all tokens/collections
+// that have metadata but no evm_address.
+func (s *Server) handleAdminRefetchBridge(w http.ResponseWriter, r *http.Request) {
+	if s.client == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "no Flow client configured")
+		return
+	}
+
+	ctx := r.Context()
+	script := adminBridgeOnlyScript()
+	timeout := 15 * time.Second
+
+	// NFT collections missing bridge
+	nftMissing, err := s.repo.ListNFTCollectionsMissingBridge(ctx, 10000)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	nftUpdated := 0
+	nftFailed := 0
+	for _, c := range nftMissing {
+		identifier := fmt.Sprintf("A.%s.%s.NFT", c.ContractAddress, c.ContractName)
+		evmAddr := adminQueryBridgeAddress(ctx, s.client, script, identifier, timeout)
+		if evmAddr == "" {
+			continue
+		}
+		if err := s.repo.UpdateEVMBridgeAddress(ctx, "app.nft_collections", c.ContractAddress, c.ContractName, evmAddr); err != nil {
+			log.Printf("[admin] nft bridge update error %s.%s: %v", c.ContractAddress, c.ContractName, err)
+			nftFailed++
+			continue
+		}
+		log.Printf("[admin] nft bridge updated %s.%s -> %s", c.ContractAddress, c.ContractName, evmAddr)
+		nftUpdated++
+	}
+
+	// FT tokens missing bridge
+	ftMissing, err := s.repo.ListFTTokensMissingBridge(ctx, 10000)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	ftUpdated := 0
+	ftFailed := 0
+	for _, t := range ftMissing {
+		identifier := fmt.Sprintf("A.%s.%s.Vault", t.ContractAddress, t.ContractName)
+		evmAddr := adminQueryBridgeAddress(ctx, s.client, script, identifier, timeout)
+		if evmAddr == "" {
+			continue
+		}
+		if err := s.repo.UpdateEVMBridgeAddress(ctx, "app.ft_tokens", t.ContractAddress, t.ContractName, evmAddr); err != nil {
+			log.Printf("[admin] ft bridge update error %s.%s: %v", t.ContractAddress, t.ContractName, err)
+			ftFailed++
+			continue
+		}
+		log.Printf("[admin] ft bridge updated %s.%s -> %s", t.ContractAddress, t.ContractName, evmAddr)
+		ftUpdated++
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"nft_checked": len(nftMissing),
+		"nft_updated": nftUpdated,
+		"nft_failed":  nftFailed,
+		"ft_checked":  len(ftMissing),
+		"ft_updated":  ftUpdated,
+		"ft_failed":   ftFailed,
+	})
+}
+
+func adminQueryBridgeAddress(ctx context.Context, client FlowClient, script string, identifier string, timeout time.Duration) string {
+	idVal, _ := cadence.NewString(identifier)
+	ctxExec, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	v, err := client.ExecuteScriptAtLatestBlock(ctxExec, []byte(script), []cadence.Value{idVal})
+	if err != nil {
+		return ""
+	}
+	v = adminUnwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(cadence.String); ok {
+		return string(s)
+	}
+	return ""
+}
+
+func adminBridgeOnlyScript() string {
+	evmBridgeAddr := adminGetEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+	return fmt.Sprintf(`
+		import FlowEVMBridgeConfig from 0x%s
+
+		access(all) fun main(identifier: String): String? {
+			if let type = CompositeType(identifier) {
+				if let address = FlowEVMBridgeConfig.getEVMAddressAssociated(with: type) {
+					return "0x".concat(address.toString())
+				}
+			}
+			return nil
+		}
+	`, evmBridgeAddr)
+}
+
 // --- helpers (reuse logic from token_metadata_worker but using the FlowClient interface) ---
 
 func fetchFTMetadataViaClient(ctx context.Context, client FlowClient, contractAddr, contractName string) (models.FTToken, bool) {
@@ -136,7 +241,7 @@ func fetchNFTCollectionMetadataViaClient(ctx context.Context, client FlowClient,
 	ctxExec, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	v, err := client.ExecuteScriptAtLatestBlock(ctxExec, []byte(adminNFTCollectionDisplayScript()), []cadence.Value{
+	v, err := client.ExecuteScriptAtLatestBlock(ctxExec, []byte(adminNFTCollectionDisplayWithBridgeScript()), []cadence.Value{
 		cadence.NewAddress([8]byte(addr)),
 		nameVal,
 	})
@@ -149,7 +254,28 @@ func fetchNFTCollectionMetadataViaClient(ctx context.Context, client FlowClient,
 	if !ok {
 		return models.NFTCollection{}, false
 	}
-	fields := s.FieldsMappedByName()
+	topFields := s.FieldsMappedByName()
+
+	// Extract EVM address from the wrapper struct.
+	evmAddress := adminCadenceToString(topFields["evmAddress"])
+
+	// Extract the display struct.
+	displayVal := adminUnwrapOptional(topFields["display"])
+	if displayVal == nil {
+		if evmAddress != "" {
+			return models.NFTCollection{
+				ContractAddress: contractAddr,
+				ContractName:    contractName,
+				EVMAddress:      evmAddress,
+			}, true
+		}
+		return models.NFTCollection{}, false
+	}
+	displayStruct, ok := displayVal.(cadence.Struct)
+	if !ok {
+		return models.NFTCollection{}, false
+	}
+	fields := displayStruct.FieldsMappedByName()
 	name := adminCadenceToString(fields["name"])
 	if name == "" {
 		return models.NFTCollection{}, false
@@ -177,6 +303,7 @@ func fetchNFTCollectionMetadataViaClient(ctx context.Context, client FlowClient,
 		SquareImage:     adminExtractMediaImageURL(fields["squareImage"]),
 		BannerImage:     adminExtractMediaImageURL(fields["bannerImage"]),
 		Socials:         socials,
+		EVMAddress:      evmAddress,
 	}, true
 }
 
@@ -373,17 +500,40 @@ func adminFTCombinedScript() string {
     `, adminViewResolverAddr(), adminFTAddr(), adminFTMetadataViewsAddr(), adminViewResolverAddr())
 }
 
-func adminNFTCollectionDisplayScript() string {
+// adminNFTCollectionDisplayWithBridgeScript returns the combined script that fetches
+// both NFTCollectionDisplay metadata and the EVM bridge address.
+func adminNFTCollectionDisplayWithBridgeScript() string {
 	metadataViewsAddr := adminGetEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS", "")
 	if metadataViewsAddr == "" {
 		metadataViewsAddr = adminGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")
 	}
+	evmBridgeAddr := adminGetEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
 
 	return fmt.Sprintf(`
         import ViewResolver from 0x%s
         import MetadataViews from 0x%s
+        import FlowEVMBridgeConfig from 0x%s
 
-        access(all) fun main(contractAddress: Address, contractName: String): MetadataViews.NFTCollectionDisplay? {
+        access(all) struct NFTCollectionInfo {
+            access(all) let display: MetadataViews.NFTCollectionDisplay?
+            access(all) let evmAddress: String?
+
+            init(display: MetadataViews.NFTCollectionDisplay?, evmAddress: String?) {
+                self.display = display
+                self.evmAddress = evmAddress
+            }
+        }
+
+        access(all) fun getEVMAddress(identifier: String): String? {
+            if let type = CompositeType(identifier) {
+                if let address = FlowEVMBridgeConfig.getEVMAddressAssociated(with: type) {
+                    return "0x".concat(address.toString())
+                }
+            }
+            return nil
+        }
+
+        access(all) fun main(contractAddress: Address, contractName: String): NFTCollectionInfo? {
             let acct = getAccount(contractAddress)
             let viewResolver = acct.contracts.borrow<&{ViewResolver}>(name: contractName)
             if viewResolver == nil { return nil }
@@ -391,9 +541,13 @@ func adminNFTCollectionDisplayScript() string {
                 resourceType: nil,
                 viewType: Type<MetadataViews.NFTCollectionDisplay>()
             ) as! MetadataViews.NFTCollectionDisplay?
-            return display
+
+            let identifier = "A.".concat(contractAddress.toString().slice(from: 2, upTo: contractAddress.toString().length)).concat(".").concat(contractName).concat(".NFT")
+            let evmAddr = getEVMAddress(identifier: identifier)
+
+            return NFTCollectionInfo(display: display, evmAddress: evmAddr)
         }
-    `, adminViewResolverAddr(), metadataViewsAddr)
+    `, adminViewResolverAddr(), metadataViewsAddr, evmBridgeAddr)
 }
 
 // --- Cadence value extraction helpers (admin-prefixed to avoid collision with ingester) ---

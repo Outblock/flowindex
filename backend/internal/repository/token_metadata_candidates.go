@@ -88,3 +88,68 @@ func (r *Repository) ListNFTCollectionsMissingMetadata(ctx context.Context, limi
 	return out, rows.Err()
 }
 
+// ListNFTCollectionsMissingBridge returns NFT collections that have metadata (name != '')
+// but no EVM bridge address. Used for periodic bridge status backfill.
+func (r *Repository) ListNFTCollectionsMissingBridge(ctx context.Context, limit int) ([]models.NFTCollection, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(contract_address, 'hex') AS contract_address,
+		       COALESCE(contract_name,'') AS contract_name
+		FROM app.nft_collections
+		WHERE COALESCE(name,'') != '' AND COALESCE(evm_address,'') = ''
+		ORDER BY updated_at ASC, contract_address ASC, contract_name ASC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list nft collections missing bridge: %w", err)
+	}
+	defer rows.Close()
+	var out []models.NFTCollection
+	for rows.Next() {
+		var c models.NFTCollection
+		if err := rows.Scan(&c.ContractAddress, &c.ContractName); err != nil {
+			return nil, fmt.Errorf("scan nft collections missing bridge: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// ListFTTokensMissingBridge returns FT tokens that have metadata (name != '')
+// but no EVM bridge address. Used for periodic bridge status backfill.
+func (r *Repository) ListFTTokensMissingBridge(ctx context.Context, limit int) ([]models.FTToken, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(contract_address, 'hex') AS contract_address,
+		       COALESCE(contract_name,'') AS contract_name
+		FROM app.ft_tokens
+		WHERE COALESCE(name,'') != '' AND COALESCE(evm_address,'') = ''
+		ORDER BY updated_at ASC, contract_address ASC, contract_name ASC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list ft tokens missing bridge: %w", err)
+	}
+	defer rows.Close()
+	var out []models.FTToken
+	for rows.Next() {
+		var t models.FTToken
+		if err := rows.Scan(&t.ContractAddress, &t.ContractName); err != nil {
+			return nil, fmt.Errorf("scan ft tokens missing bridge: %w", err)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// UpdateEVMBridgeAddress updates only the evm_address for a token/collection.
+func (r *Repository) UpdateEVMBridgeAddress(ctx context.Context, table, contractAddr, contractName, evmAddress string) error {
+	_, err := r.db.Exec(ctx, fmt.Sprintf(`
+		UPDATE %s SET evm_address = $1, updated_at = NOW()
+		WHERE contract_address = $2 AND contract_name = $3`, table),
+		evmAddress, hexToBytes(contractAddr), contractName)
+	return err
+}
+

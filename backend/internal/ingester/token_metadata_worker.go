@@ -694,3 +694,21 @@ func cadenceNFTCollectionDisplayScript() string {
     `, viewResolverAddr, metadataViewsAddr, evmBridgeAddr)
 }
 
+// cadenceBridgeOnlyScript returns a lightweight Cadence script that only queries
+// FlowEVMBridgeConfig for a given type identifier. Much faster than the full metadata script.
+func cadenceBridgeOnlyScript() string {
+	evmBridgeAddr := getEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+	return fmt.Sprintf(`
+		import FlowEVMBridgeConfig from 0x%s
+
+		access(all) fun main(identifier: String): String? {
+			if let type = CompositeType(identifier) {
+				if let address = FlowEVMBridgeConfig.getEVMAddressAssociated(with: type) {
+					return "0x".concat(address.toString())
+				}
+			}
+			return nil
+		}
+	`, evmBridgeAddr)
+}
+
