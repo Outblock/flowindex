@@ -13,6 +13,7 @@ import (
 	"github.com/onflow/cadence"
 
 	flowclient "flowscan-clone/internal/flow"
+	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 )
 
@@ -55,17 +56,23 @@ func (p *NetworkPoller) Start(ctx context.Context) {
 }
 
 func (p *NetworkPoller) poll(ctx context.Context) {
-	fetchCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	// Fetch epoch info
-	if err := p.fetchEpochStatus(fetchCtx); err != nil {
+	epoch, err := p.fetchEpochStatus(fetchCtx)
+	if err != nil {
 		log.Printf("[NetworkPoller] epoch_status error: %v", err)
 	}
 
 	// Fetch tokenomics (total staked + node count)
 	if err := p.fetchTokenomics(fetchCtx); err != nil {
 		log.Printf("[NetworkPoller] tokenomics error: %v", err)
+	}
+
+	// Fetch full node list and upsert into staking_nodes
+	if err := p.fetchAndUpsertNodes(fetchCtx, epoch); err != nil {
+		log.Printf("[NetworkPoller] node_list error: %v", err)
 	}
 }
 
@@ -92,26 +99,52 @@ access(all) fun main(): [AnyStruct] {
 }
 `
 
-func (p *NetworkPoller) fetchEpochStatus(ctx context.Context) error {
+// Cadence script to get full node info for all staked nodes
+const nodeListScript = `
+import FlowIDTableStaking from 0x8624b52f9ddcd04a
+
+access(all) fun main(): [AnyStruct] {
+    let ids = FlowIDTableStaking.getStakedNodeIDs()
+    let nodes: [[AnyStruct]] = []
+    for id in ids {
+        let info = FlowIDTableStaking.NodeInfo(nodeID: id)
+        nodes.append([
+            info.id,
+            info.role,
+            info.networkingAddress,
+            info.tokensStaked,
+            info.tokensCommitted,
+            info.tokensUnstaking,
+            info.tokensUnstaked,
+            info.tokensRewarded,
+            info.delegatorIDCounter,
+            info.initialWeight
+        ])
+    }
+    return nodes
+}
+`
+
+func (p *NetworkPoller) fetchEpochStatus(ctx context.Context) (uint64, error) {
 	result, err := p.flowClient.ExecuteScriptAtLatestBlock(ctx, []byte(epochScript), nil)
 	if err != nil {
-		return fmt.Errorf("execute epoch script: %w", err)
+		return 0, fmt.Errorf("execute epoch script: %w", err)
 	}
 
 	arr, ok := result.(cadence.Array)
 	if !ok || len(arr.Values) < 4 {
-		return fmt.Errorf("unexpected epoch script result: %v", result)
+		return 0, fmt.Errorf("unexpected epoch script result: %v", result)
 	}
 
-	counter := cadenceToUint64(arr.Values[0])
-	phase := cadenceToUint64(arr.Values[1])
-	startView := cadenceToUint64(arr.Values[2])
-	endView := cadenceToUint64(arr.Values[3])
+	counter := npCadenceToUint64(arr.Values[0])
+	phase := npCadenceToUint64(arr.Values[1])
+	startView := npCadenceToUint64(arr.Values[2])
+	endView := npCadenceToUint64(arr.Values[3])
 
 	// Get current view from latest block header
 	latestHeight, err := p.flowClient.GetLatestBlockHeight(ctx)
 	if err != nil {
-		return fmt.Errorf("get latest block height: %w", err)
+		return counter, fmt.Errorf("get latest block height: %w", err)
 	}
 
 	// Calculate progress
@@ -135,10 +168,10 @@ func (p *NetworkPoller) fetchEpochStatus(ctx context.Context) error {
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return counter, err
 	}
 
-	return p.repo.UpsertStatusSnapshot(ctx, "epoch_status", data, now)
+	return counter, p.repo.UpsertStatusSnapshot(ctx, "epoch_status", data, now)
 }
 
 func (p *NetworkPoller) fetchTokenomics(ctx context.Context) error {
@@ -152,8 +185,8 @@ func (p *NetworkPoller) fetchTokenomics(ctx context.Context) error {
 		return fmt.Errorf("unexpected staking script result: %v", result)
 	}
 
-	totalStaked := cadenceToFloat64(arr.Values[0])
-	validatorCount := cadenceToUint64(arr.Values[1])
+	totalStaked := npCadenceToFloat64(arr.Values[0])
+	validatorCount := npCadenceToUint64(arr.Values[1])
 
 	now := time.Now()
 	payload := map[string]interface{}{
@@ -170,8 +203,62 @@ func (p *NetworkPoller) fetchTokenomics(ctx context.Context) error {
 	return p.repo.UpsertStatusSnapshot(ctx, "tokenomics", data, now)
 }
 
-// cadenceToUint64 extracts a uint64 from various Cadence value types
-func cadenceToUint64(v cadence.Value) uint64 {
+func (p *NetworkPoller) fetchAndUpsertNodes(ctx context.Context, epoch uint64) error {
+	result, err := p.flowClient.ExecuteScriptAtLatestBlock(ctx, []byte(nodeListScript), nil)
+	if err != nil {
+		return fmt.Errorf("execute node list script: %w", err)
+	}
+
+	outerArr, ok := result.(cadence.Array)
+	if !ok {
+		return fmt.Errorf("unexpected node list result type: %T", result)
+	}
+
+	nodes := make([]models.StakingNode, 0, len(outerArr.Values))
+	for _, v := range outerArr.Values {
+		nodeArr, ok := v.(cadence.Array)
+		if !ok || len(nodeArr.Values) < 9 {
+			continue
+		}
+
+		nodeID := npCadenceToString(nodeArr.Values[0])
+		if nodeID == "" {
+			continue
+		}
+
+		role := int(npCadenceToUint64(nodeArr.Values[1]))
+		networkingAddr := npCadenceToString(nodeArr.Values[2])
+		tokensStaked := npCadenceToString(nodeArr.Values[3])
+		tokensCommitted := npCadenceToString(nodeArr.Values[4])
+		tokensUnstaking := npCadenceToString(nodeArr.Values[5])
+		tokensUnstaked := npCadenceToString(nodeArr.Values[6])
+		tokensRewarded := npCadenceToString(nodeArr.Values[7])
+		delegatorCount := int(npCadenceToUint64(nodeArr.Values[8]))
+
+		nodes = append(nodes, models.StakingNode{
+			NodeID:            nodeID,
+			Epoch:             int64(epoch),
+			Role:              role,
+			NetworkingAddress: networkingAddr,
+			TokensStaked:      tokensStaked,
+			TokensCommitted:   tokensCommitted,
+			TokensUnstaking:   tokensUnstaking,
+			TokensUnstaked:    tokensUnstaked,
+			TokensRewarded:    tokensRewarded,
+			DelegatorCount:    delegatorCount,
+		})
+	}
+
+	if len(nodes) == 0 {
+		return fmt.Errorf("no nodes parsed from Cadence result")
+	}
+
+	log.Printf("[NetworkPoller] Upserting %d nodes for epoch %d", len(nodes), epoch)
+	return p.repo.UpsertStakingNodes(ctx, nodes)
+}
+
+// npCadenceToUint64 extracts a uint64 from various Cadence value types
+func npCadenceToUint64(v cadence.Value) uint64 {
 	switch val := v.(type) {
 	case cadence.UInt64:
 		return uint64(val)
@@ -186,7 +273,7 @@ func cadenceToUint64(v cadence.Value) uint64 {
 		return n
 	case cadence.Optional:
 		if val.Value != nil {
-			return cadenceToUint64(val.Value)
+			return npCadenceToUint64(val.Value)
 		}
 		return 0
 	default:
@@ -197,8 +284,8 @@ func cadenceToUint64(v cadence.Value) uint64 {
 	}
 }
 
-// cadenceToFloat64 extracts a float64 from UFix64 or other numeric Cadence values
-func cadenceToFloat64(v cadence.Value) float64 {
+// npCadenceToFloat64 extracts a float64 from UFix64 or other numeric Cadence values
+func npCadenceToFloat64(v cadence.Value) float64 {
 	switch val := v.(type) {
 	case cadence.UFix64:
 		f, _ := strconv.ParseFloat(val.String(), 64)
@@ -208,12 +295,33 @@ func cadenceToFloat64(v cadence.Value) float64 {
 		return f
 	case cadence.Optional:
 		if val.Value != nil {
-			return cadenceToFloat64(val.Value)
+			return npCadenceToFloat64(val.Value)
 		}
 		return 0
 	default:
 		s := strings.TrimSpace(v.String())
 		f, _ := strconv.ParseFloat(s, 64)
 		return f
+	}
+}
+
+// npCadenceToString extracts a string from a Cadence value
+func npCadenceToString(v cadence.Value) string {
+	switch val := v.(type) {
+	case cadence.String:
+		return string(val)
+	case cadence.Optional:
+		if val.Value != nil {
+			return npCadenceToString(val.Value)
+		}
+		return ""
+	default:
+		s := v.String()
+		// UFix64 values come through as e.g. "123.456" which is fine for tokens
+		// String values may be quoted — strip quotes
+		if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+			return s[1 : len(s)-1]
+		}
+		return s
 	}
 }
