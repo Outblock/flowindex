@@ -347,16 +347,16 @@ function Transactions() {
                     </div>
                 ) : (
                     <div className="space-y-0">
-                        <AnimatePresence mode='popLayout'>
+                        <AnimatePresence initial={false}>
                             {displayTxs.map((tx) => {
                                 const isNew = newTxIds.has(tx.id);
                                 return (
                                     <motion.div
-                                        layout
-                                        key={tx.id}
-                                        initial={{ opacity: 0, x: -10 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        className={isNew ? 'bg-nothing-green/10' : ''}
+                                        key={`${tx.id}-${tx.block_height || tx.blockHeight}`}
+                                        initial={isNew ? { opacity: 0, height: 0 } : false}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        transition={{ duration: 0.3 }}
+                                        className={isNew ? 'bg-nothing-green/5' : ''}
                                     >
                                         <ActivityRow
                                             tx={tx}

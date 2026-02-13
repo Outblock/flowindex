@@ -66,18 +66,21 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	args = append(args, f.Limit, f.Offset)
 
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
-		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
-		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
-		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
-		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
-		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
-		       t.timestamp, t.timestamp AS created_at,
-		       COALESCE(m.event_count, t.event_count) AS event_count
-		FROM raw.transactions t
-		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
-		`+where+`
-		ORDER BY t.block_height DESC, t.transaction_index DESC
+		SELECT * FROM (
+		  SELECT DISTINCT ON (t.id)
+		         encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
+		         COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+		         COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+		         COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
+		         t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
+		         COALESCE(m.gas_used, t.gas_used) AS gas_used,
+		         t.timestamp, t.timestamp AS created_at,
+		         COALESCE(m.event_count, t.event_count) AS event_count
+		  FROM raw.transactions t
+		  LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
+		  `+where+`
+		  ORDER BY t.id, t.block_height DESC
+		) sub ORDER BY sub.block_height DESC, sub.transaction_index DESC
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
 	if err != nil {
 		return nil, err
