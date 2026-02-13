@@ -1,7 +1,10 @@
+import { useState, useEffect, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Loader2, Globe } from 'lucide-react';
 import { normalizeAddress, formatShort } from './account/accountUtils';
 import { formatRelativeTime } from '../lib/time';
+import { ensureHeyApiConfigured } from '../api/heyapi';
+import { getFlowV1TransactionById } from '../api/gen/find/sdk.gen';
 
 // --- Interfaces ---
 
@@ -170,49 +173,266 @@ export function buildSummaryLine(tx: any): string {
     return '';
 }
 
-// --- Expanded Detail Panel ---
+// --- Detail cache (persists across re-renders, shared across rows) ---
+const detailCache = new Map<string, any>();
 
-export function ExpandedTransferDetails({ tx, address }: { tx: any; address: string }) {
+// --- Expanded Detail Panel with lazy fetch ---
+
+export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; address: string; expanded: boolean }) {
+    const [detail, setDetail] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(false);
+    const fetchedRef = useRef(false);
+
+    useEffect(() => {
+        if (!expanded || fetchedRef.current) return;
+        fetchedRef.current = true;
+
+        const txId = tx.id;
+        if (detailCache.has(txId)) {
+            setDetail(detailCache.get(txId));
+            return;
+        }
+
+        let cancelled = false;
+        setLoading(true);
+        (async () => {
+            try {
+                await ensureHeyApiConfigured();
+                const res = await getFlowV1TransactionById({ path: { id: txId } });
+                const raw: any = (res.data as any)?.data?.[0] ?? res.data;
+                if (!cancelled) {
+                    detailCache.set(txId, raw);
+                    setDetail(raw);
+                }
+            } catch {
+                if (!cancelled) setError(true);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [expanded, tx.id]);
+
+    // Fallback to list-level data while loading or on error
     const summary: TransferSummary | undefined = tx.transfer_summary;
-    const hasFT = summary?.ft && summary.ft.length > 0;
-    const hasNFT = summary?.nft && summary.nft.length > 0;
-    const isEVM = tx.is_evm || tx.evm_hash;
+    const tags: string[] = tx.tags || [];
+    const tagsLower = tags.map((t: string) => t.toLowerCase());
+
+    // Derive rich data from detail response
+    const evmExecs: any[] = detail?.evm_executions || [];
+    const ftTransfers: any[] = detail?.ft_transfers || [];
+    const events: any[] = detail?.events || [];
+
+    // Extract created accounts from events
+    const createdAccounts: string[] = [];
+    if (tagsLower.some(t => t.includes('account_created'))) {
+        for (const ev of events) {
+            const name = ev.name || ev.type || '';
+            if (name.includes('AccountCreated')) {
+                try {
+                    const payload = ev.values || ev.payload || ev.data || ev.fields;
+                    const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
+                    // Cadence event: { type: "Event", value: { fields: [{ name: "address", value: { value: "0x..." } }] } }
+                    const extractAddr = (obj: any): string | null => {
+                        if (!obj) return null;
+                        if (typeof obj === 'string' && obj.startsWith('0x')) return obj;
+                        if (obj.value !== undefined) return extractAddr(obj.value);
+                        if (Array.isArray(obj.fields)) {
+                            const addrField = obj.fields.find((f: any) => f.name === 'address');
+                            if (addrField) return extractAddr(addrField.value || addrField);
+                        }
+                        if (Array.isArray(obj)) {
+                            for (const item of obj) {
+                                const found = extractAddr(item);
+                                if (found) return found;
+                            }
+                        }
+                        return null;
+                    };
+                    const addr = extractAddr(parsed);
+                    if (addr) createdAccounts.push(addr.replace(/^0x/, ''));
+                } catch { /* skip */ }
+            }
+        }
+    }
 
     return (
         <div className="px-4 pb-4 pt-1 ml-[88px] space-y-3">
-            {/* EVM info */}
-            {isEVM && tx.evm_hash && (
+            {/* Loading indicator */}
+            {loading && (
+                <div className="flex items-center gap-2 text-xs text-zinc-400 py-1">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Loading details...</span>
+                </div>
+            )}
+
+            {/* EVM Executions (from detail API) */}
+            {evmExecs.length > 0 && (
+                <div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">EVM Executions</div>
+                    <div className="space-y-1.5">
+                        {evmExecs.map((exec: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
+                                <a
+                                    href={`https://evm.flowscan.io/tx/0x${exec.hash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-mono text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                >
+                                    0x{formatShort(exec.hash, 10, 8)}
+                                    <ExternalLink className="h-3 w-3" />
+                                </a>
+                                {exec.from && (
+                                    <>
+                                        <span className="text-zinc-400">from</span>
+                                        <a
+                                            href={`https://evm.flowscan.io/address/0x${exec.from}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                        >
+                                            0x{formatShort(exec.from, 6, 4)}
+                                        </a>
+                                    </>
+                                )}
+                                {exec.to && (
+                                    <>
+                                        <span className="text-zinc-400">&rarr;</span>
+                                        <a
+                                            href={`https://evm.flowscan.io/address/0x${exec.to}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                        >
+                                            0x{formatShort(exec.to, 6, 4)}
+                                        </a>
+                                    </>
+                                )}
+                                {!exec.to && <span className="text-zinc-400 italic">Contract Creation</span>}
+                                {exec.value && exec.value !== '0' && (
+                                    <span className="text-zinc-500 font-mono">{(Number(exec.value) / 1e18).toFixed(4)} FLOW</span>
+                                )}
+                                <span className={`text-[9px] uppercase px-1 py-0.5 rounded-sm border ${
+                                    exec.status === 'SEALED' || exec.status === 'SUCCESS'
+                                        ? 'text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10'
+                                        : exec.status ? 'text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10' : ''
+                                }`}>
+                                    {exec.status || ''}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Fallback: EVM from list data when detail not loaded yet */}
+            {evmExecs.length === 0 && !detail && (tx.is_evm || tx.evm_hash) && tx.evm_hash && (
                 <div className="flex items-center gap-2 text-xs">
                     <span className="text-zinc-500 uppercase tracking-wider text-[10px] w-20 flex-shrink-0">EVM Hash</span>
                     <Link to={`/tx/${tx.evm_hash}` as any} className="font-mono text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1">
                         {formatShort(tx.evm_hash, 16, 12)}
                         <ExternalLink className="h-3 w-3" />
                     </Link>
-                    {tx.evm_from && (
-                        <>
-                            <span className="text-zinc-400 mx-1">from</span>
-                            <Link to={`/accounts/${tx.evm_from}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                {formatShort(tx.evm_from, 8, 6)}
-                            </Link>
-                        </>
-                    )}
-                    {tx.evm_to && (
-                        <>
-                            <span className="text-zinc-400 mx-1">&rarr;</span>
-                            <Link to={`/accounts/${tx.evm_to}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                {formatShort(tx.evm_to, 8, 6)}
-                            </Link>
-                        </>
-                    )}
                 </div>
             )}
 
-            {/* FT Transfer details */}
-            {hasFT && (
+            {/* Account Creation */}
+            {createdAccounts.length > 0 && (
+                <div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Created Accounts</div>
+                    <div className="space-y-1">
+                        {createdAccounts.map((addr, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs">
+                                <UserPlus className="h-3 w-3 text-cyan-500 flex-shrink-0" />
+                                <Link
+                                    to={`/accounts/${normalizeAddress(addr)}` as any}
+                                    className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                >
+                                    0x{normalizeAddress(addr)}
+                                </Link>
+                                {(tx.payer || tx.authorizers?.[0]) && (
+                                    <span className="text-zinc-400 text-[10px]">
+                                        by{' '}
+                                        <Link
+                                            to={`/accounts/${normalizeAddress(tx.payer || tx.authorizers[0])}` as any}
+                                            className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                        >
+                                            {formatShort(tx.payer || tx.authorizers[0])}
+                                        </Link>
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Account creation fallback before detail loads */}
+            {createdAccounts.length === 0 && !detail && tagsLower.some(t => t.includes('account_created')) && (
+                <div className="flex items-center gap-2 text-xs">
+                    <UserPlus className="h-3 w-3 text-cyan-500" />
+                    <span className="text-zinc-500">Created new account</span>
+                    {!loading && <span className="text-zinc-400 text-[10px]">(expand to see address)</span>}
+                </div>
+            )}
+
+            {/* FT Transfers (rich, from detail API) */}
+            {ftTransfers.length > 0 && (
                 <div>
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Token Transfers</div>
                     <div className="space-y-1.5">
-                        {summary!.ft.map((f, i) => {
+                        {ftTransfers.map((ft: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-xs">
+                                {ft.token_logo ? (
+                                    <img src={ft.token_logo} alt="" className="w-[18px] h-[18px] rounded-full object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                ) : (
+                                    <TokenIcon logo={null} symbol={ft.token_symbol} size={18} />
+                                )}
+                                <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
+                                    {ft.amount != null ? Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
+                                </span>
+                                <span className="text-zinc-500 text-[10px] uppercase font-medium">{ft.token_symbol || ft.token?.split('.').pop() || ''}</span>
+                                {ft.is_cross_vm && (
+                                    <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1 py-0.5 rounded uppercase">
+                                        <Globe className="w-2.5 h-2.5" />
+                                        Cross-VM
+                                    </span>
+                                )}
+                                {ft.from_address && (
+                                    <span className="text-zinc-400 text-[10px]">
+                                        from{' '}
+                                        <Link to={`/accounts/${ft.from_address}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                            {formatShort(ft.from_address, 8, 4)}
+                                        </Link>
+                                    </span>
+                                )}
+                                {ft.from_address && ft.to_address && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
+                                {ft.to_address && (
+                                    <span className="text-zinc-400 text-[10px]">
+                                        to{' '}
+                                        <Link to={`/accounts/${ft.to_address}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                            {formatShort(ft.to_address, 8, 4)}
+                                        </Link>
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* FT fallback from list summary when detail not loaded */}
+            {ftTransfers.length === 0 && !detail && summary?.ft && summary.ft.length > 0 && (
+                <div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Token Transfers</div>
+                    <div className="space-y-1.5">
+                        {summary.ft.map((f, i) => {
                             const displayName = f.symbol || f.name || formatTokenName(f.token);
                             const isOut = f.direction === 'out';
                             return (
@@ -234,7 +454,6 @@ export function ExpandedTransferDetails({ tx, address }: { tx: any; address: str
                                             </Link>
                                         </span>
                                     )}
-                                    <span className="text-zinc-400 text-[10px] font-mono ml-auto">{f.token}</span>
                                 </div>
                             );
                         })}
@@ -242,12 +461,12 @@ export function ExpandedTransferDetails({ tx, address }: { tx: any; address: str
                 </div>
             )}
 
-            {/* NFT Transfer details */}
-            {hasNFT && (
+            {/* NFT Transfer details (from list summary — detail API doesn't have separate nft_transfers) */}
+            {summary?.nft && summary.nft.length > 0 && (
                 <div>
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">NFT Transfers</div>
                     <div className="space-y-1.5">
-                        {summary!.nft.map((n, i) => {
+                        {summary.nft.map((n, i) => {
                             const displayName = n.name || formatTokenName(n.collection);
                             const isOut = n.direction === 'out';
                             return (
@@ -273,6 +492,11 @@ export function ExpandedTransferDetails({ tx, address }: { tx: any; address: str
                         })}
                     </div>
                 </div>
+            )}
+
+            {/* Error state */}
+            {error && !detail && (
+                <div className="text-xs text-zinc-400">Failed to load details</div>
             )}
 
             {/* General tx info */}
@@ -310,7 +534,7 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
     const summaryLine = buildSummaryLine(tx);
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
     const IconComp = activityTypeIcons[activity.type] || Activity;
-    const hasDetails = !!(tx.transfer_summary?.ft?.length || tx.transfer_summary?.nft?.length || tx.is_evm || tx.evm_hash || tx.gas_used);
+    const hasDetails = true; // All rows are expandable — detail API may reveal interesting data
 
     return (
         <div className={`border-b border-zinc-100 dark:border-white/5 transition-colors ${expanded ? 'bg-zinc-50/50 dark:bg-white/[0.02]' : ''}`}>
@@ -381,7 +605,7 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
 
             {/* Expanded detail panel */}
             {expanded && hasDetails && (
-                <ExpandedTransferDetails tx={tx} address={address} />
+                <ExpandedTransferDetails tx={tx} address={address} expanded={expanded} />
             )}
         </div>
     );
