@@ -33,7 +33,7 @@ export const Route = createFileRoute('/tx/$txId')({
                 gasUsed: rawTx.gas_used,
                 events: rawTx.events || [],
                 status: rawTx.status || 'UNKNOWN',
-                errorMessage: rawTx.error_message,
+                errorMessage: rawTx.error_message || rawTx.error,
                 arguments: rawTx.arguments
             };
             return { transaction: transformedTx, error: null as string | null };
