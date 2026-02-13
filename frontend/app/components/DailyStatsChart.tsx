@@ -69,10 +69,11 @@ export function DailyStatsChart() {
                 <h2 className="text-xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Transaction History</h2>
                 <div className="flex items-center gap-1">
                     {[
+                        { label: '7D', value: 7 },
                         { label: '14D', value: 14 },
                         { label: '30D', value: 30 },
-                        { label: '3M', value: 90 },
-                        { label: '6M', value: 180 }
+                        { label: '90D', value: 90 },
+                        { label: '180D', value: 180 }
                     ].map((range) => (
                         <button
                             key={range.value}
@@ -87,7 +88,7 @@ export function DailyStatsChart() {
                     ))}
                 </div>
             </div>
-            <div className="h-[200px] w-full">
+            <div className="h-[200px] w-full" key={rangeDays}>
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
                         data={visibleData}

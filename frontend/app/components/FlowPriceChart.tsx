@@ -10,13 +10,13 @@ const generateSparkline = (currentPrice) => {
     const base = Number.isFinite(currentPrice) ? currentPrice : 0;
     const amp = Math.max(Math.abs(base) * 0.02, 0.0005);
     const data = [];
-    const total = 20;
+    const total = 30;
     for (let i = 0; i < total; i++) {
         const a = i * 0.65;
         const b = i * 1.35;
         const value = base + (Math.sin(a) * amp) + (Math.sin(b) * amp * 0.25);
-        const hoursAgo = total - 1 - i;
-        const label = hoursAgo === 0 ? 'Now' : `${hoursAgo}h ago`;
+        const daysAgo = total - 1 - i;
+        const label = daysAgo === 0 ? 'Today' : `${daysAgo}d ago`;
         data.push({ value, label });
     }
     return data;
