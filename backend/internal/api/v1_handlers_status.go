@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 )
 
 // Status endpoints
@@ -107,6 +108,12 @@ func (s *Server) handleStatusPrice(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStatusNodes(w http.ResponseWriter, r *http.Request) {
 	// Return nodes from the latest epoch via the staking_nodes table
 	limit, offset := parseLimitOffset(r)
+	// Nodes are a bounded set (~500); allow higher limit for this endpoint
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 2000 {
+			limit = n
+		}
+	}
 	nodes, err := s.repo.ListStakingNodesLatestEpoch(r.Context(), limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
