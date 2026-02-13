@@ -631,20 +631,24 @@ func adminExtractMediaFileURL(v cadence.Value) string {
 	}
 	s, ok := v.(cadence.Struct)
 	if !ok {
-		return adminCadenceToString(v)
+		return adminTrimQuotes(adminCadenceToString(v))
 	}
 	fields := s.FieldsMappedByName()
 	if url := adminCadenceToString(fields["url"]); url != "" {
-		return url
+		return adminTrimQuotes(url)
 	}
-	if cid := adminCadenceToString(fields["cid"]); cid != "" {
-		path := adminCadenceToString(fields["path"])
+	if cid := adminTrimQuotes(adminCadenceToString(fields["cid"])); cid != "" {
+		path := adminTrimQuotes(adminCadenceToString(fields["path"]))
 		if path != "" {
 			return "https://ipfs.io/ipfs/" + cid + "/" + path
 		}
 		return "https://ipfs.io/ipfs/" + cid
 	}
 	return ""
+}
+
+func adminTrimQuotes(s string) string {
+	return strings.Trim(s, "\"")
 }
 
 func adminExtractMediaImageURL(v cadence.Value) string {

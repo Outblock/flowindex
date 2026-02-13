@@ -369,22 +369,27 @@ func extractMediaFileURL(v cadence.Value) string {
 	}
 	s, ok := v.(cadence.Struct)
 	if !ok {
-		return cadenceToString(v)
+		return trimQuotes(cadenceToString(v))
 	}
 	fields := s.FieldsMappedByName()
 	// HTTPFile has "url" field
 	if url := cadenceToString(fields["url"]); url != "" {
-		return url
+		return trimQuotes(url)
 	}
 	// IPFSFile has "cid" field
-	if cid := cadenceToString(fields["cid"]); cid != "" {
-		path := cadenceToString(fields["path"])
+	if cid := trimQuotes(cadenceToString(fields["cid"])); cid != "" {
+		path := trimQuotes(cadenceToString(fields["path"]))
 		if path != "" {
 			return "https://ipfs.io/ipfs/" + cid + "/" + path
 		}
 		return "https://ipfs.io/ipfs/" + cid
 	}
 	return ""
+}
+
+// trimQuotes strips surrounding double quotes from a string.
+func trimQuotes(s string) string {
+	return strings.Trim(s, "\"")
 }
 
 // extractMediaImageURL extracts URL from a single MetadataViews.Media value.

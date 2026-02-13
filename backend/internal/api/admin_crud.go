@@ -152,10 +152,10 @@ func (s *Server) handleAdminUpdateNFTCollection(w http.ResponseWriter, r *http.R
 		updates["symbol"] = *body.Symbol
 	}
 	if body.SquareImage != nil {
-		updates["square_image"] = *body.SquareImage
+		updates["square_image"] = unquoteString(*body.SquareImage)
 	}
 	if body.BannerImage != nil {
-		updates["banner_image"] = *body.BannerImage
+		updates["banner_image"] = unquoteString(*body.BannerImage)
 	}
 	if body.Description != nil {
 		updates["description"] = *body.Description
@@ -201,8 +201,8 @@ func nftCollectionToAdmin(c models.NFTCollection) map[string]interface{} {
 		"symbol":           c.Symbol,
 		"description":      c.Description,
 		"external_url":     c.ExternalURL,
-		"square_image":     c.SquareImage,
-		"banner_image":     c.BannerImage,
+		"square_image":     unquoteString(c.SquareImage),
+		"banner_image":     unquoteString(c.BannerImage),
 		"updated_at":       formatTime(c.UpdatedAt),
 	}
 }

@@ -31,10 +31,7 @@ func safeRawJSON(b []byte) json.RawMessage {
 // unquoteString strips surrounding JSON quotes from a string value that was
 // stored as a JSON-encoded text (e.g. `"https://..."` → `https://...`).
 func unquoteString(s string) string {
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		s = s[1 : len(s)-1]
-	}
-	return s
+	return strings.Trim(s, "\"")
 }
 
 func writeAPIResponse(w http.ResponseWriter, data interface{}, meta map[string]interface{}, links map[string]string) {
