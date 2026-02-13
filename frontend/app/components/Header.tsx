@@ -31,12 +31,10 @@ function Header() {
     } else if (/^[a-fA-F0-9]{64}$/.test(query)) {
       navigate({ to: '/tx/$txId', params: { txId: query } });
     } else if (/^0x[a-fA-F0-9]{40}$/.test(query)) {
-      // COA address -> resolve to Flow address if possible
-      // NOTE: The legacy /coa/{address} route was removed. Using manual fetch
-      // against /flow/account/{address} which may include COA mapping data.
+      // COA (EVM) address -> resolve to Flow address via /flow/coa/{address}
       try {
         const baseUrl = await resolveApiBaseUrl();
-        const res = await fetch(`${baseUrl}/flow/account/${encodeURIComponent(query)}`);
+        const res = await fetch(`${baseUrl}/flow/coa/${encodeURIComponent(query)}`);
         if (res.ok) {
           const payload = await res.json();
           const items = payload?.data ?? (Array.isArray(payload) ? payload : []);
