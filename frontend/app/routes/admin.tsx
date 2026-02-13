@@ -371,9 +371,10 @@ function NFTRow({ item, token }: { item: any; token: string }) {
 // ── Script Templates Panel ───────────────────────────────────────────
 
 const SCRIPT_CATEGORIES = [
-  '', 'FT_TRANSFER', 'NFT_TRANSFER', 'NFT_PURCHASE', 'NFT_LISTING',
-  'STAKING', 'ACCOUNT_SETUP', 'EVM_BRIDGE', 'EVM_CALL', 'SWAP',
-  'LIQUIDITY', 'CONTRACT_DEPLOY', 'SYSTEM', 'OTHER',
+  '', 'FT_TRANSFER', 'FT_MINT', 'NFT_TRANSFER', 'NFT_MINT', 'NFT_PURCHASE', 'NFT_LISTING',
+  'STAKING', 'ACCOUNT_CREATION', 'ACCOUNT_SETUP', 'SCHEDULED',
+  'EVM_BRIDGE', 'EVM_CALL', 'SWAP', 'LIQUIDITY',
+  'CONTRACT_DEPLOY', 'SYSTEM', 'OTHER',
 ]
 
 function ScriptTemplatesPanel({ token }: { token: string }) {
