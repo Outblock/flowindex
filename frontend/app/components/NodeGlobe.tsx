@@ -20,8 +20,10 @@ const ROLE_COLORS: Record<number, number> = {
 const GLOBE_RADIUS = 1.6;
 const DOT_BASE = 0.012;
 const DOT_MAX = 0.035;
-const ARC_INTERVAL = 3000;
-const ARC_LIFE = 2000;
+const ARC_INTERVAL = 1200;
+const ARC_LIFE = 2400;
+const ARCS_PER_SPAWN = 2;
+const MAX_CONCURRENT_ARCS = 8;
 const ARC_SEGMENTS = 64;
 
 const COUNTRIES_URL =
@@ -67,28 +69,36 @@ function extractRings(geometry: any): number[][][] {
   return rings;
 }
 
-function buildCountryLines(geojson: any, radius: number): THREE.LineSegments {
-  const vertices: number[] = [];
+function buildCountryDots(geojson: any, radius: number): THREE.Points {
+  const positions: number[] = [];
 
   for (const feature of geojson.features) {
     const rings = extractRings(feature.geometry);
     for (const ring of rings) {
       for (let i = 0; i < ring.length - 1; i++) {
-        const a = latLonToVec3(ring[i][1], ring[i][0], radius);
-        const b = latLonToVec3(ring[i + 1][1], ring[i + 1][0], radius);
-        vertices.push(a.x, a.y, a.z, b.x, b.y, b.z);
+        // Interpolate between vertices to create dense dots along borders
+        const steps = 4;
+        for (let s = 0; s <= steps; s++) {
+          const t = s / steps;
+          const lon = ring[i][0] + (ring[i + 1][0] - ring[i][0]) * t;
+          const lat = ring[i][1] + (ring[i + 1][1] - ring[i][1]) * t;
+          const v = latLonToVec3(lat, lon, radius);
+          positions.push(v.x, v.y, v.z);
+        }
       }
     }
   }
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  const mat = new THREE.LineBasicMaterial({
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
     color: 0x00e599,
+    size: 0.008,
     transparent: true,
-    opacity: 0.22,
+    opacity: 0.4,
+    sizeAttenuation: true,
   });
-  return new THREE.LineSegments(geo, mat);
+  return new THREE.Points(geo, mat);
 }
 
 export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
@@ -126,28 +136,18 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     const globeMesh = new THREE.Mesh(globeGeo, globeMat);
     pivot.add(globeMesh);
 
-    // Subtle lat/lon grid (very faint, behind country lines)
-    const wireGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.001, 36, 18);
-    const wireMat = new THREE.MeshBasicMaterial({
-      color: 0x00e599,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.03,
-    });
-    pivot.add(new THREE.Mesh(wireGeo, wireMat));
-
-    // --- Country outlines (async load) ---
-    const countryDisposables: THREE.LineSegments[] = [];
+    // --- Country border dots (async load) ---
+    const countryDisposables: THREE.Points[] = [];
     fetch(COUNTRIES_URL)
       .then((r) => r.json())
       .then((geojson) => {
         if (disposed) return;
-        const lines = buildCountryLines(geojson, GLOBE_RADIUS * 1.002);
-        countryDisposables.push(lines);
-        pivot.add(lines);
+        const dots = buildCountryDots(geojson, GLOBE_RADIUS * 1.002);
+        countryDisposables.push(dots);
+        pivot.add(dots);
       })
       .catch(() => {
-        // Silently fail — globe still works without country outlines
+        // Silently fail — globe still works without country dots
       });
 
     // --- Node dots ---
@@ -310,7 +310,8 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
       }
 
       if (now - lastArc > ARC_INTERVAL) {
-        spawnArc(now);
+        const count = Math.min(ARCS_PER_SPAWN, MAX_CONCURRENT_ARCS - arcs.length);
+        for (let i = 0; i < count; i++) spawnArc(now);
         lastArc = now;
       }
       updateArcs(now);
@@ -349,8 +350,6 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
       dotGeo.dispose();
       globeGeo.dispose();
       globeMat.dispose();
-      wireGeo.dispose();
-      wireMat.dispose();
       ringGeo.dispose();
       ringMat.dispose();
       composer.dispose();
