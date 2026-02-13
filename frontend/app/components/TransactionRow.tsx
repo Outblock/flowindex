@@ -184,7 +184,7 @@ export function ExpandedTransferDetails({ tx, address }: { tx: any; address: str
             {isEVM && tx.evm_hash && (
                 <div className="flex items-center gap-2 text-xs">
                     <span className="text-zinc-500 uppercase tracking-wider text-[10px] w-20 flex-shrink-0">EVM Hash</span>
-                    <Link to={`/transactions/${tx.evm_hash}` as any} className="font-mono text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1">
+                    <Link to={`/tx/${tx.evm_hash}` as any} className="font-mono text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1">
                         {formatShort(tx.evm_hash, 16, 12)}
                         <ExternalLink className="h-3 w-3" />
                     </Link>
@@ -339,7 +339,7 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                         <Link
-                            to={`/transactions/${tx.id}` as any}
+                            to={`/tx/${tx.id}` as any}
                             className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-xs"
                             onClick={(e) => e.stopPropagation()}
                         >

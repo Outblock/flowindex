@@ -434,7 +434,7 @@ function ContractDetail() {
                                                 {transactions.map((tx) => (
                                                     <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
                                                         <td className="p-3">
-                                                            <Link to={`/transactions/${tx.id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                            <Link to={`/tx/${tx.id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
                                                                 {formatShort(tx.id, 10, 6)}
                                                             </Link>
                                                         </td>
@@ -572,7 +572,7 @@ function ContractDetail() {
                                                             </td>
                                                             <td className="p-3">
                                                                 {v.transaction_id ? (
-                                                                    <Link to={`/transactions/${v.transaction_id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                                    <Link to={`/tx/${v.transaction_id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
                                                                         {formatShort(v.transaction_id, 10, 6)}
                                                                     </Link>
                                                                 ) : '—'}

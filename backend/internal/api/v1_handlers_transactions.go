@@ -62,6 +62,10 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), []string{tx.ID})
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), []string{tx.ID})
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), []string{tx.ID})
-	out := toFlowTransactionOutput(*tx, events, contracts[tx.ID], tags[tx.ID], feesByTx[tx.ID])
+	var evmExecs []repository.EVMTransactionRecord
+	if tx.IsEVM {
+		evmExecs, _ = s.repo.GetEVMTransactionsByCadenceTx(r.Context(), tx.ID, tx.BlockHeight)
+	}
+	out := toFlowTransactionOutput(*tx, events, contracts[tx.ID], tags[tx.ID], feesByTx[tx.ID], evmExecs)
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
 }

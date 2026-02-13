@@ -870,7 +870,7 @@ function Home() {
                                             transition={{ type: "spring", stiffness: 300, damping: 25 }}
                                         >
                                             <Link
-                                                to={`/transactions/${tx.id}`}
+                                                to={`/tx/${tx.id}`}
                                                 className={`block border p-4 h-20 transition-colors duration-200 hover:bg-zinc-50 dark:hover:bg-white/5 hover:border-zinc-300 dark:hover:border-white/20 relative overflow-hidden ${isNew
                                                     ? 'bg-white/10 border-white/40' // Keep new highlight distinct or adjust
                                                     : 'bg-white dark:bg-black/20 border-zinc-100 dark:border-white/5'

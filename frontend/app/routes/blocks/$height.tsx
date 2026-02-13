@@ -187,7 +187,7 @@ function BlockDetail() {
                                         <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group">
                                             <td className="p-4">
                                                 <div className="flex items-center gap-2">
-                                                    <Link to={`/transactions/${tx.id}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                    <Link to={`/tx/${tx.id}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
                                                         {tx.id.slice(0, 16)}...
                                                     </Link>
                                                     <CopyButton
