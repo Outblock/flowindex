@@ -908,4 +908,21 @@ ALTER TABLE IF EXISTS app.ft_tokens ADD COLUMN IF NOT EXISTS evm_address TEXT DE
 
 ALTER TABLE IF EXISTS app.nft_collections ADD COLUMN IF NOT EXISTS evm_address TEXT DEFAULT '';
 
+-- Node GeoIP metadata (enriched by NetworkPoller via ip-api.com)
+CREATE TABLE IF NOT EXISTS app.node_metadata (
+    node_id       TEXT PRIMARY KEY,
+    ip_address    TEXT,
+    hostname      TEXT,
+    country       TEXT,
+    country_code  TEXT,
+    region        TEXT,
+    city          TEXT,
+    latitude      DOUBLE PRECISION,
+    longitude     DOUBLE PRECISION,
+    isp           TEXT,
+    org           TEXT,
+    as_number     TEXT,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 COMMIT;

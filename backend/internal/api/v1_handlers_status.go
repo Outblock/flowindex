@@ -113,9 +113,12 @@ func (s *Server) handleStatusNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch GeoIP metadata and merge into response
+	metaMap, _ := s.repo.ListNodeMetadata(r.Context())
+
 	out := make([]interface{}, 0, len(nodes))
 	for _, n := range nodes {
-		out = append(out, map[string]interface{}{
+		entry := map[string]interface{}{
 			"node_id":            n.NodeID,
 			"role":               n.Role,
 			"address":            formatAddressV1(n.Address),
@@ -127,7 +130,17 @@ func (s *Server) handleStatusNodes(w http.ResponseWriter, r *http.Request) {
 			"tokens_rewarded":    parseFloatOrZero(n.TokensRewarded),
 			"delegator_count":    n.DelegatorCount,
 			"epoch":              n.Epoch,
-		})
+		}
+		if m, ok := metaMap[n.NodeID]; ok {
+			entry["country"] = m.Country
+			entry["country_code"] = m.CountryCode
+			entry["city"] = m.City
+			entry["latitude"] = m.Latitude
+			entry["longitude"] = m.Longitude
+			entry["isp"] = m.ISP
+			entry["org"] = m.Org
+		}
+		out = append(out, entry)
 	}
 
 	writeAPIResponse(w, out, map[string]interface{}{

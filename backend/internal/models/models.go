@@ -439,6 +439,23 @@ type DailyBalanceDelta struct {
 	LastHeight      uint64 `json:"last_height"`
 }
 
+// NodeMetadata represents app.node_metadata (GeoIP enrichment)
+type NodeMetadata struct {
+	NodeID      string    `json:"node_id"`
+	IPAddress   string    `json:"ip_address,omitempty"`
+	Hostname    string    `json:"hostname,omitempty"`
+	Country     string    `json:"country,omitempty"`
+	CountryCode string    `json:"country_code,omitempty"`
+	Region      string    `json:"region,omitempty"`
+	City        string    `json:"city,omitempty"`
+	Latitude    float64   `json:"latitude,omitempty"`
+	Longitude   float64   `json:"longitude,omitempty"`
+	ISP         string    `json:"isp,omitempty"`
+	Org         string    `json:"org,omitempty"`
+	ASNumber    string    `json:"as_number,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // EpochStats represents app.epoch_stats
 type EpochStats struct {
 	Epoch         int64     `json:"epoch"`
