@@ -94,17 +94,18 @@ import FlowIDTableStaking from 0x8624b52f9ddcd04a
 
 access(all) fun main(): [AnyStruct] {
     let staked = FlowIDTableStaking.getTotalStaked()
-    let nodeIDs = FlowIDTableStaking.getStakedNodeIDs()
+    let nodeIDs = FlowIDTableStaking.getNodeIDs()
     return [staked, UInt64(nodeIDs.length)]
 }
 `
 
-// Cadence script to get full node info for all staked nodes
+// Cadence script to get full node info for ALL proposed nodes (not just staked).
+// getNodeIDs() returns the full set visible to the staking table — matching FlowScan's count.
 const nodeListScript = `
 import FlowIDTableStaking from 0x8624b52f9ddcd04a
 
 access(all) fun main(): [AnyStruct] {
-    let ids = FlowIDTableStaking.getStakedNodeIDs()
+    let ids = FlowIDTableStaking.getNodeIDs()
     let nodes: [[AnyStruct]] = []
     for id in ids {
         let info = FlowIDTableStaking.NodeInfo(nodeID: id)
