@@ -2,7 +2,8 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1BlockByHeight } from '../../api/gen/find';
-import { ArrowLeft, Box, Clock, Hash, Activity, ArrowRightLeft, User, Coins, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Box, Clock, Hash, Activity, ArrowRightLeft, User, Coins, Image as ImageIcon, Layers } from 'lucide-react';
+import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -34,6 +35,7 @@ export const Route = createFileRoute('/blocks/$height')({
 
 
 function BlockDetail() {
+    const { height } = Route.useParams();
     const { block: initialBlock } = Route.useLoaderData();
     const [block, setBlock] = useState<any>(initialBlock);
     // const [loading, setLoading] = useState(false); // handled by loader
@@ -52,16 +54,13 @@ function BlockDetail() {
 
     if (error || !block) {
         return (
-            <div className="min-h-screen bg-white dark:bg-black flex items-center justify-center font-mono transition-colors duration-300">
-                <div className="border border-red-500/30 bg-red-50 dark:bg-nothing-dark p-8 max-w-md text-center shadow-sm">
-                    <Box className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                    <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-2">Block Not Found</h2>
-                    <p className="text-zinc-600 dark:text-zinc-500 text-xs mb-6">The requested block could not be located.</p>
-                    <Link to="/" className="inline-block w-full border border-red-200 dark:border-white/20 hover:bg-red-100 dark:hover:bg-white/10 text-zinc-900 dark:text-white text-xs uppercase tracking-widest py-3 transition-all">
-                        Return to Dashboard
-                    </Link>
-                </div>
-            </div>
+            <NotFoundPage
+                icon={Box}
+                title="Block Not Found"
+                identifier={`Block #${height}`}
+                description="This block could not be located in our indexed data."
+                hint="The indexer may not have reached this block yet. Check indexing progress or try again shortly."
+            />
         );
     }
 

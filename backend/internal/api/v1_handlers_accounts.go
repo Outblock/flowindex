@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -85,6 +86,7 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 	addr := flowsdk.HexToAddress(mux.Vars(r)["address"])
 	acc, err := s.client.GetAccount(r.Context(), addr)
 	if err != nil {
+		log.Printf("[WARN] GetAccount(%s) RPC error: %v", addr.Hex(), err)
 		writeAPIError(w, http.StatusNotFound, "account not found")
 		return
 	}

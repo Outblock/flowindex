@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import { normalizeAddress } from '../../components/account/accountUtils';
+import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import type { StakingInfo, StorageInfo } from '../../../cadence/cadence.gen';
 import { AccountActivityTab } from '../../components/account/AccountActivityTab';
 import { AccountTokensTab } from '../../components/account/AccountTokensTab';
@@ -209,16 +210,13 @@ function AccountDetail() {
 
     if (error || !account) {
         return (
-            <div className="min-h-screen bg-white dark:bg-black flex items-center justify-center font-mono transition-colors duration-300">
-                <GlassCard className="p-12 text-center max-w-lg mx-auto">
-                    <User className="h-16 w-16 text-red-500 mx-auto mb-6" />
-                    <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-4">Account Not Found</h2>
-                    <p className="text-zinc-600 dark:text-zinc-400 mb-8">The requested account could not be located on the network.</p>
-                    <Link to="/" className="inline-block w-full border border-zinc-200 dark:border-white/20 hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-900 dark:text-white text-sm uppercase tracking-widest py-4 rounded-lg transition-all">
-                        Return to Dashboard
-                    </Link>
-                </GlassCard>
-            </div>
+            <NotFoundPage
+                icon={User}
+                title="Account Not Found"
+                identifier={normalizedAddress}
+                description="This account could not be located on the network."
+                hint="It may not have been indexed yet, or the address may be invalid. Our indexer is continuously processing blocks — try again shortly."
+            />
         );
     }
 

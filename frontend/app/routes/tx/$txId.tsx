@@ -15,6 +15,7 @@ import DecryptedText from '../../components/ui/DecryptedText';
 import { deriveActivityType, TokenIcon, formatTokenName, extractLogoUrl, buildSummaryLine } from '../../components/TransactionRow';
 import { normalizeAddress, formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
+import { NotFoundPage } from '../../components/ui/NotFoundPage';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -281,6 +282,7 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
 }
 
 function TransactionDetail() {
+    const { txId } = Route.useParams();
     const { transaction, error: loaderError } = Route.useLoaderData();
     const error = transaction ? null : (loaderError || 'Transaction not found');
     const hasTransfers = transaction?.ft_transfers?.length > 0 || transaction?.defi_events?.length > 0;
@@ -325,24 +327,13 @@ function TransactionDetail() {
 
     if (error || !transaction) {
         return (
-            <div className="min-h-screen bg-white dark:bg-black flex items-center justify-center font-mono transition-colors duration-300">
-                <div className="border border-yellow-500/30 bg-yellow-50 dark:bg-nothing-dark p-8 max-w-md text-center shadow-sm">
-                    <XCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-                    <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-2">Transaction Not Yet Indexed</h2>
-                    <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-4">This transaction exists on the blockchain but hasn&apos;t been indexed yet.</p>
-                    <p className="text-zinc-500 text-xs mb-6">
-                        The indexer is currently processing historical blocks. Please check back in a few minutes.
-                    </p>
-                    <div className="space-y-2">
-                        <Link to="/" className="inline-block w-full border border-zinc-200 dark:border-white/20 hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-900 dark:text-white text-xs uppercase tracking-widest py-3 transition-all">
-                            Return to Dashboard
-                        </Link>
-                        <Link to="/stats" className="inline-block w-full border border-nothing-green-dark/20 dark:border-nothing-green/20 hover:bg-nothing-green-dark/10 dark:hover:bg-nothing-green/10 text-nothing-green-dark dark:text-nothing-green text-xs uppercase tracking-widest py-3 transition-all">
-                            View Indexing Progress
-                        </Link>
-                    </div>
-                </div>
-            </div>
+            <NotFoundPage
+                icon={Hash}
+                title="Transaction Not Found"
+                identifier={txId}
+                description="This transaction hasn't been indexed yet or doesn't exist."
+                hint="Our indexer is continuously processing blocks. If this is a recent transaction, please check back in a few minutes."
+            />
         );
     }
 
