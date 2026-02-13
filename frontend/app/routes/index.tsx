@@ -18,39 +18,37 @@ import { formatNumber } from '../lib/format';
 export const Route = createFileRoute('/')({
     component: Home,
     loader: async () => {
+        // Only fetch fast, critical data in the SSR loader.
+        // Slower endpoints (transactions, tokens, nfts) load client-side
+        // so the page renders immediately.
         try {
             await ensureHeyApiConfigured();
-            const [status, networkStats, blocks, transactions, tokens, nftCollections] = await Promise.all([
+            const [status, networkStats, blocks] = await Promise.all([
                 fetchStatus(),
                 fetchNetworkStats(),
                 getFlowV1Block({ query: { limit: 50, offset: 0 } }),
-                getFlowV1Transaction({ query: { limit: 50, offset: 0 } }),
-                getFlowV1Ft({ query: { limit: 5, offset: 0, sort: 'trending' } }),
-                getFlowV1Nft({ query: { limit: 5, offset: 0, sort: 'trending' } }),
             ]);
             return {
                 status: status,
                 networkStats: networkStats,
                 blocks: blocks.data?.data ?? [],
-                transactions: transactions.data?.data ?? [],
-                tokens: tokens.data?.data ?? [],
-                nftCollections: nftCollections.data?.data ?? [],
             };
         } catch (e) {
             console.error("Failed to load initial data", e);
-            return { status: null, networkStats: null, blocks: [], transactions: [], tokens: [], nftCollections: [] };
+            return { status: null, networkStats: null, blocks: [] };
         }
     }
 })
 
 function Home() {
-    const { status, networkStats: initialNetworkStats, blocks: initialBlocks, transactions: initialTransactions, tokens, nftCollections } = Route.useLoaderData();
+    const { status, networkStats: initialNetworkStats, blocks: initialBlocks } = Route.useLoaderData();
 
     // Prevent SSR hydration mismatch for Date.now()-based UI (relative timestamps, etc).
     const [hydrated, setHydrated] = useState(false);
     const [blocks, setBlocks] = useState<any[]>(initialBlocks || []);
-    const [transactions, setTransactions] = useState<any[]>([]); // Initialize empty, merge later
-    // const [loading, setLoading] = useState(true); // Unused
+    const [transactions, setTransactions] = useState<any[]>([]);
+    const [tokens, setTokens] = useState<any[]>([]);
+    const [nftCollections, setNftCollections] = useState<any[]>([]);
     const [statusRaw, setStatusRaw] = useState<any>(status);
     const [networkStats, setNetworkStats] = useState<any>(initialNetworkStats);
     const [tps, setTps] = useState(0);
@@ -95,17 +93,27 @@ function Home() {
         }
     }, [highlightTick]);
 
-    useEffect(() => {
-        // Process initial transactions
-        const items = Array.isArray(initialTransactions) ? initialTransactions : [];
-        const transformedTxs = Array.isArray(items) ? items.map(tx => ({
-            ...tx,
-            type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
-            payer: tx.payer_address || tx.proposer_address,
-            blockHeight: tx.block_height
-        })) : [];
-        setTransactions(prev => mergeTransactions(prev, transformedTxs, { prependNew: false }));
-    }, [initialTransactions]);
+    // Load tokens client-side (non-blocking)
+    const loadTokens = async () => {
+        try {
+            await ensureHeyApiConfigured();
+            const res = await getFlowV1Ft({ query: { limit: 5, offset: 0, sort: 'trending' } });
+            setTokens(res.data?.data ?? []);
+        } catch (err) {
+            console.error("Failed to load tokens", err);
+        }
+    };
+
+    // Load NFT collections client-side (non-blocking)
+    const loadNftCollections = async () => {
+        try {
+            await ensureHeyApiConfigured();
+            const res = await getFlowV1Nft({ query: { limit: 5, offset: 0, sort: 'trending' } });
+            setNftCollections(res.data?.data ?? []);
+        } catch (err) {
+            console.error("Failed to load NFT collections", err);
+        }
+    };
 
     useEffect(() => {
         isConnectedRef.current = isConnected;
@@ -380,7 +388,9 @@ function Home() {
         // Immediate fetch on mount (SSR may have failed if no local backend)
         if (!networkStats) refreshNetworkStats();
         if (!initialBlocks?.length) loadBlocks();
-        if (!initialTransactions?.length) loadTransactions();
+        loadTransactions();
+        loadTokens();
+        loadNftCollections();
 
         const statusTimer = setInterval(refreshStatus, 10000);
         const networkStatsTimer = setInterval(refreshNetworkStats, 60000);
