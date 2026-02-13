@@ -76,10 +76,10 @@ function buildSurfaceDots(count: number, radius: number): THREE.Points {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   const mat = new THREE.PointsMaterial({
-    color: 0x1a3a2a,
-    size: 0.006,
+    color: 0x2d6b4a,
+    size: 0.007,
     transparent: true,
-    opacity: 0.6,
+    opacity: 0.7,
     sizeAttenuation: true,
   });
   return new THREE.Points(geo, mat);
@@ -98,35 +98,28 @@ function extractRings(geometry: any): number[][][] {
   return rings;
 }
 
-function buildCountryDots(geojson: any, radius: number): THREE.Points {
-  const positions: number[] = [];
+function buildCountryLines(geojson: any, radius: number): THREE.LineSegments {
+  const vertices: number[] = [];
 
   for (const feature of geojson.features) {
     const rings = extractRings(feature.geometry);
     for (const ring of rings) {
       for (let i = 0; i < ring.length - 1; i++) {
-        const steps = 4;
-        for (let s = 0; s <= steps; s++) {
-          const t = s / steps;
-          const lon = ring[i][0] + (ring[i + 1][0] - ring[i][0]) * t;
-          const lat = ring[i][1] + (ring[i + 1][1] - ring[i][1]) * t;
-          const v = latLonToVec3(lat, lon, radius);
-          positions.push(v.x, v.y, v.z);
-        }
+        const a = latLonToVec3(ring[i][1], ring[i][0], radius);
+        const b = latLonToVec3(ring[i + 1][1], ring[i + 1][0], radius);
+        vertices.push(a.x, a.y, a.z, b.x, b.y, b.z);
       }
     }
   }
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  const mat = new THREE.PointsMaterial({
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  const mat = new THREE.LineBasicMaterial({
     color: 0x00e599,
-    size: 0.008,
     transparent: true,
-    opacity: 0.35,
-    sizeAttenuation: true,
+    opacity: 0.2,
   });
-  return new THREE.Points(geo, mat);
+  return new THREE.LineSegments(geo, mat);
 }
 
 export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
@@ -168,15 +161,15 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     const surfaceDots = buildSurfaceDots(SURFACE_DOT_COUNT, GLOBE_RADIUS * 1.001);
     pivot.add(surfaceDots);
 
-    // --- Country border dots (async load, brighter than surface dots) ---
-    const countryDisposables: THREE.Points[] = [];
+    // --- Country border lines (async load) ---
+    const countryDisposables: THREE.LineSegments[] = [];
     fetch(COUNTRIES_URL)
       .then((r) => r.json())
       .then((geojson) => {
         if (disposed) return;
-        const dots = buildCountryDots(geojson, GLOBE_RADIUS * 1.002);
-        countryDisposables.push(dots);
-        pivot.add(dots);
+        const lines = buildCountryLines(geojson, GLOBE_RADIUS * 1.002);
+        countryDisposables.push(lines);
+        pivot.add(lines);
       })
       .catch(() => {});
 
