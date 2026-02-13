@@ -144,6 +144,7 @@ type EVMTransactionRecord struct {
 	TxType      int
 	ChainID     string
 	Position    int
+	EventIndex  int
 	StatusCode  int
 	Status      string
 	Timestamp   time.Time
@@ -499,6 +500,7 @@ func (r *Repository) ListEVMTransactions(ctx context.Context, limit, offset int)
 			COALESCE(tx_type, 0),
 			COALESCE(chain_id::text, ''),
 			COALESCE(transaction_index, 0),
+			COALESCE(event_index, 0),
 			COALESCE(status_code, 0),
 			COALESCE(status, ''),
 			timestamp
@@ -527,6 +529,7 @@ func (r *Repository) ListEVMTransactions(ctx context.Context, limit, offset int)
 			&row.TxType,
 			&row.ChainID,
 			&row.Position,
+			&row.EventIndex,
 			&row.StatusCode,
 			&row.Status,
 			&row.Timestamp,
@@ -556,6 +559,7 @@ func (r *Repository) GetEVMTransactionByHash(ctx context.Context, hash string) (
 			COALESCE(tx_type, 0),
 			COALESCE(chain_id::text, ''),
 			COALESCE(transaction_index, 0),
+			COALESCE(event_index, 0),
 			COALESCE(status_code, 0),
 			COALESCE(status, ''),
 			timestamp
@@ -577,6 +581,7 @@ func (r *Repository) GetEVMTransactionByHash(ctx context.Context, hash string) (
 		&row.TxType,
 		&row.ChainID,
 		&row.Position,
+		&row.EventIndex,
 		&row.StatusCode,
 		&row.Status,
 		&row.Timestamp,
@@ -607,6 +612,7 @@ func (r *Repository) GetEVMTransactionsByCadenceTx(ctx context.Context, txID str
 			COALESCE(tx_type, 0),
 			COALESCE(chain_id::text, ''),
 			COALESCE(transaction_index, 0),
+			COALESCE(event_index, 0),
 			COALESCE(status_code, 0),
 			COALESCE(status, ''),
 			timestamp
@@ -635,6 +641,7 @@ func (r *Repository) GetEVMTransactionsByCadenceTx(ctx context.Context, txID str
 			&row.TxType,
 			&row.ChainID,
 			&row.Position,
+			&row.EventIndex,
 			&row.StatusCode,
 			&row.Status,
 			&row.Timestamp,

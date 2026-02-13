@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1TransactionById } from '../../api/gen/find';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, ChevronDown } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
@@ -61,6 +61,7 @@ function TransactionDetail() {
     const nowTick = useTimeTicker(20000);
     const { theme } = useTheme();
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
+    const [expandedPayloads, setExpandedPayloads] = useState<Record<number, boolean>>({});
 
 
     // Convert byte arrays (arrays of numeric strings) to "0x..." hex strings for display
@@ -635,6 +636,39 @@ function TransactionDetail() {
                                                         </p>
                                                     </div>
                                                 </div>
+
+                                                {/* Collapsible Raw Event Payload */}
+                                                {(() => {
+                                                    const matchedEvent = transaction.events?.find(
+                                                        (e: any) => e.event_index === exec.event_index
+                                                    );
+                                                    if (!matchedEvent) return null;
+                                                    const isExpanded = expandedPayloads[idx] ?? false;
+                                                    return (
+                                                        <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
+                                                            <button
+                                                                onClick={() => setExpandedPayloads(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                                                                className="w-full flex items-center justify-between px-4 py-2.5 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors text-left"
+                                                            >
+                                                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                                                                    <Database className="h-3 w-3" />
+                                                                    Raw Event Payload
+                                                                    <span className="text-zinc-400 font-mono normal-case">
+                                                                        ({matchedEvent.type?.split('.').pop() || 'Event'} #{matchedEvent.event_index})
+                                                                    </span>
+                                                                </span>
+                                                                <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                                            </button>
+                                                            {isExpanded && (
+                                                                <div className="p-4 bg-zinc-50 dark:bg-black/40 border-t border-zinc-200 dark:border-white/5 max-h-[400px] overflow-y-auto">
+                                                                    <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+                                                                        {JSON.stringify(formatEventPayload(matchedEvent.values || matchedEvent.payload || matchedEvent.data), null, 2)}
+                                                                    </pre>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     ))
