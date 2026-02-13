@@ -84,6 +84,7 @@ export async function fetchNetworkStats(): Promise<any> {
     epoch_progress: epoch?.epoch_progress ?? epoch?.progress ?? 0,
     updated_at: epoch?.updated_at ?? epoch?.as_of ?? null,
     total_staked: tokenomics?.total_staked ?? 0,
+    total_supply: tokenomics?.total_supply ?? 0,
     active_nodes: tokenomics?.validator_count ?? tokenomics?.active_nodes ?? 0,
   };
 }
