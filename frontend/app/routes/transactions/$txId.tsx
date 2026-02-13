@@ -63,6 +63,27 @@ function TransactionDetail() {
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
 
 
+    // Convert byte arrays (arrays of numeric strings) to "0x..." hex strings for display
+    const formatEventPayload = (data: any): any => {
+        if (data == null) return data;
+        if (Array.isArray(data)) {
+            // Check if this looks like a byte array: all elements are numeric strings 0-255
+            if (data.length > 0 && data.every((v: any) => typeof v === 'string' && /^\d+$/.test(v) && Number(v) >= 0 && Number(v) <= 255)) {
+                const hex = data.map((v: string) => Number(v).toString(16).padStart(2, '0')).join('');
+                return `0x${hex}`;
+            }
+            return data.map(formatEventPayload);
+        }
+        if (typeof data === 'object') {
+            const out: Record<string, any> = {};
+            for (const [k, v] of Object.entries(data)) {
+                out[k] = formatEventPayload(v);
+            }
+            return out;
+        }
+        return data;
+    };
+
     const formatAddress = (addr) => {
         if (!addr) return 'Unknown';
         let formatted = addr.toLowerCase();
@@ -478,9 +499,9 @@ function TransactionDetail() {
                                                 </span>
                                             </div>
 
-                                            <div className="bg-zinc-50 dark:bg-black/40 rounded-sm border border-zinc-200 dark:border-white/5 p-4 group-hover/event:bg-zinc-100 dark:group-hover/event:bg-black/60 transition-colors">
+                                            <div className="bg-zinc-50 dark:bg-black/40 rounded-sm border border-zinc-200 dark:border-white/5 p-4 group-hover/event:bg-zinc-100 dark:group-hover/event:bg-black/60 transition-colors max-h-[400px] overflow-y-auto">
                                                 <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
-                                                    {JSON.stringify(event.values || event.payload || event.data, null, 2)}
+                                                    {JSON.stringify(formatEventPayload(event.values || event.payload || event.data), null, 2)}
                                                 </pre>
                                             </div>
                                         </div>
