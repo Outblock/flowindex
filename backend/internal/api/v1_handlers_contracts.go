@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
@@ -160,15 +161,30 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fallback: if contract not in DB at all but we have a specific name, try RPC
+	if len(contracts) == 0 && name != "" && s.client != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		acc, rpcErr := s.client.GetAccount(ctx, flow.HexToAddress(address))
+		cancel()
+		if rpcErr == nil && acc != nil {
+			if b, ok := acc.Contracts[name]; ok && len(b) > 0 {
+				contracts = append(contracts, models.SmartContract{
+					Address: address,
+					Name:    name,
+					Code:    string(b),
+				})
+			}
+		}
+	}
+
 	out := make([]map[string]interface{}, 0, len(contracts))
 	for _, c := range contracts {
-		// If we didn't persist contract code (storage pressure), we can still serve it on-demand
-		// from Flow RPC for the detail view.
+		// If contract in DB but code is empty, fetch on-demand from RPC
 		if c.Code == "" && s.client != nil {
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-			acc, err := s.client.GetAccount(ctx, flow.HexToAddress(c.Address))
+			acc, rpcErr := s.client.GetAccount(ctx, flow.HexToAddress(c.Address))
 			cancel()
-			if err == nil && acc != nil {
+			if rpcErr == nil && acc != nil {
 				if b, ok := acc.Contracts[c.Name]; ok && len(b) > 0 {
 					c.Code = string(b)
 				}
