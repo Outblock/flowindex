@@ -147,6 +147,7 @@ func main() {
 	txContractsWorkerRange := getEnvUint("TX_CONTRACTS_WORKER_RANGE", 1000)
 	txMetricsWorkerRange := getEnvUint("TX_METRICS_WORKER_RANGE", 1000)
 	stakingWorkerRange := getEnvUint("STAKING_WORKER_RANGE", 1000)
+	dailyBalanceWorkerRange := getEnvUint("DAILY_BALANCE_WORKER_RANGE", 1000)
 	defiWorkerRange := getEnvUint("DEFI_WORKER_RANGE", 1000)
 	nftItemMetadataWorkerRange := getEnvUint("NFT_ITEM_METADATA_WORKER_RANGE", 1000)
 	nftReconcilerRange := getEnvUint("NFT_RECONCILER_RANGE", 1000)
@@ -160,6 +161,7 @@ func main() {
 	txContractsWorkerConcurrency := getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1)
 	txMetricsWorkerConcurrency := getEnvInt("TX_METRICS_WORKER_CONCURRENCY", 1)
 	stakingWorkerConcurrency := getEnvInt("STAKING_WORKER_CONCURRENCY", 1)
+	dailyBalanceWorkerConcurrency := getEnvInt("DAILY_BALANCE_WORKER_CONCURRENCY", 1)
 	defiWorkerConcurrency := getEnvInt("DEFI_WORKER_CONCURRENCY", 1)
 	nftItemMetadataWorkerConcurrency := getEnvInt("NFT_ITEM_METADATA_WORKER_CONCURRENCY", 1)
 	nftReconcilerConcurrency := getEnvInt("NFT_RECONCILER_CONCURRENCY", 1)
@@ -189,6 +191,7 @@ func main() {
 	enableTxContractsWorker := os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false"
 	enableTxMetricsWorker := os.Getenv("ENABLE_TX_METRICS_WORKER") != "false"
 	enableStakingWorker := os.Getenv("ENABLE_STAKING_WORKER") != "false"
+	enableDailyBalanceWorker := os.Getenv("ENABLE_DAILY_BALANCE_WORKER") != "false"
 	enableDefiWorker := os.Getenv("ENABLE_DEFI_WORKER") != "false"
 	enableNFTItemMetadataWorker := os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false"
 	enableNFTReconciler := os.Getenv("ENABLE_NFT_RECONCILER") != "false"
@@ -284,6 +287,8 @@ func main() {
 	var txMetricsWorkers []*ingester.AsyncWorker
 	var stakingWorkerProcessor *ingester.StakingWorker
 	var stakingWorkers []*ingester.AsyncWorker
+	var dailyBalanceWorkerProcessor *ingester.DailyBalanceWorker
+	var dailyBalanceWorkers []*ingester.AsyncWorker
 	var defiWorkerProcessor *ingester.DefiWorker
 	var defiWorkers []*ingester.AsyncWorker
 	var nftItemMetadataWorkerProcessor *ingester.NFTItemMetadataWorker
@@ -499,6 +504,25 @@ func main() {
 		workerTypes = append(workerTypes, defiWorkerProcessor.Name())
 	} else {
 		log.Println("DeFi Worker is DISABLED (ENABLE_DEFI_WORKER=false)")
+	}
+
+	if enableDailyBalanceWorker {
+		dailyBalanceWorkerProcessor = ingester.NewDailyBalanceWorker(repo)
+		if dailyBalanceWorkerConcurrency < 1 {
+			dailyBalanceWorkerConcurrency = 1
+		}
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < dailyBalanceWorkerConcurrency; i++ {
+			dailyBalanceWorkers = append(dailyBalanceWorkers, ingester.NewAsyncWorker(dailyBalanceWorkerProcessor, repo, ingester.WorkerConfig{
+				RangeSize:    dailyBalanceWorkerRange,
+				WorkerID:     fmt.Sprintf("%s-%d-daily-balance-%d", hostname, pid, i),
+				Dependencies: tokenWorkerDep,
+			}))
+		}
+		workerTypes = append(workerTypes, dailyBalanceWorkerProcessor.Name())
+	} else {
+		log.Println("Daily Balance Worker is DISABLED (ENABLE_DAILY_BALANCE_WORKER=false)")
 	}
 
 	nftOwnershipDep := []string{"nft_ownership_worker"}
@@ -733,6 +757,16 @@ func main() {
 
 	if enableDefiWorker {
 		for _, worker := range defiWorkers {
+			wg.Add(1)
+			go func(w *ingester.AsyncWorker) {
+				defer wg.Done()
+				w.Start(ctx)
+			}(worker)
+		}
+	}
+
+	if enableDailyBalanceWorker {
+		for _, worker := range dailyBalanceWorkers {
 			wg.Add(1)
 			go func(w *ingester.AsyncWorker) {
 				defer wg.Done()

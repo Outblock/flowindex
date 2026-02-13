@@ -428,6 +428,17 @@ type DefiEvent struct {
 	Timestamp     time.Time `json:"timestamp"`
 }
 
+// DailyBalanceDelta represents app.daily_balance_deltas
+type DailyBalanceDelta struct {
+	Address         string `json:"address"`
+	ContractAddress string `json:"contract_address"`
+	ContractName    string `json:"contract_name"`
+	Date            string `json:"date"`
+	Delta           string `json:"delta"`
+	TxCount         int    `json:"tx_count"`
+	LastHeight      uint64 `json:"last_height"`
+}
+
 // EpochStats represents app.epoch_stats
 type EpochStats struct {
 	Epoch         int64     `json:"epoch"`
