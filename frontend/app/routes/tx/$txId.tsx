@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1TransactionById } from '../../api/gen/find';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
@@ -349,7 +349,7 @@ function TransactionDetail() {
                                 Key Events ({transaction.events ? transaction.events.length : 0})
                             </span>
                         </button>
-                        {transaction.is_evm && (
+                        {transaction.is_evm && transaction.evm_executions?.length > 0 && (
                             <button
                                 onClick={() => setActiveTab('evm')}
                                 className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'evm'
