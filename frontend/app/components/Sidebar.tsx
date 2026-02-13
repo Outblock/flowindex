@@ -26,7 +26,7 @@ export default function Sidebar() {
         { label: 'Contracts', path: '/contracts', icon: FileText },
         { label: 'Accounts', path: '/accounts', icon: Users },
         { label: 'Scheduled Txs', path: '/scheduled', icon: Clock },
-        { label: 'Nodes', path: '#', icon: Layers, disabled: true },
+        { label: 'Nodes', path: '/nodes', icon: Layers },
         { label: 'Indexing Status', path: '/stats', icon: Layers },
         { label: 'API Docs', path: '/api-docs', icon: FileText },
     ];

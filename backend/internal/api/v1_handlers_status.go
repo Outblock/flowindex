@@ -104,6 +104,38 @@ func (s *Server) handleStatusPrice(w http.ResponseWriter, r *http.Request) {
 	}}, nil, nil)
 }
 
+func (s *Server) handleStatusNodes(w http.ResponseWriter, r *http.Request) {
+	// Return nodes from the latest epoch via the staking_nodes table
+	limit, offset := parseLimitOffset(r)
+	nodes, err := s.repo.ListStakingNodesLatestEpoch(r.Context(), limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	out := make([]interface{}, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, map[string]interface{}{
+			"node_id":            n.NodeID,
+			"role":               n.Role,
+			"address":            formatAddressV1(n.Address),
+			"networking_address": n.NetworkingAddress,
+			"tokens_staked":      parseFloatOrZero(n.TokensStaked),
+			"tokens_committed":   parseFloatOrZero(n.TokensCommitted),
+			"tokens_unstaking":   parseFloatOrZero(n.TokensUnstaking),
+			"tokens_unstaked":    parseFloatOrZero(n.TokensUnstaked),
+			"tokens_rewarded":    parseFloatOrZero(n.TokensRewarded),
+			"delegator_count":    n.DelegatorCount,
+			"epoch":              n.Epoch,
+		})
+	}
+
+	writeAPIResponse(w, out, map[string]interface{}{
+		"limit":  limit,
+		"offset": offset,
+	}, nil)
+}
+
 func (s *Server) handleNotImplemented(w http.ResponseWriter, r *http.Request) {
 	writeAPIError(w, http.StatusNotImplemented, "endpoint not implemented yet; see /docs/api for status")
 }

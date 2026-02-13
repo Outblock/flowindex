@@ -88,6 +88,15 @@ export async function fetchNetworkStats(): Promise<any> {
   };
 }
 
+/** Fetch node list from /status/nodes */
+export async function fetchNodeList(): Promise<any[]> {
+  await ensureHeyApiConfigured();
+  const res = await fetch(`${_baseURL}/status/nodes?limit=2000`);
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json?.data ?? [];
+}
+
 /** Storage API helpers (returns raw Cadence JSON-CDC) */
 export async function fetchAccountStorage(address: string): Promise<any> {
   await ensureHeyApiConfigured();

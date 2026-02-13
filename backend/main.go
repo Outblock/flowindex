@@ -952,6 +952,21 @@ func main() {
 		log.Println("Market Price Poller is DISABLED (ENABLE_PRICE_FEED=false)")
 	}
 
+	// Start Network Poller (epoch + tokenomics from Cadence scripts)
+	enableNetworkPoller := os.Getenv("ENABLE_NETWORK_POLLER") != "false"
+	if enableNetworkPoller {
+		pollIntervalSec := getEnvInt("NETWORK_POLL_INTERVAL_SEC", 30)
+		poller := ingester.NewNetworkPoller(flowClient, repo, pollIntervalSec)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			poller.Start(ctx)
+		}()
+	} else {
+		log.Println("Network Poller is DISABLED (ENABLE_NETWORK_POLLER=false)")
+	}
+
 	// Start Lookup Repair Job (optional)
 	enableLookupRepair := os.Getenv("ENABLE_LOOKUP_REPAIR") == "true"
 	if enableLookupRepair {
