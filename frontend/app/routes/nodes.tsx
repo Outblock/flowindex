@@ -1,9 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { Server, Shield, Cpu, Eye, Radio, Database, Globe } from 'lucide-react';
 import { resolveApiBaseUrl } from '../api';
 import { ensureHeyApiConfigured } from '../api/heyapi';
+
+const NodeGlobe = lazy(() => import('../components/NodeGlobe'));
 
 interface StakingNode {
   node_id: string;
@@ -55,9 +57,13 @@ function NodesPage() {
   const { nodes } = Route.useLoaderData();
   const [roleFilter, setRoleFilter] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hideZeroStake, setHideZeroStake] = useState(true);
 
   const filteredNodes = useMemo(() => {
     let result = nodes;
+    if (hideZeroStake) {
+      result = result.filter((n) => n.tokens_staked > 0);
+    }
     if (roleFilter !== null) {
       result = result.filter((n) => n.role === roleFilter);
     }
@@ -71,7 +77,20 @@ function NodesPage() {
       );
     }
     return result;
-  }, [nodes, roleFilter, searchQuery]);
+  }, [nodes, roleFilter, searchQuery, hideZeroStake]);
+
+  const globeNodes = useMemo(
+    () =>
+      filteredNodes
+        .filter((n) => n.latitude != null && n.longitude != null)
+        .map((n) => ({
+          lat: n.latitude!,
+          lon: n.longitude!,
+          role: n.role,
+          tokens_staked: n.tokens_staked,
+        })),
+    [filteredNodes],
+  );
 
   // Summary stats
   const totalStaked = useMemo(() => nodes.reduce((sum, n) => sum + n.tokens_staked, 0), [nodes]);
@@ -153,6 +172,12 @@ function NodesPage() {
             active={roleFilter === null}
             onClick={() => setRoleFilter(null)}
           />
+          <FilterPill
+            label={hideZeroStake ? 'Staked Only' : 'All Nodes'}
+            active={hideZeroStake}
+            onClick={() => setHideZeroStake(!hideZeroStake)}
+          />
+          <span className="w-px h-5 bg-zinc-200 dark:bg-white/10 mx-0.5" />
           {Object.entries(ROLE_MAP).map(([role, { label }]) => {
             const count = roleBreakdown[Number(role)] || 0;
             if (count === 0) return null;
@@ -167,6 +192,27 @@ function NodesPage() {
           })}
         </div>
       </motion.div>
+
+      {/* 3D Globe */}
+      {globeNodes.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18 }}
+          className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden shadow-sm dark:shadow-none"
+        >
+          <Suspense
+            fallback={
+              <div className="w-full h-[420px] md:h-[480px] flex items-center justify-center text-zinc-400 text-sm">
+                <Globe className="w-5 h-5 animate-spin mr-2" />
+                Loading globe...
+              </div>
+            }
+          >
+            <NodeGlobe nodes={globeNodes} />
+          </Suspense>
+        </motion.div>
+      )}
 
       {/* Table */}
       <motion.div
