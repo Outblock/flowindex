@@ -612,6 +612,20 @@ CREATE INDEX IF NOT EXISTS idx_ft_holdings_address
 CREATE INDEX IF NOT EXISTS idx_ft_holdings_token
   ON app.ft_holdings(contract_address, contract_name) WHERE balance > 0;
 
+-- Daily balance deltas: aggregated per (address, token, date) for balance history charts.
+CREATE TABLE IF NOT EXISTS app.daily_balance_deltas (
+    address          BYTEA NOT NULL,
+    contract_address BYTEA NOT NULL,
+    contract_name    TEXT NOT NULL DEFAULT '',
+    date             DATE NOT NULL,
+    delta            NUMERIC(78, 18) NOT NULL DEFAULT 0,
+    tx_count         INT NOT NULL DEFAULT 0,
+    last_height      BIGINT NOT NULL,
+    PRIMARY KEY (address, contract_address, contract_name, date)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_balance_deltas_lookup
+  ON app.daily_balance_deltas(address, contract_address, contract_name, date DESC);
+
 CREATE TABLE IF NOT EXISTS app.nft_collections (
     contract_address BYTEA NOT NULL,
     contract_name    TEXT NOT NULL DEFAULT '',

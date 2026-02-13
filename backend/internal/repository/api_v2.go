@@ -177,6 +177,56 @@ func (r *Repository) UpsertFTHoldingsDelta(ctx context.Context, address, contrac
 	return err
 }
 
+func (r *Repository) UpsertDailyBalanceDelta(ctx context.Context, address, contract, contractName, date, delta string, height uint64) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO app.daily_balance_deltas (address, contract_address, contract_name, date, delta, tx_count, last_height)
+		VALUES ($1, $2, $3, $4::date, $5::numeric, 1, $6)
+		ON CONFLICT (address, contract_address, contract_name, date) DO UPDATE SET
+			delta = app.daily_balance_deltas.delta + EXCLUDED.delta,
+			tx_count = app.daily_balance_deltas.tx_count + 1,
+			last_height = GREATEST(app.daily_balance_deltas.last_height, EXCLUDED.last_height)`,
+		hexToBytes(address), hexToBytes(contract), contractName, date, delta, height)
+	return err
+}
+
+type BalanceHistoryPoint struct {
+	Date    string `json:"date"`
+	Balance string `json:"balance"`
+}
+
+func (r *Repository) GetBalanceHistory(ctx context.Context, address, contract, contractName, currentBalance, fromDate, toDate string) ([]BalanceHistoryPoint, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH dates AS (
+			SELECT d::date AS date FROM generate_series($1::date, $2::date, '1 day') d
+		), deltas AS (
+			SELECT date, delta
+			FROM app.daily_balance_deltas
+			WHERE address=$3 AND contract_address=$4 AND contract_name=$5
+			  AND date >= $1::date AND date <= $2::date
+		), filled AS (
+			SELECT dates.date, COALESCE(deltas.delta, 0) AS delta
+			FROM dates LEFT JOIN deltas USING(date)
+		)
+		SELECT date::text,
+			($6::numeric - COALESCE(SUM(delta) OVER (ORDER BY date DESC ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0))::text AS balance
+		FROM filled ORDER BY date ASC`,
+		fromDate, toDate, hexToBytes(address), hexToBytes(contract), contractName, currentBalance)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []BalanceHistoryPoint
+	for rows.Next() {
+		var p BalanceHistoryPoint
+		if err := rows.Scan(&p.Date, &p.Balance); err != nil {
+			return nil, err
+		}
+		result = append(result, p)
+	}
+	return result, rows.Err()
+}
+
 func (r *Repository) ListFTHoldingsByAddress(ctx context.Context, address string, limit, offset int) ([]models.FTHolding, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(address, 'hex') AS address, encode(contract_address, 'hex') AS contract_address, COALESCE(contract_name, '') AS contract_name,

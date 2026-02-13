@@ -584,6 +584,53 @@ func cadenceStorageOverviewScript() string {
 	`
 }
 
+func (s *Server) handleFlowAccountBalanceHistory(w http.ResponseWriter, r *http.Request) {
+	address := normalizeAddr(mux.Vars(r)["address"])
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
+
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		token = "A.1654653399040a61.FlowToken"
+	}
+	tokenAddr, tokenName := parseTokenParam(token)
+
+	daysStr := r.URL.Query().Get("days")
+	days := 30
+	if daysStr != "" {
+		if d, err := strconv.Atoi(daysStr); err == nil && d > 0 && d <= 365 {
+			days = d
+		}
+	}
+
+	toDate := time.Now().UTC().Format("2006-01-02")
+	fromDate := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
+
+	holding, err := s.repo.GetFTHolding(r.Context(), address, tokenAddr, tokenName)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	currentBalance := "0"
+	if holding != nil {
+		currentBalance = holding.Balance
+	}
+
+	points, err := s.repo.GetBalanceHistory(r.Context(), address, tokenAddr, tokenName, currentBalance, fromDate, toDate)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeAPIResponse(w, points, map[string]interface{}{
+		"token":           token,
+		"days":            days,
+		"current_balance": currentBalance,
+	}, nil)
+}
+
 func sigAlgoToNum(name string) string {
 	switch strings.ToUpper(name) {
 	case "ECDSA_P256":
