@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as ApiDocsRouteImport } from './routes/api-docs'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TxIndexRouteImport } from './routes/tx/index'
@@ -39,6 +40,11 @@ const StatsRoute = StatsRouteImport.update({
 const ApiDocsRoute = ApiDocsRouteImport.update({
   id: '/api-docs',
   path: '/api-docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SplatRoute = SplatRouteImport.update({
@@ -140,6 +146,7 @@ const NftsNftTypeItemIdRoute = NftsNftTypeItemIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/admin': typeof AdminRoute
   '/api-docs': typeof ApiDocsRoute
   '/stats': typeof StatsRoute
   '/accounts/$address': typeof AccountsAddressRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/admin': typeof AdminRoute
   '/api-docs': typeof ApiDocsRoute
   '/stats': typeof StatsRoute
   '/accounts/$address': typeof AccountsAddressRoute
@@ -187,6 +195,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/admin': typeof AdminRoute
   '/api-docs': typeof ApiDocsRoute
   '/stats': typeof StatsRoute
   '/accounts/$address': typeof AccountsAddressRoute
@@ -212,6 +221,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$'
+    | '/admin'
     | '/api-docs'
     | '/stats'
     | '/accounts/$address'
@@ -235,6 +245,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$'
+    | '/admin'
     | '/api-docs'
     | '/stats'
     | '/accounts/$address'
@@ -258,6 +269,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$'
+    | '/admin'
     | '/api-docs'
     | '/stats'
     | '/accounts/$address'
@@ -282,6 +294,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
+  AdminRoute: typeof AdminRoute
   ApiDocsRoute: typeof ApiDocsRoute
   StatsRoute: typeof StatsRoute
   AccountsAddressRoute: typeof AccountsAddressRoute
@@ -316,6 +329,13 @@ declare module '@tanstack/react-router' {
       path: '/api-docs'
       fullPath: '/api-docs'
       preLoaderRoute: typeof ApiDocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$': {
@@ -469,6 +489,7 @@ const NftsNftTypeRouteWithChildren = NftsNftTypeRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
+  AdminRoute: AdminRoute,
   ApiDocsRoute: ApiDocsRoute,
   StatsRoute: StatsRoute,
   AccountsAddressRoute: AccountsAddressRoute,

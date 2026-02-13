@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1TransactionById } from '../../api/gen/find';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
@@ -14,6 +14,7 @@ import { CopyButton } from '../../../components/animate-ui/components/buttons/co
 import DecryptedText from '../../components/ui/DecryptedText';
 import { deriveActivityType, TokenIcon, formatTokenName, extractLogoUrl, buildSummaryLine } from '../../components/TransactionRow';
 import { normalizeAddress, formatShort } from '../../components/account/accountUtils';
+import AISummary from '../../components/tx/AISummary';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -65,11 +66,13 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
     const isDeploy = tags.some((t: string) => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated'));
     const isAccountCreation = tags.some((t: string) => t.includes('account_created'));
 
-    // Don't show card if there's nothing meaningful to summarize
-    if (!summaryLine && !hasFT && !hasDefi && !hasEvm && !isDeploy && !isAccountCreation) return null;
+    const hasContractImports = transaction.contract_imports?.length > 0;
 
     return (
         <div className="border border-zinc-200 dark:border-white/10 p-6 mb-8 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+            <h2 className="text-sm uppercase tracking-widest mb-4 border-b border-zinc-200 dark:border-white/10 pb-2 text-zinc-500 dark:text-zinc-400">
+                Transaction Summary
+            </h2>
             {/* Activity badge + summary line */}
             <div className="flex items-start gap-3 mb-4">
                 <span className={`inline-flex items-center gap-1 px-2 py-1 border rounded-sm text-[10px] font-bold uppercase tracking-wider flex-shrink-0 ${activity.bgColor} ${activity.color}`}>
@@ -187,16 +190,38 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
             )}
 
             {/* Deploy info */}
-            {isDeploy && !hasFT && !hasDefi && (
+            {isDeploy && !hasFT && !hasDefi && !hasContractImports && (
                 <div className="flex items-center gap-2 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
                     <Layers className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                    <span className="text-xs text-zinc-700 dark:text-zinc-300">
-                        {transaction.contract_imports?.length > 0
-                            ? `Deployed: ${transaction.contract_imports.map((c: string) => formatTokenName(c)).join(', ')}`
-                            : 'Contract deployment'}
-                    </span>
+                    <span className="text-xs text-zinc-700 dark:text-zinc-300">Contract deployment</span>
                 </div>
             )}
+
+            {/* All contract imports as links */}
+            {hasContractImports && (
+                <div className="flex items-start gap-2 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm mt-2">
+                    <Layers className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+                        <span className="text-zinc-500 uppercase tracking-wider text-[10px]">Contracts:</span>
+                        {transaction.contract_imports.map((c: string, i: number) => (
+                            <span key={c} className="inline-flex items-center">
+                                {i > 0 && <span className="text-zinc-300 dark:text-zinc-600 mr-1.5">&middot;</span>}
+                                <Link
+                                    to={`/contracts/${c}` as any}
+                                    className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono"
+                                >
+                                    {formatTokenName(c)}
+                                </Link>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* AI Summary */}
+            <div className="mt-4">
+                <AISummary transaction={transaction} />
+            </div>
         </div>
     );
 }
@@ -317,8 +342,8 @@ function TransactionDetail() {
                                 animateOn="view"
                                 sequential
                                 revealDirection="start"
-                                speed={30}
-                                maxIterations={15}
+                                speed={60}
+                                maxIterations={30}
                                 characters="0123456789abcdef"
                                 className="font-mono"
                             />

@@ -27,6 +27,11 @@ func registerAPIRoutes(r *mux.Router, s *Server) {
 	registerAccountingRoutes(r, s)
 	registerStatusRoutes(r, s)
 	registerDeferredRoutes(r, s)
+	registerAIRoutes(r, s)
+}
+
+func registerAIRoutes(r *mux.Router, s *Server) {
+	r.HandleFunc("/ai/tx-summary", s.handleAITxSummary).Methods("POST", "OPTIONS")
 }
 
 func registerFlowRoutes(r *mux.Router, s *Server) {
