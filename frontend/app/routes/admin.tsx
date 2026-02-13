@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Search, Save, Coins, Image, Loader2, X } from 'lucide-react'
+import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
 import { resolveApiBaseUrl } from '../api'
 import toast from 'react-hot-toast'
 
@@ -39,7 +39,7 @@ function AdminPage() {
   const [tokenInput, setTokenInput] = useState(token)
   const [authed, setAuthed] = useState(!!token)
 
-  const [tab, setTab] = useState<'ft' | 'nft'>('ft')
+  const [tab, setTab] = useState<'ft' | 'nft' | 'scripts'>('ft')
 
   const handleLogin = () => {
     if (!tokenInput.trim()) return
@@ -114,9 +114,10 @@ function AdminPage() {
       <div className="flex gap-1 border-b border-zinc-200 dark:border-white/10">
         <TabButton active={tab === 'ft'} onClick={() => setTab('ft')} icon={<Coins className="w-4 h-4" />} label="FT Tokens" />
         <TabButton active={tab === 'nft'} onClick={() => setTab('nft')} icon={<Image className="w-4 h-4" />} label="NFT Collections" />
+        <TabButton active={tab === 'scripts'} onClick={() => setTab('scripts')} icon={<FileCode className="w-4 h-4" />} label="Script Templates" />
       </div>
 
-      {tab === 'ft' ? <FTPanel token={token} /> : <NFTPanel token={token} />}
+      {tab === 'ft' ? <FTPanel token={token} /> : tab === 'nft' ? <NFTPanel token={token} /> : <ScriptTemplatesPanel token={token} />}
     </div>
   )
 }
@@ -357,6 +358,216 @@ function NFTRow({ item, token }: { item: any; token: string }) {
           <Field label="Banner Image URL" value={form.banner_image} onChange={(v) => setForm({ ...form, banner_image: v })} />
           <Field label="External URL" value={form.external_url} onChange={(v) => setForm({ ...form, external_url: v })} />
           <Field label="Description" value={form.description} onChange={(v) => setForm({ ...form, description: v })} multiline />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Script Templates Panel ───────────────────────────────────────────
+
+const SCRIPT_CATEGORIES = [
+  '', 'FT_TRANSFER', 'NFT_TRANSFER', 'NFT_PURCHASE', 'NFT_LISTING',
+  'STAKING', 'ACCOUNT_SETUP', 'EVM_BRIDGE', 'EVM_CALL', 'SWAP',
+  'LIQUIDITY', 'CONTRACT_DEPLOY', 'SYSTEM', 'OTHER',
+]
+
+function ScriptTemplatesPanel({ token }: { token: string }) {
+  const [search, setSearch] = useState('')
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [stats, setStats] = useState<any>(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const loadStats = useCallback(async () => {
+    try {
+      const data = await adminFetch('admin/script-templates/stats', token)
+      setStats(data?.data || null)
+    } catch { /* ignore */ }
+  }, [token])
+
+  const doSearch = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await adminFetch(`admin/script-templates?limit=50&search=${encodeURIComponent(search)}`, token)
+      setItems(data?.data || [])
+      setLoaded(true)
+      loadStats()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [search, token, loadStats])
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await adminFetch('admin/script-templates/refresh-counts', token, { method: 'POST' })
+      toast.success('Counts refreshed')
+      doSearch()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Stats bar */}
+      {stats && (
+        <div className="flex gap-4 flex-wrap">
+          <StatBadge label="Total Scripts" value={stats.total?.toLocaleString() || '0'} />
+          <StatBadge label="Labeled" value={stats.labeled?.toLocaleString() || '0'} />
+          <StatBadge label="Unlabeled" value={stats.unlabeled?.toLocaleString() || '0'} />
+          <StatBadge label="TX Coverage" value={`${(stats.coverage_pct || 0).toFixed(1)}%`} highlight />
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <SearchBar value={search} onChange={setSearch} onSearch={doSearch} loading={loading} />
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-4 py-2 border border-zinc-200 dark:border-white/10 text-xs uppercase tracking-widest font-mono text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+        >
+          {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Refresh
+        </button>
+      </div>
+
+      {loaded && items.length === 0 && (
+        <p className="text-sm text-zinc-500 font-mono text-center py-8">No script templates found. Click "Refresh" to populate.</p>
+      )}
+      {items.map((item) => (
+        <ScriptTemplateRow key={item.script_hash} item={item} token={token} />
+      ))}
+    </div>
+  )
+}
+
+function StatBadge({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className={`px-3 py-2 border rounded-sm ${highlight ? 'border-nothing-green/30 bg-nothing-green/5' : 'border-zinc-200 dark:border-white/10 bg-white dark:bg-nothing-dark'}`}>
+      <div className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-mono">{label}</div>
+      <div className={`text-lg font-bold font-mono ${highlight ? 'text-nothing-green-dark dark:text-nothing-green' : 'text-zinc-900 dark:text-white'}`}>{value}</div>
+    </div>
+  )
+}
+
+function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
+  const [saving, setSaving] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [scriptText, setScriptText] = useState<string | null>(null)
+  const [loadingScript, setLoadingScript] = useState(false)
+  const [category, setCategory] = useState(item.category || '')
+  const [label, setLabel] = useState(item.label || '')
+  const [description, setDescription] = useState(item.description || '')
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await adminFetch(`admin/script-templates/${encodeURIComponent(item.script_hash)}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ category, label, description }),
+      })
+      toast.success('Template updated')
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleExpand = async () => {
+    if (!expanded && scriptText === null) {
+      setLoadingScript(true)
+      try {
+        const data = await adminFetch(`admin/script-templates/${encodeURIComponent(item.script_hash)}/script`, token)
+        setScriptText(data?.data?.script_text || '')
+      } catch {
+        setScriptText('(failed to load)')
+      } finally {
+        setLoadingScript(false)
+      }
+    }
+    setExpanded(!expanded)
+  }
+
+  return (
+    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm p-4">
+      <div className="flex items-start gap-3">
+        {/* Expand toggle */}
+        <button onClick={handleExpand} className="flex-shrink-0 pt-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+          {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </button>
+
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="font-mono text-xs text-zinc-900 dark:text-white">{item.script_hash}</span>
+            <span className="text-xs font-mono text-zinc-400 bg-zinc-100 dark:bg-white/10 px-2 py-0.5 rounded-sm">
+              {(item.tx_count || 0).toLocaleString()} txs
+            </span>
+          </div>
+
+          {/* Script preview */}
+          {item.script_preview && (
+            <pre className="text-[10px] text-zinc-500 dark:text-zinc-500 font-mono mb-3 whitespace-pre-wrap line-clamp-2 leading-tight">
+              {item.script_preview}
+            </pre>
+          )}
+
+          {/* Inline edit fields */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="px-2 py-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-xs font-mono text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-nothing-green"
+            >
+              {SCRIPT_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c || '(none)'}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Label..."
+              className="flex-1 min-w-[200px] px-2 py-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-xs font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-nothing-green"
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1 px-3 py-1 bg-nothing-green text-black text-[10px] uppercase tracking-widest font-mono font-bold hover:bg-nothing-green/90 transition-colors disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded script text */}
+      {expanded && (
+        <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-white/5">
+          <Field label="Description" value={description} onChange={setDescription} multiline />
+          <div className="mt-3">
+            <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Full Script</label>
+            {loadingScript ? (
+              <div className="flex items-center gap-2 text-xs text-zinc-400 py-2">
+                <Loader2 className="w-3 h-3 animate-spin" /> Loading...
+              </div>
+            ) : (
+              <pre className="text-[10px] text-zinc-600 dark:text-zinc-400 font-mono bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm p-3 max-h-64 overflow-auto whitespace-pre-wrap">
+                {scriptText || '(empty)'}
+              </pre>
+            )}
+          </div>
         </div>
       )}
     </div>

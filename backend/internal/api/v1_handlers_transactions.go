@@ -44,10 +44,12 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 			eventsByTx[e.TransactionID] = append(eventsByTx[e.TransactionID], e)
 		}
 	}
+	templates, _ := s.repo.GetScriptTemplatesByTxIDs(r.Context(), txIDs)
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
 		out = append(out, toFlowTransactionOutput(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
 	}
+	enrichWithTemplates(out, templates)
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
 
@@ -67,6 +69,11 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		evmExecs, _ = s.repo.GetEVMTransactionsByCadenceTx(r.Context(), tx.ID, tx.BlockHeight)
 	}
 	out := toFlowTransactionOutput(*tx, events, contracts[tx.ID], tags[tx.ID], feesByTx[tx.ID], evmExecs)
+
+	// Enrich: script template classification
+	if templates, err := s.repo.GetScriptTemplatesByTxIDs(r.Context(), []string{tx.ID}); err == nil {
+		enrichWithTemplates([]map[string]interface{}{out}, templates)
+	}
 
 	// Enrich: FT transfers with token metadata
 	ftTransfers, _ := s.repo.GetFTTransfersByTransactionID(r.Context(), tx.ID)

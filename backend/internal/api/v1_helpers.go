@@ -818,4 +818,22 @@ func enrichNFTItemOutput(out map[string]interface{}, meta *models.NFTItem) {
 	}
 }
 
+// enrichWithTemplates adds template_category and template_label fields to transaction outputs.
+func enrichWithTemplates(outputs []map[string]interface{}, templates map[string]repository.TxScriptTemplate) {
+	if len(templates) == 0 {
+		return
+	}
+	for _, out := range outputs {
+		txID, ok := out["id"].(string)
+		if !ok {
+			continue
+		}
+		txID = strings.TrimPrefix(strings.ToLower(txID), "0x")
+		if tmpl, found := templates[txID]; found {
+			out["template_category"] = tmpl.Category
+			out["template_label"] = tmpl.Label
+		}
+	}
+}
+
 // --- Accounting + Flow + Status Handlers ---
