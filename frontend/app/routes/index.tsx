@@ -420,42 +420,66 @@ function Home() {
                             animate={{ opacity: 1, y: 0 }}
                         >
                             <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic">
-                                Flow<span className="text-nothing-green-dark dark:text-nothing-green">Scan</span>
+                                Flow<span className="text-nothing-green-dark dark:text-nothing-green">Index</span>
                             </h1>
                             <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
                         </motion.div>
                     </div>
 
                     {/* Indexing Progress Banner */}
-                    <IndexingStatus />
-
-                    {/* New Premium Stats Grid (Flow Pulse) */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+                        transition={{ duration: 0.5, delay: 0.05 }}
                     >
+                        <IndexingStatus />
+                    </motion.div>
+
+                    {/* New Premium Stats Grid (Flow Pulse) */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* 1. Price Chart */}
-                        <FlowPriceChart data={networkStats} />
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5, delay: 0.1 }}
+                        >
+                            <FlowPriceChart data={networkStats} />
+                        </motion.div>
 
                         {/* 2. Epoch Progress */}
-                        <EpochProgress
-                            epoch={networkStats?.epoch}
-                            progress={networkStats?.epoch_progress}
-                            updatedAt={networkStats?.updated_at}
-                        />
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5, delay: 0.15 }}
+                        >
+                            <EpochProgress
+                                epoch={networkStats?.epoch}
+                                progress={networkStats?.epoch_progress}
+                                updatedAt={networkStats?.updated_at}
+                            />
+                        </motion.div>
 
                         {/* 3. Network Stats Grid */}
-                        <NetworkStats totalStaked={networkStats?.total_staked} activeNodes={networkStats?.active_nodes} />
-                    </motion.div>
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5, delay: 0.2 }}
+                        >
+                            <NetworkStats totalStaked={networkStats?.total_staked} activeNodes={networkStats?.active_nodes} />
+                        </motion.div>
+                    </div>
                 </div>
             </div>
 
             <div className="container mx-auto px-4 py-8 space-y-8">
                 {/* Basic Stats Section */}
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-nothing-green/50 transition-all duration-300">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.25 }}
+                    >
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-nothing-green/50 transition-all duration-300 h-full">
                         <div className="flex items-center justify-between mb-4">
                             <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
                                 <Box className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
@@ -477,10 +501,14 @@ function Home() {
                             </p>
                         </div>
                     </div>
+                    </motion.div>
 
-
-
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.3 }}
+                    >
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
                         <div className="flex items-center justify-between mb-4">
                             <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
                                 <Activity className="h-5 w-5 text-zinc-900 dark:text-white" />
@@ -505,10 +533,14 @@ function Home() {
                             </p>
                         </div>
                     </div>
+                    </motion.div>
 
-
-
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.35 }}
+                    >
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
                         <div className="flex items-center justify-between mb-4">
                             <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
                                 <TrendingUp className="h-5 w-5 text-zinc-900 dark:text-white" />
@@ -527,8 +559,14 @@ function Home() {
                             </p>
                         </div>
                     </div>
+                    </motion.div>
 
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.4 }}
+                    >
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
                         <div className="flex items-center justify-between mb-4">
                             <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
                                 <Box className="h-5 w-5 text-zinc-900 dark:text-white" />
@@ -544,10 +582,14 @@ function Home() {
                             </p>
                         </div>
                     </div>
+                    </motion.div>
 
-
-
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.45 }}
+                    >
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
                         <div className="flex items-center justify-between mb-4">
                             <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
                                 <Activity className="h-5 w-5 text-zinc-900 dark:text-white" />
@@ -572,13 +614,14 @@ function Home() {
                             </p>
                         </div>
                     </div>
+                    </motion.div>
                 </div>
 
                 {/* Charts Section */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
+                    transition={{ duration: 0.5, delay: 0.55 }}
                 >
                     <DailyStatsChart />
                 </motion.div>
@@ -589,7 +632,7 @@ function Home() {
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.3 }}
+                        transition={{ duration: 0.5, delay: 0.6 }}
                         className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10"
                     >
                         <div className="flex items-center justify-between p-6 pb-0">
@@ -658,7 +701,7 @@ function Home() {
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.4 }}
+                        transition={{ duration: 0.5, delay: 0.65 }}
                         className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10"
                     >
                         <div className="flex items-center justify-between p-6 pb-0">
@@ -724,9 +767,9 @@ function Home() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Recent Blocks */}
                     <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.5 }}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.7 }}
                         className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-[1240px] flex flex-col overflow-hidden"
                     >
                         <div className="flex items-center justify-between mb-6">
@@ -798,10 +841,10 @@ function Home() {
                     </motion.div >
 
                     {/* Recent Transactions */}
-                    < motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.5 }}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.75 }}
                         className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-[1240px] flex flex-col overflow-hidden"
                     >
                         <div className="flex items-center justify-between mb-6">
