@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useState, useMemo, lazy, Suspense } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { Server, Shield, Cpu, Eye, Radio, Database, Globe } from 'lucide-react';
 import { resolveApiBaseUrl } from '../api';
@@ -36,6 +36,8 @@ const ROLE_MAP: Record<number, { label: string; icon: typeof Server; color: stri
   5: { label: 'Access', icon: Radio, color: 'text-cyan-400' },
 };
 
+const FALLBACK_TOTAL_SUPPLY = 1_630_000_000;
+
 async function fetchNodes(): Promise<StakingNode[]> {
   await ensureHeyApiConfigured();
   const baseURL = await resolveApiBaseUrl();
@@ -45,16 +47,29 @@ async function fetchNodes(): Promise<StakingNode[]> {
   return json?.data ?? [];
 }
 
+async function fetchTotalSupply(): Promise<number> {
+  try {
+    const baseURL = await resolveApiBaseUrl();
+    const res = await fetch(`${baseURL}/status/tokenomics`);
+    if (!res.ok) return FALLBACK_TOTAL_SUPPLY;
+    const json = await res.json();
+    const supply = Number(json?.data?.total_supply || json?.total_supply);
+    return supply > 0 ? supply : FALLBACK_TOTAL_SUPPLY;
+  } catch {
+    return FALLBACK_TOTAL_SUPPLY;
+  }
+}
+
 export const Route = createFileRoute('/nodes')({
   component: NodesPage,
   loader: async () => {
-    const nodes = await fetchNodes();
-    return { nodes };
+    const [nodes, totalSupply] = await Promise.all([fetchNodes(), fetchTotalSupply()]);
+    return { nodes, totalSupply };
   },
 });
 
 function NodesPage() {
-  const { nodes } = Route.useLoaderData();
+  const { nodes, totalSupply } = Route.useLoaderData();
   const [roleFilter, setRoleFilter] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [hideZeroStake, setHideZeroStake] = useState(true);
@@ -144,7 +159,7 @@ function NodesPage() {
       >
         <StatCard label="Nodes" value={nodes.length.toLocaleString()} />
         <StatCard label="Validators" value={validatorCount.toLocaleString()} />
-        <StatCard label="Total Staked" value={formatFlowCompact(totalStaked)} suffix="FLOW" />
+        <StakeBarCard staked={totalStaked} totalSupply={totalSupply} />
         {countryCount > 0 ? (
           <StatCard label="Countries" value={countryCount.toLocaleString()} />
         ) : (
@@ -318,6 +333,64 @@ function StatCard({ label, value, suffix }: { label: string; value: string; suff
         {value}
         {suffix && <span className="text-sm text-zinc-400 ml-1.5 font-normal">{suffix}</span>}
       </p>
+    </div>
+  );
+}
+
+function StakeBarCard({ staked, totalSupply }: { staked: number; totalSupply: number }) {
+  const pct = totalSupply > 0 ? Math.min((staked / totalSupply) * 100, 100) : 0;
+  const [animPct, setAnimPct] = useState(0);
+
+  useEffect(() => {
+    // Small delay then animate to target
+    const t = setTimeout(() => setAnimPct(pct), 100);
+    return () => clearTimeout(t);
+  }, [pct]);
+
+  return (
+    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none flex flex-col justify-between">
+      <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1 font-mono">
+        Network Staked
+      </p>
+      <div className="flex items-baseline gap-1.5 mb-3">
+        <span className="text-2xl font-bold font-mono text-zinc-900 dark:text-white">
+          {pct.toFixed(1)}%
+        </span>
+        <span className="text-xs text-zinc-400 font-mono">
+          {formatFlowCompact(staked)} / {formatFlowCompact(totalSupply)} FLOW
+        </span>
+      </div>
+      {/* Bar track */}
+      <div className="relative w-full h-3 bg-zinc-100 dark:bg-white/5 rounded-full overflow-hidden">
+        {/* Animated fill */}
+        <motion.div
+          className="absolute inset-y-0 left-0 rounded-full"
+          initial={{ width: '0%' }}
+          animate={{ width: `${animPct}%` }}
+          transition={{ duration: 1.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+          style={{
+            background: 'linear-gradient(90deg, #00e599 0%, #00c97a 60%, #00e599 100%)',
+            backgroundSize: '200% 100%',
+          }}
+        />
+        {/* Shimmer overlay */}
+        <motion.div
+          className="absolute inset-y-0 left-0 rounded-full opacity-30"
+          initial={{ width: '0%' }}
+          animate={{ width: `${animPct}%` }}
+          transition={{ duration: 1.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+        >
+          <motion.div
+            className="h-full w-full"
+            style={{
+              background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+              backgroundSize: '200% 100%',
+            }}
+            animate={{ backgroundPosition: ['200% 0%', '-200% 0%'] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'linear', repeatDelay: 1 }}
+          />
+        </motion.div>
+      </div>
     </div>
   );
 }
