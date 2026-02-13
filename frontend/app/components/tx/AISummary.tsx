@@ -1,16 +1,19 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Link } from '@tanstack/react-router';
 import { Sparkles, Loader2 } from 'lucide-react';
 import ReactFlow, {
     Node,
     Edge,
     Position,
     MarkerType,
+    Background,
+    BackgroundVariant,
+    Controls,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { resolveApiBaseUrl } from '../../api';
 import { formatShort } from '../account/accountUtils';
 import { deriveActivityType, buildSummaryLine } from '../TransactionRow';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface Flow {
     from: string;
@@ -29,44 +32,55 @@ interface AISummaryData {
 /* ── Lightweight inline markdown → React ── */
 
 function InlineMarkdown({ text }: { text: string }) {
-    // Split on markdown patterns: **bold**, `code`, [link](url)
-    const parts: React.ReactNode[] = [];
-    const regex = /(\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    let key = 0;
+    if (!text) return null;
 
-    while ((match = regex.exec(text)) !== null) {
-        // Text before match
-        if (match.index > lastIndex) {
-            parts.push(text.slice(lastIndex, match.index));
+    // Process bold, code, and links via sequential replacement
+    const tokens: Array<{ type: 'text' | 'bold' | 'code' | 'link'; value: string; href?: string }> = [];
+    const pattern = /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)/g;
+    let lastIdx = 0;
+    let m: RegExpExecArray | null;
+
+    // Reset regex state
+    pattern.lastIndex = 0;
+
+    while ((m = pattern.exec(text)) !== null) {
+        if (m.index > lastIdx) {
+            tokens.push({ type: 'text', value: text.slice(lastIdx, m.index) });
         }
-
-        if (match[2]) {
-            // **bold**
-            parts.push(<strong key={key++} className="font-bold text-zinc-900 dark:text-white">{match[2]}</strong>);
-        } else if (match[3]) {
-            // `code`
-            parts.push(<code key={key++} className="text-[11px] bg-zinc-100 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-purple-600 dark:text-purple-400">{match[3]}</code>);
-        } else if (match[4] && match[5]) {
-            // [text](url)
-            parts.push(<a key={key++} href={match[5]} className="text-nothing-green-dark dark:text-nothing-green hover:underline">{match[4]}</a>);
+        if (m[1] !== undefined) {
+            tokens.push({ type: 'bold', value: m[1] });
+        } else if (m[2] !== undefined) {
+            tokens.push({ type: 'code', value: m[2] });
+        } else if (m[3] !== undefined && m[4] !== undefined) {
+            tokens.push({ type: 'link', value: m[3], href: m[4] });
         }
-
-        lastIndex = match.index + match[0].length;
+        lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < text.length) {
+        tokens.push({ type: 'text', value: text.slice(lastIdx) });
     }
 
-    if (lastIndex < text.length) {
-        parts.push(text.slice(lastIndex));
-    }
-
-    return <>{parts}</>;
+    return (
+        <>
+            {tokens.map((tok, i) => {
+                switch (tok.type) {
+                    case 'bold':
+                        return <strong key={i} className="font-bold text-zinc-900 dark:text-white">{tok.value}</strong>;
+                    case 'code':
+                        return <code key={i} className="text-[11px] bg-zinc-100 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-purple-600 dark:text-purple-400">{tok.value}</code>;
+                    case 'link':
+                        return <a key={i} href={tok.href} className="text-nothing-green-dark dark:text-nothing-green hover:underline">{tok.value}</a>;
+                    default:
+                        return <span key={i}>{tok.value}</span>;
+                }
+            })}
+        </>
+    );
 }
 
 /* ── Layout: assign (x,y) per unique address, left-to-right ── */
 
-function layoutGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
-    // Collect unique addresses preserving order of appearance
+function layoutGraph(flows: Flow[], isDark: boolean): { nodes: Node[]; edges: Edge[] } {
     const seen = new Map<string, { label: string; isSource: boolean; isTarget: boolean }>();
     for (const f of flows) {
         if (!seen.has(f.from)) seen.set(f.from, { label: f.fromLabel || formatShort(f.from, 8, 4), isSource: true, isTarget: false });
@@ -76,7 +90,6 @@ function layoutGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
         else seen.get(f.to)!.isTarget = true;
     }
 
-    // Categorize: pure sources → left column, pure targets → right, mixed → middle
     const sources: string[] = [];
     const targets: string[] = [];
     const middle: string[] = [];
@@ -86,8 +99,20 @@ function layoutGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
         else middle.push(addr);
     }
 
-    const colWidth = 280;
-    const rowHeight = 90;
+    const colWidth = 300;
+    const rowHeight = 100;
+
+    const nodeStyle = {
+        padding: '12px 16px',
+        borderRadius: '6px',
+        fontSize: '11px',
+        fontFamily: 'ui-monospace, monospace',
+        minWidth: 170,
+        border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e4e4e7',
+        background: isDark ? '#18181b' : '#ffffff',
+        color: isDark ? '#e4e4e7' : '#27272a',
+        boxShadow: isDark ? '0 1px 3px rgba(0,0,0,0.4)' : '0 1px 3px rgba(0,0,0,0.08)',
+    };
 
     const placeColumn = (addrs: string[], col: number): Node[] =>
         addrs.map((addr, row) => ({
@@ -95,10 +120,10 @@ function layoutGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
             data: {
                 label: (
                     <div style={{ textAlign: 'center' }}>
-                        <div className="font-bold text-[11px] text-zinc-800 dark:text-zinc-200">
+                        <div style={{ fontWeight: 700, fontSize: '11px', color: isDark ? '#e4e4e7' : '#27272a' }}>
                             {seen.get(addr)!.label}
                         </div>
-                        <div className="text-[9px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5">
+                        <div style={{ fontSize: '9px', color: isDark ? '#71717a' : '#a1a1aa', fontFamily: 'ui-monospace, monospace', marginTop: '2px' }}>
                             {formatShort(addr, 8, 4)}
                         </div>
                     </div>
@@ -107,16 +132,7 @@ function layoutGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
             position: { x: col * colWidth, y: row * rowHeight },
             sourcePosition: Position.Right,
             targetPosition: Position.Left,
-            style: {
-                padding: '10px 14px',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontFamily: 'ui-monospace, monospace',
-                minWidth: 160,
-                border: '1px solid #d4d4d8',
-                background: '#fafafa',
-                color: '#27272a',
-            },
+            style: nodeStyle,
         }));
 
     const nodes: Node[] = [
@@ -125,6 +141,8 @@ function layoutGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
         ...placeColumn(targets, middle.length > 0 ? 2 : 1),
     ];
 
+    const accentColor = isDark ? '#4ade80' : '#16a34a';
+
     const edges: Edge[] = flows.map((f, i) => {
         const amountStr = Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 8 });
         return {
@@ -132,11 +150,11 @@ function layoutGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
             source: f.from,
             target: f.to,
             label: `${amountStr} ${f.token}`,
-            labelStyle: { fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, fill: '#16a34a' },
-            labelBgStyle: { fill: '#ffffff', fillOpacity: 0.95, rx: 4, ry: 4 },
+            labelStyle: { fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, fill: accentColor },
+            labelBgStyle: { fill: isDark ? '#18181b' : '#ffffff', fillOpacity: 0.95, rx: 4, ry: 4 },
             labelBgPadding: [8, 4] as [number, number],
-            style: { stroke: '#22c55e', strokeWidth: 2 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: '#22c55e', width: 18, height: 18 },
+            style: { stroke: accentColor, strokeWidth: 2 },
+            markerEnd: { type: MarkerType.ArrowClosed, color: accentColor, width: 18, height: 18 },
             animated: true,
         };
     });
@@ -150,13 +168,14 @@ export default function AISummary({ transaction }: { transaction: any }) {
     const [data, setData] = useState<AISummaryData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
 
     const handleSummarize = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
             const baseUrl = await resolveApiBaseUrl();
-            // Pre-analyzed data from frontend helpers
             const activity = deriveActivityType(transaction);
             const summaryLine = buildSummaryLine(transaction);
 
@@ -164,12 +183,10 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 id: transaction.id,
                 status: transaction.status,
                 is_evm: transaction.is_evm || false,
-                // Pre-analyzed context — AI can use these directly
                 activity_type: activity.type,
                 activity_label: activity.label,
                 preliminary_summary: summaryLine,
                 transfer_summary: transaction.transfer_summary || null,
-                // Raw data — full script, events with values
                 events: (transaction.events || []).slice(0, 30).map((e: any) => ({
                     type: e.type,
                     event_name: e.event_name,
@@ -210,7 +227,6 @@ export default function AISummary({ transaction }: { transaction: any }) {
             const result = await res.json();
             const d = result.data as AISummaryData;
 
-            // Frontend validation: summary must be a string, flows must be an array
             if (!d || typeof d.summary !== 'string') {
                 throw new Error('Invalid response format');
             }
@@ -226,8 +242,8 @@ export default function AISummary({ transaction }: { transaction: any }) {
 
     const { nodes, edges } = useMemo(() => {
         if (!data?.flows?.length) return { nodes: [], edges: [] };
-        return layoutGraph(data.flows);
-    }, [data]);
+        return layoutGraph(data.flows, isDark);
+    }, [data, isDark]);
 
     /* ── Button state ── */
     if (!data && !loading && !error) {
@@ -293,23 +309,36 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 <div>
                     <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Asset Flow</p>
                     <div
-                        className="border border-zinc-200 dark:border-white/10 rounded-sm bg-white dark:bg-zinc-900 overflow-hidden"
-                        style={{ height: Math.max(200, Math.ceil(nodes.length / 2) * 90 + 60) }}
+                        className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden"
+                        style={{ height: Math.max(250, Math.ceil(nodes.length / 2) * 100 + 80) }}
                     >
                         <ReactFlow
                             nodes={nodes}
                             edges={edges}
                             fitView
-                            fitViewOptions={{ padding: 0.4 }}
-                            nodesDraggable={false}
+                            fitViewOptions={{ padding: 0.3 }}
+                            nodesDraggable
                             nodesConnectable={false}
-                            elementsSelectable={false}
-                            panOnDrag={false}
-                            zoomOnScroll={false}
-                            zoomOnPinch={false}
-                            zoomOnDoubleClick={false}
+                            panOnDrag
+                            zoomOnScroll
+                            zoomOnPinch
+                            zoomOnDoubleClick
+                            minZoom={0.3}
+                            maxZoom={2}
                             proOptions={{ hideAttribution: true }}
-                        />
+                        >
+                            <Background
+                                variant={BackgroundVariant.Dots}
+                                gap={16}
+                                size={1}
+                                color={isDark ? '#333' : '#ddd'}
+                                style={{ backgroundColor: isDark ? '#09090b' : '#fafafa' }}
+                            />
+                            <Controls
+                                showInteractive={false}
+                                className="!bg-white dark:!bg-zinc-800 !border-zinc-200 dark:!border-white/10 !shadow-sm [&>button]:!border-zinc-200 dark:[&>button]:!border-white/10 [&>button]:!bg-white dark:[&>button]:!bg-zinc-800 [&>button>svg]:!fill-zinc-600 dark:[&>button>svg]:!fill-zinc-400"
+                            />
+                        </ReactFlow>
                     </div>
                 </div>
             )}
