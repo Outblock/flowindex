@@ -345,6 +345,7 @@ function TransactionDetail() {
                                 speed={60}
                                 maxIterations={30}
                                 characters="0123456789abcdef"
+                                startEncrypted
                                 className="font-mono"
                             />
                             <CopyButton

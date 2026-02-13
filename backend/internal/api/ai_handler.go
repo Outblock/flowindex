@@ -30,6 +30,11 @@ type aiTxSummaryRequest struct {
 	ContractImports []any  `json:"contract_imports,omitempty"`
 	ScriptSummary   string `json:"script_summary,omitempty"`
 	EVMExecutions   []any  `json:"evm_executions,omitempty"`
+	// Pre-analyzed fields from frontend
+	ActivityType       string `json:"activity_type,omitempty"`
+	ActivityLabel      string `json:"activity_label,omitempty"`
+	PreliminarySummary string `json:"preliminary_summary,omitempty"`
+	TransferSummary    any    `json:"transfer_summary,omitempty"`
 }
 
 type anthropicMessage struct {
@@ -37,11 +42,21 @@ type anthropicMessage struct {
 	Content string `json:"content"`
 }
 
+type anthropicOutputConfig struct {
+	Format anthropicOutputFormat `json:"format"`
+}
+
+type anthropicOutputFormat struct {
+	Type   string         `json:"type"`
+	Schema map[string]any `json:"schema"`
+}
+
 type anthropicRequest struct {
-	Model     string             `json:"model"`
-	MaxTokens int                `json:"max_tokens"`
-	System    string             `json:"system"`
-	Messages  []anthropicMessage `json:"messages"`
+	Model        string                 `json:"model"`
+	MaxTokens    int                    `json:"max_tokens"`
+	System       string                 `json:"system"`
+	Messages     []anthropicMessage     `json:"messages"`
+	OutputConfig *anthropicOutputConfig `json:"output_config,omitempty"`
 }
 
 type anthropicContentBlock struct {
@@ -50,7 +65,8 @@ type anthropicContentBlock struct {
 }
 
 type anthropicResponse struct {
-	Content []anthropicContentBlock `json:"content"`
+	Content    []anthropicContentBlock `json:"content"`
+	StopReason string                 `json:"stop_reason"`
 }
 
 type aiFlow struct {
@@ -65,6 +81,32 @@ type aiFlow struct {
 type aiTxSummaryResponse struct {
 	Summary string   `json:"summary"`
 	Flows   []aiFlow `json:"flows"`
+}
+
+// JSON Schema for structured output — guarantees valid response
+var txSummarySchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"summary": map[string]any{"type": "string"},
+		"flows": map[string]any{
+			"type": "array",
+			"items": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"from":      map[string]any{"type": "string"},
+					"fromLabel": map[string]any{"type": "string"},
+					"to":        map[string]any{"type": "string"},
+					"toLabel":   map[string]any{"type": "string"},
+					"token":     map[string]any{"type": "string"},
+					"amount":    map[string]any{"type": "string"},
+				},
+				"required":             []string{"from", "fromLabel", "to", "toLabel", "token", "amount"},
+				"additionalProperties": false,
+			},
+		},
+	},
+	"required":             []string{"summary", "flows"},
+	"additionalProperties": false,
 }
 
 func (s *Server) handleAITxSummary(w http.ResponseWriter, r *http.Request) {
@@ -82,23 +124,22 @@ func (s *Server) handleAITxSummary(w http.ResponseWriter, r *http.Request) {
 
 	txJSON, _ := json.Marshal(req)
 
-	systemPrompt := `You analyze Flow blockchain transactions. Return ONLY raw JSON (no markdown fences).
+	systemPrompt := `You analyze Flow blockchain transactions and return structured JSON.
 
 The input includes pre-analyzed fields from our frontend:
-- "activity_type" / "activity_label": classified tx type (e.g. "ft" / "FT Transfer", "swap" / "Swap", "deploy" / "Deploy")
-- "preliminary_summary": a basic one-line summary already generated (e.g. "Sent 100 FLOW to 0xabc...def")
+- "activity_type" / "activity_label": classified tx type (e.g. "ft" / "FT Transfer", "swap" / "Swap")
+- "preliminary_summary": a basic one-line summary already generated
 - "transfer_summary": structured summary with token directions, amounts, counterparties
 
-Use these to inform your response — refine and improve them, don't ignore them.
+Rules for "summary":
+- ONE concise sentence. Improve on "preliminary_summary" — add protocol names, clearer descriptions.
+- Do NOT explain fee mechanics or internal plumbing.
 
-Rules:
-- "summary": ONE concise sentence. Improve on "preliminary_summary" — add protocol names, clearer descriptions, or context from events. Do NOT explain fee mechanics or internal plumbing.
-- "flows": Array of ACTUAL token movements from ft_transfers/defi_events data ONLY. Each object: {"from":"0xRealAddr","fromLabel":"short name","to":"0xRealAddr","toLabel":"short name","token":"SYMBOL","amount":"123.45"}
-  - Use real 0x hex addresses and real numeric amounts from the input data. NEVER use placeholders.
-  - SKIP routine fee deposits/withdrawals (FlowToken fee movements to 0xf919ee77447b7497 or FlowFees).
-  - If no meaningful user-initiated token transfers exist, return empty flows array [].
-
-Output format: {"summary":"...","flows":[...]}`
+Rules for "flows":
+- Use ONLY data from ft_transfers/defi_events fields. Each flow must use real 0x hex addresses and real numeric amounts.
+- NEVER use placeholders like "Transaction Signer" or "Fee Amount".
+- SKIP routine fee deposits/withdrawals (FlowToken to 0xf919ee77447b7497 or FlowFees).
+- Return empty array [] if no meaningful user-initiated token transfers exist.`
 
 	userContent := fmt.Sprintf("Analyze this Flow blockchain transaction:\n%s", string(txJSON))
 
@@ -108,6 +149,12 @@ Output format: {"summary":"...","flows":[...]}`
 		System:    systemPrompt,
 		Messages: []anthropicMessage{
 			{Role: "user", Content: userContent},
+		},
+		OutputConfig: &anthropicOutputConfig{
+			Format: anthropicOutputFormat{
+				Type:   "json_schema",
+				Schema: txSummarySchema,
+			},
 		},
 	}
 
@@ -147,6 +194,12 @@ Output format: {"summary":"...","flows":[...]}`
 		return
 	}
 
+	// Check for refusal or empty content
+	if anthropicResp.StopReason == "refusal" {
+		http.Error(w, `{"error":"AI refused to process this transaction"}`, http.StatusUnprocessableEntity)
+		return
+	}
+
 	if len(anthropicResp.Content) == 0 {
 		http.Error(w, `{"error":"empty response from AI"}`, http.StatusBadGateway)
 		return
@@ -172,7 +225,7 @@ Output format: {"summary":"...","flows":[...]}`
 		if f.From == "" || f.To == "" || f.Token == "" || f.Amount == "" {
 			continue
 		}
-		// Must look like real addresses (0x prefix or 16-char hex) — reject placeholders
+		// Must look like real addresses (0x prefix or hex) — reject placeholders
 		if !looksLikeAddress(f.From) || !looksLikeAddress(f.To) {
 			continue
 		}

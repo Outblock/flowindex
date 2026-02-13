@@ -14,6 +14,7 @@ interface DecryptedTextProps {
   parentClassName?: string;
   animateOn?: "view" | "hover";
   animationDelay?: number;
+  startEncrypted?: boolean;
 }
 
 const defaultCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()";
@@ -29,8 +30,19 @@ export default function DecryptedText({
   parentClassName = "",
   animateOn = "hover",
   animationDelay = 0,
+  startEncrypted = false,
 }: DecryptedTextProps) {
-  const [displayText, setDisplayText] = useState(text);
+  const [displayText, setDisplayText] = useState(() => {
+    if (startEncrypted) {
+      return text
+        .split("")
+        .map((char) =>
+          char === " " ? " " : characters[Math.floor(Math.random() * characters.length)]
+        )
+        .join("");
+    }
+    return text;
+  });
   const [isAnimating, setIsAnimating] = useState(false);
   const [hasAnimated, setHasAnimated] = useState(false);
   const iterationCount = useRef(0);
