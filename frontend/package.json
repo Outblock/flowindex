@@ -26,7 +26,6 @@
     "axios": "^1.13.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.0",
-    "face-api.js": "^0.22.2",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.563.0",
     "motion": "^12.34.0",
