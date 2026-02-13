@@ -111,12 +111,18 @@ const templateCategoryStyles: Record<string, { type: string; label: string; colo
 };
 
 function mapTemplateCategoryToActivity(category: string, templateLabel?: string): { type: string; label: string; color: string; bgColor: string } | null {
-    const style = templateCategoryStyles[category];
-    if (!style) return null;
-    if (templateLabel) {
-        return { ...style, label: templateLabel };
+    // Support comma-separated multi-categories — use first match for badge styling
+    const cats = category.split(',').map(c => c.trim()).filter(Boolean);
+    for (const cat of cats) {
+        const style = templateCategoryStyles[cat];
+        if (style) {
+            if (templateLabel) {
+                return { ...style, label: templateLabel };
+            }
+            return style;
+        }
     }
-    return style;
+    return null;
 }
 
 export function formatTokenName(identifier: string): string {

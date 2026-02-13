@@ -471,7 +471,7 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
   const [expanded, setExpanded] = useState(false)
   const [scriptText, setScriptText] = useState<string | null>(null)
   const [loadingScript, setLoadingScript] = useState(false)
-  const [category, setCategory] = useState(item.category || '')
+  const [categories, setCategories] = useState<string[]>(() => (item.category || '').split(',').filter(Boolean))
   const [label, setLabel] = useState(item.label || '')
   const [description, setDescription] = useState(item.description || '')
 
@@ -480,7 +480,7 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
     try {
       await adminFetch(`admin/script-templates/${encodeURIComponent(item.script_hash)}`, token, {
         method: 'PUT',
-        body: JSON.stringify({ category, label, description }),
+        body: JSON.stringify({ category: categories.join(','), label, description }),
       })
       toast.success('Template updated')
     } catch (e: any) {
@@ -529,17 +529,28 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
             </pre>
           )}
 
-          {/* Inline edit fields */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Tags (multi-select) */}
+          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+            {categories.map((c) => (
+              <span key={c} className="inline-flex items-center gap-1 px-2 py-0.5 bg-nothing-green/10 border border-nothing-green/30 rounded-sm text-[10px] font-mono text-nothing-green-dark dark:text-nothing-green uppercase tracking-wider">
+                {c}
+                <button onClick={() => setCategories(categories.filter(x => x !== c))} className="hover:text-red-500 transition-colors"><X className="w-2.5 h-2.5" /></button>
+              </span>
+            ))}
             <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="px-2 py-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-xs font-mono text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-nothing-green"
+              value=""
+              onChange={(e) => { if (e.target.value && !categories.includes(e.target.value)) setCategories([...categories, e.target.value]); e.target.value = ''; }}
+              className="px-2 py-0.5 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-[10px] font-mono text-zinc-500 dark:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-nothing-green"
             >
-              {SCRIPT_CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c || '(none)'}</option>
+              <option value="">+ Add tag</option>
+              {SCRIPT_CATEGORIES.filter(c => c && !categories.includes(c)).map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
+          </div>
+
+          {/* Label + Save */}
+          <div className="flex items-center gap-2 flex-wrap">
             <input
               type="text"
               value={label}
