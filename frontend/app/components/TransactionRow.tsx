@@ -68,6 +68,17 @@ export function deriveActivityType(tx: any): { type: string; label: string; colo
     if (summary?.ft && summary.ft.length > 0) {
         return { type: 'ft', label: 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
     }
+    // Check ft_transfers array directly (transfer_summary may be null even when ft_transfers exist)
+    if (tx.ft_transfers?.length > 0 || tagsLower.some(t => t.includes('ft_transfer'))) {
+        return { type: 'ft', label: 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
+    }
+    if (tx.nft_transfers?.length > 0 || tagsLower.some(t => t.includes('nft_transfer'))) {
+        return { type: 'nft', label: 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
+    }
+    // Check defi_events for swaps
+    if (tx.defi_events?.length > 0) {
+        return { type: 'swap', label: 'Swap', color: 'text-teal-600 dark:text-teal-400', bgColor: 'border-teal-300 dark:border-teal-500/30 bg-teal-50 dark:bg-teal-500/10' };
+    }
     if (imports.length > 0) {
         return { type: 'contract', label: 'Contract Call', color: 'text-zinc-600 dark:text-zinc-400', bgColor: 'border-zinc-300 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/10' };
     }

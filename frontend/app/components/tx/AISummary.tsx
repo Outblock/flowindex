@@ -477,9 +477,8 @@ export default function AISummary({ transaction }: { transaction: any }) {
                             </button>
                         </div>
                         <div
-                            className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden cursor-pointer"
+                            className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden"
                             style={{ height: Math.max(250, Math.ceil(initialNodes.length / 2) * 100 + 80) }}
-                            onClick={() => setFlowModal(true)}
                         >
                             <FlowDiagram
                                 initialNodes={initialNodes}
