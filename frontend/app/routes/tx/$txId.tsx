@@ -11,6 +11,9 @@ import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '../../contexts/ThemeContext';
 import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
+import DecryptedText from '../../components/ui/DecryptedText';
+import { deriveActivityType, TokenIcon, formatTokenName, extractLogoUrl, buildSummaryLine } from '../../components/TransactionRow';
+import { normalizeAddress, formatShort } from '../../components/account/accountUtils';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -51,6 +54,152 @@ export const Route = createFileRoute('/tx/$txId')({
         }
     }
 })
+
+function TransactionSummaryCard({ transaction, formatAddress }: { transaction: any; formatAddress: (addr: string) => string }) {
+    const activity = deriveActivityType(transaction);
+    const summaryLine = buildSummaryLine(transaction);
+    const hasFT = transaction.ft_transfers?.length > 0;
+    const hasDefi = transaction.defi_events?.length > 0;
+    const hasEvm = transaction.is_evm && (transaction.evm_hash || transaction.evm_executions?.length > 0);
+    const tags = (transaction.tags || []).map((t: string) => t.toLowerCase());
+    const isDeploy = tags.some((t: string) => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated'));
+    const isAccountCreation = tags.some((t: string) => t.includes('account_created'));
+
+    // Don't show card if there's nothing meaningful to summarize
+    if (!summaryLine && !hasFT && !hasDefi && !hasEvm && !isDeploy && !isAccountCreation) return null;
+
+    return (
+        <div className="border border-zinc-200 dark:border-white/10 p-6 mb-8 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+            {/* Activity badge + summary line */}
+            <div className="flex items-start gap-3 mb-4">
+                <span className={`inline-flex items-center gap-1 px-2 py-1 border rounded-sm text-[10px] font-bold uppercase tracking-wider flex-shrink-0 ${activity.bgColor} ${activity.color}`}>
+                    {activity.label}
+                </span>
+                {summaryLine && (
+                    <p className="text-sm text-zinc-700 dark:text-zinc-300 pt-0.5">{summaryLine}</p>
+                )}
+            </div>
+
+            {/* FT transfer visual rows */}
+            {hasFT && (
+                <div className="space-y-2">
+                    {transaction.ft_transfers.slice(0, 5).map((ft: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-3 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
+                            <div className="flex-shrink-0">
+                                {ft.token_logo ? (
+                                    <img src={ft.token_logo} alt="" className="w-7 h-7 rounded-full border border-zinc-200 dark:border-white/10" />
+                                ) : (
+                                    <div className="w-7 h-7 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center">
+                                        <Coins className="w-3.5 h-3.5 text-emerald-500" />
+                                    </div>
+                                )}
+                            </div>
+                            <span className="text-sm font-mono font-medium text-zinc-900 dark:text-white">
+                                {ft.amount != null ? Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 font-medium uppercase">
+                                {ft.token_symbol || ft.token?.split('.').pop() || ''}
+                            </span>
+                            {ft.is_cross_vm && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                    <Globe className="w-2.5 h-2.5" />
+                                    Cross-VM
+                                </span>
+                            )}
+                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 ml-auto">
+                                {ft.from_address && (
+                                    <Link to={`/accounts/${ft.from_address}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                        {formatShort(ft.from_address, 8, 4)}
+                                    </Link>
+                                )}
+                                {ft.from_address && ft.to_address && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
+                                {ft.to_address && (
+                                    <Link to={`/accounts/${ft.to_address}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                        {formatShort(ft.to_address, 8, 4)}
+                                    </Link>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {transaction.ft_transfers.length > 5 && (
+                        <p className="text-[10px] text-zinc-400 uppercase tracking-wider pl-1">+{transaction.ft_transfers.length - 5} more transfers</p>
+                    )}
+                </div>
+            )}
+
+            {/* DeFi swap summary */}
+            {hasDefi && (
+                <div className="space-y-2">
+                    {transaction.defi_events.slice(0, 3).map((swap: any, idx: number) => {
+                        const a0In = parseFloat(swap.asset0_in) || 0;
+                        const a1In = parseFloat(swap.asset1_in) || 0;
+                        const a0Out = parseFloat(swap.asset0_out) || 0;
+                        const a1Out = parseFloat(swap.asset1_out) || 0;
+                        const fromToken = a0In > 0
+                            ? { symbol: swap.asset0_symbol || swap.asset0_id?.split('.').pop() || '?', logo: swap.asset0_logo, amount: a0In }
+                            : { symbol: swap.asset1_symbol || swap.asset1_id?.split('.').pop() || '?', logo: swap.asset1_logo, amount: a1In };
+                        const toToken = a1Out > 0
+                            ? { symbol: swap.asset1_symbol || swap.asset1_id?.split('.').pop() || '?', logo: swap.asset1_logo, amount: a1Out }
+                            : { symbol: swap.asset0_symbol || swap.asset0_id?.split('.').pop() || '?', logo: swap.asset0_logo, amount: a0Out };
+
+                        return (
+                            <div key={idx} className="flex items-center gap-3 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
+                                {fromToken.logo ? (
+                                    <img src={fromToken.logo} alt="" className="w-6 h-6 rounded-full border border-zinc-200 dark:border-white/10 flex-shrink-0" />
+                                ) : (
+                                    <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-500 flex-shrink-0">{fromToken.symbol?.slice(0, 2)}</div>
+                                )}
+                                <span className="text-xs font-mono text-zinc-900 dark:text-white">{fromToken.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                                <span className="text-[10px] text-zinc-500 uppercase">{fromToken.symbol}</span>
+                                <ArrowRight className="w-3.5 h-3.5 text-nothing-green-dark dark:text-nothing-green flex-shrink-0" />
+                                {toToken.logo ? (
+                                    <img src={toToken.logo} alt="" className="w-6 h-6 rounded-full border border-zinc-200 dark:border-white/10 flex-shrink-0" />
+                                ) : (
+                                    <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-500 flex-shrink-0">{toToken.symbol?.slice(0, 2)}</div>
+                                )}
+                                <span className="text-xs font-mono text-zinc-900 dark:text-white">{toToken.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                                <span className="text-[10px] text-zinc-500 uppercase">{toToken.symbol}</span>
+                                {swap.dex && (
+                                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded ml-auto">{swap.dex}</span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* EVM hash link */}
+            {hasEvm && !hasFT && !hasDefi && (
+                <div className="flex items-center gap-2 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">EVM Hash</span>
+                    <code className="text-xs text-blue-600 dark:text-blue-400 font-mono">{transaction.evm_hash}</code>
+                    {transaction.evm_hash && (
+                        <a
+                            href={`https://evm.flowscan.io/tx/${transaction.evm_hash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-zinc-400 hover:text-blue-500 transition-colors"
+                        >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                    )}
+                </div>
+            )}
+
+            {/* Deploy info */}
+            {isDeploy && !hasFT && !hasDefi && (
+                <div className="flex items-center gap-2 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
+                    <Layers className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                    <span className="text-xs text-zinc-700 dark:text-zinc-300">
+                        {transaction.contract_imports?.length > 0
+                            ? `Deployed: ${transaction.contract_imports.map((c: string) => formatTokenName(c)).join(', ')}`
+                            : 'Contract deployment'}
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+}
 
 function TransactionDetail() {
     const { transaction, error: loaderError } = Route.useLoaderData();
@@ -131,17 +280,23 @@ function TransactionDetail() {
                     <span className="text-xs uppercase tracking-widest">Return to Dashboard</span>
                 </Link>
 
-                {/* Header */}
+                {/* Consolidated Header Card */}
                 <div className="border border-zinc-200 dark:border-white/10 p-8 mb-8 relative overflow-hidden bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
                     <div className="absolute top-0 right-0 p-4 opacity-10">
                         {transaction.is_evm ? <Box className="h-32 w-32" /> : <Hash className="h-32 w-32" />}
                     </div>
 
                     <div className="relative z-10">
-                        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-                            <span className="text-nothing-green-dark dark:text-nothing-green text-xs uppercase tracking-[0.2em] border border-nothing-green-dark/30 dark:border-nothing-green/30 px-2 py-1 rounded-sm w-fit">
-                                {transaction.type}
-                            </span>
+                        {/* Badges */}
+                        <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4">
+                            {(() => {
+                                const activity = deriveActivityType(transaction);
+                                return (
+                                    <span className={`text-xs uppercase tracking-[0.2em] border px-2 py-1 rounded-sm w-fit font-bold ${activity.bgColor} ${activity.color}`}>
+                                        {activity.label}
+                                    </span>
+                                );
+                            })()}
                             <span className={`text-xs uppercase tracking-[0.2em] border px-2 py-1 rounded-sm w-fit ${transaction.status === 'SEALED'
                                 ? 'text-zinc-500 dark:text-white border-zinc-300 dark:border-white/30'
                                 : 'text-yellow-600 dark:text-yellow-500 border-yellow-500/30'
@@ -150,23 +305,137 @@ function TransactionDetail() {
                             </span>
                             {transaction.is_evm && (
                                 <span className="text-blue-600 dark:text-blue-400 text-xs uppercase tracking-[0.2em] border border-blue-400/30 px-2 py-1 rounded-sm w-fit">
-                                    EVM Transaction
+                                    EVM
                                 </span>
                             )}
                         </div>
 
-                        <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white mb-2 break-all flex items-center gap-1 group">
-                            {transaction.is_evm ? transaction.evm_hash : transaction.id}
+                        {/* TX ID with DecryptedText */}
+                        <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white mb-1 break-all flex items-center gap-1 group">
+                            <DecryptedText
+                                text={transaction.is_evm ? transaction.evm_hash : transaction.id}
+                                animateOn="view"
+                                sequential
+                                revealDirection="start"
+                                speed={30}
+                                maxIterations={15}
+                                characters="0123456789abcdef"
+                                className="font-mono"
+                            />
                             <CopyButton
                                 content={transaction.is_evm ? transaction.evm_hash : transaction.id}
                                 variant="ghost"
                                 size="xs"
-                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                             />
                         </h1>
                         <p className="text-zinc-500 text-xs uppercase tracking-widest">
                             {transaction.is_evm ? 'EVM Hash' : 'Transaction ID'}
                         </p>
+
+                        {/* Divider */}
+                        <div className="border-t border-zinc-200 dark:border-white/10 mt-6 pt-6">
+                            {/* Row 1: Timestamp, Block, Computation */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+                                <div>
+                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Timestamp</p>
+                                    <span className="text-sm text-zinc-600 dark:text-zinc-300">{txTimeAbsolute || 'N/A'}</span>
+                                    {txTimeRelative && (
+                                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">
+                                            {txTimeRelative}
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Block Height</p>
+                                    <Link
+                                        to={`/blocks/${transaction.blockHeight}` as any}
+                                        className="text-sm text-zinc-900 dark:text-white hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors font-mono"
+                                    >
+                                        {transaction.blockHeight?.toLocaleString()}
+                                    </Link>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Computation</p>
+                                    <span className="text-sm text-zinc-600 dark:text-zinc-300 font-mono">{transaction.computation_usage?.toLocaleString() || 0}</span>
+                                </div>
+                            </div>
+
+                            {/* Row 2: Payer, Proposer, Authorizers */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                {/* Payer */}
+                                <div className="group">
+                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Payer</p>
+                                    <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-2.5 flex items-center justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-colors rounded-sm">
+                                        <div className="flex items-center gap-1 min-w-0">
+                                            <Link to={`/accounts/${formatAddress(transaction.payer)}` as any} className="text-xs text-nothing-green-dark dark:text-nothing-green hover:underline break-all font-mono truncate">
+                                                {formatAddress(transaction.payer)}
+                                            </Link>
+                                            <CopyButton
+                                                content={formatAddress(transaction.payer)}
+                                                variant="ghost"
+                                                size="xs"
+                                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Proposer */}
+                                <div className="group">
+                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">
+                                        Proposer
+                                        <span className="text-zinc-400 ml-2 font-mono normal-case">
+                                            seq:{transaction.proposerSequenceNumber} key:{transaction.proposerKeyIndex}
+                                        </span>
+                                    </p>
+                                    <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-2.5 flex items-center hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm">
+                                        <div className="flex items-center gap-1 min-w-0">
+                                            <Link to={`/accounts/${formatAddress(transaction.proposer)}` as any} className="text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white break-all font-mono truncate">
+                                                {formatAddress(transaction.proposer)}
+                                            </Link>
+                                            <CopyButton
+                                                content={formatAddress(transaction.proposer)}
+                                                variant="ghost"
+                                                size="xs"
+                                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Authorizers */}
+                                <div className="group">
+                                    <div className="flex items-center gap-1.5 mb-1.5">
+                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Authorizers</p>
+                                        {transaction.authorizers?.length > 0 && (
+                                            <span className="bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-white text-[9px] px-1.5 py-0.5 rounded-full">{transaction.authorizers.length}</span>
+                                        )}
+                                    </div>
+                                    {transaction.authorizers && transaction.authorizers.length > 0 ? (
+                                        <div className="flex flex-col gap-1.5">
+                                            {transaction.authorizers.map((auth, idx) => (
+                                                <div key={`${auth}-${idx}`} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-2.5 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm flex items-center gap-1 group">
+                                                    <Link to={`/accounts/${formatAddress(auth)}` as any} className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white break-all font-mono truncate">
+                                                        {formatAddress(auth)}
+                                                    </Link>
+                                                    <CopyButton
+                                                        content={formatAddress(auth)}
+                                                        variant="ghost"
+                                                        size="xs"
+                                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-2.5 rounded-sm">
+                                            <span className="text-xs text-zinc-400">None</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -183,130 +452,8 @@ function TransactionDetail() {
                     </div>
                 )}
 
-                {/* Info Grid - Now Full Width for Flow Info */}
-                <div className="mb-8">
-                    {/* Flow Information */}
-                    <div className="border border-zinc-200 dark:border-white/10 p-6 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-                        <h2 className="text-zinc-900 dark:text-white text-sm uppercase tracking-widest mb-6 border-b border-zinc-100 dark:border-white/5 pb-2">
-                            Cadence / Flow Information
-                        </h2>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-6">
-                                <div className="group">
-                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Flow Transaction ID</p>
-                                    <div className="flex items-center gap-1 group">
-                                        <code className="text-sm text-zinc-600 dark:text-zinc-300 break-all">{transaction.id}</code>
-                                        <CopyButton
-                                            content={transaction.id}
-                                            variant="ghost"
-                                            size="xs"
-                                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="group">
-                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Timestamp</p>
-                                    <span className="text-sm text-zinc-600 dark:text-zinc-300">{txTimeAbsolute || 'N/A'}</span>
-                                    {txTimeRelative && (
-                                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">
-                                            {txTimeRelative}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="group">
-                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Block Height</p>
-                                        <Link
-                                            to={`/blocks/${transaction.blockHeight}` as any}
-                                            className="text-sm text-zinc-900 dark:text-white hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors"
-                                        >
-                                            {transaction.blockHeight?.toLocaleString()}
-                                        </Link>
-                                    </div>
-                                    <div className="group">
-                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Computation Usage</p>
-                                        <span className="text-sm text-zinc-600 dark:text-zinc-300">{transaction.computation_usage?.toLocaleString() || 0}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col gap-6">
-                                {/* Payer Section */}
-                                <div className="group">
-                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Payer</p>
-                                    <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 flex items-center justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-colors rounded-sm group">
-                                        <div className="flex items-center gap-1">
-                                            <Link to={`/accounts/${formatAddress(transaction.payer)}` as any} className="text-sm text-nothing-green-dark dark:text-nothing-green hover:underline break-all font-mono">
-                                                {formatAddress(transaction.payer)}
-                                            </Link>
-                                            <CopyButton
-                                                content={formatAddress(transaction.payer)}
-                                                variant="ghost"
-                                                size="xs"
-                                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            />
-                                        </div>
-                                        <span className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase tracking-wider px-2 py-0.5 bg-zinc-200 dark:bg-white/5 rounded-sm">
-                                            Fee Payer
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Proposer Section */}
-                                <div className="group">
-                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Proposer</p>
-                                    <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 flex flex-col gap-2 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm">
-                                        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/5 pb-2 mb-1">
-                                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Key Info</span>
-                                            <div className="flex gap-3">
-                                                <span className="text-[10px] text-zinc-400 font-mono">Seq: <span className="text-zinc-600 dark:text-white">{transaction.proposerSequenceNumber}</span></span>
-                                                <span className="text-[10px] text-zinc-400 font-mono">Key: <span className="text-zinc-600 dark:text-white">{transaction.proposerKeyIndex}</span></span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1 group">
-                                            <Link to={`/accounts/${formatAddress(transaction.proposer)}` as any} className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white break-all font-mono">
-                                                {formatAddress(transaction.proposer)}
-                                            </Link>
-                                            <CopyButton
-                                                content={formatAddress(transaction.proposer)}
-                                                variant="ghost"
-                                                size="xs"
-                                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Authorizers Section */}
-                                {transaction.authorizers && transaction.authorizers.length > 0 && (
-                                    <div className="group">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Authorizers</p>
-                                            <span className="bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-white text-[9px] px-1.5 py-0.5 rounded-full">{transaction.authorizers.length}</span>
-                                        </div>
-                                        <div className="flex flex-col gap-2">
-                                            {transaction.authorizers.map((auth, idx) => (
-                                                <div key={`${auth}-${idx}`} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-3 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm flex items-center gap-1 group">
-                                                    <Link to={`/accounts/${formatAddress(auth)}` as any} className="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white break-all font-mono block">
-                                                        {formatAddress(auth)}
-                                                    </Link>
-                                                    <CopyButton
-                                                        content={formatAddress(auth)}
-                                                        variant="ghost"
-                                                        size="xs"
-                                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {/* Transaction Summary Card */}
+                <TransactionSummaryCard transaction={transaction} formatAddress={formatAddress} />
 
                 {/* Tabs Section */}
                 <div className="mt-12">
