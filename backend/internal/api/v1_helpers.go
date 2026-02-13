@@ -818,7 +818,7 @@ func enrichNFTItemOutput(out map[string]interface{}, meta *models.NFTItem) {
 	}
 }
 
-// enrichWithTemplates adds template_category and template_label fields to transaction outputs.
+// enrichWithTemplates adds script_hash, template_category and template_label fields to transaction outputs.
 func enrichWithTemplates(outputs []map[string]interface{}, templates map[string]repository.TxScriptTemplate) {
 	if len(templates) == 0 {
 		return
@@ -830,8 +830,13 @@ func enrichWithTemplates(outputs []map[string]interface{}, templates map[string]
 		}
 		txID = strings.TrimPrefix(strings.ToLower(txID), "0x")
 		if tmpl, found := templates[txID]; found {
-			out["template_category"] = tmpl.Category
-			out["template_label"] = tmpl.Label
+			if tmpl.ScriptHash != "" {
+				out["script_hash"] = tmpl.ScriptHash
+			}
+			if tmpl.Category != "" {
+				out["template_category"] = tmpl.Category
+				out["template_label"] = tmpl.Label
+			}
 		}
 	}
 }

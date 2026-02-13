@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
 import { resolveApiBaseUrl } from '../api'
@@ -159,6 +159,8 @@ function FTPanel({ token }: { token: string }) {
     }
   }, [search, token])
 
+  useEffect(() => { doSearch() }, [token]) // auto-load on mount
+
   return (
     <div className="space-y-4">
       <SearchBar value={search} onChange={setSearch} onSearch={doSearch} loading={loading} />
@@ -271,6 +273,8 @@ function NFTPanel({ token }: { token: string }) {
       setLoading(false)
     }
   }, [search, token])
+
+  useEffect(() => { doSearch() }, [token]) // auto-load on mount
 
   return (
     <div className="space-y-4">
@@ -413,6 +417,8 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
       setRefreshing(false)
     }
   }
+
+  useEffect(() => { doSearch() }, [token]) // auto-load on mount
 
   return (
     <div className="space-y-4">
