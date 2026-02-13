@@ -90,15 +90,31 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	keys := make([]map[string]interface{}, 0, len(acc.Keys))
+	var dbKeys []models.AccountKey
+	addrHex := normalizeAddr(acc.Address.Hex())
 	for _, key := range acc.Keys {
+		pubKeyHex := strings.TrimPrefix(strings.ToLower(key.PublicKey.String()), "0x")
 		keys = append(keys, map[string]interface{}{
 			"index":              strconv.FormatUint(uint64(key.Index), 10),
-			"key":                strings.TrimPrefix(strings.ToLower(key.PublicKey.String()), "0x"),
+			"key":                pubKeyHex,
 			"signatureAlgorithm": key.SigAlgo.String(),
 			"hashAlgorithm":      key.HashAlgo.String(),
 			"weight":             key.Weight,
 			"revoked":            key.Revoked,
 		})
+		dbKeys = append(dbKeys, models.AccountKey{
+			Address:          addrHex,
+			KeyIndex:         int(key.Index),
+			PublicKey:        pubKeyHex,
+			SigningAlgorithm: sigAlgoToNum(key.SigAlgo.String()),
+			HashingAlgorithm: hashAlgoToNum(key.HashAlgo.String()),
+			Weight:           key.Weight,
+			Revoked:          key.Revoked,
+		})
+	}
+	// Opportunistically upsert keys so public-key search works for recently-created accounts
+	if s.repo != nil && len(dbKeys) > 0 {
+		_ = s.repo.UpsertAccountKeys(r.Context(), dbKeys)
 	}
 	contractNames := make([]string, 0, len(acc.Contracts))
 	for name := range acc.Contracts {
@@ -566,4 +582,30 @@ func cadenceStorageOverviewScript() string {
 			}
 		}
 	`
+}
+
+func sigAlgoToNum(name string) string {
+	switch strings.ToUpper(name) {
+	case "ECDSA_P256":
+		return "1"
+	case "ECDSA_SECP256K1":
+		return "2"
+	default:
+		return name
+	}
+}
+
+func hashAlgoToNum(name string) string {
+	switch strings.ToUpper(name) {
+	case "SHA2_256":
+		return "1"
+	case "SHA2_384":
+		return "2"
+	case "SHA3_256":
+		return "3"
+	case "SHA3_384":
+		return "4"
+	default:
+		return name
+	}
 }

@@ -402,6 +402,9 @@ func extractPublicKey(v interface{}) string {
 					bytes = append(bytes, byte(n))
 				}
 			}
+		case string:
+			// cadence.Bytes flattening produces "0x..." hex string
+			return arr
 		}
 
 		if len(bytes) == 0 {
