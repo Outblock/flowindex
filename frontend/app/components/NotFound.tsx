@@ -6,7 +6,7 @@ function NotFound() {
     return (
         <div className="flex-1 w-full flex flex-col items-center justify-center p-8 text-center bg-black relative overflow-hidden isolate">
             {/* GridScan Background */}
-            <div className="absolute inset-0 z-0 pointer-events-none">
+            <div className="absolute inset-0 z-0">
                 <GridScan scanColor="#9effe2" className="w-full h-full" />
             </div>
 
