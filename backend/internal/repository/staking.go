@@ -434,6 +434,97 @@ func (r *Repository) GetLatestTokenomicsSnapshot(ctx context.Context) (map[strin
 	return result, nil
 }
 
+// UpsertNodeMetadataBatch batch upserts node metadata (GeoIP data).
+func (r *Repository) UpsertNodeMetadataBatch(ctx context.Context, metas []models.NodeMetadata) error {
+	if len(metas) == 0 {
+		return nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, m := range metas {
+		batch.Queue(`
+			INSERT INTO app.node_metadata (
+				node_id, ip_address, hostname, country, country_code,
+				region, city, latitude, longitude, isp, org, as_number, updated_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			ON CONFLICT (node_id) DO UPDATE SET
+				ip_address   = EXCLUDED.ip_address,
+				hostname     = EXCLUDED.hostname,
+				country      = EXCLUDED.country,
+				country_code = EXCLUDED.country_code,
+				region       = EXCLUDED.region,
+				city         = EXCLUDED.city,
+				latitude     = EXCLUDED.latitude,
+				longitude    = EXCLUDED.longitude,
+				isp          = EXCLUDED.isp,
+				org          = EXCLUDED.org,
+				as_number    = EXCLUDED.as_number,
+				updated_at   = EXCLUDED.updated_at`,
+			m.NodeID, m.IPAddress, m.Hostname, m.Country, m.CountryCode,
+			m.Region, m.City, m.Latitude, m.Longitude, m.ISP, m.Org, m.ASNumber, time.Now(),
+		)
+	}
+
+	br := r.db.SendBatch(ctx, batch)
+	defer br.Close()
+
+	for i := 0; i < len(metas); i++ {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("failed to upsert node metadata batch: %w", err)
+		}
+	}
+	return nil
+}
+
+// ListNodeMetadata returns all node metadata rows keyed by node_id.
+func (r *Repository) ListNodeMetadata(ctx context.Context) (map[string]models.NodeMetadata, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT node_id, COALESCE(ip_address, ''), COALESCE(hostname, ''),
+			COALESCE(country, ''), COALESCE(country_code, ''), COALESCE(region, ''),
+			COALESCE(city, ''), COALESCE(latitude, 0), COALESCE(longitude, 0),
+			COALESCE(isp, ''), COALESCE(org, ''), COALESCE(as_number, ''), updated_at
+		FROM app.node_metadata`)
+	if err != nil {
+		return nil, fmt.Errorf("list node metadata: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]models.NodeMetadata)
+	for rows.Next() {
+		var m models.NodeMetadata
+		if err := rows.Scan(
+			&m.NodeID, &m.IPAddress, &m.Hostname,
+			&m.Country, &m.CountryCode, &m.Region,
+			&m.City, &m.Latitude, &m.Longitude,
+			&m.ISP, &m.Org, &m.ASNumber, &m.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result[m.NodeID] = m
+	}
+	return result, rows.Err()
+}
+
+// ListNodeMetadataUpdatedSince returns node_ids that have been updated since the given time.
+func (r *Repository) ListNodeMetadataUpdatedSince(ctx context.Context, since time.Time) (map[string]bool, error) {
+	rows, err := r.db.Query(ctx, `SELECT node_id FROM app.node_metadata WHERE updated_at > $1`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		result[id] = true
+	}
+	return result, rows.Err()
+}
+
 func scanStakingNodes(rows pgx.Rows) ([]models.StakingNode, error) {
 	var nodes []models.StakingNode
 	for rows.Next() {

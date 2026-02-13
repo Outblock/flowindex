@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Server, Shield, Cpu, Eye, Radio, Database } from 'lucide-react';
+import { Server, Shield, Cpu, Eye, Radio, Database, Globe } from 'lucide-react';
 import { resolveApiBaseUrl } from '../api';
 import { ensureHeyApiConfigured } from '../api/heyapi';
 
@@ -17,6 +17,13 @@ interface StakingNode {
   tokens_rewarded: number;
   delegator_count: number;
   epoch: number;
+  country?: string;
+  country_code?: string;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
+  isp?: string;
+  org?: string;
 }
 
 const ROLE_MAP: Record<number, { label: string; icon: typeof Server; color: string }> = {
@@ -80,6 +87,12 @@ function NodesPage() {
   // Count validators (nodes with tokens_staked > 0)
   const validatorCount = useMemo(() => nodes.filter(n => n.tokens_staked > 0).length, [nodes]);
 
+  // Count unique countries
+  const countryCount = useMemo(() => {
+    const countries = new Set(nodes.map(n => n.country_code).filter(Boolean));
+    return countries.size;
+  }, [nodes]);
+
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       {/* Header */}
@@ -113,7 +126,11 @@ function NodesPage() {
         <StatCard label="Nodes" value={nodes.length.toLocaleString()} />
         <StatCard label="Validators" value={validatorCount.toLocaleString()} />
         <StatCard label="Total Staked" value={formatFlowCompact(totalStaked)} suffix="FLOW" />
-        <StatCard label="Delegators" value={totalDelegators.toLocaleString()} />
+        {countryCount > 0 ? (
+          <StatCard label="Countries" value={countryCount.toLocaleString()} />
+        ) : (
+          <StatCard label="Delegators" value={totalDelegators.toLocaleString()} />
+        )}
       </motion.div>
 
       {/* Filter Bar */}
@@ -168,6 +185,9 @@ function NodesPage() {
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">
                   Role
                 </th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">
+                  Location
+                </th>
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">
                   Staked
                 </th>
@@ -185,7 +205,7 @@ function NodesPage() {
             <tbody>
               {filteredNodes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-zinc-400 text-sm">
+                  <td colSpan={7} className="p-12 text-center text-zinc-400 text-sm">
                     {nodes.length === 0 ? 'No node data available yet.' : 'No nodes match your filter.'}
                   </td>
                 </tr>
@@ -208,6 +228,9 @@ function NodesPage() {
                     </td>
                     <td className="p-4">
                       <RoleBadge role={node.role} />
+                    </td>
+                    <td className="p-4">
+                      <NodeLocation node={node} />
                     </td>
                     <td className="p-4 text-right font-mono text-sm text-zinc-900 dark:text-white">
                       {formatFlowAmount(node.tokens_staked)}
@@ -265,6 +288,28 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
     >
       {label}
     </button>
+  );
+}
+
+function countryCodeToFlag(code: string): string {
+  if (!code || code.length !== 2) return '';
+  const offset = 0x1F1E6;
+  return String.fromCodePoint(
+    code.charCodeAt(0) - 65 + offset,
+    code.charCodeAt(1) - 65 + offset,
+  );
+}
+
+function NodeLocation({ node }: { node: StakingNode }) {
+  if (!node.country_code) {
+    return <span className="text-xs text-zinc-400">-</span>;
+  }
+  const flag = countryCodeToFlag(node.country_code.toUpperCase());
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm text-zinc-700 dark:text-zinc-300" title={`${node.city || ''}, ${node.country || ''} (${node.isp || ''})`}>
+      <span className="text-base">{flag}</span>
+      <span className="truncate max-w-[120px]">{node.city || node.country || node.country_code}</span>
+    </span>
   );
 }
 
