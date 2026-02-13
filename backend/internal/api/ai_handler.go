@@ -155,10 +155,12 @@ The input includes:
 - Add specifics from script and events. NEVER explain fee mechanics.
 
 === FLOWS ===
-- Extract from ft_transfers first. If empty, extract from events (TokensMinted, TokensDeposited, etc.).
+- CRITICAL: Use the "ft_transfers" array as your PRIMARY source for flows. These are pre-aggregated: each entry already has the correct total "amount" and "transfer_count" (number of individual transfers combined). Copy from/to addresses and amounts EXACTLY as given. Do NOT re-derive or re-sum from events.
+- If ft_transfers is empty, THEN extract from events (TokensMinted, TokensDeposited, etc.).
 - REAL 0x hex addresses, REAL numeric amounts only. NEVER use placeholders.
 - SKIP FlowFees and routine fee movements.
 - For mints: from=contract address, fromLabel=contract name, to=recipient, toLabel="Minter".
+- Use the token_symbol field (e.g. "DUST") as the "token" value in flows, NOT the full contract identifier.
 - Empty array [] if no meaningful token movement.
 
 === RISK SCORE (0-100) ===

@@ -236,18 +236,12 @@ function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<string, str
     const accentColor = isDark ? '#4ade80' : '#16a34a';
 
     const edges: Edge[] = flows.map((f, i) => {
-        const amountStr = Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 8 });
-        const iconUrl = tokenIcons.get(f.token);
+        const amountStr = Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 });
         return {
             id: `e-${i}`,
             source: f.from,
             target: f.to,
-            label: (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, color: accentColor }}>
-                    {iconUrl && <img src={iconUrl} alt="" style={{ width: 14, height: 14, borderRadius: '50%' }} />}
-                    {amountStr} {f.token}
-                </span>
-            ) as any,
+            label: `${amountStr} ${f.token}`,
             labelStyle: { fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, fill: accentColor },
             labelBgStyle: { fill: isDark ? '#18181b' : '#ffffff', fillOpacity: 0.95, rx: 4, ry: 4 },
             labelBgPadding: [8, 4] as [number, number],
