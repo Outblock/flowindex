@@ -54,7 +54,9 @@ export function deriveActivityType(tx: any): { type: string; label: string; colo
     if (tagsLower.some(t => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated') || t.includes('contract_deploy'))) {
         return { type: 'deploy', label: 'Deploy', color: 'text-blue-600 dark:text-blue-400', bgColor: 'border-blue-300 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10' };
     }
-    if (tagsLower.some(t => t.includes('evm')) || importsLower.some(c => c.includes('evm'))) {
+    // Only classify as EVM if there's actual EVM execution evidence (evm_hash, evm_executions),
+    // not just because the tx imports EVM (system heartbeat txs import EVM but aren't user EVM txs).
+    if (tx.evm_hash || tx.evm_executions?.length > 0 || tagsLower.some(t => t.includes('evm'))) {
         return { type: 'evm', label: 'EVM', color: 'text-purple-600 dark:text-purple-400', bgColor: 'border-purple-300 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-500/10' };
     }
     if (tagsLower.some(t => t.includes('marketplace'))) {

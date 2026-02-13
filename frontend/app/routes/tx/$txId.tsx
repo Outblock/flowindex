@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1TransactionById } from '../../api/gen/find';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
@@ -171,13 +171,13 @@ function TransactionDetail() {
                 </div>
 
                 {/* Error Message Section */}
-                {transaction.errorMessage && (
+                {(transaction.errorMessage || transaction.error_message || transaction.error) && (
                     <div className="border border-red-500/30 bg-red-50 dark:bg-red-900/10 p-6 mb-8 flex items-start gap-4 rounded-sm">
                         <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-0.5" />
                         <div>
                             <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest mb-1">Execution Error</h3>
                             <p className="text-red-600 dark:text-red-300 text-xs font-mono break-all leading-relaxed">
-                                {transaction.errorMessage}
+                                {transaction.errorMessage || transaction.error_message || transaction.error}
                             </p>
                         </div>
                     </div>
@@ -349,7 +349,7 @@ function TransactionDetail() {
                                 Key Events ({transaction.events ? transaction.events.length : 0})
                             </span>
                         </button>
-                        {transaction.is_evm && (
+                        {transaction.is_evm && transaction.evm_executions?.length > 0 && (
                             <button
                                 onClick={() => setActiveTab('evm')}
                                 className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'evm'
