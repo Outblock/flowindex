@@ -23,7 +23,7 @@ export function EpochProgress({ epoch, progress, updatedAt }) {
     const updatedText = updatedAt ? formatAbsoluteTime(updatedAt * 1000) : '';
 
     return (
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 flex items-center justify-between relative overflow-hidden group hover:border-nothing-green/30 transition-all duration-300">
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-full flex items-center justify-between relative overflow-hidden group hover:border-nothing-green/30 transition-all duration-300">
             {/* Background Gradient */}
             <div className="absolute -right-10 -bottom-10 w-32 h-32 blur-3xl rounded-full bg-blue-500/10" />
 

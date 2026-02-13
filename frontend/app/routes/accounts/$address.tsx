@@ -224,13 +224,13 @@ function AccountDetail() {
 
     const tabs = [
         { id: 'activity' as const, label: 'Activity', icon: Activity },
-        { id: 'balance' as const, label: 'Balance', icon: TrendingUp },
         { id: 'tokens' as const, label: 'Tokens', icon: Coins },
         { id: 'nfts' as const, label: 'NFTs', icon: ImageIcon },
         { id: 'keys' as const, label: 'Public Keys', icon: Key },
         { id: 'contracts' as const, label: `Contracts (${account.contracts?.length || 0})`, icon: FileText },
         { id: 'storage' as const, label: 'Storage', icon: HardDrive },
         { id: 'custody' as const, label: 'Hybrid Custody', icon: Shield },
+        { id: 'balance' as const, label: 'Balance', icon: TrendingUp },
     ];
 
     const balanceValue = onChainData?.balance != null ? onChainData.balance : (account.balance != null ? Number(account.balance) / 1e8 : 0);
