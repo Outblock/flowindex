@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1ContractByIdentifier } from '../../api/gen/find';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -24,6 +24,15 @@ export function AccountContractsTab({ address, contracts }: Props) {
     const [contractCode, setContractCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const didAutoSelect = useRef(false);
+    useEffect(() => {
+        if (!didAutoSelect.current && contracts.length > 0 && !selectedContract) {
+            didAutoSelect.current = true;
+            loadContractCode(contracts[0]);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [contracts]);
 
     const loadContractCode = async (name: string) => {
         if (!name || selectedContract === name) {
@@ -60,9 +69,9 @@ export function AccountContractsTab({ address, contracts }: Props) {
             </h3>
 
             {contracts.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4">
                     {/* Contract List */}
-                    <div className="space-y-3">
+                    <div className="space-y-1">
                         <AnimatePresence>
                             {contracts.map((name: string, i: number) => (
                                 <motion.div
@@ -78,22 +87,17 @@ export function AccountContractsTab({ address, contracts }: Props) {
                                             : 'bg-white/50 dark:bg-zinc-900/50 hover:bg-white dark:hover:bg-white/5 border-zinc-200 dark:border-white/10'
                                             }`}
                                     >
-                                        <div className="p-4 flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`p-2 ${selectedContract === name
-                                                    ? 'bg-nothing-green text-black'
-                                                    : 'bg-zinc-100 dark:bg-white/5 text-zinc-500'
-                                                    }`}>
-                                                    <Code className="w-4 h-4" />
-                                                </div>
-                                                <span className={`font-mono font-semibold ${selectedContract === name
-                                                    ? 'text-nothing-green-dark dark:text-nothing-green'
+                                        <div className="px-3 py-2.5 flex items-center justify-between">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <Code className={`w-3.5 h-3.5 flex-shrink-0 ${selectedContract === name ? 'text-nothing-green' : 'text-zinc-400'}`} />
+                                                <span className={`font-mono text-xs truncate ${selectedContract === name
+                                                    ? 'text-nothing-green-dark dark:text-nothing-green font-semibold'
                                                     : 'text-zinc-700 dark:text-zinc-300'
                                                     }`}>
                                                     {name}
                                                 </span>
                                             </div>
-                                            <ChevronRight className={`w-4 h-4 transition-transform ${selectedContract === name ? 'rotate-90 text-nothing-green' : 'text-zinc-400 group-hover:translate-x-1'
+                                            <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform ${selectedContract === name ? 'rotate-90 text-nothing-green' : 'text-zinc-400 group-hover:translate-x-1'
                                                 }`} />
                                         </div>
                                     </button>

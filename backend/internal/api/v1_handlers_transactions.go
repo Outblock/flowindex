@@ -67,5 +67,118 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		evmExecs, _ = s.repo.GetEVMTransactionsByCadenceTx(r.Context(), tx.ID, tx.BlockHeight)
 	}
 	out := toFlowTransactionOutput(*tx, events, contracts[tx.ID], tags[tx.ID], feesByTx[tx.ID], evmExecs)
+
+	// Enrich: FT transfers with token metadata
+	ftTransfers, _ := s.repo.GetFTTransfersByTransactionID(r.Context(), tx.ID)
+	if len(ftTransfers) > 0 {
+		tokenIDSet := make(map[string]bool)
+		for _, ft := range ftTransfers {
+			tokenIDSet[ft.Token] = true
+		}
+		tokenIDs := make([]string, 0, len(tokenIDSet))
+		for id := range tokenIDSet {
+			tokenIDs = append(tokenIDs, id)
+		}
+		ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), tokenIDs)
+
+		addrSet := make(map[string]bool)
+		for _, ft := range ftTransfers {
+			if ft.FromAddress != "" {
+				addrSet[ft.FromAddress] = true
+			}
+			if ft.ToAddress != "" {
+				addrSet[ft.ToAddress] = true
+			}
+		}
+		addrs := make([]string, 0, len(addrSet))
+		for a := range addrSet {
+			addrs = append(addrs, a)
+		}
+		coaMap, _ := s.repo.CheckAddressesAreCOA(r.Context(), addrs)
+
+		transfersOut := make([]map[string]interface{}, 0, len(ftTransfers))
+		for _, ft := range ftTransfers {
+			item := map[string]interface{}{
+				"token":        ft.Token,
+				"from_address": formatAddressV1(ft.FromAddress),
+				"to_address":   formatAddressV1(ft.ToAddress),
+				"amount":       ft.Amount,
+				"event_index":  ft.EventIndex,
+			}
+			if meta, ok := ftMeta[ft.Token]; ok {
+				item["token_name"] = meta.Name
+				item["token_symbol"] = meta.Symbol
+				item["token_logo"] = meta.Logo
+				item["token_decimals"] = meta.Decimals
+			}
+			fromIsCOA := false
+			toIsCOA := false
+			if ft.FromAddress != "" {
+				if flowAddr, ok := coaMap[ft.FromAddress]; ok {
+					fromIsCOA = true
+					item["from_coa_flow_address"] = formatAddressV1(flowAddr)
+				}
+			}
+			if ft.ToAddress != "" {
+				if flowAddr, ok := coaMap[ft.ToAddress]; ok {
+					toIsCOA = true
+					item["to_coa_flow_address"] = formatAddressV1(flowAddr)
+				}
+			}
+			if fromIsCOA || toIsCOA {
+				item["is_cross_vm"] = true
+			}
+			transfersOut = append(transfersOut, item)
+		}
+		out["ft_transfers"] = transfersOut
+	}
+
+	// Enrich: DeFi swap events
+	defiEvents, defiPairs, _ := s.repo.GetDefiEventsByTransactionID(r.Context(), tx.ID)
+	if len(defiEvents) > 0 {
+		assetIDSet := make(map[string]bool)
+		for _, p := range defiPairs {
+			if p.Asset0ID != "" {
+				assetIDSet[p.Asset0ID] = true
+			}
+			if p.Asset1ID != "" {
+				assetIDSet[p.Asset1ID] = true
+			}
+		}
+		assetIDs := make([]string, 0, len(assetIDSet))
+		for id := range assetIDSet {
+			assetIDs = append(assetIDs, id)
+		}
+		assetMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), assetIDs)
+
+		swapEvents := make([]map[string]interface{}, 0, len(defiEvents))
+		for _, e := range defiEvents {
+			pair := defiPairs[e.PairID]
+			item := map[string]interface{}{
+				"event_type":    e.EventType,
+				"pair_id":       e.PairID,
+				"dex":           pair.DexKey,
+				"asset0_id":     pair.Asset0ID,
+				"asset1_id":     pair.Asset1ID,
+				"asset0_symbol": pair.Asset0Symbol,
+				"asset1_symbol": pair.Asset1Symbol,
+				"asset0_in":     e.Asset0In,
+				"asset0_out":    e.Asset0Out,
+				"asset1_in":     e.Asset1In,
+				"asset1_out":    e.Asset1Out,
+			}
+			if meta, ok := assetMeta[pair.Asset0ID]; ok {
+				item["asset0_name"] = meta.Name
+				item["asset0_logo"] = meta.Logo
+			}
+			if meta, ok := assetMeta[pair.Asset1ID]; ok {
+				item["asset1_name"] = meta.Name
+				item["asset1_logo"] = meta.Logo
+			}
+			swapEvents = append(swapEvents, item)
+		}
+		out["defi_events"] = swapEvents
+	}
+
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
 }

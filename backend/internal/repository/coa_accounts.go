@@ -53,6 +53,41 @@ func (r *Repository) GetFlowAddressByCOA(ctx context.Context, coa string) (*mode
 	return &out, nil
 }
 
+// CheckAddressesAreCOA checks which of the given addresses (hex) are COA addresses.
+// Returns a map of address -> flow_address for those that are COAs.
+func (r *Repository) CheckAddressesAreCOA(ctx context.Context, addresses []string) (map[string]string, error) {
+	if len(addresses) == 0 {
+		return map[string]string{}, nil
+	}
+	addrBytes := make([][]byte, 0, len(addresses))
+	for _, a := range addresses {
+		b := hexToBytes(a)
+		if b != nil {
+			addrBytes = append(addrBytes, b)
+		}
+	}
+	if len(addrBytes) == 0 {
+		return map[string]string{}, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(coa_address, 'hex'), encode(flow_address, 'hex')
+		FROM app.coa_accounts
+		WHERE coa_address = ANY($1)`, addrBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]string)
+	for rows.Next() {
+		var coa, flow string
+		if err := rows.Scan(&coa, &flow); err != nil {
+			return nil, err
+		}
+		result[coa] = flow
+	}
+	return result, rows.Err()
+}
+
 func (r *Repository) GetCOAByFlowAddress(ctx context.Context, flowAddress string) (*models.COAAccount, error) {
 	var out models.COAAccount
 	err := r.db.QueryRow(ctx, `

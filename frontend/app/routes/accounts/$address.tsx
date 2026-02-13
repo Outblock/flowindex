@@ -25,14 +25,21 @@ import { cn } from '../../lib/utils';
 const VALID_TABS = ['activity', 'tokens', 'nfts', 'keys', 'contracts', 'storage', 'custody'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
+const VALID_SUBTABS = ['all', 'ft', 'nft', 'scheduled'] as const;
+type AccountSubTab = (typeof VALID_SUBTABS)[number];
+
 export const Route = createFileRoute('/accounts/$address')({
     component: AccountDetail,
     pendingComponent: AccountDetailPending,
-    validateSearch: (search: Record<string, unknown>): { tab?: AccountTab } => {
+    validateSearch: (search: Record<string, unknown>): { tab?: AccountTab; subtab?: AccountSubTab } => {
         const tab = search.tab as string;
-        return { tab: VALID_TABS.includes(tab as AccountTab) ? (tab as AccountTab) : undefined };
+        const subtab = search.subtab as string;
+        return {
+            tab: VALID_TABS.includes(tab as AccountTab) ? (tab as AccountTab) : undefined,
+            subtab: VALID_SUBTABS.includes(subtab as AccountSubTab) ? (subtab as AccountSubTab) : undefined,
+        };
     },
-    loader: async ({ params }) => {
+    loader: async ({ params, search }) => {
         try {
             const address = params.address;
             const normalized = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
@@ -43,9 +50,9 @@ export const Route = createFileRoute('/accounts/$address')({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const normalizedKeys = (accountPayload?.keys || []).map((key: any) => ({
                 keyIndex: key.keyIndex ?? key.key_index ?? key.index,
-                publicKey: key.publicKey ?? key.public_key ?? '',
-                signingAlgorithm: key.signingAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
-                hashingAlgorithm: key.hashingAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
+                publicKey: key.publicKey ?? key.public_key ?? key.key ?? '',
+                signingAlgorithm: key.signingAlgorithm ?? key.signatureAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
+                hashingAlgorithm: key.hashingAlgorithm ?? key.hashAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
                 weight: key.weight ?? 0,
                 sequenceNumber: key.sequenceNumber ?? key.sequence_number ?? 0,
                 revoked: Boolean(key.revoked),
@@ -59,24 +66,30 @@ export const Route = createFileRoute('/accounts/$address')({
                 keys: normalizedKeys
             };
 
+            // Only prefetch transactions when on the activity/all tab (no subtab)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let initialTransactions: any[] = [];
             let initialNextCursor = '';
-            try {
-                const txRes = await getFlowV1AccountByAddressTransaction({ path: { address: normalized }, query: { offset: 0, limit: 20 } });
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const payload: any = txRes.data;
-                const items = payload?.data ?? [];
-                initialNextCursor = items.length >= 20 ? '20' : '';
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                initialTransactions = (items || []).map((tx: any) => ({
-                    ...tx,
-                    payer: tx.payer_address || tx.payer || tx.proposer_address,
-                    proposer: tx.proposer_address || tx.proposer,
-                    blockHeight: tx.block_height
-                }));
-            } catch (e) {
-                console.error("Failed to prefetch transactions", e);
+            const activeTab = (search as any)?.tab;
+            const activeSubtab = (search as any)?.subtab;
+            const shouldPrefetchTxs = (!activeTab || activeTab === 'activity') && !activeSubtab;
+            if (shouldPrefetchTxs) {
+                try {
+                    const txRes = await getFlowV1AccountByAddressTransaction({ path: { address: normalized }, query: { offset: 0, limit: 20 } });
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const payload: any = txRes.data;
+                    const items = payload?.data ?? [];
+                    initialNextCursor = items.length >= 20 ? '20' : '';
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    initialTransactions = (items || []).map((tx: any) => ({
+                        ...tx,
+                        payer: tx.payer_address || tx.payer || tx.proposer_address,
+                        proposer: tx.proposer_address || tx.proposer,
+                        blockHeight: tx.block_height
+                    }));
+                } catch (e) {
+                    console.error("Failed to prefetch transactions", e);
+                }
             }
 
             return { account: initialAccount, initialTransactions, initialNextCursor };
@@ -108,7 +121,7 @@ function AccountDetailPending() {
 
 function AccountDetail() {
     const { address } = Route.useParams();
-    const { tab: searchTab } = Route.useSearch();
+    const { tab: searchTab, subtab: searchSubTab } = Route.useSearch();
     const { account: initialAccount, initialTransactions, initialNextCursor } = Route.useLoaderData();
     const navigate = Route.useNavigate();
 
@@ -117,8 +130,12 @@ function AccountDetail() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [error, setError] = useState<any>(initialAccount ? null : 'Account not found');
     const activeTab: AccountTab = searchTab || 'activity';
+    const activeSubTab: AccountSubTab | undefined = searchSubTab;
     const setActiveTab = (tab: AccountTab) => {
         navigate({ search: { tab }, replace: true });
+    };
+    const setActiveSubTab = (subtab: AccountSubTab | undefined) => {
+        navigate({ search: { tab: activeTab, subtab }, replace: true });
     };
 
     const normalizedAddress = normalizeAddress(address);
@@ -169,9 +186,9 @@ function AccountDetail() {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const keys = (payload?.keys || []).map((key: any) => ({
                     keyIndex: key.keyIndex ?? key.key_index ?? key.index,
-                    publicKey: key.publicKey ?? key.public_key ?? '',
-                    signingAlgorithm: key.signingAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
-                    hashingAlgorithm: key.hashingAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
+                    publicKey: key.publicKey ?? key.public_key ?? key.key ?? '',
+                    signingAlgorithm: key.signingAlgorithm ?? key.signatureAlgorithm ?? key.sign_algo ?? key.signing_algorithm ?? '',
+                    hashingAlgorithm: key.hashingAlgorithm ?? key.hashAlgorithm ?? key.hash_algo ?? key.hashing_algorithm ?? '',
                     weight: key.weight ?? 0,
                     sequenceNumber: key.sequenceNumber ?? key.sequence_number ?? 0,
                     revoked: Boolean(key.revoked),
@@ -350,7 +367,7 @@ function AccountDetail() {
                     </div>
 
                     <div className="min-h-[500px]">
-                        {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} initialNextCursor={initialNextCursor} />}
+                        {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} initialNextCursor={initialNextCursor} subtab={activeSubTab} onSubTabChange={setActiveSubTab} />}
                         {activeTab === 'tokens' && <AccountTokensTab address={address} />}
                         {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
                         {activeTab === 'keys' && <AccountKeysTab account={account} />}

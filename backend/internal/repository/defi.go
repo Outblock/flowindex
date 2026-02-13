@@ -230,6 +230,60 @@ func (r *Repository) GetDefiLatestBlock(ctx context.Context) (uint64, error) {
 	return height, nil
 }
 
+// GetDefiEventsByTransactionID returns defi events for a specific transaction, joined with pair metadata.
+func (r *Repository) GetDefiEventsByTransactionID(ctx context.Context, txID string) ([]models.DefiEvent, map[string]models.DefiPair, error) {
+	txBytes := hexToBytes(txID)
+	if txBytes == nil {
+		return nil, nil, nil
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT e.block_height, encode(e.transaction_id, 'hex') AS transaction_id,
+			e.event_index, e.pair_id, e.event_type,
+			COALESCE(encode(e.maker, 'hex'), '') AS maker,
+			COALESCE(e.asset0_in, 0)::TEXT, COALESCE(e.asset0_out, 0)::TEXT,
+			COALESCE(e.asset1_in, 0)::TEXT, COALESCE(e.asset1_out, 0)::TEXT,
+			COALESCE(e.price_native, 0)::TEXT, e.timestamp,
+			COALESCE(p.dex_key, ''), COALESCE(p.asset0_id, ''), COALESCE(p.asset1_id, ''),
+			COALESCE(p.asset0_symbol, ''), COALESCE(p.asset1_symbol, '')
+		FROM app.defi_events e
+		LEFT JOIN app.defi_pairs p ON p.id = e.pair_id
+		WHERE e.transaction_id = $1
+		ORDER BY e.event_index`, txBytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get defi events by tx: %w", err)
+	}
+	defer rows.Close()
+
+	var events []models.DefiEvent
+	pairs := make(map[string]models.DefiPair)
+	for rows.Next() {
+		var e models.DefiEvent
+		var dexKey, asset0ID, asset1ID, asset0Symbol, asset1Symbol string
+		if err := rows.Scan(
+			&e.BlockHeight, &e.TransactionID, &e.EventIndex,
+			&e.PairID, &e.EventType, &e.Maker,
+			&e.Asset0In, &e.Asset0Out, &e.Asset1In, &e.Asset1Out,
+			&e.PriceNative, &e.Timestamp,
+			&dexKey, &asset0ID, &asset1ID, &asset0Symbol, &asset1Symbol,
+		); err != nil {
+			return nil, nil, err
+		}
+		events = append(events, e)
+		if _, ok := pairs[e.PairID]; !ok {
+			pairs[e.PairID] = models.DefiPair{
+				ID:           e.PairID,
+				DexKey:       dexKey,
+				Asset0ID:     asset0ID,
+				Asset1ID:     asset1ID,
+				Asset0Symbol: asset0Symbol,
+				Asset1Symbol: asset1Symbol,
+			}
+		}
+	}
+	return events, pairs, rows.Err()
+}
+
 // ListDefiAssets returns unique assets from defi_pairs.
 func (r *Repository) ListDefiAssets(ctx context.Context) ([]DefiAsset, error) {
 	rows, err := r.db.Query(ctx, `
