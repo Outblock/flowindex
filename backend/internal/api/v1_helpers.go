@@ -537,6 +537,7 @@ func toEVMTransactionOutput(rec repository.EVMTransactionRecord) map[string]inte
 		"value":        value,
 		"type":         rec.TxType,
 		"position":     rec.Position,
+		"event_index":  rec.EventIndex,
 		"nonce":        rec.Nonce,
 	}
 }
