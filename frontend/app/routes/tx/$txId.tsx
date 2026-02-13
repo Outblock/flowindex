@@ -886,7 +886,7 @@ function TransactionDetail() {
                                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
                                                 <div className="flex flex-col">
                                                     <p className="text-xs font-bold text-nothing-green-dark dark:text-nothing-green mb-1 uppercase tracking-wider">
-                                                        {event.event_name || event.type.split('.').pop()}
+                                                        {event.event_name || event.type?.split('.').pop() || 'Unknown'}
                                                     </p>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase">Contract</span>

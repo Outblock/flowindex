@@ -126,7 +126,7 @@ function RiskBadge({ score, label, tips }: { score: number; label: string; tips?
                 )}
             </button>
             {expanded && tips && tips.length > 0 && (
-                <div className={`absolute right-0 top-full mt-1 z-50 w-80 p-3 rounded-sm border shadow-lg ${bg} ${border}`}>
+                <div className={`absolute right-0 top-full mt-1 z-50 w-80 p-3 rounded-sm border shadow-lg bg-white dark:bg-zinc-900 ${border}`}>
                     <div className="flex items-center gap-1.5 mb-2">
                         <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
                         <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Tips</span>
