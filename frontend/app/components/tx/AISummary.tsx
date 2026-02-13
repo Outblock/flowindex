@@ -10,6 +10,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { resolveApiBaseUrl } from '../../api';
 import { formatShort } from '../account/accountUtils';
+import { deriveActivityType, buildSummaryLine } from '../TransactionRow';
 
 interface Flow {
     from: string;
@@ -123,10 +124,20 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 ? scriptLines.slice(0, 10).join('\n') + '\n... (truncated)'
                 : transaction.script || '';
 
+            // Pre-analyzed data from frontend helpers
+            const activity = deriveActivityType(transaction);
+            const summaryLine = buildSummaryLine(transaction);
+
             const payload = {
                 id: transaction.id,
                 status: transaction.status,
                 is_evm: transaction.is_evm || false,
+                // Pre-analyzed context — AI can use these directly
+                activity_type: activity.type,
+                activity_label: activity.label,
+                preliminary_summary: summaryLine,
+                transfer_summary: transaction.transfer_summary || null,
+                // Raw data
                 events: (transaction.events || []).slice(0, 20).map((e: any) => ({
                     type: e.type,
                     event_name: e.event_name,

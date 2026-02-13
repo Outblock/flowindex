@@ -84,10 +84,17 @@ func (s *Server) handleAITxSummary(w http.ResponseWriter, r *http.Request) {
 
 	systemPrompt := `You analyze Flow blockchain transactions. Return ONLY raw JSON (no markdown fences).
 
+The input includes pre-analyzed fields from our frontend:
+- "activity_type" / "activity_label": classified tx type (e.g. "ft" / "FT Transfer", "swap" / "Swap", "deploy" / "Deploy")
+- "preliminary_summary": a basic one-line summary already generated (e.g. "Sent 100 FLOW to 0xabc...def")
+- "transfer_summary": structured summary with token directions, amounts, counterparties
+
+Use these to inform your response — refine and improve them, don't ignore them.
+
 Rules:
-- "summary": ONE short sentence. State what happened (e.g. "Minted 1,000 JOSHIN tokens" or "Swapped 50 FLOW for 120 USDC on IncrementFi"). Do NOT explain fee mechanics or internal plumbing.
+- "summary": ONE concise sentence. Improve on "preliminary_summary" — add protocol names, clearer descriptions, or context from events. Do NOT explain fee mechanics or internal plumbing.
 - "flows": Array of ACTUAL token movements from ft_transfers/defi_events data ONLY. Each object: {"from":"0xRealAddr","fromLabel":"short name","to":"0xRealAddr","toLabel":"short name","token":"SYMBOL","amount":"123.45"}
-  - Use real addresses and real amounts from the input data. Never use placeholders like "Fee Amount" or "Transaction Signer".
+  - Use real 0x hex addresses and real numeric amounts from the input data. NEVER use placeholders.
   - SKIP routine fee deposits/withdrawals (FlowToken fee movements to 0xf919ee77447b7497 or FlowFees).
   - If no meaningful user-initiated token transfers exist, return empty flows array [].
 
