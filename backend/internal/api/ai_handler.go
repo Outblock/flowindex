@@ -28,7 +28,7 @@ type aiTxSummaryRequest struct {
 	DefiEvents      []any  `json:"defi_events,omitempty"`
 	Tags            []any  `json:"tags,omitempty"`
 	ContractImports []any  `json:"contract_imports,omitempty"`
-	ScriptSummary   string `json:"script_summary,omitempty"`
+	Script          string `json:"script,omitempty"`
 	EVMExecutions   []any  `json:"evm_executions,omitempty"`
 	// Pre-analyzed fields from frontend
 	ActivityType       string `json:"activity_type,omitempty"`
@@ -124,22 +124,36 @@ func (s *Server) handleAITxSummary(w http.ResponseWriter, r *http.Request) {
 
 	txJSON, _ := json.Marshal(req)
 
-	systemPrompt := `You analyze Flow blockchain transactions and return structured JSON.
+	systemPrompt := `You are an expert analyst for the **Flow blockchain**. Flow uses **Cadence**, a resource-oriented smart contract language. Transactions emit typed events like A.{address}.{ContractName}.{EventName} with structured payloads.
 
-The input includes pre-analyzed fields from our frontend:
-- "activity_type" / "activity_label": classified tx type (e.g. "ft" / "FT Transfer", "swap" / "Swap")
-- "preliminary_summary": a basic one-line summary already generated
-- "transfer_summary": structured summary with token directions, amounts, counterparties
+Key Cadence event patterns:
+- TokensMinted: a new token mint (amount in event payload)
+- TokensDeposited / TokensWithdrawn: token movements (amount + to/from in payload)
+- Deposit / Withdrawn on FungibleToken: standard FT transfers
+- FlowFees.FeesDeducted: routine tx fees (IGNORE these)
+- FlowToken.TokensWithdrawn/Deposited to 0xf919ee77447b7497: fee payments (IGNORE)
+
+The input includes:
+- "script": the full Cadence transaction script
+- "events": emitted events WITH payload values
+- "ft_transfers": pre-parsed FT transfers (may be empty for mints)
+- "activity_type"/"activity_label": pre-classified tx type
+- "preliminary_summary": basic one-line summary from our frontend
+- "contract_imports": Cadence contracts used
 
 Rules for "summary":
-- ONE concise sentence. Improve on "preliminary_summary" — add protocol names, clearer descriptions.
-- Do NOT explain fee mechanics or internal plumbing.
+- 1-2 concise sentences using **markdown**: bold token names, amounts, protocol names with **bold**.
+- Use backticks for contract names like ` + "`JOSHIN`" + `.
+- Improve on "preliminary_summary" — add specifics from script and events (e.g. mint amounts, recipients).
+- NEVER explain fee mechanics or internal gas plumbing.
 
 Rules for "flows":
-- Use ONLY data from ft_transfers/defi_events fields. Each flow must use real 0x hex addresses and real numeric amounts.
-- NEVER use placeholders like "Transaction Signer" or "Fee Amount".
-- SKIP routine fee deposits/withdrawals (FlowToken to 0xf919ee77447b7497 or FlowFees).
-- Return empty array [] if no meaningful user-initiated token transfers exist.`
+- Extract from ft_transfers first. If ft_transfers is empty, extract from events (e.g. TokensMinted → show mint flow from contract to recipient).
+- Each flow must use REAL 0x hex addresses from the data and REAL numeric amounts from event values.
+- NEVER use placeholders. If you cannot determine a real address or amount, omit that flow.
+- SKIP FlowFees and routine fee movements entirely.
+- For mints: from=contract address, fromLabel=contract name, to=recipient, toLabel="Minter", token=symbol, amount=minted amount.
+- Return empty array [] only if truly no meaningful token movement occurred.`
 
 	userContent := fmt.Sprintf("Analyze this Flow blockchain transaction:\n%s", string(txJSON))
 

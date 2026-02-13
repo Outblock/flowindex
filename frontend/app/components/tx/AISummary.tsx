@@ -26,6 +26,43 @@ interface AISummaryData {
     flows: Flow[];
 }
 
+/* ── Lightweight inline markdown → React ── */
+
+function InlineMarkdown({ text }: { text: string }) {
+    // Split on markdown patterns: **bold**, `code`, [link](url)
+    const parts: React.ReactNode[] = [];
+    const regex = /(\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+
+    while ((match = regex.exec(text)) !== null) {
+        // Text before match
+        if (match.index > lastIndex) {
+            parts.push(text.slice(lastIndex, match.index));
+        }
+
+        if (match[2]) {
+            // **bold**
+            parts.push(<strong key={key++} className="font-bold text-zinc-900 dark:text-white">{match[2]}</strong>);
+        } else if (match[3]) {
+            // `code`
+            parts.push(<code key={key++} className="text-[11px] bg-zinc-100 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-purple-600 dark:text-purple-400">{match[3]}</code>);
+        } else if (match[4] && match[5]) {
+            // [text](url)
+            parts.push(<a key={key++} href={match[5]} className="text-nothing-green-dark dark:text-nothing-green hover:underline">{match[4]}</a>);
+        }
+
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push(text.slice(lastIndex));
+    }
+
+    return <>{parts}</>;
+}
+
 /* ── Layout: assign (x,y) per unique address, left-to-right ── */
 
 function layoutGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
@@ -119,11 +156,6 @@ export default function AISummary({ transaction }: { transaction: any }) {
         setError(null);
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const scriptLines = (transaction.script || '').split('\n');
-            const scriptSummary = scriptLines.length > 20
-                ? scriptLines.slice(0, 10).join('\n') + '\n... (truncated)'
-                : transaction.script || '';
-
             // Pre-analyzed data from frontend helpers
             const activity = deriveActivityType(transaction);
             const summaryLine = buildSummaryLine(transaction);
@@ -137,11 +169,13 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 activity_label: activity.label,
                 preliminary_summary: summaryLine,
                 transfer_summary: transaction.transfer_summary || null,
-                // Raw data
-                events: (transaction.events || []).slice(0, 20).map((e: any) => ({
+                // Raw data — full script, events with values
+                events: (transaction.events || []).slice(0, 30).map((e: any) => ({
                     type: e.type,
                     event_name: e.event_name,
                     contract_name: e.contract_name,
+                    contract_address: e.contract_address,
+                    values: e.values || e.payload || e.data || null,
                 })),
                 ft_transfers: (transaction.ft_transfers || []).slice(0, 10).map((ft: any) => ({
                     from_address: ft.from_address,
@@ -153,7 +187,7 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 defi_events: (transaction.defi_events || []).slice(0, 5),
                 tags: transaction.tags || [],
                 contract_imports: transaction.contract_imports || [],
-                script_summary: scriptSummary,
+                script: transaction.script || '',
                 evm_executions: (transaction.evm_executions || []).slice(0, 3).map((e: any) => ({
                     from: e.from,
                     to: e.to,
@@ -247,10 +281,10 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 </span>
             </div>
 
-            {/* Summary text */}
+            {/* Summary text with inline markdown */}
             <div className="bg-purple-50 dark:bg-purple-500/5 border border-purple-200 dark:border-purple-500/20 p-3 rounded-sm">
-                <p className="text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed">
-                    {data?.summary}
+                <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                    <InlineMarkdown text={data?.summary || ''} />
                 </p>
             </div>
 
