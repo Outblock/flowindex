@@ -457,8 +457,10 @@ func (r *Repository) ListAccountsByPublicKey(ctx context.Context, publicKey stri
 
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(address, 'hex') AS address, key_index, encode(public_key, 'hex') AS public_key,
-		       signing_algorithm, hashing_algorithm, weight, revoked,
-		       added_at_height, COALESCE(revoked_at_height, 0), last_updated_height
+		       COALESCE(signing_algorithm::text, '') AS signing_algorithm,
+		       COALESCE(hashing_algorithm::text, '') AS hashing_algorithm,
+		       COALESCE(weight, 0), revoked,
+		       COALESCE(added_at_height, 0), COALESCE(revoked_at_height, 0), COALESCE(last_updated_height, 0)
 		FROM app.account_keys
 		WHERE public_key = $1
 		ORDER BY revoked ASC, last_updated_height DESC
