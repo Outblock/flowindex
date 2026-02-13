@@ -171,13 +171,13 @@ function TransactionDetail() {
                 </div>
 
                 {/* Error Message Section */}
-                {transaction.errorMessage && (
+                {(transaction.errorMessage || transaction.error_message || transaction.error) && (
                     <div className="border border-red-500/30 bg-red-50 dark:bg-red-900/10 p-6 mb-8 flex items-start gap-4 rounded-sm">
                         <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-0.5" />
                         <div>
                             <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest mb-1">Execution Error</h3>
                             <p className="text-red-600 dark:text-red-300 text-xs font-mono break-all leading-relaxed">
-                                {transaction.errorMessage}
+                                {transaction.errorMessage || transaction.error_message || transaction.error}
                             </p>
                         </div>
                     </div>
