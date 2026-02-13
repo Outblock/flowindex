@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
-import { getFlowV1BlockByHeight } from '../../api/gen/find';
+import { getFlowV1BlockByHeight, getFlowV1BlockByHeightTransaction } from '../../api/gen/find';
 import { ArrowLeft, Box, Clock, Hash, Activity, ArrowRightLeft, User, Coins, Image as ImageIcon, Layers } from 'lucide-react';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
@@ -13,16 +13,22 @@ export const Route = createFileRoute('/blocks/$height')({
     loader: async ({ params }) => {
         try {
             await ensureHeyApiConfigured();
-            const res = await getFlowV1BlockByHeight({ path: { height: params.height } });
-            const rawBlock: any = res.data?.data?.[0] ?? res.data?.data ?? null;
+            const [blockRes, txRes] = await Promise.all([
+                getFlowV1BlockByHeight({ path: { height: params.height } }),
+                getFlowV1BlockByHeightTransaction({ path: { height: params.height } }),
+            ]);
+            const rawBlock: any = blockRes.data?.data?.[0] ?? blockRes.data?.data ?? null;
             if (!rawBlock) return { block: null };
+            const rawTxs: any[] = txRes.data?.data ?? [];
             const transformedBlock = {
                 ...rawBlock,
-                transactions: (rawBlock.transactions || []).map(tx => ({
+                txCount: rawBlock.tx ?? rawTxs.length,
+                transactions: rawTxs.map(tx => ({
                     ...tx,
-                    type: tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING',
-                    payer: tx.payer_address || tx.proposer_address,
-                    blockHeight: tx.block_height
+                    type: tx.tags?.[0] || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
+                    payer: tx.payer || tx.payer_address || tx.proposer_address,
+                    blockHeight: tx.block_height,
+                    gasUsed: tx.gas_used ?? 0,
                 }))
             };
             return { block: transformedBlock };
