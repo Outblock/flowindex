@@ -56,6 +56,57 @@ export const Route = createFileRoute('/tx/$txId')({
     }
 })
 
+function TokenBubble({ logo, symbol, size = 32 }: { logo?: string; symbol?: string; size?: number }) {
+    if (logo) {
+        return <img src={logo} alt={symbol || ''} style={{ width: size, height: size }} className="rounded-full border border-zinc-200 dark:border-white/10 flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />;
+    }
+    return (
+        <div style={{ width: size, height: size }} className="rounded-full bg-zinc-100 dark:bg-white/10 border border-zinc-200 dark:border-white/10 flex items-center justify-center text-[10px] font-bold text-zinc-500 dark:text-zinc-400 flex-shrink-0 uppercase">
+            {symbol?.slice(0, 2) || '?'}
+        </div>
+    );
+}
+
+function FlowRow({ from, to, amount, symbol, logo, badge, formatAddr }: {
+    from?: string; to?: string; amount?: string | number; symbol?: string; logo?: string; badge?: React.ReactNode;
+    formatAddr: (a: string) => string;
+}) {
+    const formattedAmount = amount != null ? Number(amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—';
+    return (
+        <div className="flex items-center gap-0 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
+            {/* FROM */}
+            <div className="flex items-center gap-2 px-3 py-2.5 min-w-0 flex-shrink-0">
+                {from ? (
+                    <Link to={`/accounts/${from}` as any} className="text-[11px] font-mono text-nothing-green-dark dark:text-nothing-green hover:underline truncate">
+                        {formatAddr(from)}
+                    </Link>
+                ) : (
+                    <span className="text-[11px] text-zinc-400 italic">Mint</span>
+                )}
+            </div>
+            {/* ARROW + TOKEN */}
+            <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-nothing-dark border-x border-zinc-200 dark:border-white/5 flex-1 justify-center">
+                <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 flex-shrink-0" />
+                <TokenBubble logo={logo} symbol={symbol} size={24} />
+                <span className="text-sm font-mono font-semibold text-zinc-900 dark:text-white whitespace-nowrap">{formattedAmount}</span>
+                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">{symbol}</span>
+                {badge}
+                <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 flex-shrink-0" />
+            </div>
+            {/* TO */}
+            <div className="flex items-center gap-2 px-3 py-2.5 min-w-0 flex-shrink-0">
+                {to ? (
+                    <Link to={`/accounts/${to}` as any} className="text-[11px] font-mono text-nothing-green-dark dark:text-nothing-green hover:underline truncate">
+                        {formatAddr(to)}
+                    </Link>
+                ) : (
+                    <span className="text-[11px] text-zinc-400 italic">Burn</span>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function TransactionSummaryCard({ transaction, formatAddress }: { transaction: any; formatAddress: (addr: string) => string }) {
     const activity = deriveActivityType(transaction);
     const summaryLine = buildSummaryLine(transaction);
@@ -64,75 +115,83 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
     const hasEvm = transaction.is_evm && (transaction.evm_hash || transaction.evm_executions?.length > 0);
     const tags = (transaction.tags || []).map((t: string) => t.toLowerCase());
     const isDeploy = tags.some((t: string) => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated'));
-    const isAccountCreation = tags.some((t: string) => t.includes('account_created'));
-
     const hasContractImports = transaction.contract_imports?.length > 0;
+
+    const fmtAddr = (addr: string) => formatShort(addr, 8, 4);
 
     return (
         <div className="border border-zinc-200 dark:border-white/10 p-6 mb-8 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
-            <h2 className="text-sm uppercase tracking-widest mb-4 border-b border-zinc-200 dark:border-white/10 pb-2 text-zinc-500 dark:text-zinc-400">
-                Transaction Summary
-            </h2>
-            {/* Activity badge + summary line */}
-            <div className="flex items-start gap-3 mb-4">
-                <span className={`inline-flex items-center gap-1 px-2 py-1 border rounded-sm text-[10px] font-bold uppercase tracking-wider flex-shrink-0 ${activity.bgColor} ${activity.color}`}>
+            {/* Header row: title + activity badge */}
+            <div className="flex items-center justify-between mb-4 border-b border-zinc-200 dark:border-white/10 pb-3">
+                <h2 className="text-sm uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+                    Transaction Summary
+                </h2>
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 border rounded-sm text-[10px] font-bold uppercase tracking-wider ${activity.bgColor} ${activity.color}`}>
                     {activity.label}
                 </span>
-                {summaryLine && (
-                    <p className="text-sm text-zinc-700 dark:text-zinc-300 pt-0.5">{summaryLine}</p>
-                )}
             </div>
 
-            {/* FT transfer visual rows */}
-            {hasFT && (
-                <div className="space-y-2">
-                    {transaction.ft_transfers.slice(0, 5).map((ft: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-3 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
-                            <div className="flex-shrink-0">
-                                {ft.token_logo ? (
-                                    <img src={ft.token_logo} alt="" className="w-7 h-7 rounded-full border border-zinc-200 dark:border-white/10" />
-                                ) : (
-                                    <div className="w-7 h-7 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center">
-                                        <Coins className="w-3.5 h-3.5 text-emerald-500" />
-                                    </div>
-                                )}
-                            </div>
-                            <span className="text-sm font-mono font-medium text-zinc-900 dark:text-white">
-                                {ft.amount != null ? Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
-                            </span>
-                            <span className="text-[10px] text-zinc-500 font-medium uppercase">
-                                {ft.token_symbol || ft.token?.split('.').pop() || ''}
-                            </span>
-                            {ft.is_cross_vm && (
-                                <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                    <Globe className="w-2.5 h-2.5" />
-                                    Cross-VM
-                                </span>
-                            )}
-                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 ml-auto">
-                                {ft.from_address && (
-                                    <Link to={`/accounts/${ft.from_address}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
-                                        {formatShort(ft.from_address, 8, 4)}
-                                    </Link>
-                                )}
-                                {ft.from_address && ft.to_address && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
-                                {ft.to_address && (
-                                    <Link to={`/accounts/${ft.to_address}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
-                                        {formatShort(ft.to_address, 8, 4)}
-                                    </Link>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                    {transaction.ft_transfers.length > 5 && (
-                        <p className="text-[10px] text-zinc-400 uppercase tracking-wider pl-1">+{transaction.ft_transfers.length - 5} more transfers</p>
-                    )}
-                </div>
+            {/* Summary line */}
+            {summaryLine && (
+                <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">{summaryLine}</p>
             )}
+
+            {/* FT transfer flow rows — aggregated by (from, to, token) */}
+            {hasFT && (() => {
+                const agg = new Map<string, { from: string; to: string; symbol: string; logo: string; total: number; count: number; hasCrossVm: boolean }>();
+                for (const ft of transaction.ft_transfers) {
+                    const sym = ft.token_symbol || ft.token?.split('.').pop() || '';
+                    const key = `${ft.from_address}|${ft.to_address}|${sym}`;
+                    const existing = agg.get(key);
+                    if (existing) {
+                        existing.total += parseFloat(ft.amount) || 0;
+                        existing.count += 1;
+                        if (ft.is_cross_vm) existing.hasCrossVm = true;
+                    } else {
+                        agg.set(key, { from: ft.from_address, to: ft.to_address, symbol: sym, logo: ft.token_logo, total: parseFloat(ft.amount) || 0, count: 1, hasCrossVm: !!ft.is_cross_vm });
+                    }
+                }
+                const rows = Array.from(agg.values());
+                return (
+                    <div className="space-y-2 mb-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <p className="text-[10px] text-zinc-400 uppercase tracking-widest">Token Transfers</p>
+                            <span className="text-[9px] text-zinc-400 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">{transaction.ft_transfers.length}</span>
+                        </div>
+                        {rows.slice(0, 8).map((r, idx) => (
+                            <FlowRow
+                                key={idx}
+                                from={r.from}
+                                to={r.to}
+                                amount={r.total}
+                                symbol={r.symbol}
+                                logo={r.logo}
+                                formatAddr={fmtAddr}
+                                badge={<>
+                                    {r.count > 1 && (
+                                        <span className="text-[9px] text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded">
+                                            ×{r.count}
+                                        </span>
+                                    )}
+                                    {r.hasCrossVm && (
+                                        <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                            <Globe className="w-2.5 h-2.5" /> Cross-VM
+                                        </span>
+                                    )}
+                                </>}
+                            />
+                        ))}
+                        {rows.length > 8 && (
+                            <p className="text-[10px] text-zinc-400 uppercase tracking-wider pl-1">+{rows.length - 8} more groups</p>
+                        )}
+                    </div>
+                );
+            })()}
 
             {/* DeFi swap summary */}
             {hasDefi && (
-                <div className="space-y-2">
+                <div className="space-y-2 mb-4">
+                    <p className="text-[10px] text-zinc-400 uppercase tracking-widest mb-1">Swaps</p>
                     {transaction.defi_events.slice(0, 3).map((swap: any, idx: number) => {
                         const a0In = parseFloat(swap.asset0_in) || 0;
                         const a1In = parseFloat(swap.asset1_in) || 0;
@@ -146,24 +205,26 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
                             : { symbol: swap.asset0_symbol || swap.asset0_id?.split('.').pop() || '?', logo: swap.asset0_logo, amount: a0Out };
 
                         return (
-                            <div key={idx} className="flex items-center gap-3 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
-                                {fromToken.logo ? (
-                                    <img src={fromToken.logo} alt="" className="w-6 h-6 rounded-full border border-zinc-200 dark:border-white/10 flex-shrink-0" />
-                                ) : (
-                                    <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-500 flex-shrink-0">{fromToken.symbol?.slice(0, 2)}</div>
-                                )}
-                                <span className="text-xs font-mono text-zinc-900 dark:text-white">{fromToken.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
-                                <span className="text-[10px] text-zinc-500 uppercase">{fromToken.symbol}</span>
-                                <ArrowRight className="w-3.5 h-3.5 text-nothing-green-dark dark:text-nothing-green flex-shrink-0" />
-                                {toToken.logo ? (
-                                    <img src={toToken.logo} alt="" className="w-6 h-6 rounded-full border border-zinc-200 dark:border-white/10 flex-shrink-0" />
-                                ) : (
-                                    <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-500 flex-shrink-0">{toToken.symbol?.slice(0, 2)}</div>
-                                )}
-                                <span className="text-xs font-mono text-zinc-900 dark:text-white">{toToken.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
-                                <span className="text-[10px] text-zinc-500 uppercase">{toToken.symbol}</span>
+                            <div key={idx} className="flex items-center gap-0 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
+                                {/* FROM token */}
+                                <div className="flex items-center gap-2 px-3 py-2.5">
+                                    <TokenBubble logo={fromToken.logo} symbol={fromToken.symbol} size={24} />
+                                    <span className="text-sm font-mono font-semibold text-zinc-900 dark:text-white">{fromToken.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                                    <span className="text-[10px] text-zinc-500 font-bold uppercase">{fromToken.symbol}</span>
+                                </div>
+                                {/* Arrow */}
+                                <div className="flex items-center px-3 bg-white dark:bg-nothing-dark border-x border-zinc-200 dark:border-white/5 py-2.5 self-stretch">
+                                    <ArrowRightLeft className="w-4 h-4 text-nothing-green-dark dark:text-nothing-green" />
+                                </div>
+                                {/* TO token */}
+                                <div className="flex items-center gap-2 px-3 py-2.5">
+                                    <TokenBubble logo={toToken.logo} symbol={toToken.symbol} size={24} />
+                                    <span className="text-sm font-mono font-semibold text-zinc-900 dark:text-white">{toToken.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                                    <span className="text-[10px] text-zinc-500 font-bold uppercase">{toToken.symbol}</span>
+                                </div>
+                                {/* DEX badge */}
                                 {swap.dex && (
-                                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded ml-auto">{swap.dex}</span>
+                                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider bg-zinc-100 dark:bg-white/10 px-2 py-1 rounded ml-auto mr-3">{swap.dex}</span>
                                 )}
                             </div>
                         );
@@ -173,16 +234,11 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
 
             {/* EVM hash link */}
             {hasEvm && !hasFT && !hasDefi && (
-                <div className="flex items-center gap-2 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
+                <div className="flex items-center gap-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 p-3 rounded-sm mb-4">
                     <span className="text-[10px] text-zinc-500 uppercase tracking-wider">EVM Hash</span>
                     <code className="text-xs text-blue-600 dark:text-blue-400 font-mono">{transaction.evm_hash}</code>
                     {transaction.evm_hash && (
-                        <a
-                            href={`https://evm.flowscan.io/tx/${transaction.evm_hash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-zinc-400 hover:text-blue-500 transition-colors"
-                        >
+                        <a href={`https://evm.flowscan.io/tx/${transaction.evm_hash}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 transition-colors">
                             <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                     )}
@@ -191,35 +247,33 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
 
             {/* Deploy info */}
             {isDeploy && !hasFT && !hasDefi && !hasContractImports && (
-                <div className="flex items-center gap-2 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
+                <div className="flex items-center gap-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 p-3 rounded-sm mb-4">
                     <Layers className="w-4 h-4 text-blue-500 flex-shrink-0" />
                     <span className="text-xs text-zinc-700 dark:text-zinc-300">Contract deployment</span>
                 </div>
             )}
 
-            {/* All contract imports as links */}
+            {/* Contract imports */}
             {hasContractImports && (
-                <div className="flex items-start gap-2 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/5 p-3 rounded-sm mt-2">
-                    <Layers className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
-                        <span className="text-zinc-500 uppercase tracking-wider text-[10px]">Contracts:</span>
-                        {transaction.contract_imports.map((c: string, i: number) => (
-                            <span key={c} className="inline-flex items-center">
-                                {i > 0 && <span className="text-zinc-300 dark:text-zinc-600 mr-1.5">&middot;</span>}
-                                <Link
-                                    to={`/contracts/${c}` as any}
-                                    className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono"
-                                >
-                                    {formatTokenName(c)}
-                                </Link>
-                            </span>
+                <div className="mb-4">
+                    <p className="text-[10px] text-zinc-400 uppercase tracking-widest mb-1.5">Contracts</p>
+                    <div className="flex flex-wrap gap-1.5">
+                        {transaction.contract_imports.map((c: string) => (
+                            <Link
+                                key={c}
+                                to={`/contracts/${c}` as any}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-mono bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-nothing-green-dark dark:text-nothing-green hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors"
+                            >
+                                <Braces className="w-3 h-3 text-zinc-400" />
+                                {formatTokenName(c)}
+                            </Link>
                         ))}
                     </div>
                 </div>
             )}
 
             {/* AI Summary */}
-            <div className="mt-4">
+            <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-white/10">
                 <AISummary transaction={transaction} />
             </div>
         </div>

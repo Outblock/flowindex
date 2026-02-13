@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Sparkles, Loader2, Shield, ShieldAlert, ShieldCheck, AlertTriangle, Lightbulb } from 'lucide-react';
+import { Sparkles, Loader2, Shield, ShieldAlert, ShieldCheck, AlertTriangle, Lightbulb, ChevronDown } from 'lucide-react';
 import ReactFlow, {
     Node,
     Edge,
@@ -83,7 +83,8 @@ function InlineMarkdown({ text }: { text: string }) {
 
 /* ── Risk badge ── */
 
-function RiskBadge({ score, label }: { score: number; label: string }) {
+function RiskBadge({ score, label, tips }: { score: number; label: string; tips?: string[] }) {
+    const [expanded, setExpanded] = useState(false);
     let color: string;
     let bg: string;
     let border: string;
@@ -112,10 +113,31 @@ function RiskBadge({ score, label }: { score: number; label: string }) {
     }
 
     return (
-        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-sm border ${bg} ${border}`}>
-            <Icon className={`w-4 h-4 ${color}`} />
-            <span className={`text-xs font-bold uppercase tracking-widest ${color}`}>{label}</span>
-            <span className={`text-[10px] font-mono ${color}`}>{score}/100</span>
+        <div className="relative">
+            <button
+                onClick={() => tips?.length && setExpanded(!expanded)}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-sm border ${bg} ${border} transition-colors ${tips?.length ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+            >
+                <Icon className={`w-4 h-4 ${color}`} />
+                <span className={`text-xs font-bold uppercase tracking-widest ${color}`}>{label}</span>
+                <span className={`text-[10px] font-mono ${color}`}>{score}/100</span>
+                {tips && tips.length > 0 && (
+                    <ChevronDown className={`w-3 h-3 ${color} transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                )}
+            </button>
+            {expanded && tips && tips.length > 0 && (
+                <div className={`absolute right-0 top-full mt-1 z-50 w-80 p-3 rounded-sm border shadow-lg ${bg} ${border}`}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                        <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Tips</span>
+                    </div>
+                    {tips.map((tip, i) => (
+                        <p key={i} className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mb-1 last:mb-0">
+                            <InlineMarkdown text={tip} />
+                        </p>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -216,12 +238,16 @@ function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<string, str
     const edges: Edge[] = flows.map((f, i) => {
         const amountStr = Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 8 });
         const iconUrl = tokenIcons.get(f.token);
-        const labelText = iconUrl ? `  ${amountStr} ${f.token}` : `${amountStr} ${f.token}`;
         return {
             id: `e-${i}`,
             source: f.from,
             target: f.to,
-            label: labelText,
+            label: (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, color: accentColor }}>
+                    {iconUrl && <img src={iconUrl} alt="" style={{ width: 14, height: 14, borderRadius: '50%' }} />}
+                    {amountStr} {f.token}
+                </span>
+            ) as any,
             labelStyle: { fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, fill: accentColor },
             labelBgStyle: { fill: isDark ? '#18181b' : '#ffffff', fillOpacity: 0.95, rx: 4, ry: 4 },
             labelBgPadding: [8, 4] as [number, number],
@@ -236,12 +262,10 @@ function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<string, str
 
 /* ── Flow diagram wrapper using controlled state for drag support ── */
 
-function FlowDiagram({ initialNodes, initialEdges, isDark, tokenIcons, flows }: {
+function FlowDiagram({ initialNodes, initialEdges, isDark }: {
     initialNodes: Node[];
     initialEdges: Edge[];
     isDark: boolean;
-    tokenIcons: Map<string, string>;
-    flows: Flow[];
 }) {
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -275,15 +299,6 @@ function FlowDiagram({ initialNodes, initialEdges, isDark, tokenIcons, flows }: 
                 showInteractive={false}
                 className="!bg-white dark:!bg-zinc-800 !border-zinc-200 dark:!border-white/10 !shadow-sm [&>button]:!border-zinc-200 dark:[&>button]:!border-white/10 [&>button]:!bg-white dark:[&>button]:!bg-zinc-800 [&>button>svg]:!fill-zinc-600 dark:[&>button>svg]:!fill-zinc-400"
             />
-            {/* Token icon overlays on edges */}
-            {flows.map((f, i) => {
-                const iconUrl = tokenIcons.get(f.token);
-                if (!iconUrl) return null;
-                // Icon rendered as a foreignObject overlay isn't possible with ReactFlow edges,
-                // so we show token icons inline in the edge label area via SVG defs — skipped for now.
-                // The token symbol text label already identifies the token.
-                return null;
-            })}
         </ReactFlow>
     );
 }
@@ -322,13 +337,29 @@ export default function AISummary({ transaction }: { transaction: any }) {
                     contract_address: e.contract_address,
                     values: e.values || e.payload || e.data || null,
                 })),
-                ft_transfers: (transaction.ft_transfers || []).slice(0, 10).map((ft: any) => ({
-                    from_address: ft.from_address,
-                    to_address: ft.to_address,
-                    amount: ft.amount,
-                    token_symbol: ft.token_symbol,
-                    token: ft.token,
-                })),
+                ft_transfers: (() => {
+                    // Aggregate by (from, to, token) to reduce payload for bulk-transfer txs
+                    const agg = new Map<string, { from_address: string; to_address: string; amount: number; token_symbol: string; token: string; count: number }>();
+                    for (const ft of (transaction.ft_transfers || [])) {
+                        const sym = ft.token_symbol || ft.token?.split('.').pop() || '';
+                        const key = `${ft.from_address}|${ft.to_address}|${sym}`;
+                        const existing = agg.get(key);
+                        if (existing) {
+                            existing.amount += parseFloat(ft.amount) || 0;
+                            existing.count += 1;
+                        } else {
+                            agg.set(key, { from_address: ft.from_address, to_address: ft.to_address, amount: parseFloat(ft.amount) || 0, token_symbol: sym, token: ft.token, count: 1 });
+                        }
+                    }
+                    return Array.from(agg.values()).slice(0, 20).map(a => ({
+                        from_address: a.from_address,
+                        to_address: a.to_address,
+                        amount: a.amount.toString(),
+                        token_symbol: a.token_symbol,
+                        token: a.token,
+                        transfer_count: a.count,
+                    }));
+                })(),
                 defi_events: (transaction.defi_events || []).slice(0, 5),
                 tags: transaction.tags || [],
                 contract_imports: transaction.contract_imports || [],
@@ -426,7 +457,7 @@ export default function AISummary({ transaction }: { transaction: any }) {
                         Beta
                     </span>
                 </div>
-                {data && <RiskBadge score={data.risk_score} label={data.risk_label} />}
+                {data && <RiskBadge score={data.risk_score} label={data.risk_label} tips={data.tips} />}
             </div>
 
             {/* Summary text */}
@@ -435,21 +466,6 @@ export default function AISummary({ transaction }: { transaction: any }) {
                     <InlineMarkdown text={data?.summary || ''} />
                 </p>
             </div>
-
-            {/* Tips */}
-            {data && data.tips.length > 0 && (
-                <div className="bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/10 p-3 rounded-sm space-y-1.5">
-                    <div className="flex items-center gap-1.5 mb-1">
-                        <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Tips</span>
-                    </div>
-                    {data.tips.map((tip, i) => (
-                        <p key={i} className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed pl-5">
-                            <InlineMarkdown text={tip} />
-                        </p>
-                    ))}
-                </div>
-            )}
 
             {/* React Flow diagram */}
             {initialNodes.length > 0 && (
@@ -463,8 +479,6 @@ export default function AISummary({ transaction }: { transaction: any }) {
                             initialNodes={initialNodes}
                             initialEdges={initialEdges}
                             isDark={isDark}
-                            tokenIcons={tokenIcons}
-                            flows={data?.flows || []}
                         />
                     </div>
                 </div>
