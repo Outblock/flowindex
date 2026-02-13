@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Users, ArrowRightLeft } from 'lucide-react';
+import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
@@ -174,9 +175,12 @@ function TokenDetailInner() {
             <Coins className="h-8 w-8 text-nothing-green-dark dark:text-nothing-green" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tighter">
-              Token
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tighter">
+                Token
+              </h1>
+              {token?.evm_address && <EVMBridgeBadge evmAddress={String(token.evm_address)} />}
+            </div>
             <div className="flex items-center gap-2">
               <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono break-all">{id}</p>
               <CopyButton

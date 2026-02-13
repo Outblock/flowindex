@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion, AnimatePresence } from 'framer-motion';
-import { Image, Database, Layers, LayoutGrid, LayoutList, ExternalLink } from 'lucide-react';
+import { Image, Database, Layers, LayoutGrid, LayoutList } from 'lucide-react';
+import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import NumberFlow from '@number-flow/react';
 import { useState } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
@@ -175,6 +176,7 @@ function NFTs() {
                 const contractId = id;
                 const count = Number(c?.number_of_tokens || 0);
                 const squareImage = c?.square_image || '';
+                const evmAddress = String(c?.evm_address || '');
 
                 return (
                   <motion.div
@@ -192,9 +194,12 @@ function NFTs() {
                         <CollectionImage name={displayName} src={squareImage} />
                       </div>
                       <div className="p-3 space-y-1.5">
-                        <h3 className="font-mono font-bold text-sm text-zinc-900 dark:text-white truncate group-hover:text-nothing-green-dark dark:group-hover:text-nothing-green transition-colors">
-                          {displayName}
-                        </h3>
+                        <div className="flex items-center gap-1.5">
+                          <h3 className="font-mono font-bold text-sm text-zinc-900 dark:text-white truncate group-hover:text-nothing-green-dark dark:group-hover:text-nothing-green transition-colors">
+                            {displayName}
+                          </h3>
+                          {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
+                        </div>
                         <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate" title={contractId}>
                           {contractId}
                         </p>
@@ -220,7 +225,6 @@ function NFTs() {
                     <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Address</th>
                     <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-right">Items</th>
                     <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-right">Holders</th>
-                    <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">EVM Bridge</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -232,7 +236,6 @@ function NFTs() {
                       const count = Number(c?.number_of_tokens || 0);
                       const holderCount = Number(c?.holder_count || 0);
                       const squareImage = c?.square_image || '';
-                      const evmBridged = !!c?.evm_bridged;
                       const evmAddress = String(c?.evm_address || '');
 
                       return (
@@ -247,13 +250,16 @@ function NFTs() {
                             <div className="flex items-center gap-3">
                               <CollectionLogo name={displayName} src={squareImage} />
                               <div className="min-w-0">
-                                <Link
-                                  to={`/nfts/${encodeURIComponent(id)}`}
-                                  className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                  title={id}
-                                >
-                                  {displayName}
-                                </Link>
+                                <div className="flex items-center gap-1.5">
+                                  <Link
+                                    to={`/nfts/${encodeURIComponent(id)}`}
+                                    className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline truncate"
+                                    title={id}
+                                  >
+                                    {displayName}
+                                  </Link>
+                                  {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
+                                </div>
                                 <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono truncate" title={id}>
                                   {c?.contract_name || id}
                                 </div>
@@ -281,21 +287,6 @@ function NFTs() {
                             <span className="font-mono text-sm text-zinc-900 dark:text-white">
                               {holderCount.toLocaleString()}
                             </span>
-                          </td>
-                          <td className="p-4">
-                            {evmBridged ? (
-                              <a
-                                href={`https://evm.flowindex.dev/address/${evmAddress}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-mono rounded-sm hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors"
-                              >
-                                Bridged
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            ) : (
-                              <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500">&mdash;</span>
-                            )}
                           </td>
                         </motion.tr>
                       );

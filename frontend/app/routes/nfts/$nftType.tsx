@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Image, Users, ArrowRightLeft, ArrowLeft, Grid3X3, Search } from 'lucide-react';
+import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import {
@@ -260,7 +261,12 @@ function NFTCollectionDetailInner() {
 
         {/* Header with banner + icon */}
         <PageHeader
-          title={displayName}
+          title={
+            <span className="flex items-center gap-2">
+              {displayName}
+              {collection?.evm_address && <EVMBridgeBadge evmAddress={String(collection.evm_address)} />}
+            </span>
+          }
           subtitle={
             <div className="flex items-center gap-1">
               {id}
