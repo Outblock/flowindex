@@ -7,8 +7,17 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
 )
+
+var hexAddrRe = regexp.MustCompile(`^(?:0x)?[0-9a-fA-F]{8,40}$`)
+
+// looksLikeAddress checks if a string looks like a real blockchain address
+// (hex with optional 0x prefix, 8-40 chars). Rejects placeholders like "Transaction Signer".
+func looksLikeAddress(s string) bool {
+	return hexAddrRe.MatchString(s)
+}
 
 type aiTxSummaryRequest struct {
 	ID              string `json:"id"`
@@ -140,9 +149,29 @@ Output format: {"summary":"...","flows":[...]}`
 
 	var result aiTxSummaryResponse
 	if err := json.Unmarshal([]byte(text), &result); err != nil {
-		// If parsing fails, return the raw text as summary with no flows
-		result = aiTxSummaryResponse{Summary: text, Flows: []aiFlow{}}
+		http.Error(w, `{"error":"AI returned invalid JSON"}`, http.StatusBadGateway)
+		return
 	}
+
+	// Validate summary
+	if result.Summary == "" {
+		http.Error(w, `{"error":"AI returned empty summary"}`, http.StatusBadGateway)
+		return
+	}
+
+	// Validate and filter flows — only keep entries with real addresses and amounts
+	validated := make([]aiFlow, 0, len(result.Flows))
+	for _, f := range result.Flows {
+		if f.From == "" || f.To == "" || f.Token == "" || f.Amount == "" {
+			continue
+		}
+		// Must look like real addresses (0x prefix or 16-char hex) — reject placeholders
+		if !looksLikeAddress(f.From) || !looksLikeAddress(f.To) {
+			continue
+		}
+		validated = append(validated, f)
+	}
+	result.Flows = validated
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"data": result})

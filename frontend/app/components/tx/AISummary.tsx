@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { Link } from '@tanstack/react-router';
 import { Sparkles, Loader2 } from 'lucide-react';
 import ReactFlow, {
     Node,
@@ -8,6 +9,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { resolveApiBaseUrl } from '../../api';
+import { formatShort } from '../account/accountUtils';
 
 interface Flow {
     from: string;
@@ -23,72 +25,88 @@ interface AISummaryData {
     flows: Flow[];
 }
 
-function truncateAddr(addr: string): string {
-    if (!addr || addr.length <= 12) return addr;
-    return addr.slice(0, 8) + '...' + addr.slice(-4);
-}
+/* ── Layout: assign (x,y) per unique address, left-to-right ── */
 
-const nodeStyle = {
-    padding: '8px 12px',
-    border: '1px solid',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontFamily: 'monospace',
-    minWidth: 120,
-    textAlign: 'center' as const,
-};
+function layoutGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
+    // Collect unique addresses preserving order of appearance
+    const seen = new Map<string, { label: string; isSource: boolean; isTarget: boolean }>();
+    for (const f of flows) {
+        if (!seen.has(f.from)) seen.set(f.from, { label: f.fromLabel || formatShort(f.from, 8, 4), isSource: true, isTarget: false });
+        else seen.get(f.from)!.isSource = true;
 
-function buildFlowGraph(flows: Flow[]): { nodes: Node[]; edges: Edge[] } {
-    const addressMap = new Map<string, string>();
-    flows.forEach(f => {
-        if (f.from) addressMap.set(f.from, f.fromLabel || truncateAddr(f.from));
-        if (f.to) addressMap.set(f.to, f.toLabel || truncateAddr(f.to));
+        if (!seen.has(f.to)) seen.set(f.to, { label: f.toLabel || formatShort(f.to, 8, 4), isSource: false, isTarget: true });
+        else seen.get(f.to)!.isTarget = true;
+    }
+
+    // Categorize: pure sources → left column, pure targets → right, mixed → middle
+    const sources: string[] = [];
+    const targets: string[] = [];
+    const middle: string[] = [];
+    for (const [addr, info] of seen) {
+        if (info.isSource && !info.isTarget) sources.push(addr);
+        else if (info.isTarget && !info.isSource) targets.push(addr);
+        else middle.push(addr);
+    }
+
+    const colWidth = 280;
+    const rowHeight = 90;
+
+    const placeColumn = (addrs: string[], col: number): Node[] =>
+        addrs.map((addr, row) => ({
+            id: addr,
+            data: {
+                label: (
+                    <div style={{ textAlign: 'center' }}>
+                        <div className="font-bold text-[11px] text-zinc-800 dark:text-zinc-200">
+                            {seen.get(addr)!.label}
+                        </div>
+                        <div className="text-[9px] text-zinc-400 dark:text-zinc-500 font-mono mt-0.5">
+                            {formatShort(addr, 8, 4)}
+                        </div>
+                    </div>
+                ),
+            },
+            position: { x: col * colWidth, y: row * rowHeight },
+            sourcePosition: Position.Right,
+            targetPosition: Position.Left,
+            style: {
+                padding: '10px 14px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontFamily: 'ui-monospace, monospace',
+                minWidth: 160,
+                border: '1px solid #d4d4d8',
+                background: '#fafafa',
+                color: '#27272a',
+            },
+        }));
+
+    const nodes: Node[] = [
+        ...placeColumn(sources, 0),
+        ...placeColumn(middle, 1),
+        ...placeColumn(targets, middle.length > 0 ? 2 : 1),
+    ];
+
+    const edges: Edge[] = flows.map((f, i) => {
+        const amountStr = Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 8 });
+        return {
+            id: `e-${i}`,
+            source: f.from,
+            target: f.to,
+            label: `${amountStr} ${f.token}`,
+            labelStyle: { fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, fill: '#16a34a' },
+            labelBgStyle: { fill: '#ffffff', fillOpacity: 0.95, rx: 4, ry: 4 },
+            labelBgPadding: [8, 4] as [number, number],
+            style: { stroke: '#22c55e', strokeWidth: 2 },
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#22c55e', width: 18, height: 18 },
+            animated: true,
+        };
     });
-
-    const addresses = Array.from(addressMap.keys());
-    const ySpacing = 100;
-    const xCenter = 200;
-
-    const nodes: Node[] = addresses.map((addr, i) => ({
-        id: addr,
-        data: {
-            label: (
-                <div>
-                    <div className="font-bold text-[10px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                        {addressMap.get(addr)}
-                    </div>
-                    <div className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                        {truncateAddr(addr)}
-                    </div>
-                </div>
-            ),
-        },
-        position: { x: (i % 2 === 0 ? 0 : xCenter * 2), y: Math.floor(i / 2) * ySpacing },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-        style: {
-            ...nodeStyle,
-            borderColor: 'var(--flow-node-border, #d4d4d8)',
-            background: 'var(--flow-node-bg, #fafafa)',
-            color: 'var(--flow-node-color, #27272a)',
-        },
-    }));
-
-    const edges: Edge[] = flows.map((f, i) => ({
-        id: `e-${i}`,
-        source: f.from,
-        target: f.to,
-        label: `${f.amount} ${f.token}`,
-        labelStyle: { fontSize: '10px', fontFamily: 'monospace', fill: '#71717a' },
-        labelBgStyle: { fill: 'var(--flow-edge-bg, #ffffff)', fillOpacity: 0.9 },
-        labelBgPadding: [6, 3] as [number, number],
-        style: { stroke: '#22c55e', strokeWidth: 1.5 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#22c55e', width: 16, height: 16 },
-        animated: true,
-    }));
 
     return { nodes, edges };
 }
+
+/* ── Component ── */
 
 export default function AISummary({ transaction }: { transaction: any }) {
     const [data, setData] = useState<AISummaryData | null>(null);
@@ -140,12 +158,20 @@ export default function AISummary({ transaction }: { transaction: any }) {
             });
 
             if (!res.ok) {
-                const errBody = await res.text();
-                throw new Error(errBody || `HTTP ${res.status}`);
+                const errBody = await res.json().catch(() => ({}));
+                throw new Error((errBody as any)?.error || `HTTP ${res.status}`);
             }
 
             const result = await res.json();
-            setData(result.data);
+            const d = result.data as AISummaryData;
+
+            // Frontend validation: summary must be a string, flows must be an array
+            if (!d || typeof d.summary !== 'string') {
+                throw new Error('Invalid response format');
+            }
+            if (!Array.isArray(d.flows)) d.flows = [];
+
+            setData(d);
         } catch (e: any) {
             setError(e.message || 'Failed to generate summary');
         } finally {
@@ -155,14 +181,14 @@ export default function AISummary({ transaction }: { transaction: any }) {
 
     const { nodes, edges } = useMemo(() => {
         if (!data?.flows?.length) return { nodes: [], edges: [] };
-        return buildFlowGraph(data.flows);
+        return layoutGraph(data.flows);
     }, [data]);
 
-    if (!data && !loading) {
+    /* ── Button state ── */
+    if (!data && !loading && !error) {
         return (
             <button
                 onClick={handleSummarize}
-                disabled={loading}
                 className="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] uppercase tracking-widest border border-purple-300 dark:border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors rounded-sm"
             >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -174,32 +200,33 @@ export default function AISummary({ transaction }: { transaction: any }) {
         );
     }
 
+    /* ── Loading ── */
     if (loading) {
         return (
-            <div className="flex items-center gap-2 text-xs text-purple-500">
+            <div className="flex items-center gap-2 text-xs text-purple-500 py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span className="uppercase tracking-widest">Analyzing transaction...</span>
             </div>
         );
     }
 
+    /* ── Error ── */
     if (error) {
         return (
-            <div className="text-xs text-red-500">
-                <span className="uppercase tracking-widest">AI Summary Error:</span> {error}
-                <button
-                    onClick={handleSummarize}
-                    className="ml-2 text-purple-500 hover:underline uppercase tracking-widest"
-                >
-                    Retry
+            <div className="text-xs text-red-500 py-2">
+                <span className="uppercase tracking-widest">AI Error:</span> {error}
+                <button onClick={() => { setError(null); }} className="ml-2 text-purple-500 hover:underline uppercase tracking-widest">
+                    Dismiss
                 </button>
             </div>
         );
     }
 
+    /* ── Result ── */
     return (
-        <div className="space-y-3">
-            <div className="flex items-center gap-2 mb-1">
+        <div className="space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-2">
                 <Sparkles className="w-3.5 h-3.5 text-purple-500" />
                 <span className="text-[10px] text-purple-600 dark:text-purple-400 uppercase tracking-widest font-bold">
                     AI Summary
@@ -209,36 +236,36 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 </span>
             </div>
 
-            <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                {data?.summary}
-            </p>
+            {/* Summary text */}
+            <div className="bg-purple-50 dark:bg-purple-500/5 border border-purple-200 dark:border-purple-500/20 p-3 rounded-sm">
+                <p className="text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed">
+                    {data?.summary}
+                </p>
+            </div>
 
+            {/* React Flow diagram */}
             {nodes.length > 0 && (
-                <div
-                    className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden"
-                    style={{
-                        height: Math.max(250, nodes.length * 60 + 100),
-                        // CSS custom properties for dark mode support in ReactFlow nodes
-                        ['--flow-node-border' as any]: 'var(--tw-border-opacity, 1) #d4d4d8',
-                        ['--flow-node-bg' as any]: '#fafafa',
-                        ['--flow-node-color' as any]: '#27272a',
-                        ['--flow-edge-bg' as any]: '#ffffff',
-                    }}
-                >
-                    <ReactFlow
-                        nodes={nodes}
-                        edges={edges}
-                        fitView
-                        fitViewOptions={{ padding: 0.3 }}
-                        nodesDraggable={false}
-                        nodesConnectable={false}
-                        elementsSelectable={false}
-                        panOnDrag={false}
-                        zoomOnScroll={false}
-                        zoomOnPinch={false}
-                        zoomOnDoubleClick={false}
-                        proOptions={{ hideAttribution: true }}
-                    />
+                <div>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Asset Flow</p>
+                    <div
+                        className="border border-zinc-200 dark:border-white/10 rounded-sm bg-white dark:bg-zinc-900 overflow-hidden"
+                        style={{ height: Math.max(200, Math.ceil(nodes.length / 2) * 90 + 60) }}
+                    >
+                        <ReactFlow
+                            nodes={nodes}
+                            edges={edges}
+                            fitView
+                            fitViewOptions={{ padding: 0.4 }}
+                            nodesDraggable={false}
+                            nodesConnectable={false}
+                            elementsSelectable={false}
+                            panOnDrag={false}
+                            zoomOnScroll={false}
+                            zoomOnPinch={false}
+                            zoomOnDoubleClick={false}
+                            proOptions={{ hideAttribution: true }}
+                        />
+                    </div>
                 </div>
             )}
         </div>
