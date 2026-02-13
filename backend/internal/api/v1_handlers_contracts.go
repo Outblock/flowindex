@@ -168,11 +168,10 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 		cancel()
 		if rpcErr == nil && acc != nil {
 			if b, ok := acc.Contracts[name]; ok && len(b) > 0 {
-				contracts = append(contracts, models.SmartContract{
-					Address: address,
-					Name:    name,
-					Code:    string(b),
-				})
+				sc := models.SmartContract{Address: address, Name: name, Code: string(b)}
+				contracts = append(contracts, sc)
+				// Backfill to DB with height=0 so indexer can overwrite later
+				_ = s.repo.UpsertSmartContracts(r.Context(), []models.SmartContract{sc})
 			}
 		}
 	}
@@ -187,6 +186,10 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 			if rpcErr == nil && acc != nil {
 				if b, ok := acc.Contracts[c.Name]; ok && len(b) > 0 {
 					c.Code = string(b)
+					// Backfill code to DB
+					_ = s.repo.UpsertSmartContracts(r.Context(), []models.SmartContract{
+						{Address: c.Address, Name: c.Name, Code: c.Code, BlockHeight: c.BlockHeight},
+					})
 				}
 			}
 		}
