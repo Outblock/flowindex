@@ -26,27 +26,27 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	arg := 1
 
 	if f.Height != nil {
-		clauses = append(clauses, fmt.Sprintf("block_height = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("t.block_height = $%d", arg))
 		args = append(args, *f.Height)
 		arg++
 	}
 	if f.Payer != "" {
-		clauses = append(clauses, fmt.Sprintf("payer_address = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("t.payer_address = $%d", arg))
 		args = append(args, hexToBytes(f.Payer))
 		arg++
 	}
 	if f.Proposer != "" {
-		clauses = append(clauses, fmt.Sprintf("proposer_address = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("t.proposer_address = $%d", arg))
 		args = append(args, hexToBytes(f.Proposer))
 		arg++
 	}
 	if f.Authorizer != "" {
-		clauses = append(clauses, fmt.Sprintf("$%d = ANY(authorizers)", arg))
+		clauses = append(clauses, fmt.Sprintf("$%d = ANY(t.authorizers)", arg))
 		args = append(args, hexToBytes(f.Authorizer))
 		arg++
 	}
 	if f.Status != "" {
-		clauses = append(clauses, fmt.Sprintf("status = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("t.status = $%d", arg))
 		args = append(args, f.Status)
 		arg++
 	}
@@ -85,12 +85,17 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	defer rows.Close()
 
 	var out []models.Transaction
+	seen := make(map[string]bool)
 	for rows.Next() {
 		var t models.Transaction
 		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
 			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
 			return nil, err
 		}
+		if seen[t.ID] {
+			continue
+		}
+		seen[t.ID] = true
 		out = append(out, t)
 	}
 	return out, nil

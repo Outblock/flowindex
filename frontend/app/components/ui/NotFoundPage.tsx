@@ -1,57 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import { Search } from 'lucide-react';
-
-/* ── Animated grid-scan background ── */
-function GridScanBg() {
-    return (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {/* Grid */}
-            <div
-                className="absolute inset-0 opacity-[0.04] dark:opacity-[0.06]"
-                style={{
-                    backgroundImage: `
-                        linear-gradient(rgba(0,0,0,0.3) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(0,0,0,0.3) 1px, transparent 1px)
-                    `,
-                    backgroundSize: '40px 40px',
-                }}
-            />
-            {/* Horizontal scan line */}
-            <div
-                className="absolute left-0 right-0 h-px opacity-20"
-                style={{
-                    background: 'linear-gradient(90deg, transparent 0%, #4ade80 30%, #4ade80 70%, transparent 100%)',
-                    animation: 'scanY 4s ease-in-out infinite',
-                }}
-            />
-            {/* Vertical scan line */}
-            <div
-                className="absolute top-0 bottom-0 w-px opacity-10"
-                style={{
-                    background: 'linear-gradient(180deg, transparent 0%, #4ade80 30%, #4ade80 70%, transparent 100%)',
-                    animation: 'scanX 6s ease-in-out infinite',
-                }}
-            />
-            {/* Large "404" watermark */}
-            <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-[20vw] font-black text-zinc-200 dark:text-white/[0.02] leading-none select-none tracking-tighter">
-                    404
-                </span>
-            </div>
-            <style>{`
-                @keyframes scanY {
-                    0%, 100% { top: -1px; }
-                    50% { top: 100%; }
-                }
-                @keyframes scanX {
-                    0%, 100% { left: -1px; }
-                    50% { left: 100%; }
-                }
-            `}</style>
-        </div>
-    );
-}
+import GridScan from '../GridScan';
 
 interface NotFoundPageProps {
     icon: LucideIcon;
@@ -63,54 +13,63 @@ interface NotFoundPageProps {
 
 export function NotFoundPage({ icon: Icon, title, description, hint, identifier }: NotFoundPageProps) {
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center font-mono transition-colors duration-300 relative">
-            <GridScanBg />
-            <div className="relative z-10 border border-zinc-200 dark:border-white/10 bg-white dark:bg-nothing-dark p-10 max-w-lg w-full text-center shadow-sm">
-                {/* Icon */}
-                <div className="w-16 h-16 rounded-full border-2 border-zinc-200 dark:border-white/10 flex items-center justify-center mx-auto mb-6">
-                    <Icon className="h-7 w-7 text-zinc-400 dark:text-zinc-500" />
-                </div>
+        <div className="min-h-screen w-full flex flex-col items-center justify-center p-8 text-center bg-black relative overflow-hidden isolate font-mono">
+            {/* GridScan Background */}
+            <div className="absolute inset-0 z-0">
+                <GridScan scanColor="#9effe2" className="w-full h-full" />
+            </div>
 
-                {/* Title */}
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-3">
-                    {title}
-                </h2>
+            <div className="relative z-10 space-y-8 max-w-2xl mx-auto flex flex-col items-center">
+                {/* Large 404 watermark */}
+                <h1 className="text-[12rem] leading-none font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-white/5 tracking-tighter select-none">
+                    404
+                </h1>
 
-                {/* Identifier if provided */}
-                {identifier && (
-                    <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 break-all mb-4 px-4">
-                        {identifier}
+                <div className="space-y-4 max-w-lg">
+                    {/* Icon + Title */}
+                    <div className="flex items-center justify-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center">
+                            <Icon className="h-5 w-5 text-zinc-400" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-white uppercase tracking-widest">
+                            {title}
+                        </h2>
+                    </div>
+
+                    {/* Identifier */}
+                    {identifier && (
+                        <p className="text-[11px] font-mono text-zinc-500 break-all px-4">
+                            {identifier}
+                        </p>
+                    )}
+
+                    {/* Description */}
+                    <p className="text-sm text-zinc-400 font-mono leading-relaxed">
+                        {description}
                     </p>
-                )}
 
-                {/* Description */}
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-2">{description}</p>
-
-                {/* Hint about indexing */}
-                {hint && (
-                    <p className="text-xs text-zinc-400 dark:text-zinc-600 mb-6">{hint}</p>
-                )}
-                {!hint && <div className="mb-6" />}
-
-                {/* Searching indicator */}
-                <div className="flex items-center justify-center gap-2 text-[10px] text-zinc-400 uppercase tracking-widest mb-6">
-                    <Search className="w-3 h-3 animate-pulse" />
-                    <span>Not found in indexed data</span>
+                    {/* Hint */}
+                    {hint && (
+                        <div className="flex items-center justify-center gap-2 text-xs text-zinc-500">
+                            <Search className="w-3 h-3 animate-pulse" />
+                            <span>{hint}</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Action buttons */}
-                <div className="space-y-2">
+                <div className="flex flex-col sm:flex-row gap-3 mt-4">
                     <Link
                         to="/"
-                        className="inline-block w-full border border-zinc-200 dark:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5 text-zinc-900 dark:text-white text-xs uppercase tracking-widest py-3 transition-all"
+                        className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-black font-bold uppercase tracking-widest hover:bg-[#9effe2] transition-colors duration-300 rounded-sm"
                     >
                         Return to Dashboard
                     </Link>
                     <Link
                         to="/stats"
-                        className="inline-block w-full border border-nothing-green-dark/20 dark:border-nothing-green/20 hover:bg-nothing-green-dark/5 dark:hover:bg-nothing-green/10 text-nothing-green-dark dark:text-nothing-green text-xs uppercase tracking-widest py-3 transition-all"
+                        className="inline-flex items-center justify-center gap-2 px-8 py-4 border border-white/10 text-white font-bold uppercase tracking-widest hover:bg-white/5 transition-colors duration-300 rounded-sm"
                     >
-                        View Indexing Progress
+                        Indexing Progress
                     </Link>
                 </div>
             </div>
