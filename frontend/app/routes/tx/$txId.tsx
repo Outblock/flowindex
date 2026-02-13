@@ -383,7 +383,7 @@ function TransactionDetail() {
                         {/* TX ID with DecryptedText */}
                         <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white mb-1 break-all flex items-center gap-1 group">
                             <DecryptedText
-                                text={transaction.is_evm ? transaction.evm_hash : transaction.id}
+                                text={(transaction.is_evm && transaction.evm_hash) ? transaction.evm_hash : transaction.id}
                                 animateOn="view"
                                 sequential
                                 revealDirection="start"
@@ -394,14 +394,14 @@ function TransactionDetail() {
                                 className="font-mono"
                             />
                             <CopyButton
-                                content={transaction.is_evm ? transaction.evm_hash : transaction.id}
+                                content={(transaction.is_evm && transaction.evm_hash) ? transaction.evm_hash : transaction.id}
                                 variant="ghost"
                                 size="xs"
                                 className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                             />
                         </h1>
                         <p className="text-zinc-500 text-xs uppercase tracking-widest">
-                            {transaction.is_evm ? 'EVM Hash' : 'Transaction ID'}
+                            {(transaction.is_evm && transaction.evm_hash) ? 'EVM Hash' : 'Transaction ID'}
                         </p>
 
                         {/* Divider */}
