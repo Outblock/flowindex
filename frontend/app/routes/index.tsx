@@ -465,7 +465,7 @@ function Home() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.5, delay: 0.2 }}
                         >
-                            <NetworkStats totalStaked={networkStats?.total_staked} activeNodes={networkStats?.active_nodes} />
+                            <NetworkStats totalStaked={networkStats?.total_staked} totalSupply={networkStats?.total_supply} activeNodes={networkStats?.active_nodes} />
                         </motion.div>
                     </div>
                 </div>
