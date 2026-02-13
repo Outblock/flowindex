@@ -26,27 +26,27 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	arg := 1
 
 	if f.Height != nil {
-		clauses = append(clauses, fmt.Sprintf("block_height = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("t.block_height = $%d", arg))
 		args = append(args, *f.Height)
 		arg++
 	}
 	if f.Payer != "" {
-		clauses = append(clauses, fmt.Sprintf("payer_address = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("t.payer_address = $%d", arg))
 		args = append(args, hexToBytes(f.Payer))
 		arg++
 	}
 	if f.Proposer != "" {
-		clauses = append(clauses, fmt.Sprintf("proposer_address = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("t.proposer_address = $%d", arg))
 		args = append(args, hexToBytes(f.Proposer))
 		arg++
 	}
 	if f.Authorizer != "" {
-		clauses = append(clauses, fmt.Sprintf("$%d = ANY(authorizers)", arg))
+		clauses = append(clauses, fmt.Sprintf("$%d = ANY(t.authorizers)", arg))
 		args = append(args, hexToBytes(f.Authorizer))
 		arg++
 	}
 	if f.Status != "" {
-		clauses = append(clauses, fmt.Sprintf("status = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("t.status = $%d", arg))
 		args = append(args, f.Status)
 		arg++
 	}
@@ -66,21 +66,18 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	args = append(args, f.Limit, f.Offset)
 
 	rows, err := r.db.Query(ctx, `
-		SELECT * FROM (
-		  SELECT DISTINCT ON (t.id)
-		         encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
-		         COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
-		         COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
-		         COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
-		         t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
-		         COALESCE(m.gas_used, t.gas_used) AS gas_used,
-		         t.timestamp, t.timestamp AS created_at,
-		         COALESCE(m.event_count, t.event_count) AS event_count
-		  FROM raw.transactions t
-		  LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
-		  `+where+`
-		  ORDER BY t.id, t.block_height DESC
-		) sub ORDER BY sub.block_height DESC, sub.transaction_index DESC
+		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
+		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
+		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
+		       COALESCE(ARRAY(SELECT encode(a, 'hex') FROM unnest(t.authorizers) a), ARRAY[]::text[]) AS authorizers,
+		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
+		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
+		       t.timestamp, t.timestamp AS created_at,
+		       COALESCE(m.event_count, t.event_count) AS event_count
+		FROM raw.transactions t
+		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
+		`+where+`
+		ORDER BY t.block_height DESC, t.transaction_index DESC
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
 	if err != nil {
 		return nil, err
@@ -88,12 +85,17 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	defer rows.Close()
 
 	var out []models.Transaction
+	seen := make(map[string]bool)
 	for rows.Next() {
 		var t models.Transaction
 		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
 			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
 			return nil, err
 		}
+		if seen[t.ID] {
+			continue
+		}
+		seen[t.ID] = true
 		out = append(out, t)
 	}
 	return out, nil
