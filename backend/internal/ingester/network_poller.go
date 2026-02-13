@@ -100,7 +100,8 @@ access(all) fun main(): [AnyStruct] {
     let counter = FlowEpoch.currentEpochCounter
     let phase = FlowEpoch.currentEpochPhase.rawValue
     let metadata = FlowEpoch.getEpochMetadata(counter)
-    return [counter, phase, metadata?.startView, metadata?.endView]
+    let currentView = getCurrentBlock().view
+    return [counter, phase, metadata?.startView, metadata?.endView, currentView]
 }
 `
 
@@ -149,7 +150,7 @@ func (p *NetworkPoller) fetchEpochStatus(ctx context.Context) (uint64, error) {
 	}
 
 	arr, ok := result.(cadence.Array)
-	if !ok || len(arr.Values) < 4 {
+	if !ok || len(arr.Values) < 5 {
 		return 0, fmt.Errorf("unexpected epoch script result: %v", result)
 	}
 
@@ -157,18 +158,12 @@ func (p *NetworkPoller) fetchEpochStatus(ctx context.Context) (uint64, error) {
 	phase := npCadenceToUint64(arr.Values[1])
 	startView := npCadenceToUint64(arr.Values[2])
 	endView := npCadenceToUint64(arr.Values[3])
+	currentView := npCadenceToUint64(arr.Values[4])
 
-	// Get current view from latest block header
-	latestHeight, err := p.flowClient.GetLatestBlockHeight(ctx)
-	if err != nil {
-		return counter, fmt.Errorf("get latest block height: %w", err)
-	}
-
-	// Calculate progress
+	// Calculate progress using actual view numbers (not block height)
 	var progress float64
-	if endView > startView {
-		// Use block height as a proxy for view (not exact, but close enough for display)
-		progress = float64(latestHeight-startView) / float64(endView-startView) * 100
+	if endView > startView && currentView >= startView {
+		progress = float64(currentView-startView) / float64(endView-startView) * 100
 		progress = math.Max(0, math.Min(100, progress))
 	}
 
@@ -179,7 +174,7 @@ func (p *NetworkPoller) fetchEpochStatus(ctx context.Context) (uint64, error) {
 		"phase":          phase,
 		"start_view":     startView,
 		"end_view":       endView,
-		"current_view":   latestHeight,
+		"current_view":   currentView,
 		"updated_at":     now.Unix(),
 	}
 
