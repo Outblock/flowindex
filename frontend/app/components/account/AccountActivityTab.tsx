@@ -43,20 +43,10 @@ function getTimeSection(timestamp: string, now: Date): string {
 }
 
 // Module-level token metadata cache (persists across re-renders, shared across pages)
-// Pre-seeded with well-known tokens so icons render instantly before API responds
-const tokenMetaCache = new Map<string, TokenMetaEntry>([
-    ['A.1654653399040a61.FlowToken', { name: 'FLOW', symbol: 'FLOW', logo: 'https://raw.githubusercontent.com/onflow/FRW-Assets/refs/heads/main/ft/flow/logo.svg', type: 'ft' }],
-    ['A.05b67ba314000b2d.TSHOT', { name: 'TSHOT', symbol: 'TSHOT', logo: 'https://storage.googleapis.com/vaultopolis/TSHOT.png', type: 'ft' }],
-    ['A.d6f80565193ad727.stFlowToken', { name: 'stFlow', symbol: 'stFlow', logo: 'https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.d6f80565193ad727.stFlowToken/logo.svg', type: 'ft' }],
-    ['A.cfdd90d4a00f7b5b.TeleportedTetherToken', { name: 'tUSDT', symbol: 'tUSDT', logo: 'https://raw.githubusercontent.com/blocto/assets/main/color/flow/tusdt.svg', type: 'ft' }],
-    ['A.ead892083b3e2c6c.DapperUtilityCoin', { name: 'DUC', symbol: 'DUC', logo: 'https://github.com/onflow/FRW-Assets/blob/main/ft/DapperUtilityCoin/logo.png?raw=true', type: 'ft' }],
-    ['A.0b2a3299cc857e29.TopShot', { name: 'NBA Top Shot', symbol: 'TopShot', logo: 'https://nbatopshot.com/static/favicon/favicon.svg', type: 'nft', banner_image: 'https://nbatopshot.com/static/img/top-shot-logo-horizontal-white.svg' }],
-    ['A.e4cf4bdc1751c65d.AllDay', { name: 'NFL All Day', symbol: 'AllDay', logo: 'https://assets.nflallday.com/flow/catalogue/NFLAD_SQUARE.png', type: 'nft', banner_image: 'https://assets.nflallday.com/flow/catalogue/NFLAD_BANNER.png' }],
-    ['A.edf9df96c92f4595.Pinnacle', { name: 'Pinnacle', symbol: 'Pinnacle', logo: 'https://assets.disneypinnacle.com/on-chain/pinnacle.jpg', type: 'nft', banner_image: 'https://assets.disneypinnacle.com/on-chain/pinnacle-banner.jpeg' }],
-]);
+const tokenMetaCache = new Map<string, TokenMetaEntry>();
 let tokenMetaCacheLoaded = false;
 
-async function loadTokenMetaCache(): Promise<Map<string, TokenMetaEntry>> {
+export async function loadTokenMetaCache(): Promise<Map<string, TokenMetaEntry>> {
     if (tokenMetaCacheLoaded && tokenMetaCache.size > 0) return tokenMetaCache;
     try {
         const baseUrl = await resolveApiBaseUrl();
