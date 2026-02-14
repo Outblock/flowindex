@@ -61,3 +61,30 @@ func isHexChar(b byte) bool {
 	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f')
 }
 
+// normalizeEVMAddress normalizes EVM addresses to lowercase hex without 0x prefix.
+// EVM addresses are 20 bytes (40 hex chars).
+func normalizeEVMAddress(input string) string {
+	s := strings.ToLower(strings.TrimSpace(input))
+	if s == "" || s == "nil" || s == "<nil>" || s == "null" {
+		return ""
+	}
+	s = strings.TrimPrefix(s, "0x")
+	if s == "" {
+		return ""
+	}
+	// Trim non-hex suffixes.
+	end := 0
+	for end < len(s) && isHexChar(s[end]) {
+		end++
+	}
+	s = s[:end]
+	// EVM address is 20 bytes => 40 hex chars. Left-pad if shorter.
+	if len(s) > 40 {
+		return ""
+	}
+	if len(s) < 40 {
+		s = strings.Repeat("0", 40-len(s)) + s
+	}
+	return s
+}
+

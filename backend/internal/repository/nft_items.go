@@ -210,6 +210,7 @@ func (r *Repository) UpdateCollectionPublicPath(ctx context.Context, contractAdd
 }
 
 // ListNFTItems returns paginated NFT items for a collection.
+// Falls back to nft_ownership if nft_items has no metadata rows for this collection.
 func (r *Repository) ListNFTItems(ctx context.Context, contractAddr, contractName string, limit, offset int) ([]models.NFTItem, bool, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(contract_address, 'hex'), COALESCE(contract_name, ''), nft_id,
@@ -239,6 +240,43 @@ func (r *Repository) ListNFTItems(ctx context.Context, contractAddr, contractNam
 		); err != nil {
 			return nil, false, err
 		}
+		out = append(out, item)
+	}
+	hasMore := len(out) > limit
+	if hasMore {
+		out = out[:limit]
+	}
+	// Fallback: if nft_items has no metadata rows, derive items from nft_ownership.
+	if len(out) == 0 && offset == 0 {
+		return r.listNFTItemsFromOwnership(ctx, contractAddr, contractName, limit)
+	}
+	return out, hasMore, nil
+}
+
+// listNFTItemsFromOwnership returns stub NFTItem records derived from nft_ownership
+// for collections where the metadata worker hasn't populated nft_items yet.
+func (r *Repository) listNFTItemsFromOwnership(ctx context.Context, contractAddr, contractName string, limit int) ([]models.NFTItem, bool, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(contract_address, 'hex'), COALESCE(contract_name, ''), nft_id,
+			encode(owner, 'hex'), updated_at
+		FROM app.nft_ownership
+		WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)
+		  AND owner IS NOT NULL
+		ORDER BY nft_id ASC
+		LIMIT $3`,
+		hexToBytes(contractAddr), contractName, limit+1)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	var out []models.NFTItem
+	for rows.Next() {
+		var item models.NFTItem
+		var owner string
+		if err := rows.Scan(&item.ContractAddress, &item.ContractName, &item.NFTID, &owner, &item.UpdatedAt); err != nil {
+			return nil, false, err
+		}
+		item.Name = contractName + " #" + item.NFTID
 		out = append(out, item)
 	}
 	hasMore := len(out) > limit

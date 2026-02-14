@@ -538,7 +538,7 @@ func main() {
 			nftItemMetadataWorkers = append(nftItemMetadataWorkers, ingester.NewAsyncWorker(nftItemMetadataWorkerProcessor, repo, ingester.WorkerConfig{
 				RangeSize:    nftItemMetadataWorkerRange,
 				WorkerID:     fmt.Sprintf("%s-%d-nft-item-meta-%d", hostname, pid, i),
-				Dependencies: nftOwnershipDep,
+				Dependencies: nil, // No dependency — this worker is queue-based (ignores block heights), just needs nft_ownership rows to exist
 			}))
 		}
 		workerTypes = append(workerTypes, nftItemMetadataWorkerProcessor.Name())

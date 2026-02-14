@@ -178,8 +178,8 @@ func (w *StakingWorker) processNodeEvent(
 	}
 
 	// Always update first_seen_height
-	if node.FirstSeenHeight == 0 || int64(evt.BlockHeight) < node.FirstSeenHeight {
-		node.FirstSeenHeight = int64(evt.BlockHeight)
+	if node.FirstSeenHeight == 0 || evt.BlockHeight < node.FirstSeenHeight {
+		node.FirstSeenHeight = evt.BlockHeight
 	}
 
 	switch eventName {
@@ -248,7 +248,7 @@ func (w *StakingWorker) processEpochEvent(
 
 		// Use the event's block height as epoch start height.
 		// Note: firstView is a consensus view number, NOT a block height.
-		startHeight := int64(evt.BlockHeight)
+		startHeight := evt.BlockHeight
 
 		return &models.EpochStats{
 			Epoch:       epoch,

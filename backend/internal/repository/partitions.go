@@ -45,6 +45,16 @@ func (r *Repository) EnsureAppPartitions(ctx context.Context, minHeight, maxHeig
 	return nil
 }
 
+// EnsureDefiPartitions is a no-op; defi tables are not partitioned.
+func (r *Repository) EnsureDefiPartitions(ctx context.Context, minHeight, maxHeight uint64) error {
+	return nil
+}
+
+// EnsureStakingPartitions is a no-op; staking tables are not partitioned.
+func (r *Repository) EnsureStakingPartitions(ctx context.Context, minHeight, maxHeight uint64) error {
+	return nil
+}
+
 func (r *Repository) createPartitions(ctx context.Context, table string, minHeight, maxHeight, step uint64) error {
 	if step == 0 {
 		return fmt.Errorf("partition step must be > 0")
