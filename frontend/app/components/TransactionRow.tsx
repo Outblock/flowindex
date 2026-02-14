@@ -886,14 +886,19 @@ function deriveTransferPreview(tx: any, tokenMeta?: Map<string, TokenMetaEntry>)
         if (items.length > 0) return items;
     }
 
-    // Priority 4: tags hint — when tags say FT/NFT but no rich data available
+    // Priority 4: tags hint — derive label from contract_imports names
     const tags: string[] = tx.tags || [];
     const tagsSet = new Set(tags);
+    const imports: string[] = tx.contract_imports || [];
+    // Extract readable contract names (e.g. "A.xxx.FlowToken" → "FlowToken")
+    const contractNames = imports.map(c => formatTokenName(c)).filter(n => n && n !== 'Crypto' && n !== 'FungibleToken' && n !== 'NonFungibleToken');
     if (tagsSet.has('FT_TRANSFER') || tagsSet.has('FT_SENDER') || tagsSet.has('FT_RECEIVER')) {
-        items.push({ type: 'ft', icon: null, label: 'Token Transfer' });
+        const label = contractNames[0] || 'FT';
+        items.push({ type: 'ft', icon: null, label });
     }
     if (tagsSet.has('NFT_TRANSFER') || tagsSet.has('NFT_SENDER') || tagsSet.has('NFT_RECEIVER')) {
-        items.push({ type: 'nft', icon: null, label: 'NFT Transfer' });
+        const label = contractNames[0] || 'NFT';
+        items.push({ type: 'nft', icon: null, label });
     }
     return items;
 }
