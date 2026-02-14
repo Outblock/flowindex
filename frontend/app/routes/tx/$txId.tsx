@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1TransactionById } from '../../api/gen/find';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
@@ -22,6 +22,9 @@ SyntaxHighlighter.registerLanguage('cadence', swift);
 
 export const Route = createFileRoute('/tx/$txId')({
     component: TransactionDetail,
+    validateSearch: (search: Record<string, unknown>) => ({
+        tab: (search.tab as string) || undefined,
+    }),
     loader: async ({ params }) => {
         try {
             await ensureHeyApiConfigured();
@@ -231,7 +234,7 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
             )}
 
             {/* EVM hash links — show all EVM tx hashes from executions (or legacy field) */}
-            {hasEvm && !hasFT && !hasDefi && (() => {
+            {hasEvm && (() => {
                 const hashes: string[] = [];
                 if (transaction.evm_executions?.length > 0) {
                     for (const exec of transaction.evm_executions) {
@@ -297,16 +300,29 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
 
 function TransactionDetail() {
     const { txId } = Route.useParams();
+    const { tab: urlTab } = Route.useSearch();
+    const navigate = useNavigate();
     const { transaction, error: loaderError } = Route.useLoaderData();
     const error = transaction ? null : (loaderError || 'Transaction not found');
     const hasTransfers = transaction?.ft_transfers?.length > 0 || transaction?.defi_events?.length > 0;
+    const validTabs = ['transfers', 'script', 'events', 'evm'];
+    const defaultTab = hasTransfers ? 'transfers' : (transaction?.script ? 'script' : 'events');
     const [activeTab, setActiveTab] = useState(() =>
-        hasTransfers ? 'transfers' : (transaction?.script ? 'script' : 'events')
+        urlTab && validTabs.includes(urlTab) ? urlTab : defaultTab
     );
     const nowTick = useTimeTicker(20000);
     const { theme } = useTheme();
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
     const [expandedPayloads, setExpandedPayloads] = useState<Record<number, boolean>>({});
+
+    // Sync tab to URL
+    const switchTab = (tab: string) => {
+        setActiveTab(tab);
+        navigate({
+            search: (prev: any) => ({ ...prev, tab: tab === defaultTab ? undefined : tab }),
+            replace: true,
+        });
+    };
 
 
     // Convert byte arrays (arrays of numeric strings) to "0x..." hex strings for display
@@ -539,7 +555,7 @@ function TransactionDetail() {
                     <div className="flex border-b border-zinc-200 dark:border-white/10 mb-0 overflow-x-auto">
                         {hasTransfers && (
                             <button
-                                onClick={() => setActiveTab('transfers')}
+                                onClick={() => switchTab('transfers')}
                                 className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'transfers'
                                     ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
                                     : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
@@ -552,7 +568,7 @@ function TransactionDetail() {
                             </button>
                         )}
                         <button
-                            onClick={() => setActiveTab('script')}
+                            onClick={() => switchTab('script')}
                             className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'script'
                                 ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
                                 : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
@@ -564,7 +580,7 @@ function TransactionDetail() {
                             </span>
                         </button>
                         <button
-                            onClick={() => setActiveTab('events')}
+                            onClick={() => switchTab('events')}
                             className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'events'
                                 ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
                                 : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
@@ -577,7 +593,7 @@ function TransactionDetail() {
                         </button>
                         {transaction.is_evm && transaction.evm_executions?.length > 0 && (
                             <button
-                                onClick={() => setActiveTab('evm')}
+                                onClick={() => switchTab('evm')}
                                 className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'evm'
                                     ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
                                     : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
@@ -1037,12 +1053,39 @@ function TransactionDetail() {
                                                     </div>
                                                 </div>
 
-                                                {/* Collapsible Raw Event Payload */}
+                                                {/* Collapsible Decoded EVM Payload */}
                                                 {(() => {
+                                                    // Build decoded EVM payload from execution data
+                                                    const decodedPayload: Record<string, any> = {
+                                                        hash: exec.hash ? `0x${exec.hash.replace(/^0x/, '')}` : null,
+                                                        type: exec.type,
+                                                        from: exec.from ? `0x${exec.from.replace(/^0x/, '')}` : null,
+                                                        to: exec.to ? `0x${exec.to.replace(/^0x/, '')}` : null,
+                                                        value: exec.value || '0',
+                                                        nonce: exec.nonce,
+                                                        gas_limit: exec.gas_limit,
+                                                        gas_used: exec.gas_used,
+                                                        gas_price: exec.gas_price || '0',
+                                                        status: exec.status,
+                                                        position: exec.position,
+                                                        event_index: exec.event_index,
+                                                        block_number: exec.block_number,
+                                                        timestamp: exec.timestamp,
+                                                    };
+                                                    // Also include raw EVM-specific fields from matched event payload if present
                                                     const matchedEvent = transaction.events?.find(
                                                         (e: any) => e.event_index === exec.event_index
                                                     );
-                                                    if (!matchedEvent) return null;
+                                                    const eventPayload = matchedEvent?.values || matchedEvent?.payload || matchedEvent?.data;
+                                                    if (eventPayload) {
+                                                        const formatted = formatEventPayload(eventPayload);
+                                                        if (formatted.payload) decodedPayload.raw_tx_payload = formatted.payload;
+                                                        if (formatted.logs) decodedPayload.logs = formatted.logs;
+                                                        if (formatted.returnedData) decodedPayload.returned_data = formatted.returnedData;
+                                                        if (formatted.errorMessage) decodedPayload.error_message = formatted.errorMessage;
+                                                        if (formatted.errorCode && formatted.errorCode !== '0') decodedPayload.error_code = formatted.errorCode;
+                                                        if (formatted.contractAddress) decodedPayload.contract_address = formatted.contractAddress;
+                                                    }
                                                     const isExpanded = expandedPayloads[idx] ?? false;
                                                     return (
                                                         <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
@@ -1052,20 +1095,22 @@ function TransactionDetail() {
                                                             >
                                                                 <span className="text-[10px] text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                                                                     <Database className="h-3 w-3" />
-                                                                    Raw Event Payload
-                                                                    <span className="text-zinc-400 font-mono normal-case">
-                                                                        ({matchedEvent.type?.split('.').pop() || 'Event'} #{matchedEvent.event_index})
-                                                                    </span>
+                                                                    Decoded EVM Payload
                                                                 </span>
-                                                                <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                                                <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                                                             </button>
-                                                            {isExpanded && (
-                                                                <div className="p-4 bg-zinc-50 dark:bg-black/40 border-t border-zinc-200 dark:border-white/5 max-h-[400px] overflow-y-auto">
-                                                                    <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
-                                                                        {JSON.stringify(formatEventPayload(matchedEvent.values || matchedEvent.payload || matchedEvent.data), null, 2)}
-                                                                    </pre>
+                                                            <div
+                                                                className="grid transition-[grid-template-rows] duration-200 ease-out"
+                                                                style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+                                                            >
+                                                                <div className="overflow-hidden">
+                                                                    <div className="p-4 bg-zinc-50 dark:bg-black/40 border-t border-zinc-200 dark:border-white/5 max-h-[400px] overflow-y-auto">
+                                                                        <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+                                                                            {JSON.stringify(decodedPayload, null, 2)}
+                                                                        </pre>
+                                                                    </div>
                                                                 </div>
-                                                            )}
+                                                            </div>
                                                         </div>
                                                     );
                                                 })()}
