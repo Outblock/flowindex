@@ -4,10 +4,12 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddress, getFlowV1AccountByAddressTransaction } from '../../api/gen/find';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Shield, Lock, Database, Check, TrendingUp
+    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
+import Avatar from 'boring-avatars';
+import { colorsFromAddress } from '../../components/AddressLink';
 import { normalizeAddress } from '../../components/account/accountUtils';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import type { StakingInfo, StorageInfo } from '../../../cadence/cadence.gen';
@@ -17,14 +19,14 @@ import { AccountNFTsTab } from '../../components/account/AccountNFTsTab';
 import { AccountKeysTab } from '../../components/account/AccountInfoTab';
 import { AccountContractsTab } from '../../components/account/AccountContractsTab';
 import { AccountStorageTab } from '../../components/account/AccountStorageTab';
-import { AccountHybridCustodyTab } from '../../components/account/AccountHybridCustodyTab';
+import { AccountLinkedAccountsTab } from '../../components/account/AccountLinkedAccountsTab';
 import { AccountBalanceTab } from '../../components/account/AccountBalanceTab';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { cn } from '../../lib/utils';
 
-const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'keys', 'contracts', 'storage', 'custody'] as const;
+const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'keys', 'contracts', 'storage', 'linked'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
 const VALID_SUBTABS = ['all', 'ft', 'nft', 'scheduled'] as const;
@@ -227,7 +229,7 @@ function AccountDetail() {
         { id: 'keys' as const, label: 'Public Keys', icon: Key },
         { id: 'contracts' as const, label: `Contracts (${account.contracts?.length || 0})`, icon: FileText },
         { id: 'storage' as const, label: 'Storage', icon: HardDrive },
-        { id: 'custody' as const, label: 'Hybrid Custody', icon: Shield },
+        { id: 'linked' as const, label: 'Linked Accounts', icon: Link2 },
         { id: 'balance' as const, label: 'Balance', icon: TrendingUp },
     ];
 
@@ -245,7 +247,17 @@ function AccountDetail() {
                 </Link>
 
                 <PageHeader
-                    title="Account"
+                    title={
+                        <div className="flex items-center gap-4">
+                            <Avatar
+                                size={64}
+                                name={normalizedAddress}
+                                variant="beam"
+                                colors={colorsFromAddress(normalizedAddress)}
+                            />
+                            <span>Account</span>
+                        </div>
+                    }
                     subtitle={
                         <div className="flex items-center gap-1 group">
                             {normalizedAddress}
@@ -374,7 +386,7 @@ function AccountDetail() {
                         {activeTab === 'keys' && <AccountKeysTab account={account} />}
                         {activeTab === 'contracts' && <AccountContractsTab address={address} contracts={account.contracts || []} />}
                         {activeTab === 'storage' && <AccountStorageTab address={address} />}
-                        {activeTab === 'custody' && <AccountHybridCustodyTab address={address} />}
+                        {activeTab === 'linked' && <AccountLinkedAccountsTab address={address} />}
                     </div>
                 </div>
             </div>

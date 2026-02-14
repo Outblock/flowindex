@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Coins, ExternalLink } from 'lucide-react';
-import { AddressLink } from '../AddressLink';
+import { Link } from '@tanstack/react-router';
+import { Coins, ExternalLink, Filter } from 'lucide-react';
 import type { FTVaultInfo } from '../../../cadence/cadence.gen';
 import { normalizeAddress, formatShort, getTokenLogoURL } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
@@ -65,13 +65,29 @@ export function AccountTokensTab({ address }: Props) {
         return map;
     }, [backendFTs]);
 
+    const [hideZero, setHideZero] = useState(true);
+
+    const displayTokens = useMemo(() => {
+        let list = [...tokens];
+        if (hideZero) list = list.filter(t => t.balance != null && Number(t.balance) > 0);
+        list.sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
+        return list;
+    }, [tokens, hideZero]);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 flex items-center gap-2">
                     <Coins className="w-4 h-4" />
-                    Fungible Tokens ({tokens.length})
+                    Fungible Tokens ({displayTokens.length}{hideZero && tokens.length !== displayTokens.length ? ` / ${tokens.length}` : ''})
                 </h3>
+                <button
+                    onClick={() => setHideZero(prev => !prev)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] uppercase tracking-widest border rounded-sm transition-colors ${hideZero ? 'border-nothing-green-dark/30 dark:border-nothing-green/30 text-nothing-green-dark dark:text-nothing-green bg-nothing-green/5' : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                >
+                    <Filter className="w-3 h-3" />
+                    {hideZero ? 'Hide Zero' : 'Show All'}
+                </button>
             </div>
 
             {error && (
@@ -98,7 +114,7 @@ export function AccountTokensTab({ address }: Props) {
                     </div>
                 ) : (
                     <AnimatePresence mode="popLayout">
-                        {tokens.map((t: FTVaultInfo, i: number) => {
+                        {displayTokens.map((t: FTVaultInfo, i: number) => {
                             const identifier = `A.${normalizeAddress(t.contractAddress).replace(/^0x/, '')}.${t.contractName}`;
                             const meta = metaMap[identifier];
                             const logoUrl = meta?.logo || getTokenLogoURL(t);
@@ -136,7 +152,14 @@ export function AccountTokensTab({ address }: Props) {
                                                     {evmAddr && <EVMBridgeBadge evmAddress={evmAddr} />}
                                                 </div>
                                                 <div className="flex items-center gap-1 mt-0.5">
-                                                    <AddressLink address={t.contractAddress} size={12} className="text-[10px] text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green" />
+                                                    <Link
+                                                        to="/accounts/$address"
+                                                        params={{ address: normalizeAddress(t.contractAddress) }}
+                                                        className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-1 transition-colors"
+                                                    >
+                                                        {formatShort(t.contractAddress)}
+                                                        <ExternalLink className="w-2.5 h-2.5" />
+                                                    </Link>
                                                     <span className="text-[10px] text-zinc-300 dark:text-zinc-600">•</span>
                                                     <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[100px]">{t.contractName}</span>
                                                 </div>
@@ -156,7 +179,7 @@ export function AccountTokensTab({ address }: Props) {
                 )}
             </div>
 
-            {tokens.length === 0 && !loading && (
+            {displayTokens.length === 0 && !loading && (
                 <GlassCard className="text-center py-12">
                     <Coins className="w-12 h-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
                     <div className="text-zinc-500 italic">No fungible tokens found</div>

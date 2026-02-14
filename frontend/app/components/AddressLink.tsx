@@ -4,7 +4,7 @@ import { normalizeAddress, formatShort } from './account/accountUtils';
 
 /** Derive 5 colors from a Flow address (16 hex chars after 0x).
  *  Split into 3 base colors from the address, plus 2 mixed variants. */
-function colorsFromAddress(addr: string): string[] {
+export function colorsFromAddress(addr: string): string[] {
     const hex = addr.replace(/^0x/, '').padEnd(16, '0').slice(0, 16);
     // 3 segments of ~5-6 hex chars each → 3 base colors
     const c1 = `#${hex.slice(0, 6)}`;
