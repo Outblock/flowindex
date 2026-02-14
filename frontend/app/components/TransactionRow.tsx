@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Loader2, Globe } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Loader2, Globe, Flame, Droplets, CircleDollarSign, Coins } from 'lucide-react';
 import { normalizeAddress, formatShort } from './account/accountUtils';
 import { formatRelativeTime } from '../lib/time';
 import { ensureHeyApiConfigured } from '../api/heyapi';
@@ -594,8 +594,13 @@ const tagStyles: Record<string, string> = {
     CONTRACT_DEPLOY:  'text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10',
     ACCOUNT_CREATED:  'text-cyan-600 dark:text-cyan-400 border-cyan-300 dark:border-cyan-500/30 bg-cyan-50 dark:bg-cyan-500/10',
     KEY_UPDATE:       'text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10',
+    MARKETPLACE:      'text-pink-600 dark:text-pink-400 border-pink-300 dark:border-pink-500/30 bg-pink-50 dark:bg-pink-500/10',
     STAKING:          'text-violet-600 dark:text-violet-400 border-violet-300 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10',
+    LIQUID_STAKING:   'text-violet-600 dark:text-violet-400 border-violet-300 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10',
     SWAP:             'text-teal-600 dark:text-teal-400 border-teal-300 dark:border-teal-500/30 bg-teal-50 dark:bg-teal-500/10',
+    LIQUIDITY:        'text-teal-600 dark:text-teal-400 border-teal-300 dark:border-teal-500/30 bg-teal-50 dark:bg-teal-500/10',
+    TOKEN_MINT:       'text-lime-600 dark:text-lime-400 border-lime-300 dark:border-lime-500/30 bg-lime-50 dark:bg-lime-500/10',
+    TOKEN_BURN:       'text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10',
 };
 
 const defaultTagStyle = 'text-zinc-500 dark:text-zinc-500 border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5';
@@ -612,8 +617,13 @@ const tagIcons: Record<string, React.ComponentType<{ className?: string }>> = {
     CONTRACT_DEPLOY:  FileCode,
     ACCOUNT_CREATED:  UserPlus,
     KEY_UPDATE:       Key,
-    STAKING:          Repeat,
+    MARKETPLACE:      ShoppingBag,
+    STAKING:          Coins,
+    LIQUID_STAKING:   Droplets,
     SWAP:             ArrowRightLeft,
+    LIQUIDITY:        Droplets,
+    TOKEN_MINT:       CircleDollarSign,
+    TOKEN_BURN:       Flame,
 };
 
 function formatTagLabel(tag: string): string {
