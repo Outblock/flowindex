@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Image, Database, Layers, LayoutGrid, LayoutList } from 'lucide-react';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
@@ -268,12 +269,7 @@ function NFTs() {
                           </td>
                           <td className="p-4">
                             {addr ? (
-                              <Link
-                                to={`/accounts/${addr}`}
-                                className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
-                              >
-                                {addr}
-                              </Link>
+                              <AddressLink address={addr} prefixLen={20} suffixLen={0} />
                             ) : (
                               <span className="text-zinc-500 font-mono text-sm">N/A</span>
                             )}

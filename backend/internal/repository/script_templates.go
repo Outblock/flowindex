@@ -9,14 +9,16 @@ import (
 
 // ScriptTemplate represents a row in app.script_templates.
 type ScriptTemplate struct {
-	ScriptHash    string    `json:"script_hash"`
-	Category      string    `json:"category"`
-	Label         string    `json:"label"`
-	Description   string    `json:"description"`
-	TxCount       int64     `json:"tx_count"`
-	ScriptPreview string    `json:"script_preview,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ScriptHash     string    `json:"script_hash"`
+	NormalizedHash string    `json:"normalized_hash,omitempty"`
+	Category       string    `json:"category"`
+	Label          string    `json:"label"`
+	Description    string    `json:"description"`
+	TxCount        int64     `json:"tx_count"`
+	VariantCount   int       `json:"variant_count,omitempty"` // number of script_hash variants sharing the same normalized_hash
+	ScriptPreview  string    `json:"script_preview,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // ScriptTemplateStats holds coverage statistics.
@@ -37,37 +39,55 @@ type TxScriptTemplate struct {
 	Description string
 }
 
-// AdminListScriptTemplates returns script templates sorted by tx_count DESC with optional filters.
+// AdminListScriptTemplates returns script templates sorted by aggregated tx_count DESC.
+// When normalized_hash is available, rows sharing the same normalized_hash are grouped:
+// we pick one representative row per group and SUM their tx_counts.
 func (r *Repository) AdminListScriptTemplates(ctx context.Context, search, category string, labeledOnly, unlabeledOnly bool, limit, offset int) ([]ScriptTemplate, error) {
+	// Use a CTE to aggregate by normalized_hash (falling back to script_hash if null).
 	query := `
-		SELECT st.script_hash, COALESCE(st.category, ''), COALESCE(st.label, ''),
-		       COALESCE(st.description, ''), st.tx_count,
+		WITH grouped AS (
+			SELECT
+				COALESCE(st.normalized_hash, st.script_hash) AS group_key,
+				(ARRAY_AGG(st.script_hash ORDER BY st.tx_count DESC))[1] AS script_hash,
+				MAX(COALESCE(st.normalized_hash, '')) AS normalized_hash,
+				MAX(COALESCE(st.category, ''))  AS category,
+				MAX(COALESCE(st.label, ''))     AS label,
+				MAX(COALESCE(st.description, '')) AS description,
+				SUM(st.tx_count)                AS tx_count,
+				COUNT(*)                        AS variant_count,
+				MIN(st.created_at)              AS created_at,
+				MAX(st.updated_at)              AS updated_at
+			FROM app.script_templates st
+			GROUP BY COALESCE(st.normalized_hash, st.script_hash)
+		)
+		SELECT g.script_hash, g.normalized_hash, g.category, g.label, g.description,
+		       g.tx_count, g.variant_count,
 		       COALESCE(LEFT(s.script_text, 200), ''),
-		       st.created_at, st.updated_at
-		FROM app.script_templates st
-		LEFT JOIN raw.scripts s ON s.script_hash = st.script_hash
+		       g.created_at, g.updated_at
+		FROM grouped g
+		LEFT JOIN raw.scripts s ON s.script_hash = g.script_hash
 		WHERE 1=1`
 	args := []interface{}{}
 	argN := 1
 
 	if search != "" {
-		query += fmt.Sprintf(` AND (st.script_hash ILIKE $%d OR st.label ILIKE $%d OR st.category ILIKE $%d OR s.script_text ILIKE $%d)`, argN, argN, argN, argN)
+		query += fmt.Sprintf(` AND (g.script_hash ILIKE $%d OR g.label ILIKE $%d OR g.category ILIKE $%d OR s.script_text ILIKE $%d)`, argN, argN, argN, argN)
 		args = append(args, "%"+search+"%")
 		argN++
 	}
 	if category != "" {
-		query += fmt.Sprintf(` AND st.category = $%d`, argN)
+		query += fmt.Sprintf(` AND g.category = $%d`, argN)
 		args = append(args, category)
 		argN++
 	}
 	if labeledOnly {
-		query += ` AND st.category IS NOT NULL AND st.category != ''`
+		query += ` AND g.category IS NOT NULL AND g.category != ''`
 	}
 	if unlabeledOnly {
-		query += ` AND (st.category IS NULL OR st.category = '')`
+		query += ` AND (g.category IS NULL OR g.category = '')`
 	}
 
-	query += ` ORDER BY st.tx_count DESC`
+	query += ` ORDER BY g.tx_count DESC`
 	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argN, argN+1)
 	args = append(args, limit, offset)
 
@@ -80,8 +100,8 @@ func (r *Repository) AdminListScriptTemplates(ctx context.Context, search, categ
 	var result []ScriptTemplate
 	for rows.Next() {
 		var t ScriptTemplate
-		if err := rows.Scan(&t.ScriptHash, &t.Category, &t.Label,
-			&t.Description, &t.TxCount, &t.ScriptPreview,
+		if err := rows.Scan(&t.ScriptHash, &t.NormalizedHash, &t.Category, &t.Label,
+			&t.Description, &t.TxCount, &t.VariantCount, &t.ScriptPreview,
 			&t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -91,12 +111,32 @@ func (r *Repository) AdminListScriptTemplates(ctx context.Context, search, categ
 }
 
 // AdminUpdateScriptTemplate updates category/label/description for a script hash.
+// If the template has a normalized_hash, propagate the classification to all variants.
 func (r *Repository) AdminUpdateScriptTemplate(ctx context.Context, hash, category, label, description string) error {
+	cat := nilIfEmpty(category)
+	lbl := nilIfEmpty(label)
+	desc := nilIfEmpty(description)
+
+	// First, check if this template has a normalized_hash.
+	var normHash *string
+	_ = r.db.QueryRow(ctx, `SELECT normalized_hash FROM app.script_templates WHERE script_hash = $1`, hash).Scan(&normHash)
+
+	if normHash != nil && *normHash != "" {
+		// Propagate to all variants sharing the same normalized_hash.
+		_, err := r.db.Exec(ctx, `
+			UPDATE app.script_templates
+			SET category = $1, label = $2, description = $3, updated_at = NOW()
+			WHERE normalized_hash = $4`,
+			cat, lbl, desc, *normHash)
+		return err
+	}
+
+	// Fallback: update only the specific hash.
 	_, err := r.db.Exec(ctx, `
 		UPDATE app.script_templates
 		SET category = $1, label = $2, description = $3, updated_at = NOW()
 		WHERE script_hash = $4`,
-		nilIfEmpty(category), nilIfEmpty(label), nilIfEmpty(description), hash)
+		cat, lbl, desc, hash)
 	return err
 }
 
@@ -121,8 +161,8 @@ func (r *Repository) AdminGetScriptTemplateStats(ctx context.Context) (*ScriptTe
 	return &stats, nil
 }
 
-// AdminRefreshScriptTemplateCounts inserts all script hashes from raw.scripts
-// and updates tx_count from raw.transactions.
+// AdminRefreshScriptTemplateCounts inserts all script hashes from raw.scripts,
+// updates tx_count from raw.transactions, and backfills normalized_hash.
 func (r *Repository) AdminRefreshScriptTemplateCounts(ctx context.Context) (int64, error) {
 	// Insert missing hashes
 	_, err := r.db.Exec(ctx, `
@@ -147,7 +187,69 @@ func (r *Repository) AdminRefreshScriptTemplateCounts(ctx context.Context) (int6
 	if err != nil {
 		return 0, fmt.Errorf("update counts: %w", err)
 	}
+
+	// Backfill normalized_hash for templates that don't have one yet.
+	if err := r.backfillNormalizedHashes(ctx); err != nil {
+		return tag.RowsAffected(), fmt.Errorf("backfill normalized hashes: %w", err)
+	}
+
 	return tag.RowsAffected(), nil
+}
+
+// backfillNormalizedHashes computes normalized_hash for script_templates missing it.
+func (r *Repository) backfillNormalizedHashes(ctx context.Context) error {
+	rows, err := r.db.Query(ctx, `
+		SELECT st.script_hash, s.script_text
+		FROM app.script_templates st
+		JOIN raw.scripts s ON s.script_hash = st.script_hash
+		WHERE st.normalized_hash IS NULL AND s.script_text IS NOT NULL`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type pair struct {
+		scriptHash     string
+		normalizedHash string
+	}
+	var pairs []pair
+	for rows.Next() {
+		var hash, text string
+		if err := rows.Scan(&hash, &text); err != nil {
+			return err
+		}
+		nh := NormalizedScriptHash(text)
+		if nh != "" {
+			pairs = append(pairs, pair{hash, nh})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Batch update in chunks.
+	for i := 0; i < len(pairs); i += 500 {
+		end := i + 500
+		if end > len(pairs) {
+			end = len(pairs)
+		}
+		hashes := make([]string, 0, end-i)
+		norms := make([]string, 0, end-i)
+		for _, p := range pairs[i:end] {
+			hashes = append(hashes, p.scriptHash)
+			norms = append(norms, p.normalizedHash)
+		}
+		_, err := r.db.Exec(ctx, `
+			UPDATE app.script_templates st
+			SET normalized_hash = u.normalized_hash
+			FROM UNNEST($1::text[], $2::text[]) AS u(script_hash, normalized_hash)
+			WHERE st.script_hash = u.script_hash`,
+			hashes, norms)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // AdminGetScriptText returns the full script text for a given hash.

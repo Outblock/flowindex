@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from '@tanstack/react-router';
 import { Coins, ExternalLink } from 'lucide-react';
+import { AddressLink } from '../AddressLink';
 import type { FTVaultInfo } from '../../../cadence/cadence.gen';
 import { normalizeAddress, formatShort, getTokenLogoURL } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
@@ -136,14 +136,7 @@ export function AccountTokensTab({ address }: Props) {
                                                     {evmAddr && <EVMBridgeBadge evmAddress={evmAddr} />}
                                                 </div>
                                                 <div className="flex items-center gap-1 mt-0.5">
-                                                    <Link
-                                                        to="/accounts/$address"
-                                                        params={{ address: normalizeAddress(t.contractAddress) }}
-                                                        className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-1 transition-colors"
-                                                    >
-                                                        {formatShort(t.contractAddress)}
-                                                        <ExternalLink className="w-2.5 h-2.5" />
-                                                    </Link>
+                                                    <AddressLink address={t.contractAddress} size={12} className="text-[10px] text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green" />
                                                     <span className="text-[10px] text-zinc-300 dark:text-zinc-600">•</span>
                                                     <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[100px]">{t.contractName}</span>
                                                 </div>

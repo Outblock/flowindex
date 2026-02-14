@@ -23,16 +23,19 @@ func (s *Server) handleAdminListScriptTemplates(w http.ResponseWriter, r *http.R
 	}
 	out := make([]map[string]interface{}, 0, len(templates))
 	for _, t := range templates {
-		out = append(out, map[string]interface{}{
-			"script_hash":    t.ScriptHash,
-			"category":       t.Category,
-			"label":          t.Label,
-			"description":    t.Description,
-			"tx_count":       t.TxCount,
-			"script_preview": t.ScriptPreview,
-			"created_at":     formatTime(t.CreatedAt),
-			"updated_at":     formatTime(t.UpdatedAt),
-		})
+		row := map[string]interface{}{
+			"script_hash":     t.ScriptHash,
+			"normalized_hash": t.NormalizedHash,
+			"category":        t.Category,
+			"label":           t.Label,
+			"description":     t.Description,
+			"tx_count":        t.TxCount,
+			"variant_count":   t.VariantCount,
+			"script_preview":  t.ScriptPreview,
+			"created_at":      formatTime(t.CreatedAt),
+			"updated_at":      formatTime(t.UpdatedAt),
+		}
+		out = append(out, row)
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }

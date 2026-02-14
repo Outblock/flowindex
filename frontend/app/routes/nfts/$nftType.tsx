@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
+import { AddressLink } from '../../components/AddressLink';
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Image, Users, ArrowRightLeft, ArrowLeft, Grid3X3, Search } from 'lucide-react';
@@ -318,9 +319,7 @@ function NFTCollectionDetailInner() {
             <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Contract</p>
             <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
               {addr ? (
-                <Link to={`/accounts/${addr}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
-                  {addr}
-                </Link>
+                <AddressLink address={addr} prefixLen={20} suffixLen={0} />
               ) : 'N/A'}
             </p>
           </GlassCard>
@@ -477,9 +476,7 @@ function NFTCollectionDetailInner() {
                                   className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
                                 >
                                   <td className="p-4">
-                                    <Link to={`/accounts/${a}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                      {a}
-                                    </Link>
+                                    <AddressLink address={a} prefixLen={20} suffixLen={0} />
                                   </td>
                                   <td className="p-4 text-right">
                                     <span className="font-mono text-sm bg-zinc-100 dark:bg-white/10 px-2 py-1 rounded">
@@ -553,16 +550,12 @@ function NFTCollectionDetailInner() {
                                   </td>
                                   <td className="p-4">
                                     {from ? (
-                                      <Link to={`/accounts/${from}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
-                                        {from.slice(0, 14)}...
-                                      </Link>
+                                      <AddressLink address={from} />
                                     ) : <span className="text-zinc-500">—</span>}
                                   </td>
                                   <td className="p-4">
                                     {to ? (
-                                      <Link to={`/accounts/${to}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
-                                        {to.slice(0, 14)}...
-                                      </Link>
+                                      <AddressLink address={to} />
                                     ) : <span className="text-zinc-500">—</span>}
                                   </td>
                                   <td className="p-4">

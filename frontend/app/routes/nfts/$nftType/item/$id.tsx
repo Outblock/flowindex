@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { AddressLink } from '../../../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Package, ArrowRightLeft, ExternalLink, Calendar, Hash, User, Shield } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
@@ -127,17 +128,15 @@ function NFTItemInner() {
             <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Current Owner</p>
             <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
               {owner ? (
-                <>
-                  <Link to="/accounts/$address" params={{ address: owner }} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
-                    {owner}
-                  </Link>
+                <span className="flex items-center gap-1">
+                  <AddressLink address={owner} prefixLen={20} suffixLen={0} />
                   <CopyButton
                     content={owner}
                     variant="ghost"
                     size="xs"
-                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1"
+                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
                   />
-                </>
+                </span>
               ) : (
                 '—'
               )}
@@ -219,9 +218,7 @@ function NFTItemInner() {
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <Link to={`/accounts/${from}`} className="font-mono text-xs text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                {from}
-                              </Link>
+                              <AddressLink address={from} prefixLen={20} suffixLen={0} className="text-xs" />
                               <CopyButton
                                 content={from}
                                 variant="ghost"
@@ -232,9 +229,7 @@ function NFTItemInner() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <Link to={`/accounts/${to}`} className="font-mono text-xs text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                {to}
-                              </Link>
+                              <AddressLink address={to} prefixLen={20} suffixLen={0} className="text-xs" />
                               <CopyButton
                                 content={to}
                                 variant="ghost"

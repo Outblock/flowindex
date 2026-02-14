@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { AddressLink } from '../../components/AddressLink';
 import { useState, lazy, Suspense } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1TransactionById } from '../../api/gen/find';
@@ -78,9 +79,7 @@ function FlowRow({ from, to, amount, symbol, logo, badge, formatAddr }: {
             {/* FROM */}
             <div className="flex items-center gap-2 px-3 py-2.5 min-w-0 flex-shrink-0">
                 {from ? (
-                    <Link to={`/accounts/${from}` as any} className="text-[11px] font-mono text-nothing-green-dark dark:text-nothing-green hover:underline truncate">
-                        {formatAddr(from)}
-                    </Link>
+                    <AddressLink address={from} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" />
                 ) : (
                     <span className="text-[11px] text-zinc-400 italic">Mint</span>
                 )}
@@ -97,9 +96,7 @@ function FlowRow({ from, to, amount, symbol, logo, badge, formatAddr }: {
             {/* TO */}
             <div className="flex items-center gap-2 px-3 py-2.5 min-w-0 flex-shrink-0">
                 {to ? (
-                    <Link to={`/accounts/${to}` as any} className="text-[11px] font-mono text-nothing-green-dark dark:text-nothing-green hover:underline truncate">
-                        {formatAddr(to)}
-                    </Link>
+                    <AddressLink address={to} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" />
                 ) : (
                     <span className="text-[11px] text-zinc-400 italic">Burn</span>
                 )}
@@ -439,9 +436,7 @@ function TransactionDetail() {
                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Payer</p>
                                     <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-2.5 flex items-center justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-colors rounded-sm">
                                         <div className="flex items-center gap-1 min-w-0">
-                                            <Link to={`/accounts/${formatAddress(transaction.payer)}` as any} className="text-xs text-nothing-green-dark dark:text-nothing-green hover:underline break-all font-mono truncate">
-                                                {formatAddress(transaction.payer)}
-                                            </Link>
+                                            <AddressLink address={formatAddress(transaction.payer)} prefixLen={20} suffixLen={0} className="text-xs" />
                                             <CopyButton
                                                 content={formatAddress(transaction.payer)}
                                                 variant="ghost"
@@ -462,9 +457,7 @@ function TransactionDetail() {
                                     </p>
                                     <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-2.5 flex items-center hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm">
                                         <div className="flex items-center gap-1 min-w-0">
-                                            <Link to={`/accounts/${formatAddress(transaction.proposer)}` as any} className="text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white break-all font-mono truncate">
-                                                {formatAddress(transaction.proposer)}
-                                            </Link>
+                                            <AddressLink address={formatAddress(transaction.proposer)} prefixLen={20} suffixLen={0} className="text-xs" />
                                             <CopyButton
                                                 content={formatAddress(transaction.proposer)}
                                                 variant="ghost"
@@ -487,9 +480,7 @@ function TransactionDetail() {
                                         <div className="flex flex-col gap-1.5">
                                             {transaction.authorizers.map((auth, idx) => (
                                                 <div key={`${auth}-${idx}`} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-2.5 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm flex items-center gap-1 group">
-                                                    <Link to={`/accounts/${formatAddress(auth)}` as any} className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white break-all font-mono truncate">
-                                                        {formatAddress(auth)}
-                                                    </Link>
+                                                    <AddressLink address={formatAddress(auth)} prefixLen={20} suffixLen={0} className="text-xs" />
                                                     <CopyButton
                                                         content={formatAddress(auth)}
                                                         variant="ghost"
@@ -706,25 +697,21 @@ function TransactionDetail() {
                                                         </div>
                                                         <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
                                                             {ft.from_address && (
-                                                                <span>
+                                                                <span className="inline-flex items-center gap-1">
                                                                     From{' '}
-                                                                    <Link to={`/accounts/${ft.from_address}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
-                                                                        {ft.from_address?.slice(0, 8)}...{ft.from_address?.slice(-4)}
-                                                                    </Link>
+                                                                    <AddressLink address={ft.from_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
                                                                     {ft.from_coa_flow_address && (
-                                                                        <span className="text-purple-500 ml-1">(COA → <Link to={`/accounts/${ft.from_coa_flow_address}` as any} className="hover:underline font-mono">{ft.from_coa_flow_address?.slice(0, 8)}...</Link>)</span>
+                                                                        <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={ft.from_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
                                                                     )}
                                                                 </span>
                                                             )}
                                                             {ft.from_address && ft.to_address && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
                                                             {ft.to_address && (
-                                                                <span>
+                                                                <span className="inline-flex items-center gap-1">
                                                                     To{' '}
-                                                                    <Link to={`/accounts/${ft.to_address}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
-                                                                        {ft.to_address?.slice(0, 8)}...{ft.to_address?.slice(-4)}
-                                                                    </Link>
+                                                                    <AddressLink address={ft.to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
                                                                     {ft.to_coa_flow_address && (
-                                                                        <span className="text-purple-500 ml-1">(COA → <Link to={`/accounts/${ft.to_coa_flow_address}` as any} className="hover:underline font-mono">{ft.to_coa_flow_address?.slice(0, 8)}...</Link>)</span>
+                                                                        <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={ft.to_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
                                                                     )}
                                                                 </span>
                                                             )}
@@ -881,12 +868,14 @@ function TransactionDetail() {
                                                     </p>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase">Contract</span>
-                                                        <Link
-                                                            to={`/accounts/${formatAddress(event.contract_address)}` as any}
-                                                            className="text-[10px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors underline decoration-zinc-300 dark:decoration-white/10 underline-offset-2"
-                                                        >
-                                                            {formatAddress(event.contract_address) || 'System'} {event.contract_name ? `(${event.contract_name})` : ''}
-                                                        </Link>
+                                                        {formatAddress(event.contract_address) ? (
+                                                            <span className="inline-flex items-center gap-1">
+                                                                <AddressLink address={formatAddress(event.contract_address)} size={12} className="text-[10px]" />
+                                                                {event.contract_name ? <span className="text-[10px] text-zinc-400">({event.contract_name})</span> : ''}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-zinc-500">System {event.contract_name ? `(${event.contract_name})` : ''}</span>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <span className="text-[10px] text-zinc-600 dark:text-zinc-700 font-mono bg-zinc-100 dark:bg-white/5 px-2 py-0.5 rounded uppercase">

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Loader2, Globe, Flame, Droplets, CircleDollarSign, Coins } from 'lucide-react';
 import { normalizeAddress, formatShort } from './account/accountUtils';
+import { AddressLink } from './AddressLink';
 import { formatRelativeTime } from '../lib/time';
 import { ensureHeyApiConfigured } from '../api/heyapi';
 import { getFlowV1TransactionById } from '../api/gen/find/sdk.gen';
@@ -471,23 +472,11 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                         {createdAccounts.map((addr, i) => (
                             <div key={i} className="flex items-center gap-2 text-xs">
                                 <UserPlus className="h-3 w-3 text-cyan-500 flex-shrink-0" />
-                                <Link
-                                    to={`/accounts/${normalizeAddress(addr)}` as any}
-                                    className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                                >
-                                    0x{normalizeAddress(addr)}
-                                </Link>
+                                <AddressLink address={addr} prefixLen={20} suffixLen={0} onClick={(e) => e.stopPropagation()} />
                                 {(tx.payer || tx.authorizers?.[0]) && (
                                     <span className="text-zinc-400 text-[10px]">
                                         by{' '}
-                                        <Link
-                                            to={`/accounts/${normalizeAddress(tx.payer || tx.authorizers[0])}` as any}
-                                            className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                                        >
-                                            {formatShort(tx.payer || tx.authorizers[0])}
-                                        </Link>
+                                        <AddressLink address={tx.payer || tx.authorizers[0]} size={14} onClick={(e) => e.stopPropagation()} />
                                     </span>
                                 )}
                             </div>
@@ -530,18 +519,14 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                                 {ft.from_address && (
                                     <span className="text-zinc-400 text-[10px]">
                                         from{' '}
-                                        <Link to={`/accounts/${ft.from_address}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                                            {formatShort(ft.from_address, 8, 4)}
-                                        </Link>
+                                        <AddressLink address={ft.from_address} prefixLen={8} suffixLen={4} size={14} onClick={(e) => e.stopPropagation()} />
                                     </span>
                                 )}
                                 {ft.from_address && ft.to_address && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
                                 {ft.to_address && (
                                     <span className="text-zinc-400 text-[10px]">
                                         to{' '}
-                                        <Link to={`/accounts/${ft.to_address}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                                            {formatShort(ft.to_address, 8, 4)}
-                                        </Link>
+                                        <AddressLink address={ft.to_address} prefixLen={8} suffixLen={4} size={14} onClick={(e) => e.stopPropagation()} />
                                     </span>
                                 )}
                             </div>
@@ -572,9 +557,7 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                                     {f.counterparty && (
                                         <span className="text-zinc-400 text-[10px]">
                                             {isOut ? 'to' : 'from'}{' '}
-                                            <Link to={`/accounts/${f.counterparty}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                                                {formatShort(f.counterparty)}
-                                            </Link>
+                                            <AddressLink address={f.counterparty} size={14} onClick={(e) => e.stopPropagation()} />
                                         </span>
                                     )}
                                 </div>
@@ -643,18 +626,14 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                                             {nt.from_address && (
                                                 <span>
                                                     from{' '}
-                                                    <Link to={`/accounts/${nt.from_address}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                                                        {formatShort(nt.from_address, 8, 4)}
-                                                    </Link>
+                                                    <AddressLink address={nt.from_address} prefixLen={8} suffixLen={4} size={14} onClick={(e) => e.stopPropagation()} />
                                                 </span>
                                             )}
                                             {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
                                             {nt.to_address && (
                                                 <span>
                                                     to{' '}
-                                                    <Link to={`/accounts/${nt.to_address}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                                                        {formatShort(nt.to_address, 8, 4)}
-                                                    </Link>
+                                                    <AddressLink address={nt.to_address} prefixLen={8} suffixLen={4} size={14} onClick={(e) => e.stopPropagation()} />
                                                 </span>
                                             )}
                                         </div>
@@ -686,9 +665,7 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                                     {n.counterparty && (
                                         <span className="text-zinc-400 text-[10px]">
                                             {isOut ? 'to' : 'from'}{' '}
-                                            <Link to={`/accounts/${n.counterparty}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                                                {formatShort(n.counterparty)}
-                                            </Link>
+                                            <AddressLink address={n.counterparty} size={14} onClick={(e) => e.stopPropagation()} />
                                         </span>
                                     )}
                                 </div>
@@ -746,8 +723,8 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                 {tx.gas_used != null && <span>Gas: <span className="text-zinc-700 dark:text-zinc-300 font-mono">{Number(tx.gas_used).toLocaleString()}</span></span>}
                 {tx.fee != null && tx.fee > 0 && <span>Fee: <span className="text-zinc-700 dark:text-zinc-300 font-mono">{Number(tx.fee).toFixed(8)}</span></span>}
                 {tx.block_height && <span>Block: <Link to={`/blocks/${tx.block_height}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{tx.block_height}</Link></span>}
-                {tx.proposer && <span>Proposer: <Link to={`/accounts/${normalizeAddress(tx.proposer)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.proposer)}</Link></span>}
-                {tx.payer && tx.payer !== tx.proposer && <span>Payer: <Link to={`/accounts/${normalizeAddress(tx.payer)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.payer)}</Link></span>}
+                {tx.proposer && <span>Proposer: <AddressLink address={tx.proposer} size={12} onClick={(e) => e.stopPropagation()} /></span>}
+                {tx.payer && tx.payer !== tx.proposer && <span>Payer: <AddressLink address={tx.payer} size={12} onClick={(e) => e.stopPropagation()} /></span>}
                 {tx.contract_imports?.length > 0 && <span>Contracts: {tx.contract_imports.map((c: string, i: number) => (
                     <span key={c}>{i > 0 && ', '}<Link to={`/contracts/${c}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>{formatTokenName(c)}</Link></span>
                 ))}</span>}
