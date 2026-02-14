@@ -4,7 +4,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddress, getFlowV1AccountByAddressTransaction } from '../../api/gen/find';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark
+    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark, Globe, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
@@ -146,20 +146,21 @@ function AccountDetail() {
     const normalizedAddress = normalizeAddress(address);
 
     const [onChainData, setOnChainData] = useState<{
-        balance?: number; storage?: StorageInfo; staking?: StakingInfo;
+        balance?: number; storage?: StorageInfo; staking?: StakingInfo; coaAddress?: string;
     } | null>(null);
 
 
 
-    // Client-side on-chain data (balance, staking, storage)
+    // Client-side on-chain data (balance, staking, storage, COA)
     useEffect(() => {
         setOnChainData(null);
         const load = async () => {
             try {
                 const { cadenceService } = await import('../../fclConfig');
-                const [tokenRes, stakingRes] = await Promise.all([
+                const [tokenRes, stakingRes, accountInfoRes] = await Promise.all([
                     cadenceService.getToken(normalizedAddress).catch(() => null),
                     cadenceService.getStakingInfo(normalizedAddress).catch(() => null),
+                    cadenceService.getAccountInfo(normalizedAddress).catch(() => null),
                 ]);
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const flowToken = tokenRes?.tokens?.find((t: any) =>
@@ -169,6 +170,7 @@ function AccountDetail() {
                     balance: flowToken ? Number(flowToken.balance) : undefined,
                     storage: tokenRes?.storage || undefined,
                     staking: stakingRes?.stakingInfo || undefined,
+                    coaAddress: accountInfoRes?.coaAddress || undefined,
                 });
             } catch (e) {
                 console.error('Failed to load on-chain data', e);
@@ -261,14 +263,37 @@ function AccountDetail() {
                         </div>
                     }
                     subtitle={
-                        <div className="flex items-center gap-1 group">
-                            {normalizedAddress}
-                            <CopyButton
-                                content={normalizedAddress}
-                                variant="ghost"
-                                size="xs"
-                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                            />
+                        <div className="space-y-1.5">
+                            <div className="flex items-center gap-1 group">
+                                {normalizedAddress}
+                                <CopyButton
+                                    content={normalizedAddress}
+                                    variant="ghost"
+                                    size="xs"
+                                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                />
+                            </div>
+                            {onChainData?.coaAddress && (
+                                <div className="flex items-center gap-1.5 group">
+                                    <Globe className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
+                                    <span className="text-[11px] text-zinc-500">EVM</span>
+                                    <a
+                                        href={`https://evm.flowindex.dev/address/0x${onChainData.coaAddress}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[11px] font-mono text-violet-600 dark:text-violet-400 hover:underline"
+                                    >
+                                        0x{onChainData.coaAddress}
+                                    </a>
+                                    <ExternalLink className="w-3 h-3 text-violet-400 flex-shrink-0" />
+                                    <CopyButton
+                                        content={`0x${onChainData.coaAddress}`}
+                                        variant="ghost"
+                                        size="xs"
+                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    />
+                                </div>
+                            )}
                         </div>
                     }
                 >
