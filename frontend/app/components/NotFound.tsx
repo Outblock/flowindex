@@ -1,13 +1,17 @@
+import { lazy, Suspense } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Home } from 'lucide-react';
-import GridScan from '../components/GridScan';
+
+const GridScan = lazy(() => import('../components/GridScan'));
 
 function NotFound() {
     return (
         <div className="flex-1 w-full flex flex-col items-center justify-center p-8 text-center bg-black relative overflow-hidden isolate">
             {/* GridScan Background */}
             <div className="absolute inset-0 z-0">
-                <GridScan scanColor="#9effe2" className="w-full h-full" />
+                <Suspense fallback={null}>
+                    <GridScan scanColor="#9effe2" className="w-full h-full" />
+                </Suspense>
             </div>
 
             <div className="relative z-10 space-y-8 max-w-2xl mx-auto flex flex-col items-center">

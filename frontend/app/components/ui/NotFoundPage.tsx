@@ -1,7 +1,9 @@
+import { lazy, Suspense } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import { Search, RefreshCw } from 'lucide-react';
-import GridScan from '../GridScan';
+
+const GridScan = lazy(() => import('../GridScan'));
 
 interface NotFoundPageProps {
     icon: LucideIcon;
@@ -16,7 +18,9 @@ export function NotFoundPage({ icon: Icon, title, description, hint, identifier 
         <div className="min-h-screen w-full flex flex-col items-center justify-center p-8 text-center bg-zinc-50 dark:bg-black relative overflow-hidden isolate font-mono">
             {/* GridScan Background */}
             <div className="absolute inset-0 z-0 opacity-40 dark:opacity-100">
-                <GridScan scanColor="#9effe2" className="w-full h-full" />
+                <Suspense fallback={null}>
+                    <GridScan scanColor="#9effe2" className="w-full h-full" />
+                </Suspense>
             </div>
 
             <div className="relative z-10 space-y-8 max-w-2xl mx-auto flex flex-col items-center">
