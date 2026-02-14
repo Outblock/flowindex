@@ -17,7 +17,7 @@ import { Pagination } from '../../components/Pagination';
 import { RouteErrorBoundary } from '../../components/RouteErrorBoundary';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { GlassCard } from '../../components/ui/GlassCard';
-import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { cn } from '../../lib/utils';
 
 const VALID_TABS = ['nfts', 'owners', 'transfers'] as const;

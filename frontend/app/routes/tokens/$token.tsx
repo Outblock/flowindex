@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Users, ArrowRightLeft } from 'lucide-react';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
-import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1FtByToken, getFlowV1FtByTokenHolding, getFlowV1FtTransfer } from '../../api/gen/find';

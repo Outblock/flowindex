@@ -12,7 +12,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { normalizeAddress, formatShort } from '../../components/account/accountUtils';
-import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 

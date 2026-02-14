@@ -11,7 +11,7 @@ import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '../../contexts/ThemeContext';
-import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import DecryptedText from '../../components/ui/DecryptedText';
 import { deriveActivityType, TokenIcon, formatTokenName, extractLogoUrl, buildSummaryLine } from '../../components/TransactionRow';
 import { normalizeAddress, formatShort } from '../../components/account/accountUtils';

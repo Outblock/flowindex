@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1KeyByPublicKey } from '../../api/gen/find';
 import { ArrowLeft, Key, ShieldCheck, ShieldOff } from 'lucide-react';
-import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 
 export const Route = createFileRoute('/key/$publicKey')({
     component: KeySearchResults,

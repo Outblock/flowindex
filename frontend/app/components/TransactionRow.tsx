@@ -7,6 +7,8 @@ import { formatRelativeTime } from '../lib/time';
 import { ensureHeyApiConfigured } from '../api/heyapi';
 import { getFlowV1TransactionById } from '../api/gen/find/sdk.gen';
 import { NFTDetailModal } from './NFTDetailModal';
+import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
+import { AvatarGroup, AvatarGroupTooltip } from '@/components/animate-ui/components/animate/avatar-group';
 
 // --- Interfaces ---
 
@@ -998,21 +1000,27 @@ export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }:
                     </div>
                 </div>
 
-                {/* Col 3: Transfer preview (right-aligned) */}
+                {/* Col 3: Transfer preview as avatar group (right-aligned) */}
                 {transferPreview.length > 0 && (
-                    <div className="flex-shrink-0 flex flex-col items-end gap-0.5 relative z-[1]">
-                        {transferPreview.map((item, i) => (
-                            <div key={i} className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
-                                <TokenIcon logo={item.icon} symbol={item.label} size={14} />
-                                {item.type === 'ft' && item.amount && (
-                                    <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200">{item.amount}</span>
-                                )}
-                                <span className="truncate max-w-[80px]">{item.label}</span>
-                                {item.type === 'nft' && item.count != null && (
-                                    <span className="font-mono text-zinc-500">&times;{item.count}</span>
-                                )}
-                            </div>
-                        ))}
+                    <div className="flex-shrink-0 relative z-[1]" onClick={(e) => e.stopPropagation()}>
+                        <AvatarGroup className="h-7 -space-x-2">
+                            {transferPreview.map((item, i) => {
+                                const logoUrl = extractLogoUrl(item.icon);
+                                const fallbackChar = (item.symbol || item.label || '?')[0].toUpperCase();
+                                const tooltipText = item.type === 'ft'
+                                    ? (item.amount ? `${item.amount} ${item.label}` : item.label)
+                                    : (item.count != null ? `${item.label} ×${item.count}` : item.label);
+                                return (
+                                    <Avatar key={i} className="h-7 w-7 border-2 border-white dark:border-zinc-900">
+                                        {logoUrl && <AvatarImage src={logoUrl} alt={item.label} />}
+                                        <AvatarFallback className="text-[9px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                                            {fallbackChar}
+                                        </AvatarFallback>
+                                        <AvatarGroupTooltip>{tooltipText}</AvatarGroupTooltip>
+                                    </Avatar>
+                                );
+                            })}
+                        </AvatarGroup>
                     </div>
                 )}
             </div>
