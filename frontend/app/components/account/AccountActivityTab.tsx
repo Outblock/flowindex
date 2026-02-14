@@ -143,9 +143,10 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     const [scheduledLoading, setScheduledLoading] = useState(false);
 
     // Token metadata cache for enriching list rows
-    const [tokenMeta, setTokenMeta] = useState<Map<string, TokenMetaEntry>>(tokenMetaCache);
+    // Must create a new Map reference so React detects the state change
+    const [tokenMeta, setTokenMeta] = useState<Map<string, TokenMetaEntry>>(() => new Map(tokenMetaCache));
     useEffect(() => {
-        loadTokenMetaCache().then(setTokenMeta);
+        loadTokenMetaCache().then(cache => setTokenMeta(new Map(cache)));
     }, []);
 
     // Reset only when address changes (not on every initialTransactions reference change)
