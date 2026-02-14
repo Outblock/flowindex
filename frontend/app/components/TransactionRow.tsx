@@ -600,6 +600,22 @@ const tagStyles: Record<string, string> = {
 
 const defaultTagStyle = 'text-zinc-500 dark:text-zinc-500 border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5';
 
+const tagIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+    FT_TRANSFER:      ArrowRightLeft,
+    FT_SENDER:        ArrowUpRight,
+    FT_RECEIVER:      ArrowDownLeft,
+    NFT_TRANSFER:     ShoppingBag,
+    NFT_SENDER:       ArrowUpRight,
+    NFT_RECEIVER:     ArrowDownLeft,
+    SCHEDULED_TX:     Clock,
+    EVM:              Zap,
+    CONTRACT_DEPLOY:  FileCode,
+    ACCOUNT_CREATED:  UserPlus,
+    KEY_UPDATE:       Key,
+    STAKING:          Repeat,
+    SWAP:             ArrowRightLeft,
+};
+
 function formatTagLabel(tag: string): string {
     return tag.replace(/_/g, ' ');
 }
@@ -651,14 +667,18 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                         )}
                         {/* Tags */}
                         <div className="flex items-center gap-1 flex-wrap">
-                            {tags.map((tag) => (
-                                <span
-                                    key={tag}
-                                    className={`inline-flex items-center px-1.5 py-0.5 border rounded-sm text-[9px] font-bold uppercase tracking-wider ${tagStyles[tag] || defaultTagStyle}`}
-                                >
-                                    {formatTagLabel(tag)}
-                                </span>
-                            ))}
+                            {tags.map((tag) => {
+                                const Icon = tagIcons[tag];
+                                return (
+                                    <span
+                                        key={tag}
+                                        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 border rounded-sm text-[9px] font-bold uppercase tracking-wider ${tagStyles[tag] || defaultTagStyle}`}
+                                    >
+                                        {Icon && <Icon className="h-2.5 w-2.5" />}
+                                        {formatTagLabel(tag)}
+                                    </span>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
