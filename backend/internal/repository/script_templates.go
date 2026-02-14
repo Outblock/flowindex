@@ -161,43 +161,81 @@ func (r *Repository) GetScriptTemplatesByTxIDs(ctx context.Context, txIDs []stri
 		return nil, nil
 	}
 
-	// Build hex array for the query
 	hexIDs := make([]string, 0, len(txIDs))
 	for _, id := range txIDs {
 		id = strings.TrimPrefix(strings.ToLower(id), "0x")
 		hexIDs = append(hexIDs, id)
 	}
-
-	// Join transactions to get script_hash; LEFT JOIN script_templates for labels.
-	// Always returns script_hash so the API can expose it even for unlabeled txs.
-	query := `
-		SELECT encode(t.id, 'hex'), COALESCE(t.script_hash, ''),
-		       COALESCE(st.category, ''), COALESCE(st.label, ''), COALESCE(st.description, '')
-		FROM raw.transactions t
-		LEFT JOIN app.script_templates st ON st.script_hash = t.script_hash
-		WHERE t.id = ANY($1::bytea[])
-		  AND t.script_hash IS NOT NULL AND t.script_hash != ''`
-
 	byteIDs := make([][]byte, 0, len(hexIDs))
 	for _, h := range hexIDs {
 		byteIDs = append(byteIDs, hexToBytes(h))
 	}
 
-	rows, err := r.db.Query(ctx, query, byteIDs)
+	// Step 1: Get script_hash from raw.transactions.
+	// Using ANY on a partitioned table without block_height scans all partitions,
+	// but for a small number of IDs (~20) this is fast enough with bitmap index scans.
+	txHashRows, err := r.db.Query(ctx, `
+		SELECT encode(id, 'hex'), COALESCE(script_hash, '')
+		FROM raw.transactions
+		WHERE id = ANY($1::bytea[])
+		  AND script_hash IS NOT NULL AND script_hash != ''`, byteIDs)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer txHashRows.Close()
 
-	result := make(map[string]TxScriptTemplate)
-	for rows.Next() {
-		var txID, scriptHash, category, label, description string
-		if err := rows.Scan(&txID, &scriptHash, &category, &label, &description); err != nil {
+	type txHash struct {
+		txID       string
+		scriptHash string
+	}
+	var txHashes []txHash
+	hashSet := make(map[string]struct{})
+	for txHashRows.Next() {
+		var th txHash
+		if err := txHashRows.Scan(&th.txID, &th.scriptHash); err != nil {
 			return nil, err
 		}
-		result[txID] = TxScriptTemplate{ScriptHash: scriptHash, Category: category, Label: label, Description: description}
+		txHashes = append(txHashes, th)
+		hashSet[th.scriptHash] = struct{}{}
 	}
-	return result, rows.Err()
+	if len(txHashes) == 0 {
+		return nil, nil
+	}
+
+	// Step 2: Batch lookup script_templates by PK (script_hash).
+	// This avoids the expensive Hash Join on the full script_templates table.
+	uniqueHashes := make([]string, 0, len(hashSet))
+	for h := range hashSet {
+		uniqueHashes = append(uniqueHashes, h)
+	}
+	stRows, err := r.db.Query(ctx, `
+		SELECT script_hash, COALESCE(category, ''), COALESCE(label, ''), COALESCE(description, '')
+		FROM app.script_templates
+		WHERE script_hash = ANY($1::varchar[])`, uniqueHashes)
+	if err != nil {
+		return nil, err
+	}
+	defer stRows.Close()
+
+	templates := make(map[string]TxScriptTemplate)
+	for stRows.Next() {
+		var scriptHash, category, label, description string
+		if err := stRows.Scan(&scriptHash, &category, &label, &description); err != nil {
+			return nil, err
+		}
+		templates[scriptHash] = TxScriptTemplate{ScriptHash: scriptHash, Category: category, Label: label, Description: description}
+	}
+
+	// Step 3: Merge results — map txID -> template info.
+	result := make(map[string]TxScriptTemplate, len(txHashes))
+	for _, th := range txHashes {
+		if tmpl, ok := templates[th.scriptHash]; ok {
+			result[th.txID] = tmpl
+		} else {
+			result[th.txID] = TxScriptTemplate{ScriptHash: th.scriptHash}
+		}
+	}
+	return result, nil
 }
 
 // AdminListUnlabeledScriptTemplates returns unlabeled templates with tx_count >= minTxCount,

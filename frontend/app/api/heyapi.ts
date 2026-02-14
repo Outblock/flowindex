@@ -18,7 +18,7 @@ export async function ensureHeyApiConfigured() {
   if (!configuring) {
     configuring = (async () => {
       _baseURL = await resolveApiBaseUrl();
-      findClient.setConfig({ baseURL: _baseURL, throwOnError: true, timeout: 8000 });
+      findClient.setConfig({ baseURL: _baseURL, throwOnError: true, timeout: 30000 });
       // Install interceptor on the SDK's own Axios instance to strip /v1/ from paths
       findClient.instance.interceptors.request.use((config) => {
         if (config.url) {
