@@ -549,3 +549,36 @@ func (r *Repository) UpdateAddressStatsBatch(ctx context.Context, deltas []Addre
 	}
 	return nil
 }
+
+// CountAddressTransactions returns the number of indexed transactions for an address.
+func (r *Repository) CountAddressTransactions(ctx context.Context, address string) (int64, error) {
+	var count int64
+	err := r.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM app.address_transactions WHERE address = $1 LIMIT 1`,
+		hexToBytes(address),
+	).Scan(&count)
+	return count, err
+}
+
+// GetAccountKeysByAddress returns all account keys for an address from the DB.
+func (r *Repository) GetAccountKeysByAddress(ctx context.Context, address string) ([]models.AccountKey, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT key_index, public_key, signing_algorithm, hashing_algorithm, weight, revoked
+		 FROM app.account_keys WHERE address = $1 ORDER BY key_index`,
+		hexToBytes(address),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []models.AccountKey
+	for rows.Next() {
+		var k models.AccountKey
+		k.Address = address
+		if err := rows.Scan(&k.KeyIndex, &k.PublicKey, &k.SigningAlgorithm, &k.HashingAlgorithm, &k.Weight, &k.Revoked); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}

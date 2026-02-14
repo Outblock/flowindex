@@ -94,6 +94,12 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 	acc, err := s.client.GetAccount(r.Context(), addr)
 	if err != nil {
 		log.Printf("[WARN] GetAccount(%s) RPC error: %v", addr.Hex(), err)
+		// Fallback: build a degraded account response from DB data
+		data := s.buildAccountFallback(r.Context(), addr)
+		if data != nil {
+			writeAPIResponse(w, []interface{}{data}, nil, nil)
+			return
+		}
 		writeAPIError(w, http.StatusNotFound, "account not found")
 		return
 	}
@@ -169,6 +175,63 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 		"storageAvailable": storageAvailableMB,
 	}
 	writeAPIResponse(w, []interface{}{data}, nil, nil)
+}
+
+// buildAccountFallback returns a degraded account response from DB when RPC fails.
+// Returns nil if we have no data at all for this address.
+func (s *Server) buildAccountFallback(ctx context.Context, addr flowsdk.Address) map[string]interface{} {
+	if s.repo == nil {
+		return nil
+	}
+	addressNorm := normalizeAddr(addr.Hex())
+
+	// Check if we have any indexed data for this address (transactions, keys, etc.)
+	hasTxs := false
+	if count, err := s.repo.CountAddressTransactions(ctx, addressNorm); err == nil && count > 0 {
+		hasTxs = true
+	}
+
+	// Also check account_keys
+	dbKeys, _ := s.repo.GetAccountKeysByAddress(ctx, addressNorm)
+	keys := make([]map[string]interface{}, 0, len(dbKeys))
+	for _, k := range dbKeys {
+		keys = append(keys, map[string]interface{}{
+			"index":              strconv.Itoa(k.KeyIndex),
+			"key":                k.PublicKey,
+			"signatureAlgorithm": numToSigAlgo(k.SigningAlgorithm),
+			"hashAlgorithm":      numToHashAlgo(k.HashingAlgorithm),
+			"weight":             k.Weight,
+			"revoked":            k.Revoked,
+		})
+	}
+
+	if !hasTxs && len(keys) == 0 {
+		return nil // no data at all
+	}
+
+	// Build degraded response
+	storageUsed := uint64(0)
+	storageCapacity := uint64(0)
+	storageAvailable := uint64(0)
+	if snap, err := s.repo.GetAccountStorageSnapshot(ctx, addressNorm); err == nil && snap != nil {
+		storageUsed = snap.StorageUsed
+		storageCapacity = snap.StorageCapacity
+		storageAvailable = snap.StorageAvailable
+	}
+	const bytesPerMB = 1024 * 1024
+
+	log.Printf("[INFO] Serving fallback account data for %s (RPC unavailable)", addr.Hex())
+
+	return map[string]interface{}{
+		"address":          formatAddressV1(addr.Hex()),
+		"flowBalance":      float64(-1), // -1 signals "unavailable" to frontend
+		"contracts":        []string{},
+		"keys":             keys,
+		"flowStorage":      float64(storageCapacity) / bytesPerMB,
+		"storageUsed":      float64(storageUsed) / bytesPerMB,
+		"storageAvailable": float64(storageAvailable) / bytesPerMB,
+		"_rpcUnavailable":  true,
+	}
 }
 
 func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Request) {
@@ -656,5 +719,31 @@ func hashAlgoToNum(name string) string {
 		return "4"
 	default:
 		return name
+	}
+}
+
+func numToSigAlgo(num string) string {
+	switch num {
+	case "1":
+		return "ECDSA_P256"
+	case "2":
+		return "ECDSA_secp256k1"
+	default:
+		return num
+	}
+}
+
+func numToHashAlgo(num string) string {
+	switch num {
+	case "1":
+		return "SHA2_256"
+	case "2":
+		return "SHA2_384"
+	case "3":
+		return "SHA3_256"
+	case "4":
+		return "SHA3_384"
+	default:
+		return num
 	}
 }
