@@ -210,8 +210,77 @@ func (r *Repository) UpdateCollectionPublicPath(ctx context.Context, contractAdd
 }
 
 // ListNFTItems returns paginated NFT items for a collection.
-// Falls back to nft_ownership if nft_items has no metadata rows for this collection.
+// Uses nft_ownership as the authoritative source for pagination (it has all NFT IDs),
+// then enriches with metadata from nft_items where available.
 func (r *Repository) ListNFTItems(ctx context.Context, contractAddr, contractName string, limit, offset int) ([]models.NFTItem, bool, error) {
+	// 1. Paginate from nft_ownership (complete list of NFT IDs).
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(o.contract_address, 'hex'), COALESCE(o.contract_name, ''), o.nft_id,
+			encode(o.owner, 'hex'), o.updated_at
+		FROM app.nft_ownership o
+		WHERE o.contract_address = $1 AND ($2 = '' OR o.contract_name = $2)
+		  AND o.owner IS NOT NULL
+		ORDER BY o.nft_id ASC
+		LIMIT $3 OFFSET $4`,
+		hexToBytes(contractAddr), contractName, limit+1, offset)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	type ownershipRow struct {
+		item  models.NFTItem
+		owner string
+	}
+	var stubs []ownershipRow
+	for rows.Next() {
+		var r ownershipRow
+		if err := rows.Scan(&r.item.ContractAddress, &r.item.ContractName, &r.item.NFTID, &r.owner, &r.item.UpdatedAt); err != nil {
+			return nil, false, err
+		}
+		r.item.Name = contractName + " #" + r.item.NFTID
+		stubs = append(stubs, r)
+	}
+	hasMore := len(stubs) > limit
+	if hasMore {
+		stubs = stubs[:limit]
+	}
+	if len(stubs) == 0 {
+		return nil, false, nil
+	}
+
+	// 2. Batch-lookup metadata from nft_items for these IDs.
+	nftIDs := make([]string, len(stubs))
+	for i, s := range stubs {
+		nftIDs[i] = s.item.NFTID
+	}
+	metaMap, err := r.getNFTItemsMetadataByIDs(ctx, contractAddr, contractName, nftIDs)
+	if err != nil {
+		// Non-fatal: return stubs without metadata.
+		out := make([]models.NFTItem, len(stubs))
+		for i, s := range stubs {
+			out[i] = s.item
+		}
+		return out, hasMore, nil
+	}
+
+	// 3. Merge: use metadata where available, otherwise use stub.
+	out := make([]models.NFTItem, len(stubs))
+	for i, s := range stubs {
+		if meta, ok := metaMap[s.item.NFTID]; ok {
+			out[i] = meta
+		} else {
+			out[i] = s.item
+		}
+	}
+	return out, hasMore, nil
+}
+
+// getNFTItemsMetadataByIDs fetches nft_items metadata for a set of NFT IDs in one collection.
+func (r *Repository) getNFTItemsMetadataByIDs(ctx context.Context, contractAddr, contractName string, nftIDs []string) (map[string]models.NFTItem, error) {
+	out := make(map[string]models.NFTItem, len(nftIDs))
+	if len(nftIDs) == 0 {
+		return out, nil
+	}
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(contract_address, 'hex'), COALESCE(contract_name, ''), nft_id,
 			COALESCE(name, ''), COALESCE(description, ''), COALESCE(thumbnail, ''), COALESCE(external_url, ''),
@@ -220,15 +289,13 @@ func (r *Repository) ListNFTItems(ctx context.Context, contractAddr, contractNam
 			updated_at
 		FROM app.nft_items
 		WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)
-		  AND name IS NOT NULL
-		ORDER BY nft_id ASC
-		LIMIT $3 OFFSET $4`,
-		hexToBytes(contractAddr), contractName, limit+1, offset)
+		  AND nft_id = ANY($3)
+		  AND name IS NOT NULL`,
+		hexToBytes(contractAddr), contractName, nftIDs)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	defer rows.Close()
-	var out []models.NFTItem
 	for rows.Next() {
 		var item models.NFTItem
 		if err := rows.Scan(
@@ -238,53 +305,14 @@ func (r *Repository) ListNFTItems(ctx context.Context, contractAddr, contractNam
 			&item.RarityScore, &item.RarityDescription, &item.Traits,
 			&item.UpdatedAt,
 		); err != nil {
-			return nil, false, err
+			return nil, err
 		}
-		out = append(out, item)
+		out[item.NFTID] = item
 	}
-	hasMore := len(out) > limit
-	if hasMore {
-		out = out[:limit]
-	}
-	// Fallback: if nft_items has no metadata rows, derive items from nft_ownership.
-	if len(out) == 0 && offset == 0 {
-		return r.listNFTItemsFromOwnership(ctx, contractAddr, contractName, limit)
-	}
-	return out, hasMore, nil
+	return out, nil
 }
 
-// listNFTItemsFromOwnership returns stub NFTItem records derived from nft_ownership
-// for collections where the metadata worker hasn't populated nft_items yet.
-func (r *Repository) listNFTItemsFromOwnership(ctx context.Context, contractAddr, contractName string, limit int) ([]models.NFTItem, bool, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT encode(contract_address, 'hex'), COALESCE(contract_name, ''), nft_id,
-			encode(owner, 'hex'), updated_at
-		FROM app.nft_ownership
-		WHERE contract_address = $1 AND ($2 = '' OR contract_name = $2)
-		  AND owner IS NOT NULL
-		ORDER BY nft_id ASC
-		LIMIT $3`,
-		hexToBytes(contractAddr), contractName, limit+1)
-	if err != nil {
-		return nil, false, err
-	}
-	defer rows.Close()
-	var out []models.NFTItem
-	for rows.Next() {
-		var item models.NFTItem
-		var owner string
-		if err := rows.Scan(&item.ContractAddress, &item.ContractName, &item.NFTID, &owner, &item.UpdatedAt); err != nil {
-			return nil, false, err
-		}
-		item.Name = contractName + " #" + item.NFTID
-		out = append(out, item)
-	}
-	hasMore := len(out) > limit
-	if hasMore {
-		out = out[:limit]
-	}
-	return out, hasMore, nil
-}
+
 
 // GetNFTItem returns a single NFT item by collection + nft_id.
 func (r *Repository) GetNFTItem(ctx context.Context, contractAddr, contractName, nftID string) (*models.NFTItem, error) {
