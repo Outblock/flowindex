@@ -47,6 +47,7 @@ type AccountListRow struct {
 	StorageUsed      uint64
 	StorageCapacity  uint64
 	StorageAvailable uint64
+	TxCount          int64
 }
 
 func (r *Repository) GetAccountCatalog(ctx context.Context, address string) (*models.AccountCatalog, error) {
@@ -69,11 +70,25 @@ func (r *Repository) GetAccountCatalog(ctx context.Context, address string) (*mo
 	return &a, nil
 }
 
-func (r *Repository) ListAccountsForAPI(ctx context.Context, cursorHeight *uint64, limit, offset int) ([]AccountListRow, error) {
+func (r *Repository) ListAccountsForAPI(ctx context.Context, cursorHeight *uint64, limit, offset int, sortBy ...string) ([]AccountListRow, error) {
+	sort := "recent"
+	if len(sortBy) > 0 && sortBy[0] != "" {
+		sort = sortBy[0]
+	}
+
 	var cursor interface{}
 	if cursorHeight != nil {
 		cursor = int64(*cursorHeight)
 	}
+
+	orderBy := "COALESCE(a.last_seen_height, 0) DESC NULLS LAST, a.address ASC"
+	switch sort {
+	case "tx_count":
+		orderBy = "COALESCE(st.tx_count, 0) DESC, a.address ASC"
+	case "storage":
+		orderBy = "COALESCE(s.storage_used, 0) DESC, a.address ASC"
+	}
+
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(a.address, 'hex') AS address,
 		       COALESCE(a.first_seen_height, 0),
@@ -81,12 +96,14 @@ func (r *Repository) ListAccountsForAPI(ctx context.Context, cursorHeight *uint6
 		       a.created_at, a.updated_at,
 		       COALESCE(s.storage_used, 0),
 		       COALESCE(s.storage_capacity, 0),
-		       COALESCE(s.storage_available, 0)
+		       COALESCE(s.storage_available, 0),
+		       COALESCE(st.tx_count, 0)
 		FROM app.accounts a
 		LEFT JOIN app.account_storage_snapshots s ON s.address = a.address
+		LEFT JOIN app.address_stats st ON st.address = a.address
 		WHERE a.address <> $4
 		  AND ($1::bigint IS NULL OR COALESCE(a.last_seen_height, 0) <= $1)
-		ORDER BY COALESCE(a.last_seen_height, 0) DESC NULLS LAST, a.address ASC
+		ORDER BY `+orderBy+`
 		LIMIT $2 OFFSET $3`, cursor, limit, offset, hexToBytes(systemFlowAddressHex))
 	if err != nil {
 		return nil, err
@@ -95,7 +112,7 @@ func (r *Repository) ListAccountsForAPI(ctx context.Context, cursorHeight *uint6
 	var out []AccountListRow
 	for rows.Next() {
 		var a AccountListRow
-		if err := rows.Scan(&a.Address, &a.FirstSeenHeight, &a.LastSeenHeight, &a.CreatedAt, &a.UpdatedAt, &a.StorageUsed, &a.StorageCapacity, &a.StorageAvailable); err != nil {
+		if err := rows.Scan(&a.Address, &a.FirstSeenHeight, &a.LastSeenHeight, &a.CreatedAt, &a.UpdatedAt, &a.StorageUsed, &a.StorageCapacity, &a.StorageAvailable, &a.TxCount); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
