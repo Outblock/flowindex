@@ -4,7 +4,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddress, getFlowV1AccountByAddressTransaction } from '../../api/gen/find';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark
+    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark, AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
@@ -66,10 +66,11 @@ export const Route = createFileRoute('/accounts/$address')({
 
             const initialAccount = {
                 address: normalized,
-                balance: accountPayload?.balance,
+                balance: accountPayload?.flowBalance ?? accountPayload?.balance,
                 createdAt: null,
                 contracts: accountPayload?.contracts || [],
-                keys: normalizedKeys
+                keys: normalizedKeys,
+                _rpcUnavailable: accountPayload?._rpcUnavailable || false,
             };
 
             // Only prefetch transactions when on the activity/all tab (no subtab)
@@ -202,7 +203,7 @@ function AccountDetail() {
                     revoked: Boolean(key.revoked),
                 }));
                 if (cancelled) return;
-                setAccount({ address: normalizedAddress, balance: payload?.balance, createdAt: null, contracts: payload?.contracts || [], keys });
+                setAccount({ address: normalizedAddress, balance: payload?.flowBalance ?? payload?.balance, createdAt: null, contracts: payload?.contracts || [], keys, _rpcUnavailable: payload?._rpcUnavailable || false });
                 setError(null);
             } catch (e) {
                 if (cancelled) return;
@@ -238,7 +239,7 @@ function AccountDetail() {
         { id: 'balance' as const, label: 'Balance', icon: TrendingUp },
     ];
 
-    const balanceValue = onChainData?.balance != null ? onChainData.balance : (account.balance != null ? Number(account.balance) / 1e8 : 0);
+    const balanceValue = onChainData?.balance != null ? onChainData.balance : (account.balance != null && account.balance >= 0 ? Number(account.balance) : 0);
     const stakedValue = [...(onChainData?.staking?.nodeInfos || []), ...(onChainData?.staking?.delegatorInfos || [])]
         .reduce((sum, info) => sum + Number(info.tokensStaked || 0), 0);
 
@@ -297,6 +298,16 @@ function AccountDetail() {
                         </div>
                     </div>
                 </PageHeader>
+
+                {/* RPC unavailable banner */}
+                {account._rpcUnavailable && (
+                    <div className="flex items-center gap-3 border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-900/10 px-4 py-3 mb-6 rounded-sm">
+                        <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                            Live on-chain data is temporarily unavailable for this account (storage limit exceeded). Showing indexed data only — balance and some details may be incomplete.
+                        </p>
+                    </div>
+                )}
 
                 {/* Overview Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
