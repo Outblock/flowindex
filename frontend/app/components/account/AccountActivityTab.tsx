@@ -76,6 +76,7 @@ async function loadTokenMetaCache(): Promise<Map<string, TokenMetaEntry>> {
                 symbol: c.symbol || '',
                 logo: c.square_image || c.logo || null,
                 type: 'nft',
+                banner_image: c.banner_image || null,
             });
         }
         tokenMetaCacheLoaded = true;
