@@ -230,18 +230,35 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
                 </div>
             )}
 
-            {/* EVM hash link */}
-            {hasEvm && !hasFT && !hasDefi && (
-                <div className="flex items-center gap-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 p-3 rounded-sm mb-4">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">EVM Hash</span>
-                    <code className="text-xs text-blue-600 dark:text-blue-400 font-mono">{transaction.evm_hash}</code>
-                    {transaction.evm_hash && (
-                        <a href={`https://evm.flowscan.io/tx/${transaction.evm_hash}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 transition-colors">
-                            <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                    )}
-                </div>
-            )}
+            {/* EVM hash links — show all EVM tx hashes from executions (or legacy field) */}
+            {hasEvm && !hasFT && !hasDefi && (() => {
+                const hashes: string[] = [];
+                if (transaction.evm_executions?.length > 0) {
+                    for (const exec of transaction.evm_executions) {
+                        if (exec.hash) hashes.push(exec.hash);
+                    }
+                } else if (transaction.evm_hash) {
+                    hashes.push(transaction.evm_hash);
+                }
+                return hashes.length > 0 ? (
+                    <div className="space-y-1.5 mb-4">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider">EVM Hash{hashes.length > 1 ? 'es' : ''}</span>
+                        {hashes.map((hash, idx) => (
+                            <div key={idx} className="flex items-center gap-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
+                                <code className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">0x{hash.replace(/^0x/, '')}</code>
+                                <a href={`https://evm.flowscan.io/tx/0x${hash.replace(/^0x/, '')}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0">
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 p-3 rounded-sm mb-4">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider">EVM Hash</span>
+                        <span className="text-xs text-zinc-400 italic">Pending</span>
+                    </div>
+                );
+            })()}
 
             {/* Deploy info */}
             {isDeploy && !hasFT && !hasDefi && !hasContractImports && (
