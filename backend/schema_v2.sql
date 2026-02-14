@@ -927,15 +927,22 @@ CREATE TABLE IF NOT EXISTS app.node_metadata (
 
 -- Script template classification (admin-managed labels for high-frequency script hashes)
 CREATE TABLE IF NOT EXISTS app.script_templates (
-    script_hash VARCHAR(64) PRIMARY KEY REFERENCES raw.scripts(script_hash),
-    category    TEXT,
-    label       TEXT,
-    description TEXT,
-    tx_count    BIGINT NOT NULL DEFAULT 0,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    script_hash     VARCHAR(64) PRIMARY KEY REFERENCES raw.scripts(script_hash),
+    normalized_hash VARCHAR(64),
+    category        TEXT,
+    label           TEXT,
+    description     TEXT,
+    tx_count        BIGINT NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_script_templates_tx_count
   ON app.script_templates (tx_count DESC);
+CREATE INDEX IF NOT EXISTS idx_script_templates_normalized_hash
+  ON app.script_templates (normalized_hash) WHERE normalized_hash IS NOT NULL;
+
+-- Migration: add normalized_hash column to existing script_templates tables
+ALTER TABLE IF EXISTS app.script_templates
+  ADD COLUMN IF NOT EXISTS normalized_hash VARCHAR(64);
 
 COMMIT;

@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
@@ -6,8 +6,17 @@ import { resolveApiBaseUrl } from '../api'
 import toast from 'react-hot-toast'
 import { Pagination } from '../components/Pagination'
 
+type AdminTab = 'ft' | 'nft' | 'scripts'
+const VALID_TABS: AdminTab[] = ['ft', 'nft', 'scripts']
+
 export const Route = createFileRoute('/admin')({
   component: AdminPage,
+  validateSearch: (search: Record<string, unknown>): { tab?: AdminTab } => {
+    const tab = search.tab as string
+    return {
+      tab: VALID_TABS.includes(tab as AdminTab) ? (tab as AdminTab) : undefined,
+    }
+  },
 })
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -40,7 +49,10 @@ function AdminPage() {
   const [tokenInput, setTokenInput] = useState(token)
   const [authed, setAuthed] = useState(!!token)
 
-  const [tab, setTab] = useState<'ft' | 'nft' | 'scripts'>('ft')
+  const { tab: searchTab } = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+  const tab: AdminTab = searchTab || 'ft'
+  const setTab = (t: AdminTab) => navigate({ search: { tab: t } as any })
 
   const handleLogin = () => {
     if (!tokenInput.trim()) return
@@ -394,8 +406,10 @@ function NFTRow({ item, token }: { item: any; token: string }) {
 // ── Script Templates Panel ───────────────────────────────────────────
 
 const SCRIPT_CATEGORIES = [
-  '', 'FT_TRANSFER', 'FT_MINT', 'NFT_TRANSFER', 'NFT_MINT', 'NFT_PURCHASE', 'NFT_LISTING',
-  'STAKING', 'ACCOUNT_CREATION', 'ACCOUNT_SETUP', 'SCHEDULED',
+  '', 'FT_TRANSFER', 'FT_MINT', 'FT_BURN',
+  'NFT_TRANSFER', 'NFT_MINT', 'NFT_BURN', 'NFT_PURCHASE', 'NFT_LISTING',
+  'STAKING', 'REWARD_CLAIM', 'GOVERNANCE',
+  'ACCOUNT_CREATION', 'ACCOUNT_SETUP', 'SCHEDULED',
   'EVM_BRIDGE', 'EVM_CALL', 'SWAP', 'LIQUIDITY',
   'CONTRACT_DEPLOY', 'SYSTEM', 'OTHER',
 ]
@@ -568,7 +582,7 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
         method: 'PUT',
         body: JSON.stringify({ category: categories.join(','), label, description }),
       })
-      toast.success('Template updated')
+      toast.success(item.variant_count > 1 ? `Updated ${item.variant_count} variants` : 'Template updated')
     } catch (e: any) {
       toast.error(e.message)
     } finally {
@@ -627,6 +641,11 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
             <span className="text-xs font-mono text-zinc-400 bg-zinc-100 dark:bg-white/10 px-2 py-0.5 rounded-sm">
               {(item.tx_count || 0).toLocaleString()} txs
             </span>
+            {item.variant_count > 1 && (
+              <span className="text-xs font-mono text-purple-500 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/40 px-2 py-0.5 rounded-sm" title="Number of script variants (differing only in comments) grouped under the same normalized hash">
+                {item.variant_count} variants
+              </span>
+            )}
           </div>
 
           {/* Script preview */}

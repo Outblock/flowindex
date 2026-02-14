@@ -19,8 +19,10 @@ var templateClassifySchema = map[string]any{
 			"items": map[string]any{
 				"type": "string",
 				"enum": []string{
-					"FT_TRANSFER", "FT_MINT", "NFT_TRANSFER", "NFT_MINT", "NFT_PURCHASE", "NFT_LISTING",
-					"STAKING", "ACCOUNT_CREATION", "ACCOUNT_SETUP", "SCHEDULED",
+					"FT_TRANSFER", "FT_MINT", "FT_BURN",
+					"NFT_TRANSFER", "NFT_MINT", "NFT_BURN", "NFT_PURCHASE", "NFT_LISTING",
+					"STAKING", "REWARD_CLAIM", "GOVERNANCE",
+					"ACCOUNT_CREATION", "ACCOUNT_SETUP", "SCHEDULED",
 					"EVM_BRIDGE", "EVM_CALL", "SWAP", "LIQUIDITY",
 					"CONTRACT_DEPLOY", "SYSTEM", "OTHER",
 				},
@@ -45,11 +47,15 @@ Return structured JSON with:
 Category definitions:
 - FT_TRANSFER: Transfers fungible tokens between accounts
 - FT_MINT: Mints new fungible tokens
+- FT_BURN: Burns/destroys fungible tokens
 - NFT_TRANSFER: Transfers NFTs between accounts
 - NFT_MINT: Mints new NFTs
+- NFT_BURN: Burns/destroys NFTs
 - NFT_PURCHASE: Purchases/buys NFTs (involves payment)
 - NFT_LISTING: Lists NFTs for sale on a marketplace
-- STAKING: Staking, delegation, or reward operations
+- STAKING: Staking, delegation, or lock-up operations
+- REWARD_CLAIM: Claims staking rewards or token distributions
+- GOVERNANCE: Voting, proposals, or DAO governance actions
 - ACCOUNT_CREATION: Creates new Flow accounts
 - ACCOUNT_SETUP: Sets up vaults, collections, or capabilities on existing accounts
 - SCHEDULED: Scheduled/delayed transaction operations
