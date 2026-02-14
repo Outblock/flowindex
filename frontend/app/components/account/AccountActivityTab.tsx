@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { resolveApiBaseUrl } from '../../api';
@@ -7,7 +7,7 @@ import {
     getFlowV1AccountByAddressFtTransfer,
     getFlowV1NftTransfer,
 } from '../../api/gen/find';
-import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, Clock } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, Clock, List, CalendarDays } from 'lucide-react';
 import { normalizeAddress, formatShort } from './accountUtils';
 import { AddressLink } from '../AddressLink';
 import { formatRelativeTime } from '../../lib/time';
@@ -23,6 +23,24 @@ import {
 } from '../TransactionRow';
 
 type FilterMode = 'all' | 'ft' | 'nft' | 'scheduled';
+type ViewMode = 'pages' | 'timeline';
+
+function getTimeSection(timestamp: string, now: Date): string {
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return 'Unknown';
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (d >= today) return 'Today';
+
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 6);
+    if (d >= weekAgo) return 'This Week';
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (d >= monthStart) return 'Earlier This Month';
+
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
 
 // Module-level token metadata cache (persists across re-renders, shared across pages)
 const tokenMetaCache = new Map<string, TokenMetaEntry>();
@@ -85,6 +103,14 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     };
     const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
     const didFetchRef = useRef(false);
+    const [viewMode, setViewMode] = useState<ViewMode>('pages');
+
+    // Timeline state
+    const [timelineTxs, setTimelineTxs] = useState<any[]>([]);
+    const [timelineOffset, setTimelineOffset] = useState(0);
+    const [timelineHasMore, setTimelineHasMore] = useState(true);
+    const [timelineLoading, setTimelineLoading] = useState(false);
+    const sentinelRef = useRef<HTMLDivElement | null>(null);
 
     // Transactions state
     const [transactions, setTransactions] = useState<any[]>(() => dedup(initialTransactions));
@@ -137,6 +163,14 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         setTxHasNext(!!initialNextCursor);
         setExpandedTxId(null);
 
+        // Reset timeline when transaction data changes
+        if (viewMode === 'timeline') {
+            const dedupedForTimeline = dedup(initialTransactions);
+            setTimelineTxs(dedupedForTimeline);
+            setTimelineOffset(dedupedForTimeline.length);
+            setTimelineHasMore(dedupedForTimeline.length >= 20);
+        }
+
         // Only reset subtab data when the address actually changes
         if (addressChanged) {
             setFtTransfers([]);
@@ -148,6 +182,11 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             setScheduledTxs([]);
             setScheduledCursor('');
             setScheduledHasMore(false);
+            // Also reset timeline fully on address change
+            setTimelineTxs([]);
+            setTimelineOffset(0);
+            setTimelineHasMore(true);
+            setViewMode('pages');
         }
 
         didFetchRef.current = dedupedTxs.length > 0;
@@ -196,6 +235,61 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         if (currentPage > 1) loadTransactions(currentPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage]);
+
+    // --- Timeline mode ---
+    const loadMoreTimeline = useCallback(async () => {
+        if (timelineLoading || !timelineHasMore) return;
+        setTimelineLoading(true);
+        try {
+            await ensureHeyApiConfigured();
+            const txRes = await getFlowV1AccountByAddressTransaction({ path: { address: normalizedAddress }, query: { offset: timelineOffset, limit: 20 } });
+            const payload: any = txRes.data;
+            const items = payload?.data ?? [];
+            const mapped = items.map((tx: any) => ({
+                ...tx,
+                payer: tx.payer_address || tx.payer || tx.proposer_address,
+                proposer: tx.proposer_address || tx.proposer,
+                blockHeight: tx.block_height,
+            }));
+            setTimelineTxs(prev => dedup([...prev, ...mapped]));
+            setTimelineOffset(prev => prev + items.length);
+            setTimelineHasMore(items.length >= 20);
+        } catch (err) {
+            console.error('Failed to load timeline transactions', err);
+        } finally {
+            setTimelineLoading(false);
+        }
+    }, [timelineLoading, timelineHasMore, timelineOffset, normalizedAddress]);
+
+    // Seed timeline when switching to timeline mode
+    useEffect(() => {
+        if (viewMode === 'timeline' && timelineTxs.length === 0) {
+            const seed = dedup(initialTransactions);
+            if (seed.length > 0) {
+                setTimelineTxs(seed);
+                setTimelineOffset(seed.length);
+                setTimelineHasMore(seed.length >= 20);
+            } else {
+                loadMoreTimeline();
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewMode]);
+
+    // IntersectionObserver for infinite scroll
+    useEffect(() => {
+        if (viewMode !== 'timeline' || !timelineHasMore) return;
+        const sentinel = sentinelRef.current;
+        if (!sentinel) return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting) loadMoreTimeline();
+            },
+            { rootMargin: '200px' }
+        );
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [viewMode, timelineHasMore, loadMoreTimeline]);
 
     // --- FT Transfers (lazy) ---
     const loadFtTransfers = async (cursorValue: string, append: boolean) => {
@@ -312,14 +406,32 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                 ))}
             </div>
 
-            {/* Pagination */}
+            {/* View mode toggle + Pagination */}
             {filterMode === 'all' && (
-                <div className="flex items-center justify-end mb-3">
-                    <div className="flex items-center gap-2">
-                        <button disabled={currentPage <= 1 || txLoading} onClick={() => setCurrentPage(prev => prev - 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Prev</button>
-                        <span className="text-[10px] text-zinc-500 tabular-nums min-w-[4rem] text-center">Page {currentPage}</span>
-                        <button disabled={!txHasNext || txLoading} onClick={() => setCurrentPage(prev => prev + 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Next</button>
+                <div className="flex items-center justify-between mb-3">
+                    {/* View mode toggle */}
+                    <div className="flex items-center gap-0.5 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
+                        <button
+                            onClick={() => setViewMode('pages')}
+                            className={`px-2.5 py-1 text-[10px] uppercase tracking-widest flex items-center gap-1.5 transition-colors ${viewMode === 'pages' ? 'bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'}`}
+                        >
+                            <List className="h-3 w-3" />Pages
+                        </button>
+                        <button
+                            onClick={() => setViewMode('timeline')}
+                            className={`px-2.5 py-1 text-[10px] uppercase tracking-widest flex items-center gap-1.5 transition-colors ${viewMode === 'timeline' ? 'bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'}`}
+                        >
+                            <CalendarDays className="h-3 w-3" />Timeline
+                        </button>
                     </div>
+                    {/* Pagination (pages mode only) */}
+                    {viewMode === 'pages' && (
+                        <div className="flex items-center gap-2">
+                            <button disabled={currentPage <= 1 || txLoading} onClick={() => setCurrentPage(prev => prev - 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Prev</button>
+                            <span className="text-[10px] text-zinc-500 tabular-nums min-w-[4rem] text-center">Page {currentPage}</span>
+                            <button disabled={!txHasNext || txLoading} onClick={() => setCurrentPage(prev => prev + 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Next</button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -499,8 +611,8 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                     <div className="text-center text-zinc-500 italic py-8">No scheduled transactions found</div>
                 )}
 
-                {/* Unified timeline (filterMode === 'all') */}
-                {filterMode === 'all' && filteredTransactions.length > 0 && (
+                {/* Unified activity feed — Pages mode */}
+                {filterMode === 'all' && viewMode === 'pages' && filteredTransactions.length > 0 && (
                     <div className="space-y-0">
                         {filteredTransactions.map((tx) => {
                             const txKey = `${tx.id}:${tx.block_height ?? tx.blockHeight ?? ''}`;
@@ -517,8 +629,54 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                         })}
                     </div>
                 )}
-                {filterMode === 'all' && filteredTransactions.length === 0 && !txLoading && (
+                {filterMode === 'all' && viewMode === 'pages' && filteredTransactions.length === 0 && !txLoading && (
                     <div className="text-center text-zinc-500 italic py-8">No transactions found</div>
+                )}
+
+                {/* Unified activity feed — Timeline mode */}
+                {filterMode === 'all' && viewMode === 'timeline' && (
+                    <div className="space-y-0">
+                        {(() => {
+                            const now = new Date();
+                            let lastSection = '';
+                            return timelineTxs.map((tx) => {
+                                const txKey = `tl:${tx.id}:${tx.block_height ?? tx.blockHeight ?? ''}`;
+                                const ts = tx.timestamp || tx.time;
+                                const section = ts ? getTimeSection(ts, now) : 'Unknown';
+                                const showHeader = section !== lastSection;
+                                lastSection = section;
+                                return (
+                                    <Fragment key={txKey}>
+                                        {showHeader && (
+                                            <div className="sticky top-0 z-10 bg-zinc-50/90 dark:bg-zinc-900/90 backdrop-blur-sm text-[10px] uppercase tracking-widest text-zinc-500 font-bold px-4 py-2 border-b border-zinc-200 dark:border-white/10">
+                                                {section}
+                                            </div>
+                                        )}
+                                        <ActivityRow
+                                            tx={tx}
+                                            address={normalizedAddress}
+                                            expanded={expandedTxId === txKey}
+                                            onToggle={() => setExpandedTxId(prev => prev === txKey ? null : txKey)}
+                                            tokenMeta={tokenMeta}
+                                        />
+                                    </Fragment>
+                                );
+                            });
+                        })()}
+                        {/* Sentinel for infinite scroll */}
+                        <div ref={sentinelRef} className="h-1" />
+                        {timelineLoading && (
+                            <div className="flex items-center justify-center py-4">
+                                <div className="w-5 h-5 border-2 border-dashed border-zinc-400 dark:border-zinc-500 rounded-full animate-spin" />
+                            </div>
+                        )}
+                        {!timelineHasMore && timelineTxs.length > 0 && (
+                            <div className="text-center text-[10px] text-zinc-400 py-4 uppercase tracking-widest">End of activity</div>
+                        )}
+                        {timelineTxs.length === 0 && !timelineLoading && (
+                            <div className="text-center text-zinc-500 italic py-8">No transactions found</div>
+                        )}
+                    </div>
                 )}
             </div>
         </div>
