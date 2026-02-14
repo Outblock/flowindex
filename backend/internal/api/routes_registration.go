@@ -23,6 +23,8 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin.HandleFunc("/script-templates", s.handleAdminListScriptTemplates).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/script-templates/stats", s.handleAdminGetScriptTemplateStats).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/script-templates/refresh-counts", s.handleAdminRefreshScriptTemplateCounts).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/script-templates/ai-classify", s.handleAdminAIClassify).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/script-templates/ai-classify-batch", s.handleAdminAIClassifyBatch).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/script-templates/{hash}", s.handleAdminUpdateScriptTemplate).Methods("PUT", "PATCH", "OPTIONS")
 	admin.HandleFunc("/script-templates/{hash}/script", s.handleAdminGetScriptText).Methods("GET", "OPTIONS")
 }

@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
+import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
 import { resolveApiBaseUrl } from '../api'
 import toast from 'react-hot-toast'
 
@@ -384,6 +384,7 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
   const [loaded, setLoaded] = useState(false)
   const [stats, setStats] = useState<any>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [aiClassifying, setAiClassifying] = useState(false)
 
   const loadStats = useCallback(async () => {
     try {
@@ -419,6 +420,26 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
     }
   }
 
+  const handleAIClassifyBatch = async () => {
+    setAiClassifying(true)
+    try {
+      const data = await adminFetch('admin/script-templates/ai-classify-batch', token, {
+        method: 'POST',
+        body: JSON.stringify({ min_tx_count: 1000, limit: 20 }),
+      })
+      const results = data?.data || []
+      const successes = results.filter((r: any) => !r.error)
+      const failures = results.filter((r: any) => r.error)
+      if (successes.length > 0) toast.success(`AI classified ${successes.length} templates`)
+      if (failures.length > 0) toast.error(`${failures.length} failed`)
+      doSearch()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setAiClassifying(false)
+    }
+  }
+
   useEffect(() => { doSearch() }, [token]) // auto-load on mount
 
   return (
@@ -444,6 +465,14 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
         >
           {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           Refresh
+        </button>
+        <button
+          onClick={handleAIClassifyBatch}
+          disabled={aiClassifying}
+          className="flex items-center gap-2 px-4 py-2 border border-nothing-green/30 bg-nothing-green/5 text-xs uppercase tracking-widest font-mono text-nothing-green-dark dark:text-nothing-green hover:bg-nothing-green/10 transition-colors disabled:opacity-50"
+        >
+          {aiClassifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          AI Classify Top 20
         </button>
       </div>
 
@@ -471,6 +500,7 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
   const [expanded, setExpanded] = useState(false)
   const [scriptText, setScriptText] = useState<string | null>(null)
   const [loadingScript, setLoadingScript] = useState(false)
+  const [aiClassifying, setAiClassifying] = useState(false)
   const [categories, setCategories] = useState<string[]>(() => (item.category || '').split(',').filter(Boolean))
   const [label, setLabel] = useState(item.label || '')
   const [description, setDescription] = useState(item.description || '')
@@ -503,6 +533,27 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
       }
     }
     setExpanded(!expanded)
+  }
+
+  const handleAIClassify = async () => {
+    setAiClassifying(true)
+    try {
+      const data = await adminFetch('admin/script-templates/ai-classify', token, {
+        method: 'POST',
+        body: JSON.stringify({ script_hash: item.script_hash }),
+      })
+      const result = data?.data
+      if (result) {
+        setCategories(result.categories || [])
+        setLabel(result.label || '')
+        setDescription(result.description || '')
+        toast.success('AI classified')
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setAiClassifying(false)
+    }
   }
 
   return (
@@ -558,6 +609,15 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
               placeholder="Label..."
               className="flex-1 min-w-[200px] px-2 py-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-xs font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-nothing-green"
             />
+            <button
+              onClick={handleAIClassify}
+              disabled={aiClassifying}
+              className="flex items-center gap-1 px-3 py-1 border border-nothing-green/30 bg-nothing-green/5 text-nothing-green-dark dark:text-nothing-green text-[10px] uppercase tracking-widest font-mono font-bold hover:bg-nothing-green/10 transition-colors disabled:opacity-50"
+              title="AI Classify"
+            >
+              {aiClassifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              AI
+            </button>
             <button
               onClick={handleSave}
               disabled={saving}

@@ -200,6 +200,38 @@ func (r *Repository) GetScriptTemplatesByTxIDs(ctx context.Context, txIDs []stri
 	return result, rows.Err()
 }
 
+// AdminListUnlabeledScriptTemplates returns unlabeled templates with tx_count >= minTxCount,
+// sorted by tx_count DESC, limited to `limit` rows.
+func (r *Repository) AdminListUnlabeledScriptTemplates(ctx context.Context, minTxCount, limit int) ([]ScriptTemplate, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT st.script_hash, COALESCE(st.category, ''), COALESCE(st.label, ''),
+		       COALESCE(st.description, ''), st.tx_count,
+		       COALESCE(LEFT(s.script_text, 200), ''),
+		       st.created_at, st.updated_at
+		FROM app.script_templates st
+		LEFT JOIN raw.scripts s ON s.script_hash = st.script_hash
+		WHERE (st.category IS NULL OR st.category = '')
+		  AND st.tx_count >= $1
+		ORDER BY st.tx_count DESC
+		LIMIT $2`, minTxCount, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ScriptTemplate
+	for rows.Next() {
+		var t ScriptTemplate
+		if err := rows.Scan(&t.ScriptHash, &t.Category, &t.Label,
+			&t.Description, &t.TxCount, &t.ScriptPreview,
+			&t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, t)
+	}
+	return result, rows.Err()
+}
+
 func nilIfEmpty(s string) interface{} {
 	if s == "" {
 		return nil
