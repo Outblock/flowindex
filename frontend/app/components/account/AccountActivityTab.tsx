@@ -9,6 +9,7 @@ import {
 } from '../../api/gen/find';
 import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, Clock } from 'lucide-react';
 import { normalizeAddress, formatShort } from './accountUtils';
+import { AddressLink } from '../AddressLink';
 import { formatRelativeTime } from '../../lib/time';
 import {
     ActivityRow,
@@ -20,7 +21,6 @@ import {
     type TransferSummary,
     type TokenMetaEntry,
 } from '../TransactionRow';
-import { resolveApiBaseUrl } from '../../api';
 
 type FilterMode = 'all' | 'ft' | 'nft' | 'scheduled';
 
@@ -368,11 +368,11 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                                         </div>
                                         <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
                                             {sender && (
-                                                <span>From <Link to={`/accounts/${normalizeAddress(sender)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(sender)}</Link></span>
+                                                <span>From <AddressLink address={sender} size={14} /></span>
                                             )}
                                             {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
                                             {receiver && (
-                                                <span>To <Link to={`/accounts/${normalizeAddress(receiver)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(receiver)}</Link></span>
+                                                <span>To <AddressLink address={receiver} size={14} /></span>
                                             )}
                                             {tx.transaction_hash && (
                                                 <>
@@ -428,11 +428,11 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                                         </div>
                                         <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
                                             {sender && (
-                                                <span>From <Link to={`/accounts/${normalizeAddress(sender)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(sender)}</Link></span>
+                                                <span>From <AddressLink address={sender} size={14} /></span>
                                             )}
                                             {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
                                             {receiver && (
-                                                <span>To <Link to={`/accounts/${normalizeAddress(receiver)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(receiver)}</Link></span>
+                                                <span>To <AddressLink address={receiver} size={14} /></span>
                                             )}
                                             {tx.nft_type && (
                                                 <>

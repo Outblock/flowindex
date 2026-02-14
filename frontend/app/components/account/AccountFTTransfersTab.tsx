@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddressFtTransfer } from '../../api/gen/find';
 import { normalizeAddress, formatShort } from './accountUtils';
+import { AddressLink } from '../AddressLink';
 
 interface Props {
     address: string;
@@ -71,10 +72,10 @@ export function AccountFTTransfersTab({ address }: Props) {
                                     <td className="p-4 font-mono">{tx.token_id || tx.type_id || '—'}</td>
                                     <td className="p-4 font-mono">{tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}</td>
                                     <td className="p-4">
-                                        {tx.from_address ? <Link to={`/accounts/${normalizeAddress(tx.from_address)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.from_address)}</Link> : '—'}
+                                        {tx.from_address ? <AddressLink address={tx.from_address} /> : '—'}
                                     </td>
                                     <td className="p-4">
-                                        {tx.to_address ? <Link to={`/accounts/${normalizeAddress(tx.to_address)}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.to_address)}</Link> : '—'}
+                                        {tx.to_address ? <AddressLink address={tx.to_address} /> : '—'}
                                     </td>
                                     <td className="p-4 text-right text-zinc-500">{tx.block_height ?? '—'}</td>
                                 </tr>
