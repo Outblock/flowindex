@@ -6,6 +6,7 @@ import { AddressLink } from './AddressLink';
 import { formatRelativeTime } from '../lib/time';
 import { ensureHeyApiConfigured } from '../api/heyapi';
 import { getFlowV1TransactionById } from '../api/gen/find/sdk.gen';
+import { NFTDetailModal } from './NFTDetailModal';
 
 // --- Interfaces ---
 
@@ -249,6 +250,12 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
     const [error, setError] = useState(false);
     const fetchedRef = useRef(false);
 
+    // NFT detail modal state
+    const [selectedNft, setSelectedNft] = useState<any>(null);
+    const [selectedNftCollectionId, setSelectedNftCollectionId] = useState('');
+    const [selectedNftCollectionName, setSelectedNftCollectionName] = useState('');
+    const [nftLoadingIdx, setNftLoadingIdx] = useState<number | null>(null);
+
     useEffect(() => {
         if (!expanded || fetchedRef.current) return;
         fetchedRef.current = true;
@@ -278,6 +285,47 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
         })();
         return () => { cancelled = true; };
     }, [expanded, tx.id]);
+
+    // Handler: click NFT transfer row → fetch full Cadence detail → show modal
+    const handleNftClick = async (nt: any, idx: number) => {
+        // Determine owner address: receiver is most likely current holder
+        const ownerAddr = nt.to_address || nt.from_address;
+        const publicPath = nt.public_path;
+        const tokenId = nt.token_id;
+
+        if (!ownerAddr || !publicPath || !tokenId) {
+            // Can't fetch on-chain detail without these — just skip
+            return;
+        }
+
+        setNftLoadingIdx(idx);
+        try {
+            const { cadenceService } = await import('../fclConfig');
+            const nftDetail = await cadenceService.getNftDetail(ownerAddr, publicPath, parseInt(tokenId));
+            // Ensure tokenId is included in the result
+            if (nftDetail && !nftDetail.tokenId) {
+                nftDetail.tokenId = tokenId;
+            }
+            setSelectedNft(nftDetail);
+            setSelectedNftCollectionId(nt.token || '');
+            setSelectedNftCollectionName(nt.collection_name || '');
+        } catch (err) {
+            console.warn('Failed to fetch NFT detail (may be burned/moved)', err);
+            // Graceful fallback: show modal with whatever metadata we have from the transfer
+            setSelectedNft({
+                display: {
+                    name: nt.nft_name || `#${tokenId}`,
+                    thumbnail: nt.nft_thumbnail ? { url: nt.nft_thumbnail } : undefined,
+                },
+                tokenId,
+                rarity: nt.nft_rarity ? { description: nt.nft_rarity } : undefined,
+            });
+            setSelectedNftCollectionId(nt.token || '');
+            setSelectedNftCollectionName(nt.collection_name || '');
+        } finally {
+            setNftLoadingIdx(null);
+        }
+    };
 
     // Fallback to list-level data while loading or on error
     const summary: TransferSummary | undefined = tx.transfer_summary;
@@ -524,63 +572,75 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                 <div>
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">NFT Transfers</div>
                     <div className="space-y-2">
-                        {nftTransfers.map((nt: any, i: number) => (
-                            <div key={i} className="flex items-center gap-2.5 text-xs">
-                                {/* NFT thumbnail or collection icon */}
-                                {nt.nft_thumbnail ? (
-                                    <img
-                                        src={nt.nft_thumbnail}
-                                        alt={nt.nft_name || ''}
-                                        className="w-10 h-10 rounded-md object-cover flex-shrink-0 border border-zinc-200 dark:border-white/10"
-                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                    />
-                                ) : nt.collection_logo ? (
-                                    <div className="w-10 h-10 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-                                        <TokenIcon logo={nt.collection_logo} symbol={nt.collection_name} size={32} />
-                                    </div>
-                                ) : (
-                                    <div className="w-10 h-10 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center flex-shrink-0">
-                                        <ShoppingBag className="h-4 w-4 text-amber-500" />
-                                    </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                                            {nt.nft_name || `#${nt.token_id}`}
-                                        </span>
-                                        <span className="text-zinc-400 text-[10px]">
-                                            {nt.collection_name || formatTokenName(nt.token)}
-                                        </span>
-                                        {nt.nft_rarity && (
-                                            <span className="text-[9px] px-1 py-0.5 rounded-sm border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 uppercase">
-                                                {nt.nft_rarity}
+                        {nftTransfers.map((nt: any, i: number) => {
+                            const isClickable = !!(nt.public_path && nt.token_id && (nt.to_address || nt.from_address));
+                            const isLoadingThis = nftLoadingIdx === i;
+                            return (
+                                <div
+                                    key={i}
+                                    className={`flex items-center gap-2.5 text-xs ${isClickable ? 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-white/5 -mx-2 px-2 py-1.5 rounded-md transition-colors' : ''}`}
+                                    onClick={isClickable && !isLoadingThis ? (e) => { e.stopPropagation(); handleNftClick(nt, i); } : undefined}
+                                >
+                                    {/* NFT thumbnail or collection icon */}
+                                    {isLoadingThis ? (
+                                        <div className="w-10 h-10 rounded-md bg-zinc-100 dark:bg-white/10 flex items-center justify-center flex-shrink-0">
+                                            <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                                        </div>
+                                    ) : nt.nft_thumbnail ? (
+                                        <img
+                                            src={nt.nft_thumbnail}
+                                            alt={nt.nft_name || ''}
+                                            className="w-10 h-10 rounded-md object-cover flex-shrink-0 border border-zinc-200 dark:border-white/10"
+                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                    ) : nt.collection_logo ? (
+                                        <div className="w-10 h-10 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                            <TokenIcon logo={nt.collection_logo} symbol={nt.collection_name} size={32} />
+                                        </div>
+                                    ) : (
+                                        <div className="w-10 h-10 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center flex-shrink-0">
+                                            <ShoppingBag className="h-4 w-4 text-amber-500" />
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className={`font-medium truncate ${isClickable ? 'text-nothing-green-dark dark:text-nothing-green' : 'text-zinc-900 dark:text-zinc-100'}`}>
+                                                {nt.nft_name || `#${nt.token_id}`}
                                             </span>
-                                        )}
-                                        {nt.is_cross_vm && (
-                                            <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1 py-0.5 rounded uppercase">
-                                                <Globe className="w-2.5 h-2.5" />
-                                                Cross-VM
+                                            <span className="text-zinc-400 text-[10px]">
+                                                {nt.collection_name || formatTokenName(nt.token)}
                                             </span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 mt-0.5">
-                                        {nt.from_address && (
-                                            <span>
-                                                from{' '}
-                                                <AddressLink address={nt.from_address} prefixLen={8} suffixLen={4} size={14} onClick={(e) => e.stopPropagation()} />
-                                            </span>
-                                        )}
-                                        {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
-                                        {nt.to_address && (
-                                            <span>
-                                                to{' '}
-                                                <AddressLink address={nt.to_address} prefixLen={8} suffixLen={4} size={14} onClick={(e) => e.stopPropagation()} />
-                                            </span>
-                                        )}
+                                            {nt.nft_rarity && (
+                                                <span className="text-[9px] px-1 py-0.5 rounded-sm border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 uppercase">
+                                                    {nt.nft_rarity}
+                                                </span>
+                                            )}
+                                            {nt.is_cross_vm && (
+                                                <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1 py-0.5 rounded uppercase">
+                                                    <Globe className="w-2.5 h-2.5" />
+                                                    Cross-VM
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 mt-0.5">
+                                            {nt.from_address && (
+                                                <span>
+                                                    from{' '}
+                                                    <AddressLink address={nt.from_address} prefixLen={8} suffixLen={4} size={14} onClick={(e) => e.stopPropagation()} />
+                                                </span>
+                                            )}
+                                            {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
+                                            {nt.to_address && (
+                                                <span>
+                                                    to{' '}
+                                                    <AddressLink address={nt.to_address} prefixLen={8} suffixLen={4} size={14} onClick={(e) => e.stopPropagation()} />
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -669,6 +729,16 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                     <span key={c}>{i > 0 && ', '}<Link to={`/contracts/${c}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>{formatTokenName(c)}</Link></span>
                 ))}</span>}
             </div>
+
+            {/* NFT Detail Modal */}
+            {selectedNft && (
+                <NFTDetailModal
+                    nft={selectedNft}
+                    collectionId={selectedNftCollectionId}
+                    collectionName={selectedNftCollectionName}
+                    onClose={() => setSelectedNft(null)}
+                />
+            )}
         </div>
     );
 }

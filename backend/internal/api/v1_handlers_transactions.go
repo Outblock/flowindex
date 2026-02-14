@@ -152,6 +152,19 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		}
 		nftCollMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), collIDs)
 
+		// Batch fetch public_path for each collection (for on-chain NFT detail lookup)
+		collPublicPaths := make(map[string]string)
+		for _, id := range collIDs {
+			parts := strings.SplitN(id, ".", 3)
+			if len(parts) >= 3 {
+				addr := strings.TrimPrefix(parts[1], "0x")
+				name := parts[2]
+				if pp, err := s.repo.GetCollectionPublicPath(r.Context(), addr, name); err == nil && pp != "" {
+					collPublicPaths[id] = pp
+				}
+			}
+		}
+
 		// Batch fetch NFT item metadata
 		itemKeys := make([]repository.NFTItemKey, 0, len(nftTransfers))
 		for _, nt := range nftTransfers {
@@ -194,6 +207,9 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 			if meta, ok := nftCollMeta[nt.Token]; ok {
 				item["collection_name"] = meta.Name
 				item["collection_logo"] = meta.Logo
+			}
+			if pp, ok := collPublicPaths[nt.Token]; ok {
+				item["public_path"] = pp
 			}
 			// Attach NFT item metadata if available
 			parts := strings.SplitN(nt.Token, ".", 3)
