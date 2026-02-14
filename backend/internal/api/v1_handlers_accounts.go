@@ -185,6 +185,11 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// The repo fetches limit+1 rows; trim to detect hasMore.
+	hasMore := len(txs) > limit
+	if hasMore {
+		txs = txs[:limit]
+	}
 	// Filter by height if provided
 	if height != nil {
 		filtered := make([]models.Transaction, 0, len(txs))
@@ -222,7 +227,12 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts, ftMeta, nftMeta))
 	}
 	enrichWithTemplates(out, templates)
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}
+	// Include pre-computed total from address_stats if available.
+	if total, err := s.repo.GetAddressTxCount(r.Context(), address); err == nil && total > 0 {
+		meta["total"] = total
+	}
+	writeAPIResponse(w, out, meta, nil)
 }
 
 func (s *Server) handleFlowAccountFTTransfers(w http.ResponseWriter, r *http.Request) {
