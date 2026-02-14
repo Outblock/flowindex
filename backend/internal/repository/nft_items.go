@@ -336,6 +336,51 @@ func (r *Repository) SearchNFTItems(ctx context.Context, query, contractAddr, co
 	return out, hasMore, nil
 }
 
+// NFTItemKey uniquely identifies an NFT item for batch lookup.
+type NFTItemKey struct {
+	ContractAddress string
+	ContractName    string
+	NFTID           string
+}
+
+// GetNFTItemsBatch fetches NFT item metadata for multiple (contractAddr, contractName, nftID) tuples.
+func (r *Repository) GetNFTItemsBatch(ctx context.Context, keys []NFTItemKey) (map[NFTItemKey]*models.NFTItem, error) {
+	out := make(map[NFTItemKey]*models.NFTItem, len(keys))
+	if len(keys) == 0 {
+		return out, nil
+	}
+	batch := &pgx.Batch{}
+	for _, k := range keys {
+		batch.Queue(`
+			SELECT encode(contract_address, 'hex'), COALESCE(contract_name, ''), nft_id,
+				COALESCE(name, ''), COALESCE(description, ''), COALESCE(thumbnail, ''), COALESCE(external_url, ''),
+				serial_number, COALESCE(edition_name, ''), edition_number, edition_max,
+				COALESCE(rarity_score, ''), COALESCE(rarity_description, ''), traits,
+				updated_at
+			FROM app.nft_items
+			WHERE contract_address = $1 AND contract_name = $2 AND nft_id = $3
+			  AND name IS NOT NULL`,
+			hexToBytes(k.ContractAddress), k.ContractName, k.NFTID)
+	}
+	br := r.db.SendBatch(ctx, batch)
+	defer br.Close()
+	for _, k := range keys {
+		var item models.NFTItem
+		err := br.QueryRow().Scan(
+			&item.ContractAddress, &item.ContractName, &item.NFTID,
+			&item.Name, &item.Description, &item.Thumbnail, &item.ExternalURL,
+			&item.SerialNumber, &item.EditionName, &item.EditionNumber, &item.EditionMax,
+			&item.RarityScore, &item.RarityDescription, &item.Traits,
+			&item.UpdatedAt,
+		)
+		if err != nil {
+			continue // not found or error, skip
+		}
+		out[k] = &item
+	}
+	return out, nil
+}
+
 // --- Reconciliation methods ---
 
 // OwnerCollectionCount represents a (owner, collection) pair with its DB-side NFT count.

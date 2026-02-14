@@ -18,9 +18,54 @@ import {
     deriveActivityType,
     dedup,
     type TransferSummary,
+    type TokenMetaEntry,
 } from '../TransactionRow';
+import { resolveApiBaseUrl } from '../../api';
 
 type FilterMode = 'all' | 'ft' | 'nft' | 'scheduled';
+
+// Module-level token metadata cache (persists across re-renders, shared across pages)
+const tokenMetaCache = new Map<string, TokenMetaEntry>();
+let tokenMetaCacheLoaded = false;
+
+async function loadTokenMetaCache(): Promise<Map<string, TokenMetaEntry>> {
+    if (tokenMetaCacheLoaded && tokenMetaCache.size > 0) return tokenMetaCache;
+    try {
+        const baseUrl = await resolveApiBaseUrl();
+        const [ftRes, nftRes] = await Promise.all([
+            fetch(`${baseUrl}/flow/ft?limit=500`),
+            fetch(`${baseUrl}/flow/nft?limit=500`),
+        ]);
+        const ftPayload: any = await ftRes.json();
+        const nftPayload: any = await nftRes.json();
+        const ftTokens: any[] = ftPayload?.data ?? [];
+        const nftColls: any[] = nftPayload?.data ?? [];
+        for (const t of ftTokens) {
+            const id = t.identifier || t.token || '';
+            if (!id) continue;
+            tokenMetaCache.set(id, {
+                name: t.name || '',
+                symbol: t.symbol || '',
+                logo: t.logo || null,
+                type: 'ft',
+            });
+        }
+        for (const c of nftColls) {
+            const id = c.identifier || c.token || '';
+            if (!id) continue;
+            tokenMetaCache.set(id, {
+                name: c.name || '',
+                symbol: c.symbol || '',
+                logo: c.square_image || c.logo || null,
+                type: 'nft',
+            });
+        }
+        tokenMetaCacheLoaded = true;
+    } catch (err) {
+        console.warn('Failed to load token metadata cache', err);
+    }
+    return tokenMetaCache;
+}
 
 interface Props {
     address: string;
@@ -69,6 +114,12 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     const [scheduledCursor, setScheduledCursor] = useState('');
     const [scheduledHasMore, setScheduledHasMore] = useState(false);
     const [scheduledLoading, setScheduledLoading] = useState(false);
+
+    // Token metadata cache for enriching list rows
+    const [tokenMeta, setTokenMeta] = useState<Map<string, TokenMetaEntry>>(tokenMetaCache);
+    useEffect(() => {
+        loadTokenMetaCache().then(setTokenMeta);
+    }, []);
 
     // Reset only when address changes (not on every initialTransactions reference change)
     const prevAddressRef = useRef(normalizedAddress);
@@ -425,6 +476,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                                     address={normalizedAddress}
                                     expanded={expandedTxId === txKey}
                                     onToggle={() => setExpandedTxId(prev => prev === txKey ? null : txKey)}
+                                    tokenMeta={tokenMeta}
                                 />
                             );
                         })}
@@ -459,6 +511,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                                     address={normalizedAddress}
                                     expanded={expandedTxId === txKey}
                                     onToggle={() => setExpandedTxId(prev => prev === txKey ? null : txKey)}
+                                    tokenMeta={tokenMeta}
                                 />
                             );
                         })}
