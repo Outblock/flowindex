@@ -775,7 +775,7 @@ function TransactionDetail() {
                                     {transaction.arguments ? (
                                         <div className="bg-zinc-50 dark:bg-black/50 border border-zinc-200 dark:border-white/5 p-4 rounded-sm">
                                             {(() => {
-                                                const decodeCadenceValue = (val) => {
+                                                const decodeCadenceValue = (val: any): any => {
                                                     if (!val || typeof val !== 'object') return val;
 
                                                     if (val.value !== undefined) {
@@ -786,8 +786,8 @@ function TransactionDetail() {
                                                             return val.value.map(decodeCadenceValue);
                                                         }
                                                         if (val.type === 'Dictionary') {
-                                                            const dict = {};
-                                                            val.value.forEach(item => {
+                                                            const dict: Record<string, any> = {};
+                                                            val.value.forEach((item: any) => {
                                                                 const k = decodeCadenceValue(item.key);
                                                                 const v = decodeCadenceValue(item.value);
                                                                 dict[String(k)] = v;
@@ -795,9 +795,9 @@ function TransactionDetail() {
                                                             return dict;
                                                         }
                                                         if (val.type === 'Struct' || val.type === 'Resource' || val.type === 'Event') {
-                                                            const obj = {};
+                                                            const obj: Record<string, any> = {};
                                                             if (val.value && val.value.fields) {
-                                                                val.value.fields.forEach(f => {
+                                                                val.value.fields.forEach((f: any) => {
                                                                     obj[f.name] = decodeCadenceValue(f.value);
                                                                 });
                                                                 return obj;
@@ -814,6 +814,33 @@ function TransactionDetail() {
                                                     return val;
                                                 };
 
+                                                // Extract Cadence type string (handles nested: [String], {String: UInt64}, etc.)
+                                                const getCadenceType = (val: any): string => {
+                                                    if (!val || typeof val !== 'object') return typeof val;
+                                                    if (val.type === 'Optional') return `${getCadenceType(val.value)}?`;
+                                                    if (val.type === 'Array') return `[${val.value?.length > 0 ? getCadenceType(val.value[0]) : 'Any'}]`;
+                                                    if (val.type === 'Dictionary') {
+                                                        const first = val.value?.[0];
+                                                        return first ? `{${getCadenceType(first.key)}: ${getCadenceType(first.value)}}` : '{Any: Any}';
+                                                    }
+                                                    return val.type || typeof val;
+                                                };
+
+                                                // Parse parameter names from script's transaction(...) signature
+                                                const parseParamNames = (script: string): { name: string; type: string }[] => {
+                                                    if (!script) return [];
+                                                    // Match transaction(...) or prepare(...) — handle multiline
+                                                    const match = script.match(/(?:transaction|prepare)\s*\(([^)]*)\)/s);
+                                                    if (!match) return [];
+                                                    const paramsStr = match[1].trim();
+                                                    if (!paramsStr) return [];
+                                                    return paramsStr.split(',').map(p => {
+                                                        const trimmed = p.trim();
+                                                        const parts = trimmed.split(':').map(s => s.trim());
+                                                        return { name: parts[0] || '', type: parts[1] || '' };
+                                                    });
+                                                };
+
                                                 try {
                                                     let args = transaction.arguments;
                                                     if (typeof args === 'string') {
@@ -828,21 +855,35 @@ function TransactionDetail() {
                                                         return <pre className="text-[10px] text-nothing-green-dark dark:text-nothing-green whitespace-pre-wrap">{JSON.stringify(args, null, 2)}</pre>;
                                                     }
 
-                                                    const decodedArgs = args.map(decodeCadenceValue);
+                                                    const paramNames = parseParamNames(transaction.script);
 
                                                     return (
-                                                        <div className="space-y-2">
-                                                            {decodedArgs.map((arg, idx) => (
-                                                                <div key={idx} className="flex flex-col gap-1 border-b border-zinc-200 dark:border-white/5 last:border-0 pb-2 mb-2 last:mb-0 last:pb-0">
-                                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Argument {idx}</span>
-                                                                    <div className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all bg-zinc-100 dark:bg-white/5 p-2 rounded-sm">
-                                                                        {typeof arg === 'object' && arg !== null
-                                                                            ? JSON.stringify(arg, null, 2)
-                                                                            : String(arg)
-                                                                        }
+                                                        <div className="space-y-3">
+                                                            {args.map((rawArg: any, idx: number) => {
+                                                                const decoded = decodeCadenceValue(rawArg);
+                                                                const cadenceType = getCadenceType(rawArg);
+                                                                const param = paramNames[idx];
+                                                                const paramName = param?.name || `arg${idx}`;
+                                                                const paramType = param?.type || cadenceType;
+
+                                                                return (
+                                                                    <div key={idx} className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
+                                                                        {/* Header: name + type */}
+                                                                        <div className="flex items-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-white/5 border-b border-zinc-200 dark:border-white/5">
+                                                                            <span className="text-[10px] text-zinc-400 font-mono tabular-nums">{idx}</span>
+                                                                            <span className="text-[11px] text-zinc-800 dark:text-zinc-200 font-medium font-mono">{paramName}</span>
+                                                                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-500/10 px-1.5 py-0.5 rounded">{paramType}</span>
+                                                                        </div>
+                                                                        {/* Value */}
+                                                                        <div className="px-3 py-2.5 text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all leading-relaxed">
+                                                                            {typeof decoded === 'object' && decoded !== null
+                                                                                ? <pre className="whitespace-pre-wrap">{JSON.stringify(decoded, null, 2)}</pre>
+                                                                                : String(decoded)
+                                                                            }
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </div>
                                                     );
 
