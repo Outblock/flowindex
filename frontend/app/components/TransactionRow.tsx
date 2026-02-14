@@ -39,6 +39,7 @@ export interface TokenMetaEntry {
     symbol: string;
     logo: any;
     type: 'ft' | 'nft';
+    banner_image?: string | null;
 }
 
 // --- Helpers ---
@@ -793,36 +794,132 @@ function formatTagLabel(tag: string): string {
     return tag.replace(/_/g, ' ');
 }
 
-function deriveTokenContext(tx: any, tokenMeta?: Map<string, TokenMetaEntry>): { icon: any; label: string; type: 'ft' | 'nft' | null }[] {
+interface TransferPreviewItem {
+    type: 'ft' | 'nft';
+    icon: any;
+    label: string;
+    amount?: string;
+    symbol?: string;
+    count?: number;
+}
+
+function deriveTransferPreview(tx: any, tokenMeta?: Map<string, TokenMetaEntry>): TransferPreviewItem[] {
+    const items: TransferPreviewItem[] = [];
+
+    // Priority 1: rich ft_transfers / nft_transfers arrays
+    if (tx.ft_transfers?.length > 0) {
+        for (const ft of tx.ft_transfers) {
+            if (items.length >= 3) break;
+            const sym = ft.token_symbol || ft.token?.split('.').pop() || '';
+            items.push({
+                type: 'ft',
+                icon: ft.token_logo || null,
+                label: sym,
+                amount: ft.amount != null ? Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 4 }) : undefined,
+                symbol: sym,
+            });
+        }
+    }
+    if (tx.nft_transfers?.length > 0) {
+        // Group NFT transfers by collection
+        const collMap = new Map<string, { count: number; icon: any; name: string }>();
+        for (const nt of tx.nft_transfers) {
+            const key = nt.token || nt.collection_name || 'NFT';
+            const existing = collMap.get(key);
+            if (existing) {
+                existing.count++;
+            } else {
+                collMap.set(key, { count: 1, icon: nt.collection_logo || null, name: nt.collection_name || formatTokenName(nt.token || '') });
+            }
+        }
+        for (const [, val] of collMap) {
+            if (items.length >= 3) break;
+            items.push({ type: 'nft', icon: val.icon, label: val.name, count: val.count });
+        }
+    }
+    if (items.length > 0) return items;
+
+    // Priority 2: transfer_summary
+    const summary: TransferSummary | undefined = tx.transfer_summary;
+    if (summary?.ft?.length) {
+        for (const f of summary.ft) {
+            if (items.length >= 3) break;
+            const sym = f.symbol || f.name || formatTokenName(f.token);
+            items.push({
+                type: 'ft',
+                icon: f.logo || null,
+                label: sym,
+                amount: f.amount ? Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 }) : undefined,
+                symbol: sym,
+            });
+        }
+    }
+    if (summary?.nft?.length) {
+        for (const n of summary.nft) {
+            if (items.length >= 3) break;
+            const name = n.name || formatTokenName(n.collection);
+            items.push({ type: 'nft', icon: n.logo || null, label: name, count: n.count });
+        }
+    }
+    if (items.length > 0) return items;
+
+    // Priority 3: contract_imports + tokenMeta (labels only)
     if (!tokenMeta || tokenMeta.size === 0) return [];
     const imports: string[] = tx.contract_imports || [];
-    if (imports.length === 0) return [];
-    const results: { icon: any; label: string; type: 'ft' | 'nft' | null }[] = [];
     const seen = new Set<string>();
     for (const imp of imports) {
+        if (items.length >= 3) break;
         if (seen.has(imp)) continue;
         const meta = tokenMeta.get(imp);
         if (meta) {
             seen.add(imp);
-            results.push({ icon: meta.logo, label: meta.symbol || meta.name || formatTokenName(imp), type: meta.type });
+            items.push({
+                type: meta.type,
+                icon: meta.logo,
+                label: meta.symbol || meta.name || formatTokenName(imp),
+            });
         }
     }
-    return results.slice(0, 4); // Cap at 4 to avoid overflow
+    return items;
+}
+
+function findNftBannerImage(tx: any, tokenMeta?: Map<string, TokenMetaEntry>): string | null {
+    if (!tokenMeta || tokenMeta.size === 0) return null;
+    const imports: string[] = tx.contract_imports || [];
+    for (const imp of imports) {
+        const meta = tokenMeta.get(imp);
+        if (meta?.type === 'nft' && meta.banner_image) return meta.banner_image;
+    }
+    return null;
 }
 
 export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }: { tx: any; address?: string; expanded: boolean; onToggle: () => void; tokenMeta?: Map<string, TokenMetaEntry> }) {
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
-    // Filter out noise tags that appear on every transaction
     const tags: string[] = (tx.tags || []).filter((t: string) => t !== 'FEE');
     const hasDetails = true;
-    const tokenContext = deriveTokenContext(tx, tokenMeta);
+    const transferPreview = deriveTransferPreview(tx, tokenMeta);
+    const bannerUrl = findNftBannerImage(tx, tokenMeta);
 
     return (
         <div className={`border-b border-zinc-100 dark:border-white/5 transition-colors ${expanded ? 'bg-zinc-50/50 dark:bg-white/[0.02]' : ''}`}>
             <div
-                className={`flex items-start gap-3 p-4 ${hasDetails ? 'cursor-pointer' : ''} hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group`}
+                className={`relative overflow-hidden flex items-start gap-3 p-4 ${hasDetails ? 'cursor-pointer' : ''} hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group`}
                 onClick={hasDetails ? onToggle : undefined}
             >
+                {/* NFT banner gradient overlay */}
+                {bannerUrl && !expanded && (
+                    <div
+                        className="absolute right-0 top-0 bottom-0 w-32 pointer-events-none opacity-[0.08] dark:opacity-[0.06]"
+                        style={{
+                            backgroundImage: `url(${bannerUrl})`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            maskImage: 'linear-gradient(to right, transparent, black)',
+                            WebkitMaskImage: 'linear-gradient(to right, transparent, black)',
+                        }}
+                    />
+                )}
+
                 {/* Expand chevron */}
                 <div className="flex-shrink-0 pt-1 w-4">
                     {hasDetails && (
@@ -832,9 +929,10 @@ export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }:
                     )}
                 </div>
 
-                {/* Main content: txid first, then tags, then token context */}
+                {/* Col 2: Main content */}
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    {/* Line 1: txid + tags + error */}
+                    <div className="flex items-center gap-2 flex-wrap">
                         <Link
                             to={`/tx/${tx.id}` as any}
                             className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-xs flex-shrink-0"
@@ -842,6 +940,25 @@ export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }:
                         >
                             {formatShort(tx.id, 12, 8)}
                         </Link>
+                        {/* Tags */}
+                        {tags.map((tag) => {
+                            const Icon = tagIcons[tag];
+                            return (
+                                <span
+                                    key={tag}
+                                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 border rounded-sm text-[9px] font-bold uppercase tracking-wider ${tagStyles[tag] || defaultTagStyle}`}
+                                >
+                                    {Icon && <Icon className="h-2.5 w-2.5" />}
+                                    {formatTagLabel(tag)}
+                                </span>
+                            );
+                        })}
+                        {/* Error badge (only for sealed-with-error, not normal status) */}
+                        {(tx.error_message || tx.error) && tx.status === 'SEALED' && (
+                            <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-sm border font-semibold text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
+                                ERROR
+                            </span>
+                        )}
                         {tx.status && tx.status !== 'SEALED' && (
                             <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded-sm border font-semibold ${
                                 (tx.error_message || tx.error) || tx.status === 'EXPIRED'
@@ -851,44 +968,40 @@ export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }:
                                 {tx.status}
                             </span>
                         )}
-                        {(tx.error_message || tx.error) && tx.status === 'SEALED' && (
-                            <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-sm border font-semibold text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
-                                ERROR
-                            </span>
-                        )}
-                        {/* Tags */}
-                        <div className="flex items-center gap-1 flex-wrap">
-                            {tags.map((tag) => {
-                                const Icon = tagIcons[tag];
-                                return (
-                                    <span
-                                        key={tag}
-                                        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 border rounded-sm text-[9px] font-bold uppercase tracking-wider ${tagStyles[tag] || defaultTagStyle}`}
-                                    >
-                                        {Icon && <Icon className="h-2.5 w-2.5" />}
-                                        {formatTagLabel(tag)}
-                                    </span>
-                                );
-                            })}
-                        </div>
                     </div>
-                    {/* Token context line — derived from contract_imports + metadata cache */}
-                    {tokenContext.length > 0 && (
-                        <div className="flex items-center gap-2 mt-1">
-                            {tokenContext.map((tc, i) => (
-                                <span key={i} className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
-                                    <TokenIcon logo={tc.icon} symbol={tc.label} size={14} />
-                                    <span>{tc.label}</span>
-                                </span>
-                            ))}
-                        </div>
-                    )}
+                    {/* Line 2: relative time + block link */}
+                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-zinc-400">
+                        {timeStr && <span>{timeStr}</span>}
+                        {timeStr && tx.block_height && <span>·</span>}
+                        {tx.block_height && (
+                            <Link
+                                to={`/blocks/${tx.block_height}` as any}
+                                className="font-mono hover:text-nothing-green-dark dark:hover:text-nothing-green hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                Block {Number(tx.block_height).toLocaleString()}
+                            </Link>
+                        )}
+                    </div>
                 </div>
 
-                {/* Time */}
-                <div className="flex-shrink-0 text-right">
-                    <span className="text-[10px] text-zinc-400">{timeStr}</span>
-                </div>
+                {/* Col 3: Transfer preview (right-aligned) */}
+                {transferPreview.length > 0 && (
+                    <div className="flex-shrink-0 flex flex-col items-end gap-0.5 relative z-[1]">
+                        {transferPreview.map((item, i) => (
+                            <div key={i} className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
+                                <TokenIcon logo={item.icon} symbol={item.label} size={14} />
+                                {item.type === 'ft' && item.amount && (
+                                    <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200">{item.amount}</span>
+                                )}
+                                <span className="truncate max-w-[80px]">{item.label}</span>
+                                {item.type === 'nft' && item.count != null && (
+                                    <span className="font-mono text-zinc-500">&times;{item.count}</span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Expanded detail panel */}
