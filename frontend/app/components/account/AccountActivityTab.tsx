@@ -59,7 +59,7 @@ async function loadTokenMetaCache(): Promise<Map<string, TokenMetaEntry>> {
         const ftTokens: any[] = ftPayload?.data ?? [];
         const nftColls: any[] = nftPayload?.data ?? [];
         for (const t of ftTokens) {
-            const id = t.identifier || t.token || '';
+            const id = t.id || t.identifier || t.token || '';
             if (!id) continue;
             tokenMetaCache.set(id, {
                 name: t.name || '',
@@ -69,7 +69,7 @@ async function loadTokenMetaCache(): Promise<Map<string, TokenMetaEntry>> {
             });
         }
         for (const c of nftColls) {
-            const id = c.identifier || c.token || '';
+            const id = c.id || c.identifier || c.token || '';
             if (!id) continue;
             tokenMetaCache.set(id, {
                 name: c.name || '',

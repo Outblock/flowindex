@@ -864,21 +864,33 @@ function deriveTransferPreview(tx: any, tokenMeta?: Map<string, TokenMetaEntry>)
     if (items.length > 0) return items;
 
     // Priority 3: contract_imports + tokenMeta (labels only)
-    if (!tokenMeta || tokenMeta.size === 0) return [];
-    const imports: string[] = tx.contract_imports || [];
-    const seen = new Set<string>();
-    for (const imp of imports) {
-        if (items.length >= 3) break;
-        if (seen.has(imp)) continue;
-        const meta = tokenMeta.get(imp);
-        if (meta) {
-            seen.add(imp);
-            items.push({
-                type: meta.type,
-                icon: meta.logo,
-                label: meta.symbol || meta.name || formatTokenName(imp),
-            });
+    if (tokenMeta && tokenMeta.size > 0) {
+        const imports: string[] = tx.contract_imports || [];
+        const seen = new Set<string>();
+        for (const imp of imports) {
+            if (items.length >= 3) break;
+            if (seen.has(imp)) continue;
+            const meta = tokenMeta.get(imp);
+            if (meta) {
+                seen.add(imp);
+                items.push({
+                    type: meta.type,
+                    icon: meta.logo,
+                    label: meta.symbol || meta.name || formatTokenName(imp),
+                });
+            }
         }
+        if (items.length > 0) return items;
+    }
+
+    // Priority 4: tags hint — when tags say FT/NFT but no rich data available
+    const tags: string[] = tx.tags || [];
+    const tagsSet = new Set(tags);
+    if (tagsSet.has('FT_TRANSFER') || tagsSet.has('FT_SENDER') || tagsSet.has('FT_RECEIVER')) {
+        items.push({ type: 'ft', icon: null, label: 'Token Transfer' });
+    }
+    if (tagsSet.has('NFT_TRANSFER') || tagsSet.has('NFT_SENDER') || tagsSet.has('NFT_RECEIVER')) {
+        items.push({ type: 'nft', icon: null, label: 'NFT Transfer' });
     }
     return items;
 }
