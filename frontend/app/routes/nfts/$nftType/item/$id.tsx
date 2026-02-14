@@ -10,7 +10,7 @@ import { RouteErrorBoundary } from '../../../../components/RouteErrorBoundary';
 import { PageHeader } from '../../../../components/ui/PageHeader';
 import { GlassCard } from '../../../../components/ui/GlassCard';
 import { getNFTThumbnail, normalizeAddress } from '../../../../components/account/accountUtils';
-import { CopyButton } from '../../../../../components/animate-ui/components/buttons/copy';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 
 export const Route = createFileRoute('/nfts/$nftType/item/$id')({
   component: NFTItem,

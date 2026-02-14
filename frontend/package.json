@@ -16,10 +16,12 @@
     "prepare": "cd .. && husky"
   },
   "dependencies": {
+    "@floating-ui/react": "^0.27.17",
     "@number-flow/react": "^0.5.11",
     "@onflow/fcl": "^1.21.9",
+    "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-slot": "^1.2.4",
-"@tanstack/react-router": "^1.159.4",
+    "@tanstack/react-router": "^1.159.4",
     "@tanstack/react-start": "^1.159.4",
     "ajv": "^8.17.1",
     "axios": "^1.13.4",

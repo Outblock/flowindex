@@ -23,7 +23,7 @@ import { AccountLinkedAccountsTab } from '../../components/account/AccountLinked
 import { AccountStakingTab } from '../../components/account/AccountStakingTab';
 import { AccountBalanceTab } from '../../components/account/AccountBalanceTab';
 import { PageHeader } from '../../components/ui/PageHeader';
-import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { COABadge } from '../../components/ui/COABadge';
 import { cn } from '../../lib/utils';

@@ -4,7 +4,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1BlockByHeight, getFlowV1BlockByHeightTransaction } from '../../api/gen/find';
 import { ArrowLeft, Box, Clock, Hash, Activity, ArrowRightLeft, User, Coins, Image as ImageIcon, Layers } from 'lucide-react';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
-import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
