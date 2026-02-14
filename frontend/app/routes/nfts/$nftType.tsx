@@ -19,6 +19,8 @@ import { PageHeader } from '../../components/ui/PageHeader';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { cn } from '../../lib/utils';
+import { NFTDetailModal } from '../../components/NFTDetailModal';
+import { apiItemToCadenceFormat } from '../../components/NFTDetailContent';
 
 const VALID_TABS = ['nfts', 'owners', 'transfers'] as const;
 type CollectionTab = (typeof VALID_TABS)[number];
@@ -122,6 +124,8 @@ function NFTCollectionDetailInner() {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchActive, setSearchActive] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [selectedNft, setSelectedNft] = useState<any>(null);
 
   // --- Owners state (lazy) ---
   const [owners, setOwners] = useState<any[]>([]);
@@ -393,9 +397,9 @@ function NFTCollectionDetailInner() {
                             layout
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="group"
+                            className="group cursor-pointer"
+                            onClick={() => setSelectedNft(apiItemToCadenceFormat(item))}
                           >
-                            <Link to={`/nfts/${encodeURIComponent(id)}/item/${encodeURIComponent(nftId)}`}>
                               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 overflow-hidden hover:border-nothing-green dark:hover:border-nothing-green transition-colors">
                                 <div className="aspect-square bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
                                   {thumb ? (
@@ -415,7 +419,6 @@ function NFTCollectionDetailInner() {
                                   <p className="text-[10px] text-zinc-400 font-mono">#{nftId}</p>
                                 </div>
                               </div>
-                            </Link>
                           </motion.div>
                         );
                       })}
@@ -578,6 +581,16 @@ function NFTCollectionDetailInner() {
           </div>
         </div>
       </div>
+
+      {/* NFT Detail Modal */}
+      {selectedNft && (
+        <NFTDetailModal
+          nft={selectedNft}
+          collectionId={id}
+          collectionName={displayName}
+          onClose={() => setSelectedNft(null)}
+        />
+      )}
     </div>
   );
 }
