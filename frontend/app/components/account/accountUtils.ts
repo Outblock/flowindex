@@ -118,6 +118,81 @@ export const getTokenLogoURL = (token: FTVaultInfo): string => {
     return '';
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BackfillCollection = {
+    id: string;
+    public_path: string;
+    nft_ids: string[];
+    items?: BackfillItem[];
+};
+
+type BackfillItem = {
+    nft_id: string;
+    name: string;
+    description: string;
+    thumbnail: string;
+    external_url: string;
+    serial_number: number | null;
+    edition_name: string;
+    edition_number: number | null;
+    edition_max: number | null;
+    rarity_score: string;
+    rarity_description: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    traits: any[] | null;
+};
+
+/**
+ * Fire-and-forget: send NFT ownership/metadata to backend for caching.
+ * Never throws — errors are silently logged.
+ */
+export async function backfillNFTData(owner: string, collections: BackfillCollection[]): Promise<void> {
+    try {
+        const { resolveApiBaseUrl } = await import('../../api');
+        const base = await resolveApiBaseUrl();
+        await fetch(`${base}/flow/nft/backfill`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ owner, collections }),
+        });
+    } catch (e) {
+        console.debug('[nft_backfill] failed:', e);
+    }
+}
+
+/**
+ * Convert frontend NFT detail (from Cadence) to backfill item format.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function toBackfillItem(nft: any): BackfillItem | null {
+    const name = nft?.display?.name;
+    if (!name || !nft?.tokenId) return null;
+
+    let thumbnail = '';
+    const th = nft?.display?.thumbnail;
+    if (typeof th === 'string') thumbnail = th;
+    else if (th?.url) thumbnail = th.url;
+    else if (th?.cid) thumbnail = `ipfs://${th.cid}${th.path ? `/${th.path}` : ''}`;
+
+    return {
+        nft_id: String(nft.tokenId),
+        name,
+        description: nft?.display?.description || '',
+        thumbnail,
+        external_url: nft?.externalURL?.url || '',
+        serial_number: nft?.serial?.number ?? null,
+        edition_name: nft?.editions?.[0]?.name || '',
+        edition_number: nft?.editions?.[0]?.number ?? null,
+        edition_max: nft?.editions?.[0]?.max ?? null,
+        rarity_score: nft?.rarity?.score != null ? String(nft.rarity.score) : '',
+        rarity_description: nft?.rarity?.description || '',
+        traits: nft?.traits?.traits?.map((t: { name: string; value: unknown }) => ({
+            name: t.name,
+            value: String(t.value ?? ''),
+        })) || null,
+    };
+}
+
 /** Resolve IPFS links to gateway */
 export const resolveIPFS = (url: string): string => {
     if (!url) return '';

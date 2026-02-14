@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Package, Image as ImageIcon, ExternalLink, Grid, List as ListIcon } from 'lucide-react';
 import type { NFTCollection } from '../../../cadence/cadence.gen';
-import { normalizeAddress, getNFTThumbnail } from './accountUtils';
+import { normalizeAddress, getNFTThumbnail, backfillNFTData, toBackfillItem } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
 import { cn } from '../../lib/utils';
 import { ImageWithFallback } from '../ui/ImageWithFallback';
@@ -48,6 +48,17 @@ export function AccountNFTsTab({ address }: Props) {
                     if (sorted.length > 0 && !selectedCollectionId) {
                         setSelectedCollectionId(sorted[0].id);
                     }
+                    // Fire-and-forget: backfill ownership + public paths to backend.
+                    backfillNFTData(normalizedAddress, sorted.map(col => {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const pp = col.collectionData?.publicPath as any;
+                        const publicPath = typeof pp === 'string' ? pp : pp?.identifier || '';
+                        return {
+                            id: col.id,
+                            public_path: publicPath,
+                            nft_ids: (col.ids || []).map(String),
+                        };
+                    }));
                 }
             } catch (err) {
                 console.error('Failed to load NFT collections', err);
@@ -134,6 +145,19 @@ export function AccountNFTsTab({ address }: Props) {
                         hasLoaded: true
                     }
                 }));
+
+                // Fire-and-forget: backfill detailed metadata to backend.
+                if (nfts && nfts.length > 0 && collection) {
+                    const items = nfts.map(toBackfillItem).filter(Boolean) as NonNullable<ReturnType<typeof toBackfillItem>>[];
+                    if (items.length > 0) {
+                        backfillNFTData(normalizedAddress, [{
+                            id: collection.id,
+                            public_path: '',
+                            nft_ids: [],
+                            items,
+                        }]);
+                    }
+                }
             } catch (err) {
                 console.error('Failed to load NFTs', err);
                 setCollectionStates(prev => ({

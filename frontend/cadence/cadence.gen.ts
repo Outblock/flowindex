@@ -1733,7 +1733,7 @@ import MetadataViews from 0xMetadataViews
   }
 
 
-  public async getNftDetail(address: string, pathId: string, tokenID: number): Promise<Record<string, any>> {
+  public async getNftDetail(address: string, pathId: string, tokenIDs: number[]): Promise<Record<string, any>[]> {
     const code = `
 import NonFungibleToken from 0xNonFungibleToken
 import MetadataViews from 0xMetadataViews
@@ -1759,32 +1759,12 @@ access(all) struct CollectionData {
     }
 }
 
-access(all) fun main(address: Address, pathId: String, tokenID: UInt64): {String: AnyStruct} {
-    let account = getAccount(address)
+access(all) fun getNFTDetail(collectionRef: &{NonFungibleToken.Collection, ViewResolver.ResolverCollection}, tokenID: UInt64): {String: AnyStruct} {
     let res: {String: AnyStruct} = {}
 
-    let storagePath = StoragePath(identifier: pathId)!
-    let publicPath = PublicPath(identifier: pathId)!
-    let collectionRef = account.capabilities.borrow<&{NonFungibleToken.Collection, ViewResolver.ResolverCollection}>(publicPath)
-    if collectionRef == nil {
-        panic("Get Collection Failed")
-    }
+    collectionRef.borrowNFT(tokenID)
 
-    let type = account.storage.type(at: storagePath)
-    if type == nil {
-        return res
-    }
-
-    let metadataViewType = Type<@{ViewResolver.ResolverCollection}>()
-    let conformedMetadataViews = type!.isSubtype(of: metadataViewType)
-
-    if (!conformedMetadataViews) {
-        return res
-    }
-
-    collectionRef!.borrowNFT(tokenID)
-
-    let resolver = collectionRef!.borrowViewResolver(id: tokenID)!
+    let resolver = collectionRef.borrowViewResolver(id: tokenID)!
     if resolver != nil {
         if let rarity = MetadataViews.getRarity(resolver) {
             res["rarity"] = rarity
@@ -1840,6 +1820,36 @@ access(all) fun main(address: Address, pathId: String, tokenID: UInt64): {String
 
     return res
 }
+
+access(all) fun main(address: Address, pathId: String, tokenIDs: [UInt64]): [{String: AnyStruct}] {
+    let account = getAccount(address)
+    let results: [{String: AnyStruct}] = []
+
+    let storagePath = StoragePath(identifier: pathId)!
+    let publicPath = PublicPath(identifier: pathId)!
+    let collectionRef = account.capabilities.borrow<&{NonFungibleToken.Collection, ViewResolver.ResolverCollection}>(publicPath)
+    if collectionRef == nil {
+        panic("Get Collection Failed")
+    }
+
+    let type = account.storage.type(at: storagePath)
+    if type == nil {
+        return results
+    }
+
+    let metadataViewType = Type<@{ViewResolver.ResolverCollection}>()
+    let conformedMetadataViews = type!.isSubtype(of: metadataViewType)
+
+    if (!conformedMetadataViews) {
+        return results
+    }
+
+    for tokenID in tokenIDs {
+        results.append(getNFTDetail(collectionRef: collectionRef!, tokenID: tokenID))
+    }
+
+    return results
+}
 `;
     let config = {
       cadence: code.trim(),
@@ -1848,7 +1858,7 @@ access(all) fun main(address: Address, pathId: String, tokenID: UInt64): {String
       args: (arg: any, t: any) => [
         arg(address, t.Address),
         arg(pathId, t.String),
-        arg(tokenID, t.UInt64),
+        arg(tokenIDs.map(String), t.Array(t.UInt64)),
       ],
       limit: 9999,
     };

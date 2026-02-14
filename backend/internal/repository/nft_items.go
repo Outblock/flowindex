@@ -419,6 +419,32 @@ func (r *Repository) GetNFTItemsBatch(ctx context.Context, keys []NFTItemKey) (m
 	return out, nil
 }
 
+// GetNFTOwnersByIDs returns a map of nftID -> owner address for the given NFT IDs in a collection.
+func (r *Repository) GetNFTOwnersByIDs(ctx context.Context, contractAddr, contractName string, nftIDs []string) (map[string]string, error) {
+	out := make(map[string]string, len(nftIDs))
+	if len(nftIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT nft_id, encode(owner, 'hex')
+		FROM app.nft_ownership
+		WHERE contract_address = $1 AND contract_name = $2 AND nft_id = ANY($3)
+		  AND owner IS NOT NULL`,
+		hexToBytes(contractAddr), contractName, nftIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var nftID, owner string
+		if err := rows.Scan(&nftID, &owner); err != nil {
+			return nil, err
+		}
+		out[nftID] = owner
+	}
+	return out, nil
+}
+
 // --- Reconciliation methods ---
 
 // OwnerCollectionCount represents a (owner, collection) pair with its DB-side NFT count.
@@ -473,6 +499,33 @@ func (r *Repository) ListNFTIDsByOwnerCollection(ctx context.Context, owner, con
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+// BulkUpsertNFTOwnership batch-upserts NFT ownership records from frontend backfill.
+// Uses last_height=0 so that ingester-sourced records (with real heights) always win.
+func (r *Repository) BulkUpsertNFTOwnership(ctx context.Context, owner, contractAddr, contractName string, nftIDs []string) error {
+	if len(nftIDs) == 0 {
+		return nil
+	}
+	batch := &pgx.Batch{}
+	for _, id := range nftIDs {
+		batch.Queue(`
+			INSERT INTO app.nft_ownership (contract_address, contract_name, nft_id, owner, last_height, updated_at)
+			VALUES ($1, $2, $3, $4, 0, NOW())
+			ON CONFLICT (contract_address, contract_name, nft_id) DO UPDATE SET
+				owner = EXCLUDED.owner,
+				updated_at = NOW()
+			WHERE app.nft_ownership.last_height <= 0`,
+			hexToBytes(contractAddr), contractName, id, hexToBytes(owner))
+	}
+	br := r.db.SendBatch(ctx, batch)
+	defer br.Close()
+	for range nftIDs {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("bulk upsert nft_ownership: %w", err)
+		}
+	}
+	return nil
 }
 
 // DeleteNFTOwnershipBatch removes stale ownership records in batch.

@@ -1,147 +1,117 @@
-package ingester
+package api
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	flowclient "flowscan-clone/internal/flow"
 	"flowscan-clone/internal/models"
-	"flowscan-clone/internal/repository"
 
 	"github.com/onflow/cadence"
 	flowsdk "github.com/onflow/flow-go-sdk"
 )
 
-// NFTItemMetadataWorker crawls (owner, collection) pairs from nft_ownership,
-// batch-fetches per-NFT metadata via Cadence scripts, and stores in app.nft_items.
-type NFTItemMetadataWorker struct {
-	repo          *repository.Repository
-	flow          *flowclient.Client
-	pairsPerRange int
-	nftBatchSize  int
-	scriptTimeout time.Duration
-}
+const (
+	onDemandMaxNFTs       = 50
+	onDemandScriptTimeout = 10 * time.Second
+)
 
-func NewNFTItemMetadataWorker(repo *repository.Repository, flow *flowclient.Client) *NFTItemMetadataWorker {
-	pairsPerRange := getEnvIntDefault("NFT_ITEM_METADATA_PAIRS_PER_RANGE", 5)
-	nftBatchSize := getEnvIntDefault("NFT_ITEM_METADATA_BATCH_SIZE", 50)
-	timeoutMs := getEnvIntDefault("NFT_ITEM_METADATA_SCRIPT_TIMEOUT_MS", 30000)
-	return &NFTItemMetadataWorker{
-		repo:          repo,
-		flow:          flow,
-		pairsPerRange: pairsPerRange,
-		nftBatchSize:  nftBatchSize,
-		scriptTimeout: time.Duration(timeoutMs) * time.Millisecond,
-	}
-}
-
-func (w *NFTItemMetadataWorker) Name() string { return "nft_item_metadata_worker" }
-
-// ProcessRange is queue-based: it ignores block heights and instead picks (owner, collection)
-// pairs that need metadata. This makes it compatible with the AsyncWorker framework while
-// doing its own work-finding.
-func (w *NFTItemMetadataWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint64) error {
-	if w.flow == nil {
-		return nil
+// fetchAndEnrichNFTItems resolves metadata for stub NFTItems on-demand via Cadence scripts.
+// It looks up owners from nft_ownership, resolves the collection's public path, executes
+// a batch metadata Cadence script per owner group, caches results, and returns enriched items.
+func (s *Server) fetchAndEnrichNFTItems(ctx context.Context, contractAddr, contractName string, stubs []models.NFTItem) []models.NFTItem {
+	if s.client == nil {
+		return stubs
 	}
 
-	pairs, err := w.repo.ListOwnerCollectionsNeedingMetadata(ctx, w.pairsPerRange)
+	// Cap to avoid huge Cadence calls.
+	if len(stubs) > onDemandMaxNFTs {
+		stubs = stubs[:onDemandMaxNFTs]
+	}
+
+	// Collect NFT IDs.
+	nftIDs := make([]string, len(stubs))
+	for i, stub := range stubs {
+		nftIDs[i] = stub.NFTID
+	}
+
+	// Look up owners from nft_ownership.
+	ownerMap, err := s.repo.GetNFTOwnersByIDs(ctx, contractAddr, contractName, nftIDs)
 	if err != nil {
-		return fmt.Errorf("list owner collections: %w", err)
+		log.Printf("[nft_metadata_fetch] failed to get owners: %v", err)
+		return stubs
 	}
-	if len(pairs) == 0 {
-		return nil
+	if len(ownerMap) == 0 {
+		return stubs
 	}
 
-	for _, pair := range pairs {
-		if ctx.Err() != nil {
-			return ctx.Err()
+	// Resolve public path.
+	publicPath, err := s.resolvePublicPath(ctx, contractAddr, contractName)
+	if err != nil || publicPath == "" {
+		if err != nil {
+			log.Printf("[nft_metadata_fetch] failed to resolve public path for %s.%s: %v", contractAddr, contractName, err)
 		}
-		if err := w.processOwnerCollection(ctx, pair); err != nil {
-			log.Printf("[nft_item_metadata_worker] error processing %s/%s.%s: %v",
-				pair.Owner, pair.ContractAddress, pair.ContractName, err)
-			// Continue to next pair rather than failing the whole range.
-		}
+		return stubs
 	}
-	return nil
-}
-
-func (w *NFTItemMetadataWorker) processOwnerCollection(ctx context.Context, pair repository.OwnerCollectionPair) error {
-	// 1. Resolve public path (cached in nft_collections).
-	publicPath, err := w.resolvePublicPath(ctx, pair.ContractAddress, pair.ContractName)
-	if err != nil {
-		log.Printf("[nft_item_metadata_worker] cannot resolve public path for %s.%s: %v",
-			pair.ContractAddress, pair.ContractName, err)
-		return nil // Skip collection, don't fail
-	}
-	if publicPath == "" {
-		return nil // Collection doesn't expose a public path
-	}
-
 	// Strip /public/ prefix — PublicPath(identifier:) needs just the identifier.
 	publicPath = strings.TrimPrefix(publicPath, "/public/")
 
-	// 2. Get NFT IDs that need metadata.
-	nftIDs, err := w.repo.ListNFTIDsForOwnerCollection(ctx, pair.Owner, pair.ContractAddress, pair.ContractName)
-	if err != nil {
-		return fmt.Errorf("list nft ids: %w", err)
-	}
-	if len(nftIDs) == 0 {
-		return nil
-	}
-
-	// 3. Batch fetch metadata.
-	for i := 0; i < len(nftIDs); i += w.nftBatchSize {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		end := i + w.nftBatchSize
-		if end > len(nftIDs) {
-			end = len(nftIDs)
-		}
-		chunk := nftIDs[i:end]
-
-		items, err := w.fetchNFTMetadataBatch(ctx, pair.Owner, publicPath, pair.ContractAddress, pair.ContractName, chunk)
-		if err != nil {
-			log.Printf("[nft_item_metadata_worker] script error for %s/%s.%s (batch %d): %v",
-				pair.Owner, pair.ContractAddress, pair.ContractName, i/w.nftBatchSize, err)
-			// Mark these as errored with exponential backoff.
-			_ = w.repo.MarkNFTItemsError(ctx, pair.ContractAddress, pair.ContractName, chunk, err.Error(), 0)
+	// Group NFT IDs by owner.
+	ownerGroups := make(map[string][]string)
+	for _, id := range nftIDs {
+		owner, ok := ownerMap[id]
+		if !ok {
 			continue
 		}
+		ownerGroups[owner] = append(ownerGroups[owner], id)
+	}
 
-		if len(items) > 0 {
-			if err := w.repo.UpsertNFTItems(ctx, items); err != nil {
-				return fmt.Errorf("upsert nft items: %w", err)
-			}
+	// Fetch metadata per owner group.
+	fetched := make(map[string]models.NFTItem)
+	for owner, ids := range ownerGroups {
+		items, err := fetchNFTMetadataBatchViaClient(ctx, s.client, owner, publicPath, contractAddr, contractName, ids)
+		if err != nil {
+			log.Printf("[nft_metadata_fetch] cadence error for owner %s / %s.%s: %v", owner, contractAddr, contractName, err)
+			continue
 		}
-
-		// Mark any IDs that weren't in the result as errored (NFT may not exist or borrowNFT failed).
-		fetched := make(map[string]bool)
 		for _, item := range items {
-			fetched[item.NFTID] = true
-		}
-		var missing []string
-		for _, id := range chunk {
-			if !fetched[id] {
-				missing = append(missing, id)
-			}
-		}
-		if len(missing) > 0 {
-			_ = w.repo.MarkNFTItemsError(ctx, pair.ContractAddress, pair.ContractName, missing, "not returned by script", 0)
+			fetched[item.NFTID] = item
 		}
 	}
-	return nil
+
+	if len(fetched) == 0 {
+		return stubs
+	}
+
+	// Cache fetched items for future requests.
+	toUpsert := make([]models.NFTItem, 0, len(fetched))
+	for _, item := range fetched {
+		toUpsert = append(toUpsert, item)
+	}
+	if err := s.repo.UpsertNFTItems(ctx, toUpsert); err != nil {
+		log.Printf("[nft_metadata_fetch] failed to cache items: %v", err)
+	}
+
+	// Merge fetched data into stubs.
+	result := make([]models.NFTItem, 0, len(stubs))
+	for _, stub := range stubs {
+		if enriched, ok := fetched[stub.NFTID]; ok {
+			result = append(result, enriched)
+		} else {
+			result = append(result, stub)
+		}
+	}
+	return result
 }
 
-func (w *NFTItemMetadataWorker) resolvePublicPath(ctx context.Context, contractAddr, contractName string) (string, error) {
-	// Check cache first.
-	cached, err := w.repo.GetCollectionPublicPath(ctx, contractAddr, contractName)
+// resolvePublicPath checks the cached public_path, falling back to a Cadence script.
+func (s *Server) resolvePublicPath(ctx context.Context, contractAddr, contractName string) (string, error) {
+	cached, err := s.repo.GetCollectionPublicPath(ctx, contractAddr, contractName)
 	if err != nil {
 		return "", err
 	}
@@ -149,14 +119,13 @@ func (w *NFTItemMetadataWorker) resolvePublicPath(ctx context.Context, contractA
 		return cached, nil
 	}
 
-	// Execute Cadence script to resolve.
 	addr := flowsdk.HexToAddress(contractAddr)
 	nameVal, _ := cadence.NewString(contractName)
 
-	ctxExec, cancel := context.WithTimeout(ctx, w.scriptTimeout)
+	ctxExec, cancel := context.WithTimeout(ctx, onDemandScriptTimeout)
 	defer cancel()
 
-	v, err := w.flow.ExecuteScriptAtLatestBlock(ctxExec, []byte(cadenceResolvePublicPathScript()), []cadence.Value{
+	v, err := s.client.ExecuteScriptAtLatestBlock(ctxExec, []byte(apiCadenceResolvePublicPathScript()), []cadence.Value{
 		cadence.NewAddress([8]byte(addr)),
 		nameVal,
 	})
@@ -164,33 +133,32 @@ func (w *NFTItemMetadataWorker) resolvePublicPath(ctx context.Context, contractA
 		return "", err
 	}
 
-	v = unwrapOptional(v)
+	v = apiUnwrapOptional(v)
 	if v == nil {
 		return "", nil
 	}
-
-	path := cadenceToString(v)
+	path := apiCadenceToString(v)
 	if path == "" {
 		return "", nil
 	}
 
 	// Cache it.
-	if err := w.repo.UpdateCollectionPublicPath(ctx, contractAddr, contractName, path); err != nil {
-		log.Printf("[nft_item_metadata_worker] failed to cache public_path for %s.%s: %v", contractAddr, contractName, err)
+	if err := s.repo.UpdateCollectionPublicPath(ctx, contractAddr, contractName, path); err != nil {
+		log.Printf("[nft_metadata_fetch] failed to cache public_path for %s.%s: %v", contractAddr, contractName, err)
 	}
 	return path, nil
 }
 
-func (w *NFTItemMetadataWorker) fetchNFTMetadataBatch(ctx context.Context, owner, publicPathID, contractAddr, contractName string, nftIDs []string) ([]models.NFTItem, error) {
+// fetchNFTMetadataBatchViaClient executes the batch metadata Cadence script using the FlowClient interface.
+func fetchNFTMetadataBatchViaClient(ctx context.Context, client FlowClient, owner, publicPathID, contractAddr, contractName string, nftIDs []string) ([]models.NFTItem, error) {
 	ownerAddr := flowsdk.HexToAddress(owner)
 	pathVal, _ := cadence.NewString(publicPathID)
 
-	// Convert string IDs to UInt64 cadence array.
 	cadenceIDs := make([]cadence.Value, 0, len(nftIDs))
 	for _, id := range nftIDs {
 		n, err := strconv.ParseUint(id, 10, 64)
 		if err != nil {
-			continue // Skip non-numeric IDs
+			continue
 		}
 		cadenceIDs = append(cadenceIDs, cadence.NewUInt64(n))
 	}
@@ -200,10 +168,10 @@ func (w *NFTItemMetadataWorker) fetchNFTMetadataBatch(ctx context.Context, owner
 
 	idsArray := cadence.NewArray(cadenceIDs).WithType(cadence.NewVariableSizedArrayType(cadence.UInt64Type))
 
-	ctxExec, cancel := context.WithTimeout(ctx, w.scriptTimeout)
+	ctxExec, cancel := context.WithTimeout(ctx, onDemandScriptTimeout)
 	defer cancel()
 
-	v, err := w.flow.ExecuteScriptAtLatestBlock(ctxExec, []byte(cadenceBatchNFTMetadataScript()), []cadence.Value{
+	v, err := client.ExecuteScriptAtLatestBlock(ctxExec, []byte(apiCadenceBatchNFTMetadataScript()), []cadence.Value{
 		cadence.NewAddress([8]byte(ownerAddr)),
 		pathVal,
 		idsArray,
@@ -219,7 +187,7 @@ func (w *NFTItemMetadataWorker) fetchNFTMetadataBatch(ctx context.Context, owner
 
 	var items []models.NFTItem
 	for _, elem := range arr.Values {
-		item, ok := w.parseNFTMetaStruct(elem, contractAddr, contractName)
+		item, ok := parseNFTMetaStruct(elem, contractAddr, contractName)
 		if ok {
 			items = append(items, item)
 		}
@@ -227,8 +195,9 @@ func (w *NFTItemMetadataWorker) fetchNFTMetadataBatch(ctx context.Context, owner
 	return items, nil
 }
 
-func (w *NFTItemMetadataWorker) parseNFTMetaStruct(v cadence.Value, contractAddr, contractName string) (models.NFTItem, bool) {
-	v = unwrapOptional(v)
+// parseNFTMetaStruct parses a Cadence NFTMeta struct into a models.NFTItem.
+func parseNFTMetaStruct(v cadence.Value, contractAddr, contractName string) (models.NFTItem, bool) {
+	v = apiUnwrapOptional(v)
 	s, ok := v.(cadence.Struct)
 	if !ok {
 		return models.NFTItem{}, false
@@ -240,45 +209,43 @@ func (w *NFTItemMetadataWorker) parseNFTMetaStruct(v cadence.Value, contractAddr
 		ContractName:    contractName,
 	}
 
-	// id (UInt64)
-	if idVal := unwrapOptional(fields["id"]); idVal != nil {
+	if idVal := apiUnwrapOptional(fields["id"]); idVal != nil {
 		item.NFTID = idVal.String()
 	}
 	if item.NFTID == "" {
 		return models.NFTItem{}, false
 	}
 
-	item.Name = cadenceToString(fields["name"])
-	item.Description = cadenceToString(fields["description"])
-	item.Thumbnail = cadenceToString(fields["thumbnail"])
-	item.ExternalURL = cadenceToString(fields["externalURL"])
+	item.Name = apiCadenceToString(fields["name"])
+	item.Description = apiCadenceToString(fields["description"])
+	item.Thumbnail = apiCadenceToString(fields["thumbnail"])
+	item.ExternalURL = apiCadenceToString(fields["externalURL"])
 
-	if sn := unwrapOptional(fields["serialNumber"]); sn != nil {
-		if n, ok := cadenceToUint(sn); ok {
+	if sn := apiUnwrapOptional(fields["serialNumber"]); sn != nil {
+		if n, ok := apiCadenceToUint(sn); ok {
 			v := int64(n)
 			item.SerialNumber = &v
 		}
 	}
 
-	item.EditionName = cadenceToString(fields["editionName"])
-	if en := unwrapOptional(fields["editionNumber"]); en != nil {
-		if n, ok := cadenceToUint(en); ok {
+	item.EditionName = apiCadenceToString(fields["editionName"])
+	if en := apiUnwrapOptional(fields["editionNumber"]); en != nil {
+		if n, ok := apiCadenceToUint(en); ok {
 			v := int64(n)
 			item.EditionNumber = &v
 		}
 	}
-	if em := unwrapOptional(fields["editionMax"]); em != nil {
-		if n, ok := cadenceToUint(em); ok {
+	if em := apiUnwrapOptional(fields["editionMax"]); em != nil {
+		if n, ok := apiCadenceToUint(em); ok {
 			v := int64(n)
 			item.EditionMax = &v
 		}
 	}
 
-	item.RarityScore = cadenceToString(fields["rarityScore"])
-	item.RarityDescription = cadenceToString(fields["rarityDescription"])
+	item.RarityScore = apiCadenceToString(fields["rarityScore"])
+	item.RarityDescription = apiCadenceToString(fields["rarityDescription"])
 
-	// Traits as JSON.
-	if traits := unwrapOptional(fields["traits"]); traits != nil {
+	if traits := apiUnwrapOptional(fields["traits"]); traits != nil {
 		if arr, ok := traits.(cadence.Array); ok {
 			type traitEntry struct {
 				Name  string      `json:"name"`
@@ -286,11 +253,11 @@ func (w *NFTItemMetadataWorker) parseNFTMetaStruct(v cadence.Value, contractAddr
 			}
 			var parsed []traitEntry
 			for _, t := range arr.Values {
-				t = unwrapOptional(t)
+				t = apiUnwrapOptional(t)
 				if st, ok := t.(cadence.Struct); ok {
 					tf := st.FieldsMappedByName()
-					name := cadenceToString(tf["name"])
-					val := cadenceToString(tf["value"])
+					name := apiCadenceToString(tf["name"])
+					val := apiCadenceToString(tf["value"])
 					if name != "" {
 						parsed = append(parsed, traitEntry{Name: name, Value: val})
 					}
@@ -306,7 +273,30 @@ func (w *NFTItemMetadataWorker) parseNFTMetaStruct(v cadence.Value, contractAddr
 	return item, true
 }
 
-func cadenceToUint(v cadence.Value) (uint64, bool) {
+// --- Cadence helpers (duplicated from ingester to keep api package independent) ---
+
+func apiUnwrapOptional(v cadence.Value) cadence.Value {
+	if opt, ok := v.(cadence.Optional); ok {
+		if opt.Value == nil {
+			return nil
+		}
+		return opt.Value
+	}
+	return v
+}
+
+func apiCadenceToString(v cadence.Value) string {
+	v = apiUnwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(cadence.String); ok {
+		return string(s)
+	}
+	return ""
+}
+
+func apiCadenceToUint(v cadence.Value) (uint64, bool) {
 	switch x := v.(type) {
 	case cadence.UInt64:
 		return uint64(x), true
@@ -333,14 +323,20 @@ func cadenceToUint(v cadence.Value) (uint64, bool) {
 	}
 }
 
-// Cadence scripts
+func apiGetEnvOrDefault(key, def string) string {
+	v := strings.TrimPrefix(strings.TrimSpace(os.Getenv(key)), "0x")
+	if v == "" {
+		return def
+	}
+	return v
+}
 
-func cadenceResolvePublicPathScript() string {
-	viewResolverAddr := getEnvOrDefault("FLOW_VIEW_RESOLVER_ADDRESS",
-		getEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-			getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")))
-	metadataViewsAddr := getEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-		getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448"))
+func apiCadenceResolvePublicPathScript() string {
+	viewResolverAddr := apiGetEnvOrDefault("FLOW_VIEW_RESOLVER_ADDRESS",
+		apiGetEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
+			apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")))
+	metadataViewsAddr := apiGetEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
+		apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448"))
 
 	return fmt.Sprintf(`
 		import ViewResolver from 0x%s
@@ -360,10 +356,10 @@ func cadenceResolvePublicPathScript() string {
 	`, viewResolverAddr, metadataViewsAddr)
 }
 
-func cadenceBatchNFTMetadataScript() string {
-	nftAddr := getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")
-	metadataViewsAddr := getEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-		getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448"))
+func apiCadenceBatchNFTMetadataScript() string {
+	nftAddr := apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")
+	metadataViewsAddr := apiGetEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
+		apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448"))
 
 	return fmt.Sprintf(`
 		import NonFungibleToken from 0x%s

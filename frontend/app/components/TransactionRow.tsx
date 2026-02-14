@@ -302,7 +302,8 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
         setNftLoadingIdx(idx);
         try {
             const { cadenceService } = await import('../fclConfig');
-            const nftDetail = await cadenceService.getNftDetail(ownerAddr, publicPath, parseInt(tokenId));
+            const nftDetails = await cadenceService.getNftDetail(ownerAddr, publicPath, [parseInt(tokenId)]);
+            const nftDetail = nftDetails?.[0] ?? {};
             // Ensure tokenId is included in the result
             if (nftDetail && !nftDetail.tokenId) {
                 nftDetail.tokenId = tokenId;

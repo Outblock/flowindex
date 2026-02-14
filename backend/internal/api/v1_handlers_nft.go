@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
@@ -141,6 +142,13 @@ func (s *Server) handleFlowNFTItem(w http.ResponseWriter, r *http.Request) {
 	meta, _ := s.repo.GetNFTItem(r.Context(), collectionAddr, collectionName, id)
 	if meta != nil {
 		enrichNFTItemOutput(out, meta)
+	} else if s.client != nil {
+		// On-demand fetch for single item.
+		stub := models.NFTItem{ContractAddress: collectionAddr, ContractName: collectionName, NFTID: id}
+		enriched := s.fetchAndEnrichNFTItems(r.Context(), collectionAddr, collectionName, []models.NFTItem{stub})
+		if len(enriched) > 0 && enriched[0].Thumbnail != "" {
+			enrichNFTItemOutput(out, &enriched[0])
+		}
 	}
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
 }
@@ -152,6 +160,10 @@ func (s *Server) handleFlowNFTCollectionItems(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// If items are ownership stubs (empty thumbnail), try on-demand Cadence fetch.
+	if len(items) > 0 && items[0].Thumbnail == "" && s.client != nil {
+		items = s.fetchAndEnrichNFTItems(r.Context(), collectionAddr, collectionName, items)
 	}
 	out := make([]map[string]interface{}, 0, len(items))
 	for _, item := range items {

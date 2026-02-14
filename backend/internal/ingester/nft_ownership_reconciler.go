@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	flowclient "flowscan-clone/internal/flow"
@@ -77,6 +78,9 @@ func (w *NFTOwnershipReconciler) reconcilePair(ctx context.Context, pair reposit
 			return nil
 		}
 	}
+
+	// Strip /public/ prefix — PublicPath(identifier:) needs just the identifier.
+	publicPath = strings.TrimPrefix(publicPath, "/public/")
 
 	// 2. Query chain for actual NFT IDs this owner holds.
 	chainIDs, err := w.getChainNFTIDs(ctx, pair.Owner, publicPath)
