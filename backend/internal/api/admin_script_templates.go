@@ -12,9 +12,11 @@ func (s *Server) handleAdminListScriptTemplates(w http.ResponseWriter, r *http.R
 	limit, offset := parseLimitOffset(r)
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	category := strings.TrimSpace(r.URL.Query().Get("category"))
-	labeledOnly := r.URL.Query().Get("labeled") == "true"
+	labeledParam := strings.TrimSpace(r.URL.Query().Get("labeled"))
+	labeledOnly := labeledParam == "true"
+	unlabeledOnly := labeledParam == "false"
 
-	templates, err := s.repo.AdminListScriptTemplates(r.Context(), search, category, labeledOnly, limit, offset)
+	templates, err := s.repo.AdminListScriptTemplates(r.Context(), search, category, labeledOnly, unlabeledOnly, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return

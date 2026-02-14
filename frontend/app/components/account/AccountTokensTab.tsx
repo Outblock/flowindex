@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Coins, ArrowRight, ExternalLink } from 'lucide-react';
+import { Coins, ExternalLink } from 'lucide-react';
 import type { FTVaultInfo } from '../../../cadence/cadence.gen';
 import { normalizeAddress, formatShort, getTokenLogoURL } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
+import { EVMBridgeBadge } from '../ui/EVMBridgeBadge';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getFlowV1Ft } from '../../api/gen/find';
 
 interface Props {
     address: string;
@@ -16,6 +18,7 @@ export function AccountTokensTab({ address }: Props) {
     const [tokens, setTokens] = useState<FTVaultInfo[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [backendFTs, setBackendFTs] = useState<any[]>([]);
 
     const loadTokens = async () => {
         setLoading(true);
@@ -36,6 +39,31 @@ export function AccountTokensTab({ address }: Props) {
         if (tokens.length === 0 && !loading) loadTokens();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [address]);
+
+    // Fetch backend FT metadata once
+    useEffect(() => {
+        getFlowV1Ft({ query: { limit: 100, offset: 0 } }).then((res) => {
+            const items = (res.data as any)?.data || [];
+            setBackendFTs(items);
+            // Fetch more if there are exactly 100 (paginate)
+            if (items.length >= 100) {
+                getFlowV1Ft({ query: { limit: 100, offset: 100 } }).then((res2) => {
+                    const more = (res2.data as any)?.data || [];
+                    setBackendFTs((prev: any[]) => [...prev, ...more]);
+                }).catch(() => {});
+            }
+        }).catch(() => {});
+    }, []);
+
+    // Build lookup map: "A.{hex}.{ContractName}" → backend metadata
+    const metaMap = useMemo(() => {
+        const map: Record<string, { name?: string; symbol?: string; logo?: string; evm_address?: string }> = {};
+        for (const ft of backendFTs) {
+            const id = ft.id || '';
+            if (id) map[id] = { name: ft.name, symbol: ft.symbol, logo: ft.logo, evm_address: ft.evm_address };
+        }
+        return map;
+    }, [backendFTs]);
 
     return (
         <div className="space-y-6">
@@ -71,7 +99,12 @@ export function AccountTokensTab({ address }: Props) {
                 ) : (
                     <AnimatePresence mode="popLayout">
                         {tokens.map((t: FTVaultInfo, i: number) => {
-                            const logoUrl = getTokenLogoURL(t);
+                            const identifier = `A.${normalizeAddress(t.contractAddress).replace(/^0x/, '')}.${t.contractName}`;
+                            const meta = metaMap[identifier];
+                            const logoUrl = meta?.logo || getTokenLogoURL(t);
+                            const displayName = meta?.name || t.name || t.contractName;
+                            const displaySymbol = meta?.symbol || t.symbol;
+                            const evmAddr = meta?.evm_address || (t as any).evmAddress || '';
                             return (
                                 <motion.div
                                     key={`${t.contractAddress}-${t.contractName}`}
@@ -85,7 +118,7 @@ export function AccountTokensTab({ address }: Props) {
                                                 {logoUrl ? (
                                                     <img
                                                         src={logoUrl}
-                                                        alt={t.name}
+                                                        alt={displayName}
                                                         className="w-10 h-10 object-cover bg-white dark:bg-white/10 shadow-sm rounded-full"
                                                         loading="lazy"
                                                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
@@ -98,8 +131,9 @@ export function AccountTokensTab({ address }: Props) {
 
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{t.name || t.contractName}</div>
-                                                    <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{t.symbol}</div>
+                                                    <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{displayName}</div>
+                                                    <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{displaySymbol}</div>
+                                                    {evmAddr && <EVMBridgeBadge evmAddress={evmAddr} />}
                                                 </div>
                                                 <div className="flex items-center gap-1 mt-0.5">
                                                     <Link

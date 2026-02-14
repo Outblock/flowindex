@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
 import { resolveApiBaseUrl } from '../api'
 import toast from 'react-hot-toast'
+import { Pagination } from '../components/Pagination'
 
 export const Route = createFileRoute('/admin')({
   component: AdminPage,
@@ -145,31 +146,42 @@ function FTPanel({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasNext, setHasNext] = useState(false)
 
-  const doSearch = useCallback(async () => {
+  const doSearch = useCallback(async (p = page) => {
     setLoading(true)
     try {
-      const data = await adminFetch(`admin/ft?limit=50&search=${encodeURIComponent(search)}`, token)
-      setItems(data?.data || [])
+      const offset = (p - 1) * 50
+      const data = await adminFetch(`admin/ft?limit=50&offset=${offset}&search=${encodeURIComponent(search)}`, token)
+      const rows = data?.data || []
+      setItems(rows)
+      setHasNext(rows.length >= 50)
       setLoaded(true)
     } catch (e: any) {
       toast.error(e.message)
     } finally {
       setLoading(false)
     }
-  }, [search, token])
+  }, [search, token, page])
 
-  useEffect(() => { doSearch() }, [token]) // auto-load on mount
+  const handleSearch = () => { setPage(1); doSearch(1) }
+  const handlePageChange = (p: number) => { setPage(p); doSearch(p) }
+
+  useEffect(() => { doSearch(1) }, [token]) // auto-load on mount
 
   return (
     <div className="space-y-4">
-      <SearchBar value={search} onChange={setSearch} onSearch={doSearch} loading={loading} />
+      <SearchBar value={search} onChange={setSearch} onSearch={handleSearch} loading={loading} />
       {loaded && items.length === 0 && (
         <p className="text-sm text-zinc-500 font-mono text-center py-8">No tokens found.</p>
       )}
       {items.map((item) => (
         <FTRow key={item.identifier} item={item} token={token} />
       ))}
+      {loaded && items.length > 0 && (
+        <Pagination currentPage={page} onPageChange={handlePageChange} hasNext={hasNext} />
+      )}
     </div>
   )
 }
@@ -260,31 +272,42 @@ function NFTPanel({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasNext, setHasNext] = useState(false)
 
-  const doSearch = useCallback(async () => {
+  const doSearch = useCallback(async (p = page) => {
     setLoading(true)
     try {
-      const data = await adminFetch(`admin/nft?limit=50&search=${encodeURIComponent(search)}`, token)
-      setItems(data?.data || [])
+      const offset = (p - 1) * 50
+      const data = await adminFetch(`admin/nft?limit=50&offset=${offset}&search=${encodeURIComponent(search)}`, token)
+      const rows = data?.data || []
+      setItems(rows)
+      setHasNext(rows.length >= 50)
       setLoaded(true)
     } catch (e: any) {
       toast.error(e.message)
     } finally {
       setLoading(false)
     }
-  }, [search, token])
+  }, [search, token, page])
 
-  useEffect(() => { doSearch() }, [token]) // auto-load on mount
+  const handleSearch = () => { setPage(1); doSearch(1) }
+  const handlePageChange = (p: number) => { setPage(p); doSearch(p) }
+
+  useEffect(() => { doSearch(1) }, [token]) // auto-load on mount
 
   return (
     <div className="space-y-4">
-      <SearchBar value={search} onChange={setSearch} onSearch={doSearch} loading={loading} />
+      <SearchBar value={search} onChange={setSearch} onSearch={handleSearch} loading={loading} />
       {loaded && items.length === 0 && (
         <p className="text-sm text-zinc-500 font-mono text-center py-8">No collections found.</p>
       )}
       {items.map((item) => (
         <NFTRow key={item.identifier} item={item} token={token} />
       ))}
+      {loaded && items.length > 0 && (
+        <Pagination currentPage={page} onPageChange={handlePageChange} hasNext={hasNext} />
+      )}
     </div>
   )
 }
@@ -385,6 +408,9 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
   const [stats, setStats] = useState<any>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [aiClassifying, setAiClassifying] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasNext, setHasNext] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'unlabeled' | 'labeled'>('all')
 
   const loadStats = useCallback(async () => {
     try {
@@ -393,11 +419,17 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
     } catch { /* ignore */ }
   }, [token])
 
-  const doSearch = useCallback(async () => {
+  const doSearch = useCallback(async (p = page, f = filter) => {
     setLoading(true)
     try {
-      const data = await adminFetch(`admin/script-templates?limit=50&search=${encodeURIComponent(search)}`, token)
-      setItems(data?.data || [])
+      const offset = (p - 1) * 50
+      let url = `admin/script-templates?limit=50&offset=${offset}&search=${encodeURIComponent(search)}`
+      if (f === 'labeled') url += '&labeled=true'
+      else if (f === 'unlabeled') url += '&labeled=false'
+      const data = await adminFetch(url, token)
+      const rows = data?.data || []
+      setItems(rows)
+      setHasNext(rows.length >= 50)
       setLoaded(true)
       loadStats()
     } catch (e: any) {
@@ -405,14 +437,18 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
     } finally {
       setLoading(false)
     }
-  }, [search, token, loadStats])
+  }, [search, token, loadStats, page, filter])
+
+  const handleSearch = () => { setPage(1); doSearch(1, filter) }
+  const handlePageChange = (p: number) => { setPage(p); doSearch(p, filter) }
+  const handleFilterChange = (f: 'all' | 'unlabeled' | 'labeled') => { setFilter(f); setPage(1); doSearch(1, f) }
 
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
       await adminFetch('admin/script-templates/refresh-counts', token, { method: 'POST' })
       toast.success('Counts refreshed')
-      doSearch()
+      doSearch(page, filter)
     } catch (e: any) {
       toast.error(e.message)
     } finally {
@@ -432,7 +468,7 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
       const failures = results.filter((r: any) => r.error)
       if (successes.length > 0) toast.success(`AI classified ${successes.length} templates`)
       if (failures.length > 0) toast.error(`${failures.length} failed`)
-      doSearch()
+      doSearch(page, filter)
     } catch (e: any) {
       toast.error(e.message)
     } finally {
@@ -440,7 +476,7 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
     }
   }
 
-  useEffect(() => { doSearch() }, [token]) // auto-load on mount
+  useEffect(() => { doSearch(1, filter) }, [token]) // auto-load on mount
 
   return (
     <div className="space-y-4">
@@ -456,7 +492,7 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
 
       <div className="flex gap-2">
         <div className="flex-1">
-          <SearchBar value={search} onChange={setSearch} onSearch={doSearch} loading={loading} />
+          <SearchBar value={search} onChange={setSearch} onSearch={handleSearch} loading={loading} />
         </div>
         <button
           onClick={handleRefresh}
@@ -476,12 +512,32 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
         </button>
       </div>
 
+      {/* Filter toggle */}
+      <div className="flex gap-1">
+        {(['all', 'unlabeled', 'labeled'] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => handleFilterChange(f)}
+            className={`px-3 py-1.5 text-xs uppercase tracking-widest font-mono transition-colors ${
+              filter === f
+                ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
+                : 'border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
       {loaded && items.length === 0 && (
         <p className="text-sm text-zinc-500 font-mono text-center py-8">No script templates found. Click "Refresh" to populate.</p>
       )}
       {items.map((item) => (
         <ScriptTemplateRow key={item.script_hash} item={item} token={token} />
       ))}
+      {loaded && items.length > 0 && (
+        <Pagination currentPage={page} onPageChange={handlePageChange} hasNext={hasNext} />
+      )}
     </div>
   )
 }

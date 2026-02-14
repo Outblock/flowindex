@@ -38,7 +38,7 @@ type TxScriptTemplate struct {
 }
 
 // AdminListScriptTemplates returns script templates sorted by tx_count DESC with optional filters.
-func (r *Repository) AdminListScriptTemplates(ctx context.Context, search, category string, labeledOnly bool, limit, offset int) ([]ScriptTemplate, error) {
+func (r *Repository) AdminListScriptTemplates(ctx context.Context, search, category string, labeledOnly, unlabeledOnly bool, limit, offset int) ([]ScriptTemplate, error) {
 	query := `
 		SELECT st.script_hash, COALESCE(st.category, ''), COALESCE(st.label, ''),
 		       COALESCE(st.description, ''), st.tx_count,
@@ -62,6 +62,9 @@ func (r *Repository) AdminListScriptTemplates(ctx context.Context, search, categ
 	}
 	if labeledOnly {
 		query += ` AND st.category IS NOT NULL AND st.category != ''`
+	}
+	if unlabeledOnly {
+		query += ` AND (st.category IS NULL OR st.category = '')`
 	}
 
 	query += ` ORDER BY st.tx_count DESC`
