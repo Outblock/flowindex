@@ -609,7 +609,6 @@ function formatTagLabel(tag: string): string {
 }
 
 export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any; address?: string; expanded: boolean; onToggle: () => void }) {
-    const summaryLine = buildSummaryLine(tx);
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
     const tags: string[] = tx.tags || [];
     const hasDetails = true;
@@ -665,11 +664,6 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                             ))}
                         </div>
                     </div>
-                    {summaryLine && (
-                        <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-                            <span className="truncate">{summaryLine}</span>
-                        </div>
-                    )}
                 </div>
 
                 {/* Time */}
@@ -691,8 +685,10 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
 export function dedup(txs: any[]): any[] {
     const seen = new Set<string>();
     return txs.filter(tx => {
-        if (!tx.id || seen.has(tx.id)) return false;
-        seen.add(tx.id);
+        // Use id+block_height as key: system transactions reuse the same id across blocks
+        const key = tx.id ? `${tx.id}:${tx.block_height ?? tx.blockHeight ?? ''}` : '';
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
         return true;
     });
 }
