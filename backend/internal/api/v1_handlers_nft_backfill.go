@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"flowscan-clone/internal/models"
@@ -26,18 +28,52 @@ type nftBackfillCollectionData struct {
 }
 
 type nftBackfillItem struct {
-	NFTID            string `json:"nft_id"`
-	Name             string `json:"name"`
-	Description      string `json:"description"`
-	Thumbnail        string `json:"thumbnail"`
-	ExternalURL      string `json:"external_url"`
-	SerialNumber     *int64 `json:"serial_number"`
-	EditionName      string `json:"edition_name"`
-	EditionNumber    *int64 `json:"edition_number"`
-	EditionMax       *int64 `json:"edition_max"`
-	RarityScore      string `json:"rarity_score"`
-	RarityDescription string `json:"rarity_description"`
-	Traits           json.RawMessage `json:"traits"`
+	NFTID             string          `json:"nft_id"`
+	Name              string          `json:"name"`
+	Description       string          `json:"description"`
+	Thumbnail         string          `json:"thumbnail"`
+	ExternalURL       string          `json:"external_url"`
+	SerialNumber      interface{}     `json:"serial_number"`
+	EditionName       string          `json:"edition_name"`
+	EditionNumber     interface{}     `json:"edition_number"`
+	EditionMax        interface{}     `json:"edition_max"`
+	RarityScore       string          `json:"rarity_score"`
+	RarityDescription string          `json:"rarity_description"`
+	Traits            json.RawMessage `json:"traits"`
+}
+
+// toInt64Ptr converts an interface{} (string or number from JSON) to *int64.
+func toInt64Ptr(v interface{}) *int64 {
+	if v == nil {
+		return nil
+	}
+	switch x := v.(type) {
+	case float64:
+		n := int64(x)
+		return &n
+	case string:
+		if x == "" {
+			return nil
+		}
+		n, err := strconv.ParseInt(x, 10, 64)
+		if err != nil {
+			return nil
+		}
+		return &n
+	case json.Number:
+		n, err := x.Int64()
+		if err != nil {
+			return nil
+		}
+		return &n
+	default:
+		s := fmt.Sprint(v)
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return nil
+		}
+		return &n
+	}
 }
 
 // parseCollectionID extracts contract address and name from a type identifier.
@@ -53,7 +89,8 @@ func parseCollectionID(id string) (contractAddr, contractName string, ok bool) {
 func (s *Server) handleFlowNFTBackfill(w http.ResponseWriter, r *http.Request) {
 	var req nftBackfillRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid request body")
+		log.Printf("[nft_backfill] decode error: %v", err)
+		writeAPIError(w, http.StatusBadRequest, fmt.Sprintf("invalid request body: %v", err))
 		return
 	}
 
@@ -112,10 +149,10 @@ func (s *Server) handleFlowNFTBackfill(w http.ResponseWriter, r *http.Request) {
 					Description:       it.Description,
 					Thumbnail:         it.Thumbnail,
 					ExternalURL:       it.ExternalURL,
-					SerialNumber:      it.SerialNumber,
+					SerialNumber:      toInt64Ptr(it.SerialNumber),
 					EditionName:       it.EditionName,
-					EditionNumber:     it.EditionNumber,
-					EditionMax:        it.EditionMax,
+					EditionNumber:     toInt64Ptr(it.EditionNumber),
+					EditionMax:        toInt64Ptr(it.EditionMax),
 					RarityScore:       it.RarityScore,
 					RarityDescription: it.RarityDescription,
 					Traits:            it.Traits,

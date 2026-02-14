@@ -180,10 +180,10 @@ export function toBackfillItem(nft: any): BackfillItem | null {
         description: nft?.display?.description || '',
         thumbnail,
         external_url: nft?.externalURL?.url || '',
-        serial_number: nft?.serial?.number ?? null,
+        serial_number: nft?.serial?.number != null ? Number(nft.serial.number) || null : null,
         edition_name: nft?.editions?.[0]?.name || '',
-        edition_number: nft?.editions?.[0]?.number ?? null,
-        edition_max: nft?.editions?.[0]?.max ?? null,
+        edition_number: nft?.editions?.[0]?.number != null ? Number(nft.editions[0].number) || null : null,
+        edition_max: nft?.editions?.[0]?.max != null ? Number(nft.editions[0].max) || null : null,
         rarity_score: nft?.rarity?.score != null ? String(nft.rarity.score) : '',
         rarity_description: nft?.rarity?.description || '',
         traits: nft?.traits?.traits?.map((t: { name: string; value: unknown }) => ({
