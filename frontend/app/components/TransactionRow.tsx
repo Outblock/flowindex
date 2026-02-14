@@ -573,19 +573,6 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
 
 // --- Activity Row ---
 
-const activityTypeIcons: Record<string, React.ComponentType<any>> = {
-    ft: ArrowRightLeft,
-    nft: Repeat,
-    deploy: FileCode,
-    evm: Zap,
-    contract: Box,
-    account: UserPlus,
-    key: Key,
-    marketplace: ShoppingBag,
-    scheduled: Clock,
-    tx: Activity,
-};
-
 const tagStyles: Record<string, string> = {
     FT_TRANSFER:      'text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10',
     FT_SENDER:        'text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10',
@@ -609,7 +596,6 @@ function formatTagLabel(tag: string): string {
 }
 
 export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any; address?: string; expanded: boolean; onToggle: () => void }) {
-    const summaryLine = buildSummaryLine(tx);
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
     const tags: string[] = tx.tags || [];
     const hasDetails = true;
@@ -631,7 +617,7 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
 
                 {/* Main content: txid first, then tags */}
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2">
                         <Link
                             to={`/tx/${tx.id}` as any}
                             className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-xs flex-shrink-0"
@@ -665,11 +651,6 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                             ))}
                         </div>
                     </div>
-                    {summaryLine && (
-                        <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-                            <span className="truncate">{summaryLine}</span>
-                        </div>
-                    )}
                 </div>
 
                 {/* Time */}
@@ -691,8 +672,10 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
 export function dedup(txs: any[]): any[] {
     const seen = new Set<string>();
     return txs.filter(tx => {
-        if (!tx.id || seen.has(tx.id)) return false;
-        seen.add(tx.id);
+        // Use id+block_height as key: system transactions reuse the same id across blocks
+        const key = tx.id ? `${tx.id}:${tx.block_height ?? tx.blockHeight ?? ''}` : '';
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
         return true;
     });
 }

@@ -416,15 +416,18 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                 {/* Scheduled transactions list */}
                 {filterMode === 'scheduled' && scheduledTxs.length > 0 && (
                     <div className="space-y-0">
-                        {scheduledTxs.map((tx) => (
-                            <ActivityRow
-                                key={tx.id}
-                                tx={tx}
-                                address={normalizedAddress}
-                                expanded={expandedTxId === tx.id}
-                                onToggle={() => setExpandedTxId(prev => prev === tx.id ? null : tx.id)}
-                            />
-                        ))}
+                        {scheduledTxs.map((tx) => {
+                            const txKey = `${tx.id}:${tx.block_height ?? tx.blockHeight ?? ''}`;
+                            return (
+                                <ActivityRow
+                                    key={txKey}
+                                    tx={tx}
+                                    address={normalizedAddress}
+                                    expanded={expandedTxId === txKey}
+                                    onToggle={() => setExpandedTxId(prev => prev === txKey ? null : txKey)}
+                                />
+                            );
+                        })}
                         {scheduledHasMore && (
                             <div className="text-center py-3">
                                 <button onClick={() => loadScheduledTransactions(scheduledCursor, true)} disabled={scheduledLoading} className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50">{scheduledLoading ? 'Loading...' : 'Load More'}</button>
@@ -447,15 +450,18 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                 {/* Unified timeline (filterMode === 'all') */}
                 {filterMode === 'all' && filteredTransactions.length > 0 && (
                     <div className="space-y-0">
-                        {filteredTransactions.map((tx) => (
-                            <ActivityRow
-                                key={tx.id}
-                                tx={tx}
-                                address={normalizedAddress}
-                                expanded={expandedTxId === tx.id}
-                                onToggle={() => setExpandedTxId(prev => prev === tx.id ? null : tx.id)}
-                            />
-                        ))}
+                        {filteredTransactions.map((tx) => {
+                            const txKey = `${tx.id}:${tx.block_height ?? tx.blockHeight ?? ''}`;
+                            return (
+                                <ActivityRow
+                                    key={txKey}
+                                    tx={tx}
+                                    address={normalizedAddress}
+                                    expanded={expandedTxId === txKey}
+                                    onToggle={() => setExpandedTxId(prev => prev === txKey ? null : txKey)}
+                                />
+                            );
+                        })}
                     </div>
                 )}
                 {filterMode === 'all' && filteredTransactions.length === 0 && !txLoading && (
