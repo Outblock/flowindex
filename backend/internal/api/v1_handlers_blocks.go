@@ -78,12 +78,10 @@ func (s *Server) handleFlowBlockTransactions(w http.ResponseWriter, r *http.Requ
 			eventsByTx[tx.ID] = tx.Events
 		}
 	}
-	templates, _ := s.repo.GetScriptTemplatesByTxIDs(r.Context(), txIDs)
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
 		out = append(out, toFlowTransactionOutput(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
 	}
-	enrichWithTemplates(out, templates)
 	writeAPIResponse(w, out, map[string]interface{}{"count": len(out)}, nil)
 }
 
