@@ -233,16 +233,9 @@ function NFTCollectionDetailInner() {
   const isLoading = activeTab === 'nfts' ? itemsLoading : activeTab === 'owners' ? ownersLoading : transfersLoading;
 
   const hasNext = (() => {
-    if (activeTab === 'nfts') {
-      const count = Number(itemsMeta?.count || 0);
-      return count > 0 ? offset + limit < count : items.length === limit;
-    }
-    if (activeTab === 'owners') {
-      const count = Number(ownersMeta?.count || 0);
-      return count > 0 ? offset + limit < count : owners.length === limit;
-    }
-    const count = Number(transfersMeta?.count || 0);
-    return count > 0 ? offset + limit < count : transfers.length === limit;
+    if (activeTab === 'nfts') return itemsMeta?.has_more === true;
+    if (activeTab === 'owners') return ownersMeta?.has_more === true;
+    return transfersMeta?.has_more === true;
   })();
 
   const tabs = [
