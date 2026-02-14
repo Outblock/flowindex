@@ -203,6 +203,7 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 	txIDs := collectTxIDs(txs)
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
+	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
 	eventsByTx := make(map[string][]models.Event)
 	if includeEvents {
 		events, _ := s.repo.GetEventsByTransactionIDs(r.Context(), txIDs)
@@ -213,7 +214,7 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
-		out = append(out, toFlowTransactionOutput(t, eventsByTx[t.ID], nil, tags[t.ID], feesByTx[t.ID]))
+		out = append(out, toFlowTransactionOutput(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
 	}
 	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}
 	// Include pre-computed total from address_stats if available.
@@ -500,10 +501,11 @@ func (s *Server) handleFlowAccountScheduledTransactions(w http.ResponseWriter, r
 	txIDs := collectTxIDs(txs)
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
+	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
 
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
-		out = append(out, toFlowTransactionOutput(t, nil, nil, tags[t.ID], feesByTx[t.ID]))
+		out = append(out, toFlowTransactionOutput(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
@@ -518,10 +520,11 @@ func (s *Server) handleFlowScheduledTransactions(w http.ResponseWriter, r *http.
 	txIDs := collectTxIDs(txs)
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
+	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
 
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
-		out = append(out, toFlowTransactionOutput(t, nil, nil, tags[t.ID], feesByTx[t.ID]))
+		out = append(out, toFlowTransactionOutput(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }

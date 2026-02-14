@@ -729,3 +729,45 @@ func (r *Repository) GetFTTransfersByTransactionID(ctx context.Context, txID str
 	}
 	return out, rows.Err()
 }
+
+// NFTTransferRow is a raw NFT transfer row for a transaction.
+type NFTTransferRow struct {
+	Token        string `json:"token"`
+	ContractName string `json:"contract_name"`
+	FromAddress  string `json:"from_address"`
+	ToAddress    string `json:"to_address"`
+	TokenID      string `json:"token_id"`
+	EventIndex   int    `json:"event_index"`
+}
+
+// GetNFTTransfersByTransactionID returns all NFT transfer rows for a transaction.
+func (r *Repository) GetNFTTransfersByTransactionID(ctx context.Context, txID string) ([]NFTTransferRow, error) {
+	txBytes := hexToBytes(txID)
+	if txBytes == nil {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS token,
+		       COALESCE(contract_name, '') AS contract_name,
+		       COALESCE(encode(from_address, 'hex'), '') AS from_address,
+		       COALESCE(encode(to_address, 'hex'), '') AS to_address,
+		       COALESCE(token_id, '') AS token_id,
+		       event_index
+		FROM app.nft_transfers
+		WHERE transaction_id = $1
+		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
+		ORDER BY event_index`, txBytes)
+	if err != nil {
+		return nil, fmt.Errorf("get nft transfers by tx: %w", err)
+	}
+	defer rows.Close()
+	var out []NFTTransferRow
+	for rows.Next() {
+		var nr NFTTransferRow
+		if err := rows.Scan(&nr.Token, &nr.ContractName, &nr.FromAddress, &nr.ToAddress, &nr.TokenID, &nr.EventIndex); err != nil {
+			return nil, err
+		}
+		out = append(out, nr)
+	}
+	return out, rows.Err()
+}

@@ -138,6 +138,95 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		out["ft_transfers"] = transfersOut
 	}
 
+	// Enrich: NFT transfers with item metadata
+	nftTransfers, _ := s.repo.GetNFTTransfersByTransactionID(r.Context(), tx.ID)
+	if len(nftTransfers) > 0 {
+		// Collect unique collection identifiers for metadata lookup
+		collIDSet := make(map[string]bool)
+		for _, nt := range nftTransfers {
+			collIDSet[nt.Token] = true
+		}
+		collIDs := make([]string, 0, len(collIDSet))
+		for id := range collIDSet {
+			collIDs = append(collIDs, id)
+		}
+		nftCollMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), collIDs)
+
+		// Batch fetch NFT item metadata
+		itemKeys := make([]repository.NFTItemKey, 0, len(nftTransfers))
+		for _, nt := range nftTransfers {
+			parts := strings.SplitN(nt.Token, ".", 3)
+			if len(parts) >= 3 && nt.TokenID != "" {
+				itemKeys = append(itemKeys, repository.NFTItemKey{
+					ContractAddress: strings.TrimPrefix(parts[1], "0x"),
+					ContractName:    parts[2],
+					NFTID:           nt.TokenID,
+				})
+			}
+		}
+		itemMeta, _ := s.repo.GetNFTItemsBatch(r.Context(), itemKeys)
+
+		// COA address lookup for NFT transfers
+		nftAddrSet := make(map[string]bool)
+		for _, nt := range nftTransfers {
+			if nt.FromAddress != "" {
+				nftAddrSet[nt.FromAddress] = true
+			}
+			if nt.ToAddress != "" {
+				nftAddrSet[nt.ToAddress] = true
+			}
+		}
+		nftAddrs := make([]string, 0, len(nftAddrSet))
+		for a := range nftAddrSet {
+			nftAddrs = append(nftAddrs, a)
+		}
+		nftCOAMap, _ := s.repo.CheckAddressesAreCOA(r.Context(), nftAddrs)
+
+		nftTransfersOut := make([]map[string]interface{}, 0, len(nftTransfers))
+		for _, nt := range nftTransfers {
+			item := map[string]interface{}{
+				"token":        nt.Token,
+				"from_address": formatAddressV1(nt.FromAddress),
+				"to_address":   formatAddressV1(nt.ToAddress),
+				"token_id":     nt.TokenID,
+				"event_index":  nt.EventIndex,
+			}
+			if meta, ok := nftCollMeta[nt.Token]; ok {
+				item["collection_name"] = meta.Name
+				item["collection_logo"] = meta.Logo
+			}
+			// Attach NFT item metadata if available
+			parts := strings.SplitN(nt.Token, ".", 3)
+			if len(parts) >= 3 && nt.TokenID != "" {
+				key := repository.NFTItemKey{
+					ContractAddress: strings.TrimPrefix(parts[1], "0x"),
+					ContractName:    parts[2],
+					NFTID:           nt.TokenID,
+				}
+				if nftItem, ok := itemMeta[key]; ok {
+					item["nft_name"] = nftItem.Name
+					item["nft_thumbnail"] = nftItem.Thumbnail
+					item["nft_rarity"] = nftItem.RarityDescription
+				}
+			}
+			// COA cross-VM detection
+			if nt.FromAddress != "" {
+				if flowAddr, ok := nftCOAMap[nt.FromAddress]; ok {
+					item["from_coa_flow_address"] = formatAddressV1(flowAddr)
+					item["is_cross_vm"] = true
+				}
+			}
+			if nt.ToAddress != "" {
+				if flowAddr, ok := nftCOAMap[nt.ToAddress]; ok {
+					item["to_coa_flow_address"] = formatAddressV1(flowAddr)
+					item["is_cross_vm"] = true
+				}
+			}
+			nftTransfersOut = append(nftTransfersOut, item)
+		}
+		out["nft_transfers"] = nftTransfersOut
+	}
+
 	// Enrich: DeFi swap events
 	defiEvents, defiPairs, _ := s.repo.GetDefiEventsByTransactionID(r.Context(), tx.ID)
 	if len(defiEvents) > 0 {

@@ -32,6 +32,13 @@ export interface TransferSummary {
     nft: NFTSummaryItem[];
 }
 
+export interface TokenMetaEntry {
+    name: string;
+    symbol: string;
+    logo: any;
+    type: 'ft' | 'nft';
+}
+
 // --- Helpers ---
 
 export function deriveActivityType(tx: any): { type: string; label: string; color: string; bgColor: string } {
@@ -279,6 +286,8 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
     // Derive rich data from detail response
     const evmExecs: any[] = detail?.evm_executions || [];
     const ftTransfers: any[] = detail?.ft_transfers || [];
+    const nftTransfers: any[] = detail?.nft_transfers || [];
+    const defiEvents: any[] = detail?.defi_events || [];
     const events: any[] = detail?.events || [];
 
     // Extract created accounts from events
@@ -527,8 +536,78 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                 </div>
             )}
 
-            {/* NFT Transfer details (from list summary — detail API doesn't have separate nft_transfers) */}
-            {summary?.nft && summary.nft.length > 0 && (
+            {/* NFT Transfers (rich, from detail API) */}
+            {nftTransfers.length > 0 && (
+                <div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">NFT Transfers</div>
+                    <div className="space-y-2">
+                        {nftTransfers.map((nt: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2.5 text-xs">
+                                {/* NFT thumbnail or collection icon */}
+                                {nt.nft_thumbnail ? (
+                                    <img
+                                        src={nt.nft_thumbnail}
+                                        alt={nt.nft_name || ''}
+                                        className="w-10 h-10 rounded-md object-cover flex-shrink-0 border border-zinc-200 dark:border-white/10"
+                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                ) : nt.collection_logo ? (
+                                    <div className="w-10 h-10 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                        <TokenIcon logo={nt.collection_logo} symbol={nt.collection_name} size={32} />
+                                    </div>
+                                ) : (
+                                    <div className="w-10 h-10 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center flex-shrink-0">
+                                        <ShoppingBag className="h-4 w-4 text-amber-500" />
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                                            {nt.nft_name || `#${nt.token_id}`}
+                                        </span>
+                                        <span className="text-zinc-400 text-[10px]">
+                                            {nt.collection_name || formatTokenName(nt.token)}
+                                        </span>
+                                        {nt.nft_rarity && (
+                                            <span className="text-[9px] px-1 py-0.5 rounded-sm border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 uppercase">
+                                                {nt.nft_rarity}
+                                            </span>
+                                        )}
+                                        {nt.is_cross_vm && (
+                                            <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1 py-0.5 rounded uppercase">
+                                                <Globe className="w-2.5 h-2.5" />
+                                                Cross-VM
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 mt-0.5">
+                                        {nt.from_address && (
+                                            <span>
+                                                from{' '}
+                                                <Link to={`/accounts/${nt.from_address}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                                    {formatShort(nt.from_address, 8, 4)}
+                                                </Link>
+                                            </span>
+                                        )}
+                                        {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
+                                        {nt.to_address && (
+                                            <span>
+                                                to{' '}
+                                                <Link to={`/accounts/${nt.to_address}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                                    {formatShort(nt.to_address, 8, 4)}
+                                                </Link>
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* NFT fallback from list summary when detail not loaded */}
+            {nftTransfers.length === 0 && !detail && summary?.nft && summary.nft.length > 0 && (
                 <div>
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">NFT Transfers</div>
                     <div className="space-y-1.5">
@@ -552,10 +631,47 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                                             </Link>
                                         </span>
                                     )}
-                                    <span className="text-zinc-400 text-[10px] font-mono ml-auto">{n.collection}</span>
                                 </div>
                             );
                         })}
+                    </div>
+                </div>
+            )}
+
+            {/* DeFi Swap Events (from detail API) */}
+            {defiEvents.length > 0 && (
+                <div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">DeFi Swaps</div>
+                    <div className="space-y-2">
+                        {defiEvents.map((de: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
+                                {/* Input side */}
+                                <div className="inline-flex items-center gap-1">
+                                    <TokenIcon logo={de.asset0_logo} symbol={de.asset0_symbol} size={16} />
+                                    <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
+                                        {de.asset0_in && de.asset0_in !== '0' ? Number(de.asset0_in).toLocaleString(undefined, { maximumFractionDigits: 6 }) :
+                                         de.asset0_out && de.asset0_out !== '0' ? Number(de.asset0_out).toLocaleString(undefined, { maximumFractionDigits: 6 }) : '0'}
+                                    </span>
+                                    <span className="text-zinc-500 text-[10px] uppercase font-medium">{de.asset0_symbol || ''}</span>
+                                </div>
+                                <ArrowRightLeft className="h-3 w-3 text-zinc-400 flex-shrink-0" />
+                                {/* Output side */}
+                                <div className="inline-flex items-center gap-1">
+                                    <TokenIcon logo={de.asset1_logo} symbol={de.asset1_symbol} size={16} />
+                                    <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
+                                        {de.asset1_out && de.asset1_out !== '0' ? Number(de.asset1_out).toLocaleString(undefined, { maximumFractionDigits: 6 }) :
+                                         de.asset1_in && de.asset1_in !== '0' ? Number(de.asset1_in).toLocaleString(undefined, { maximumFractionDigits: 6 }) : '0'}
+                                    </span>
+                                    <span className="text-zinc-500 text-[10px] uppercase font-medium">{de.asset1_symbol || ''}</span>
+                                </div>
+                                {/* DEX badge */}
+                                {de.dex && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded-sm border border-teal-300 dark:border-teal-500/30 bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 uppercase font-medium">
+                                        {de.dex}
+                                    </span>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
@@ -630,11 +746,29 @@ function formatTagLabel(tag: string): string {
     return tag.replace(/_/g, ' ');
 }
 
-export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any; address?: string; expanded: boolean; onToggle: () => void }) {
+function deriveTokenContext(tx: any, tokenMeta?: Map<string, TokenMetaEntry>): { icon: any; label: string; type: 'ft' | 'nft' | null }[] {
+    if (!tokenMeta || tokenMeta.size === 0) return [];
+    const imports: string[] = tx.contract_imports || [];
+    if (imports.length === 0) return [];
+    const results: { icon: any; label: string; type: 'ft' | 'nft' | null }[] = [];
+    const seen = new Set<string>();
+    for (const imp of imports) {
+        if (seen.has(imp)) continue;
+        const meta = tokenMeta.get(imp);
+        if (meta) {
+            seen.add(imp);
+            results.push({ icon: meta.logo, label: meta.symbol || meta.name || formatTokenName(imp), type: meta.type });
+        }
+    }
+    return results.slice(0, 4); // Cap at 4 to avoid overflow
+}
+
+export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }: { tx: any; address?: string; expanded: boolean; onToggle: () => void; tokenMeta?: Map<string, TokenMetaEntry> }) {
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
     // Filter out noise tags that appear on every transaction
     const tags: string[] = (tx.tags || []).filter((t: string) => t !== 'FEE');
     const hasDetails = true;
+    const tokenContext = deriveTokenContext(tx, tokenMeta);
 
     return (
         <div className={`border-b border-zinc-100 dark:border-white/5 transition-colors ${expanded ? 'bg-zinc-50/50 dark:bg-white/[0.02]' : ''}`}>
@@ -651,7 +785,7 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                     )}
                 </div>
 
-                {/* Main content: txid first, then tags */}
+                {/* Main content: txid first, then tags, then token context */}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                         <Link
@@ -691,6 +825,17 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                             })}
                         </div>
                     </div>
+                    {/* Token context line — derived from contract_imports + metadata cache */}
+                    {tokenContext.length > 0 && (
+                        <div className="flex items-center gap-2 mt-1">
+                            {tokenContext.map((tc, i) => (
+                                <span key={i} className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+                                    <TokenIcon logo={tc.icon} symbol={tc.label} size={14} />
+                                    <span>{tc.label}</span>
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Time */}
