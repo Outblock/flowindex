@@ -192,6 +192,7 @@ export function buildSummaryLine(tx: any): string {
     if (tagsLower.some(t => t.includes('account_created'))) return 'Created new account';
     if (tagsLower.some(t => t.includes('key_update'))) return 'Updated account key';
 
+    // Transfer summary (available on detail/expand, not on list)
     if (summary?.ft && summary.ft.length > 0) {
         const parts = summary.ft.map(f => {
             const displayName = f.symbol || f.name || formatTokenName(f.token);
@@ -585,17 +586,38 @@ const activityTypeIcons: Record<string, React.ComponentType<any>> = {
     tx: Activity,
 };
 
+const tagStyles: Record<string, string> = {
+    FT_TRANSFER:      'text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10',
+    FT_SENDER:        'text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10',
+    FT_RECEIVER:      'text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10',
+    NFT_TRANSFER:     'text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10',
+    NFT_SENDER:       'text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10',
+    NFT_RECEIVER:     'text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10',
+    SCHEDULED_TX:     'text-indigo-600 dark:text-indigo-400 border-indigo-300 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/10',
+    EVM:              'text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-500/10',
+    CONTRACT_DEPLOY:  'text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10',
+    ACCOUNT_CREATED:  'text-cyan-600 dark:text-cyan-400 border-cyan-300 dark:border-cyan-500/30 bg-cyan-50 dark:bg-cyan-500/10',
+    KEY_UPDATE:       'text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10',
+    STAKING:          'text-violet-600 dark:text-violet-400 border-violet-300 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10',
+    SWAP:             'text-teal-600 dark:text-teal-400 border-teal-300 dark:border-teal-500/30 bg-teal-50 dark:bg-teal-500/10',
+};
+
+const defaultTagStyle = 'text-zinc-500 dark:text-zinc-500 border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5';
+
+function formatTagLabel(tag: string): string {
+    return tag.replace(/_/g, ' ');
+}
+
 export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any; address?: string; expanded: boolean; onToggle: () => void }) {
-    const activity = deriveActivityType(tx);
     const summaryLine = buildSummaryLine(tx);
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
-    const IconComp = activityTypeIcons[activity.type] || Activity;
-    const hasDetails = true; // All rows are expandable — detail API may reveal interesting data
+    const tags: string[] = tx.tags || [];
+    const hasDetails = true;
 
     return (
         <div className={`border-b border-zinc-100 dark:border-white/5 transition-colors ${expanded ? 'bg-zinc-50/50 dark:bg-white/[0.02]' : ''}`}>
             <div
-                className={`flex items-start gap-4 p-4 ${hasDetails ? 'cursor-pointer' : ''} hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group`}
+                className={`flex items-start gap-3 p-4 ${hasDetails ? 'cursor-pointer' : ''} hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group`}
                 onClick={hasDetails ? onToggle : undefined}
             >
                 {/* Expand chevron */}
@@ -607,26 +629,18 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                     )}
                 </div>
 
-                {/* Type badge */}
-                <div className="flex-shrink-0 pt-0.5">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 border rounded-sm text-[9px] font-bold uppercase tracking-wider ${activity.bgColor} ${activity.color}`}>
-                        <IconComp className="h-2.5 w-2.5" />
-                        {activity.label}
-                    </span>
-                </div>
-
-                {/* Main content */}
+                {/* Main content: txid first, then tags */}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                         <Link
                             to={`/tx/${tx.id}` as any}
-                            className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-xs"
+                            className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-xs flex-shrink-0"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {formatShort(tx.id, 12, 8)}
                         </Link>
                         {tx.status && tx.status !== 'SEALED' && (
-                            <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-sm border ${
+                            <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded-sm border font-semibold ${
                                 (tx.error_message || tx.error) || tx.status === 'EXPIRED'
                                     ? 'text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10'
                                     : 'text-yellow-600 dark:text-yellow-500 border-yellow-300 dark:border-yellow-500/30 bg-yellow-50 dark:bg-yellow-500/10'
@@ -635,19 +649,24 @@ export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any;
                             </span>
                         )}
                         {(tx.error_message || tx.error) && tx.status === 'SEALED' && (
-                            <span className="text-[10px] uppercase px-1.5 py-0.5 rounded-sm border text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
+                            <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-sm border font-semibold text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
                                 ERROR
                             </span>
                         )}
+                        {/* Tags */}
+                        <div className="flex items-center gap-1 flex-wrap">
+                            {tags.map((tag) => (
+                                <span
+                                    key={tag}
+                                    className={`inline-flex items-center px-1.5 py-0.5 border rounded-sm text-[9px] font-bold uppercase tracking-wider ${tagStyles[tag] || defaultTagStyle}`}
+                                >
+                                    {formatTagLabel(tag)}
+                                </span>
+                            ))}
+                        </div>
                     </div>
                     {summaryLine && (
                         <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-                            {(() => {
-                                const s: TransferSummary | undefined = tx.transfer_summary;
-                                const firstLogo = s?.ft?.[0]?.logo || s?.nft?.[0]?.logo;
-                                if (firstLogo) return <TokenIcon logo={firstLogo} symbol={s?.ft?.[0]?.symbol || s?.nft?.[0]?.name} size={14} />;
-                                return null;
-                            })()}
                             <span className="truncate">{summaryLine}</span>
                         </div>
                     )}

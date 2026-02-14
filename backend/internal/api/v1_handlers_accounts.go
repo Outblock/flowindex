@@ -204,7 +204,6 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
-	transferSummaries, _ := s.repo.GetTransferSummariesByTxIDs(r.Context(), txIDs, address)
 	eventsByTx := make(map[string][]models.Event)
 	if includeEvents {
 		events, _ := s.repo.GetEventsByTransactionIDs(r.Context(), txIDs)
@@ -212,18 +211,10 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 			eventsByTx[e.TransactionID] = append(eventsByTx[e.TransactionID], e)
 		}
 	}
-	// Collect token metadata for icons/symbols.
-	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
-	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
-	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
 
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
-		var ts *repository.TransferSummary
-		if s, ok := transferSummaries[t.ID]; ok {
-			ts = &s
-		}
-		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts, ftMeta, nftMeta))
+		out = append(out, toFlowTransactionOutput(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
 	}
 	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}
 	// Include pre-computed total from address_stats if available.
@@ -511,18 +502,10 @@ func (s *Server) handleFlowAccountScheduledTransactions(w http.ResponseWriter, r
 	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
-	transferSummaries, _ := s.repo.GetTransferSummariesByTxIDs(r.Context(), txIDs, address)
-	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
-	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
-	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
 
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
-		var ts *repository.TransferSummary
-		if s, ok := transferSummaries[t.ID]; ok {
-			ts = &s
-		}
-		out = append(out, toFlowTransactionOutputWithTransfers(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID], ts, ftMeta, nftMeta))
+		out = append(out, toFlowTransactionOutput(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
@@ -541,7 +524,7 @@ func (s *Server) handleFlowScheduledTransactions(w http.ResponseWriter, r *http.
 
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
-		out = append(out, toFlowTransactionOutputWithTransfers(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID], nil, nil, nil))
+		out = append(out, toFlowTransactionOutput(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
