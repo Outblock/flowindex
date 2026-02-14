@@ -277,14 +277,6 @@ function AccountDetail() {
                             {onChainData?.coaAddress && (
                                 <div className="flex items-center gap-1.5 group">
                                     <COABadge evmAddress={onChainData.coaAddress} />
-                                    <a
-                                        href={`https://evm.flowindex.dev/address/0x${onChainData.coaAddress}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-[11px] font-mono text-violet-600 dark:text-violet-400 hover:underline"
-                                    >
-                                        0x{onChainData.coaAddress}
-                                    </a>
                                     <CopyButton
                                         content={`0x${onChainData.coaAddress}`}
                                         variant="ghost"

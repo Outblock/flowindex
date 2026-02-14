@@ -21,11 +21,12 @@ export function COABadge({ evmAddress, className = '' }: COABadgeProps) {
       target="_blank"
       rel="noopener noreferrer"
       title="Cadence Owned Account — click to view on EVM explorer"
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-800/40 hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors cursor-pointer shrink-0 ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-mono font-semibold bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-800/40 hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors cursor-pointer shrink-0 ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
-      COA
-      <ExternalLink className="w-2.5 h-2.5" />
+      <span className="uppercase tracking-wider">COA</span>
+      <span className="font-normal">{normalized}</span>
+      <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
     </a>
   );
 }
