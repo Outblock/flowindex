@@ -32,14 +32,20 @@ func (s *Server) handleFlowListAccounts(w http.ResponseWriter, r *http.Request) 
 
 	sortBy := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort_by")))
 	meta := map[string]interface{}{"limit": limit, "offset": offset}
+	// Normalize sort_by to internal names
+	repoSort := "recent"
+	switch sortBy {
+	case "tx_count":
+		repoSort = "tx_count"
+	case "storage":
+		repoSort = "storage"
+	case "flow_balance":
+		meta["warning"] = "sort_by=flow_balance is not supported yet; falling back to block_height"
+	}
 	if sortBy == "" {
 		sortBy = "block_height"
 	}
 	meta["sort_by"] = sortBy
-	if sortBy == "flow_balance" {
-		// We do not maintain historical balances in DB yet.
-		meta["warning"] = "sort_by=flow_balance is not supported yet; falling back to block_height"
-	}
 
 	cursor := height
 	if cursor == nil {
@@ -51,7 +57,7 @@ func (s *Server) handleFlowListAccounts(w http.ResponseWriter, r *http.Request) 
 		meta["height"] = *cursor
 	}
 
-	accounts, err := s.repo.ListAccountsForAPI(r.Context(), cursor, limit, offset)
+	accounts, err := s.repo.ListAccountsForAPI(r.Context(), cursor, limit, offset, repoSort)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -72,6 +78,7 @@ func (s *Server) handleFlowListAccounts(w http.ResponseWriter, r *http.Request) 
 			"height":            a.LastSeenHeight,
 			"timestamp":         formatTime(a.UpdatedAt),
 			"transaction_hash":  "",
+			"tx_count":          a.TxCount,
 		})
 	}
 	if total, err := s.repo.GetTotalAddresses(r.Context()); err == nil && total > 0 {
