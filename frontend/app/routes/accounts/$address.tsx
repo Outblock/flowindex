@@ -4,7 +4,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddress, getFlowV1AccountByAddressTransaction } from '../../api/gen/find';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp
+    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
@@ -20,13 +20,14 @@ import { AccountKeysTab } from '../../components/account/AccountInfoTab';
 import { AccountContractsTab } from '../../components/account/AccountContractsTab';
 import { AccountStorageTab } from '../../components/account/AccountStorageTab';
 import { AccountLinkedAccountsTab } from '../../components/account/AccountLinkedAccountsTab';
+import { AccountStakingTab } from '../../components/account/AccountStakingTab';
 import { AccountBalanceTab } from '../../components/account/AccountBalanceTab';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { cn } from '../../lib/utils';
 
-const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'keys', 'contracts', 'storage', 'linked'] as const;
+const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'staking', 'keys', 'contracts', 'storage', 'linked'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
 const VALID_SUBTABS = ['all', 'ft', 'nft', 'scheduled'] as const;
@@ -226,6 +227,7 @@ function AccountDetail() {
         { id: 'activity' as const, label: 'Activity', icon: Activity },
         { id: 'tokens' as const, label: 'Tokens', icon: Coins },
         { id: 'nfts' as const, label: 'NFTs', icon: ImageIcon },
+        { id: 'staking' as const, label: 'Staking', icon: Landmark },
         { id: 'keys' as const, label: 'Public Keys', icon: Key },
         { id: 'contracts' as const, label: `Contracts (${account.contracts?.length || 0})`, icon: FileText },
         { id: 'storage' as const, label: 'Storage', icon: HardDrive },
@@ -383,6 +385,7 @@ function AccountDetail() {
                         {activeTab === 'balance' && <AccountBalanceTab address={normalizedAddress} />}
                         {activeTab === 'tokens' && <AccountTokensTab address={address} />}
                         {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
+                        {activeTab === 'staking' && <AccountStakingTab address={address} />}
                         {activeTab === 'keys' && <AccountKeysTab account={account} />}
                         {activeTab === 'contracts' && <AccountContractsTab address={address} contracts={account.contracts || []} />}
                         {activeTab === 'storage' && <AccountStorageTab address={address} />}
