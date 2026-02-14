@@ -314,8 +314,17 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
         }
     }
 
+    // Build summary from detail data (richer) or fall back to list-level data
+    const summarySource = detail || tx;
+    const summaryLine = buildSummaryLine(summarySource);
+
     return (
         <div className="px-4 pb-4 pt-1 ml-[88px] space-y-3">
+            {/* Summary line */}
+            {summaryLine && (
+                <div className="text-xs text-zinc-600 dark:text-zinc-400">{summaryLine}</div>
+            )}
+
             {/* Loading indicator */}
             {loading && (
                 <div className="flex items-center gap-2 text-xs text-zinc-400 py-1">
@@ -597,7 +606,8 @@ function formatTagLabel(tag: string): string {
 
 export function ActivityRow({ tx, address = '', expanded, onToggle }: { tx: any; address?: string; expanded: boolean; onToggle: () => void }) {
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
-    const tags: string[] = tx.tags || [];
+    // Filter out noise tags that appear on every transaction
+    const tags: string[] = (tx.tags || []).filter((t: string) => t !== 'FEE');
     const hasDetails = true;
 
     return (
