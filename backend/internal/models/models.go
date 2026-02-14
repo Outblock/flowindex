@@ -134,6 +134,7 @@ type Event struct {
 	CreatedAt        time.Time       `json:"created_at"`
 }
 
+
 // TokenTransfer represents FT/NFT transfers (app.ft_transfers / app.nft_transfers).
 type TokenTransfer struct {
 	ID                   int       `json:"id"`
@@ -206,7 +207,7 @@ type AccountKey struct {
 	LastUpdatedHeight uint64 `json:"last_updated_height,omitempty"`
 }
 
-// SmartContract represents the smart_contracts table
+// SmartContract represents the unified app.smart_contracts table.
 type SmartContract struct {
 	Address         string    `json:"address"`
 	Name            string    `json:"name"`
@@ -218,17 +219,6 @@ type SmartContract struct {
 	BlockHeight     uint64    `json:"block_height"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
-}
-
-// ContractVersion represents a single version of a contract's code.
-type ContractVersion struct {
-	Address       string    `json:"address"`
-	Name          string    `json:"name"`
-	Version       int       `json:"version"`
-	Code          string    `json:"code,omitempty"`
-	BlockHeight   uint64    `json:"block_height"`
-	TransactionID string    `json:"transaction_id,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
 }
 
 // AddressStats represents the address_stats table
@@ -260,22 +250,12 @@ type AccountCatalog struct {
 
 // FTToken represents app.ft_tokens
 type FTToken struct {
-	ContractAddress string          `json:"contract_address"`
-	ContractName    string          `json:"contract_name,omitempty"`
-	Name            string          `json:"name"`
-	Symbol          string          `json:"symbol"`
-	Decimals        int             `json:"decimals"`
-	Description     string          `json:"description,omitempty"`
-	ExternalURL     string          `json:"external_url,omitempty"`
-	Logo            string          `json:"logo,omitempty"`
-	VaultPath       string          `json:"vault_path,omitempty"`
-	ReceiverPath    string          `json:"receiver_path,omitempty"`
-	BalancePath     string          `json:"balance_path,omitempty"`
-	Socials         json.RawMessage `json:"socials,omitempty"`
-	EVMAddress      string          `json:"evm_address,omitempty"`
-	HolderCount     int64           `json:"holder_count"`
-	TransferCount   int64           `json:"transfer_count"`
-	UpdatedAt       time.Time       `json:"updated_at"`
+	ContractAddress string    `json:"contract_address"`
+	ContractName    string    `json:"contract_name,omitempty"`
+	Name            string    `json:"name"`
+	Symbol          string    `json:"symbol"`
+	Decimals        int       `json:"decimals"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // FTHolding represents app.ft_holdings
@@ -290,39 +270,16 @@ type FTHolding struct {
 
 // NFTCollection represents app.nft_collections
 type NFTCollection struct {
-	ContractAddress string          `json:"contract_address"`
-	ContractName    string          `json:"contract_name,omitempty"`
-	Name            string          `json:"name"`
-	Symbol          string          `json:"symbol"`
+	ContractAddress string    `json:"contract_address"`
+	ContractName    string    `json:"contract_name,omitempty"`
+	Name            string    `json:"name"`
+	Symbol          string    `json:"symbol"`
 	Description     string          `json:"description,omitempty"`
 	ExternalURL     string          `json:"external_url,omitempty"`
-	SquareImage     string          `json:"square_image,omitempty"`
-	BannerImage     string          `json:"banner_image,omitempty"`
+	SquareImage     json.RawMessage `json:"square_image,omitempty"`
+	BannerImage     json.RawMessage `json:"banner_image,omitempty"`
 	Socials         json.RawMessage `json:"socials,omitempty"`
-	PublicPath      string          `json:"public_path,omitempty"`
-	EVMAddress      string          `json:"evm_address,omitempty"`
-	UpdatedAt       time.Time       `json:"updated_at"`
-}
-
-// NFTItem represents app.nft_items
-type NFTItem struct {
-	ContractAddress   string          `json:"contract_address"`
-	ContractName      string          `json:"contract_name,omitempty"`
-	NFTID             string          `json:"nft_id"`
-	Name              string          `json:"name,omitempty"`
-	Description       string          `json:"description,omitempty"`
-	Thumbnail         string          `json:"thumbnail,omitempty"`
-	ExternalURL       string          `json:"external_url,omitempty"`
-	SerialNumber      *int64          `json:"serial_number,omitempty"`
-	EditionName       string          `json:"edition_name,omitempty"`
-	EditionNumber     *int64          `json:"edition_number,omitempty"`
-	EditionMax        *int64          `json:"edition_max,omitempty"`
-	RarityScore       string          `json:"rarity_score,omitempty"`
-	RarityDescription string          `json:"rarity_description,omitempty"`
-	Traits            json.RawMessage `json:"traits,omitempty"`
-	MetadataError     string          `json:"-"`
-	Retries           int             `json:"-"`
-	UpdatedAt         time.Time       `json:"updated_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // NFTOwnership represents app.nft_ownership
@@ -353,118 +310,4 @@ type StatusSnapshot struct {
 	Kind    string          `json:"kind"`
 	Payload json.RawMessage `json:"payload"`
 	AsOf    time.Time       `json:"as_of"`
-}
-
-// StakingNode represents app.staking_nodes
-type StakingNode struct {
-	NodeID            string    `json:"node_id"`
-	Epoch             int64     `json:"epoch"`
-	Address           string    `json:"address"`
-	Role              int       `json:"role"`
-	NetworkingAddress string    `json:"networking_address,omitempty"`
-	TokensStaked      string    `json:"tokens_staked"`
-	TokensCommitted   string    `json:"tokens_committed"`
-	TokensUnstaking   string    `json:"tokens_unstaking"`
-	TokensUnstaked    string    `json:"tokens_unstaked"`
-	TokensRewarded    string    `json:"tokens_rewarded"`
-	DelegatorCount    int       `json:"delegator_count"`
-	FirstSeenHeight   int64     `json:"first_seen_height,omitempty"`
-	UpdatedAt         time.Time `json:"updated_at"`
-}
-
-// StakingDelegator represents app.staking_delegators
-type StakingDelegator struct {
-	DelegatorID     int       `json:"delegator_id"`
-	NodeID          string    `json:"node_id"`
-	Address         string    `json:"address,omitempty"`
-	TokensCommitted string    `json:"tokens_committed"`
-	TokensStaked    string    `json:"tokens_staked"`
-	TokensUnstaking string    `json:"tokens_unstaking"`
-	TokensRewarded  string    `json:"tokens_rewarded"`
-	TokensUnstaked  string    `json:"tokens_unstaked"`
-	BlockHeight     int64     `json:"block_height,omitempty"`
-	UpdatedAt       time.Time `json:"updated_at"`
-}
-
-// StakingEvent represents app.staking_events
-type StakingEvent struct {
-	BlockHeight   uint64    `json:"block_height"`
-	TransactionID string    `json:"transaction_id"`
-	EventIndex    int       `json:"event_index"`
-	EventType     string    `json:"event_type"`
-	NodeID        string    `json:"node_id,omitempty"`
-	DelegatorID   int       `json:"delegator_id,omitempty"`
-	Amount        string    `json:"amount,omitempty"`
-	Timestamp     time.Time `json:"timestamp"`
-}
-
-// DefiPair represents app.defi_pairs
-type DefiPair struct {
-	ID             string    `json:"id"`
-	DexKey         string    `json:"dex_key"`
-	Asset0ID       string    `json:"asset0_id"`
-	Asset1ID       string    `json:"asset1_id"`
-	Asset0Symbol   string    `json:"asset0_symbol"`
-	Asset1Symbol   string    `json:"asset1_symbol"`
-	FeeBps         int       `json:"fee_bps"`
-	ReservesAsset0 string    `json:"reserves_asset0"`
-	ReservesAsset1 string    `json:"reserves_asset1"`
-	UpdatedAt      time.Time `json:"updated_at"`
-}
-
-// DefiEvent represents app.defi_events
-type DefiEvent struct {
-	BlockHeight   uint64    `json:"block_height"`
-	TransactionID string    `json:"transaction_id"`
-	EventIndex    int       `json:"event_index"`
-	PairID        string    `json:"pair_id"`
-	EventType     string    `json:"event_type"`
-	Maker         string    `json:"maker"`
-	Asset0In      string    `json:"asset0_in"`
-	Asset0Out     string    `json:"asset0_out"`
-	Asset1In      string    `json:"asset1_in"`
-	Asset1Out     string    `json:"asset1_out"`
-	PriceNative   string    `json:"price_native"`
-	Timestamp     time.Time `json:"timestamp"`
-}
-
-// DailyBalanceDelta represents app.daily_balance_deltas
-type DailyBalanceDelta struct {
-	Address         string `json:"address"`
-	ContractAddress string `json:"contract_address"`
-	ContractName    string `json:"contract_name"`
-	Date            string `json:"date"`
-	Delta           string `json:"delta"`
-	TxCount         int    `json:"tx_count"`
-	LastHeight      uint64 `json:"last_height"`
-}
-
-// NodeMetadata represents app.node_metadata (GeoIP enrichment)
-type NodeMetadata struct {
-	NodeID      string    `json:"node_id"`
-	IPAddress   string    `json:"ip_address,omitempty"`
-	Hostname    string    `json:"hostname,omitempty"`
-	Country     string    `json:"country,omitempty"`
-	CountryCode string    `json:"country_code,omitempty"`
-	Region      string    `json:"region,omitempty"`
-	City        string    `json:"city,omitempty"`
-	Latitude    float64   `json:"latitude,omitempty"`
-	Longitude   float64   `json:"longitude,omitempty"`
-	ISP         string    `json:"isp,omitempty"`
-	Org         string    `json:"org,omitempty"`
-	ASNumber    string    `json:"as_number,omitempty"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-// EpochStats represents app.epoch_stats
-type EpochStats struct {
-	Epoch         int64     `json:"epoch"`
-	StartHeight   int64     `json:"start_height,omitempty"`
-	EndHeight     int64     `json:"end_height,omitempty"`
-	StartTime     time.Time `json:"start_time,omitempty"`
-	EndTime       time.Time `json:"end_time,omitempty"`
-	TotalNodes    int       `json:"total_nodes"`
-	TotalStaked   string    `json:"total_staked"`
-	TotalRewarded string    `json:"total_rewarded"`
-	UpdatedAt     time.Time `json:"updated_at"`
 }

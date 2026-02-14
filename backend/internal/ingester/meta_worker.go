@@ -49,6 +49,8 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 
 	accountKeys := w.extractAccountKeys(events)
 	contracts := w.extractContracts(ctx, events)
+	// UpsertSmartContracts handles code + version; UpsertContractRegistry handles kind/first_seen/last_seen.
+	// Both write to the same unified app.smart_contracts table with complementary ON CONFLICT clauses.
 	contractRegistry := make([]models.SmartContract, 0, len(contracts))
 	for _, c := range contracts {
 		if c.Address == "" || c.Name == "" {
@@ -71,12 +73,6 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 	}
 	if err := w.repo.UpsertContractRegistry(ctx, contractRegistry); err != nil {
 		return err
-	}
-
-	// Store contract version history for each add/update event.
-	contractVersions := w.extractContractVersions(events, contracts)
-	for _, cv := range contractVersions {
-		_ = w.repo.InsertContractVersion(ctx, cv.Address, cv.Name, cv.Code, cv.BlockHeight, cv.TransactionID)
 	}
 
 	// Opportunistic backfill for existing rows that were created before we started persisting
@@ -295,51 +291,6 @@ func (w *MetaWorker) extractContracts(ctx context.Context, events []models.Event
 	return out
 }
 
-func (w *MetaWorker) extractContractVersions(events []models.Event, contracts []models.SmartContract) []models.ContractVersion {
-	// Build a map from (address, name) -> code from the already-extracted contracts.
-	type key struct{ addr, name string }
-	codeMap := make(map[key]string)
-	for _, c := range contracts {
-		codeMap[key{c.Address, c.Name}] = c.Code
-	}
-
-	var versions []models.ContractVersion
-	for _, evt := range events {
-		if !strings.Contains(evt.Type, "AccountContractAdded") && !strings.Contains(evt.Type, "AccountContractUpdated") {
-			continue
-		}
-		var payload map[string]interface{}
-		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
-			continue
-		}
-		address, _ := payload["address"].(string)
-		name, _ := payload["name"].(string)
-		if name == "" {
-			if v, ok := payload["contract"].(string); ok {
-				name = v
-			}
-		}
-		if name == "" {
-			if v, ok := payload["contractName"].(string); ok {
-				name = v
-			}
-		}
-		address = normalizeFlowAddress(address)
-		if address == "" || name == "" {
-			continue
-		}
-		code := codeMap[key{address, name}]
-		versions = append(versions, models.ContractVersion{
-			Address:       address,
-			Name:          name,
-			Code:          code,
-			BlockHeight:   evt.BlockHeight,
-			TransactionID: evt.TransactionID,
-		})
-	}
-	return versions
-}
-
 func (w *MetaWorker) backfillMissingContractCode(ctx context.Context, limit int) error {
 	missing, err := w.repo.ListSmartContractsMissingCode(ctx, limit)
 	if err != nil {
@@ -402,9 +353,6 @@ func extractPublicKey(v interface{}) string {
 					bytes = append(bytes, byte(n))
 				}
 			}
-		case string:
-			// cadence.Bytes flattening produces "0x..." hex string
-			return arr
 		}
 
 		if len(bytes) == 0 {

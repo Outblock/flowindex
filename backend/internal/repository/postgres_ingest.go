@@ -428,10 +428,9 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					script_hash, script, arguments,
 					status, error_message, is_evm,
 					gas_limit, gas_used, event_count,
-					timestamp,
-					proposer_key_index, proposer_sequence_number
+					timestamp
 				)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 				ON CONFLICT (block_height, id) DO UPDATE SET
 					transaction_index = EXCLUDED.transaction_index,
 					status = EXCLUDED.status,
@@ -439,9 +438,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					gas_used = EXCLUDED.gas_used,
 					event_count = EXCLUDED.event_count,
 					is_evm = EXCLUDED.is_evm,
-					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash),
-					proposer_key_index = COALESCE(EXCLUDED.proposer_key_index, raw.transactions.proposer_key_index),
-					proposer_sequence_number = COALESCE(EXCLUDED.proposer_sequence_number, raw.transactions.proposer_sequence_number)`,
+					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash)`,
 				t.BlockHeight, hexToBytes(t.ID), t.TransactionIndex,
 				hexToBytes(t.ProposerAddress), hexToBytes(t.PayerAddress), sliceHexToBytes(t.Authorizers),
 				scriptHash, scriptInline, t.Arguments,
@@ -453,7 +450,6 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				}(), t.IsEVM,
 				t.GasLimit, t.GasUsed, eventCount,
 				txTimestamp,
-				t.ProposerKeyIndex, t.ProposerSequenceNumber,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
@@ -566,7 +562,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		}
 	}
 
-	// 7. Update Checkpoint (app schema)
+	// 4. Update Checkpoint (app schema)
 	_, err = dbtx.Exec(ctx, `
 		INSERT INTO app.indexing_checkpoints (service_name, last_height, updated_at)
 		VALUES ($1, $2, $3)

@@ -4,7 +4,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddress, getFlowV1AccountByAddressTransaction } from '../../api/gen/find';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark, Globe, ExternalLink
+    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
@@ -25,6 +25,7 @@ import { AccountBalanceTab } from '../../components/account/AccountBalanceTab';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { CopyButton } from '../../../components/animate-ui/components/buttons/copy';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { COABadge } from '../../components/ui/COABadge';
 import { cn } from '../../lib/utils';
 
 const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'staking', 'keys', 'contracts', 'storage', 'linked'] as const;
@@ -275,8 +276,7 @@ function AccountDetail() {
                             </div>
                             {onChainData?.coaAddress && (
                                 <div className="flex items-center gap-1.5 group">
-                                    <Globe className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-                                    <span className="text-[11px] text-zinc-500">EVM</span>
+                                    <COABadge evmAddress={onChainData.coaAddress} />
                                     <a
                                         href={`https://evm.flowindex.dev/address/0x${onChainData.coaAddress}`}
                                         target="_blank"
@@ -285,7 +285,6 @@ function AccountDetail() {
                                     >
                                         0x{onChainData.coaAddress}
                                     </a>
-                                    <ExternalLink className="w-3 h-3 text-violet-400 flex-shrink-0" />
                                     <CopyButton
                                         content={`0x${onChainData.coaAddress}`}
                                         variant="ghost"

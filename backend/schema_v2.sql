@@ -160,7 +160,7 @@ ALTER TABLE IF EXISTS raw.blocks
     ADD COLUMN IF NOT EXISTS signatures JSONB,
     ADD COLUMN IF NOT EXISTS execution_result_id BYTEA;
 
--- 3.1.b Scripts & Contract Code mapping tables (For payload offloading)
+-- 3.1.b Scripts mapping table (For payload offloading)
 -- raw.scripts (store script text by hash)
 CREATE TABLE IF NOT EXISTS raw.scripts (
     script_hash VARCHAR(64) PRIMARY KEY, -- SHA-256
@@ -208,10 +208,6 @@ CREATE TABLE IF NOT EXISTS raw.transactions (
 -- Ensure column exists on older installs (safe no-op for new DBs).
 ALTER TABLE IF EXISTS raw.transactions
   ADD COLUMN IF NOT EXISTS script_hash VARCHAR(64);
-ALTER TABLE IF EXISTS raw.transactions
-  ADD COLUMN IF NOT EXISTS proposer_key_index INT;
-ALTER TABLE IF EXISTS raw.transactions
-  ADD COLUMN IF NOT EXISTS proposer_sequence_number BIGINT;
 
 -- 3.2.a Tx lookup for fast "by tx id" queries
 CREATE TABLE IF NOT EXISTS raw.tx_lookup (
@@ -247,6 +243,7 @@ CREATE TABLE IF NOT EXISTS raw.events (
 
 -- Note: avoid heavy secondary indexes on raw.events in early phase.
 
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4) DERIVED HIGH-VOLUME TABLES (partitioned)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -268,17 +265,10 @@ CREATE TABLE IF NOT EXISTS app.ft_transfers (
     PRIMARY KEY (block_height, transaction_id, event_index)
 ) PARTITION BY RANGE (block_height);
 
--- Composite indexes: eliminate sort for "transfers by address, ordered by recency"
-CREATE INDEX IF NOT EXISTS idx_ft_transfers_from_height
-  ON app.ft_transfers(from_address, block_height DESC, event_index DESC);
-CREATE INDEX IF NOT EXISTS idx_ft_transfers_to_height
-  ON app.ft_transfers(to_address, block_height DESC, event_index DESC);
+CREATE INDEX IF NOT EXISTS idx_ft_transfers_from  ON app.ft_transfers(from_address);
+CREATE INDEX IF NOT EXISTS idx_ft_transfers_to    ON app.ft_transfers(to_address);
 CREATE INDEX IF NOT EXISTS idx_ft_transfers_token ON app.ft_transfers(token_contract_address);
 CREATE INDEX IF NOT EXISTS idx_ft_transfers_height ON app.ft_transfers(block_height DESC, event_index DESC);
-
--- Drop old single-column indexes on existing databases
-DROP INDEX IF EXISTS app.idx_ft_transfers_from;
-DROP INDEX IF EXISTS app.idx_ft_transfers_to;
 
 -- 4.1.b NFT transfers (10M partitions)
 CREATE TABLE IF NOT EXISTS app.nft_transfers (
@@ -297,18 +287,11 @@ CREATE TABLE IF NOT EXISTS app.nft_transfers (
     PRIMARY KEY (block_height, transaction_id, event_index)
 ) PARTITION BY RANGE (block_height);
 
--- Composite indexes: eliminate sort for "transfers by address, ordered by recency"
-CREATE INDEX IF NOT EXISTS idx_nft_transfers_from_height
-  ON app.nft_transfers(from_address, block_height DESC, event_index DESC);
-CREATE INDEX IF NOT EXISTS idx_nft_transfers_to_height
-  ON app.nft_transfers(to_address, block_height DESC, event_index DESC);
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_from  ON app.nft_transfers(from_address);
+CREATE INDEX IF NOT EXISTS idx_nft_transfers_to    ON app.nft_transfers(to_address);
 CREATE INDEX IF NOT EXISTS idx_nft_transfers_token ON app.nft_transfers(token_contract_address);
 CREATE INDEX IF NOT EXISTS idx_nft_transfers_height ON app.nft_transfers(block_height DESC, event_index DESC);
 CREATE INDEX IF NOT EXISTS idx_nft_transfers_token_id ON app.nft_transfers(token_id);
-
--- Drop old single-column indexes on existing databases
-DROP INDEX IF EXISTS app.idx_nft_transfers_from;
-DROP INDEX IF EXISTS app.idx_nft_transfers_to;
 
 ALTER TABLE IF EXISTS app.evm_transactions
   ADD COLUMN IF NOT EXISTS event_index INT;
@@ -362,13 +345,11 @@ BEGIN
   END LOOP;
 END $$;
 
-DO $$ BEGIN
-  IF to_regclass('app.evm_transactions') IS NOT NULL THEN
-    DELETE FROM app.evm_transactions WHERE evm_hash IS NULL;
-    ALTER TABLE app.evm_transactions DROP CONSTRAINT IF EXISTS evm_transactions_pkey;
-    ALTER TABLE app.evm_transactions ADD CONSTRAINT evm_transactions_pkey PRIMARY KEY (block_height, transaction_id, event_index, evm_hash);
-  END IF;
-END $$;
+DELETE FROM app.evm_transactions WHERE evm_hash IS NULL;
+ALTER TABLE IF EXISTS app.evm_transactions
+  DROP CONSTRAINT IF EXISTS evm_transactions_pkey;
+ALTER TABLE IF EXISTS app.evm_transactions
+  ADD CONSTRAINT evm_transactions_pkey PRIMARY KEY (block_height, transaction_id, event_index, evm_hash);
 
 -- 4.2 EVM transactions/logs (10M partitions)
 CREATE TABLE IF NOT EXISTS app.evm_transactions (
@@ -458,28 +439,10 @@ CREATE TABLE IF NOT EXISTS app.smart_contracts (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (address, name)
 );
--- Add columns for existing tables (no-op on fresh installs)
-ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS kind TEXT;
-ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS first_seen_height BIGINT;
-ALTER TABLE IF EXISTS app.smart_contracts ADD COLUMN IF NOT EXISTS last_seen_height BIGINT;
 
 CREATE INDEX IF NOT EXISTS idx_smart_contracts_kind_first_seen
   ON app.smart_contracts (kind, first_seen_height)
   WHERE kind IS NOT NULL;
-
--- 5.2b Contract Version History
-CREATE TABLE IF NOT EXISTS app.contract_versions (
-    address         BYTEA NOT NULL,
-    name            TEXT NOT NULL,
-    version         INT NOT NULL,
-    code            TEXT,
-    block_height    BIGINT NOT NULL,
-    transaction_id  BYTEA,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (address, name, version)
-);
-CREATE INDEX IF NOT EXISTS idx_contract_versions_height
-  ON app.contract_versions(address, name, block_height DESC);
 
 -- 5.3 Address Stats
 CREATE TABLE IF NOT EXISTS app.address_stats (
@@ -503,13 +466,6 @@ SELECT raw.create_partitions('raw.events', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.ft_transfers', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.nft_transfers', 0, 20000000, 10000000);
 SELECT raw.create_partitions('app.evm_transactions', 0, 20000000, 10000000);
-SELECT raw.create_partitions('app.evm_tx_hashes', 0, 20000000, 10000000);
-SELECT raw.create_partitions('app.staking_events', 0, 20000000, 10000000);
-SELECT raw.create_partitions('app.defi_events', 0, 20000000, 10000000);
-
--- Per-transaction transfer lookups
-CREATE INDEX IF NOT EXISTS idx_ft_transfers_txid ON app.ft_transfers(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_nft_transfers_txid ON app.nft_transfers(transaction_id);
 
 COMMIT;
 -- Add missing tables required by backend but not in initial Schema V2
@@ -524,10 +480,6 @@ CREATE TABLE IF NOT EXISTS app.address_transactions (
     PRIMARY KEY (address, block_height, transaction_id, role)
 );
 CREATE INDEX IF NOT EXISTS idx_address_txs_address_height ON app.address_transactions(address, block_height DESC);
-
--- Cursor pagination on address_transactions
-CREATE INDEX IF NOT EXISTS idx_address_txs_cursor
-  ON app.address_transactions(address, block_height DESC, transaction_id DESC);
 
 
 CREATE TABLE IF NOT EXISTS app.daily_stats (
@@ -552,6 +504,30 @@ CREATE TABLE IF NOT EXISTS app.market_prices (
 CREATE INDEX IF NOT EXISTS idx_market_prices_asset_currency_time
     ON app.market_prices (asset, currency, as_of DESC);
 
+-- Migrate app.contracts → app.smart_contracts for existing installs.
+ALTER TABLE IF EXISTS app.smart_contracts
+  ADD COLUMN IF NOT EXISTS kind TEXT;
+ALTER TABLE IF EXISTS app.smart_contracts
+  ADD COLUMN IF NOT EXISTS first_seen_height BIGINT;
+ALTER TABLE IF EXISTS app.smart_contracts
+  ADD COLUMN IF NOT EXISTS last_seen_height BIGINT;
+
+-- Backfill from app.contracts if it still exists.
+DO $$
+BEGIN
+  IF to_regclass('app.contracts') IS NOT NULL THEN
+    EXECUTE '
+      UPDATE app.smart_contracts sc
+      SET kind = c.kind,
+          first_seen_height = c.first_seen_height,
+          last_seen_height = c.last_seen_height
+      FROM app.contracts c
+      WHERE sc.address = c.address AND sc.name = c.name
+        AND sc.kind IS NULL';
+    EXECUTE 'DROP TABLE app.contracts';
+  END IF;
+END $$;
+
 COMMIT;
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -575,13 +551,6 @@ CREATE TABLE IF NOT EXISTS app.ft_tokens (
     name             TEXT,
     symbol           TEXT,
     decimals         INT,
-    description      TEXT,
-    external_url     TEXT,
-    logo             TEXT,
-    vault_path       TEXT,
-    receiver_path    TEXT,
-    balance_path     TEXT,
-    socials          JSONB,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (contract_address, contract_name)
 );
@@ -608,24 +577,6 @@ CREATE TABLE IF NOT EXISTS app.ft_holdings (
 CREATE INDEX IF NOT EXISTS idx_ft_holdings_address
   ON app.ft_holdings (address);
 
--- FT holdings by token (for holder count queries)
-CREATE INDEX IF NOT EXISTS idx_ft_holdings_token
-  ON app.ft_holdings(contract_address, contract_name) WHERE balance > 0;
-
--- Daily balance deltas: aggregated per (address, token, date) for balance history charts.
-CREATE TABLE IF NOT EXISTS app.daily_balance_deltas (
-    address          BYTEA NOT NULL,
-    contract_address BYTEA NOT NULL,
-    contract_name    TEXT NOT NULL DEFAULT '',
-    date             DATE NOT NULL,
-    delta            NUMERIC(78, 18) NOT NULL DEFAULT 0,
-    tx_count         INT NOT NULL DEFAULT 0,
-    last_height      BIGINT NOT NULL,
-    PRIMARY KEY (address, contract_address, contract_name, date)
-);
-CREATE INDEX IF NOT EXISTS idx_daily_balance_deltas_lookup
-  ON app.daily_balance_deltas(address, contract_address, contract_name, date DESC);
-
 CREATE TABLE IF NOT EXISTS app.nft_collections (
     contract_address BYTEA NOT NULL,
     contract_name    TEXT NOT NULL DEFAULT '',
@@ -633,9 +584,9 @@ CREATE TABLE IF NOT EXISTS app.nft_collections (
     symbol           TEXT,
     description      TEXT,
     external_url     TEXT,
-    square_image     TEXT,
-    banner_image     TEXT,
-    socials          TEXT,
+    square_image     JSONB,
+    banner_image     JSONB,
+    socials          JSONB,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (contract_address, contract_name)
 );
@@ -658,20 +609,6 @@ ALTER TABLE IF EXISTS app.ft_tokens
   DROP CONSTRAINT IF EXISTS ft_tokens_pkey;
 ALTER TABLE IF EXISTS app.ft_tokens
   ADD CONSTRAINT ft_tokens_pkey PRIMARY KEY (contract_address, contract_name);
-ALTER TABLE IF EXISTS app.ft_tokens
-  ADD COLUMN IF NOT EXISTS description TEXT;
-ALTER TABLE IF EXISTS app.ft_tokens
-  ADD COLUMN IF NOT EXISTS external_url TEXT;
-ALTER TABLE IF EXISTS app.ft_tokens
-  ADD COLUMN IF NOT EXISTS logo TEXT;
-ALTER TABLE IF EXISTS app.ft_tokens
-  ADD COLUMN IF NOT EXISTS vault_path TEXT;
-ALTER TABLE IF EXISTS app.ft_tokens
-  ADD COLUMN IF NOT EXISTS receiver_path TEXT;
-ALTER TABLE IF EXISTS app.ft_tokens
-  ADD COLUMN IF NOT EXISTS balance_path TEXT;
-ALTER TABLE IF EXISTS app.ft_tokens
-  ADD COLUMN IF NOT EXISTS socials TEXT;
 
 ALTER TABLE IF EXISTS app.ft_holdings
   ADD COLUMN IF NOT EXISTS contract_name TEXT NOT NULL DEFAULT '';
@@ -687,11 +624,11 @@ ALTER TABLE IF EXISTS app.nft_collections
 ALTER TABLE IF EXISTS app.nft_collections
   ADD COLUMN IF NOT EXISTS external_url TEXT;
 ALTER TABLE IF EXISTS app.nft_collections
-  ADD COLUMN IF NOT EXISTS square_image TEXT;
+  ADD COLUMN IF NOT EXISTS square_image JSONB;
 ALTER TABLE IF EXISTS app.nft_collections
-  ADD COLUMN IF NOT EXISTS banner_image TEXT;
+  ADD COLUMN IF NOT EXISTS banner_image JSONB;
 ALTER TABLE IF EXISTS app.nft_collections
-  ADD COLUMN IF NOT EXISTS socials TEXT;
+  ADD COLUMN IF NOT EXISTS socials JSONB;
 ALTER TABLE IF EXISTS app.nft_collections
   DROP CONSTRAINT IF EXISTS nft_collections_pkey;
 ALTER TABLE IF EXISTS app.nft_collections
@@ -748,202 +685,5 @@ CREATE TABLE IF NOT EXISTS app.status_snapshots (
     as_of      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (kind)
 );
-
--- Migration: merge app.contracts into app.smart_contracts
-DO $$ BEGIN
-  IF to_regclass('app.contracts') IS NOT NULL THEN
-    EXECUTE 'UPDATE app.smart_contracts sc SET kind = c.kind, first_seen_height = c.first_seen_height, last_seen_height = c.last_seen_height FROM app.contracts c WHERE sc.address = c.address AND sc.name = c.name AND sc.kind IS NULL';
-    EXECUTE 'DROP TABLE app.contracts';
-  END IF;
-END $$;
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- 9. STAKING TABLES
--- ═══════════════════════════════════════════════════════════════════════════════
-
-CREATE TABLE IF NOT EXISTS app.staking_nodes (
-    node_id           TEXT NOT NULL,
-    epoch             BIGINT NOT NULL,
-    address           BYTEA,
-    role              SMALLINT NOT NULL DEFAULT 0,
-    networking_address TEXT,
-    tokens_staked     NUMERIC(78,8) DEFAULT 0,
-    tokens_committed  NUMERIC(78,8) DEFAULT 0,
-    tokens_unstaking  NUMERIC(78,8) DEFAULT 0,
-    tokens_unstaked   NUMERIC(78,8) DEFAULT 0,
-    tokens_rewarded   NUMERIC(78,8) DEFAULT 0,
-    delegator_count   INT DEFAULT 0,
-    first_seen_height BIGINT,
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (node_id, epoch)
-);
-
--- Allow NULL address for nodes discovered via events that don't include the address
-ALTER TABLE app.staking_nodes ALTER COLUMN address DROP NOT NULL;
-ALTER TABLE app.staking_nodes ALTER COLUMN role SET DEFAULT 0;
-
-CREATE INDEX IF NOT EXISTS idx_staking_nodes_epoch ON app.staking_nodes(epoch);
-CREATE INDEX IF NOT EXISTS idx_staking_nodes_address ON app.staking_nodes(address);
-
-CREATE TABLE IF NOT EXISTS app.staking_delegators (
-    delegator_id      INT NOT NULL,
-    node_id           TEXT NOT NULL,
-    address           BYTEA,
-    tokens_committed  NUMERIC(78,8) DEFAULT 0,
-    tokens_staked     NUMERIC(78,8) DEFAULT 0,
-    tokens_unstaking  NUMERIC(78,8) DEFAULT 0,
-    tokens_rewarded   NUMERIC(78,8) DEFAULT 0,
-    tokens_unstaked   NUMERIC(78,8) DEFAULT 0,
-    block_height      BIGINT,
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (delegator_id, node_id)
-);
-
-CREATE TABLE IF NOT EXISTS app.staking_events (
-    block_height      BIGINT NOT NULL,
-    transaction_id    BYTEA NOT NULL,
-    event_index       INT NOT NULL,
-    event_type        TEXT NOT NULL,
-    node_id           TEXT,
-    delegator_id      INT,
-    amount            NUMERIC(78,8),
-    timestamp         TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY (block_height, transaction_id, event_index)
-) PARTITION BY RANGE (block_height);
-
-CREATE INDEX IF NOT EXISTS idx_staking_events_node ON app.staking_events(node_id);
-CREATE INDEX IF NOT EXISTS idx_staking_events_type ON app.staking_events(event_type, block_height DESC);
-
-CREATE TABLE IF NOT EXISTS app.epoch_stats (
-    epoch              BIGINT PRIMARY KEY,
-    start_height       BIGINT,
-    end_height         BIGINT,
-    start_time         TIMESTAMPTZ,
-    end_time           TIMESTAMPTZ,
-    total_nodes        INT DEFAULT 0,
-    total_staked       NUMERIC(78,8) DEFAULT 0,
-    total_rewarded     NUMERIC(78,8) DEFAULT 0,
-    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS app.tokenomics_snapshots (
-    id                  BIGSERIAL PRIMARY KEY,
-    total_supply        NUMERIC(78,8),
-    circulating_supply  NUMERIC(78,8),
-    total_staked        NUMERIC(78,8),
-    staking_apy         NUMERIC(10,6),
-    validator_count     INT,
-    delegator_count     INT,
-    as_of               TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- 10. DEFI TABLES
--- ═══════════════════════════════════════════════════════════════════════════════
-
-CREATE TABLE IF NOT EXISTS app.defi_pairs (
-    id                TEXT PRIMARY KEY,
-    dex_key           TEXT NOT NULL,
-    asset0_id         TEXT NOT NULL,
-    asset1_id         TEXT NOT NULL,
-    asset0_symbol     TEXT,
-    asset1_symbol     TEXT,
-    fee_bps           INT,
-    reserves_asset0   NUMERIC(78,18) DEFAULT 0,
-    reserves_asset1   NUMERIC(78,18) DEFAULT 0,
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS app.defi_events (
-    block_height      BIGINT NOT NULL,
-    transaction_id    BYTEA NOT NULL,
-    event_index       INT NOT NULL,
-    pair_id           TEXT NOT NULL,
-    event_type        TEXT NOT NULL,
-    maker             BYTEA,
-    asset0_in         NUMERIC(78,18) DEFAULT 0,
-    asset0_out        NUMERIC(78,18) DEFAULT 0,
-    asset1_in         NUMERIC(78,18) DEFAULT 0,
-    asset1_out        NUMERIC(78,18) DEFAULT 0,
-    price_native      NUMERIC,
-    timestamp         TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY (block_height, transaction_id, event_index)
-) PARTITION BY RANGE (block_height);
-CREATE INDEX IF NOT EXISTS idx_defi_events_pair ON app.defi_events(pair_id, block_height DESC);
-CREATE INDEX IF NOT EXISTS idx_defi_events_type ON app.defi_events(event_type, block_height DESC);
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- 11. NFT ITEM METADATA
--- ═══════════════════════════════════════════════════════════════════════════════
-
-CREATE TABLE IF NOT EXISTS app.nft_items (
-    contract_address   BYTEA NOT NULL,
-    contract_name      TEXT NOT NULL DEFAULT '',
-    nft_id             VARCHAR(255) NOT NULL,
-    name               TEXT,
-    description        TEXT,
-    thumbnail          TEXT,
-    external_url       TEXT,
-    serial_number      BIGINT,
-    edition_name       TEXT,
-    edition_number     BIGINT,
-    edition_max        BIGINT,
-    rarity_score       TEXT,
-    rarity_description TEXT,
-    traits             JSONB,
-    metadata_error     TEXT,
-    retries            INT NOT NULL DEFAULT 0,
-    refetch_after      TIMESTAMPTZ,
-    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    search_tsv         TSVECTOR,
-    PRIMARY KEY (contract_address, contract_name, nft_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_nft_items_search ON app.nft_items USING GIN (search_tsv);
-CREATE INDEX IF NOT EXISTS idx_nft_items_collection ON app.nft_items (contract_address, contract_name);
-
-ALTER TABLE IF EXISTS app.nft_collections ADD COLUMN IF NOT EXISTS public_path TEXT;
-
-ALTER TABLE IF EXISTS app.ft_tokens ADD COLUMN IF NOT EXISTS evm_address TEXT DEFAULT '';
-
-ALTER TABLE IF EXISTS app.nft_collections ADD COLUMN IF NOT EXISTS evm_address TEXT DEFAULT '';
-
--- Node GeoIP metadata (enriched by NetworkPoller via ip-api.com)
-CREATE TABLE IF NOT EXISTS app.node_metadata (
-    node_id       TEXT PRIMARY KEY,
-    ip_address    TEXT,
-    hostname      TEXT,
-    country       TEXT,
-    country_code  TEXT,
-    region        TEXT,
-    city          TEXT,
-    latitude      DOUBLE PRECISION,
-    longitude     DOUBLE PRECISION,
-    isp           TEXT,
-    org           TEXT,
-    as_number     TEXT,
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Script template classification (admin-managed labels for high-frequency script hashes)
-CREATE TABLE IF NOT EXISTS app.script_templates (
-    script_hash     VARCHAR(64) PRIMARY KEY REFERENCES raw.scripts(script_hash),
-    normalized_hash VARCHAR(64),
-    category        TEXT,
-    label           TEXT,
-    description     TEXT,
-    tx_count        BIGINT NOT NULL DEFAULT 0,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_script_templates_tx_count
-  ON app.script_templates (tx_count DESC);
-
--- Migration: add normalized_hash column to existing script_templates tables
-ALTER TABLE IF EXISTS app.script_templates
-  ADD COLUMN IF NOT EXISTS normalized_hash VARCHAR(64);
-
-CREATE INDEX IF NOT EXISTS idx_script_templates_normalized_hash
-  ON app.script_templates (normalized_hash) WHERE normalized_hash IS NOT NULL;
 
 COMMIT;

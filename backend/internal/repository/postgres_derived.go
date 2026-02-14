@@ -187,7 +187,8 @@ func (r *Repository) UpdateSmartContractCodeIfEmpty(ctx context.Context, address
 	return err
 }
 
-// UpsertContractRegistry inserts/updates contract registry entries in the unified smart_contracts table.
+// UpsertContractRegistry upserts kind/first_seen/last_seen into app.smart_contracts.
+// This merges what was formerly app.contracts into the unified table.
 func (r *Repository) UpsertContractRegistry(ctx context.Context, rows []models.SmartContract) error {
 	if len(rows) == 0 {
 		return nil
