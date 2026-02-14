@@ -938,11 +938,12 @@ CREATE TABLE IF NOT EXISTS app.script_templates (
 );
 CREATE INDEX IF NOT EXISTS idx_script_templates_tx_count
   ON app.script_templates (tx_count DESC);
-CREATE INDEX IF NOT EXISTS idx_script_templates_normalized_hash
-  ON app.script_templates (normalized_hash) WHERE normalized_hash IS NOT NULL;
 
 -- Migration: add normalized_hash column to existing script_templates tables
 ALTER TABLE IF EXISTS app.script_templates
   ADD COLUMN IF NOT EXISTS normalized_hash VARCHAR(64);
+
+CREATE INDEX IF NOT EXISTS idx_script_templates_normalized_hash
+  ON app.script_templates (normalized_hash) WHERE normalized_hash IS NOT NULL;
 
 COMMIT;
