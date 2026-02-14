@@ -371,45 +371,22 @@ func (r *Repository) GetEventsByTransactionID(ctx context.Context, txID string) 
 }
 
 func (r *Repository) GetTransactionsByAddress(ctx context.Context, address string, limit, offset int) ([]models.Transaction, error) {
-	// TODO: After a full reindex, this UNION can be simplified to just query
-	// app.address_transactions, since the token_worker now writes FT_SENDER,
-	// FT_RECEIVER, NFT_SENDER, NFT_RECEIVER roles there. The UNION with
-	// ft_transfers/nft_transfers is kept for backward compatibility with data
-	// indexed before that change.
+	// address_transactions now contains all roles (PROPOSER, PAYER, AUTHORIZER,
+	// FT_SENDER, FT_RECEIVER, NFT_SENDER, NFT_RECEIVER) so we can query it
+	// directly instead of the old 5-way UNION with ft_transfers/nft_transfers.
+	// The composite index (address, block_height DESC, transaction_id DESC)
+	// makes this an efficient index-only scan even for high-volume accounts.
+	// Fetch limit+1 to determine hasMore without an extra COUNT(*).
+	fetchLimit := limit + 1
 	query := `
 		WITH addr_txs AS (
-			-- 1) Signed participation (payer/proposer/authorizer) + transfer roles
-			SELECT at.block_height, at.transaction_id
-			FROM app.address_transactions at
-			WHERE at.address = $1
-
-			UNION
-
-			-- 2) Token/NFT transfer participation (from/to)
-			-- Kept for backward compatibility until a full reindex populates transfer roles in address_transactions.
-			SELECT ft.block_height, ft.transaction_id
-			FROM app.ft_transfers ft
-			WHERE ft.from_address = $1
-
-			UNION
-
-			SELECT ft.block_height, ft.transaction_id
-			FROM app.ft_transfers ft
-			WHERE ft.to_address = $1
-
-			UNION
-
-			SELECT nt.block_height, nt.transaction_id
-			FROM app.nft_transfers nt
-			WHERE nt.from_address = $1
-
-			UNION
-
-			SELECT nt.block_height, nt.transaction_id
-			FROM app.nft_transfers nt
-			WHERE nt.to_address = $1
+			SELECT DISTINCT block_height, transaction_id
+			FROM app.address_transactions
+			WHERE address = $1
+			ORDER BY block_height DESC, transaction_id DESC
+			LIMIT $2 OFFSET $3
 		)
-		SELECT DISTINCT ON (a.block_height, a.transaction_id)
+		SELECT
 			encode(t.id, 'hex') AS id,
 			t.block_height,
 			t.transaction_index,
@@ -436,10 +413,9 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 			LIMIT 1
 		) et ON true
 		ORDER BY a.block_height DESC, a.transaction_id DESC
-		LIMIT $2 OFFSET $3
 	`
 
-	rows, err := r.db.Query(ctx, query, hexToBytes(address), limit, offset)
+	rows, err := r.db.Query(ctx, query, hexToBytes(address), fetchLimit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -456,46 +432,34 @@ func (r *Repository) GetTransactionsByAddress(ctx context.Context, address strin
 	return txs, nil
 }
 
+// GetAddressTxCount returns the pre-computed tx_count from address_stats.
+func (r *Repository) GetAddressTxCount(ctx context.Context, address string) (int64, error) {
+	var count int64
+	err := r.db.QueryRow(ctx, `
+		SELECT COALESCE(tx_count, 0) FROM app.address_stats WHERE address = $1`,
+		hexToBytes(address)).Scan(&count)
+	if err != nil {
+		return 0, nil // not found is fine, return 0
+	}
+	return count, nil
+}
+
 type AddressTxCursor struct {
 	BlockHeight uint64
 	TxID        string
 }
 
 func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address string, limit int, cursor *AddressTxCursor) ([]models.Transaction, error) {
-	// TODO: After a full reindex, this UNION can be simplified to just query
-	// app.address_transactions, since the token_worker now writes FT_SENDER,
-	// FT_RECEIVER, NFT_SENDER, NFT_RECEIVER roles there.
 	query := `
 		WITH addr_txs AS (
-			SELECT at.block_height, at.transaction_id
-			FROM app.address_transactions at
-			WHERE at.address = $1
-
-			UNION
-
-			SELECT ft.block_height, ft.transaction_id
-			FROM app.ft_transfers ft
-			WHERE ft.from_address = $1
-
-			UNION
-
-			SELECT ft.block_height, ft.transaction_id
-			FROM app.ft_transfers ft
-			WHERE ft.to_address = $1
-
-			UNION
-
-			SELECT nt.block_height, nt.transaction_id
-			FROM app.nft_transfers nt
-			WHERE nt.from_address = $1
-
-			UNION
-
-			SELECT nt.block_height, nt.transaction_id
-			FROM app.nft_transfers nt
-			WHERE nt.to_address = $1
+			SELECT DISTINCT block_height, transaction_id
+			FROM app.address_transactions
+			WHERE address = $1
+			  AND ($2::bigint IS NULL OR (block_height, transaction_id) < ($2, $3))
+			ORDER BY block_height DESC, transaction_id DESC
+			LIMIT $4
 		)
-		SELECT DISTINCT ON (a.block_height, a.transaction_id)
+		SELECT
 			encode(t.id, 'hex') AS id,
 			t.block_height,
 			t.transaction_index,
@@ -510,9 +474,7 @@ func (r *Repository) GetTransactionsByAddressCursor(ctx context.Context, address
 		FROM addr_txs a
 		JOIN raw.transactions t ON t.id = a.transaction_id AND t.block_height = a.block_height
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
-		WHERE ($2::bigint IS NULL OR (a.block_height, a.transaction_id) < ($2, $3))
 		ORDER BY a.block_height DESC, a.transaction_id DESC
-		LIMIT $4
 	`
 
 	var (
