@@ -217,6 +217,7 @@ export function buildSummaryLine(tx: any): string {
         return contractNames.length > 0 ? `Deployed ${contractNames.join(', ')}` : 'Contract deployment';
     }
 
+    if (tx.template_description) return tx.template_description;
     if (tx.template_label) return tx.template_label;
 
     if (imports.length > 0) {

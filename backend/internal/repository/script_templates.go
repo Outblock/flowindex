@@ -29,11 +29,12 @@ type ScriptTemplateStats struct {
 	TotalTx     int64   `json:"total_tx"`
 }
 
-// TxScriptTemplate is the category/label/hash for a single transaction.
+// TxScriptTemplate is the category/label/description/hash for a single transaction.
 type TxScriptTemplate struct {
-	ScriptHash string
-	Category   string
-	Label      string
+	ScriptHash  string
+	Category    string
+	Label       string
+	Description string
 }
 
 // AdminListScriptTemplates returns script templates sorted by tx_count DESC with optional filters.
@@ -171,7 +172,7 @@ func (r *Repository) GetScriptTemplatesByTxIDs(ctx context.Context, txIDs []stri
 	// Always returns script_hash so the API can expose it even for unlabeled txs.
 	query := `
 		SELECT encode(t.id, 'hex'), COALESCE(t.script_hash, ''),
-		       COALESCE(st.category, ''), COALESCE(st.label, '')
+		       COALESCE(st.category, ''), COALESCE(st.label, ''), COALESCE(st.description, '')
 		FROM raw.transactions t
 		LEFT JOIN app.script_templates st ON st.script_hash = t.script_hash
 		WHERE t.id = ANY($1::bytea[])
@@ -190,11 +191,11 @@ func (r *Repository) GetScriptTemplatesByTxIDs(ctx context.Context, txIDs []stri
 
 	result := make(map[string]TxScriptTemplate)
 	for rows.Next() {
-		var txID, scriptHash, category, label string
-		if err := rows.Scan(&txID, &scriptHash, &category, &label); err != nil {
+		var txID, scriptHash, category, label, description string
+		if err := rows.Scan(&txID, &scriptHash, &category, &label, &description); err != nil {
 			return nil, err
 		}
-		result[txID] = TxScriptTemplate{ScriptHash: scriptHash, Category: category, Label: label}
+		result[txID] = TxScriptTemplate{ScriptHash: scriptHash, Category: category, Label: label, Description: description}
 	}
 	return result, rows.Err()
 }

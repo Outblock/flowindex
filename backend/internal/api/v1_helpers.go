@@ -833,6 +833,7 @@ func enrichWithTemplates(outputs []map[string]interface{}, templates map[string]
 			if tmpl.Category != "" {
 				out["template_category"] = tmpl.Category
 				out["template_label"] = tmpl.Label
+				out["template_description"] = tmpl.Description
 			}
 		}
 	}
