@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect, useCallback } from 'react';
 import { Clock, CheckCircle, XCircle } from 'lucide-react';
 import { resolveApiBaseUrl } from '../../api';
@@ -134,12 +135,7 @@ function ScheduledTransactions() {
 
                                 <div className="col-span-2">
                                     {proposer ? (
-                                        <Link
-                                            to={`/accounts/${proposer.replace('0x', '')}`}
-                                            className="text-xs text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                        >
-                                            {formatMiddle(proposer, 6, 4)}
-                                        </Link>
+                                        <AddressLink address={proposer} prefixLen={8} suffixLen={4} size={14} />
                                     ) : (
                                         <span className="text-xs text-zinc-400">-</span>
                                     )}

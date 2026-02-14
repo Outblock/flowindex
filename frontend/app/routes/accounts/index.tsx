@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Coins, ImageIcon, ArrowUpDown } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
@@ -246,12 +247,7 @@ function AllAccountsTab({ accounts, meta, page, sortBy, totalCount, hasNext, now
                                         >
                                             <td className="p-4 text-xs text-zinc-400 font-mono">{rank}</td>
                                             <td className="p-4">
-                                                <Link
-                                                    to={`/accounts/${addr}`}
-                                                    className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                                >
-                                                    {addr}
-                                                </Link>
+                                                <AddressLink address={addr} prefixLen={20} suffixLen={0} />
                                             </td>
                                             <td className="p-4 text-right">
                                                 <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300">
@@ -406,12 +402,7 @@ function TopTokenHoldersTab({ token, onTokenChange, page, onPageChange, normaliz
                                             >
                                                 <td className="p-4 text-xs text-zinc-400 font-mono">{rank}</td>
                                                 <td className="p-4">
-                                                    <Link
-                                                        to={`/accounts/${addr}`}
-                                                        className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                                    >
-                                                        {addr}
-                                                    </Link>
+                                                    <AddressLink address={addr} prefixLen={20} suffixLen={0} />
                                                 </td>
                                                 <td className="p-4 text-right">
                                                     <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300">
@@ -558,12 +549,7 @@ function TopNFTCollectorsTab({ collection, onCollectionChange, page, onPageChang
                                             >
                                                 <td className="p-4 text-xs text-zinc-400 font-mono">{rank}</td>
                                                 <td className="p-4">
-                                                    <Link
-                                                        to={`/accounts/${addr}`}
-                                                        className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                                    >
-                                                        {addr}
-                                                    </Link>
+                                                    <AddressLink address={addr} prefixLen={20} suffixLen={0} />
                                                 </td>
                                                 <td className="p-4 text-right">
                                                     <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300">

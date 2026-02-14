@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
+import { AddressLink } from '../../components/AddressLink';
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Users, ArrowRightLeft } from 'lucide-react';
@@ -204,9 +205,7 @@ function TokenDetailInner() {
           <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Contract Address</p>
           <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
             {addr ? (
-              <Link to={`/accounts/${addr}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline">
-                {addr}
-              </Link>
+              <AddressLink address={addr} prefixLen={20} suffixLen={0} />
             ) : (
               'N/A'
             )}
@@ -270,9 +269,7 @@ function TokenDetailInner() {
                       >
                         <td className="p-4">
                           <div className="flex items-center gap-2">
-                            <Link to={`/accounts/${a}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
-                              {a}
-                            </Link>
+                            <AddressLink address={a} prefixLen={20} suffixLen={0} />
                             <CopyButton
                               content={a}
                               variant="ghost"
@@ -345,9 +342,7 @@ function TokenDetailInner() {
                         <td className="p-4">
                           {from ? (
                             <div className="flex items-center gap-2">
-                              <Link to={`/accounts/${from}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
-                                {from.slice(0, 14)}...
-                              </Link>
+                              <AddressLink address={from} />
                               <CopyButton
                                 content={from}
                                 variant="ghost"
@@ -362,9 +357,7 @@ function TokenDetailInner() {
                         <td className="p-4">
                           {to ? (
                             <div className="flex items-center gap-2">
-                              <Link to={`/accounts/${to}`} className="font-mono text-zinc-700 dark:text-zinc-300 hover:underline">
-                                {to.slice(0, 14)}...
-                              </Link>
+                              <AddressLink address={to} />
                               <CopyButton
                                 content={to}
                                 variant="ghost"

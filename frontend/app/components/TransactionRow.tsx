@@ -424,13 +424,7 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
                         {createdAccounts.map((addr, i) => (
                             <div key={i} className="flex items-center gap-2 text-xs">
                                 <UserPlus className="h-3 w-3 text-cyan-500 flex-shrink-0" />
-                                <Link
-                                    to={`/accounts/${normalizeAddress(addr)}` as any}
-                                    className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                                >
-                                    0x{normalizeAddress(addr)}
-                                </Link>
+                                <AddressLink address={addr} prefixLen={20} suffixLen={0} onClick={(e) => e.stopPropagation()} />
                                 {(tx.payer || tx.authorizers?.[0]) && (
                                     <span className="text-zinc-400 text-[10px]">
                                         by{' '}

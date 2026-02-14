@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Search, Database } from 'lucide-react';
@@ -207,12 +208,7 @@ function Contracts() {
                                             </td>
                                             <td className="p-4">
                                                 {addr ? (
-                                                    <Link
-                                                        to={`/accounts/${addr}`}
-                                                        className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                                    >
-                                                        {addr}
-                                                    </Link>
+                                                    <AddressLink address={addr} prefixLen={20} suffixLen={0} />
                                                 ) : (
                                                     <span className="text-zinc-500">N/A</span>
                                                 )}

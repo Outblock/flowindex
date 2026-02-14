@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1KeyByPublicKey } from '../../api/gen/find';
@@ -105,13 +106,7 @@ function KeySearchResults() {
                                         <tr key={`${k.address}-${k.key_index}-${i}`} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group">
                                             <td className="p-4">
                                                 <div className="flex items-center gap-2">
-                                                    <Link
-                                                        to="/accounts/$address"
-                                                        params={{ address: k.address }}
-                                                        className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono"
-                                                    >
-                                                        {k.address}
-                                                    </Link>
+                                                    <AddressLink address={k.address} prefixLen={20} suffixLen={0} />
                                                     <CopyButton
                                                         content={k.address}
                                                         variant="ghost"

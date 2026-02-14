@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Contract } from '../../api/gen/find';
@@ -313,9 +314,7 @@ function ContractDetail() {
                                 <div className="group">
                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Address</p>
                                     <div className="flex items-center gap-1 group">
-                                        <Link to={`/accounts/${contract.address}`} className="text-sm font-mono text-nothing-green-dark dark:text-nothing-green hover:underline break-all">
-                                            {contract.address}
-                                        </Link>
+                                        <AddressLink address={contract.address} prefixLen={20} suffixLen={0} />
                                         <CopyButton
                                             content={contract.address}
                                             variant="ghost"
