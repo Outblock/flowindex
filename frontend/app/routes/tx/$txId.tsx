@@ -195,6 +195,54 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
                 );
             })()}
 
+            {/* NFT transfer summary rows */}
+            {transaction.nft_transfers?.length > 0 && (
+                <div className="space-y-2 mb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <p className="text-[10px] text-zinc-400 uppercase tracking-widest">NFT Transfers</p>
+                        <span className="text-[9px] text-zinc-400 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">{transaction.nft_transfers.length}</span>
+                    </div>
+                    {transaction.nft_transfers.slice(0, 6).map((nt: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-3 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-sm p-2.5">
+                            <div className="flex-shrink-0">
+                                {nt.nft_thumbnail ? (
+                                    <img src={nt.nft_thumbnail} alt="" className="w-8 h-8 rounded border border-zinc-200 dark:border-white/10 object-cover" />
+                                ) : nt.collection_logo ? (
+                                    <img src={nt.collection_logo} alt="" className="w-8 h-8 rounded border border-zinc-200 dark:border-white/10 object-cover" />
+                                ) : (
+                                    <div className="w-8 h-8 rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center">
+                                        <ImageIcon className="w-3.5 h-3.5 text-purple-500" />
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">
+                                        {nt.nft_name || `#${nt.token_id}`}
+                                    </span>
+                                    <span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
+                                        {nt.collection_name || nt.token?.split('.').pop() || 'NFT'}
+                                    </span>
+                                    {nt.nft_rarity && (
+                                        <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                            {nt.nft_rarity}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
+                                    {nt.from_address && <span className="inline-flex items-center gap-1">From <span className="font-mono">{fmtAddr(nt.from_address)}</span></span>}
+                                    {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
+                                    {nt.to_address && <span className="inline-flex items-center gap-1">To <span className="font-mono">{fmtAddr(nt.to_address)}</span></span>}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {transaction.nft_transfers.length > 6 && (
+                        <p className="text-[10px] text-zinc-400 uppercase tracking-wider pl-1">+{transaction.nft_transfers.length - 6} more</p>
+                    )}
+                </div>
+            )}
+
             {/* DeFi swap summary */}
             {hasDefi && (
                 <div className="space-y-2 mb-4">
@@ -310,7 +358,7 @@ function TransactionDetail() {
     const navigate = useNavigate();
     const { transaction, error: loaderError } = Route.useLoaderData();
     const error = transaction ? null : (loaderError || 'Transaction not found');
-    const hasTransfers = transaction?.ft_transfers?.length > 0 || transaction?.defi_events?.length > 0;
+    const hasTransfers = transaction?.ft_transfers?.length > 0 || transaction?.nft_transfers?.length > 0 || transaction?.defi_events?.length > 0;
     const validTabs = ['transfers', 'script', 'events', 'evm'];
     const defaultTab = hasTransfers ? 'transfers' : (transaction?.script ? 'script' : 'events');
     const [activeTab, setActiveTab] = useState(() =>
@@ -751,6 +799,74 @@ function TransactionDetail() {
                                                                     <AddressLink address={ft.to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
                                                                     {ft.to_coa_flow_address && (
                                                                         <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={ft.to_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
+                                                                    )}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* NFT Transfers */}
+                                {transaction.nft_transfers?.length > 0 && (
+                                    <div>
+                                        <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <ImageIcon className="h-4 w-4" /> NFT Transfers ({transaction.nft_transfers.length})
+                                        </h3>
+                                        <div className="divide-y divide-zinc-100 dark:divide-white/5 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
+                                            {transaction.nft_transfers.map((nt: any, idx: number) => (
+                                                <div key={idx} className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors">
+                                                    <div className="flex-shrink-0">
+                                                        {nt.nft_thumbnail ? (
+                                                            <img src={nt.nft_thumbnail} alt="" className="w-10 h-10 rounded border border-zinc-200 dark:border-white/10 object-cover" />
+                                                        ) : nt.collection_logo ? (
+                                                            <img src={nt.collection_logo} alt="" className="w-10 h-10 rounded border border-zinc-200 dark:border-white/10 object-cover" />
+                                                        ) : (
+                                                            <div className="w-10 h-10 rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center">
+                                                                <ImageIcon className="w-4 h-4 text-purple-500" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">
+                                                                {nt.nft_name || `#${nt.token_id}`}
+                                                            </span>
+                                                            <span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
+                                                                {nt.collection_name || nt.token?.split('.').pop() || 'NFT'}
+                                                            </span>
+                                                            {nt.nft_rarity && (
+                                                                <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                                                    {nt.nft_rarity}
+                                                                </span>
+                                                            )}
+                                                            {nt.is_cross_vm && (
+                                                                <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                                                    <Globe className="w-2.5 h-2.5" />
+                                                                    Cross-VM
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
+                                                            {nt.from_address && (
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    From{' '}
+                                                                    <AddressLink address={nt.from_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
+                                                                    {nt.from_coa_flow_address && (
+                                                                        <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={nt.from_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
+                                                                    )}
+                                                                </span>
+                                                            )}
+                                                            {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
+                                                            {nt.to_address && (
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    To{' '}
+                                                                    <AddressLink address={nt.to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
+                                                                    {nt.to_coa_flow_address && (
+                                                                        <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={nt.to_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
                                                                     )}
                                                                 </span>
                                                             )}
