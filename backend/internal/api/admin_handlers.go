@@ -307,6 +307,130 @@ func fetchNFTCollectionMetadataViaClient(ctx context.Context, client FlowClient,
 	}, true
 }
 
+// --- Import Token handlers ---
+
+func (s *Server) handleAdminImportTokenPreview(w http.ResponseWriter, r *http.Request) {
+	if s.client == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "no Flow client configured")
+		return
+	}
+
+	var req struct {
+		Address      string `json:"address"`
+		ContractName string `json:"contract_name"`
+		Type         string `json:"type"` // "ft" or "nft"
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	req.Address = strings.TrimPrefix(strings.TrimSpace(req.Address), "0x")
+	req.ContractName = strings.TrimSpace(req.ContractName)
+	if req.Address == "" || req.ContractName == "" {
+		writeAPIError(w, http.StatusBadRequest, "address and contract_name are required")
+		return
+	}
+	if req.Type != "ft" && req.Type != "nft" {
+		writeAPIError(w, http.StatusBadRequest, "type must be 'ft' or 'nft'")
+		return
+	}
+
+	ctx := r.Context()
+
+	if req.Type == "ft" {
+		md, ok := fetchFTMetadataViaClient(ctx, s.client, req.Address, req.ContractName)
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, "could not fetch FT metadata from chain")
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": md})
+	} else {
+		md, ok := fetchNFTCollectionMetadataViaClient(ctx, s.client, req.Address, req.ContractName)
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, "could not fetch NFT metadata from chain")
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": md})
+	}
+}
+
+func (s *Server) handleAdminSaveImportedToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Type            string `json:"type"` // "ft" or "nft"
+		ContractAddress string `json:"contract_address"`
+		ContractName    string `json:"contract_name"`
+		Name            string `json:"name"`
+		Symbol          string `json:"symbol"`
+		Description     string `json:"description"`
+		ExternalURL     string `json:"external_url"`
+		// FT-specific
+		Logo         string `json:"logo"`
+		Decimals     int    `json:"decimals"`
+		VaultPath    string `json:"vault_path"`
+		ReceiverPath string `json:"receiver_path"`
+		BalancePath  string `json:"balance_path"`
+		// NFT-specific
+		SquareImage string `json:"square_image"`
+		BannerImage string `json:"banner_image"`
+		// Shared
+		EVMAddress string `json:"evm_address"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	req.ContractAddress = strings.TrimPrefix(strings.TrimSpace(req.ContractAddress), "0x")
+	if req.ContractAddress == "" || req.ContractName == "" {
+		writeAPIError(w, http.StatusBadRequest, "contract_address and contract_name are required")
+		return
+	}
+	if req.Type != "ft" && req.Type != "nft" {
+		writeAPIError(w, http.StatusBadRequest, "type must be 'ft' or 'nft'")
+		return
+	}
+
+	ctx := r.Context()
+
+	if req.Type == "ft" {
+		token := models.FTToken{
+			ContractAddress: req.ContractAddress,
+			ContractName:    req.ContractName,
+			Name:            req.Name,
+			Symbol:          req.Symbol,
+			Decimals:        req.Decimals,
+			Description:     req.Description,
+			ExternalURL:     req.ExternalURL,
+			Logo:            req.Logo,
+			VaultPath:       req.VaultPath,
+			ReceiverPath:    req.ReceiverPath,
+			BalancePath:     req.BalancePath,
+			EVMAddress:      req.EVMAddress,
+		}
+		if err := s.repo.UpsertFTTokens(ctx, []models.FTToken{token}); err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	} else {
+		coll := models.NFTCollection{
+			ContractAddress: req.ContractAddress,
+			ContractName:    req.ContractName,
+			Name:            req.Name,
+			Symbol:          req.Symbol,
+			Description:     req.Description,
+			ExternalURL:     req.ExternalURL,
+			SquareImage:     req.SquareImage,
+			BannerImage:     req.BannerImage,
+			EVMAddress:      req.EVMAddress,
+		}
+		if err := s.repo.UpsertNFTCollections(ctx, []models.NFTCollection{coll}); err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	}
+}
+
 // --- Cadence helpers (prefixed to avoid collision with ingester package) ---
 
 func adminUnwrapOptional(v cadence.Value) cadence.Value {

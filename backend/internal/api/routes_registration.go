@@ -20,6 +20,8 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin.HandleFunc("/ft/{identifier}", s.handleAdminUpdateFTToken).Methods("PUT", "PATCH", "OPTIONS")
 	admin.HandleFunc("/nft", s.handleAdminListNFTCollections).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/nft/{identifier}", s.handleAdminUpdateNFTCollection).Methods("PUT", "PATCH", "OPTIONS")
+	admin.HandleFunc("/import-token/preview", s.handleAdminImportTokenPreview).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/import-token/save", s.handleAdminSaveImportedToken).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/script-templates", s.handleAdminListScriptTemplates).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/script-templates/stats", s.handleAdminGetScriptTemplateStats).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/script-templates/refresh-counts", s.handleAdminRefreshScriptTemplateCounts).Methods("POST", "OPTIONS")

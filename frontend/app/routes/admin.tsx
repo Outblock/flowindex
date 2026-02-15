@@ -1,13 +1,13 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
+import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check } from 'lucide-react'
 import { resolveApiBaseUrl } from '../api'
 import toast from 'react-hot-toast'
 import { Pagination } from '../components/Pagination'
 
-type AdminTab = 'ft' | 'nft' | 'scripts'
-const VALID_TABS: AdminTab[] = ['ft', 'nft', 'scripts']
+type AdminTab = 'ft' | 'nft' | 'scripts' | 'import'
+const VALID_TABS: AdminTab[] = ['ft', 'nft', 'scripts', 'import']
 
 export const Route = createFileRoute('/admin')({
   component: AdminPage,
@@ -128,9 +128,10 @@ function AdminPage() {
         <TabButton active={tab === 'ft'} onClick={() => setTab('ft')} icon={<Coins className="w-4 h-4" />} label="FT Tokens" />
         <TabButton active={tab === 'nft'} onClick={() => setTab('nft')} icon={<Image className="w-4 h-4" />} label="NFT Collections" />
         <TabButton active={tab === 'scripts'} onClick={() => setTab('scripts')} icon={<FileCode className="w-4 h-4" />} label="Script Templates" />
+        <TabButton active={tab === 'import'} onClick={() => setTab('import')} icon={<Download className="w-4 h-4" />} label="Import Token" />
       </div>
 
-      {tab === 'ft' ? <FTPanel token={token} /> : tab === 'nft' ? <NFTPanel token={token} /> : <ScriptTemplatesPanel token={token} />}
+      {tab === 'ft' ? <FTPanel token={token} /> : tab === 'nft' ? <NFTPanel token={token} /> : tab === 'scripts' ? <ScriptTemplatesPanel token={token} /> : <ImportTokenPanel token={token} />}
     </div>
   )
 }
@@ -721,6 +722,189 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
               </pre>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Import Token Panel ───────────────────────────────────────────────
+
+function ImportTokenPanel({ token }: { token: string }) {
+  const [address, setAddress] = useState('')
+  const [contractName, setContractName] = useState('')
+  const [tokenType, setTokenType] = useState<'ft' | 'nft'>('ft')
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [preview, setPreview] = useState<any>(null)
+  const [form, setForm] = useState<Record<string, string>>({})
+
+  const handlePreview = async () => {
+    const addr = address.trim().replace(/^0x/, '')
+    const name = contractName.trim()
+    if (!addr || !name) { toast.error('Address and contract name are required'); return }
+    setLoading(true)
+    setPreview(null)
+    try {
+      const data = await adminFetch('admin/import-token/preview', token, {
+        method: 'POST',
+        body: JSON.stringify({ address: addr, contract_name: name, type: tokenType }),
+      })
+      const md = data?.data
+      if (!md) { toast.error('No metadata returned'); return }
+      setPreview(md)
+      // Pre-fill editable form
+      if (tokenType === 'ft') {
+        setForm({
+          name: md.name || '', symbol: md.symbol || '', decimals: String(md.decimals ?? 0),
+          description: md.description || '', external_url: md.external_url || '', logo: md.logo || '',
+          vault_path: md.vault_path || '', receiver_path: md.receiver_path || '', balance_path: md.balance_path || '',
+          evm_address: md.evm_address || '',
+        })
+      } else {
+        setForm({
+          name: md.name || '', symbol: md.symbol || '',
+          description: md.description || '', external_url: md.external_url || '',
+          square_image: md.square_image || '', banner_image: md.banner_image || '',
+          evm_address: md.evm_address || '',
+        })
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    const addr = address.trim().replace(/^0x/, '')
+    const name = contractName.trim()
+    setSaving(true)
+    try {
+      await adminFetch('admin/import-token/save', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: tokenType,
+          contract_address: addr,
+          contract_name: name,
+          ...form,
+          decimals: tokenType === 'ft' ? parseInt(form.decimals) || 0 : undefined,
+        }),
+      })
+      toast.success(`Saved ${tokenType === 'ft' ? 'FT' : 'NFT'}: A.${addr}.${name}`)
+      setPreview(null)
+      setForm({})
+      setAddress('')
+      setContractName('')
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateForm = (key: string, value: string) => setForm((f) => ({ ...f, [key]: value }))
+
+  return (
+    <div className="space-y-6">
+      {/* Step 1: Input */}
+      <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm p-6 space-y-4">
+        <h3 className="text-xs uppercase tracking-widest font-mono text-zinc-500 dark:text-zinc-400">Step 1 — Fetch from Chain</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Contract Address</label>
+            <input
+              type="text" value={address} onChange={(e) => setAddress(e.target.value)}
+              placeholder="0b2a3299cc857e29"
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Contract Name</label>
+            <input
+              type="text" value={contractName} onChange={(e) => setContractName(e.target.value)}
+              placeholder="TopShot"
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Type</label>
+            <div className="flex gap-1">
+              {(['ft', 'nft'] as const).map((t) => (
+                <button key={t} onClick={() => { setTokenType(t); setPreview(null); setForm({}) }}
+                  className={`flex-1 px-3 py-2 text-xs uppercase tracking-widest font-mono font-bold transition-colors ${
+                    tokenType === t
+                      ? 'bg-nothing-green text-black'
+                      : 'border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
+                  }`}>
+                  {t === 'ft' ? 'Fungible' : 'NFT'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <button onClick={handlePreview} disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-nothing-green text-black text-xs uppercase tracking-widest font-mono font-bold hover:bg-nothing-green/90 transition-colors disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+          Preview from Chain
+        </button>
+      </div>
+
+      {/* Step 2: Review & Save */}
+      {preview && (
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm p-6 space-y-4">
+          <h3 className="text-xs uppercase tracking-widest font-mono text-zinc-500 dark:text-zinc-400">Step 2 — Review & Save</h3>
+
+          {/* Image previews */}
+          <div className="flex gap-4 flex-wrap">
+            {tokenType === 'ft' && form.logo && (
+              <div>
+                <label className="block text-[10px] text-zinc-400 uppercase tracking-widest font-mono mb-1">Logo</label>
+                <img src={form.logo} alt="Logo" className="w-16 h-16 object-contain border border-zinc-200 dark:border-white/10 rounded-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+              </div>
+            )}
+            {tokenType === 'nft' && form.square_image && (
+              <div>
+                <label className="block text-[10px] text-zinc-400 uppercase tracking-widest font-mono mb-1">Square Image</label>
+                <img src={form.square_image} alt="Square" className="w-16 h-16 object-cover border border-zinc-200 dark:border-white/10 rounded-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+              </div>
+            )}
+            {tokenType === 'nft' && form.banner_image && (
+              <div>
+                <label className="block text-[10px] text-zinc-400 uppercase tracking-widest font-mono mb-1">Banner Image</label>
+                <img src={form.banner_image} alt="Banner" className="h-16 max-w-[200px] object-cover border border-zinc-200 dark:border-white/10 rounded-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Name" value={form.name || ''} onChange={(v) => updateForm('name', v)} />
+            <Field label="Symbol" value={form.symbol || ''} onChange={(v) => updateForm('symbol', v)} />
+            {tokenType === 'ft' && (
+              <>
+                <Field label="Decimals" value={form.decimals || '0'} onChange={(v) => updateForm('decimals', v)} />
+                <Field label="Logo URL" value={form.logo || ''} onChange={(v) => updateForm('logo', v)} />
+                <Field label="Vault Path" value={form.vault_path || ''} onChange={(v) => updateForm('vault_path', v)} />
+                <Field label="Receiver Path" value={form.receiver_path || ''} onChange={(v) => updateForm('receiver_path', v)} />
+                <Field label="Balance Path" value={form.balance_path || ''} onChange={(v) => updateForm('balance_path', v)} />
+              </>
+            )}
+            {tokenType === 'nft' && (
+              <>
+                <Field label="Square Image URL" value={form.square_image || ''} onChange={(v) => updateForm('square_image', v)} />
+                <Field label="Banner Image URL" value={form.banner_image || ''} onChange={(v) => updateForm('banner_image', v)} />
+              </>
+            )}
+            <Field label="External URL" value={form.external_url || ''} onChange={(v) => updateForm('external_url', v)} />
+            <Field label="EVM Address" value={form.evm_address || ''} onChange={(v) => updateForm('evm_address', v)} />
+            <Field label="Description" value={form.description || ''} onChange={(v) => updateForm('description', v)} multiline />
+          </div>
+
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-nothing-green text-black text-xs uppercase tracking-widest font-mono font-bold hover:bg-nothing-green/90 transition-colors disabled:opacity-50">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            Save to Database
+          </button>
         </div>
       )}
     </div>
