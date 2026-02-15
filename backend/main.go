@@ -300,8 +300,17 @@ func main() {
 
 	// 3. Services
 	// Forward Ingester (Live Data)
+	forwardServiceName := os.Getenv("FORWARD_SERVICE_NAME")
+	if forwardServiceName == "" {
+		forwardServiceName = "main_ingester"
+	}
+	historyServiceName := os.Getenv("HISTORY_SERVICE_NAME")
+	if historyServiceName == "" {
+		historyServiceName = "history_ingester"
+	}
+
 	forwardIngester := ingester.NewService(flowClient, repo, ingester.Config{
-		ServiceName:      "main_ingester",
+		ServiceName:      forwardServiceName,
 		BatchSize:        latestBatch,
 		WorkerCount:      latestWorkers,
 		StartBlock:       startBlock,
@@ -314,7 +323,7 @@ func main() {
 
 	// Backward Ingester (History Backfill)
 	backwardIngester := ingester.NewService(historyClient, repo, ingester.Config{
-		ServiceName:    "history_ingester",
+		ServiceName:    historyServiceName,
 		BatchSize:      historyBatch,
 		WorkerCount:    historyWorkers,
 		StartBlock:     startBlock,
