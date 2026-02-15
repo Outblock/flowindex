@@ -241,6 +241,63 @@ func main() {
 		log.Println("Live Derivers are DISABLED (ENABLE_LIVE_DERIVERS=false)")
 	}
 
+	// History Derivers: process raw blocks backfilled by the history ingester.
+	// Async workers only move forward from their checkpoint (~live tip), so history
+	// blocks below that checkpoint are unprocessed. The HistoryDeriver scans upward
+	// from the bottom of raw data, running the same processors.
+	enableHistoryDerivers := os.Getenv("ENABLE_HISTORY_DERIVERS") != "false"
+	historyDeriverChunk := getEnvUint("HISTORY_DERIVERS_CHUNK", 1000)
+	historyDeriverSleep := getEnvInt("HISTORY_DERIVERS_SLEEP_MS", 0)
+
+	var historyDeriver *ingester.HistoryDeriver
+	var onHistoryIndexedRange ingester.RangeCallback
+	if enableHistoryDerivers {
+		var histProcessors []ingester.Processor
+		if enableTokenWorker {
+			histProcessors = append(histProcessors, ingester.NewTokenWorker(repo))
+		}
+		if enableEVMWorker {
+			histProcessors = append(histProcessors, ingester.NewEVMWorker(repo))
+		}
+		if enableTxContractsWorker {
+			histProcessors = append(histProcessors, ingester.NewTxContractsWorker(repo))
+		}
+		if enableAccountsWorker {
+			histProcessors = append(histProcessors, ingester.NewAccountsWorker(repo))
+		}
+		if enableMetaWorker {
+			histProcessors = append(histProcessors, ingester.NewMetaWorker(repo, flowClient))
+		}
+		if enableTokenMetadataWorker {
+			histProcessors = append(histProcessors, ingester.NewTokenMetadataWorker(repo, flowClient))
+		}
+		if enableTxMetricsWorker {
+			histProcessors = append(histProcessors, ingester.NewTxMetricsWorker(repo))
+		}
+		if enableStakingWorker {
+			histProcessors = append(histProcessors, ingester.NewStakingWorker(repo))
+		}
+		if enableDefiWorker {
+			histProcessors = append(histProcessors, ingester.NewDefiWorker(repo))
+		}
+
+		historyDeriver = ingester.NewHistoryDeriver(repo, histProcessors, ingester.HistoryDeriverConfig{
+			ChunkSize: historyDeriverChunk,
+			SleepMs:   historyDeriverSleep,
+		})
+
+		// Also create a live-style deriver for real-time processing of new history batches.
+		// This runs processors immediately as the backward ingester commits each batch,
+		// so we don't have to wait for the HistoryDeriver scan to reach those heights.
+		historyLiveDeriver := ingester.NewLiveDeriver(repo, histProcessors, ingester.LiveDeriverConfig{
+			ChunkSize: liveDeriverChunk,
+		})
+		historyLiveDeriver.Start(context.Background())
+		onHistoryIndexedRange = historyLiveDeriver.NotifyRange
+	} else {
+		log.Println("History Derivers are DISABLED (ENABLE_HISTORY_DERIVERS=false)")
+	}
+
 	// 3. Services
 	// Forward Ingester (Live Data)
 	forwardIngester := ingester.NewService(flowClient, repo, ingester.Config{
@@ -257,14 +314,13 @@ func main() {
 
 	// Backward Ingester (History Backfill)
 	backwardIngester := ingester.NewService(historyClient, repo, ingester.Config{
-		ServiceName:   "history_ingester",
-		BatchSize:     historyBatch,
-		WorkerCount:   historyWorkers,
-		StartBlock:    startBlock,
-		Mode:          "backward",
-		MaxReorgDepth: maxReorgDepth,
-		// No callbacks for history to avoid spamming the frontend live feed
-		// or maybe we want them? Let's leave them nil for now to keep UI clean.
+		ServiceName:    "history_ingester",
+		BatchSize:      historyBatch,
+		WorkerCount:    historyWorkers,
+		StartBlock:     startBlock,
+		Mode:           "backward",
+		MaxReorgDepth:  maxReorgDepth,
+		OnIndexedRange: onHistoryIndexedRange,
 	})
 
 	var tokenWorkerProcessor *ingester.TokenWorker
@@ -607,6 +663,11 @@ func main() {
 				liveDeriver.NotifyRange(from, to)
 			}()
 		}
+	}
+
+	// Start history derivers if enabled.
+	if historyDeriver != nil {
+		historyDeriver.Start(ctx)
 	}
 
 	// Handle SIGINT
