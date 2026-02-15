@@ -246,7 +246,16 @@ export const getNFTMedia = (nft: any, collectionId: string = ''): NFTMedia => {
         };
     }
 
-    // 2. HWGarageCardV2 (Hot Wheels)
+    // 2. NFL All Day Video
+    if (isCollection('AllDay') || isCollection('e4cf4bdc1751c65d.AllDay')) {
+        return {
+            type: 'video',
+            url: `https://media.nflallday.com/editions/${id}/media/video`,
+            fallbackImage: image
+        };
+    }
+
+    // 3. HWGarageCardV2 (Hot Wheels)
     if (isCollection('HWGarageCardV2') || isCollection('d0bcefdf1e67ea85.HWGarageCardV2')) {
         return {
             type: 'video', // User said video = image, likely mp4 in image field
@@ -260,4 +269,30 @@ export const getNFTMedia = (nft: any, collectionId: string = ''): NFTMedia => {
         type: 'image',
         url: image
     };
+};
+
+/**
+ * Known collections that support video preview at the collection level.
+ * Maps collection identifier suffix to a function that builds a preview video URL.
+ * Used on /nfts page for hover-to-play.
+ */
+const COLLECTION_VIDEO_PROVIDERS: Record<string, string> = {
+    'TopShot': 'https://assets.nbatopshot.com/media/1/video',
+    '0b2a3299cc857e29.TopShot': 'https://assets.nbatopshot.com/media/1/video',
+    'AllDay': 'https://media.nflallday.com/editions/4371/media/video',
+    'e4cf4bdc1751c65d.AllDay': 'https://media.nflallday.com/editions/4371/media/video',
+};
+
+/**
+ * Get a preview video URL for a collection (for hover-to-play on listing page).
+ * Returns a URL string or null if the collection doesn't support video preview.
+ */
+export const getCollectionPreviewVideo = (collectionId: string): string | null => {
+    if (!collectionId) return null;
+    for (const [key, url] of Object.entries(COLLECTION_VIDEO_PROVIDERS)) {
+        if (collectionId.endsWith(key) || collectionId.includes(key)) {
+            return url;
+        }
+    }
+    return null;
 };

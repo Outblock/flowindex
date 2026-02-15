@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Image, Database, Layers, LayoutGrid, LayoutList } from 'lucide-react';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import NumberFlow from '@number-flow/react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Nft } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
+import { getCollectionPreviewVideo } from '../../components/account/accountUtils';
 
 interface NFTsSearch {
   page?: number;
@@ -34,27 +35,56 @@ export const Route = createFileRoute('/nfts/')({
   },
 })
 
-function CollectionImage({ name, src }: { name: string; src?: string }) {
+function CollectionImage({ name, src, videoUrl }: { name: string; src?: string; videoUrl?: string | null }) {
   const [failed, setFailed] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const letter = (name || '?')[0].toUpperCase();
 
-  if (!src || failed) {
-    return (
-      <div className="aspect-square w-full bg-zinc-100 dark:bg-white/10 flex items-center justify-center">
-        <span className="text-4xl font-bold font-mono text-zinc-400 dark:text-zinc-500 select-none">
-          {letter}
-        </span>
-      </div>
-    );
-  }
+  const handleMouseEnter = () => {
+    setHovered(true);
+    videoRef.current?.play().catch(() => {});
+  };
+  const handleMouseLeave = () => {
+    setHovered(false);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  };
 
   return (
-    <img
-      src={src}
-      alt={name}
-      className="aspect-square object-cover w-full"
-      onError={() => setFailed(true)}
-    />
+    <div
+      className="aspect-square w-full bg-zinc-100 dark:bg-white/10 relative overflow-hidden"
+      onMouseEnter={videoUrl ? handleMouseEnter : undefined}
+      onMouseLeave={videoUrl ? handleMouseLeave : undefined}
+    >
+      {(!src || failed) ? (
+        <div className="w-full h-full flex items-center justify-center">
+          <span className="text-4xl font-bold font-mono text-zinc-400 dark:text-zinc-500 select-none">
+            {letter}
+          </span>
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={name}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${hovered && videoUrl ? 'opacity-0' : 'opacity-100'}`}
+          onError={() => setFailed(true)}
+        />
+      )}
+      {videoUrl && (
+        <video
+          ref={videoRef}
+          src={hovered ? videoUrl : undefined}
+          muted
+          loop
+          playsInline
+          preload="none"
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${hovered ? 'opacity-100' : 'opacity-0'}`}
+        />
+      )}
+    </div>
   );
 }
 
@@ -178,6 +208,7 @@ function NFTs() {
                 const count = Number(c?.number_of_tokens || 0);
                 const squareImage = c?.square_image || '';
                 const evmAddress = String(c?.evm_address || '');
+                const videoUrl = getCollectionPreviewVideo(id);
 
                 return (
                   <motion.div
@@ -192,7 +223,7 @@ function NFTs() {
                       className="block bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20 transition-all overflow-hidden group"
                     >
                       <div className="overflow-hidden">
-                        <CollectionImage name={displayName} src={squareImage} />
+                        <CollectionImage name={displayName} src={squareImage} videoUrl={videoUrl} />
                       </div>
                       <div className="p-3 space-y-1.5">
                         <div className="flex items-center gap-1.5">
