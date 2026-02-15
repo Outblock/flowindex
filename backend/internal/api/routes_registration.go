@@ -52,6 +52,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/transaction/{id}", s.handleFlowGetTransaction).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account", s.handleFlowListAccounts).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}", s.handleFlowGetAccount).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/account/{address}/contract/{name}", s.handleGetAccountContractCode).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/storage", s.handleGetAccountStorage).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/storage/links", s.handleGetAccountStorageLinks).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/storage/item", s.handleGetAccountStorageItem).Methods("GET", "OPTIONS")
