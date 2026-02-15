@@ -40,8 +40,9 @@ func adminAuthMiddleware(next http.Handler) http.Handler {
 func (s *Server) handleAdminListFTTokens(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	verified := strings.TrimSpace(r.URL.Query().Get("verified"))
 
-	tokens, err := s.repo.AdminListFTTokens(r.Context(), search, limit, offset)
+	tokens, err := s.repo.AdminListFTTokens(r.Context(), search, limit, offset, verified)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -68,6 +69,7 @@ func (s *Server) handleAdminUpdateFTToken(w http.ResponseWriter, r *http.Request
 		Description *string `json:"description"`
 		ExternalURL *string `json:"external_url"`
 		Decimals    *int    `json:"decimals"`
+		IsVerified  *bool   `json:"is_verified"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
@@ -93,6 +95,9 @@ func (s *Server) handleAdminUpdateFTToken(w http.ResponseWriter, r *http.Request
 	if body.Decimals != nil {
 		updates["decimals"] = *body.Decimals
 	}
+	if body.IsVerified != nil {
+		updates["is_verified"] = *body.IsVerified
+	}
 	if len(updates) == 0 {
 		writeAPIError(w, http.StatusBadRequest, "no fields to update")
 		return
@@ -110,8 +115,9 @@ func (s *Server) handleAdminUpdateFTToken(w http.ResponseWriter, r *http.Request
 func (s *Server) handleAdminListNFTCollections(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	verified := strings.TrimSpace(r.URL.Query().Get("verified"))
 
-	collections, err := s.repo.AdminListNFTCollections(r.Context(), search, limit, offset)
+	collections, err := s.repo.AdminListNFTCollections(r.Context(), search, limit, offset, verified)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -138,6 +144,7 @@ func (s *Server) handleAdminUpdateNFTCollection(w http.ResponseWriter, r *http.R
 		BannerImage *string `json:"banner_image"`
 		Description *string `json:"description"`
 		ExternalURL *string `json:"external_url"`
+		IsVerified  *bool   `json:"is_verified"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
@@ -162,6 +169,9 @@ func (s *Server) handleAdminUpdateNFTCollection(w http.ResponseWriter, r *http.R
 	}
 	if body.ExternalURL != nil {
 		updates["external_url"] = *body.ExternalURL
+	}
+	if body.IsVerified != nil {
+		updates["is_verified"] = *body.IsVerified
 	}
 	if len(updates) == 0 {
 		writeAPIError(w, http.StatusBadRequest, "no fields to update")
@@ -188,6 +198,7 @@ func ftTokenToAdmin(t models.FTToken) map[string]interface{} {
 		"description":      t.Description,
 		"external_url":     t.ExternalURL,
 		"logo":             t.Logo,
+		"is_verified":      t.IsVerified,
 		"updated_at":       formatTime(t.UpdatedAt),
 	}
 }
@@ -203,6 +214,7 @@ func nftCollectionToAdmin(c models.NFTCollection) map[string]interface{} {
 		"external_url":     c.ExternalURL,
 		"square_image":     unquoteString(c.SquareImage),
 		"banner_image":     unquoteString(c.BannerImage),
+		"is_verified":      c.IsVerified,
 		"updated_at":       formatTime(c.UpdatedAt),
 	}
 }

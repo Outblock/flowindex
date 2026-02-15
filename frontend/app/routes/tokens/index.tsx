@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { Coins, Database } from 'lucide-react';
+import { Coins, Database, CircleCheck } from 'lucide-react';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
@@ -149,6 +149,7 @@ function Tokens() {
                   const holderCount = Number(t?.holder_count || 0);
                   const logo = t?.logo || '';
                   const evmAddress = String(t?.evm_address || '');
+                  const isVerified = Boolean(t?.is_verified);
 
                   return (
                     <motion.tr
@@ -177,6 +178,7 @@ function Tokens() {
                                   symbol || contractName || id
                                 )}
                               </Link>
+                              {isVerified && <CircleCheck className="w-3.5 h-3.5 text-nothing-green flex-shrink-0" />}
                               {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
                             </div>
                             <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono truncate" title={id}>

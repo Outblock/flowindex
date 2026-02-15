@@ -319,26 +319,26 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 }
 
 const ftTokenSelectCols = `encode(ft.contract_address, 'hex') AS contract_address, COALESCE(ft.contract_name,''), COALESCE(ft.name,''), COALESCE(ft.symbol,''), COALESCE(ft.decimals,0),
-		       COALESCE(ft.description,''), COALESCE(ft.external_url,''), COALESCE(ft.logo::text, ''), COALESCE(ft.vault_path,''), COALESCE(ft.receiver_path,''), COALESCE(ft.balance_path,''), COALESCE(ft.socials::text, ''), COALESCE(ft.evm_address, ''), ft.updated_at`
+		       COALESCE(ft.description,''), COALESCE(ft.external_url,''), COALESCE(ft.logo::text, ''), COALESCE(ft.vault_path,''), COALESCE(ft.receiver_path,''), COALESCE(ft.balance_path,''), COALESCE(ft.socials::text, ''), COALESCE(ft.evm_address, ''), COALESCE(ft.is_verified, false), ft.updated_at`
 
 func scanFTToken(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.UpdatedAt)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.IsVerified, &t.UpdatedAt)
 	return t, err
 }
 
 func scanFTTokenWithHolders(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.UpdatedAt, &t.HolderCount)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.IsVerified, &t.UpdatedAt, &t.HolderCount)
 	return t, err
 }
 
 func scanFTTokenTrending(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.UpdatedAt, &t.HolderCount, &t.TransferCount)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.IsVerified, &t.UpdatedAt, &t.HolderCount, &t.TransferCount)
 	return t, err
 }
 

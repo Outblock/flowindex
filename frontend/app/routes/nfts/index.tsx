@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Image, Database, Layers, LayoutGrid, LayoutList } from 'lucide-react';
+import { Image, Database, Layers, LayoutGrid, LayoutList, CircleCheck } from 'lucide-react';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import NumberFlow from '@number-flow/react';
 import { useState, useRef } from 'react';
@@ -208,6 +208,7 @@ function NFTs() {
                 const count = Number(c?.number_of_tokens || 0);
                 const squareImage = c?.square_image || '';
                 const evmAddress = String(c?.evm_address || '');
+                const isVerified = Boolean(c?.is_verified);
                 const videoUrl = getCollectionPreviewVideo(id);
 
                 return (
@@ -230,6 +231,7 @@ function NFTs() {
                           <h3 className="font-mono font-bold text-sm text-zinc-900 dark:text-white truncate group-hover:text-nothing-green-dark dark:group-hover:text-nothing-green transition-colors">
                             {displayName}
                           </h3>
+                          {isVerified && <CircleCheck className="w-3.5 h-3.5 text-nothing-green flex-shrink-0" />}
                           {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
                         </div>
                         <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate" title={contractId}>
@@ -269,6 +271,7 @@ function NFTs() {
                       const holderCount = Number(c?.holder_count || 0);
                       const squareImage = c?.square_image || '';
                       const evmAddress = String(c?.evm_address || '');
+                      const isVerified = Boolean(c?.is_verified);
 
                       return (
                         <motion.tr
@@ -290,6 +293,7 @@ function NFTs() {
                                   >
                                     {displayName}
                                   </Link>
+                                  {isVerified && <CircleCheck className="w-3.5 h-3.5 text-nothing-green flex-shrink-0" />}
                                   {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
                                 </div>
                                 <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono truncate" title={id}>

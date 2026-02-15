@@ -265,6 +265,7 @@ type FTToken struct {
 	EVMAddress      string    `json:"evm_address,omitempty"`
 	HolderCount     int64     `json:"holder_count,omitempty"`
 	TransferCount   int64     `json:"transfer_count,omitempty"`
+	IsVerified      bool      `json:"is_verified"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
@@ -290,6 +291,7 @@ type NFTCollection struct {
 	BannerImage     string          `json:"banner_image,omitempty"`
 	Socials         json.RawMessage `json:"socials,omitempty"`
 	EVMAddress      string          `json:"evm_address,omitempty"`
+	IsVerified      bool            `json:"is_verified"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
 

@@ -326,6 +326,7 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 		"transfer_count":  token.TransferCount,
 		"evm_address":     token.EVMAddress,
 		"evm_bridged":     token.EVMAddress != "",
+		"is_verified":     token.IsVerified,
 	}
 	if token.Description != "" {
 		out["description"] = token.Description
@@ -405,6 +406,7 @@ func toNFTCollectionOutput(summary repository.NFTCollectionSummary) map[string]i
 		"transfer_count":   summary.TransferCount,
 		"evm_address":      summary.EVMAddress,
 		"evm_bridged":      summary.EVMAddress != "",
+		"is_verified":      summary.IsVerified,
 		"timestamp":        formatTime(summary.UpdatedAt),
 		"updated_at":       formatTime(summary.UpdatedAt),
 		"status":           "",

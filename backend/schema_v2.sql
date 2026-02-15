@@ -686,4 +686,8 @@ CREATE TABLE IF NOT EXISTS app.status_snapshots (
     PRIMARY KEY (kind)
 );
 
+-- Verified badges for curated tokens / collections
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE app.nft_collections ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+
 COMMIT;

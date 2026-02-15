@@ -24,6 +24,7 @@ type NFTCollectionSummary struct {
 	HolderCount     int64
 	TransferCount   int64
 	EVMAddress      string
+	IsVerified      bool
 	UpdatedAt       time.Time
 }
 
@@ -248,6 +249,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
 			COALESCE(c.evm_address, '') AS evm_address,
+			COALESCE(c.is_verified, false) AS is_verified,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
@@ -260,7 +262,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 	var out []NFTCollectionSummary
 	for rows.Next() {
 		var row NFTCollectionSummary
-		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.IsVerified, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
@@ -300,6 +302,7 @@ func (r *Repository) ListTrendingNFTCollections(ctx context.Context, limit, offs
 			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
 			COALESCE(ra.tx_count, 0) AS transfer_count,
 			COALESCE(c.evm_address, '') AS evm_address,
+			COALESCE(c.is_verified, false) AS is_verified,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
@@ -313,7 +316,7 @@ func (r *Repository) ListTrendingNFTCollections(ctx context.Context, limit, offs
 	var out []NFTCollectionSummary
 	for rows.Next() {
 		var row NFTCollectionSummary
-		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.TransferCount, &row.EVMAddress, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.TransferCount, &row.EVMAddress, &row.IsVerified, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
@@ -344,13 +347,14 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 				COALESCE(counts.cnt, 0) AS cnt,
 				COALESCE(counts.holder_cnt, 0) AS holder_cnt,
 				COALESCE(c.evm_address, '') AS evm_address,
+				COALESCE(c.is_verified, false) AS is_verified,
 				COALESCE(c.updated_at, NOW()) AS updated_at
 			FROM app.nft_collections c
 			FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
 			WHERE COALESCE(c.contract_address, counts.contract_address) = $1
 			ORDER BY COALESCE(c.contract_name, counts.contract_name) ASC
 			LIMIT 1`, hexToBytes(contract)).
-			Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.UpdatedAt)
+			Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.IsVerified, &row.UpdatedAt)
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
@@ -379,12 +383,13 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 			COALESCE(counts.cnt, 0) AS cnt,
 			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
 			COALESCE(c.evm_address, '') AS evm_address,
+			COALESCE(c.is_verified, false) AS is_verified,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
 		WHERE COALESCE(c.contract_address, counts.contract_address) = $1 AND COALESCE(c.contract_name, counts.contract_name) = $2`,
 		hexToBytes(contract), contractName).
-		Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.UpdatedAt)
+		Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.IsVerified, &row.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}

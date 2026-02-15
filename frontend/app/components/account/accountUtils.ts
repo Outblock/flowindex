@@ -247,10 +247,14 @@ export const getNFTMedia = (nft: any, collectionId: string = ''): NFTMedia => {
     }
 
     // 2. NFL All Day Video — derive video URL from image URL by replacing last path segment
+    //    Also strip query params (e.g. ?format=jpeg&width=256) so the video URL is clean.
     if (isCollection('AllDay') || isCollection('e4cf4bdc1751c65d.AllDay')) {
-        const videoUrl = image && image.includes('media.nflallday.com')
+        let videoUrl = image && image.includes('media.nflallday.com')
             ? image.replace(/\/media\/[^/?#]+/, '/media/video')
             : image;
+        if (videoUrl && videoUrl.includes('?')) {
+            videoUrl = videoUrl.split('?')[0];
+        }
         return {
             type: 'video',
             url: videoUrl,

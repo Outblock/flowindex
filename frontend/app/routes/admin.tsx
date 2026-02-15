@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check } from 'lucide-react'
+import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check, CircleCheck } from 'lucide-react'
 import { resolveApiBaseUrl } from '../api'
 import toast from 'react-hot-toast'
 import { Pagination } from '../components/Pagination'
@@ -154,8 +154,26 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 
 // ── FT Panel ────────────────────────────────────────────────────────
 
+function VerifiedFilter({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex gap-1">
+      {[{ label: 'All', val: '' }, { label: 'Verified', val: 'true' }, { label: 'Unverified', val: 'false' }].map((opt) => (
+        <button key={opt.val} onClick={() => onChange(opt.val)}
+          className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-mono transition-colors ${
+            value === opt.val
+              ? 'bg-nothing-green text-black font-bold'
+              : 'border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
+          }`}>
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function FTPanel({ token }: { token: string }) {
   const [search, setSearch] = useState('')
+  const [verified, setVerified] = useState('')
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -166,7 +184,9 @@ function FTPanel({ token }: { token: string }) {
     setLoading(true)
     try {
       const offset = (p - 1) * 50
-      const data = await adminFetch(`admin/ft?limit=50&offset=${offset}&search=${encodeURIComponent(search)}`, token)
+      let url = `admin/ft?limit=50&offset=${offset}&search=${encodeURIComponent(search)}`
+      if (verified) url += `&verified=${verified}`
+      const data = await adminFetch(url, token)
       const rows = data?.data || []
       setItems(rows)
       setHasNext(rows.length >= 50)
@@ -176,16 +196,20 @@ function FTPanel({ token }: { token: string }) {
     } finally {
       setLoading(false)
     }
-  }, [search, token, page])
+  }, [search, verified, token, page])
 
   const handleSearch = () => { setPage(1); doSearch(1) }
   const handlePageChange = (p: number) => { setPage(p); doSearch(p) }
+  const handleVerifiedChange = (v: string) => { setVerified(v); setPage(1); setTimeout(() => doSearch(1), 0) }
 
   useEffect(() => { doSearch(1) }, [token]) // auto-load on mount
 
   return (
     <div className="space-y-4">
-      <SearchBar value={search} onChange={setSearch} onSearch={handleSearch} loading={loading} />
+      <div className="flex items-center gap-3">
+        <div className="flex-1"><SearchBar value={search} onChange={setSearch} onSearch={handleSearch} loading={loading} /></div>
+        <VerifiedFilter value={verified} onChange={handleVerifiedChange} />
+      </div>
       {loaded && items.length === 0 && (
         <p className="text-sm text-zinc-500 font-mono text-center py-8">No tokens found.</p>
       )}
@@ -202,6 +226,7 @@ function FTPanel({ token }: { token: string }) {
 function FTRow({ item, token }: { item: any; token: string }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [isVerified, setIsVerified] = useState(Boolean(item.is_verified))
   const [form, setForm] = useState({
     name: item.name || '',
     symbol: item.symbol || '',
@@ -216,7 +241,7 @@ function FTRow({ item, token }: { item: any; token: string }) {
     try {
       await adminFetch(`admin/ft/${encodeURIComponent(item.identifier)}`, token, {
         method: 'PUT',
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, is_verified: isVerified }),
       })
       toast.success(`Updated ${item.identifier}`)
       setEditing(false)
@@ -224,6 +249,20 @@ function FTRow({ item, token }: { item: any; token: string }) {
       toast.error(e.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const toggleVerified = async () => {
+    const next = !isVerified
+    try {
+      await adminFetch(`admin/ft/${encodeURIComponent(item.identifier)}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ is_verified: next }),
+      })
+      setIsVerified(next)
+      toast.success(`${item.identifier} ${next ? 'verified' : 'unverified'}`)
+    } catch (e: any) {
+      toast.error(e.message)
     }
   }
 
@@ -239,11 +278,22 @@ function FTRow({ item, token }: { item: any; token: string }) {
             </div>
           )}
           <div>
-            <span className="font-mono text-sm text-zinc-900 dark:text-white font-semibold">{item.identifier}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-sm text-zinc-900 dark:text-white font-semibold">{item.identifier}</span>
+              {isVerified && <CircleCheck className="w-3.5 h-3.5 text-nothing-green" />}
+            </div>
             <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{form.name} ({form.symbol})</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={toggleVerified} title={isVerified ? 'Unverify' : 'Verify'}
+            className={`px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-mono font-bold transition-colors ${
+              isVerified
+                ? 'bg-nothing-green/20 text-nothing-green-dark dark:text-nothing-green border border-nothing-green/30'
+                : 'border border-zinc-200 dark:border-white/10 text-zinc-400 hover:text-nothing-green hover:border-nothing-green/30'
+            }`}>
+            <CircleCheck className="w-3.5 h-3.5" />
+          </button>
           {editing ? (
             <>
               <button onClick={handleSave} disabled={saving}
@@ -282,6 +332,7 @@ function FTRow({ item, token }: { item: any; token: string }) {
 
 function NFTPanel({ token }: { token: string }) {
   const [search, setSearch] = useState('')
+  const [verified, setVerified] = useState('')
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -292,7 +343,9 @@ function NFTPanel({ token }: { token: string }) {
     setLoading(true)
     try {
       const offset = (p - 1) * 50
-      const data = await adminFetch(`admin/nft?limit=50&offset=${offset}&search=${encodeURIComponent(search)}`, token)
+      let url = `admin/nft?limit=50&offset=${offset}&search=${encodeURIComponent(search)}`
+      if (verified) url += `&verified=${verified}`
+      const data = await adminFetch(url, token)
       const rows = data?.data || []
       setItems(rows)
       setHasNext(rows.length >= 50)
@@ -302,16 +355,20 @@ function NFTPanel({ token }: { token: string }) {
     } finally {
       setLoading(false)
     }
-  }, [search, token, page])
+  }, [search, verified, token, page])
 
   const handleSearch = () => { setPage(1); doSearch(1) }
   const handlePageChange = (p: number) => { setPage(p); doSearch(p) }
+  const handleVerifiedChange = (v: string) => { setVerified(v); setPage(1); setTimeout(() => doSearch(1), 0) }
 
   useEffect(() => { doSearch(1) }, [token]) // auto-load on mount
 
   return (
     <div className="space-y-4">
-      <SearchBar value={search} onChange={setSearch} onSearch={handleSearch} loading={loading} />
+      <div className="flex items-center gap-3">
+        <div className="flex-1"><SearchBar value={search} onChange={setSearch} onSearch={handleSearch} loading={loading} /></div>
+        <VerifiedFilter value={verified} onChange={handleVerifiedChange} />
+      </div>
       {loaded && items.length === 0 && (
         <p className="text-sm text-zinc-500 font-mono text-center py-8">No collections found.</p>
       )}
@@ -328,6 +385,7 @@ function NFTPanel({ token }: { token: string }) {
 function NFTRow({ item, token }: { item: any; token: string }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [isVerified, setIsVerified] = useState(Boolean(item.is_verified))
   const [form, setForm] = useState({
     name: item.name || '',
     symbol: item.symbol || '',
@@ -342,7 +400,7 @@ function NFTRow({ item, token }: { item: any; token: string }) {
     try {
       await adminFetch(`admin/nft/${encodeURIComponent(item.identifier)}`, token, {
         method: 'PUT',
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, is_verified: isVerified }),
       })
       toast.success(`Updated ${item.identifier}`)
       setEditing(false)
@@ -350,6 +408,20 @@ function NFTRow({ item, token }: { item: any; token: string }) {
       toast.error(e.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const toggleVerified = async () => {
+    const next = !isVerified
+    try {
+      await adminFetch(`admin/nft/${encodeURIComponent(item.identifier)}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ is_verified: next }),
+      })
+      setIsVerified(next)
+      toast.success(`${item.identifier} ${next ? 'verified' : 'unverified'}`)
+    } catch (e: any) {
+      toast.error(e.message)
     }
   }
 
@@ -365,11 +437,22 @@ function NFTRow({ item, token }: { item: any; token: string }) {
             </div>
           )}
           <div>
-            <span className="font-mono text-sm text-zinc-900 dark:text-white font-semibold">{item.identifier}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-sm text-zinc-900 dark:text-white font-semibold">{item.identifier}</span>
+              {isVerified && <CircleCheck className="w-3.5 h-3.5 text-nothing-green" />}
+            </div>
             <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{form.name} ({form.symbol})</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={toggleVerified} title={isVerified ? 'Unverify' : 'Verify'}
+            className={`px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-mono font-bold transition-colors ${
+              isVerified
+                ? 'bg-nothing-green/20 text-nothing-green-dark dark:text-nothing-green border border-nothing-green/30'
+                : 'border border-zinc-200 dark:border-white/10 text-zinc-400 hover:text-nothing-green hover:border-nothing-green/30'
+            }`}>
+            <CircleCheck className="w-3.5 h-3.5" />
+          </button>
           {editing ? (
             <>
               <button onClick={handleSave} disabled={saving}
@@ -731,6 +814,7 @@ function ScriptTemplateRow({ item, token }: { item: any; token: string }) {
 // ── Import Token Panel ───────────────────────────────────────────────
 
 function ImportTokenPanel({ token }: { token: string }) {
+  const [input, setInput] = useState('')
   const [address, setAddress] = useState('')
   const [contractName, setContractName] = useState('')
   const [tokenType, setTokenType] = useState<'ft' | 'nft'>('ft')
@@ -738,6 +822,57 @@ function ImportTokenPanel({ token }: { token: string }) {
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState<any>(null)
   const [form, setForm] = useState<Record<string, string>>({})
+  const [contractOptions, setContractOptions] = useState<string[]>([])
+  const [fetchingContracts, setFetchingContracts] = useState(false)
+
+  // Parse input: A.{hex}.{Name} or just a hex address
+  const parseInput = (value: string) => {
+    setInput(value)
+    setPreview(null)
+    setForm({})
+    setContractOptions([])
+    const trimmed = value.trim()
+
+    // Match A.{hex}.{Name}
+    const aMatch = trimmed.match(/^A\.([0-9a-fA-F]+)\.(\w+)$/)
+    if (aMatch) {
+      setAddress(aMatch[1])
+      setContractName(aMatch[2])
+      return
+    }
+
+    // Match hex address (with or without 0x)
+    const hexMatch = trimmed.replace(/^0x/, '').match(/^[0-9a-fA-F]{8,16}$/)
+    if (hexMatch) {
+      setAddress(hexMatch[0])
+      setContractName('')
+      // Auto-fetch contracts from chain
+      fetchContractNames(hexMatch[0])
+      return
+    }
+
+    setAddress('')
+    setContractName('')
+  }
+
+  const fetchContractNames = async (addr: string) => {
+    setFetchingContracts(true)
+    try {
+      const { ensureHeyApiConfigured } = await import('../api/heyapi')
+      await ensureHeyApiConfigured()
+      const { getFlowV1AccountByAddress } = await import('../api/gen/find')
+      const res = await getFlowV1AccountByAddress({ path: { address: `0x${addr.replace(/^0x/, '')}` } })
+      const data = (res.data as any)?.data
+      const contracts = data?.contracts || []
+      const names = contracts.map((c: any) => c?.name || c?.contract_name || '').filter(Boolean)
+      setContractOptions(names)
+      if (names.length === 1) setContractName(names[0])
+    } catch {
+      setContractOptions([])
+    } finally {
+      setFetchingContracts(false)
+    }
+  }
 
   const handlePreview = async () => {
     const addr = address.trim().replace(/^0x/, '')
@@ -753,7 +888,6 @@ function ImportTokenPanel({ token }: { token: string }) {
       const md = data?.data
       if (!md) { toast.error('No metadata returned'); return }
       setPreview(md)
-      // Pre-fill editable form
       if (tokenType === 'ft') {
         setForm({
           name: md.name || '', symbol: md.symbol || '', decimals: String(md.decimals ?? 0),
@@ -794,8 +928,10 @@ function ImportTokenPanel({ token }: { token: string }) {
       toast.success(`Saved ${tokenType === 'ft' ? 'FT' : 'NFT'}: A.${addr}.${name}`)
       setPreview(null)
       setForm({})
+      setInput('')
       setAddress('')
       setContractName('')
+      setContractOptions([])
     } catch (e: any) {
       toast.error(e.message)
     } finally {
@@ -805,49 +941,91 @@ function ImportTokenPanel({ token }: { token: string }) {
 
   const updateForm = (key: string, value: string) => setForm((f) => ({ ...f, [key]: value }))
 
+  const isReady = address && contractName
+
   return (
     <div className="space-y-6">
       {/* Step 1: Input */}
       <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm p-6 space-y-4">
-        <h3 className="text-xs uppercase tracking-widest font-mono text-zinc-500 dark:text-zinc-400">Step 1 — Fetch from Chain</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <h3 className="text-xs uppercase tracking-widest font-mono text-zinc-500 dark:text-zinc-400">Step 1 — Identify Token</h3>
+        <div className="space-y-3">
           <div>
-            <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Contract Address</label>
+            <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Identifier or Address</label>
             <input
-              type="text" value={address} onChange={(e) => setAddress(e.target.value)}
-              placeholder="0b2a3299cc857e29"
+              type="text" value={input} onChange={(e) => parseInput(e.target.value)}
+              placeholder="A.0b2a3299cc857e29.TopShot  or  0b2a3299cc857e29"
               className="w-full px-3 py-2 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green"
             />
           </div>
-          <div>
-            <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Contract Name</label>
-            <input
-              type="text" value={contractName} onChange={(e) => setContractName(e.target.value)}
-              placeholder="TopShot"
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Type</label>
-            <div className="flex gap-1">
-              {(['ft', 'nft'] as const).map((t) => (
-                <button key={t} onClick={() => { setTokenType(t); setPreview(null); setForm({}) }}
-                  className={`flex-1 px-3 py-2 text-xs uppercase tracking-widest font-mono font-bold transition-colors ${
-                    tokenType === t
-                      ? 'bg-nothing-green text-black'
-                      : 'border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
-                  }`}>
-                  {t === 'ft' ? 'Fungible' : 'NFT'}
-                </button>
-              ))}
+
+          {/* Status line */}
+          {address && (
+            <div className="flex items-center gap-2 text-xs font-mono">
+              <span className="text-zinc-400">Address:</span>
+              <span className="text-zinc-900 dark:text-white">{address}</span>
+              {contractName ? (
+                <>
+                  <span className="text-zinc-400">•</span>
+                  <span className="text-zinc-400">Contract:</span>
+                  <span className="text-nothing-green-dark dark:text-nothing-green font-bold">{contractName}</span>
+                  <Check className="w-3 h-3 text-nothing-green" />
+                </>
+              ) : fetchingContracts ? (
+                <Loader2 className="w-3 h-3 animate-spin text-zinc-400" />
+              ) : null}
+            </div>
+          )}
+
+          {/* Contract picker dropdown */}
+          {contractOptions.length > 1 && !contractName && (
+            <div>
+              <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Select Contract</label>
+              <div className="flex flex-wrap gap-2">
+                {contractOptions.map((name) => (
+                  <button key={name} onClick={() => setContractName(name)}
+                    className="px-3 py-1.5 border border-zinc-200 dark:border-white/10 text-xs font-mono text-zinc-700 dark:text-zinc-300 hover:bg-nothing-green/10 hover:border-nothing-green/30 transition-colors">
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {contractOptions.length === 0 && address && !contractName && !fetchingContracts && (
+            <div>
+              <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Contract Name (manual)</label>
+              <input
+                type="text" value={contractName} onChange={(e) => setContractName(e.target.value)}
+                placeholder="TopShot"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green"
+              />
+            </div>
+          )}
+
+          <div className="flex items-center gap-4">
+            <div>
+              <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Type</label>
+              <div className="flex gap-1">
+                {(['ft', 'nft'] as const).map((t) => (
+                  <button key={t} onClick={() => { setTokenType(t); setPreview(null); setForm({}) }}
+                    className={`px-3 py-2 text-xs uppercase tracking-widest font-mono font-bold transition-colors ${
+                      tokenType === t
+                        ? 'bg-nothing-green text-black'
+                        : 'border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
+                    }`}>
+                    {t === 'ft' ? 'Fungible' : 'NFT'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="pt-5">
+              <button onClick={handlePreview} disabled={loading || !isReady}
+                className="flex items-center gap-2 px-4 py-2 bg-nothing-green text-black text-xs uppercase tracking-widest font-mono font-bold hover:bg-nothing-green/90 transition-colors disabled:opacity-50">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                Preview from Chain
+              </button>
             </div>
           </div>
         </div>
-        <button onClick={handlePreview} disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-nothing-green text-black text-xs uppercase tracking-widest font-mono font-bold hover:bg-nothing-green/90 transition-colors disabled:opacity-50">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-          Preview from Chain
-        </button>
       </div>
 
       {/* Step 2: Review & Save */}

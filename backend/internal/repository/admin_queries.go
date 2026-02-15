@@ -9,20 +9,30 @@ import (
 )
 
 // AdminListFTTokens returns all FT tokens with optional search.
-func (r *Repository) AdminListFTTokens(ctx context.Context, search string, limit, offset int) ([]models.FTToken, error) {
+func (r *Repository) AdminListFTTokens(ctx context.Context, search string, limit, offset int, verified ...string) ([]models.FTToken, error) {
 	query := `
 		SELECT encode(contract_address, 'hex'), contract_name,
 		       COALESCE(name, ''), COALESCE(symbol, ''), COALESCE(decimals, 0),
 		       COALESCE(description, ''), COALESCE(external_url, ''), COALESCE(logo, ''),
+		       COALESCE(is_verified, false),
 		       updated_at
 		FROM app.ft_tokens`
 	args := []interface{}{}
 	argN := 1
+	clauses := []string{}
 
 	if search != "" {
-		query += fmt.Sprintf(` WHERE (name ILIKE $%d OR symbol ILIKE $%d OR contract_name ILIKE $%d)`, argN, argN, argN)
+		clauses = append(clauses, fmt.Sprintf(`(name ILIKE $%d OR symbol ILIKE $%d OR contract_name ILIKE $%d)`, argN, argN, argN))
 		args = append(args, "%"+search+"%")
 		argN++
+	}
+	if len(verified) > 0 && verified[0] != "" {
+		clauses = append(clauses, fmt.Sprintf(`COALESCE(is_verified, false) = $%d`, argN))
+		args = append(args, verified[0] == "true")
+		argN++
+	}
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
 	query += ` ORDER BY updated_at DESC`
 	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argN, argN+1)
@@ -40,6 +50,7 @@ func (r *Repository) AdminListFTTokens(ctx context.Context, search string, limit
 		if err := rows.Scan(&t.ContractAddress, &t.ContractName,
 			&t.Name, &t.Symbol, &t.Decimals,
 			&t.Description, &t.ExternalURL, &t.Logo,
+			&t.IsVerified,
 			&t.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -57,6 +68,7 @@ func (r *Repository) AdminUpdateFTToken(ctx context.Context, address, name strin
 		"description":  "description",
 		"external_url": "external_url",
 		"decimals":     "decimals",
+		"is_verified":  "is_verified",
 	}
 
 	setClauses := []string{"updated_at = NOW()"}
@@ -82,20 +94,30 @@ func (r *Repository) AdminUpdateFTToken(ctx context.Context, address, name strin
 }
 
 // AdminListNFTCollections returns all NFT collections with optional search.
-func (r *Repository) AdminListNFTCollections(ctx context.Context, search string, limit, offset int) ([]models.NFTCollection, error) {
+func (r *Repository) AdminListNFTCollections(ctx context.Context, search string, limit, offset int, verified ...string) ([]models.NFTCollection, error) {
 	query := `
 		SELECT encode(contract_address, 'hex'), contract_name,
 		       COALESCE(name, ''), COALESCE(symbol, ''), COALESCE(description, ''),
 		       COALESCE(external_url, ''), COALESCE(square_image, ''), COALESCE(banner_image, ''),
+		       COALESCE(is_verified, false),
 		       updated_at
 		FROM app.nft_collections`
 	args := []interface{}{}
 	argN := 1
+	clauses := []string{}
 
 	if search != "" {
-		query += fmt.Sprintf(` WHERE (name ILIKE $%d OR symbol ILIKE $%d OR contract_name ILIKE $%d)`, argN, argN, argN)
+		clauses = append(clauses, fmt.Sprintf(`(name ILIKE $%d OR symbol ILIKE $%d OR contract_name ILIKE $%d)`, argN, argN, argN))
 		args = append(args, "%"+search+"%")
 		argN++
+	}
+	if len(verified) > 0 && verified[0] != "" {
+		clauses = append(clauses, fmt.Sprintf(`COALESCE(is_verified, false) = $%d`, argN))
+		args = append(args, verified[0] == "true")
+		argN++
+	}
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
 	query += ` ORDER BY updated_at DESC`
 	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argN, argN+1)
@@ -113,6 +135,7 @@ func (r *Repository) AdminListNFTCollections(ctx context.Context, search string,
 		if err := rows.Scan(&c.ContractAddress, &c.ContractName,
 			&c.Name, &c.Symbol, &c.Description,
 			&c.ExternalURL, &c.SquareImage, &c.BannerImage,
+			&c.IsVerified,
 			&c.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -130,6 +153,7 @@ func (r *Repository) AdminUpdateNFTCollection(ctx context.Context, address, name
 		"banner_image": "banner_image",
 		"description":  "description",
 		"external_url": "external_url",
+		"is_verified":  "is_verified",
 	}
 
 	setClauses := []string{"updated_at = NOW()"}

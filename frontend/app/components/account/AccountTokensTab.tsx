@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Coins, ExternalLink, Filter } from 'lucide-react';
+import { Coins, CircleCheck, Filter } from 'lucide-react';
 import type { FTVaultInfo } from '../../../cadence/cadence.gen';
 import { normalizeAddress, formatShort, getTokenLogoURL } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
@@ -57,10 +57,10 @@ export function AccountTokensTab({ address }: Props) {
 
     // Build lookup map: "A.{hex}.{ContractName}" → backend metadata
     const metaMap = useMemo(() => {
-        const map: Record<string, { name?: string; symbol?: string; logo?: string; evm_address?: string }> = {};
+        const map: Record<string, { name?: string; symbol?: string; logo?: string; evm_address?: string; is_verified?: boolean }> = {};
         for (const ft of backendFTs) {
             const id = ft.id || '';
-            if (id) map[id] = { name: ft.name, symbol: ft.symbol, logo: ft.logo, evm_address: ft.evm_address };
+            if (id) map[id] = { name: ft.name, symbol: ft.symbol, logo: ft.logo, evm_address: ft.evm_address, is_verified: ft.is_verified };
         }
         return map;
     }, [backendFTs]);
@@ -153,15 +153,15 @@ export function AccountTokensTab({ address }: Props) {
                                                 </div>
                                                 <div className="flex items-center gap-1 mt-0.5">
                                                     <Link
-                                                        to="/accounts/$address"
-                                                        params={{ address: normalizeAddress(t.contractAddress) }}
-                                                        className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-1 transition-colors"
+                                                        to="/tokens/$token"
+                                                        params={{ token: identifier }}
+                                                        className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors truncate max-w-[160px]"
                                                     >
-                                                        {formatShort(t.contractAddress)}
-                                                        <ExternalLink className="w-2.5 h-2.5" />
+                                                        {t.contractName}
                                                     </Link>
-                                                    <span className="text-[10px] text-zinc-300 dark:text-zinc-600">•</span>
-                                                    <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[100px]">{t.contractName}</span>
+                                                    {meta?.is_verified && (
+                                                        <CircleCheck className="w-3 h-3 text-nothing-green flex-shrink-0" />
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
