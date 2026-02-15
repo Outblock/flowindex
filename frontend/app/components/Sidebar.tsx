@@ -17,7 +17,7 @@ export default function Sidebar() {
         return location.pathname.startsWith(path);
     };
 
-    const navItems = [
+    const navItems: Array<{ label: string; path: string; icon: typeof Home; disabled?: boolean }> = [
         { label: 'Home Page', path: '/', icon: Home },
         { label: 'Transactions', path: '/tx', icon: ArrowRightLeft },
         { label: 'Blocks', path: '/blocks', icon: Box },

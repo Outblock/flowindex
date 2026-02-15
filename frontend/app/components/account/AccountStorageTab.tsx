@@ -59,7 +59,7 @@ export function AccountStorageTab({ address }: Props) {
 
     const [overview, setOverview] = useState<any>(null);
     const [selected, setSelected] = useState<any>(null);
-    const [rawItem, setRawItem] = useState<any>(null);
+    const [_rawItem, setRawItem] = useState<any>(null);
     const [decodedItem, setDecodedItem] = useState<any>(null);
     const [typeSchema, setTypeSchema] = useState<any>(null);
     const [loading, setLoading] = useState(false);

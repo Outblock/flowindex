@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react';
 import { EffectComposer, RenderPass, EffectPass, BloomEffect, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
 
+type ShaderUniforms = {
+    [key: string]: { value: any };
+};
+
 const vert = `
 varying vec2 vUv;
 void main(){
@@ -320,14 +324,14 @@ export default function GridScan({
     className,
     style
 }: GridScanProps) {
-    const containerRef = useRef(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    const rendererRef = useRef(null);
-    const materialRef = useRef(null);
-    const composerRef = useRef(null);
-    const bloomRef = useRef(null);
-    const chromaRef = useRef(null);
-    const rafRef = useRef(null);
+    const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+    const materialRef = useRef<THREE.ShaderMaterial | null>(null);
+    const composerRef = useRef<EffectComposer | null>(null);
+    const bloomRef = useRef<BloomEffect | null>(null);
+    const chromaRef = useRef<ChromaticAberrationEffect | null>(null);
+    const rafRef = useRef<number | null>(null);
 
     const lookTarget = useRef(new THREE.Vector2(0, 0));
     const tiltTarget = useRef(0);
@@ -341,15 +345,15 @@ export default function GridScan({
     const yawVel = useRef(0);
 
     const MAX_SCANS = 8;
-    const scanStartsRef = useRef([]);
+    const scanStartsRef = useRef<number[]>([]);
 
-    const pushScan = (t) => {
+    const pushScan = (t: number) => {
         const arr = scanStartsRef.current.slice();
         if (arr.length >= MAX_SCANS) arr.shift();
         arr.push(t);
         scanStartsRef.current = arr;
         if (materialRef.current) {
-            const u = materialRef.current.uniforms;
+            const u = materialRef.current.uniforms as ShaderUniforms;
             const buf = new Array(MAX_SCANS).fill(0);
             for (let i = 0; i < arr.length && i < MAX_SCANS; i++) buf[i] = arr[i];
             u.uScanStarts.value = buf;
@@ -370,8 +374,8 @@ export default function GridScan({
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
-        let leaveTimer = null;
-        const onMove = (e) => {
+        let leaveTimer: number | null = null;
+        const onMove = (e: MouseEvent) => {
             if (leaveTimer) {
                 clearTimeout(leaveTimer);
                 leaveTimer = null;
@@ -482,7 +486,7 @@ export default function GridScan({
         const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
         scene.add(quad);
 
-        let composer = null;
+        let composer: EffectComposer | null = null;
         if (enablePost) {
             composer = new EffectComposer(renderer);
             composerRef.current = composer;
@@ -509,7 +513,7 @@ export default function GridScan({
             composer.addPass(effectPass);
         }
 
-        const onResize = (entries) => {
+        const onResize = (entries: ResizeObserverEntry[]) => {
             if (!entries || !entries.length) return;
             const entry = entries[0];
             const { width, height } = entry.contentRect;
@@ -648,7 +652,7 @@ export default function GridScan({
 
     useEffect(() => {
         if (!enableGyro) return;
-        const handler = (e) => {
+        const handler = (e: DeviceOrientationEvent) => {
             const gamma = e.gamma ?? 0;
             const beta = e.beta ?? 0;
             const nx = THREE.MathUtils.clamp(gamma / 45, -1, 1);
@@ -667,19 +671,19 @@ export default function GridScan({
     );
 };
 
-function srgbColor(hex) {
+function srgbColor(hex: string) {
     const c = new THREE.Color(hex);
     return c.convertSRGBToLinear();
 }
 
 function smoothDampVec2(
-    current,
-    target,
-    currentVelocity,
-    smoothTime,
-    maxSpeed,
-    deltaTime
-) {
+    current: THREE.Vector2,
+    target: THREE.Vector2,
+    currentVelocity: THREE.Vector2,
+    smoothTime: number,
+    maxSpeed: number,
+    deltaTime: number
+): THREE.Vector2 {
     const out = current.clone();
     smoothTime = Math.max(0.0001, smoothTime);
     const omega = 2 / smoothTime;
@@ -709,13 +713,13 @@ function smoothDampVec2(
 }
 
 function smoothDampFloat(
-    current,
-    target,
-    velRef,
-    smoothTime,
-    maxSpeed,
-    deltaTime
-) {
+    current: number,
+    target: number,
+    velRef: { v: number },
+    smoothTime: number,
+    maxSpeed: number,
+    deltaTime: number
+): { value: number; v: number } {
     smoothTime = Math.max(0.0001, smoothTime);
     const omega = 2 / smoothTime;
     const x = omega * deltaTime;

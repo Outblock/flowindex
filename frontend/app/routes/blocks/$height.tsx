@@ -14,8 +14,8 @@ export const Route = createFileRoute('/blocks/$height')({
         try {
             await ensureHeyApiConfigured();
             const [blockRes, txRes] = await Promise.all([
-                getFlowV1BlockByHeight({ path: { height: params.height } }),
-                getFlowV1BlockByHeightTransaction({ path: { height: params.height } }),
+                getFlowV1BlockByHeight({ path: { height: Number(params.height) as any } }),
+                getFlowV1BlockByHeightTransaction({ path: { height: Number(params.height) as any } }),
             ]);
             const rawBlock: any = blockRes.data?.data?.[0] ?? blockRes.data?.data ?? null;
             if (!rawBlock) return { block: null };
@@ -188,11 +188,11 @@ function BlockDetail() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                    {block.transactions.map((tx) => (
+                                    {block.transactions.map((tx: any) => (
                                         <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group">
                                             <td className="p-4">
                                                 <div className="flex items-center gap-2">
-                                                    <Link to={`/tx/${tx.id}`} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                    <Link to={`/tx/${tx.id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
                                                         {tx.id.slice(0, 16)}...
                                                     </Link>
                                                     <CopyButton

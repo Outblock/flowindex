@@ -3,7 +3,7 @@ import { Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatAbsoluteTime } from '../lib/time';
 
-export function EpochProgress({ epoch, progress, updatedAt }) {
+export function EpochProgress({ epoch, progress, updatedAt }: { epoch: number | null; progress: number; updatedAt: number | null }) {
     if (!epoch) {
         return (
             <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 h-full flex items-center justify-between animate-pulse">

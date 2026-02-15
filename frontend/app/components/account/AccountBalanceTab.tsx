@@ -180,7 +180,7 @@ export function AccountBalanceTab({ address }: Props) {
                                 contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff', fontSize: '12px', fontFamily: 'monospace' }}
                                 itemStyle={{ color: '#00ef8b' }}
                                 cursor={{ stroke: '#333', strokeDasharray: '5 5' }}
-                                formatter={(value: number) => [value.toLocaleString(undefined, { maximumFractionDigits: 4 }), 'FLOW']}
+                                formatter={((value: string | number) => [(typeof value === 'number' ? value : Number(value)).toLocaleString(undefined, { maximumFractionDigits: 4 }), 'FLOW']) as any}
                                 labelFormatter={(label) => `Date: ${label}`}
                             />
                             <Area type="monotone" dataKey="balance" stroke="#00ef8b" strokeWidth={2} fillOpacity={1} fill="url(#colorBalance)" />

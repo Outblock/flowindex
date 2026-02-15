@@ -58,14 +58,12 @@ function NFTItem() {
 }
 
 function NFTItemInner() {
-  const { item, transfers, transfersMeta, nftType, id, page } = Route.useLoaderData();
+  const { item, transfers, transfersMeta, nftType, page } = Route.useLoaderData();
   const navigate = Route.useNavigate();
 
   const owner = normalizeAddress(item?.current_owner || item?.owner || item?.address || '');
   const nft = apiItemToCadenceFormat(item);
 
-  const limit = 25;
-  const offset = (page - 1) * limit;
   const hasNext = transfersMeta?.has_more === true;
 
   const setPage = (newPage: number) => {

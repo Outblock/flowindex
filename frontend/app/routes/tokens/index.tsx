@@ -22,7 +22,7 @@ export const Route = createFileRoute('/tokens/')({
   loaderDeps: ({ search: { page } }) => ({ page }),
   loader: async ({ deps: { page } }) => {
     const limit = 25;
-    const offset = (page - 1) * limit;
+    const offset = ((page ?? 1) - 1) * limit;
     try {
       await ensureHeyApiConfigured();
       const res = await getFlowV1Ft({ query: { limit, offset } });
@@ -64,12 +64,12 @@ function Tokens() {
   const navigate = Route.useNavigate();
 
   const limit = 25;
-  const offset = (page - 1) * limit;
+  const offset = ((page ?? 1) - 1) * limit;
 
   const totalCount = Number(meta?.count || 0);
   const hasNext = totalCount > 0 ? offset + limit < totalCount : tokens.length === limit;
 
-  const normalizeHex = (value) => {
+  const normalizeHex = (value: any) => {
     if (!value) return '';
     const lower = String(value).toLowerCase();
     return lower.startsWith('0x') ? lower : `0x${lower}`;
@@ -141,7 +141,7 @@ function Tokens() {
             </thead>
             <tbody>
               <AnimatePresence mode="popLayout">
-                {tokens.map((t) => {
+                {tokens.map((t: any) => {
                   const id = String(t?.id || t?.token || '');
                   const addr = normalizeHex(t?.address);
                   const symbol = String(t?.symbol || '');
@@ -166,7 +166,7 @@ function Tokens() {
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <Link
-                                to={`/tokens/${encodeURIComponent(id)}`}
+                                to={`/tokens/${encodeURIComponent(id)}` as any}
                                 className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline truncate"
                                 title={id}
                               >
@@ -209,7 +209,7 @@ function Tokens() {
         </div>
 
         <div className="p-4 border-t border-zinc-200 dark:border-white/5">
-          <Pagination currentPage={page} onPageChange={setPage} hasNext={hasNext} />
+          <Pagination currentPage={page ?? 1} onPageChange={setPage} hasNext={hasNext} />
         </div>
       </div>
     </div>

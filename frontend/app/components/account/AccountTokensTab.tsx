@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { Coins, Filter } from 'lucide-react';
 import { VerifiedBadge } from '../ui/VerifiedBadge';
 import type { FTVaultInfo } from '../../../cadence/cadence.gen';
-import { normalizeAddress, formatShort, getTokenLogoURL } from './accountUtils';
+import { normalizeAddress, getTokenLogoURL } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
 import { EVMBridgeBadge } from '../ui/EVMBridgeBadge';
 import { motion, AnimatePresence } from 'framer-motion';

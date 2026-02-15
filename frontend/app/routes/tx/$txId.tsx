@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1TransactionById } from '../../api/gen/find';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
@@ -13,8 +13,8 @@ import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/
 import { useTheme } from '../../contexts/ThemeContext';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import DecryptedText from '../../components/ui/DecryptedText';
-import { deriveActivityType, TokenIcon, formatTokenName, extractLogoUrl, buildSummaryLine } from '../../components/TransactionRow';
-import { normalizeAddress, formatShort } from '../../components/account/accountUtils';
+import { deriveActivityType, TokenIcon, formatTokenName, buildSummaryLine } from '../../components/TransactionRow';
+import { formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
 import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
@@ -79,7 +79,7 @@ function TokenBubble({ logo, symbol, size = 32 }: { logo?: string; symbol?: stri
     );
 }
 
-function FlowRow({ from, to, amount, symbol, logo, badge, formatAddr }: {
+function FlowRow({ from, to, amount, symbol, logo, badge, formatAddr: _formatAddr }: {
     from?: string; to?: string; amount?: string | number; symbol?: string; logo?: string; badge?: React.ReactNode;
     formatAddr: (a: string) => string;
 }) {
@@ -115,7 +115,7 @@ function FlowRow({ from, to, amount, symbol, logo, badge, formatAddr }: {
     );
 }
 
-function TransactionSummaryCard({ transaction, formatAddress }: { transaction: any; formatAddress: (addr: string) => string }) {
+function TransactionSummaryCard({ transaction, formatAddress: _formatAddress }: { transaction: any; formatAddress: (addr: string) => string }) {
     const activity = deriveActivityType(transaction);
     const summaryLine = buildSummaryLine(transaction);
     const hasFT = transaction.ft_transfers?.length > 0;
@@ -379,7 +379,7 @@ function TransactionDetail() {
     const switchTab = (tab: string) => {
         setActiveTab(tab);
         navigate({
-            search: (prev: any) => ({ ...prev, tab: tab === defaultTab ? undefined : tab }),
+            search: ((prev: any) => ({ ...prev, tab: tab === defaultTab ? undefined : tab })) as any,
             replace: true,
         });
     };
@@ -406,7 +406,7 @@ function TransactionDetail() {
         return data;
     };
 
-    const formatAddress = (addr) => {
+    const formatAddress = (addr: any) => {
         if (!addr) return 'Unknown';
         let formatted = addr.toLowerCase();
         if (!formatted.startsWith('0x')) {
@@ -571,7 +571,7 @@ function TransactionDetail() {
                                     </div>
                                     {transaction.authorizers && transaction.authorizers.length > 0 ? (
                                         <div className="flex flex-col gap-1.5">
-                                            {transaction.authorizers.map((auth, idx) => (
+                                            {transaction.authorizers.map((auth: any, idx: number) => (
                                                 <div key={`${auth}-${idx}`} className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-2.5 hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm flex items-center gap-1 group">
                                                     <AddressLink address={formatAddress(auth)} prefixLen={20} suffixLen={0} className="text-xs" />
                                                     <CopyButton
@@ -1059,7 +1059,7 @@ function TransactionDetail() {
                         {activeTab === 'events' && (
                             <div className="space-y-6">
                                 {transaction.events && transaction.events.length > 0 ? (
-                                    transaction.events.map((event, idx) => (
+                                    transaction.events.map((event: any, idx: number) => (
                                         <div key={idx} className="relative pl-6 border-l border-zinc-200 dark:border-white/5 hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 transition-all group/event">
                                             <div className="absolute left-0 top-0 -translate-x-1/2 w-2 h-2 bg-nothing-green-dark/20 dark:bg-nothing-green/20 border border-nothing-green-dark/40 dark:border-nothing-green/40 rounded-full group-hover/event:bg-nothing-green-dark dark:group-hover/event:bg-nothing-green group-hover/event:scale-125 transition-all"></div>
 

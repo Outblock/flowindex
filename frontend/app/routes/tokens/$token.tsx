@@ -18,7 +18,7 @@ interface TokenSearch {
 
 export const Route = createFileRoute('/tokens/$token')({
   component: TokenDetail,
-  loader: async ({ params, location }) => {
+  loader: async ({ params, location }: any) => {
     const token = params.token;
     const sp = new URLSearchParams(location?.search ?? '');
     const holdersPage = Number(sp.get('holdersPage') || '1') || 1;
@@ -87,7 +87,7 @@ function TokenDetailInner() {
   const [isLoading, setIsLoading] = useState(false);
   const lastKeyRef = useRef<string>('');
 
-  const normalizeHex = (value) => {
+  const normalizeHex = (value: any) => {
     if (!value) return '';
     const lower = String(value).toLowerCase();
     return lower.startsWith('0x') ? lower : `0x${lower}`;
@@ -98,7 +98,7 @@ function TokenDetailInner() {
   const symbol = String(token?.symbol || '');
   // decimals/updatedAt are not very meaningful for most users; we prioritize holder count instead.
 
-  const sp = new URLSearchParams(location?.search ?? '');
+  const sp = new URLSearchParams(location?.search as string ?? '');
   const holdersPageFromUrl = Number(sp.get('holdersPage') || holdersPage || 1) || 1;
   const transfersPageFromUrl = Number(sp.get('transfersPage') || transfersPage || 1) || 1;
 
@@ -256,7 +256,7 @@ function TokenDetailInner() {
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {holdersState.map((h) => {
+                  {holdersState.map((h: any) => {
                     const a = normalizeHex(h?.address);
                     const bal = Math.max(Number(h?.balance || 0), 0);
                     return (
@@ -313,7 +313,7 @@ function TokenDetailInner() {
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {transfersState.map((t) => {
+                  {transfersState.map((t: any) => {
                     const tx = String(t?.transaction_hash || '');
                     const from = normalizeHex(t?.sender);
                     const to = normalizeHex(t?.receiver);
@@ -328,7 +328,7 @@ function TokenDetailInner() {
                       >
                         <td className="p-4">
                           <div className="flex items-center gap-2">
-                            <Link to={`/tx/${normalizeHex(tx)}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
+                            <Link to={`/tx/${normalizeHex(tx)}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
                               {normalizeHex(tx).slice(0, 18)}...
                             </Link>
                             <CopyButton

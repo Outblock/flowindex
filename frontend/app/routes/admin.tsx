@@ -629,7 +629,7 @@ function ScriptTemplatesPanel({ token }: { token: string }) {
       </div>
 
       {loaded && items.length === 0 && (
-        <p className="text-sm text-zinc-500 font-mono text-center py-8">No script templates found. Click "Refresh" to populate.</p>
+        <p className="text-sm text-zinc-500 font-mono text-center py-8">No script templates found. Click &quot;Refresh&quot; to populate.</p>
       )}
       {items.map((item) => (
         <ScriptTemplateRow key={item.script_hash} item={item} token={token} />

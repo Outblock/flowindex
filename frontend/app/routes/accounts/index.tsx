@@ -36,7 +36,7 @@ export const Route = createFileRoute('/accounts/')({
     loaderDeps: ({ search: { page, tab, sort_by } }) => ({ page, tab, sort_by }),
     loader: async ({ deps: { page, tab, sort_by } }) => {
         const limit = 20;
-        const offset = (page - 1) * limit;
+        const offset = ((page || 1) - 1) * limit;
         try {
             await ensureHeyApiConfigured();
             if (tab === 'accounts') {
@@ -85,7 +85,7 @@ function Accounts() {
     };
 
     const limit = 20;
-    const offset = (page - 1) * limit;
+    const offset = ((page || 1) - 1) * limit;
     const totalCount = Number(meta?.count || 0);
     const hasNext = totalCount > 0 ? offset + limit < totalCount : accounts.length === limit;
 
@@ -179,7 +179,7 @@ function Accounts() {
 }
 
 // ─── All Accounts Tab ────────────────────────────────────────────────
-function AllAccountsTab({ accounts, meta, page, sortBy, totalCount, hasNext, nowTick, normalizeHex, onSortChange, onPageChange }: any) {
+function AllAccountsTab({ accounts, meta: _meta, page, sortBy, totalCount, hasNext, nowTick, normalizeHex, onSortChange, onPageChange }: any) {
     return (
         <>
             {/* Sort Pills + Stats */}
@@ -289,7 +289,7 @@ function AllAccountsTab({ accounts, meta, page, sortBy, totalCount, hasNext, now
 function TopTokenHoldersTab({ token, onTokenChange, page, onPageChange, normalizeHex }: any) {
     const [ftTokens, setFtTokens] = useState<any[]>([]);
     const [holders, setHolders] = useState<any[]>([]);
-    const [holdersMeta, setHoldersMeta] = useState<any>(null);
+    const [_holdersMeta, setHoldersMeta] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [tokenMeta, setTokenMeta] = useState<any>(null);
 
@@ -481,7 +481,6 @@ function TopNFTCollectorsTab({ collection, onCollectionChange, page, onPageChang
 
     const hasNext = owners.length === limit;
     const totalNFTs = ownersMeta?.total_nfts || 0;
-    const collectionName = activeCollection?.split('.').pop() || '';
 
     return (
         <>

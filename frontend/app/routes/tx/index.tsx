@@ -26,7 +26,7 @@ export const Route = createFileRoute('/tx/')({
                 fetchStatus()
             ]);
             const items = transactionsRes.data?.data ?? [];
-            return { initialTxs: Array.isArray(items) ? items : [], statusRes };
+            return { initialTxs: Array.isArray(items) ? items : [], statusRes } as any;
         } catch (e) {
             console.error("Failed to load transactions", e);
             return { initialTxs: [], statusRes: null };
@@ -57,7 +57,7 @@ function Transactions() {
     const [showFilters, setShowFilters] = useState(false);
     const [activeTypeFilter, setActiveTypeFilter] = useState('');
 
-    const { isConnected } = useWebSocketStatus();
+    const { isConnected: _isConnected } = useWebSocketStatus();
     const { lastMessage } = useWebSocketMessages();
 
     // ── Fetch transactions with filters ──

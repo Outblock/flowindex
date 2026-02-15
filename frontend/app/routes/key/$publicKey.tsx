@@ -23,7 +23,7 @@ export const Route = createFileRoute('/key/$publicKey')({
 })
 
 function KeySearchResults() {
-    const { keys: initialKeys, meta: initialMeta, error: initialError } = Route.useLoaderData();
+    const { keys: initialKeys, error: initialError } = Route.useLoaderData();
     const { publicKey } = Route.useParams();
     const [keys, setKeys] = useState<any[]>(initialKeys);
     const [error, setError] = useState<string | null>(initialError);

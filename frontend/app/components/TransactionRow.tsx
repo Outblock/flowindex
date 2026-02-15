@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Loader2, Globe, Flame, Droplets, CircleDollarSign, Coins } from 'lucide-react';
-import { normalizeAddress, formatShort } from './account/accountUtils';
+import { formatShort } from './account/accountUtils';
 import { AddressLink } from './AddressLink';
 import { formatRelativeTime } from '../lib/time';
 import { ensureHeyApiConfigured } from '../api/heyapi';
@@ -53,7 +53,6 @@ export function deriveActivityType(tx: any): { type: string; label: string; colo
     const summary: TransferSummary | undefined = tx.transfer_summary;
 
     const tagsLower = tags.map(t => t.toLowerCase());
-    const importsLower = imports.map(c => c.toLowerCase());
 
     if (tagsLower.some(t => t.includes('account_created'))) {
         return { type: 'account', label: 'New Account', color: 'text-cyan-600 dark:text-cyan-400', bgColor: 'border-cyan-300 dark:border-cyan-500/30 bg-cyan-50 dark:bg-cyan-500/10' };
@@ -248,7 +247,7 @@ const detailCache = new Map<string, any>();
 
 // --- Expanded Detail Panel with lazy fetch ---
 
-export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; address: string; expanded: boolean }) {
+export function ExpandedTransferDetails({ tx, address: _address, expanded }: { tx: any; address: string; expanded: boolean }) {
     const [detail, setDetail] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(false);

@@ -22,7 +22,7 @@ export const Route = createFileRoute('/nfts/')({
   loaderDeps: ({ search: { page } }) => ({ page }),
   loader: async ({ deps: { page } }) => {
     const limit = 25;
-    const offset = (page - 1) * limit;
+    const offset = ((page ?? 1) - 1) * limit;
     try {
       await ensureHeyApiConfigured();
       const res = await getFlowV1Nft({ query: { limit, offset } });
@@ -89,7 +89,7 @@ function NFTs() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const limit = 25;
-  const offset = (page - 1) * limit;
+  const offset = ((page ?? 1) - 1) * limit;
   const totalCount = Number(meta?.count || 0);
   const hasNext = totalCount > 0 ? offset + limit < totalCount : collections.length === limit;
 
@@ -191,7 +191,7 @@ function NFTs() {
                     transition={{ delay: i * 0.02 }}
                   >
                     <Link
-                      to={`/nfts/${encodeURIComponent(id)}`}
+                      to={`/nfts/${encodeURIComponent(id)}` as any}
                       className="block bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20 transition-all overflow-hidden group"
                     >
                       <div className="overflow-hidden">
@@ -264,7 +264,7 @@ function NFTs() {
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <Link
-                                    to={`/nfts/${encodeURIComponent(id)}`}
+                                    to={`/nfts/${encodeURIComponent(id)}` as any}
                                     className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline truncate"
                                     title={id}
                                   >
@@ -307,7 +307,7 @@ function NFTs() {
         )}
 
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4">
-          <Pagination currentPage={page} onPageChange={setPage} hasNext={hasNext} />
+          <Pagination currentPage={page ?? 1} onPageChange={setPage} hasNext={hasNext} />
         </div>
       </div>
     </div>

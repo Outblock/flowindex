@@ -4,7 +4,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 
 // Mock data generator for the sparkline (since we only have current price)
 // In a real app, we'd fetch historical price data
-const generateSparkline = (currentPrice) => {
+const generateSparkline = (currentPrice: number) => {
     // IMPORTANT: Must be deterministic for SSR hydration.
     // Avoid Math.random() or Date-based values here.
     const base = Number.isFinite(currentPrice) ? currentPrice : 0;
@@ -22,7 +22,7 @@ const generateSparkline = (currentPrice) => {
     return data;
 };
 
-export const FlowPriceChart = memo(function FlowPriceChart({ data }) {
+export const FlowPriceChart = memo(function FlowPriceChart({ data }: { data: { price: number; price_change_24h: number; market_cap: number } | null }) {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {

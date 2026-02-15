@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Activity, TrendingUp, Coins, Image } from 'lucide-react';
 import { SafeNumberFlow } from '../components/SafeNumberFlow';
 import { ensureHeyApiConfigured, fetchStatus, fetchNetworkStats } from '../api/heyapi';
-import { getFlowV1Block, getFlowV1Transaction, getStatusV1Stat, getFlowV1Ft, getFlowV1Nft } from '../api/gen/find';
+import { getFlowV1Block, getFlowV1Transaction, getFlowV1Ft, getFlowV1Nft } from '../api/gen/find';
 import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
 import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
@@ -97,7 +97,7 @@ function Home() {
     const loadTokens = async () => {
         try {
             await ensureHeyApiConfigured();
-            const res = await getFlowV1Ft({ query: { limit: 5, offset: 0, sort: 'trending' } });
+            const res = await getFlowV1Ft({ query: { limit: 5, offset: 0, sort: 'trending' } as any });
             setTokens(res.data?.data ?? []);
         } catch (err) {
             console.error("Failed to load tokens", err);
@@ -108,7 +108,7 @@ function Home() {
     const loadNftCollections = async () => {
         try {
             await ensureHeyApiConfigured();
-            const res = await getFlowV1Nft({ query: { limit: 5, offset: 0, sort: 'trending' } });
+            const res = await getFlowV1Nft({ query: { limit: 5, offset: 0, sort: 'trending' } as any });
             setNftCollections(res.data?.data ?? []);
         } catch (err) {
             console.error("Failed to load NFT collections", err);
@@ -260,7 +260,7 @@ function Home() {
             await ensureHeyApiConfigured();
             const res = await getFlowV1Transaction({ query: { limit: 50, offset: 0 } });
             const items = res?.data?.data ?? [];
-            const transformedTxs = Array.isArray(items) ? items.map(tx => ({
+            const transformedTxs = Array.isArray(items) ? items.map((tx: any) => ({
                 ...tx,
                 type: tx.type || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
                 payer: tx.payer_address || tx.proposer_address,
@@ -320,7 +320,7 @@ function Home() {
                 newBlockExpiryRef.current.set(newBlock.height, Date.now() + 3000);
                 setHighlightNow(Date.now());
             }
-            setStatusRaw(prev => prev ? {
+            setStatusRaw((prev: any) => prev ? {
                 ...prev,
                 latest_height: Math.max(prev.latest_height || 0, newBlock.height),
                 max_height: Math.max(prev.max_height || 0, newBlock.height)
@@ -351,7 +351,7 @@ function Home() {
                     newTxExpiryRef.current.set(id, Date.now() + 3000);
                     setHighlightNow(Date.now());
                 }
-                setStatusRaw(prev => prev ? {
+                setStatusRaw((prev: any) => prev ? {
                     ...prev,
                     total_transactions: (prev.total_transactions || 0) + 1
                 } : prev);
@@ -453,7 +453,7 @@ function Home() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.5, delay: 0.1 }}
                         >
-                            <FlowPriceChart data={networkStats} />
+                            <FlowPriceChart {...{ data: networkStats } as any} />
                         </motion.div>
 
                         {/* 2. Epoch Progress */}
@@ -662,7 +662,7 @@ function Home() {
                                     {(tokens || []).slice(0, 5).map((token: any) => (
                                         <Link
                                             key={token.id}
-                                            to={`/tokens/${token.id}`}
+                                            to={`/tokens/${token.id}` as any}
                                             className="flex items-center space-x-3 px-3 py-3 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors duration-150 border-b border-zinc-100 dark:border-white/5 last:border-b-0"
                                         >
                                             <div className="relative w-6 h-6 flex-shrink-0 bg-zinc-100 dark:bg-white/10 flex items-center justify-center overflow-hidden">
@@ -731,7 +731,7 @@ function Home() {
                                     {(nftCollections || []).slice(0, 5).map((nft: any) => (
                                         <Link
                                             key={nft.id}
-                                            to={`/nfts/${nft.id}`}
+                                            to={`/nfts/${nft.id}` as any}
                                             className="flex items-center space-x-3 px-3 py-3 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors duration-150 border-b border-zinc-100 dark:border-white/5 last:border-b-0"
                                         >
                                             <div className="relative w-6 h-6 flex-shrink-0 bg-zinc-100 dark:bg-white/10 flex items-center justify-center overflow-hidden">
@@ -813,7 +813,7 @@ function Home() {
                                             transition={{ type: "spring", stiffness: 300, damping: 25 }}
                                         >
                                             <Link
-                                                to={`/blocks/${block.height}`}
+                                                to={`/blocks/${block.height}` as any}
                                                 className={`block border p-4 h-20 transition-colors duration-200 hover:bg-zinc-50 dark:hover:bg-white/5 hover:border-zinc-300 dark:hover:border-white/20 relative overflow-hidden ${isNew
                                                     ? 'bg-nothing-green/10 border-nothing-green/50'
                                                     : 'bg-white dark:bg-black/20 border-zinc-100 dark:border-white/5'
@@ -880,7 +880,7 @@ function Home() {
                                     const txIdShort = formatMiddle(txIdFull, 12, 8);
 
                                     // Helper to determine Transaction Type & Details
-                                    const getTxMetadata = (tx) => {
+                                    const getTxMetadata = (tx: any) => {
                                         let type = 'Interaction';
                                         let transferInfo = null;
 
@@ -890,7 +890,7 @@ function Home() {
                                                 if (evt.type.includes('TokensDeposited')) {
                                                     type = 'Transfer';
                                                     if (evt.values?.value?.fields) {
-                                                        const amount = evt.values.value.fields.find(f => f.name === 'amount')?.value?.value;
+                                                        const amount = evt.values.value.fields.find((f: any) => f.name === 'amount')?.value?.value;
                                                         if (amount) transferInfo = `${parseFloat(amount).toFixed(2)} FLOW`;
                                                     }
                                                 } else if (evt.type.includes('AccountCreated')) {
@@ -923,7 +923,7 @@ function Home() {
                                             transition={{ type: "spring", stiffness: 300, damping: 25 }}
                                         >
                                             <Link
-                                                to={`/tx/${tx.id}`}
+                                                to={`/tx/${tx.id}` as any}
                                                 className={`block border p-4 h-20 transition-colors duration-200 hover:bg-zinc-50 dark:hover:bg-white/5 hover:border-zinc-300 dark:hover:border-white/20 relative overflow-hidden ${isNew
                                                     ? 'bg-white/10 border-white/40' // Keep new highlight distinct or adjust
                                                     : 'bg-white dark:bg-black/20 border-zinc-100 dark:border-white/5'

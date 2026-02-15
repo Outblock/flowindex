@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-export function Pagination({ currentPage, onPageChange, hasNext }) {
+export function Pagination({ currentPage, onPageChange, hasNext }: { currentPage: number; onPageChange: (page: number) => void; hasNext: boolean }) {
     return (
         <div className="flex items-center justify-center space-x-4 mt-8">
             <button

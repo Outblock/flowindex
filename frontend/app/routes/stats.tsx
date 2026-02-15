@@ -33,7 +33,7 @@ function Stats() {
     const [chunkSize, setChunkSize] = useState(100000);
     const [hoveredChunk, setHoveredChunk] = useState<any>(null);
 
-    const processStatus = useCallback((data) => {
+    const processStatus = useCallback((data: any) => {
         const now = Date.now();
 
         // Calculate History Speed (Backward)
@@ -82,7 +82,7 @@ function Stats() {
         loadStatus();
         const interval = setInterval(loadStatus, 3000);
 
-        let ws;
+        let ws: WebSocket | undefined;
         try {
             const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
             const wsUrl = `${proto}://${window.location.host}/ws/status`;
@@ -153,7 +153,7 @@ function Stats() {
     const historyStatusLabel = !historyEnabled ? 'DISABLED' : (historySpeed > 0 ? 'SYNCING' : 'IDLE');
     const isForwardActive = forwardEnabled && blocksBehind > 0;
     const isHistoryActive = historyEnabled && historySpeed > 0;
-    const formatDuration = (seconds) => {
+    const formatDuration = (seconds: number) => {
         if (!isFinite(seconds) || seconds === 0) return 'N/A';
         const d = Math.floor(seconds / (3600 * 24));
         const h = Math.floor((seconds % (3600 * 24)) / 3600);
@@ -179,7 +179,7 @@ function Stats() {
         return result;
     }, [status, chunkSize]); // Keep chunkSize dependency to trigger update
 
-    const getChunkStatus = (chunk) => {
+    const getChunkStatus = (chunk: any) => {
         if (!status) return 'unknown';
         const { min_height = 0, max_height = 0 } = status;
         const chunkStart = chunk.start;

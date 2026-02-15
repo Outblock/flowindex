@@ -1,4 +1,4 @@
-export function formatRelativeTime(value, nowOverride) {
+export function formatRelativeTime(value: string | number | Date | null | undefined, nowOverride?: number) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -26,7 +26,7 @@ export function formatRelativeTime(value, nowOverride) {
   return past ? `${label} ago` : `in ${label}`;
 }
 
-export function formatAbsoluteTime(value) {
+export function formatAbsoluteTime(value: string | number | Date | null | undefined) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';

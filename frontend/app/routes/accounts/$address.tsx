@@ -46,7 +46,7 @@ export const Route = createFileRoute('/accounts/$address')({
             subtab: VALID_SUBTABS.includes(subtab as AccountSubTab) ? (subtab as AccountSubTab) : undefined,
         };
     },
-    loader: async ({ params, search }) => {
+    loader: async ({ params, search }: any) => {
         try {
             const address = params.address;
             const normalized = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;

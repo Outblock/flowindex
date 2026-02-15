@@ -28,7 +28,7 @@ export const Route = createFileRoute('/contracts/')({
     loaderDeps: ({ search: { page, query } }) => ({ page, query }),
     loader: async ({ deps: { page, query } }) => {
         const limit = 25;
-        const offset = (page - 1) * limit;
+        const offset = ((page || 1) - 1) * limit;
         try {
             await ensureHeyApiConfigured();
             const res = await getFlowV1Contract({ query: { limit, offset, identifier: query } });
@@ -59,17 +59,17 @@ function Contracts() {
     const nowTick = useTimeTicker(20000);
 
     const limit = 25;
-    const offset = (page - 1) * limit;
+    const offset = ((page || 1) - 1) * limit;
     const totalCount = Number(meta?.count || 0);
     const hasNext = totalCount > 0 ? offset + limit < totalCount : contracts.length === limit;
 
-    const normalizeHex = (value) => {
+    const normalizeHex = (value: any) => {
         if (!value) return '';
         const lower = String(value).toLowerCase();
         return lower.startsWith('0x') ? lower : `0x${lower}`;
     };
 
-    const submitQuery = (e) => {
+    const submitQuery = (e: any) => {
         e.preventDefault();
         const next = String(searchQuery || '').trim();
         navigate({ search: { page: 1, query: next } });
@@ -180,7 +180,7 @@ function Contracts() {
                         </thead>
                         <tbody>
                             <AnimatePresence mode="popLayout">
-                                {contracts.map((c) => {
+                                {contracts.map((c: any) => {
                                     const identifier = String(c?.identifier || c?.id || '');
                                     const addr = normalizeHex(c?.address);
                                     const validFrom = Number(c?.valid_from || 0);
@@ -199,7 +199,7 @@ function Contracts() {
                                         >
                                             <td className="p-4">
                                                 <Link
-                                                    to={`/contracts/${identifier}`}
+                                                    to={`/contracts/${identifier}` as any}
                                                     className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
                                                     title={identifier}
                                                 >
@@ -239,7 +239,7 @@ function Contracts() {
 
                 <div className="p-4 border-t border-zinc-200 dark:border-white/5">
                     <Pagination
-                        currentPage={page}
+                        currentPage={page ?? 1}
                         onPageChange={setPage}
                         hasNext={hasNext}
                     />

@@ -113,7 +113,7 @@ function ScheduledTransactions() {
                                 <div className="col-span-4 flex items-center gap-2">
                                     <Clock className="h-4 w-4 text-indigo-500 flex-shrink-0" />
                                     <Link
-                                        to={`/tx/${txId.replace('0x', '')}`}
+                                        to={`/tx/${txId.replace('0x', '')}` as any}
                                         className="text-nothing-green-dark dark:text-nothing-green hover:underline text-xs truncate"
                                     >
                                         {formatMiddle(txId, 14, 10)}
@@ -123,7 +123,7 @@ function ScheduledTransactions() {
                                 <div className="col-span-2">
                                     {blockHeight ? (
                                         <Link
-                                            to={`/blocks/${blockHeight}`}
+                                            to={`/blocks/${blockHeight}` as any}
                                             className="text-xs text-nothing-green-dark dark:text-nothing-green hover:underline"
                                         >
                                             #{blockHeight}

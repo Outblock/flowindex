@@ -11,7 +11,7 @@ import { ArrowLeft, Box, Code, FileText, Layers, Activity, GitCompare, ChevronDo
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
-import { normalizeAddress, formatShort } from '../../components/account/accountUtils';
+import { formatShort } from '../../components/account/accountUtils';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { diffLines, type Change } from 'diff';
 
@@ -294,7 +294,7 @@ function ContractDetail() {
                                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                                     <Hash className="h-3 w-3" /> Valid From
                                 </p>
-                                <Link to={`/blocks/${validFrom}`} className="text-sm text-zinc-900 dark:text-white hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors font-mono">
+                                <Link to={`/blocks/${validFrom}` as any} className="text-sm text-zinc-900 dark:text-white hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors font-mono">
                                     {validFrom.toLocaleString()}
                                 </Link>
                             </div>

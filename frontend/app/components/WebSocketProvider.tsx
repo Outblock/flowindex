@@ -80,7 +80,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         };
     }, [connect]);
 
-    const subscribe = useCallback((listener) => {
+    const subscribe = useCallback((listener: (data: any) => void) => {
         listenersRef.current.add(listener);
         return () => {
             listenersRef.current.delete(listener);

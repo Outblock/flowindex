@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -158,7 +158,7 @@ function NFTItemCard({ item, collectionVideoSupported, onClick }: { item: any; c
               src={thumb}
               alt={name}
               className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${hovered && hasVideo ? 'opacity-0' : 'opacity-100'} transition-opacity`}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling && ((e.target as HTMLImageElement).nextElementSibling as HTMLElement).classList.remove('hidden'); }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; if ((e.target as HTMLImageElement).nextElementSibling) { ((e.target as HTMLImageElement).nextElementSibling as HTMLElement).classList.remove('hidden'); } }}
             />
           ) : null}
           <div className={`flex items-center justify-center w-full h-full text-2xl font-bold text-zinc-300 dark:text-zinc-600 ${thumb ? 'hidden' : ''}`}>
@@ -328,7 +328,6 @@ function NFTCollectionDetailInner() {
   // Check if this collection supports video previews on individual items
   const collectionVideoSupported = useMemo(() => !!getCollectionPreviewVideo(id), [id]);
 
-  const isLoading = activeTab === 'nfts' ? itemsLoading : activeTab === 'owners' ? ownersLoading : transfersLoading;
 
   const hasNext = (() => {
     if (activeTab === 'nfts') return itemsMeta?.has_more === true;
@@ -602,7 +601,7 @@ function NFTCollectionDetailInner() {
                                   <td className="p-4">
                                     {nftId ? (
                                       <Link
-                                        to={`/nfts/${encodeURIComponent(id)}/item/${encodeURIComponent(nftId)}`}
+                                        to={`/nfts/${encodeURIComponent(id)}/item/${encodeURIComponent(nftId)}` as any}
                                         className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
                                       >
                                         #{nftId}
@@ -623,7 +622,7 @@ function NFTCollectionDetailInner() {
                                   </td>
                                   <td className="p-4">
                                     {tx ? (
-                                      <Link to={`/tx/${normalizeHex(tx)}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
+                                      <Link to={`/tx/${normalizeHex(tx)}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
                                         {normalizeHex(tx).slice(0, 18)}...
                                       </Link>
                                     ) : <span className="text-zinc-500">—</span>}

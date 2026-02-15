@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddressFtTransfer } from '../../api/gen/find';
-import { normalizeAddress, formatShort } from './accountUtils';
+import { normalizeAddress } from './accountUtils';
 import { AddressLink } from '../AddressLink';
 
 interface Props {

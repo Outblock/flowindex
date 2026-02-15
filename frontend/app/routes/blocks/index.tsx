@@ -36,7 +36,6 @@ function Blocks() {
     const [blocks, setBlocks] = useState<any[]>(Array.isArray(blocksRes) ? blocksRes : []);
     const [statusRaw, setStatusRaw] = useState<any>(statusRes);
     const [blockPage, setBlockPage] = useState(page);
-    const [blockCursors, setBlockCursors] = useState<Record<number, string>>({ 1: '' });
     const [blockHasNext, setBlockHasNext] = useState(blocksRes.length >= 20);
     const [newBlockIds, setNewBlockIds] = useState(new Set());
 
@@ -127,7 +126,7 @@ function Blocks() {
                 next.delete(newBlock.height);
                 return next;
             }), 3000);
-            setStatusRaw(prev => prev ? {
+            setStatusRaw((prev: any) => prev ? {
                 ...prev,
                 latest_height: Math.max(prev.latest_height || 0, newBlock.height),
             } : prev);
@@ -239,7 +238,7 @@ function Blocks() {
                                                 }`}
                                         >
                                             <td className="p-4">
-                                                <Link to={`/blocks/${block.height}`} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
+                                                <Link to={`/blocks/${block.height}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
                                                     #{block.height.toLocaleString()}
                                                 </Link>
                                             </td>
