@@ -183,11 +183,9 @@ func (r *Repository) UpsertFTTokens(ctx context.Context, tokens []models.FTToken
 func (r *Repository) UpsertFTHoldingsDelta(ctx context.Context, address, contract, contractName string, delta string, height uint64) error {
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO app.ft_holdings (address, contract_address, contract_name, balance, last_height, updated_at)
-		-- If we start indexing mid-history, some accounts will only have outgoing transfers within the indexed range.
-		-- In that case the true balance is "unknown >= 0"; clamp to 0 to avoid confusing negative balances in the UI.
-		VALUES ($1, $2, $3, GREATEST($4::numeric, 0), $5, NOW())
+		VALUES ($1, $2, $3, $4::numeric, $5, NOW())
 		ON CONFLICT (address, contract_address, contract_name) DO UPDATE SET
-			balance = GREATEST(app.ft_holdings.balance + EXCLUDED.balance, 0),
+			balance = app.ft_holdings.balance + EXCLUDED.balance,
 			last_height = GREATEST(app.ft_holdings.last_height, EXCLUDED.last_height),
 			updated_at = NOW()`,
 		hexToBytes(address), hexToBytes(contract), contractName, delta, height)

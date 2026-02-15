@@ -415,6 +415,31 @@ func (s *Server) handleFlowSearchByPublicKey(w http.ResponseWriter, r *http.Requ
 
 func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Request) {
 	address := normalizeAddr(mux.Vars(r)["address"])
+
+	// Primary: query on-chain via Cadence script for accurate real-time balances.
+	holdings, err := s.queryFTHoldingsOnChain(r.Context(), address)
+	if err != nil {
+		log.Printf("on-chain FT holdings query failed for %s: %v, falling back to DB", address, err)
+		// Fallback to DB if chain query fails.
+		s.handleFlowAccountFTHoldingsFromDB(w, r, address)
+		return
+	}
+
+	out := make([]map[string]interface{}, 0, len(holdings))
+	for _, h := range holdings {
+		token := "A." + h.ContractAddress + "." + h.ContractName
+		out = append(out, map[string]interface{}{
+			"address":    formatAddressV1(address),
+			"token":      token,
+			"balance":    parseFloatOrZero(h.Balance),
+			"percentage": 0,
+		})
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"count": len(out)}, nil)
+}
+
+// handleFlowAccountFTHoldingsFromDB is the DB fallback when on-chain query fails.
+func (s *Server) handleFlowAccountFTHoldingsFromDB(w http.ResponseWriter, r *http.Request, address string) {
 	limit, offset := parseLimitOffset(r)
 	holdings, err := s.repo.ListFTHoldingsByAddress(r.Context(), address, limit, offset)
 	if err != nil {
@@ -428,31 +453,6 @@ func (s *Server) handleFlowAccountFTHoldings(w http.ResponseWriter, r *http.Requ
 		} else {
 			writeAPIError(w, http.StatusInternalServerError, err.Error())
 			return
-		}
-	}
-	if len(holdings) == 0 {
-		// Only fall back to contract heuristics when the derived holdings table is not populated yet.
-		// If holdings exist globally, then this address simply has no positive balances in-range.
-		hasAny, err := s.repo.HasAnyFTHoldings(r.Context())
-		if err != nil {
-			writeAPIError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		if !hasAny {
-			contracts, err := s.repo.ListFTTokenContractsByAddress(r.Context(), address, limit, offset)
-			if err != nil {
-				writeAPIError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			for _, c := range contracts {
-				holdings = append(holdings, models.FTHolding{
-					Address:         address,
-					ContractAddress: c.Address,
-					ContractName:    c.Name,
-					Balance:         "0",
-				})
-			}
-			total = int64(len(holdings))
 		}
 	}
 	out := make([]map[string]interface{}, 0, len(holdings))
