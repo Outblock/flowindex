@@ -562,6 +562,20 @@ func (p *PinnedClient) GetTransactionResult(ctx context.Context, txID flow.Ident
 	return res, nil
 }
 
+// GetTransactionResultByIndex fetches a single transaction result by block ID and index.
+// This is required for system transactions on newer spork nodes that reject requests without a block ID.
+func (p *PinnedClient) GetTransactionResultByIndex(ctx context.Context, blockID flow.Identifier, index uint32) (*flow.TransactionResult, error) {
+	var res *flow.TransactionResult
+	if err := p.withRetry(ctx, func() error {
+		var err error
+		res, err = p.cli.GetTransactionResultByIndex(ctx, blockID, index)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn func() error) error {
 	maxRetries := 5
 	backoff := 500 * time.Millisecond

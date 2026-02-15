@@ -129,11 +129,11 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			if isGRPCMessageTooLarge(err) {
 				log.Printf("[history_ingester] Warn: tx results payload too large for block %s (height=%d), falling back to per-tx calls: %v", block.ID, height, err)
 				results = make([]*flowsdk.TransactionResult, 0, len(txs))
-				for _, tx := range txs {
+				for txIdx, tx := range txs {
 					if tx == nil {
 						continue
 					}
-					r, rErr := pin.GetTransactionResult(ctx, tx.ID())
+					r, rErr := pin.GetTransactionResultByIndex(ctx, block.ID, uint32(txIdx))
 					if rErr != nil {
 						if shouldRepin(rErr) {
 							repinRequested = true
@@ -175,8 +175,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 			res := resByID[txID]
 			if res == nil {
-				// Best-effort fallback (rare): fetch result individually.
-				r, err := pin.GetTransactionResult(ctx, tx.ID())
+				// Best-effort fallback (rare): fetch result individually by block ID + index.
+				// Using GetTransactionResultByIndex because system transactions require a block ID.
+				r, err := pin.GetTransactionResultByIndex(ctx, block.ID, uint32(txIndex))
 				if err != nil {
 					if shouldRepin(err) {
 						// Retry the entire height with a different pin.
