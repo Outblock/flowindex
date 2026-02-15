@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -52,17 +53,35 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 	// UpsertSmartContracts handles code + version; UpsertContractRegistry handles kind/first_seen/last_seen.
 	// Both write to the same unified app.smart_contracts table with complementary ON CONFLICT clauses.
 	contractRegistry := make([]models.SmartContract, 0, len(contracts))
+	var discoveredFTs []models.FTToken
+	var discoveredNFTs []models.NFTCollection
 	for _, c := range contracts {
 		if c.Address == "" || c.Name == "" {
 			continue
 		}
+		kind := classifyContractCode(c.Code)
+		if kind == "" {
+			kind = "CONTRACT"
+		}
 		contractRegistry = append(contractRegistry, models.SmartContract{
 			Address:         c.Address,
 			Name:            c.Name,
-			Kind:            "CONTRACT",
+			Kind:            kind,
 			FirstSeenHeight: c.BlockHeight,
 			LastSeenHeight:  c.BlockHeight,
 		})
+		switch kind {
+		case "FT":
+			discoveredFTs = append(discoveredFTs, models.FTToken{
+				ContractAddress: c.Address,
+				ContractName:    c.Name,
+			})
+		case "NFT":
+			discoveredNFTs = append(discoveredNFTs, models.NFTCollection{
+				ContractAddress: c.Address,
+				ContractName:    c.Name,
+			})
+		}
 	}
 
 	if err := w.repo.UpsertAccountKeys(ctx, accountKeys); err != nil {
@@ -73,6 +92,12 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 	}
 	if err := w.repo.UpsertContractRegistry(ctx, contractRegistry); err != nil {
 		return err
+	}
+	if err := w.repo.UpsertFTTokens(ctx, discoveredFTs); err != nil {
+		return fmt.Errorf("upsert discovered FT tokens: %w", err)
+	}
+	if err := w.repo.UpsertNFTCollections(ctx, discoveredNFTs); err != nil {
+		return fmt.Errorf("upsert discovered NFT collections: %w", err)
 	}
 
 	// Insert contract version records for each add/update event so the versions tab is populated.
@@ -431,4 +456,38 @@ func parseWeightToInt(v interface{}) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// classifyContractCode inspects Cadence source code to determine if the contract
+// implements FungibleToken or NonFungibleToken. Returns "FT", "NFT", or "".
+//
+// Detection: the contract declaration must conform to the interface, e.g.:
+//
+//	access(all) contract FlowToken: FungibleToken {
+//	pub contract SomeNFT: NonFungibleToken {
+//	access(all) contract Foo: FungibleToken, ViewResolver {
+var contractDeclRe = regexp.MustCompile(`(?:access\s*\([^)]*\)|pub)\s+contract\s+\w+\s*:\s*([^{]+)`)
+
+func classifyContractCode(code string) string {
+	if code == "" {
+		return ""
+	}
+	m := contractDeclRe.FindStringSubmatch(code)
+	if m == nil {
+		return ""
+	}
+	conformances := m[1]
+	for _, part := range strings.Split(conformances, ",") {
+		name := strings.TrimSpace(part)
+		if dot := strings.IndexByte(name, '.'); dot > 0 {
+			name = name[:dot]
+		}
+		switch name {
+		case "FungibleToken":
+			return "FT"
+		case "NonFungibleToken":
+			return "NFT"
+		}
+	}
+	return ""
 }

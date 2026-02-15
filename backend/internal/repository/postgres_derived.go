@@ -217,7 +217,10 @@ func (r *Repository) UpsertContractRegistry(ctx context.Context, rows []models.S
 			)
 			VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 			ON CONFLICT (address, name) DO UPDATE SET
-				kind = COALESCE(app.smart_contracts.kind, EXCLUDED.kind),
+				kind = CASE
+					WHEN EXCLUDED.kind IN ('FT','NFT') THEN EXCLUDED.kind
+					ELSE COALESCE(app.smart_contracts.kind, EXCLUDED.kind)
+				END,
 				first_seen_height = LEAST(COALESCE(app.smart_contracts.first_seen_height, EXCLUDED.first_seen_height), EXCLUDED.first_seen_height),
 				last_seen_height = GREATEST(COALESCE(app.smart_contracts.last_seen_height, EXCLUDED.last_seen_height), EXCLUDED.last_seen_height),
 				updated_at = NOW()`,
