@@ -135,6 +135,17 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 	for name := range acc.Contracts {
 		contractNames = append(contractNames, name)
 	}
+	// Opportunistically upsert contracts so contract search works
+	if s.repo != nil && len(contractNames) > 0 {
+		contracts := make([]models.SmartContract, 0, len(contractNames))
+		for _, name := range contractNames {
+			contracts = append(contracts, models.SmartContract{
+				Address: addrHex,
+				Name:    name,
+			})
+		}
+		_ = s.repo.UpsertSmartContracts(r.Context(), contracts)
+	}
 
 	storageUsed := uint64(0)
 	storageCapacity := uint64(0)

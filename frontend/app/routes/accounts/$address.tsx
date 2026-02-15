@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import Avatar from 'boring-avatars';
 import { colorsFromAddress } from '../../components/AddressLink';
-import { normalizeAddress } from '../../components/account/accountUtils';
+import { normalizeAddress, backfillCOAMapping } from '../../components/account/accountUtils';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import type { StakingInfo, StorageInfo } from '../../../cadence/cadence.gen';
 import { AccountActivityTab, loadTokenMetaCache } from '../../components/account/AccountActivityTab';
@@ -198,6 +198,10 @@ function AccountDetail() {
                     staking: stakingRes?.stakingInfo || undefined,
                     coaAddress: accountInfoRes?.coaAddress || undefined,
                 });
+                // Backfill COA mapping so future COA address visits redirect
+                if (accountInfoRes?.coaAddress) {
+                    backfillCOAMapping(normalizedAddress, accountInfoRes.coaAddress);
+                }
             } catch (e) {
                 console.error('Failed to load on-chain data', e);
             }

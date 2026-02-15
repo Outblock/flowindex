@@ -193,6 +193,24 @@ export function toBackfillItem(nft: any): BackfillItem | null {
     };
 }
 
+/**
+ * Fire-and-forget: send COA→Flow mapping to backend for caching.
+ * Never throws — errors are silently logged.
+ */
+export async function backfillCOAMapping(flowAddress: string, coaAddress: string): Promise<void> {
+    try {
+        const { resolveApiBaseUrl } = await import('../../api');
+        const base = await resolveApiBaseUrl();
+        await fetch(`${base}/flow/coa/backfill`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ flow_address: flowAddress, coa_address: coaAddress }),
+        });
+    } catch (e) {
+        console.debug('[coa_backfill] failed:', e);
+    }
+}
+
 /** Resolve IPFS links to gateway */
 export const resolveIPFS = (url: string): string => {
     if (!url) return '';
