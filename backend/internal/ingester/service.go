@@ -219,6 +219,7 @@ func (s *Service) process(ctx context.Context) error {
 	}
 
 	// 6. Execute Batch Fetch
+	fetchStart := time.Now()
 	results, err := s.fetchBatchParallel(ctx, startHeight, endHeight)
 	if err != nil {
 		// Handle spork boundary errors in backward mode:
@@ -268,8 +269,16 @@ func (s *Service) process(ctx context.Context) error {
 	}
 
 	// 8. Save Batch
+	fetchDuration := time.Since(fetchStart)
+	saveStart := time.Now()
 	if err := s.saveBatch(ctx, results, checkpointHeight); err != nil {
 		return err
+	}
+	saveDuration := time.Since(saveStart)
+
+	if s.config.Mode == "backward" {
+		log.Printf("[History] Batch %d->%d: fetch=%s save=%s total=%s",
+			endHeight, startHeight, fetchDuration.Round(time.Millisecond), saveDuration.Round(time.Millisecond), (fetchDuration + saveDuration).Round(time.Millisecond))
 	}
 
 	return nil
