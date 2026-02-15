@@ -2,6 +2,7 @@ package flow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -465,6 +466,12 @@ func (p *PinnedClient) GetBlockByHeight(ctx context.Context, height uint64) (*fl
 		block, err = p.cli.GetBlockByHeight(ctx, height)
 		return err
 	}); err != nil {
+		// If SporkRootNotFoundError with RootHeight=0, the caller knows the actual height.
+		var sporkErr *SporkRootNotFoundError
+		if errors.As(err, &sporkErr) && sporkErr.RootHeight == 0 {
+			p.parent.markMinHeight(p.idx, height+1)
+			sporkErr.RootHeight = height + 1
+		}
 		return nil, nil, fmt.Errorf("failed to get block by height %d: %w", height, err)
 	}
 
@@ -493,6 +500,11 @@ func (p *PinnedClient) GetBlockHeaderByHeight(ctx context.Context, height uint64
 		block, err = p.cli.GetBlockByHeight(ctx, height)
 		return err
 	}); err != nil {
+		var sporkErr *SporkRootNotFoundError
+		if errors.As(err, &sporkErr) && sporkErr.RootHeight == 0 {
+			p.parent.markMinHeight(p.idx, height+1)
+			sporkErr.RootHeight = height + 1
+		}
 		return nil, fmt.Errorf("failed to get block by height %d: %w", height, err)
 	}
 	return block, nil
@@ -590,6 +602,12 @@ func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn f
 			return &SporkRootNotFoundError{Node: node, RootHeight: root, Err: err}
 		}
 
+		// Generic spork boundary: NotFound with "key not found" but no height in the message.
+		// Return with RootHeight=0 so the caller (who knows the requested height) can markMinHeight.
+		if isSporkBoundaryError(err) {
+			return &SporkRootNotFoundError{Node: node, RootHeight: 0, Err: err}
+		}
+
 		st, ok := status.FromError(err)
 		if !ok {
 			return err // Not a gRPC error, don't retry
@@ -649,6 +667,20 @@ func extractSporkRootHeight(err error) (uint64, bool) {
 	}
 
 	return 0, false
+}
+
+// isSporkBoundaryError returns true when a gRPC error looks like a spork boundary
+// but extractSporkRootHeight could not parse a height from it.
+func isSporkBoundaryError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	st, ok := status.FromError(err)
+	if ok && st.Code() == codes.NotFound && strings.Contains(msg, "key not found") {
+		return true
+	}
+	return false
 }
 
 func parseLeadingUint64(s string) (uint64, bool) {
