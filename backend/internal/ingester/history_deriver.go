@@ -142,6 +142,7 @@ func (h *HistoryDeriver) processNextChunk(ctx context.Context) (bool, error) {
 		scanTo = ceiling
 	}
 
+	var anyFailed bool
 	for _, p := range h.processors {
 		if ctx.Err() != nil {
 			return false, ctx.Err()
@@ -150,13 +151,15 @@ func (h *HistoryDeriver) processNextChunk(ctx context.Context) (bool, error) {
 		if err := p.ProcessRange(ctx, scanFrom, scanTo); err != nil {
 			log.Printf("[history_deriver] %s range [%d,%d) failed: %v", p.Name(), scanFrom, scanTo, err)
 			_ = h.repo.LogIndexingError(ctx, p.Name(), scanFrom, "", "HISTORY_DERIVER_ERROR", err.Error(), nil)
-			// Don't advance checkpoint; retry on next tick.
-			return true, nil
+			anyFailed = true
+			// Continue to next processor — don't block the entire chain.
+			continue
 		}
 		if dur := time.Since(began); dur > 2*time.Second {
 			log.Printf("[history_deriver] %s range [%d,%d) took %s", p.Name(), scanFrom, scanTo, dur)
 		}
 	}
+	_ = anyFailed // Failures are logged; we still advance so we don't get stuck.
 
 	// 6. Advance our checkpoint.
 	if err := h.repo.UpdateCheckpoint(ctx, historyDeriverCheckpoint, scanTo); err != nil {
