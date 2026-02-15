@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Coins, CircleCheck, Filter } from 'lucide-react';
+import { Coins, Filter } from 'lucide-react';
+import { VerifiedBadge } from '../ui/VerifiedBadge';
 import type { FTVaultInfo } from '../../../cadence/cadence.gen';
 import { normalizeAddress, formatShort, getTokenLogoURL } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
@@ -159,9 +160,7 @@ export function AccountTokensTab({ address }: Props) {
                                                     >
                                                         {t.contractName}
                                                     </Link>
-                                                    {meta?.is_verified && (
-                                                        <CircleCheck className="w-3 h-3 text-nothing-green flex-shrink-0" />
-                                                    )}
+                                                    {meta?.is_verified && <VerifiedBadge size={13} />}
                                                 </div>
                                             </div>
                                         </div>
