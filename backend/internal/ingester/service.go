@@ -468,6 +468,13 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 		blocks = append(blocks, res.Block)
 		txs = append(txs, res.Transactions...)
 		events = append(events, res.Events...)
+
+		// Log any warnings (e.g. missing tx results) to raw.indexing_errors for later revisit.
+		for _, w := range res.Warnings {
+			if logErr := s.repo.LogIndexingError(ctx, s.config.ServiceName, res.Height, w.TxID, "fetch_warning", w.Message, nil); logErr != nil {
+				log.Printf("[%s] failed to log indexing warning: %v", s.config.ServiceName, logErr)
+			}
+		}
 	}
 
 	// Use the atomic batch save

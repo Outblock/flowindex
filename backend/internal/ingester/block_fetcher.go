@@ -19,6 +19,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// FetchWarning records a non-fatal issue encountered during block fetch.
+type FetchWarning struct {
+	TxID    string
+	TxIndex int
+	Message string
+}
+
 // FetchResult holds the data for a single block height
 type FetchResult struct {
 	Height       uint64
@@ -26,6 +33,7 @@ type FetchResult struct {
 	Transactions []models.Transaction
 	Events       []models.Event
 	Error        error
+	Warnings     []FetchWarning
 }
 
 // Worker is a stateless helper to fetch data for one height
@@ -198,6 +206,11 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					// the entire batch.
 					if isNotFoundError(err) {
 						log.Printf("[history] Warn: tx result not found for %s (height=%d, idx=%d), using empty result", txID, height, txIndex)
+						result.Warnings = append(result.Warnings, FetchWarning{
+							TxID:    txID,
+							TxIndex: txIndex,
+							Message: fmt.Sprintf("tx result not found: %v", err),
+						})
 						r = &flowsdk.TransactionResult{
 							TransactionID: tx.ID(),
 							Status:        flowsdk.TransactionStatusSealed,
