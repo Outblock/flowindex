@@ -456,7 +456,9 @@ CREATE TABLE IF NOT EXISTS app.contract_versions (
     PRIMARY KEY (address, name, version)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_contract_versions_dedup
+-- Dedup index: used by InsertContractVersion NOT EXISTS check for idempotency.
+-- Not UNIQUE to avoid migration failures if duplicates slip in.
+CREATE INDEX IF NOT EXISTS idx_contract_versions_dedup
   ON app.contract_versions (address, name, block_height);
 
 -- 5.3 Address Stats
