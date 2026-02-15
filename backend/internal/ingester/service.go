@@ -482,16 +482,17 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 		return err
 	}
 
-	// Notify downstream (e.g. live derivers) once raw.* writes are committed.
-	if broadcastRealtime && len(blocks) > 0 {
+	// Notify downstream derivers once raw.* writes are committed.
+	// OnIndexedRange fires for BOTH forward and backward modes so that
+	// the history deriver can process newly backfilled blocks immediately.
+	if len(blocks) > 0 {
 		fromHeight := blocks[0].Height
 		toHeight := blocks[len(blocks)-1].Height + 1
 
 		if s.config.OnIndexedRange != nil {
 			s.config.OnIndexedRange(fromHeight, toHeight)
-		} else if os.Getenv("ENABLE_LIVE_ADDRESS_INDEX") != "false" {
-			// Backwards-compatible fallback to keep account pages fresh even if live derivers
-			// are disabled.
+		} else if broadcastRealtime && os.Getenv("ENABLE_LIVE_ADDRESS_INDEX") != "false" {
+			// Backwards-compatible fallback to keep account pages fresh.
 			if err := s.repo.BackfillAddressTransactionsAndStatsRange(ctx, fromHeight, toHeight); err != nil {
 				log.Printf("[%s] live address index (tx+stats) update failed: %v", s.config.ServiceName, err)
 			}
