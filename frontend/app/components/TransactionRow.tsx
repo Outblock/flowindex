@@ -9,6 +9,7 @@ import { getFlowV1TransactionById } from '../api/gen/find/sdk.gen';
 import { NFTDetailModal } from './NFTDetailModal';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { AvatarGroup, AvatarGroupTooltip } from '@/components/animate-ui/components/animate/avatar-group';
+import TransferFlowDiagram from './tx/TransferFlowDiagram';
 
 // --- Interfaces ---
 
@@ -385,6 +386,9 @@ export function ExpandedTransferDetails({ tx, address, expanded }: { tx: any; ad
             {summaryLine && (
                 <div className="text-xs text-zinc-600 dark:text-zinc-400">{summaryLine}</div>
             )}
+
+            {/* Transfer flow diagram (auto-synthesized from transfer data) */}
+            {detail && <TransferFlowDiagram detail={detail} />}
 
             {/* Loading indicator */}
             {loading && (
