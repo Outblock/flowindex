@@ -184,8 +184,19 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 						repinRequested = true
 						break
 					}
-					result.Error = fmt.Errorf("failed to get tx result %s: %w", txID, err)
-					return result
+					// For historical blocks, execution nodes may not have results for some
+					// system transactions. Use a synthetic empty result instead of blocking
+					// the entire batch.
+					if isNotFoundError(err) {
+						log.Printf("[history] Warn: tx result not found for %s (height=%d, idx=%d), using empty result", txID, height, txIndex)
+						r = &flowsdk.TransactionResult{
+							TransactionID: tx.ID(),
+							Status:        flowsdk.TransactionStatusSealed,
+						}
+					} else {
+						result.Error = fmt.Errorf("failed to get tx result %s: %w", txID, err)
+						return result
+					}
 				}
 				res = r
 			}
@@ -296,6 +307,17 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 	result.Error = fmt.Errorf("failed to fetch block %d: no suitable access node available", height)
 	return result
+}
+
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if st, ok := status.FromError(err); ok {
+		return st.Code() == codes.NotFound
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "NotFound") || strings.Contains(msg, "not found")
 }
 
 func isGRPCMessageTooLarge(err error) bool {
