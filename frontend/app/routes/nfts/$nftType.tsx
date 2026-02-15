@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Image, Users, ArrowRightLeft, ArrowLeft, Grid3X3, Search } from 'lucide-react';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
@@ -21,6 +21,7 @@ import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { cn } from '../../lib/utils';
 import { NFTDetailModal } from '../../components/NFTDetailModal';
 import { apiItemToCadenceFormat } from '../../components/NFTDetailContent';
+import { getCollectionPreviewVideo } from '../../components/account/accountUtils';
 
 const VALID_TABS = ['nfts', 'owners', 'transfers'] as const;
 type CollectionTab = (typeof VALID_TABS)[number];
@@ -92,6 +93,96 @@ function extractImageUrl(raw: any): string | null {
     };
     return find(obj);
   } catch { return null; }
+}
+
+function extractVideoUrl(item: any): string | null {
+  if (!item) return null;
+  // Check direct video fields
+  for (const key of ['video', 'video_url', 'videoUrl', 'video_uri']) {
+    const val = item[key];
+    if (typeof val === 'string' && val.startsWith('http')) return val.replace(/^"|"$/g, '');
+  }
+  // Check metadata fields
+  const meta = item.metadata || item.display;
+  if (meta && typeof meta === 'object') {
+    for (const key of ['video', 'video_url', 'videoUrl']) {
+      const val = meta[key];
+      if (typeof val === 'string' && val.startsWith('http')) return val.replace(/^"|"$/g, '');
+    }
+  }
+  // Check if thumbnail itself is a video URL
+  const thumb = typeof item.thumbnail === 'string' ? item.thumbnail.replace(/^"|"$/g, '') : '';
+  if (thumb && /\.(mp4|webm|mov)(\?|$)/i.test(thumb)) return thumb;
+  return null;
+}
+
+function NFTItemCard({ item, collectionVideoSupported, onClick }: { item: any; collectionVideoSupported: boolean; onClick: () => void }) {
+  const nftId = item.nft_id || item.id || '';
+  const name = item.name || `#${nftId}`;
+  const thumb = extractImageUrl(item.thumbnail);
+  const videoUrl = extractVideoUrl(item);
+  const hasVideo = collectionVideoSupported && !!videoUrl;
+
+  const [hovered, setHovered] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handleMouseEnter = () => {
+    if (!hasVideo) return;
+    setHovered(true);
+    videoRef.current?.play().catch(() => {});
+  };
+  const handleMouseLeave = () => {
+    if (!hasVideo) return;
+    setHovered(false);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  };
+
+  return (
+    <motion.div
+      key={nftId}
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="group cursor-pointer"
+      onClick={onClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 overflow-hidden hover:border-nothing-green dark:hover:border-nothing-green transition-colors">
+        <div className="aspect-square bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden relative">
+          {thumb ? (
+            <img
+              src={thumb}
+              alt={name}
+              className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${hovered && hasVideo ? 'opacity-0' : 'opacity-100'} transition-opacity`}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling && ((e.target as HTMLImageElement).nextElementSibling as HTMLElement).classList.remove('hidden'); }}
+            />
+          ) : null}
+          <div className={`flex items-center justify-center w-full h-full text-2xl font-bold text-zinc-300 dark:text-zinc-600 ${thumb ? 'hidden' : ''}`}>
+            {(name).charAt(0).toUpperCase()}
+          </div>
+          {hasVideo && (
+            <video
+              ref={videoRef}
+              src={hovered ? videoUrl! : undefined}
+              muted
+              loop
+              playsInline
+              preload="none"
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${hovered ? 'opacity-100' : 'opacity-0'}`}
+            />
+          )}
+        </div>
+        <div className="p-3">
+          <p className="text-xs font-medium text-zinc-900 dark:text-white truncate">{name}</p>
+          <p className="text-[10px] text-zinc-400 font-mono">#{nftId}</p>
+        </div>
+      </div>
+    </motion.div>
+  );
 }
 
 function NFTCollectionDetailInner() {
@@ -233,6 +324,9 @@ function NFTCollectionDetailInner() {
     } catch (e) { console.error('Search failed', e); }
     finally { setItemsLoading(false); }
   };
+
+  // Check if this collection supports video previews on individual items
+  const collectionVideoSupported = useMemo(() => !!getCollectionPreviewVideo(id), [id]);
 
   const isLoading = activeTab === 'nfts' ? itemsLoading : activeTab === 'owners' ? ownersLoading : transfersLoading;
 
@@ -387,41 +481,14 @@ function NFTCollectionDetailInner() {
                 {!itemsLoading && items.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     <AnimatePresence mode="popLayout">
-                      {items.map((item: any) => {
-                        const nftId = item.nft_id || item.id || '';
-                        const name = item.name || `#${nftId}`;
-                        const thumb = extractImageUrl(item.thumbnail);
-                        return (
-                          <motion.div
-                            key={nftId}
-                            layout
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="group cursor-pointer"
-                            onClick={() => setSelectedNft(apiItemToCadenceFormat(item))}
-                          >
-                              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 overflow-hidden hover:border-nothing-green dark:hover:border-nothing-green transition-colors">
-                                <div className="aspect-square bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
-                                  {thumb ? (
-                                    <img
-                                      src={thumb}
-                                      alt={name}
-                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling && ((e.target as HTMLImageElement).nextElementSibling as HTMLElement).classList.remove('hidden'); }}
-                                    />
-                                  ) : null}
-                                  <div className={`flex items-center justify-center w-full h-full text-2xl font-bold text-zinc-300 dark:text-zinc-600 ${thumb ? 'hidden' : ''}`}>
-                                    {(name).charAt(0).toUpperCase()}
-                                  </div>
-                                </div>
-                                <div className="p-3">
-                                  <p className="text-xs font-medium text-zinc-900 dark:text-white truncate">{name}</p>
-                                  <p className="text-[10px] text-zinc-400 font-mono">#{nftId}</p>
-                                </div>
-                              </div>
-                          </motion.div>
-                        );
-                      })}
+                      {items.map((item: any) => (
+                        <NFTItemCard
+                          key={item.nft_id || item.id || ''}
+                          item={item}
+                          collectionVideoSupported={collectionVideoSupported}
+                          onClick={() => setSelectedNft(apiItemToCadenceFormat(item))}
+                        />
+                      ))}
                     </AnimatePresence>
                   </div>
                 )}
