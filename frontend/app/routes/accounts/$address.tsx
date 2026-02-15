@@ -1,7 +1,8 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect, isRedirect } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddress, getFlowV1AccountByAddressTransaction } from '../../api/gen/find';
+import { resolveApiBaseUrl } from '../../api';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
     FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark, AlertTriangle
@@ -49,6 +50,22 @@ export const Route = createFileRoute('/accounts/$address')({
         try {
             const address = params.address;
             const normalized = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
+
+            // Detect COA (EVM) addresses: longer than Flow's 18 chars (0x + 16 hex)
+            // and have 10+ leading zeros after 0x — redirect to the linked Flow address.
+            const hexOnly = normalized.replace(/^0x/, '');
+            if (hexOnly.length > 16 && /^0{10,}/.test(hexOnly)) {
+                const base = await resolveApiBaseUrl();
+                const coaRes = await fetch(`${base}/flow/v1/coa/${normalized}`).catch(() => null);
+                if (coaRes?.ok) {
+                    const json = await coaRes.json().catch(() => null);
+                    const flowAddr = json?.data?.[0]?.flow_address;
+                    if (flowAddr) {
+                        throw redirect({ to: '/accounts/$address', params: { address: flowAddr }, search: search as any });
+                    }
+                }
+            }
+
             await ensureHeyApiConfigured();
             // Kick off token meta cache load in parallel — no await needed, fires and fills module cache
             loadTokenMetaCache();
@@ -103,6 +120,8 @@ export const Route = createFileRoute('/accounts/$address')({
 
             return { account: initialAccount, initialTransactions, initialNextCursor };
         } catch (e) {
+            // Re-throw redirects (e.g. COA → Flow address redirect)
+            if (isRedirect(e)) throw e;
             console.error("Failed to load account data", e);
             return { account: null, initialTransactions: [], initialNextCursor: '' };
         }
