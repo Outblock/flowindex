@@ -279,29 +279,51 @@ func extractSporkRootHeight(err error) (uint64, bool) {
 	if err == nil {
 		return 0, false
 	}
-	const needle = "spork root block height "
 	msg := err.Error()
-	idx := strings.Index(msg, needle)
-	if idx == -1 {
-		return 0, false
-	}
-	rest := msg[idx+len(needle):]
-	n := 0
-	for n < len(rest) {
-		ch := rest[n]
-		if ch < '0' || ch > '9' {
-			break
+
+	// Primary: explicit spork root height in error message
+	const needle = "spork root block height "
+	if idx := strings.Index(msg, needle); idx != -1 {
+		rest := msg[idx+len(needle):]
+		n := 0
+		for n < len(rest) {
+			ch := rest[n]
+			if ch < '0' || ch > '9' {
+				break
+			}
+			n++
 		}
-		n++
+		if n > 0 {
+			if v, parseErr := strconv.ParseUint(rest[:n], 10, 64); parseErr == nil && v > 0 {
+				return v, true
+			}
+		}
 	}
-	if n == 0 {
-		return 0, false
+
+	// Fallback: "failed to get block <height>" with "key not found" or "NotFound"
+	// indicates the node cannot serve this height (spork boundary).
+	if strings.Contains(msg, "key not found") || strings.Contains(msg, "NotFound") {
+		const blockNeedle = "failed to get block "
+		if idx := strings.Index(msg, blockNeedle); idx != -1 {
+			rest := msg[idx+len(blockNeedle):]
+			n := 0
+			for n < len(rest) {
+				ch := rest[n]
+				if ch < '0' || ch > '9' {
+					break
+				}
+				n++
+			}
+			if n > 0 {
+				if v, parseErr := strconv.ParseUint(rest[:n], 10, 64); parseErr == nil && v > 0 {
+					// The failed height is below the spork root; return height+1 as the floor.
+					return v + 1, true
+				}
+			}
+		}
 	}
-	v, parseErr := strconv.ParseUint(rest[:n], 10, 64)
-	if parseErr != nil || v == 0 {
-		return 0, false
-	}
-	return v, true
+
+	return 0, false
 }
 
 func (s *Service) ensureContinuity(ctx context.Context, results []*FetchResult, lastIndexed uint64) error {
