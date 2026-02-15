@@ -128,6 +128,12 @@ function Stats() {
         { key: 'nft_ownership_worker', label: 'NFT Ownership Worker' },
         { key: 'tx_contracts_worker', label: 'TX Contracts Worker' },
         { key: 'tx_metrics_worker', label: 'TX Metrics Worker' },
+        { key: 'evm_worker', label: 'EVM Worker' },
+        { key: 'staking_worker', label: 'Staking Worker' },
+        { key: 'defi_worker', label: 'DeFi Worker' },
+        { key: 'daily_balance_worker', label: 'Daily Balance Worker' },
+        { key: 'nft_item_metadata_worker', label: 'NFT Item Metadata' },
+        { key: 'nft_ownership_reconciler', label: 'NFT Reconciler' },
     ];
     const totalRange = latestHeight - startHeight;
     const indexedRange = indexedHeight - startHeight;
