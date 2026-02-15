@@ -108,7 +108,12 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"nft_ownership_worker":  os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false",
 		"token_metadata_worker": os.Getenv("ENABLE_TOKEN_METADATA_WORKER") != "false",
 		"tx_contracts_worker":   os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false",
-		"tx_metrics_worker":     os.Getenv("ENABLE_TX_METRICS_WORKER") != "false",
+		"tx_metrics_worker":          os.Getenv("ENABLE_TX_METRICS_WORKER") != "false",
+		"staking_worker":             os.Getenv("ENABLE_STAKING_WORKER") != "false",
+		"defi_worker":                os.Getenv("ENABLE_DEFI_WORKER") != "false",
+		"daily_balance_worker":       os.Getenv("ENABLE_DAILY_BALANCE_WORKER") != "false",
+		"nft_item_metadata_worker":   os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false",
+		"nft_ownership_reconciler":   os.Getenv("ENABLE_NFT_OWNERSHIP_RECONCILER") != "false",
 	}
 
 	workerConfig := map[string]map[string]interface{}{
@@ -155,6 +160,26 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"tx_metrics_worker": {
 			"concurrency": getEnvInt("TX_METRICS_WORKER_CONCURRENCY", 1),
 			"range":       getEnvUint("TX_METRICS_WORKER_RANGE", 1000),
+		},
+		"staking_worker": {
+			"concurrency": getEnvInt("STAKING_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("STAKING_WORKER_RANGE", 1000),
+		},
+		"defi_worker": {
+			"concurrency": getEnvInt("DEFI_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("DEFI_WORKER_RANGE", 1000),
+		},
+		"daily_balance_worker": {
+			"concurrency": getEnvInt("DAILY_BALANCE_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("DAILY_BALANCE_WORKER_RANGE", 1000),
+		},
+		"nft_item_metadata_worker": {
+			"concurrency": getEnvInt("NFT_ITEM_METADATA_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("NFT_ITEM_METADATA_WORKER_RANGE", 1000),
+		},
+		"nft_ownership_reconciler": {
+			"concurrency": getEnvInt("NFT_OWNERSHIP_RECONCILER_CONCURRENCY", 1),
+			"range":       getEnvUint("NFT_OWNERSHIP_RECONCILER_RANGE", 1000),
 		},
 	}
 

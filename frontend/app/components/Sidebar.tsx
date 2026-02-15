@@ -121,21 +121,23 @@ export default function Sidebar() {
             >
                 {/* Logo Section */}
                 <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} mb-6 h-[88px]`}>
-                    <Box className="h-8 w-8 text-nothing-green rotate-12 shrink-0" />
-                    <AnimatePresence>
-                        {!isCollapsed && (
-                            <motion.div
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -10 }}
-                                className="flex flex-col whitespace-nowrap overflow-hidden"
-                            >
-                                <span className="text-2xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic leading-none">
-                                    flow<span className="text-nothing-green">index</span>
-                                </span>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                    <Link to="/" className="flex items-center space-x-3">
+                        <Box className="h-8 w-8 text-nothing-green rotate-12 shrink-0" />
+                        <AnimatePresence>
+                            {!isCollapsed && (
+                                <motion.div
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -10 }}
+                                    className="flex flex-col whitespace-nowrap overflow-hidden"
+                                >
+                                    <span className="text-2xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic leading-none">
+                                        flow<span className="text-nothing-green">index</span>
+                                    </span>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </Link>
                 </div>
 
                 {/* Navigation */}
