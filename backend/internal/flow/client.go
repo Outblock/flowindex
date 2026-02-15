@@ -627,26 +627,40 @@ func extractSporkRootHeight(err error) (uint64, bool) {
 	if err == nil {
 		return 0, false
 	}
-	const needle = "spork root block height "
 	msg := err.Error()
-	idx := strings.Index(msg, needle)
-	if idx == -1 {
-		return 0, false
-	}
-	rest := msg[idx+len(needle):]
-	n := 0
-	for n < len(rest) {
-		ch := rest[n]
-		if ch < '0' || ch > '9' {
-			break
+
+	// Primary: explicit spork root height in error message
+	const needle = "spork root block height "
+	if idx := strings.Index(msg, needle); idx != -1 {
+		if v, ok := parseLeadingUint64(msg[idx+len(needle):]); ok {
+			return v, true
 		}
+	}
+
+	// Fallback: Flow gRPC "key not found" / "NotFound" with "height <N>" in the message.
+	// e.g. "failed to retrieve block ID for height 140899500: could not retrieve resource: key not found"
+	if strings.Contains(msg, "key not found") || strings.Contains(msg, "NotFound") {
+		const heightNeedle = "for height "
+		if idx := strings.Index(msg, heightNeedle); idx != -1 {
+			if v, ok := parseLeadingUint64(msg[idx+len(heightNeedle):]); ok {
+				return v + 1, true
+			}
+		}
+	}
+
+	return 0, false
+}
+
+func parseLeadingUint64(s string) (uint64, bool) {
+	n := 0
+	for n < len(s) && s[n] >= '0' && s[n] <= '9' {
 		n++
 	}
 	if n == 0 {
 		return 0, false
 	}
-	v, parseErr := strconv.ParseUint(rest[:n], 10, 64)
-	if parseErr != nil || v == 0 {
+	v, err := strconv.ParseUint(s[:n], 10, 64)
+	if err != nil || v == 0 {
 		return 0, false
 	}
 	return v, true
