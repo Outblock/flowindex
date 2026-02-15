@@ -827,6 +827,8 @@ func (r *Repository) GetTxTagsByTransactionIDs(ctx context.Context, txIDs []stri
 // --- Contract Versions ---
 
 // InsertContractVersion inserts a new contract version, auto-incrementing the version number.
+// Idempotent: skips if a version with the same (address, name, block_height) already exists,
+// preventing duplicate versions when the same block range is processed multiple times.
 func (r *Repository) InsertContractVersion(ctx context.Context, address, name, code string, blockHeight uint64, transactionID string) error {
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO app.contract_versions (address, name, version, code, block_height, transaction_id)
@@ -835,6 +837,14 @@ func (r *Repository) InsertContractVersion(ctx context.Context, address, name, c
 		       $3, $4, $5
 		FROM app.contract_versions
 		WHERE address = $1 AND name = $2
+		  AND NOT EXISTS (
+		      SELECT 1 FROM app.contract_versions
+		      WHERE address = $1 AND name = $2 AND block_height = $4
+		  )
+		HAVING NOT EXISTS (
+		      SELECT 1 FROM app.contract_versions
+		      WHERE address = $1 AND name = $2 AND block_height = $4
+		)
 		ON CONFLICT (address, name, version) DO NOTHING`,
 		hexToBytes(address), name, code, blockHeight, hexToBytesOrNull(transactionID))
 	return err

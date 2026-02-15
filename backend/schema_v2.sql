@@ -456,6 +456,9 @@ CREATE TABLE IF NOT EXISTS app.contract_versions (
     PRIMARY KEY (address, name, version)
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contract_versions_dedup
+  ON app.contract_versions (address, name, block_height);
+
 -- 5.3 Address Stats
 CREATE TABLE IF NOT EXISTS app.address_stats (
     address            BYTEA PRIMARY KEY,
