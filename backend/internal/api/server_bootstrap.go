@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,11 +14,12 @@ import (
 )
 
 type Server struct {
-	repo        *repository.Repository
-	client      FlowClient
-	httpServer  *http.Server
-	startBlock  uint64
-	statusCache struct {
+	repo          *repository.Repository
+	client        FlowClient
+	httpServer    *http.Server
+	startBlock    uint64
+	blockscoutURL string // e.g. "https://evm.flowindex.dev"
+	statusCache   struct {
 		mu        sync.Mutex
 		payload   []byte
 		expiresAt time.Time
@@ -31,10 +34,16 @@ type Server struct {
 func NewServer(repo *repository.Repository, client FlowClient, port string, startBlock uint64) *Server {
 	r := mux.NewRouter()
 
+	bsURL := strings.TrimRight(os.Getenv("BLOCKSCOUT_URL"), "/")
+	if bsURL == "" {
+		bsURL = "https://evm.flowindex.dev"
+	}
+
 	s := &Server{
-		repo:       repo,
-		client:     client,
-		startBlock: startBlock,
+		repo:          repo,
+		client:        client,
+		startBlock:    startBlock,
+		blockscoutURL: bsURL,
 	}
 
 	r.Use(commonMiddleware)
