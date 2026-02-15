@@ -11,6 +11,8 @@ const (
 	eventsStep         = uint64(10_000_000)
 	tokenStep          = uint64(10_000_000)
 	evmStep            = uint64(10_000_000)
+	stakingStep        = uint64(5_000_000)
+	defiStep           = uint64(5_000_000)
 	partitionLookahead = uint64(2)
 )
 
@@ -45,14 +47,14 @@ func (r *Repository) EnsureAppPartitions(ctx context.Context, minHeight, maxHeig
 	return nil
 }
 
-// EnsureDefiPartitions is a no-op; defi tables are not partitioned.
+// EnsureDefiPartitions creates partitions on-demand for defi tables.
 func (r *Repository) EnsureDefiPartitions(ctx context.Context, minHeight, maxHeight uint64) error {
-	return nil
+	return r.createPartitions(ctx, "app.defi_events", minHeight, maxHeight, defiStep)
 }
 
-// EnsureStakingPartitions is a no-op; staking tables are not partitioned.
+// EnsureStakingPartitions creates partitions on-demand for staking tables.
 func (r *Repository) EnsureStakingPartitions(ctx context.Context, minHeight, maxHeight uint64) error {
-	return nil
+	return r.createPartitions(ctx, "app.staking_events", minHeight, maxHeight, stakingStep)
 }
 
 func (r *Repository) createPartitions(ctx context.Context, table string, minHeight, maxHeight, step uint64) error {
