@@ -375,6 +375,15 @@ func (r *Repository) GetBlockRange(ctx context.Context) (uint64, uint64, int64, 
 	return minH, maxH, count, nil
 }
 
+// HasBlocksInRange returns true if at least one raw block exists in [from, to).
+func (r *Repository) HasBlocksInRange(ctx context.Context, from, to uint64) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM raw.blocks WHERE height >= $1 AND height < $2 LIMIT 1)`,
+		from, to).Scan(&exists)
+	return exists, err
+}
+
 func (r *Repository) estimatePartitionCount(ctx context.Context, schema, relPattern string) (int64, error) {
 	var estimate int64
 	err := r.db.QueryRow(ctx, `

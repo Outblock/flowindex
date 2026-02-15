@@ -20,6 +20,10 @@ import (
 // Additionally, the backward ingester's OnIndexedRange callback triggers a LiveDeriver
 // instance for real-time processing of new batches. The downward cursor serves as a
 // safety net for restart gaps.
+//
+// IMPORTANT: Both cursors verify that raw blocks actually exist in a range before
+// advancing the checkpoint. This prevents silently skipping ranges that the backward
+// ingester hasn't filled yet.
 type HistoryDeriver struct {
 	repo       *repository.Repository
 	processors []Processor
@@ -152,6 +156,21 @@ func (h *HistoryDeriver) processUpward(ctx context.Context) (bool, error) {
 		scanTo = ceiling
 	}
 
+	// Guard: verify raw blocks actually exist in this range before processing.
+	// If the backward ingester hasn't filled this range yet, don't advance —
+	// we'd silently skip these blocks and never come back.
+	hasBlocks, err := h.repo.HasBlocksInRange(ctx, scanFrom, scanTo)
+	if err != nil {
+		return false, err
+	}
+	if !hasBlocks {
+		// Log once per large gap to avoid spam.
+		if scanFrom%100000 < h.chunkSize {
+			log.Printf("[history_deriver] UP: no raw blocks in [%d,%d), waiting for backward ingester", scanFrom, scanTo)
+		}
+		return false, nil // Don't advance checkpoint; retry later.
+	}
+
 	h.runProcessors(ctx, scanFrom, scanTo)
 
 	if err := h.repo.UpdateCheckpoint(ctx, historyDeriverUpCheckpoint, scanTo); err != nil {
@@ -205,18 +224,18 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 		scanTo = downCursor
 	}
 
+	// Guard: verify raw blocks actually exist in this range.
+	hasBlocks, err := h.repo.HasBlocksInRange(ctx, scanFrom, scanTo)
+	if err != nil {
+		return false, err
+	}
+	if !hasBlocks {
+		return false, nil
+	}
+
 	h.runProcessors(ctx, scanFrom, scanTo)
 
-	// Advance by moving the downCursor toward minRaw.
-	// Since we processed [minRaw, scanTo), the new floor becomes scanTo.
-	// But minRaw might keep decreasing, so we track the "processed floor" as a
-	// separate concept. Use a simple approach: update downCursor to be the new
-	// lower bound of processed data.
-	//
-	// Actually, to keep it simple: the downCursor represents "everything from
-	// downCursor upward has been processed". We process from minRaw upward,
-	// so after processing [minRaw, scanTo), if scanTo == downCursor then the
-	// full gap is closed. Otherwise we need to continue next tick.
+	// Advance by closing the gap between minRaw and downCursor.
 	if scanTo >= downCursor {
 		// Gap fully closed. Move downCursor to minRaw so next check picks up
 		// any newly filled blocks below.
@@ -224,8 +243,6 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 			log.Printf("[history_deriver] Failed to update down checkpoint: %v", err)
 		}
 	}
-	// If gap not fully closed, don't update downCursor; next tick will
-	// continue from minRaw (which may be even lower by then).
 
 	if scanTo%100000 < h.chunkSize {
 		log.Printf("[history_deriver] Progress DOWN: processed [%d,%d) (downCursor=%d)", scanFrom, scanTo, downCursor)
