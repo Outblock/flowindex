@@ -127,9 +127,11 @@ func (r *Repository) UpsertSmartContracts(ctx context.Context, contracts []model
 			INSERT INTO app.smart_contracts (address, name, code, last_updated_height, created_at, updated_at)
 			VALUES ($1, $2, NULLIF($3, ''), $4, NOW(), NOW())
 			ON CONFLICT (address, name) DO UPDATE SET
-				last_updated_height = EXCLUDED.last_updated_height,
+				last_updated_height = GREATEST(COALESCE(app.smart_contracts.last_updated_height, 0), EXCLUDED.last_updated_height),
 				code = COALESCE(EXCLUDED.code, app.smart_contracts.code),
-				version = app.smart_contracts.version + 1,
+				version = CASE WHEN EXCLUDED.last_updated_height > COALESCE(app.smart_contracts.last_updated_height, 0)
+				               THEN app.smart_contracts.version + 1
+				               ELSE app.smart_contracts.version END,
 				updated_at = NOW()`,
 			hexToBytes(c.Address), c.Name, c.Code, c.BlockHeight,
 		)

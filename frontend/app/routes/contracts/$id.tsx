@@ -355,7 +355,7 @@ function ContractDetail() {
                         <div className={`flex-1 relative overflow-auto ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-zinc-50'}`}>
                             {code ? (
                                 <SyntaxHighlighter
-                                    language="cadence"
+                                    language="swift"
                                     style={syntaxTheme}
                                     customStyle={{
                                         margin: 0,

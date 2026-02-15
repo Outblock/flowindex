@@ -48,7 +48,7 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 	}
 
 	accountKeys := w.extractAccountKeys(events)
-	contracts := w.extractContracts(ctx, events)
+	contracts, contractEvents := w.extractContracts(ctx, events)
 	// UpsertSmartContracts handles code + version; UpsertContractRegistry handles kind/first_seen/last_seen.
 	// Both write to the same unified app.smart_contracts table with complementary ON CONFLICT clauses.
 	contractRegistry := make([]models.SmartContract, 0, len(contracts))
@@ -73,6 +73,16 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 	}
 	if err := w.repo.UpsertContractRegistry(ctx, contractRegistry); err != nil {
 		return err
+	}
+
+	// Insert contract version records for each add/update event so the versions tab is populated.
+	for _, ce := range contractEvents {
+		if ce.address == "" || ce.name == "" {
+			continue
+		}
+		if err := w.repo.InsertContractVersion(ctx, ce.address, ce.name, ce.code, ce.height, ce.txID); err != nil {
+			return fmt.Errorf("insert contract version: %w", err)
+		}
 	}
 
 	// Opportunistic backfill for existing rows that were created before we started persisting
@@ -202,15 +212,17 @@ func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountK
 	return keys
 }
 
-func (w *MetaWorker) extractContracts(ctx context.Context, events []models.Event) []models.SmartContract {
-	type contractEvent struct {
-		address string
-		name    string
-		height  uint64
-		code    string
-	}
+type contractEventInfo struct {
+	address string
+	name    string
+	height  uint64
+	code    string
+	txID    string
+}
 
-	var extracted []contractEvent
+func (w *MetaWorker) extractContracts(ctx context.Context, events []models.Event) ([]models.SmartContract, []contractEventInfo) {
+
+	var extracted []contractEventInfo
 	for _, evt := range events {
 		if !strings.Contains(evt.Type, "AccountContractAdded") && !strings.Contains(evt.Type, "AccountContractUpdated") {
 			continue
@@ -239,11 +251,12 @@ func (w *MetaWorker) extractContracts(ctx context.Context, events []models.Event
 			continue
 		}
 
-		extracted = append(extracted, contractEvent{
+		extracted = append(extracted, contractEventInfo{
 			address: address,
 			name:    name,
 			height:  evt.BlockHeight,
 			code:    code,
+			txID:    evt.TransactionID,
 		})
 	}
 
@@ -288,7 +301,7 @@ func (w *MetaWorker) extractContracts(ctx context.Context, events []models.Event
 			BlockHeight: c.height,
 		})
 	}
-	return out
+	return out, extracted
 }
 
 func (w *MetaWorker) backfillMissingContractCode(ctx context.Context, limit int) error {
