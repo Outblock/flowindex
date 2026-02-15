@@ -246,11 +246,14 @@ export const getNFTMedia = (nft: any, collectionId: string = ''): NFTMedia => {
         };
     }
 
-    // 2. NFL All Day Video
+    // 2. NFL All Day Video — derive video URL from image URL by replacing last path segment
     if (isCollection('AllDay') || isCollection('e4cf4bdc1751c65d.AllDay')) {
+        const videoUrl = image && image.includes('media.nflallday.com')
+            ? image.replace(/\/media\/[^/?#]+/, '/media/video')
+            : image;
         return {
             type: 'video',
-            url: `https://media.nflallday.com/editions/${id}/media/video`,
+            url: videoUrl,
             fallbackImage: image
         };
     }
@@ -279,8 +282,8 @@ export const getNFTMedia = (nft: any, collectionId: string = ''): NFTMedia => {
 const COLLECTION_VIDEO_PROVIDERS: Record<string, string> = {
     'TopShot': 'https://assets.nbatopshot.com/media/1/video',
     '0b2a3299cc857e29.TopShot': 'https://assets.nbatopshot.com/media/1/video',
-    'AllDay': 'https://media.nflallday.com/editions/4371/media/video',
-    'e4cf4bdc1751c65d.AllDay': 'https://media.nflallday.com/editions/4371/media/video',
+    'AllDay': 'https://media.nflallday.com/editions/10000241/media/video',
+    'e4cf4bdc1751c65d.AllDay': 'https://media.nflallday.com/editions/10000241/media/video',
 };
 
 /**
