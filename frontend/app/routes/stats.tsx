@@ -17,6 +17,44 @@ const CHUNK_SIZES = [
     { label: '5M', value: 5000000 },
 ];
 
+const FLOW_SPORK_BOUNDARIES = [
+    { name: 'Mainnet 1', height: 7601063 },
+    { name: 'Mainnet 2', height: 8742959 },
+    { name: 'Mainnet 3', height: 9737133 },
+    { name: 'Mainnet 4', height: 9992020 },
+    { name: 'Mainnet 5', height: 12020337 },
+    { name: 'Mainnet 6', height: 12609237 },
+    { name: 'Mainnet 7', height: 13404174 },
+    { name: 'Mainnet 8', height: 13950742 },
+    { name: 'Mainnet 9', height: 14892104 },
+    { name: 'Mainnet 10', height: 15791891 },
+    { name: 'Mainnet 11', height: 16755602 },
+    { name: 'Mainnet 12', height: 17544523 },
+    { name: 'Mainnet 13', height: 18587478 },
+    { name: 'Mainnet 14', height: 19050753 },
+    { name: 'Mainnet 15', height: 21291692 },
+    { name: 'Mainnet 16', height: 23830813 },
+    { name: 'Mainnet 17', height: 27341470 },
+    { name: 'Mainnet 18', height: 31735955 },
+    { name: 'Mainnet 19', height: 35858811 },
+    { name: 'Mainnet 20', height: 40171634 },
+    { name: 'Mainnet 21', height: 44950207 },
+    { name: 'Mainnet 22', height: 47169687 },
+    { name: 'Mainnet 23', height: 55114467 },
+    { name: 'Mainnet 24', height: 65264619 },
+    { name: 'Mainnet 25', height: 85981135 },
+    { name: 'Mainnet 26', height: 88226267 },
+    { name: 'Mainnet 27', height: 130290659 },
+    { name: 'Mainnet 28', height: 137390146 },
+];
+
+const WORKER_COLORS: Record<string, string> = {
+    main_ingester: 'bg-yellow-400',
+    history_ingester: 'bg-cyan-400',
+    history_deriver: 'bg-pink-400',
+    history_deriver_down: 'bg-pink-400',
+};
+
 function Stats() {
     const [activeTab, setActiveTab] = useState('system'); // 'system' or 'mosaic'
     const [status, setStatus] = useState<any>(null);
@@ -214,6 +252,20 @@ function Stats() {
         return { total, indexed, percent };
     }, [chunks, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const getWorkersInChunk = useCallback((chunk: any) => {
+        const workers: { name: string; height: number }[] = [];
+        const cp = status?.checkpoints || {};
+        for (const [name, height] of Object.entries(cp)) {
+            if (typeof height === 'number' && height >= chunk.start && height <= chunk.end) {
+                workers.push({ name, height });
+            }
+        }
+        return workers;
+    }, [status]);
+
+    const getSporkInChunk = useCallback((chunk: any) => {
+        return FLOW_SPORK_BOUNDARIES.find(s => s.height >= chunk.start && s.height <= chunk.end);
+    }, []);
 
     if (loading) {
         return (
@@ -593,6 +645,28 @@ function Stats() {
                                             <div className="w-3 h-3 bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 rounded-[1px]"></div>
                                             <span className="text-xs text-zinc-600 dark:text-zinc-400">Historical Missing</span>
                                         </div>
+
+                                        <div className="pt-3 mt-3 border-t border-zinc-100 dark:border-white/5">
+                                            <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2">Overlays</p>
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <div className="w-3 h-3 bg-zinc-300 dark:bg-white/10 rounded-[1px] border-l-2 border-l-red-400"></div>
+                                                <span className="text-xs text-zinc-600 dark:text-zinc-400">Spork Boundary</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <div className="flex items-center gap-1">
+                                                    <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                                                    <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                                                    <span className="w-2 h-2 rounded-full bg-pink-400"></span>
+                                                </div>
+                                                <span className="text-xs text-zinc-600 dark:text-zinc-400">Worker Positions</span>
+                                            </div>
+                                            <div className="space-y-1 pl-1 text-[10px] text-zinc-500">
+                                                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> Main ingester</div>
+                                                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> History ingester</div>
+                                                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-pink-400"></span> History deriver</div>
+                                                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-white/60"></span> Other workers</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -633,6 +707,35 @@ function Stats() {
                                                                 {getChunkStatus(hoveredChunk)}
                                                             </span>
                                                         </div>
+                                                        {(() => {
+                                                            const spork = getSporkInChunk(hoveredChunk);
+                                                            return spork ? (
+                                                                <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-white/10 font-sans">
+                                                                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">Spork Boundary</span>
+                                                                    <div className="flex justify-between mt-1">
+                                                                        <span className="text-red-400 font-bold text-[11px]">{spork.name}</span>
+                                                                        <span className="font-mono text-[11px]">#{spork.height.toLocaleString()}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
+                                                        {(() => {
+                                                            const workers = getWorkersInChunk(hoveredChunk);
+                                                            return workers.length > 0 ? (
+                                                                <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-white/10 font-sans">
+                                                                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">Workers</span>
+                                                                    {workers.map((w) => (
+                                                                        <div key={w.name} className="flex justify-between mt-1">
+                                                                            <span className="text-[11px] flex items-center gap-1.5">
+                                                                                <span className={`inline-block w-2 h-2 rounded-full ${WORKER_COLORS[w.name] || 'bg-white/60'}`} />
+                                                                                {w.name.replace(/_/g, ' ')}
+                                                                            </span>
+                                                                            <span className="font-mono text-[11px]">#{w.height.toLocaleString()}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
                                                     </div>
                                                 </motion.div>
                                             )}
@@ -642,11 +745,13 @@ function Stats() {
                                     {/* Grid Container */}
                                     <div className="grid grid-cols-[repeat(auto-fill,minmax(12px,1fr))] gap-[2px] p-2 h-full content-start overflow-y-auto max-h-[80vh] custom-scrollbar">
                                         {chunks.map((chunk) => {
-                                            const status = getChunkStatus(chunk);
+                                            const chunkStatus = getChunkStatus(chunk);
+                                            const workers = getWorkersInChunk(chunk);
+                                            const spork = getSporkInChunk(chunk);
                                             let bgClass = '';
                                             let animateClass = '';
 
-                                            switch (status) {
+                                            switch (chunkStatus) {
                                                 case 'indexed':
                                                     bgClass = 'bg-nothing-green-dark dark:bg-nothing-green hover:opacity-80';
                                                     break;
@@ -666,13 +771,35 @@ function Stats() {
                                                     break;
                                             }
 
+                                            const sporkBorder = spork ? 'border-l-2 !border-l-red-400' : '';
+
                                             return (
                                                 <div
                                                     key={chunk.index}
                                                     onMouseEnter={() => setHoveredChunk(chunk)}
                                                     onMouseLeave={() => setHoveredChunk(null)}
-                                                    className={`aspect-square rounded-[1px] cursor-crosshair transition-colors duration-200 ${bgClass} ${animateClass}`}
-                                                />
+                                                    className={`aspect-square rounded-[1px] cursor-crosshair transition-colors duration-200 relative overflow-hidden ${bgClass} ${animateClass} ${sporkBorder}`}
+                                                >
+                                                    {workers.map((w) => {
+                                                        const color = WORKER_COLORS[w.name] || 'bg-white/60';
+                                                        const isMain = w.name === 'main_ingester';
+                                                        const isHistory = w.name === 'history_ingester';
+                                                        const isDeriver = w.name.startsWith('history_deriver');
+                                                        const pos = isMain
+                                                            ? 'top-0 left-0'
+                                                            : isHistory
+                                                                ? 'bottom-0 left-0'
+                                                                : isDeriver
+                                                                    ? 'top-0 right-0'
+                                                                    : 'bottom-0 right-0';
+                                                        return (
+                                                            <span
+                                                                key={w.name}
+                                                                className={`absolute w-[4px] h-[4px] rounded-full ${color} ${pos}`}
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
                                             );
                                         })}
                                     </div>
