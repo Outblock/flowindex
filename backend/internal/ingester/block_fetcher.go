@@ -153,11 +153,16 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			}
 		}
 
+		// Build index-based result lookup. GetTransactionResultsByBlockID returns results
+		// in block execution order which may differ from GetTransactionsByBlockID order.
+		// Match by index position (both APIs enumerate the same block transactions).
+		resByIndex := make(map[int]*flowsdk.TransactionResult, len(results))
 		resByID := make(map[string]*flowsdk.TransactionResult, len(results))
-		for _, r := range results {
+		for i, r := range results {
 			if r == nil {
 				continue
 			}
+			resByIndex[i] = r
 			resByID[r.TransactionID.String()] = r
 		}
 
@@ -173,7 +178,11 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			}
 			txID := tx.ID().String()
 
-			res := resByID[txID]
+			// Prefer index-based matching (most reliable), fall back to txID matching.
+			res := resByIndex[txIndex]
+			if res == nil {
+				res = resByID[txID]
+			}
 			if res == nil {
 				// Best-effort fallback (rare): fetch result individually by block ID + index.
 				// Using GetTransactionResultByIndex because system transactions require a block ID.
