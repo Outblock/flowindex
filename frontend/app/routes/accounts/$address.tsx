@@ -54,7 +54,8 @@ export const Route = createFileRoute('/accounts/$address')({
             // Detect COA (EVM) addresses: longer than Flow's 18 chars (0x + 16 hex)
             // and have 10+ leading zeros after 0x — redirect to the linked Flow address.
             const hexOnly = normalized.replace(/^0x/, '');
-            if (hexOnly.length > 16 && /^0{10,}/.test(hexOnly)) {
+            const isCOA = hexOnly.length > 16 && /^0{10,}/.test(hexOnly);
+            if (isCOA) {
                 const base = await resolveApiBaseUrl();
                 const coaRes = await fetch(`${base}/flow/v1/coa/${normalized}`).catch(() => null);
                 if (coaRes?.ok) {
@@ -64,6 +65,8 @@ export const Route = createFileRoute('/accounts/$address')({
                         throw redirect({ to: '/accounts/$address', params: { address: flowAddr }, search: search as any });
                     }
                 }
+                // COA address with no known Flow mapping — return early with helpful state
+                return { account: null, initialTransactions: [], initialNextCursor: '', isCOA: true };
             }
 
             await ensureHeyApiConfigured();
@@ -118,12 +121,12 @@ export const Route = createFileRoute('/accounts/$address')({
                 }
             }
 
-            return { account: initialAccount, initialTransactions, initialNextCursor };
+            return { account: initialAccount, initialTransactions, initialNextCursor, isCOA: false };
         } catch (e) {
             // Re-throw redirects (e.g. COA → Flow address redirect)
             if (isRedirect(e)) throw e;
             console.error("Failed to load account data", e);
-            return { account: null, initialTransactions: [], initialNextCursor: '' };
+            return { account: null, initialTransactions: [], initialNextCursor: '', isCOA: false };
         }
     }
 })
@@ -150,7 +153,7 @@ function AccountDetailPending() {
 function AccountDetail() {
     const { address } = Route.useParams();
     const { tab: searchTab, subtab: searchSubTab } = Route.useSearch();
-    const { account: initialAccount, initialTransactions, initialNextCursor } = Route.useLoaderData();
+    const { account: initialAccount, initialTransactions, initialNextCursor, isCOA } = Route.useLoaderData();
     const navigate = Route.useNavigate();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -239,11 +242,15 @@ function AccountDetail() {
     if (error || !account) {
         return (
             <NotFoundPage
-                icon={User}
-                title="Account Not Found"
+                icon={isCOA ? Link2 : User}
+                title={isCOA ? 'COA Address (EVM)' : 'Account Not Found'}
                 identifier={normalizedAddress}
-                description="This account could not be located on the network."
-                hint="It may not have been indexed yet, or the address may be invalid. Our indexer is continuously processing blocks — try again shortly."
+                description={isCOA
+                    ? 'This is a Cadence-Owned Account (COA) address on Flow EVM. The linked Flow account has not been indexed yet.'
+                    : 'This account could not be located on the network.'}
+                hint={isCOA
+                    ? 'COA mappings are discovered as blocks are indexed. The owner account will appear here once the creation transaction is processed.'
+                    : 'It may not have been indexed yet, or the address may be invalid. Our indexer is continuously processing blocks — try again shortly.'}
             />
         );
     }
