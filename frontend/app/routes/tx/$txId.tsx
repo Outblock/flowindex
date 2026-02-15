@@ -16,6 +16,7 @@ import DecryptedText from '../../components/ui/DecryptedText';
 import { deriveActivityType, TokenIcon, formatTokenName, extractLogoUrl, buildSummaryLine } from '../../components/TransactionRow';
 import { normalizeAddress, formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
+import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
@@ -136,6 +137,11 @@ function TransactionSummaryCard({ transaction, formatAddress }: { transaction: a
             {summaryLine && (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">{summaryLine}</p>
             )}
+
+            {/* Transfer flow diagram (auto-synthesized) */}
+            <div className="mb-4">
+                <TransferFlowDiagram detail={transaction} />
+            </div>
 
             {/* FT transfer flow rows — aggregated by (from, to, token) */}
             {hasFT && (() => {
