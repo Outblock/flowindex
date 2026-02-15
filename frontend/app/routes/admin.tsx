@@ -863,11 +863,11 @@ function ImportTokenPanel({ token }: { token: string }) {
       await ensureHeyApiConfigured()
       const { getFlowV1AccountByAddress } = await import('../api/gen/find')
       const res = await getFlowV1AccountByAddress({ path: { address: `0x${addr.replace(/^0x/, '')}` } })
-      const data = (res.data as any)?.data
-      const contracts = data?.contracts || []
-      const names = contracts.map((c: any) => c?.name || c?.contract_name || '').filter(Boolean)
-      setContractOptions(names)
-      if (names.length === 1) setContractName(names[0])
+      const account = (res.data as any)?.data?.[0]
+      // contracts is an array of strings (contract names)
+      const contracts: string[] = (account?.contracts || []).filter((c: any) => typeof c === 'string' && c)
+      setContractOptions(contracts)
+      if (contracts.length === 1) setContractName(contracts[0])
     } catch {
       setContractOptions([])
     } finally {
@@ -887,7 +887,17 @@ function ImportTokenPanel({ token }: { token: string }) {
         body: JSON.stringify({ address: addr, contract_name: name, type: tokenType }),
       })
       const md = data?.data
-      if (!md) { toast.error('No metadata returned'); return }
+      if (!md) {
+        // Chain metadata not available — allow manual entry
+        toast('No metadata from chain — fill in manually', { icon: '\u26A0\uFE0F' })
+        setPreview({ _manual: true })
+        if (tokenType === 'ft') {
+          setForm({ name: '', symbol: '', decimals: '0', description: '', external_url: '', logo: '', vault_path: '', receiver_path: '', balance_path: '', evm_address: '' })
+        } else {
+          setForm({ name: '', symbol: '', description: '', external_url: '', square_image: '', banner_image: '', evm_address: '' })
+        }
+        return
+      }
       setPreview(md)
       if (tokenType === 'ft') {
         setForm({
@@ -905,7 +915,18 @@ function ImportTokenPanel({ token }: { token: string }) {
         })
       }
     } catch (e: any) {
-      toast.error(e.message)
+      // If chain metadata fetch fails (404), allow manual entry
+      if (e.message?.includes('404') || e.message?.includes('not found') || e.message?.includes('could not fetch')) {
+        toast('Chain metadata unavailable — fill in manually', { icon: '\u26A0\uFE0F' })
+        setPreview({ _manual: true })
+        if (tokenType === 'ft') {
+          setForm({ name: contractName.trim(), symbol: '', decimals: '0', description: '', external_url: '', logo: '', vault_path: '', receiver_path: '', balance_path: '', evm_address: '' })
+        } else {
+          setForm({ name: contractName.trim(), symbol: '', description: '', external_url: '', square_image: '', banner_image: '', evm_address: '' })
+        }
+      } else {
+        toast.error(e.message)
+      }
     } finally {
       setLoading(false)
     }
