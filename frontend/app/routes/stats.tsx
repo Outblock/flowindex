@@ -22,11 +22,12 @@ function Stats() {
     const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    // State for Speed Calculations
+    // State for Speed Calculations — sliding window (last 30s) for stable ETA
     const [historySpeed, setHistorySpeed] = useState(0); // blocks per second
     const [forwardSpeed, setForwardSpeed] = useState(0); // blocks per second
-    const lastHistoryCheckRef = useRef<any>(null); // { time: number, height: number }
-    const lastForwardCheckRef = useRef<any>(null); // { time: number, height: number }
+    const historySamplesRef = useRef<{ time: number; height: number }[]>([]);
+    const forwardSamplesRef = useRef<{ time: number; height: number }[]>([]);
+    const SPEED_WINDOW_MS = 30_000; // 30 second sliding window
 
     // State for Indexing Map
     // Initialize with 100K
@@ -36,33 +37,46 @@ function Stats() {
     const processStatus = useCallback((data: any) => {
         const now = Date.now();
 
-        // Calculate History Speed (Backward)
+        // Calculate History Speed (Backward) — sliding window average
         const currentHistoryHeight = (data.history_height && data.history_height > 0)
             ? data.history_height
             : (data.min_height || 0);
 
-        if (lastHistoryCheckRef.current) {
-            const timeDiff = (now - lastHistoryCheckRef.current.time) / 1000;
-            // Since history goes backwards (high -> low), diff is last - current
-            const blockDiff = lastHistoryCheckRef.current.height - currentHistoryHeight;
-            if (timeDiff > 0 && blockDiff >= 0) {
-                const instantaneousSpeed = blockDiff / timeDiff;
-                setHistorySpeed(prev => (prev * 0.7) + (instantaneousSpeed * 0.3));
+        {
+            const samples = historySamplesRef.current;
+            samples.push({ time: now, height: currentHistoryHeight });
+            // Trim samples older than the window
+            const cutoff = now - SPEED_WINDOW_MS;
+            while (samples.length > 0 && samples[0].time < cutoff) samples.shift();
+            if (samples.length >= 2) {
+                const oldest = samples[0];
+                const newest = samples[samples.length - 1];
+                const timeDiff = (newest.time - oldest.time) / 1000;
+                // History goes backwards (high -> low)
+                const blockDiff = oldest.height - newest.height;
+                if (timeDiff > 0 && blockDiff >= 0) {
+                    setHistorySpeed(blockDiff / timeDiff);
+                }
             }
         }
-        lastHistoryCheckRef.current = { time: now, height: currentHistoryHeight };
 
-        // Calculate Forward Speed (New blocks)
+        // Calculate Forward Speed (New blocks) — sliding window average
         const currentForwardHeight = data.indexed_height || 0;
-        if (lastForwardCheckRef.current) {
-            const timeDiff = (now - lastForwardCheckRef.current.time) / 1000;
-            const blockDiff = currentForwardHeight - lastForwardCheckRef.current.height;
-            if (timeDiff > 0 && blockDiff >= 0) {
-                const instantaneousSpeed = blockDiff / timeDiff;
-                setForwardSpeed(prev => (prev * 0.7) + (instantaneousSpeed * 0.3));
+        {
+            const samples = forwardSamplesRef.current;
+            samples.push({ time: now, height: currentForwardHeight });
+            const cutoff = now - SPEED_WINDOW_MS;
+            while (samples.length > 0 && samples[0].time < cutoff) samples.shift();
+            if (samples.length >= 2) {
+                const oldest = samples[0];
+                const newest = samples[samples.length - 1];
+                const timeDiff = (newest.time - oldest.time) / 1000;
+                const blockDiff = newest.height - oldest.height;
+                if (timeDiff > 0 && blockDiff >= 0) {
+                    setForwardSpeed(blockDiff / timeDiff);
+                }
             }
         }
-        lastForwardCheckRef.current = { time: now, height: currentForwardHeight };
 
         setStatus(data);
         setLoading(false);
