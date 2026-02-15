@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check, CircleCheck } from 'lucide-react'
+import { VerifiedBadge } from '../components/ui/VerifiedBadge'
 import { resolveApiBaseUrl } from '../api'
 import toast from 'react-hot-toast'
 import { Pagination } from '../components/Pagination'
@@ -280,7 +281,7 @@ function FTRow({ item, token }: { item: any; token: string }) {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-mono text-sm text-zinc-900 dark:text-white font-semibold">{item.identifier}</span>
-              {isVerified && <CircleCheck className="w-3.5 h-3.5 text-nothing-green" />}
+              {isVerified && <VerifiedBadge size={14} />}
             </div>
             <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{form.name} ({form.symbol})</div>
           </div>
@@ -439,7 +440,7 @@ function NFTRow({ item, token }: { item: any; token: string }) {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-mono text-sm text-zinc-900 dark:text-white font-semibold">{item.identifier}</span>
-              {isVerified && <CircleCheck className="w-3.5 h-3.5 text-nothing-green" />}
+              {isVerified && <VerifiedBadge size={14} />}
             </div>
             <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{form.name} ({form.symbol})</div>
           </div>
