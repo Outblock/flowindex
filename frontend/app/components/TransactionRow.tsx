@@ -928,7 +928,7 @@ export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }:
                 {/* NFT banner gradient overlay */}
                 {bannerUrl && !expanded && (
                     <div
-                        className="absolute right-0 top-0 bottom-0 w-32 pointer-events-none opacity-[0.08] dark:opacity-[0.06]"
+                        className="absolute right-0 top-0 bottom-0 w-40 pointer-events-none opacity-[0.18] dark:opacity-[0.12]"
                         style={{
                             backgroundImage: `url(${bannerUrl})`,
                             backgroundSize: 'cover',
