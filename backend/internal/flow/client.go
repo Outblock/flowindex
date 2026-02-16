@@ -81,14 +81,16 @@ func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
 		return nil, fmt.Errorf("failed to connect to flow access nodes: no nodes provided")
 	}
 
-	return &Client{
+	c := &Client{
 		grpcClients:   clients,
 		nodes:         connectedNodes,
 		minHeights:    make([]uint64, len(clients)),
 		disabledUntil: make([]int64, len(clients)),
 		sporkRanks:    ranks,
 		limiter:       newLimiterFromEnv(len(clients)),
-	}, nil
+	}
+	c.initSporkMinHeights()
+	return c, nil
 }
 
 // GetLatestBlockHeight returns the height of the latest sealed block
@@ -722,6 +724,52 @@ func extractSporkRank(node string) int {
 		return 0
 	}
 	return v
+}
+
+// mainnetSporkRootHeights maps spork number to the root block height for that spork.
+// Each spork's access node can only serve blocks at or above its root height.
+// Source: https://developers.flow.com/networks/flow-port/staking-guide
+var mainnetSporkRootHeights = map[int]uint64{
+	1:  7601063,
+	2:  8742959,
+	3:  9737133,
+	4:  9992020,
+	5:  12020337,
+	6:  12609237,
+	7:  13404174,
+	8:  13950742,
+	9:  14892104,
+	10: 15791891,
+	11: 16755602,
+	12: 17544523,
+	13: 18587478,
+	14: 19050753,
+	15: 21291692,
+	16: 23830813,
+	17: 27341470,
+	18: 31735955,
+	19: 35858811,
+	20: 40171634,
+	21: 44950207,
+	22: 47169687,
+	23: 47194634,
+	24: 53376277,
+	25: 55114467,
+	26: 65264629,
+	27: 85981135,
+	28: 137390146,
+}
+
+// initSporkMinHeights pre-populates minHeights for nodes whose hostnames contain
+// a mainnet spork number, so pickClientForHeight can immediately skip nodes that
+// cannot serve a given height range.
+func (c *Client) initSporkMinHeights() {
+	for i, rank := range c.sporkRanks {
+		if root, ok := mainnetSporkRootHeights[rank]; ok && rank > 0 {
+			atomic.StoreUint64(&c.minHeights[i], root)
+			log.Printf("[flow] Node %s (spork %d) → minHeight %d", c.nodes[i], rank, root)
+		}
+	}
 }
 
 func grpcDialOptionsFromEnv() []grpc.DialOption {
