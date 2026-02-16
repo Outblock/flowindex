@@ -366,59 +366,113 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 // over its collection guarantees. Used as fallback for old spork nodes that don't
 // support GetTransactionsByBlockID.
 func (w *Worker) fetchTransactionsViaCollections(ctx context.Context, pin *flow.PinnedClient, block *flowsdk.Block) ([]*flowsdk.Transaction, error) {
-	var allTxs []*flowsdk.Transaction
-
-	// System transaction (epoch/service tx) is not in any collection but is always
-	// the last transaction in a block. We'll fetch it separately via GetTransactionResult
-	// matching later. For now, collect only user transactions from collections.
+	// First collect all transaction IDs from all collections (sequentially since
+	// GetCollection is fast and we need the IDs before we can parallelize).
+	type txRef struct {
+		id    flowsdk.Identifier
+		order int // preserve original order
+	}
+	var refs []txRef
 	for _, cg := range block.CollectionGuarantees {
 		coll, err := pin.GetCollection(ctx, cg.CollectionID)
 		if err != nil {
 			return nil, fmt.Errorf("GetCollection(%s): %w", cg.CollectionID, err)
 		}
 		for _, txID := range coll.TransactionIDs {
-			tx, err := pin.GetTransaction(ctx, txID)
+			refs = append(refs, txRef{id: txID, order: len(refs)})
+		}
+	}
+
+	if len(refs) == 0 {
+		return nil, nil
+	}
+
+	// Fetch all transactions in parallel.
+	allTxs := make([]*flowsdk.Transaction, len(refs))
+	errCh := make(chan error, len(refs))
+	for _, ref := range refs {
+		go func(r txRef) {
+			tx, err := pin.GetTransaction(ctx, r.id)
 			if err != nil {
-				return nil, fmt.Errorf("GetTransaction(%s): %w", txID, err)
+				errCh <- fmt.Errorf("GetTransaction(%s): %w", r.id, err)
+				return
 			}
-			allTxs = append(allTxs, tx)
+			allTxs[r.order] = tx
+			errCh <- nil
+		}(ref)
+	}
+	for range refs {
+		if err := <-errCh; err != nil {
+			return nil, err
 		}
 	}
 	return allTxs, nil
 }
 
-// fetchResultsPerTx fetches transaction results one at a time. When usedBulkTxAPI is true,
+// fetchResultsPerTx fetches transaction results concurrently. When usedBulkTxAPI is true,
 // it uses GetTransactionResultByIndex (index-based); otherwise it uses GetTransactionResult
 // (ID-based, for old spork nodes that also lack the index-based API).
 func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction, usedBulkTxAPI bool) ([]*flowsdk.TransactionResult, bool, error) {
-	results := make([]*flowsdk.TransactionResult, 0, len(txs))
+	type fetchRes struct {
+		idx    int
+		result *flowsdk.TransactionResult
+		err    error
+		repin  bool
+	}
+
+	ch := make(chan fetchRes, len(txs))
+	count := 0
 	for txIdx, tx := range txs {
 		if tx == nil {
 			continue
 		}
-		var r *flowsdk.TransactionResult
-		var rErr error
-		if usedBulkTxAPI {
-			// Bulk tx API worked, so index-based result API should too
-			r, rErr = pin.GetTransactionResultByIndex(ctx, blockID, uint32(txIdx))
-		} else {
-			// Old spork: use ID-based result fetch
-			r, rErr = pin.GetTransactionResult(ctx, tx.ID())
-		}
-		if rErr != nil {
-			var sporkErr *flow.SporkRootNotFoundError
-			if errors.As(rErr, &sporkErr) {
-				return nil, true, nil
+		count++
+		go func(idx int, t *flowsdk.Transaction) {
+			var r *flowsdk.TransactionResult
+			var rErr error
+			if usedBulkTxAPI {
+				r, rErr = pin.GetTransactionResultByIndex(ctx, blockID, uint32(idx))
+			} else {
+				r, rErr = pin.GetTransactionResult(ctx, t.ID())
 			}
-			var nodeErr *flow.NodeUnavailableError
-			if errors.As(rErr, &nodeErr) {
-				return nil, true, nil
+			if rErr != nil {
+				var sporkErr *flow.SporkRootNotFoundError
+				if errors.As(rErr, &sporkErr) {
+					ch <- fetchRes{repin: true}
+					return
+				}
+				var nodeErr *flow.NodeUnavailableError
+				if errors.As(rErr, &nodeErr) {
+					ch <- fetchRes{repin: true}
+					return
+				}
+				ch <- fetchRes{err: fmt.Errorf("failed to get tx result %s: %w", t.ID().String(), rErr)}
+				return
 			}
-			return nil, false, fmt.Errorf("failed to get tx result %s: %w", tx.ID().String(), rErr)
-		}
-		results = append(results, r)
+			ch <- fetchRes{idx: idx, result: r}
+		}(txIdx, tx)
 	}
-	return results, false, nil
+
+	results := make([]*flowsdk.TransactionResult, len(txs))
+	for i := 0; i < count; i++ {
+		res := <-ch
+		if res.repin {
+			return nil, true, nil
+		}
+		if res.err != nil {
+			return nil, false, res.err
+		}
+		results[res.idx] = res.result
+	}
+
+	// Compact: remove nil entries (from nil txs)
+	compact := make([]*flowsdk.TransactionResult, 0, count)
+	for _, r := range results {
+		if r != nil {
+			compact = append(compact, r)
+		}
+	}
+	return compact, false, nil
 }
 
 func isNotFoundError(err error) bool {
