@@ -821,3 +821,32 @@ func adminExtractSocials(v cadence.Value) []byte {
 	b, _ := json.Marshal(result)
 	return b
 }
+
+// handleAdminResetTokenWorker resets the token_worker to re-process all blocks.
+// It also deletes bogus FT transfers with contract_name='EVM' that were created
+// by the old code which mis-classified EVM bridge events as token events.
+func (s *Server) handleAdminResetTokenWorker(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 1. Delete bogus EVM FT transfers
+	evmDeleted, err := s.repo.DeleteFTTransfersByContractName(ctx, "EVM")
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "delete EVM transfers: "+err.Error())
+		return
+	}
+	log.Printf("[admin] Deleted %d bogus EVM FT transfers", evmDeleted)
+
+	// 2. Reset token_worker checkpoint and leases to 0
+	leasesDeleted, err := s.repo.ResetWorkerToHeight(ctx, "token_worker", 0)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "reset token_worker: "+err.Error())
+		return
+	}
+	log.Printf("[admin] Reset token_worker: deleted %d leases", leasesDeleted)
+
+	writeAPIResponse(w, map[string]interface{}{
+		"evm_transfers_deleted": evmDeleted,
+		"leases_deleted":        leasesDeleted,
+		"message":               "token_worker reset. It will re-process all blocks on next tick.",
+	}, nil, nil)
+}

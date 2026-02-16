@@ -233,6 +233,48 @@ func (r *Repository) AdvanceCheckpointSafe(ctx context.Context, workerType strin
 	return currentHeight, nil
 }
 
+// DeleteFTTransfersByContractName deletes FT transfers with the given contract_name.
+// Used to clean up bogus data (e.g. contract_name='EVM' from mis-classified EVM bridge events).
+func (r *Repository) DeleteFTTransfersByContractName(ctx context.Context, contractName string) (int64, error) {
+	tag, err := r.db.Exec(ctx,
+		"DELETE FROM app.ft_transfers WHERE contract_name = $1", contractName)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// ResetWorkerToHeight resets a worker's checkpoint and leases so it re-processes from the given height.
+// All leases at or above resetHeight are deleted, and the checkpoint is forced to resetHeight.
+func (r *Repository) ResetWorkerToHeight(ctx context.Context, workerType string, resetHeight uint64) (int64, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx,
+		"DELETE FROM app.worker_leases WHERE worker_type = $1 AND from_height >= $2",
+		workerType, resetHeight)
+	if err != nil {
+		return 0, fmt.Errorf("delete leases: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO app.indexing_checkpoints (service_name, last_height, updated_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (service_name) DO UPDATE SET last_height = $2, updated_at = NOW()`,
+		workerType, resetHeight)
+	if err != nil {
+		return 0, fmt.Errorf("reset checkpoint: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 // LeaseGap represents a missing range between completed leases.
 type LeaseGap struct {
 	From uint64
