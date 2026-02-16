@@ -538,6 +538,18 @@ func (p *PinnedClient) GetExecutionResultForBlockID(ctx context.Context, blockID
 	return result, nil
 }
 
+func (p *PinnedClient) GetCollection(ctx context.Context, collID flow.Identifier) (*flow.Collection, error) {
+	var coll *flow.Collection
+	if err := p.withRetry(ctx, func() error {
+		var err error
+		coll, err = p.cli.GetCollection(ctx, collID)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return coll, nil
+}
+
 func (p *PinnedClient) GetTransaction(ctx context.Context, txID flow.Identifier) (*flow.Transaction, error) {
 	var tx *flow.Transaction
 	if err := p.withRetry(ctx, func() error {
