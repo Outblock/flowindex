@@ -197,9 +197,10 @@ function Stats() {
     if (historySpeed > 0) {
         historyEtaSeconds = historyHeight / historySpeed;
     }
+    const totalBlocks = status?.total_blocks || 0;
     const historyBase = latestHeight > 0 ? latestHeight : startHeight;
     const historyTotal = historyBase > 0 ? historyBase : 0;
-    const historyCovered = historyBase > 0 && historyHeight > 0 ? Math.max(0, historyBase - historyHeight) : 0;
+    const historyCovered = totalBlocks > 0 ? totalBlocks : (historyBase > 0 && historyHeight > 0 ? Math.max(0, historyBase - historyHeight) : 0);
     const historyPercent = historyTotal > 0 ? (historyCovered / historyTotal) * 100 : 0;
     const forwardStatusLabel = !forwardEnabled ? 'DISABLED' : (blocksBehind > 0 ? 'SYNCING' : 'CAUGHT UP');
     const historyStatusLabel = !historyEnabled ? 'DISABLED' : (historySpeed > 0 ? 'SYNCING' : 'IDLE');
@@ -233,16 +234,23 @@ function Stats() {
 
     const getChunkStatus = (chunk: any) => {
         if (!status) return 'unknown';
-        const { min_height = 0, max_height = 0 } = status;
+        const ranges = status.indexed_ranges || [];
         const chunkStart = chunk.start;
         const chunkEnd = chunk.end;
+        const chainTip = status.latest_height || 0;
 
-        if (chunkStart >= min_height && chunkEnd <= max_height) return 'indexed';
-        if (max_height >= chunkStart && max_height <= chunkEnd) return 'indexing';
-        if (chunkEnd < min_height) return 'missing';
-        if (chunkStart > max_height) return 'pending';
-        if (chunkStart < min_height && chunkEnd >= min_height) return 'backfilling';
-        return 'unknown';
+        // Check if fully covered by any indexed range
+        for (const range of ranges) {
+            if (chunkStart >= range.from && chunkEnd <= range.to) return 'indexed';
+        }
+        // Check if partially overlapping (actively being indexed)
+        for (const range of ranges) {
+            if (range.to >= chunkStart && range.from <= chunkEnd) return 'indexing';
+        }
+        // Beyond chain tip = pending
+        if (chunkStart > chainTip) return 'pending';
+        // Otherwise it's a gap
+        return 'missing';
     };
 
     const mosaicStats = useMemo(() => {
@@ -413,6 +421,11 @@ function Stats() {
                                         <div className="text-xl font-bold text-blue-500 font-mono">
                                             #<NumberFlow value={historyHeight} />
                                         </div>
+                                        {status?.oldest_block_timestamp && (
+                                            <div className="text-xs text-zinc-500 dark:text-gray-400 mt-1">
+                                                {new Date(status.oldest_block_timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
                                         <div className="text-zinc-500 dark:text-gray-400 text-[10px] uppercase tracking-wider mb-1">Sync Speed</div>
@@ -634,10 +647,6 @@ function Stats() {
                                             <span className="text-xs text-zinc-600 dark:text-zinc-400">Processing Tip</span>
                                         </div>
                                         <div className="flex items-center gap-3">
-                                            <div className="w-3 h-3 bg-blue-500/50 rounded-[1px] shadow-sm"></div>
-                                            <span className="text-xs text-zinc-600 dark:text-zinc-400">Backfilling Gap</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
                                             <div className="w-3 h-3 bg-purple-500/20 border border-purple-500/40 rounded-[1px]"></div>
                                             <span className="text-xs text-zinc-600 dark:text-zinc-400">Pending / Future</span>
                                         </div>
@@ -758,9 +767,6 @@ function Stats() {
                                                 case 'indexing':
                                                     bgClass = 'bg-yellow-400 z-10';
                                                     animateClass = 'animate-pulse';
-                                                    break;
-                                                case 'backfilling':
-                                                    bgClass = 'bg-blue-500/50 hover:bg-blue-500';
                                                     break;
                                                 case 'missing':
                                                     bgClass = 'bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 hover:bg-zinc-300 dark:hover:bg-white/10';

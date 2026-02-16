@@ -707,4 +707,39 @@ CREATE TABLE IF NOT EXISTS app.status_snapshots (
 ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE app.nft_collections ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
 
+-- NFT item metadata (per-NFT enrichment)
+CREATE TABLE IF NOT EXISTS app.nft_items (
+    contract_address    BYTEA NOT NULL,
+    contract_name       TEXT NOT NULL DEFAULT '',
+    nft_id              VARCHAR(255) NOT NULL,
+    name                TEXT,
+    description         TEXT,
+    thumbnail           TEXT,
+    external_url        TEXT,
+    serial_number       BIGINT,
+    edition_name        TEXT,
+    edition_number      BIGINT,
+    edition_max         BIGINT,
+    rarity_score        TEXT,
+    rarity_description  TEXT,
+    traits              JSONB,
+    metadata_error      TEXT,
+    retries             INT NOT NULL DEFAULT 0,
+    refetch_after       TIMESTAMPTZ,
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    search_tsv          TSVECTOR,
+    PRIMARY KEY (contract_address, contract_name, nft_id)
+);
+CREATE INDEX IF NOT EXISTS idx_nft_items_search ON app.nft_items USING GIN (search_tsv);
+
+-- Missing ft_tokens columns for enrichment workers
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS external_url TEXT;
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS logo TEXT;
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS vault_path TEXT;
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS receiver_path TEXT;
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS balance_path TEXT;
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS socials JSONB;
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS evm_address TEXT;
+
 COMMIT;

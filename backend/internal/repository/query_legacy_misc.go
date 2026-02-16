@@ -3,7 +3,9 @@ package repository
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
 	"flowscan-clone/internal/models"
 
@@ -495,4 +497,83 @@ func (r *Repository) ListAccountsByPublicKey(ctx context.Context, publicKey stri
 		results = results[:limit]
 	}
 	return results, hasMore, nil
+}
+
+// IndexedRange represents a contiguous range of indexed block heights.
+type IndexedRange struct {
+	From uint64 `json:"from"`
+	To   uint64 `json:"to"`
+}
+
+// GetIndexedRanges computes the actual indexed height ranges by combining
+// checkpoint data. This avoids the false assumption that everything between
+// min_height and max_height is contiguous.
+func (r *Repository) GetIndexedRanges(ctx context.Context) ([]IndexedRange, error) {
+	checkpoints, err := r.GetAllCheckpoints(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("GetIndexedRanges: checkpoints: %w", err)
+	}
+
+	minH, maxH, _, err := r.GetBlockRange(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("GetIndexedRanges: block range: %w", err)
+	}
+	if maxH == 0 {
+		return nil, nil
+	}
+
+	var ranges []IndexedRange
+
+	// Forward ingester range: main_ingester checkpoint → max_height
+	// (or gcp_forward_ingester if present)
+	forwardLow := maxH // default: just the max
+	if h, ok := checkpoints["main_ingester"]; ok && h > 0 && h < forwardLow {
+		forwardLow = h
+	}
+	if h, ok := checkpoints["gcp_forward_ingester"]; ok && h > 0 && h < forwardLow {
+		forwardLow = h
+	}
+	ranges = append(ranges, IndexedRange{From: forwardLow, To: maxH})
+
+	// History ingester range: minH → history_ingester checkpoint
+	if h, ok := checkpoints["history_ingester"]; ok && h > 0 {
+		// History goes downward, so minH is lowest block, h is where history started from
+		if minH < h {
+			ranges = append(ranges, IndexedRange{From: minH, To: h})
+		}
+	} else if minH < forwardLow {
+		// No history checkpoint but we have blocks below forward range
+		ranges = append(ranges, IndexedRange{From: minH, To: minH})
+	}
+
+	// Merge overlapping/adjacent ranges
+	if len(ranges) == 0 {
+		return nil, nil
+	}
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].From < ranges[j].From })
+
+	merged := []IndexedRange{ranges[0]}
+	for _, r := range ranges[1:] {
+		last := &merged[len(merged)-1]
+		if r.From <= last.To+1 {
+			if r.To > last.To {
+				last.To = r.To
+			}
+		} else {
+			merged = append(merged, r)
+		}
+	}
+
+	return merged, nil
+}
+
+// GetBlockTimestamp returns the timestamp of a block at the given height.
+func (r *Repository) GetBlockTimestamp(ctx context.Context, height uint64) (time.Time, error) {
+	var ts time.Time
+	err := r.db.QueryRow(ctx,
+		`SELECT timestamp FROM raw.blocks WHERE height = $1 LIMIT 1`, height).Scan(&ts)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return ts, nil
 }

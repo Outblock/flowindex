@@ -28,7 +28,8 @@ export function IndexingStatus() {
     const latestHeight = status.latest_height || 0;
     const minHeight = status.min_height || 0;
     const maxHeight = status.max_height || 0;
-    const coveredRange = maxHeight >= minHeight && maxHeight > 0 ? (maxHeight - minHeight + 1) : 0;
+    const totalBlocks = status.total_blocks || 0;
+    const coveredRange = totalBlocks > 0 ? totalBlocks : (maxHeight >= minHeight && maxHeight > 0 ? (maxHeight - minHeight + 1) : 0);
     const totalHistory = latestHeight > 0 ? (latestHeight + 1) : 0;
     const historyPercent = totalHistory > 0 ? (coveredRange / totalHistory) * 100 : 0;
 
