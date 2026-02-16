@@ -66,8 +66,34 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	wrapperDepositsByTx := make(map[string][]wrapperInfo)
 	wrapperWithdrawalsByTx := make(map[string][]wrapperInfo)
 
+	// EVM bridge events (EVM.FLOWTokensWithdrawn/Deposited) represent cross-VM FLOW
+	// transfers. Collect them to enrich unpaired FlowToken legs with the COA address.
+	type evmBridgeInfo struct {
+		coaAddress string // EVM COA address (hex, 40 chars)
+		amount     string
+	}
+	evmWithdrawalsByTx := make(map[string][]evmBridgeInfo) // FLOW left EVM → Cadence deposit
+	evmDepositsByTx := make(map[string][]evmBridgeInfo)    // FLOW entered EVM → Cadence withdrawal
+
 	// 2. Parse Events
 	for _, evt := range events {
+		// Collect EVM bridge events for cross-VM transfer enrichment
+		if isEVMBridgeEvent(evt.Type) {
+			fields, ok := parseCadenceEventFields(evt.Payload)
+			if ok {
+				amount := extractString(fields["amount"])
+				addr := extractString(fields["address"])
+				if amount != "" && addr != "" {
+					info := evmBridgeInfo{coaAddress: normalizeEVMAddress(addr), amount: amount}
+					if strings.Contains(evt.Type, "FLOWTokensWithdrawn") {
+						evmWithdrawalsByTx[evt.TransactionID] = append(evmWithdrawalsByTx[evt.TransactionID], info)
+					} else {
+						evmDepositsByTx[evt.TransactionID] = append(evmDepositsByTx[evt.TransactionID], info)
+					}
+				}
+			}
+			continue
+		}
 		// Filter for Token events
 		if isToken, isNFT := classifyTokenEvent(evt.Type); isToken {
 			leg := w.parseTokenLeg(evt, isNFT)
@@ -121,6 +147,42 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 				}
 			}
 		}
+
+		// Enrich unpaired FlowToken legs with COA addresses from EVM bridge events.
+		// EVM.FLOWTokensWithdrawn (FLOW left EVM) → fill "from" on matching FlowToken deposit
+		// EVM.FLOWTokensDeposited (FLOW entered EVM) → fill "to" on matching FlowToken withdrawal
+		if evmWds := evmWithdrawalsByTx[txID]; len(evmWds) > 0 {
+			for i := range legs {
+				leg := &legs[i]
+				if leg.ContractName == "FlowToken" && leg.Direction == "deposit" && leg.From == "" {
+					for j, ew := range evmWds {
+						if ew.amount == leg.Amount {
+							leg.From = ew.coaAddress
+							// Remove used entry to avoid double-matching
+							evmWds[j] = evmWds[len(evmWds)-1]
+							evmWds = evmWds[:len(evmWds)-1]
+							break
+						}
+					}
+				}
+			}
+		}
+		if evmDps := evmDepositsByTx[txID]; len(evmDps) > 0 {
+			for i := range legs {
+				leg := &legs[i]
+				if leg.ContractName == "FlowToken" && leg.Direction == "withdraw" && leg.To == "" {
+					for j, ed := range evmDps {
+						if ed.amount == leg.Amount {
+							leg.To = ed.coaAddress
+							evmDps[j] = evmDps[len(evmDps)-1]
+							evmDps = evmDps[:len(evmDps)-1]
+							break
+						}
+					}
+				}
+			}
+		}
+
 		legsByTx[txID] = legs
 	}
 
@@ -384,6 +446,11 @@ func isFeeVaultAddress(addr string) bool {
 }
 
 func classifyTokenEvent(eventType string) (bool, bool) {
+	// EVM bridge events (EVM.FLOWTokensWithdrawn/Deposited) are NOT standard FT events.
+	// They must be excluded before the generic checks below which would match them.
+	if parseContractName(eventType) == "EVM" {
+		return false, false
+	}
 	if strings.Contains(eventType, "NonFungibleToken.") &&
 		(strings.Contains(eventType, ".Deposited") || strings.Contains(eventType, ".Withdrawn")) {
 		return true, true
@@ -410,6 +477,12 @@ func classifyTokenEvent(eventType string) (bool, bool) {
 		return true, false
 	}
 	return false, false
+}
+
+// isEVMBridgeEvent returns true for EVM.FLOWTokensWithdrawn/FLOWTokensDeposited events.
+func isEVMBridgeEvent(eventType string) bool {
+	return strings.Contains(eventType, "EVM.FLOWTokensWithdrawn") ||
+		strings.Contains(eventType, "EVM.FLOWTokensDeposited")
 }
 
 func inferTransferDirection(eventType, fromAddr, toAddr string) string {
@@ -517,7 +590,7 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 				Timestamp:            ts,
 			})
 		}
-		// Leftovers: mint (deposit only) or burn (withdraw only)
+		// Leftovers: mint (deposit only) or burn (withdraw only), or cross-VM
 		if len(outs) > pairs {
 			for _, w := range outs[pairs:] {
 				out = append(out, models.TokenTransfer{
@@ -527,7 +600,7 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 					TokenContractAddress: w.ContractAddr,
 					ContractName:         w.ContractName,
 					FromAddress:          w.Owner,
-					ToAddress:            "",
+					ToAddress:            w.To,
 					Amount:               w.Amount,
 					TokenID:              w.TokenID,
 					IsNFT:                w.IsNFT,
@@ -543,7 +616,7 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 					EventIndex:           d.EventIndex,
 					TokenContractAddress: d.ContractAddr,
 					ContractName:         d.ContractName,
-					FromAddress:          "",
+					FromAddress:          d.From,
 					ToAddress:            d.Owner,
 					Amount:               d.Amount,
 					TokenID:              d.TokenID,
@@ -567,7 +640,7 @@ func buildTokenTransfers(legs []tokenLeg) []models.TokenTransfer {
 				EventIndex:           d.EventIndex,
 				TokenContractAddress: d.ContractAddr,
 				ContractName:         d.ContractName,
-				FromAddress:          "",
+				FromAddress:          d.From,
 				ToAddress:            d.Owner,
 				Amount:               d.Amount,
 				TokenID:              d.TokenID,
