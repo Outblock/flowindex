@@ -51,7 +51,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 	// We pin all RPC calls for a given height to the same access node so that
 	// block -> collection -> tx/result lookups stay consistent across sporks.
-	const maxPinAttempts = 12
+	const maxPinAttempts = 30
 
 	shouldRepin := func(err error) bool {
 		var sporkErr *flow.SporkRootNotFoundError

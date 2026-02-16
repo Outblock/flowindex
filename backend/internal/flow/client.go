@@ -616,18 +616,18 @@ func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn f
 			return &SporkRootNotFoundError{Node: node, RootHeight: root, Err: err}
 		}
 
-		// Note: We do NOT treat generic "key not found" as a spork boundary here,
-		// because it can also mean the block simply doesn't exist on this node yet
-		// (e.g. data not synced). Only explicit spork root messages or "for height N"
-		// patterns are reliable indicators. Generic NotFound errors are returned as-is
-		// and the caller can retry with a different node via the repin mechanism.
-
 		st, ok := status.FromError(err)
 		if !ok {
 			return err // Not a gRPC error, don't retry
 		}
 
 		switch st.Code() {
+		case codes.NotFound:
+			// The node cannot serve this data (likely a spork boundary without
+			// an explicit root height in the error message, or data not synced).
+			// Disable the node briefly so PinByHeight skips it on repin.
+			c.disableNodeFor(idx, 2*time.Second)
+			return &NodeUnavailableError{Node: node, Err: err}
 		case codes.ResourceExhausted, codes.Unavailable, codes.DeadlineExceeded:
 			if i == maxRetries-1 {
 				return fmt.Errorf("max retries reached: %w", err)
