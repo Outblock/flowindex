@@ -596,8 +596,9 @@ func (p *PinnedClient) GetTransactionResultByIndex(ctx context.Context, blockID 
 }
 
 func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn func() error) error {
-	maxRetries := 5
+	maxRetries := 8
 	backoff := 500 * time.Millisecond
+	maxBackoff := 30 * time.Second
 
 	for i := 0; i < maxRetries; i++ {
 		if c.limiter != nil {
@@ -640,6 +641,9 @@ func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn f
 				return fmt.Errorf("max retries reached: %w", err)
 			}
 			wait := backoff * time.Duration(1<<i)
+			if wait > maxBackoff {
+				wait = maxBackoff
+			}
 			select {
 			case <-time.After(wait):
 				continue
