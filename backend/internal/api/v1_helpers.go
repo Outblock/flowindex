@@ -108,11 +108,21 @@ func normalizeFlowAddr(addr string) string {
 }
 
 func formatAddressV1(addr string) string {
-	addr = normalizeFlowAddr(addr)
-	if addr == "" {
-		return ""
+	if flow := normalizeFlowAddr(addr); flow != "" {
+		return "0x" + flow
 	}
-	return "0x" + addr
+	// Try as EVM/COA address (up to 40 hex chars)
+	hex := normalizeAddr(addr)
+	if hex != "" && len(hex) > 16 && len(hex) <= 40 {
+		for _, r := range hex {
+			if (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') {
+				continue
+			}
+			return ""
+		}
+		return "0x" + hex
+	}
+	return ""
 }
 
 func formatAddressListV1(addrs []string) []string {
