@@ -252,28 +252,42 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		historyHeight = minH
 	}
 
+	// Get indexed ranges for accurate mosaic display
+	indexedRanges, _ := s.repo.GetIndexedRanges(ctx)
+
+	// Get oldest block timestamp
+	var oldestBlockTimestamp *string
+	if minH > 0 {
+		if ts, err := s.repo.GetBlockTimestamp(ctx, minH); err == nil {
+			formatted := ts.UTC().Format(time.RFC3339)
+			oldestBlockTimestamp = &formatted
+		}
+	}
+
 	resp := map[string]interface{}{
-		"chain_id":           "flow",
-		"latest_height":      latestHeight,
-		"indexed_height":     lastIndexed,
-		"history_height":     historyHeight,
-		"min_height":         minH,
-		"max_height":         maxH,
-		"total_blocks":       totalBlocks,
-		"start_height":       start,
-		"total_transactions": totalTxs,
-		"total_events":       totalEvents,
-		"total_addresses":    totalAddresses,
-		"total_contracts":    totalContracts,
-		"checkpoints":        checkpoints,
-		"forward_enabled":    forwardEnabled,
-		"history_enabled":    historyEnabled,
-		"worker_enabled":     workerEnabled,
-		"worker_config":      workerConfig,
-		"generated_at":       time.Now().UTC().Format(time.RFC3339),
-		"progress":           fmt.Sprintf("%.2f%%", progress),
-		"behind":             behind,
-		"status":             "ok",
+		"chain_id":               "flow",
+		"latest_height":          latestHeight,
+		"indexed_height":         lastIndexed,
+		"history_height":         historyHeight,
+		"min_height":             minH,
+		"max_height":             maxH,
+		"total_blocks":           totalBlocks,
+		"start_height":           start,
+		"total_transactions":     totalTxs,
+		"total_events":           totalEvents,
+		"total_addresses":        totalAddresses,
+		"total_contracts":        totalContracts,
+		"checkpoints":            checkpoints,
+		"forward_enabled":        forwardEnabled,
+		"history_enabled":        historyEnabled,
+		"worker_enabled":         workerEnabled,
+		"worker_config":          workerConfig,
+		"generated_at":           time.Now().UTC().Format(time.RFC3339),
+		"progress":               fmt.Sprintf("%.2f%%", progress),
+		"behind":                 behind,
+		"status":                 "ok",
+		"indexed_ranges":         indexedRanges,
+		"oldest_block_timestamp": oldestBlockTimestamp,
 	}
 
 	payload, err := json.Marshal(resp)
