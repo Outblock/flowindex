@@ -56,6 +56,16 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	contracts := make(map[string]models.SmartContract)
 	legsByTx := make(map[string][]tokenLeg)
 
+	// Wrapper events (FungibleToken/NonFungibleToken) carry recipient addresses
+	// that mint/burn events from specific contracts may lack. Collect them for enrichment.
+	type wrapperInfo struct {
+		addr          string
+		amount        string
+		tokenContract string // "contractAddr:contractName"
+	}
+	wrapperDepositsByTx := make(map[string][]wrapperInfo)
+	wrapperWithdrawalsByTx := make(map[string][]wrapperInfo)
+
 	// 2. Parse Events
 	for _, evt := range events {
 		// Filter for Token events
@@ -64,8 +74,54 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 			if leg == nil {
 				continue
 			}
-			legsByTx[leg.TransactionID] = append(legsByTx[leg.TransactionID], *leg)
+			if isWrapperContractName(leg.ContractName) {
+				// Extract specific token contract from Cadence payload "type" field
+				// e.g. payload has {"type":"A.82ed1b9cba5bb1b3.JOSHIN.Vault", ...}
+				fields, _ := parseCadenceEventFields(evt.Payload)
+				if fields != nil {
+					vaultType := extractString(fields["type"])
+					parts := strings.Split(vaultType, ".")
+					if len(parts) >= 3 {
+						tokenContract := normalizeFlowAddress(parts[1]) + ":" + parts[2]
+						if leg.Direction == "deposit" && leg.To != "" {
+							wrapperDepositsByTx[leg.TransactionID] = append(wrapperDepositsByTx[leg.TransactionID],
+								wrapperInfo{addr: leg.To, amount: leg.Amount, tokenContract: tokenContract})
+						} else if leg.Direction == "withdraw" && leg.From != "" {
+							wrapperWithdrawalsByTx[leg.TransactionID] = append(wrapperWithdrawalsByTx[leg.TransactionID],
+								wrapperInfo{addr: leg.From, amount: leg.Amount, tokenContract: tokenContract})
+						}
+					}
+				}
+			} else {
+				legsByTx[leg.TransactionID] = append(legsByTx[leg.TransactionID], *leg)
+			}
 		}
+	}
+
+	// Enrich mint/burn legs with addresses from wrapper events
+	for txID, legs := range legsByTx {
+		for i := range legs {
+			leg := &legs[i]
+			legKey := leg.ContractAddr + ":" + leg.ContractName
+			if leg.Direction == "deposit" && leg.Owner == "" {
+				for _, wd := range wrapperDepositsByTx[txID] {
+					if wd.tokenContract == legKey && wd.amount == leg.Amount {
+						leg.To = wd.addr
+						leg.Owner = wd.addr
+						break
+					}
+				}
+			} else if leg.Direction == "withdraw" && leg.Owner == "" {
+				for _, ww := range wrapperWithdrawalsByTx[txID] {
+					if ww.tokenContract == legKey && ww.amount == leg.Amount {
+						leg.From = ww.addr
+						leg.Owner = ww.addr
+						break
+					}
+				}
+			}
+		}
+		legsByTx[txID] = legs
 	}
 
 	for _, legs := range legsByTx {

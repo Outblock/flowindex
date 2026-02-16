@@ -495,6 +495,11 @@ function extractContractImports(script: string | undefined | null): string[] {
 export function deriveEnrichments(events: any[], script?: string | null): DerivedEnrichments {
   const legs: TokenLeg[] = [];
   const evmExecutions: EVMExecution[] = [];
+  // Collect wrapper events (FungibleToken/NonFungibleToken) to enrich mint/burn legs
+  // that lack addresses. Wrapper deposit events carry the recipient in the `to` field
+  // and identify the specific token via the `type` payload field (e.g. "A.xxx.JOSHIN.Vault").
+  const wrapperDeposits: { addr: string; amount: string; tokenContract: string }[] = [];
+  const wrapperWithdrawals: { addr: string; amount: string; tokenContract: string }[] = [];
 
   for (const event of events) {
     const eventType = event.type || '';
@@ -504,7 +509,21 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
     if (isToken) {
       try {
         const leg = parseTokenLeg(event, isNFT);
-        if (leg && !WRAPPER_CONTRACTS.has(leg.contractName)) {
+        if (!leg) continue;
+        if (WRAPPER_CONTRACTS.has(leg.contractName)) {
+          // Parse wrapper event to extract the specific token contract from payload `type` field
+          const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
+          const vaultType = payload?.type || '';  // e.g. "A.82ed1b9cba5bb1b3.JOSHIN.Vault"
+          const parts = vaultType.split('.');
+          const tokenContract = parts.length >= 3 ? `${normalizeFlowAddress(parts[1])}:${parts[2]}` : '';
+          if (tokenContract) {
+            if (leg.direction === 'deposit' && leg.to) {
+              wrapperDeposits.push({ addr: leg.to, amount: leg.amount, tokenContract });
+            } else if (leg.direction === 'withdraw' && leg.from) {
+              wrapperWithdrawals.push({ addr: leg.from, amount: leg.amount, tokenContract });
+            }
+          }
+        } else {
           legs.push(leg);
         }
       } catch { /* skip malformed events */ }
@@ -516,6 +535,26 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
         const exec = parseEVMExecution(event);
         if (exec) evmExecutions.push(exec);
       } catch { /* skip */ }
+    }
+  }
+
+  // Enrich mint/burn legs with addresses from wrapper events
+  for (const leg of legs) {
+    const legKey = `${leg.contractAddr}:${leg.contractName}`;
+    if (leg.direction === 'deposit' && !leg.owner) {
+      // Mint with no recipient — find matching wrapper deposit
+      const wrapper = wrapperDeposits.find(w => w.tokenContract === legKey && w.amount === leg.amount);
+      if (wrapper) {
+        leg.to = wrapper.addr;
+        leg.owner = wrapper.addr;
+      }
+    } else if (leg.direction === 'withdraw' && !leg.owner) {
+      // Burn with no source — find matching wrapper withdrawal
+      const wrapper = wrapperWithdrawals.find(w => w.tokenContract === legKey && w.amount === leg.amount);
+      if (wrapper) {
+        leg.from = wrapper.addr;
+        leg.owner = wrapper.addr;
+      }
     }
   }
 
