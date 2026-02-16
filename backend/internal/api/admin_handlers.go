@@ -822,31 +822,43 @@ func adminExtractSocials(v cadence.Value) []byte {
 	return b
 }
 
-// handleAdminResetTokenWorker resets the token_worker to re-process all blocks.
-// It also deletes bogus FT transfers with contract_name='EVM' that were created
-// by the old code which mis-classified EVM bridge events as token events.
+// handleAdminResetTokenWorker fixes cross-VM FLOW transfer data.
+// It deletes bogus FT transfers with contract_name='EVM' and resets the
+// token_worker to re-process from the earliest affected block height.
 func (s *Server) handleAdminResetTokenWorker(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// 1. Delete bogus EVM FT transfers
-	evmDeleted, err := s.repo.DeleteFTTransfersByContractName(ctx, "EVM")
+	// 1. Delete bogus EVM FT transfers and get earliest affected height
+	evmDeleted, minHeight, err := s.repo.DeleteFTTransfersByContractName(ctx, "EVM")
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "delete EVM transfers: "+err.Error())
 		return
 	}
-	log.Printf("[admin] Deleted %d bogus EVM FT transfers", evmDeleted)
+	log.Printf("[admin] Deleted %d bogus EVM FT transfers (earliest height: %d)", evmDeleted, minHeight)
 
-	// 2. Reset token_worker checkpoint and leases to 0
-	leasesDeleted, err := s.repo.ResetWorkerToHeight(ctx, "token_worker", 0)
+	if minHeight == 0 {
+		writeAPIResponse(w, map[string]interface{}{
+			"evm_transfers_deleted": evmDeleted,
+			"message":               "No bogus EVM transfers found. Nothing to reset.",
+		}, nil, nil)
+		return
+	}
+
+	// 2. Align to range boundary (TOKEN_WORKER_RANGE default 1000)
+	resetHeight := (minHeight / 1000) * 1000
+
+	// 3. Reset token_worker from the earliest affected height
+	leasesDeleted, err := s.repo.ResetWorkerToHeight(ctx, "token_worker", resetHeight)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "reset token_worker: "+err.Error())
 		return
 	}
-	log.Printf("[admin] Reset token_worker: deleted %d leases", leasesDeleted)
+	log.Printf("[admin] Reset token_worker to height %d: deleted %d leases", resetHeight, leasesDeleted)
 
 	writeAPIResponse(w, map[string]interface{}{
+		"reset_from_height":     resetHeight,
 		"evm_transfers_deleted": evmDeleted,
 		"leases_deleted":        leasesDeleted,
-		"message":               "token_worker reset. It will re-process all blocks on next tick.",
+		"message":               fmt.Sprintf("token_worker reset to height %d. It will re-process from there on next tick.", resetHeight),
 	}, nil, nil)
 }
