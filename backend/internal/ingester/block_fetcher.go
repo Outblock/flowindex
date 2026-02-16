@@ -65,6 +65,12 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			w.client.MarkNodeMinHeight(nodeErr.NodeIndex, height+1)
 			return true
 		}
+		// If a node is rate-limited (ResourceExhausted) after all retries,
+		// sleep and retry the pin loop so the worker backs off.
+		if st, ok := status.FromError(errors.Unwrap(err)); ok && st.Code() == codes.ResourceExhausted {
+			time.Sleep(5 * time.Second)
+			return true
+		}
 		return false
 	}
 
