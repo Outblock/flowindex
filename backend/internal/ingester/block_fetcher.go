@@ -66,9 +66,11 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			return true
 		}
 		// If a node is rate-limited (ResourceExhausted) after all retries,
-		// sleep and retry. Workers back off to give the node breathing room.
-		if st, ok := status.FromError(errors.Unwrap(err)); ok && st.Code() == codes.ResourceExhausted {
-			time.Sleep(5 * time.Second)
+		// temporarily disable it so the next repin falls through to another
+		// eligible node (e.g. the catch-all access node).
+		var exhaustedErr *flow.NodeExhaustedError
+		if errors.As(err, &exhaustedErr) {
+			w.client.DisableNodeFor(exhaustedErr.NodeIndex, 30*time.Second)
 			return true
 		}
 		return false
@@ -443,6 +445,11 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 				}
 				var nodeErr *flow.NodeUnavailableError
 				if errors.As(rErr, &nodeErr) {
+					ch <- fetchRes{repin: true}
+					return
+				}
+				var exhaustedErr *flow.NodeExhaustedError
+				if errors.As(rErr, &exhaustedErr) {
 					ch <- fetchRes{repin: true}
 					return
 				}

@@ -432,6 +432,22 @@ type NodeUnavailableError struct {
 func (e *NodeUnavailableError) Error() string { return e.Err.Error() }
 func (e *NodeUnavailableError) Unwrap() error { return e.Err }
 
+// NodeExhaustedError is returned when a node is rate-limited (ResourceExhausted)
+// even after all retries. The caller can temporarily disable the node and try another.
+type NodeExhaustedError struct {
+	Node      string
+	NodeIndex int
+	Err       error
+}
+
+func (e *NodeExhaustedError) Error() string { return e.Err.Error() }
+func (e *NodeExhaustedError) Unwrap() error { return e.Err }
+
+// DisableNodeFor temporarily disables a node for the given duration.
+func (c *Client) DisableNodeFor(idx int, d time.Duration) {
+	c.disableNodeFor(idx, d)
+}
+
 type PinnedClient struct {
 	parent *Client
 	idx    int
@@ -638,7 +654,11 @@ func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn f
 			// NodeUnavailableError so the caller can repin to another node
 			// and permanently mark this node's minimum servable height.
 			return &NodeUnavailableError{Node: node, NodeIndex: idx, Err: err}
-		case codes.ResourceExhausted, codes.Unavailable, codes.DeadlineExceeded:
+		case codes.ResourceExhausted:
+			if i == maxRetries-1 {
+				return &NodeExhaustedError{Node: node, NodeIndex: idx, Err: err}
+			}
+		case codes.Unavailable, codes.DeadlineExceeded:
 			if i == maxRetries-1 {
 				return fmt.Errorf("max retries reached: %w", err)
 			}
