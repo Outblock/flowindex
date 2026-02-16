@@ -91,8 +91,15 @@ func (s *Service) Start(ctx context.Context) error {
 			// Checking process() return values... it returns nil when "Done! reached 0" (Backward)
 			// or when "startHeight > latestHeight" (Forward).
 
-			// We should sleep a bit to avoid hot loop when up to date.
+			// Sleep to avoid hot loop when caught up (forward) or done (backward).
+		// For backward mode we only pause briefly between batches to let the
+		// DB breathe; the 1-second wait is wasteful when there are millions of
+		// blocks remaining.
+		if s.config.Mode == "backward" {
+			time.Sleep(50 * time.Millisecond)
+		} else {
 			time.Sleep(1 * time.Second)
+		}
 		}
 	}
 }

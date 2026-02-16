@@ -58,9 +58,27 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		writeAPIError(w, http.StatusNotFound, "transaction not found")
 		return
 	}
+
+	lite := strings.ToLower(r.URL.Query().Get("lite")) == "true"
+
+	// Always fetch: events + tags (fast, needed for header/activity type)
 	events, _ := s.repo.GetEventsByTransactionID(r.Context(), tx.ID)
-	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), []string{tx.ID})
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), []string{tx.ID})
+
+	if lite {
+		// Lite mode: only base tx + events + tags — skip all enrichments
+		out := toFlowTransactionOutput(*tx, events, nil, tags[tx.ID], 0)
+		out["ft_transfers"] = []interface{}{}
+		out["nft_transfers"] = []interface{}{}
+		out["defi_events"] = []interface{}{}
+		out["evm_executions"] = []interface{}{}
+		out["lite"] = true
+		writeAPIResponse(w, []interface{}{out}, nil, nil)
+		return
+	}
+
+	// Full mode (default): all queries
+	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), []string{tx.ID})
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), []string{tx.ID})
 	var evmExecs []repository.EVMTransactionRecord
 	if tx.IsEVM {
@@ -73,6 +91,63 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		enrichWithTemplates([]map[string]interface{}{out}, templates)
 	}
 
+	s.enrichTransactionOutput(r, out, tx)
+
+	writeAPIResponse(w, []interface{}{out}, nil, nil)
+}
+
+func (s *Server) handleFlowGetTransactionEnrichments(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	tx, err := s.repo.GetTransactionByID(r.Context(), id)
+	if err != nil || tx == nil {
+		writeAPIError(w, http.StatusNotFound, "transaction not found")
+		return
+	}
+
+	out := make(map[string]interface{})
+
+	// Contracts
+	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), []string{tx.ID})
+	out["contract_imports"] = contracts[tx.ID]
+
+	// Fees
+	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), []string{tx.ID})
+	out["fee"] = feesByTx[tx.ID]
+
+	// EVM executions
+	if tx.IsEVM {
+		evmExecs, _ := s.repo.GetEVMTransactionsByCadenceTx(r.Context(), tx.ID, tx.BlockHeight)
+		if len(evmExecs) > 0 {
+			execs := make([]map[string]interface{}, 0, len(evmExecs))
+			for _, rec := range evmExecs {
+				execs = append(execs, toEVMTransactionOutput(rec))
+			}
+			out["evm_executions"] = execs
+		}
+	}
+
+	// Script template classification
+	if templates, err := s.repo.GetScriptTemplatesByTxIDs(r.Context(), []string{tx.ID}); err == nil {
+		if tmpl, found := templates[strings.TrimPrefix(strings.ToLower(tx.ID), "0x")]; found {
+			if tmpl.ScriptHash != "" {
+				out["script_hash"] = tmpl.ScriptHash
+			}
+			if tmpl.Category != "" {
+				out["template_category"] = tmpl.Category
+				out["template_label"] = tmpl.Label
+				out["template_description"] = tmpl.Description
+			}
+		}
+	}
+
+	// FT transfers, NFT transfers, DeFi events
+	s.enrichTransactionOutput(r, out, tx)
+
+	writeAPIResponse(w, []interface{}{out}, nil, nil)
+}
+
+// enrichTransactionOutput adds FT transfers, NFT transfers, and DeFi events to the output map.
+func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interface{}, tx *models.Transaction) {
 	// Enrich: FT transfers with token metadata
 	ftTransfers, _ := s.repo.GetFTTransfersByTransactionID(r.Context(), tx.ID)
 	if len(ftTransfers) > 0 {
@@ -141,7 +216,6 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 	// Enrich: NFT transfers with item metadata
 	nftTransfers, _ := s.repo.GetNFTTransfersByTransactionID(r.Context(), tx.ID)
 	if len(nftTransfers) > 0 {
-		// Collect unique collection identifiers for metadata lookup
 		collIDSet := make(map[string]bool)
 		for _, nt := range nftTransfers {
 			collIDSet[nt.Token] = true
@@ -152,7 +226,6 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		}
 		nftCollMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), collIDs)
 
-		// Batch fetch public_path for each collection (for on-chain NFT detail lookup)
 		collPublicPaths := make(map[string]string)
 		for _, id := range collIDs {
 			parts := strings.SplitN(id, ".", 3)
@@ -165,7 +238,6 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 			}
 		}
 
-		// Batch fetch NFT item metadata
 		itemKeys := make([]repository.NFTItemKey, 0, len(nftTransfers))
 		for _, nt := range nftTransfers {
 			parts := strings.SplitN(nt.Token, ".", 3)
@@ -179,7 +251,6 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		}
 		itemMeta, _ := s.repo.GetNFTItemsBatch(r.Context(), itemKeys)
 
-		// COA address lookup for NFT transfers
 		nftAddrSet := make(map[string]bool)
 		for _, nt := range nftTransfers {
 			if nt.FromAddress != "" {
@@ -211,7 +282,6 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 			if pp, ok := collPublicPaths[nt.Token]; ok {
 				item["public_path"] = pp
 			}
-			// Attach NFT item metadata if available
 			parts := strings.SplitN(nt.Token, ".", 3)
 			if len(parts) >= 3 && nt.TokenID != "" {
 				key := repository.NFTItemKey{
@@ -225,7 +295,6 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 					item["nft_rarity"] = nftItem.RarityDescription
 				}
 			}
-			// COA cross-VM detection
 			if nt.FromAddress != "" {
 				if flowAddr, ok := nftCOAMap[nt.FromAddress]; ok {
 					item["from_coa_flow_address"] = formatAddressV1(flowAddr)
@@ -289,6 +358,4 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		}
 		out["defi_events"] = swapEvents
 	}
-
-	writeAPIResponse(w, []interface{}{out}, nil, nil)
 }

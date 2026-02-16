@@ -1,8 +1,7 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
-import { useState, Suspense } from 'react';
-import { ensureHeyApiConfigured } from '../../api/heyapi';
-import { getFlowV1TransactionById } from '../../api/gen/find';
+import { useState, useEffect, Suspense } from 'react';
+import { resolveApiBaseUrl } from '../../api';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -34,9 +33,16 @@ export const Route = createFileRoute('/tx/$txId')({
     }),
     loader: async ({ params }) => {
         try {
-            await ensureHeyApiConfigured();
-            const res = await getFlowV1TransactionById({ path: { id: params.txId } });
-            const rawTx: any = (res.data as any)?.data?.[0] ?? res.data;
+            const baseUrl = await resolveApiBaseUrl();
+            const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}?lite=true`);
+            if (!res.ok) {
+                if (res.status === 404) {
+                    return { transaction: null, error: 'Transaction not found' };
+                }
+                return { transaction: null, error: 'Failed to load transaction details' };
+            }
+            const json = await res.json();
+            const rawTx: any = json?.data?.[0] ?? json;
             const transformedTx = {
                 ...rawTx,
                 type: rawTx.type || (rawTx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
@@ -54,15 +60,8 @@ export const Route = createFileRoute('/tx/$txId')({
             };
             return { transaction: transformedTx, error: null as string | null };
         } catch (e) {
-            const status = (e as any)?.response?.status;
             const message = (e as any)?.message;
-            // Avoid logging the full Axios error object (it contains huge request/socket graphs).
-            console.error('Failed to load transaction data', { status, message });
-
-            if (status === 404) {
-                return { transaction: null, error: 'Transaction not found' };
-            }
-
+            console.error('Failed to load transaction data', { message });
             return { transaction: null, error: 'Failed to load transaction details' };
         }
     }
@@ -364,9 +363,50 @@ function TransactionDetail() {
     const navigate = useNavigate();
     const { transaction, error: loaderError } = Route.useLoaderData();
     const error = transaction ? null : (loaderError || 'Transaction not found');
-    const hasTransfers = transaction?.ft_transfers?.length > 0 || transaction?.nft_transfers?.length > 0 || transaction?.defi_events?.length > 0;
+
+    // Fetch enrichments (transfers, DeFi, EVM, contracts, fees, templates) async
+    const [enrichments, setEnrichments] = useState<any>(null);
+    useEffect(() => {
+        if (!transaction?.id) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const baseUrl = await resolveApiBaseUrl();
+                const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(transaction.id)}/enrichments`);
+                if (!res.ok || cancelled) return;
+                const json = await res.json();
+                const data = json?.data?.[0] ?? json;
+                if (!cancelled) setEnrichments(data);
+            } catch {
+                // Silent fail — enrichment sections stay in loading state
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [transaction?.id]);
+
+    // Merge enrichments into a full transaction object
+    const fullTx = enrichments
+        ? {
+            ...transaction,
+            ft_transfers: enrichments.ft_transfers?.length > 0 ? enrichments.ft_transfers : transaction?.ft_transfers,
+            nft_transfers: enrichments.nft_transfers?.length > 0 ? enrichments.nft_transfers : transaction?.nft_transfers,
+            defi_events: enrichments.defi_events?.length > 0 ? enrichments.defi_events : transaction?.defi_events,
+            evm_executions: enrichments.evm_executions?.length > 0 ? enrichments.evm_executions : transaction?.evm_executions,
+            contract_imports: enrichments.contract_imports?.length > 0 ? enrichments.contract_imports : transaction?.contract_imports,
+            fee: enrichments.fee ?? transaction?.fee,
+            script_hash: enrichments.script_hash ?? transaction?.script_hash,
+            template_category: enrichments.template_category ?? transaction?.template_category,
+            template_label: enrichments.template_label ?? transaction?.template_label,
+            template_description: enrichments.template_description ?? transaction?.template_description,
+        }
+        : transaction;
+
+    const hasTransfers = fullTx?.ft_transfers?.length > 0 || fullTx?.nft_transfers?.length > 0 || fullTx?.defi_events?.length > 0;
+    const enrichmentsLoading = transaction?.lite && !enrichments;
+    // Show transfers tab if enrichments are still loading (they may contain transfers)
+    const showTransfersTab = hasTransfers || enrichmentsLoading;
     const validTabs = ['transfers', 'script', 'events', 'evm'];
-    const defaultTab = hasTransfers ? 'transfers' : (transaction?.script ? 'script' : 'events');
+    const defaultTab = (hasTransfers || enrichmentsLoading) ? 'transfers' : (fullTx?.script ? 'script' : 'events');
     const [activeTab, setActiveTab] = useState(() =>
         urlTab && validTabs.includes(urlTab) ? urlTab : defaultTab
     );
@@ -608,12 +648,12 @@ function TransactionDetail() {
                 )}
 
                 {/* Transaction Summary Card */}
-                <TransactionSummaryCard transaction={transaction} formatAddress={formatAddress} />
+                <TransactionSummaryCard transaction={fullTx} formatAddress={formatAddress} />
 
                 {/* Tabs Section */}
                 <div className="mt-12">
                     <div className="flex border-b border-zinc-200 dark:border-white/10 mb-0 overflow-x-auto">
-                        {hasTransfers && (
+                        {showTransfersTab && (
                             <button
                                 onClick={() => switchTab('transfers')}
                                 className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'transfers'
@@ -651,7 +691,7 @@ function TransactionDetail() {
                                 Key Events ({transaction.events ? transaction.events.length : 0})
                             </span>
                         </button>
-                        {transaction.is_evm && transaction.evm_executions?.length > 0 && (
+                        {fullTx.is_evm && fullTx.evm_executions?.length > 0 && (
                             <button
                                 onClick={() => switchTab('evm')}
                                 className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'evm'
@@ -670,14 +710,26 @@ function TransactionDetail() {
                     <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[300px] shadow-sm dark:shadow-none">
                         {activeTab === 'transfers' && (
                             <div className="space-y-6">
+                                {/* Loading skeleton for enrichment data */}
+                                {enrichmentsLoading && (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-4 w-4 rounded bg-zinc-200 dark:bg-white/10 animate-pulse" />
+                                            <div className="h-3 w-32 rounded bg-zinc-200 dark:bg-white/10 animate-pulse" />
+                                        </div>
+                                        {[1, 2, 3].map(i => (
+                                            <div key={i} className="h-14 rounded-sm bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/5 animate-pulse" />
+                                        ))}
+                                    </div>
+                                )}
                                 {/* DeFi Swap Events */}
-                                {transaction.defi_events?.length > 0 && (
+                                {fullTx.defi_events?.length > 0 && (
                                     <div>
                                         <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                                             <Repeat className="h-4 w-4" /> Swap
                                         </h3>
                                         <div className="space-y-3">
-                                            {transaction.defi_events.map((swap: any, idx: number) => {
+                                            {fullTx.defi_events.map((swap: any, idx: number) => {
                                                 const a0In = parseFloat(swap.asset0_in) || 0;
                                                 const a1In = parseFloat(swap.asset1_in) || 0;
                                                 const a0Out = parseFloat(swap.asset0_out) || 0;
@@ -756,13 +808,13 @@ function TransactionDetail() {
                                 )}
 
                                 {/* FT Token Transfers */}
-                                {transaction.ft_transfers?.length > 0 && (
+                                {fullTx.ft_transfers?.length > 0 && (
                                     <div>
                                         <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <Coins className="h-4 w-4" /> Token Transfers ({transaction.ft_transfers.length})
+                                            <Coins className="h-4 w-4" /> Token Transfers ({fullTx.ft_transfers.length})
                                         </h3>
                                         <div className="divide-y divide-zinc-100 dark:divide-white/5 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
-                                            {transaction.ft_transfers.map((ft: any, idx: number) => (
+                                            {fullTx.ft_transfers.map((ft: any, idx: number) => (
                                                 <div key={idx} className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors">
                                                     <div className="flex-shrink-0">
                                                         {ft.token_logo ? (
@@ -817,13 +869,13 @@ function TransactionDetail() {
                                 )}
 
                                 {/* NFT Transfers */}
-                                {transaction.nft_transfers?.length > 0 && (
+                                {fullTx.nft_transfers?.length > 0 && (
                                     <div>
                                         <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <ImageIcon className="h-4 w-4" /> NFT Transfers ({transaction.nft_transfers.length})
+                                            <ImageIcon className="h-4 w-4" /> NFT Transfers ({fullTx.nft_transfers.length})
                                         </h3>
                                         <div className="divide-y divide-zinc-100 dark:divide-white/5 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
-                                            {transaction.nft_transfers.map((nt: any, idx: number) => (
+                                            {fullTx.nft_transfers.map((nt: any, idx: number) => (
                                                 <div key={idx} className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors">
                                                     <div className="flex-shrink-0">
                                                         {cleanUrl(nt.nft_thumbnail) ? (
@@ -884,7 +936,7 @@ function TransactionDetail() {
                                     </div>
                                 )}
 
-                                {!hasTransfers && (
+                                {!hasTransfers && !enrichmentsLoading && (
                                     <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
                                         <ArrowRightLeft className="h-8 w-8 mb-2 opacity-20" />
                                         <p className="text-xs uppercase tracking-widest">No Token Transfers</p>
@@ -1101,14 +1153,14 @@ function TransactionDetail() {
                             </div>
                         )}
 
-                        {activeTab === 'evm' && transaction.is_evm && (
+                        {activeTab === 'evm' && fullTx.is_evm && (
                             <div className="space-y-6">
-                                {transaction.evm_executions && transaction.evm_executions.length > 0 ? (
-                                    transaction.evm_executions.map((exec: any, idx: number) => (
+                                {fullTx.evm_executions && fullTx.evm_executions.length > 0 ? (
+                                    fullTx.evm_executions.map((exec: any, idx: number) => (
                                         <div key={idx} className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
                                             <div className="bg-zinc-50 dark:bg-black/40 px-4 py-3 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between">
                                                 <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
-                                                    EVM Execution {transaction.evm_executions.length > 1 ? `#${idx + 1}` : ''}
+                                                    EVM Execution {fullTx.evm_executions.length > 1 ? `#${idx + 1}` : ''}
                                                 </span>
                                                 <span className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-sm border ${
                                                     exec.status === 'SEALED' || exec.status === 'SUCCESS'
@@ -1292,9 +1344,9 @@ function TransactionDetail() {
                                         <div className="bg-zinc-50 dark:bg-black/30 p-4 border border-zinc-200 dark:border-white/5 space-y-1 rounded-sm">
                                             <p className="text-[10px] text-zinc-500 uppercase">EVM Hash</p>
                                             <div className="flex items-center gap-2">
-                                                <p className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">{transaction.evm_hash}</p>
-                                                {transaction.evm_hash && (
-                                                    <a href={`https://evm.flowscan.io/tx/${transaction.evm_hash}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 flex-shrink-0">
+                                                <p className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">{fullTx.evm_hash}</p>
+                                                {fullTx.evm_hash && (
+                                                    <a href={`https://evm.flowscan.io/tx/${fullTx.evm_hash}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 flex-shrink-0">
                                                         <ExternalLink className="h-3.5 w-3.5" />
                                                     </a>
                                                 )}
@@ -1302,15 +1354,15 @@ function TransactionDetail() {
                                         </div>
                                         <div className="bg-zinc-50 dark:bg-black/30 p-4 border border-zinc-200 dark:border-white/5 space-y-1 rounded-sm">
                                             <p className="text-[10px] text-zinc-500 uppercase">Value</p>
-                                            <p className="text-xs text-zinc-700 dark:text-white font-mono">{transaction.evm_value ? `${parseInt(transaction.evm_value, 16) / 1e18}` : '0'} FLOW</p>
+                                            <p className="text-xs text-zinc-700 dark:text-white font-mono">{fullTx.evm_value ? `${parseInt(fullTx.evm_value, 16) / 1e18}` : '0'} FLOW</p>
                                         </div>
                                         <div className="bg-zinc-50 dark:bg-black/30 p-4 border border-zinc-200 dark:border-white/5 space-y-1 rounded-sm">
                                             <p className="text-[10px] text-zinc-500 uppercase">From</p>
-                                            <p className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">{transaction.evm_from || 'N/A'}</p>
+                                            <p className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">{fullTx.evm_from || 'N/A'}</p>
                                         </div>
                                         <div className="bg-zinc-50 dark:bg-black/30 p-4 border border-zinc-200 dark:border-white/5 space-y-1 rounded-sm">
                                             <p className="text-[10px] text-zinc-500 uppercase">To</p>
-                                            <p className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">{transaction.evm_to || 'Contract Creation'}</p>
+                                            <p className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">{fullTx.evm_to || 'Contract Creation'}</p>
                                         </div>
                                     </div>
                                 )}

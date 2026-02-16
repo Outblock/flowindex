@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
 const (
@@ -15,6 +16,17 @@ const (
 	defiStep           = uint64(5_000_000)
 	partitionLookahead = uint64(2)
 )
+
+// partitionCache tracks which (table, startBucket, endBucket) combos have already
+// been ensured this process lifetime, avoiding redundant DB round-trips.
+var (
+	partitionCacheMu sync.Mutex
+	partitionCache   = make(map[string]bool)
+)
+
+func partitionCacheKey(table string, start, end uint64) string {
+	return fmt.Sprintf("%s:%d:%d", table, start, end)
+}
 
 // EnsureRawPartitions creates partitions on-demand for raw tables.
 func (r *Repository) EnsureRawPartitions(ctx context.Context, minHeight, maxHeight uint64) error {
@@ -65,9 +77,22 @@ func (r *Repository) createPartitions(ctx context.Context, table string, minHeig
 	start := (minHeight / step) * step
 	end := ((maxHeight / step) + 1 + partitionLookahead) * step
 
+	// Fast path: skip the DB call if we already ensured this exact range.
+	key := partitionCacheKey(table, start, end)
+	partitionCacheMu.Lock()
+	if partitionCache[key] {
+		partitionCacheMu.Unlock()
+		return nil
+	}
+	partitionCacheMu.Unlock()
+
 	_, err := r.db.Exec(ctx, "SELECT raw.create_partitions($1::regclass, $2, $3, $4)", table, start, end, step)
 	if err != nil {
 		return fmt.Errorf("create partitions for %s: %w", table, err)
 	}
+
+	partitionCacheMu.Lock()
+	partitionCache[key] = true
+	partitionCacheMu.Unlock()
 	return nil
 }
