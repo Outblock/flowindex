@@ -383,6 +383,12 @@ func (c *Client) pickClientForHeight(height uint64) (int, *flowgrpc.Client) {
 	return c.pickAnyClient()
 }
 
+// MarkNodeMinHeight permanently records that the node at idx cannot serve heights below minHeight.
+// This is used by the block fetcher to exclude nodes that return NotFound for specific heights.
+func (c *Client) MarkNodeMinHeight(idx int, minHeight uint64) {
+	c.markMinHeight(idx, minHeight)
+}
+
 func (c *Client) markMinHeight(idx int, minHeight uint64) {
 	if idx < 0 || idx >= len(c.minHeights) {
 		return
@@ -416,8 +422,9 @@ func (e *SporkRootNotFoundError) Error() string { return e.Err.Error() }
 func (e *SporkRootNotFoundError) Unwrap() error { return e.Err }
 
 type NodeUnavailableError struct {
-	Node string
-	Err  error
+	Node      string
+	NodeIndex int // Index in the client pool, used by callers to mark minHeight.
+	Err       error
 }
 
 func (e *NodeUnavailableError) Error() string { return e.Err.Error() }
@@ -607,7 +614,7 @@ func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn f
 		// If the node cannot resolve to any address, mark it disabled and let the caller repin.
 		if isZeroAddressesResolverError(err) {
 			c.disableNodeFor(idx, 5*time.Minute)
-			return &NodeUnavailableError{Node: node, Err: err}
+			return &NodeUnavailableError{Node: node, NodeIndex: idx, Err: err}
 		}
 
 		// Spork boundary: mark the node's min height and let the caller repin.
@@ -624,10 +631,10 @@ func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn f
 		switch st.Code() {
 		case codes.NotFound:
 			// The node cannot serve this data (likely a spork boundary without
-			// an explicit root height in the error message, or data not synced).
-			// Disable the node briefly so PinByHeight skips it on repin.
-			c.disableNodeFor(idx, 2*time.Second)
-			return &NodeUnavailableError{Node: node, Err: err}
+			// an explicit root height in the error message). Return
+			// NodeUnavailableError so the caller can repin to another node
+			// and permanently mark this node's minimum servable height.
+			return &NodeUnavailableError{Node: node, NodeIndex: idx, Err: err}
 		case codes.ResourceExhausted, codes.Unavailable, codes.DeadlineExceeded:
 			if i == maxRetries-1 {
 				return fmt.Errorf("max retries reached: %w", err)
