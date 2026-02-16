@@ -364,8 +364,8 @@ function AccountDetail() {
                 )}
 
                 {/* Overview Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-                    <GlassCard className="p-6 relative overflow-hidden group">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8 md:mb-12">
+                    <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                             <Coins className="h-12 w-12" />
                         </div>
@@ -380,7 +380,7 @@ function AccountDetail() {
                         )}
                     </GlassCard>
 
-                    <GlassCard className="p-6 relative overflow-hidden group">
+                    <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                             <Database className="h-12 w-12" />
                         </div>
@@ -409,7 +409,7 @@ function AccountDetail() {
                         </div>
                     </GlassCard>
 
-                    <GlassCard className="p-6 relative overflow-hidden group">
+                    <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                             <Key className="h-12 w-12" />
                         </div>
@@ -419,7 +419,7 @@ function AccountDetail() {
                         </p>
                     </GlassCard>
 
-                    <GlassCard className="p-6 relative overflow-hidden group">
+                    <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                             <FileText className="h-12 w-12" />
                         </div>
@@ -432,8 +432,21 @@ function AccountDetail() {
 
                 {/* Tabs & Content */}
                 <div className="space-y-6">
-                    {/* Floating Tab Bar */}
-                    <div className="sticky top-4 z-50">
+                    {/* Mobile Tab Selector */}
+                    <div className="md:hidden sticky top-2 z-50">
+                        <select
+                            value={activeTab}
+                            onChange={(e) => setActiveTab(e.target.value as AccountTab)}
+                            className="w-full px-4 py-3 text-sm font-bold uppercase tracking-wider bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-lg rounded-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2371717a%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat text-zinc-900 dark:text-white"
+                        >
+                            {tabs.map(({ id, label }) => (
+                                <option key={id} value={id}>{label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Desktop Floating Tab Bar */}
+                    <div className="hidden md:block sticky top-4 z-50">
                         <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto relative">
                             {tabs.map(({ id, label, icon: Icon }) => {
                                 const isActive = activeTab === id;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Home, Box, ArrowRightLeft, Users, FileText, Layers, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock } from 'lucide-react';
+import { Home, Box, ArrowRightLeft, Users, FileText, Layers, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, Menu, X } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -31,87 +31,76 @@ export default function Sidebar() {
         { label: 'API Docs', path: '/api-docs', icon: FileText },
     ];
 
-    const activeItem = navItems.find(item => isActive(item.path) && !item.disabled);
-
     return (
         <>
-            {/* Mobile Dropdown Trigger */}
-            <div className="md:hidden fixed bottom-6 right-6 z-50">
-                <div className="relative">
-                    <AnimatePresence>
-                        {isMobileOpen && (
-                            <>
-                                {/* Backdrop */}
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    onClick={() => setIsMobileOpen(false)}
-                                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-                                />
+            {/* Mobile Hamburger Button */}
+            <button
+                onClick={() => setIsMobileOpen(!isMobileOpen)}
+                className="md:hidden fixed top-4 left-4 z-[60] p-2 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-md"
+                aria-label="Toggle menu"
+            >
+                {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
 
-                                {/* Menu */}
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                    className="absolute bottom-full right-0 mb-4 w-64 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 py-2"
-                                >
-                                    {navItems.map((item) => (
-                                        <Link
-                                            key={item.label}
-                                            to={item.disabled ? '#' : item.path}
-                                            onClick={(e) => {
-                                                if (item.disabled) e.preventDefault();
-                                                else setIsMobileOpen(false);
-                                            }}
-                                            className={`flex items-center space-x-3 px-4 py-3 transition-colors ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/5'
-                                                } ${isActive(item.path) && !item.disabled ? 'text-nothing-green bg-nothing-green/10' : 'text-zinc-400'}`}
-                                        >
-                                            <item.icon className="w-5 h-5 shrink-0" />
-                                            <span className="font-medium">{item.label}</span>
-                                        </Link>
-                                    ))}
+            {/* Mobile Slide-out Drawer */}
+            <AnimatePresence>
+                {isMobileOpen && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsMobileOpen(false)}
+                            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+                        />
+                        <motion.div
+                            initial={{ x: -280 }}
+                            animate={{ x: 0 }}
+                            exit={{ x: -280 }}
+                            transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+                            className="md:hidden fixed inset-y-0 left-0 w-[280px] bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-white/10 z-50 flex flex-col"
+                        >
+                            {/* Logo */}
+                            <div className="p-6 flex items-center space-x-3 h-[64px]">
+                                <Box className="h-7 w-7 text-nothing-green rotate-12 shrink-0" />
+                                <span className="text-xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic leading-none">
+                                    flow<span className="text-nothing-green">index</span>
+                                </span>
+                            </div>
 
-                                    <div className="h-px bg-white/10 my-2" />
-
-                                    <button
+                            {/* Nav Items */}
+                            <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+                                {navItems.map((item) => (
+                                    <Link
+                                        key={item.label}
+                                        to={item.disabled ? '#' : item.path}
                                         onClick={(e) => {
-                                            toggleTheme(e);
-                                            // Keep menu open or close? Maybe keep open to see change.
+                                            if (item.disabled) e.preventDefault();
+                                            else setIsMobileOpen(false);
                                         }}
-                                        className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-zinc-400 transition-colors"
+                                        className={`flex items-center space-x-3 px-4 py-3 rounded-sm transition-colors ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-white/5'
+                                            } ${isActive(item.path) && !item.disabled ? 'text-nothing-green bg-nothing-green/10' : 'text-zinc-600 dark:text-zinc-400'}`}
                                     >
-                                        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                                        <span className="font-medium">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-                                    </button>
-                                </motion.div>
-                            </>
-                        )}
-                    </AnimatePresence>
+                                        <item.icon className="w-5 h-5 shrink-0" />
+                                        <span className="text-sm font-medium">{item.label}</span>
+                                    </Link>
+                                ))}
+                            </nav>
 
-                    <button
-                        onClick={() => setIsMobileOpen(!isMobileOpen)}
-                        className="flex items-center gap-2 bg-zinc-900 text-white border border-white/10 px-5 py-3 rounded-full shadow-lg hover:bg-zinc-800 transition-all active:scale-95"
-                    >
-                        {isMobileOpen ? (
-                            <ChevronRight className="w-5 h-5 rotate-90" />
-                        ) : (
-                            <span className="flex items-center gap-2">
-                                {activeItem ? (
-                                    <>
-                                        <activeItem.icon className="w-4 h-4" />
-                                        <span>{activeItem.label}</span>
-                                    </>
-                                ) : (
-                                    <span>Menu</span>
-                                )}
-                            </span>
-                        )}
-                        {!isMobileOpen && <ChevronLeft className="w-4 h-4 rotate-90" />}
-                    </button>
-                </div>
-            </div>
+                            {/* Footer */}
+                            <div className="p-4 border-t border-zinc-200 dark:border-white/5">
+                                <button
+                                    onClick={(e) => toggleTheme(e)}
+                                    className="w-full flex items-center space-x-3 px-4 py-2 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-400 transition-colors"
+                                >
+                                    {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                                    <span className="text-sm font-medium">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
 
             {/* Desktop Sidebar */}
             <motion.div
