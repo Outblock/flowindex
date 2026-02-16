@@ -70,9 +70,12 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		// heights there may be only one eligible node.
 		var exhaustedErr *flow.NodeExhaustedError
 		if errors.As(err, &exhaustedErr) {
+			log.Printf("[ingester] ResourceExhausted for height %d on node %s, sleeping 10s", height, exhaustedErr.Node)
 			time.Sleep(10 * time.Second)
 			return true
 		}
+		// Log unhandled errors for debugging
+		log.Printf("[ingester] Unhandled fetch error for height %d (repin=false): %v", height, err)
 		return false
 	}
 
