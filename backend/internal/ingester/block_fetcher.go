@@ -480,13 +480,17 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 					ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
 					return
 				}
-				var sporkErr *flow.SporkRootNotFoundError
-				if errors.As(rErr, &sporkErr) {
-					ch <- fetchRes{repin: true}
-					return
-				}
+				// NodeUnavailableError wraps NotFound — for per-tx results,
+				// this means the specific tx result is missing (not a node-level issue).
+				// Return empty result instead of triggering a repin.
 				var nodeErr *flow.NodeUnavailableError
 				if errors.As(rErr, &nodeErr) {
+					log.Printf("[ingester] Warn: tx result NotFound for %s (idx=%d), returning empty result", t.ID(), idx)
+					ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
+					return
+				}
+				var sporkErr *flow.SporkRootNotFoundError
+				if errors.As(rErr, &sporkErr) {
 					ch <- fetchRes{repin: true}
 					return
 				}
