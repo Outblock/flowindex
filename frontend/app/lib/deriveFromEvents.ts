@@ -156,6 +156,10 @@ const WRAPPER_CONTRACTS = new Set(['FungibleToken', 'NonFungibleToken']);
 const FEE_VAULT_ADDRESS = 'f919ee77447b7497';
 
 function classifyTokenEvent(eventType: string): { isToken: boolean; isNFT: boolean } {
+  // EVM bridge events (EVM.FLOWTokensWithdrawn/Deposited) are NOT standard FT events
+  if (parseContractName(eventType) === 'EVM') {
+    return { isToken: false, isNFT: false };
+  }
   if (eventType.includes('NonFungibleToken.') &&
     (eventType.includes('.Deposited') || eventType.includes('.Withdrawn'))) {
     return { isToken: true, isNFT: true };
@@ -179,6 +183,11 @@ function classifyTokenEvent(eventType: string): { isToken: boolean; isNFT: boole
     return { isToken: true, isNFT: false };
   }
   return { isToken: false, isNFT: false };
+}
+
+function isEVMBridgeEvent(eventType: string): boolean {
+  return eventType.includes('EVM.FLOWTokensWithdrawn') ||
+    eventType.includes('EVM.FLOWTokensDeposited');
 }
 
 function parseContractAddress(eventType: string): string {
@@ -345,20 +354,20 @@ function buildTokenTransfers(legs: TokenLeg[]): RawTransfer[] {
         isNFT: w.isNFT,
       });
     }
-    // Leftovers: burns (withdraw only)
+    // Leftovers: burns (withdraw only) or cross-VM
     for (let i = pairs; i < outs.length; i++) {
       const w = outs[i];
       out.push({
         eventIndex: w.eventIndex, token: toToken(w),
-        fromAddress: w.owner, toAddress: '', amount: w.amount, tokenID: w.tokenID, isNFT: w.isNFT,
+        fromAddress: w.owner, toAddress: w.to, amount: w.amount, tokenID: w.tokenID, isNFT: w.isNFT,
       });
     }
-    // Leftovers: mints (deposit only)
+    // Leftovers: mints (deposit only) or cross-VM
     for (let i = pairs; i < ins.length; i++) {
       const d = ins[i];
       out.push({
         eventIndex: d.eventIndex, token: toToken(d),
-        fromAddress: '', toAddress: d.owner, amount: d.amount, tokenID: d.tokenID, isNFT: d.isNFT,
+        fromAddress: d.from, toAddress: d.owner, amount: d.amount, tokenID: d.tokenID, isNFT: d.isNFT,
       });
     }
   }
@@ -370,7 +379,7 @@ function buildTokenTransfers(legs: TokenLeg[]): RawTransfer[] {
     for (const d of ins) {
       out.push({
         eventIndex: d.eventIndex, token: toToken(d),
-        fromAddress: '', toAddress: d.owner, amount: d.amount, tokenID: d.tokenID, isNFT: d.isNFT,
+        fromAddress: d.from, toAddress: d.owner, amount: d.amount, tokenID: d.tokenID, isNFT: d.isNFT,
       });
     }
   }
@@ -501,8 +510,33 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
   const wrapperDeposits: { addr: string; amount: string; tokenContract: string }[] = [];
   const wrapperWithdrawals: { addr: string; amount: string; tokenContract: string }[] = [];
 
+  // EVM bridge events (EVM.FLOWTokensWithdrawn/Deposited) for cross-VM FLOW transfer enrichment
+  const evmWithdrawals: { coaAddress: string; amount: string }[] = [];
+  const evmDeposits: { coaAddress: string; amount: string }[] = [];
+
   for (const event of events) {
     const eventType = event.type || '';
+
+    // EVM bridge events
+    if (isEVMBridgeEvent(eventType)) {
+      try {
+        const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
+        const fields = parseCadenceEventFields(payload);
+        if (fields) {
+          const amount = String(fields.amount ?? '');
+          const addr = String(fields.address ?? '');
+          if (amount && addr) {
+            const coaAddress = addr.toLowerCase().replace(/^0x/, '');
+            if (eventType.includes('FLOWTokensWithdrawn')) {
+              evmWithdrawals.push({ coaAddress, amount });
+            } else {
+              evmDeposits.push({ coaAddress, amount });
+            }
+          }
+        }
+      } catch { /* skip */ }
+      continue;
+    }
 
     // Token events
     const { isToken, isNFT } = classifyTokenEvent(eventType);
@@ -554,6 +588,30 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
       if (wrapper) {
         leg.from = wrapper.addr;
         leg.owner = wrapper.addr;
+      }
+    }
+  }
+
+  // Enrich unpaired FlowToken legs with COA addresses from EVM bridge events
+  // EVM.FLOWTokensWithdrawn (FLOW left EVM) → fill "from" on matching FlowToken deposit
+  // EVM.FLOWTokensDeposited (FLOW entered EVM) → fill "to" on matching FlowToken withdrawal
+  const usedEvmW = new Set<number>();
+  for (const leg of legs) {
+    if (leg.contractName === 'FlowToken' && leg.direction === 'deposit' && !leg.from) {
+      const idx = evmWithdrawals.findIndex((ew, i) => !usedEvmW.has(i) && ew.amount === leg.amount);
+      if (idx >= 0) {
+        leg.from = evmWithdrawals[idx].coaAddress;
+        usedEvmW.add(idx);
+      }
+    }
+  }
+  const usedEvmD = new Set<number>();
+  for (const leg of legs) {
+    if (leg.contractName === 'FlowToken' && leg.direction === 'withdraw' && !leg.to) {
+      const idx = evmDeposits.findIndex((ed, i) => !usedEvmD.has(i) && ed.amount === leg.amount);
+      if (idx >= 0) {
+        leg.to = evmDeposits[idx].coaAddress;
+        usedEvmD.add(idx);
       }
     }
   }
