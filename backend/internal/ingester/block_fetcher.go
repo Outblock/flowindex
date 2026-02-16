@@ -60,6 +60,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		}
 		var nodeErr *flow.NodeUnavailableError
 		if errors.As(err, &nodeErr) {
+			// Permanently mark this node as unable to serve this height,
+			// so PinByHeight skips it for this and all lower heights.
+			w.client.MarkNodeMinHeight(nodeErr.NodeIndex, height+1)
 			return true
 		}
 		return false
