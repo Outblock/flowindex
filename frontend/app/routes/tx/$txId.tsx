@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
@@ -17,6 +17,7 @@ import { formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
 import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
+import { deriveEnrichments } from '../../lib/deriveFromEvents';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -364,49 +365,28 @@ function TransactionDetail() {
     const { transaction, error: loaderError } = Route.useLoaderData();
     const error = transaction ? null : (loaderError || 'Transaction not found');
 
-    // Fetch enrichments (transfers, DeFi, EVM, contracts, fees, templates) async
-    const [enrichments, setEnrichments] = useState<any>(null);
-    useEffect(() => {
-        if (!transaction?.id) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const baseUrl = await resolveApiBaseUrl();
-                const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(transaction.id)}/enrichments`);
-                if (!res.ok || cancelled) return;
-                const json = await res.json();
-                const data = json?.data?.[0] ?? json;
-                if (!cancelled) setEnrichments(data);
-            } catch {
-                // Silent fail — enrichment sections stay in loading state
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [transaction?.id]);
+    // Derive enrichments locally from events + script (no backend call needed)
+    const enrichments = useMemo(() => {
+        if (!transaction?.events?.length) return null;
+        return deriveEnrichments(transaction.events, transaction.script);
+    }, [transaction?.events, transaction?.script]);
 
-    // Merge enrichments into a full transaction object
+    // Merge derived enrichments into the transaction object
     const fullTx = enrichments
         ? {
             ...transaction,
-            ft_transfers: enrichments.ft_transfers?.length > 0 ? enrichments.ft_transfers : transaction?.ft_transfers,
-            nft_transfers: enrichments.nft_transfers?.length > 0 ? enrichments.nft_transfers : transaction?.nft_transfers,
-            defi_events: enrichments.defi_events?.length > 0 ? enrichments.defi_events : transaction?.defi_events,
-            evm_executions: enrichments.evm_executions?.length > 0 ? enrichments.evm_executions : transaction?.evm_executions,
-            contract_imports: enrichments.contract_imports?.length > 0 ? enrichments.contract_imports : transaction?.contract_imports,
-            fee: enrichments.fee ?? transaction?.fee,
-            script_hash: enrichments.script_hash ?? transaction?.script_hash,
-            template_category: enrichments.template_category ?? transaction?.template_category,
-            template_label: enrichments.template_label ?? transaction?.template_label,
-            template_description: enrichments.template_description ?? transaction?.template_description,
+            ft_transfers: enrichments.ft_transfers.length > 0 ? enrichments.ft_transfers : transaction?.ft_transfers,
+            nft_transfers: enrichments.nft_transfers.length > 0 ? enrichments.nft_transfers : transaction?.nft_transfers,
+            evm_executions: enrichments.evm_executions.length > 0 ? enrichments.evm_executions : transaction?.evm_executions,
+            contract_imports: enrichments.contract_imports.length > 0 ? enrichments.contract_imports : transaction?.contract_imports,
+            fee: enrichments.fee || transaction?.fee,
         }
         : transaction;
 
     const hasTransfers = fullTx?.ft_transfers?.length > 0 || fullTx?.nft_transfers?.length > 0 || fullTx?.defi_events?.length > 0;
-    const enrichmentsLoading = transaction?.lite && !enrichments;
-    // Show transfers tab if enrichments are still loading (they may contain transfers)
-    const showTransfersTab = hasTransfers || enrichmentsLoading;
+    const showTransfersTab = hasTransfers;
     const validTabs = ['transfers', 'script', 'events', 'evm'];
-    const defaultTab = (hasTransfers || enrichmentsLoading) ? 'transfers' : (fullTx?.script ? 'script' : 'events');
+    const defaultTab = hasTransfers ? 'transfers' : (fullTx?.script ? 'script' : 'events');
     const [activeTab, setActiveTab] = useState(() =>
         urlTab && validTabs.includes(urlTab) ? urlTab : defaultTab
     );
@@ -710,18 +690,6 @@ function TransactionDetail() {
                     <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 border-t-0 p-6 min-h-[300px] shadow-sm dark:shadow-none">
                         {activeTab === 'transfers' && (
                             <div className="space-y-6">
-                                {/* Loading skeleton for enrichment data */}
-                                {enrichmentsLoading && (
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-4 w-4 rounded bg-zinc-200 dark:bg-white/10 animate-pulse" />
-                                            <div className="h-3 w-32 rounded bg-zinc-200 dark:bg-white/10 animate-pulse" />
-                                        </div>
-                                        {[1, 2, 3].map(i => (
-                                            <div key={i} className="h-14 rounded-sm bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/5 animate-pulse" />
-                                        ))}
-                                    </div>
-                                )}
                                 {/* DeFi Swap Events */}
                                 {fullTx.defi_events?.length > 0 && (
                                     <div>
@@ -936,7 +904,7 @@ function TransactionDetail() {
                                     </div>
                                 )}
 
-                                {!hasTransfers && !enrichmentsLoading && (
+                                {!hasTransfers && (
                                     <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
                                         <ArrowRightLeft className="h-8 w-8 mb-2 opacity-20" />
                                         <p className="text-xs uppercase tracking-widest">No Token Transfers</p>

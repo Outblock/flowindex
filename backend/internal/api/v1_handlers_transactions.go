@@ -96,56 +96,6 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
 }
 
-func (s *Server) handleFlowGetTransactionEnrichments(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
-	tx, err := s.repo.GetTransactionByID(r.Context(), id)
-	if err != nil || tx == nil {
-		writeAPIError(w, http.StatusNotFound, "transaction not found")
-		return
-	}
-
-	out := make(map[string]interface{})
-
-	// Contracts
-	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), []string{tx.ID})
-	out["contract_imports"] = contracts[tx.ID]
-
-	// Fees
-	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), []string{tx.ID})
-	out["fee"] = feesByTx[tx.ID]
-
-	// EVM executions
-	if tx.IsEVM {
-		evmExecs, _ := s.repo.GetEVMTransactionsByCadenceTx(r.Context(), tx.ID, tx.BlockHeight)
-		if len(evmExecs) > 0 {
-			execs := make([]map[string]interface{}, 0, len(evmExecs))
-			for _, rec := range evmExecs {
-				execs = append(execs, toEVMTransactionOutput(rec))
-			}
-			out["evm_executions"] = execs
-		}
-	}
-
-	// Script template classification
-	if templates, err := s.repo.GetScriptTemplatesByTxIDs(r.Context(), []string{tx.ID}); err == nil {
-		if tmpl, found := templates[strings.TrimPrefix(strings.ToLower(tx.ID), "0x")]; found {
-			if tmpl.ScriptHash != "" {
-				out["script_hash"] = tmpl.ScriptHash
-			}
-			if tmpl.Category != "" {
-				out["template_category"] = tmpl.Category
-				out["template_label"] = tmpl.Label
-				out["template_description"] = tmpl.Description
-			}
-		}
-	}
-
-	// FT transfers, NFT transfers, DeFi events
-	s.enrichTransactionOutput(r, out, tx)
-
-	writeAPIResponse(w, []interface{}{out}, nil, nil)
-}
-
 // enrichTransactionOutput adds FT transfers, NFT transfers, and DeFi events to the output map.
 func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interface{}, tx *models.Transaction) {
 	// Enrich: FT transfers with token metadata
