@@ -113,44 +113,66 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			IsSealed:             true,
 		}
 
-		// 2. Fetch All Transactions & Results for the Block (Bulk RPC)
-		txs, err := pin.GetTransactionsByBlockID(ctx, block.ID)
+		// 2. Fetch All Transactions & Results for the Block
+		// Try bulk APIs first; fall back to per-collection/per-tx for old spork nodes.
+		var txs []*flowsdk.Transaction
+		var results []*flowsdk.TransactionResult
+		usedBulkTxAPI := false
+
+		txs, err = pin.GetTransactionsByBlockID(ctx, block.ID)
 		if err != nil {
 			if shouldRepin(err) {
 				continue
 			}
-			result.Error = fmt.Errorf("failed to get transactions for block %s: %w", block.ID, err)
-			return result
+			if isUnimplementedError(err) {
+				// Old spork node: fall back to GetCollection + GetTransaction per-tx
+				txs, err = w.fetchTransactionsViaCollections(ctx, pin, block)
+				if err != nil {
+					if shouldRepin(err) {
+						continue
+					}
+					result.Error = fmt.Errorf("failed to get transactions via collections for block %s: %w", block.ID, err)
+					return result
+				}
+			} else {
+				result.Error = fmt.Errorf("failed to get transactions for block %s: %w", block.ID, err)
+				return result
+			}
+		} else {
+			usedBulkTxAPI = true
 		}
 
 		// Track whether we should retry this height with a different node pin.
 		repinRequested := false
 
-		results, err := pin.GetTransactionResultsByBlockID(ctx, block.ID)
+		results, err = pin.GetTransactionResultsByBlockID(ctx, block.ID)
 		if err != nil {
 			if shouldRepin(err) {
 				continue
 			}
 
-			// Some blocks have enough tx results/events to exceed the default gRPC receive limit.
-			// Fall back to per-tx result calls to avoid stalling history backfill on a single busy block.
-			if isGRPCMessageTooLarge(err) {
-				log.Printf("[history_ingester] Warn: tx results payload too large for block %s (height=%d), falling back to per-tx calls: %v", block.ID, height, err)
-				results = make([]*flowsdk.TransactionResult, 0, len(txs))
-				for txIdx, tx := range txs {
-					if tx == nil {
-						continue
-					}
-					r, rErr := pin.GetTransactionResultByIndex(ctx, block.ID, uint32(txIdx))
-					if rErr != nil {
-						if shouldRepin(rErr) {
-							repinRequested = true
-							break
-						}
-						result.Error = fmt.Errorf("failed to get tx result %s: %w", tx.ID().String(), rErr)
-						return result
-					}
-					results = append(results, r)
+			if isUnimplementedError(err) || isExecutionNodeError(err) || isBulkResultInternalError(err) {
+				// Old spork node, execution nodes down, or bulk API bug: fall back to per-tx GetTransactionResult.
+				// Force ID-based lookup (not index-based) when execution nodes are the problem.
+				useIndexAPI := usedBulkTxAPI && !isExecutionNodeError(err)
+				if isExecutionNodeError(err) || isBulkResultInternalError(err) {
+					log.Printf("[ingester] Warn: bulk result API failed for block %s (height=%d), falling back to per-tx result calls: %v", block.ID, height, err)
+				}
+				results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, useIndexAPI)
+				if err != nil {
+					result.Error = err
+					return result
+				}
+				if repinRequested {
+					continue
+				}
+			} else if isGRPCMessageTooLarge(err) {
+				// Payload too large: fall back to per-tx result calls
+				log.Printf("[ingester] Warn: tx results payload too large for block %s (height=%d), falling back to per-tx calls: %v", block.ID, height, err)
+				results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, usedBulkTxAPI)
+				if err != nil {
+					result.Error = err
+					return result
 				}
 				if repinRequested {
 					continue
@@ -331,6 +353,65 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 	return result
 }
 
+// fetchTransactionsViaCollections fetches all transactions in a block by iterating
+// over its collection guarantees. Used as fallback for old spork nodes that don't
+// support GetTransactionsByBlockID.
+func (w *Worker) fetchTransactionsViaCollections(ctx context.Context, pin *flow.PinnedClient, block *flowsdk.Block) ([]*flowsdk.Transaction, error) {
+	var allTxs []*flowsdk.Transaction
+
+	// System transaction (epoch/service tx) is not in any collection but is always
+	// the last transaction in a block. We'll fetch it separately via GetTransactionResult
+	// matching later. For now, collect only user transactions from collections.
+	for _, cg := range block.CollectionGuarantees {
+		coll, err := pin.GetCollection(ctx, cg.CollectionID)
+		if err != nil {
+			return nil, fmt.Errorf("GetCollection(%s): %w", cg.CollectionID, err)
+		}
+		for _, txID := range coll.TransactionIDs {
+			tx, err := pin.GetTransaction(ctx, txID)
+			if err != nil {
+				return nil, fmt.Errorf("GetTransaction(%s): %w", txID, err)
+			}
+			allTxs = append(allTxs, tx)
+		}
+	}
+	return allTxs, nil
+}
+
+// fetchResultsPerTx fetches transaction results one at a time. When usedBulkTxAPI is true,
+// it uses GetTransactionResultByIndex (index-based); otherwise it uses GetTransactionResult
+// (ID-based, for old spork nodes that also lack the index-based API).
+func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction, usedBulkTxAPI bool) ([]*flowsdk.TransactionResult, bool, error) {
+	results := make([]*flowsdk.TransactionResult, 0, len(txs))
+	for txIdx, tx := range txs {
+		if tx == nil {
+			continue
+		}
+		var r *flowsdk.TransactionResult
+		var rErr error
+		if usedBulkTxAPI {
+			// Bulk tx API worked, so index-based result API should too
+			r, rErr = pin.GetTransactionResultByIndex(ctx, blockID, uint32(txIdx))
+		} else {
+			// Old spork: use ID-based result fetch
+			r, rErr = pin.GetTransactionResult(ctx, tx.ID())
+		}
+		if rErr != nil {
+			var sporkErr *flow.SporkRootNotFoundError
+			if errors.As(rErr, &sporkErr) {
+				return nil, true, nil
+			}
+			var nodeErr *flow.NodeUnavailableError
+			if errors.As(rErr, &nodeErr) {
+				return nil, true, nil
+			}
+			return nil, false, fmt.Errorf("failed to get tx result %s: %w", tx.ID().String(), rErr)
+		}
+		results = append(results, r)
+	}
+	return results, false, nil
+}
+
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
@@ -340,6 +421,39 @@ func isNotFoundError(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "NotFound") || strings.Contains(msg, "not found")
+}
+
+func isExecutionNodeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "failed to retrieve result from execution node")
+}
+
+// isBulkResultInternalError detects the "transaction failed but error message is empty" bug
+// in GetTransactionResultsByBlockID. Per-tx GetTransactionResult typically works around it.
+func isBulkResultInternalError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if st, ok := status.FromError(err); ok {
+		if st.Code() == codes.Internal && strings.Contains(st.Message(), "transaction failed but error message is empty") {
+			return true
+		}
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "transaction failed but error message is empty")
+}
+
+func isUnimplementedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if st, ok := status.FromError(err); ok {
+		return st.Code() == codes.Unimplemented
+	}
+	return strings.Contains(err.Error(), "Unimplemented")
 }
 
 func isGRPCMessageTooLarge(err error) bool {

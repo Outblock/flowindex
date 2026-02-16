@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"flowscan-clone/internal/flow"
@@ -392,8 +393,13 @@ func (s *Service) fetchBatchParallel(ctx context.Context, start, end uint64) ([]
 	sem := make(chan struct{}, s.config.WorkerCount) // Semaphore for concurrency control
 
 	worker := NewWorker(s.client)
-	var errOnce sync.Once
-	var firstErr error
+
+	// Track whether ALL blocks in the batch failed with spork-related errors,
+	// which signals we should propagate the error so the spork-boundary handler
+	// in process() can adjust the floor.
+	var sporkErr error
+	var sporkErrOnce sync.Once
+	var skippedCount int64
 
 	for i := 0; i < total; i++ {
 		height := start + uint64(i)
@@ -406,16 +412,26 @@ func (s *Service) fetchBatchParallel(ctx context.Context, start, end uint64) ([]
 			defer wg.Done()
 			defer func() { <-sem }() // Release
 
-			// Stop if error already occurred
-			if firstErr != nil {
-				return
-			}
-
 			res := worker.FetchBlockData(ctx, height)
 			if res.Error != nil {
-				errOnce.Do(func() {
-					firstErr = res.Error
+				// Spork boundary errors should still propagate so the service can
+				// adjust the floor height. Detect and capture them.
+				errMsg := res.Error.Error()
+				if strings.Contains(errMsg, "no suitable access node available") ||
+					strings.Contains(errMsg, "spork root block height") {
+					sporkErrOnce.Do(func() { sporkErr = res.Error })
+					return
+				}
+
+				// Non-spork errors: log and skip this block, continue the batch.
+				log.Printf("[%s] Warn: skipping block %d due to fetch error: %v", s.config.ServiceName, height, res.Error)
+				atomic.AddInt64(&skippedCount, 1)
+				// Record error in the result so saveBatch can log it to indexing_errors.
+				res.Block = nil
+				res.Warnings = append(res.Warnings, FetchWarning{
+					Message: fmt.Sprintf("block fetch failed: %v", res.Error),
 				})
+				results[idx] = res
 				return
 			}
 			results[idx] = res // Safe because idx is unique per goroutine
@@ -424,8 +440,15 @@ func (s *Service) fetchBatchParallel(ctx context.Context, start, end uint64) ([]
 
 	wg.Wait()
 
-	if firstErr != nil {
-		return nil, firstErr
+	// If we got spork boundary errors, propagate so the caller can handle the floor.
+	if sporkErr != nil {
+		return nil, sporkErr
+	}
+
+	skipped := atomic.LoadInt64(&skippedCount)
+	if skipped > 0 {
+		log.Printf("[%s] Batch %d->%d: skipped %d/%d blocks due to errors (will retry later)",
+			s.config.ServiceName, start, end, skipped, total)
 	}
 
 	return results, nil
@@ -439,13 +462,30 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 
 	// Ensure sorted by height (should be already, but safety first)
 	sort.Slice(results, func(i, j int) bool {
+		if results[i] == nil {
+			return true
+		}
+		if results[j] == nil {
+			return false
+		}
 		return results[i].Height < results[j].Height
 	})
 
 	broadcastRealtime := s.config.Mode == "forward"
 
 	for _, res := range results {
-		if res == nil || res.Block == nil {
+		if res == nil {
+			continue
+		}
+
+		// Log warnings (including from skipped/failed blocks) to indexing_errors for later revisit.
+		for _, w := range res.Warnings {
+			if logErr := s.repo.LogIndexingError(ctx, s.config.ServiceName, res.Height, w.TxID, "fetch_warning", w.Message, nil); logErr != nil {
+				log.Printf("[%s] failed to log indexing warning: %v", s.config.ServiceName, logErr)
+			}
+		}
+
+		if res.Block == nil {
 			continue
 		}
 
@@ -469,12 +509,6 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 		txs = append(txs, res.Transactions...)
 		events = append(events, res.Events...)
 
-		// Log any warnings (e.g. missing tx results) to raw.indexing_errors for later revisit.
-		for _, w := range res.Warnings {
-			if logErr := s.repo.LogIndexingError(ctx, s.config.ServiceName, res.Height, w.TxID, "fetch_warning", w.Message, nil); logErr != nil {
-				log.Printf("[%s] failed to log indexing warning: %v", s.config.ServiceName, logErr)
-			}
-		}
 	}
 
 	// Use the atomic batch save
