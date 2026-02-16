@@ -93,6 +93,14 @@
       background-position: 150% 0;
     }
   }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Route-level pending progress bar */

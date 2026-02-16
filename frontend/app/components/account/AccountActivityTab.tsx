@@ -104,7 +104,9 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     };
     const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
     const didFetchRef = useRef(false);
-    const [viewMode, setViewMode] = useState<ViewMode>('pages');
+    const [viewMode, setViewMode] = useState<ViewMode>(() =>
+        typeof window !== 'undefined' && window.innerWidth < 768 ? 'timeline' : 'pages'
+    );
 
     // Timeline state
     const [timelineTxs, setTimelineTxs] = useState<any[]>([]);
@@ -390,12 +392,12 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     return (
         <div>
             {/* Filter toggles */}
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-4 overflow-x-auto no-scrollbar">
                 {filters.map(({ id, label, icon: Icon }) => (
                     <button
                         key={id}
                         onClick={() => setFilterMode(id)}
-                        className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors rounded-sm ${filterMode === id
+                        className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors rounded-sm whitespace-nowrap shrink-0 ${filterMode === id
                             ? 'border-nothing-green-dark dark:border-nothing-green text-zinc-900 dark:text-white bg-zinc-100 dark:bg-white/5'
                             : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
                         }`}

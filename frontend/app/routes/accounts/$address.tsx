@@ -289,20 +289,22 @@ function AccountDetail() {
 
                 <PageHeader
                     title={
-                        <div className="flex items-center gap-4">
-                            <Avatar
-                                size={64}
-                                name={normalizedAddress}
-                                variant="beam"
-                                colors={colorsFromAddress(normalizedAddress)}
-                            />
+                        <div className="flex items-center gap-3 md:gap-4">
+                            <div className="shrink-0 w-10 h-10 md:w-16 md:h-16">
+                                <Avatar
+                                    size={64}
+                                    name={normalizedAddress}
+                                    variant="beam"
+                                    colors={colorsFromAddress(normalizedAddress)}
+                                />
+                            </div>
                             <span>Account</span>
                         </div>
                     }
                     subtitle={
-                        <div className="space-y-1.5">
-                            <div className="flex items-center gap-1 group">
-                                {normalizedAddress}
+                        <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-center gap-1 group min-w-0">
+                                <span className="truncate">{normalizedAddress}</span>
                                 <CopyButton
                                     content={normalizedAddress}
                                     variant="ghost"
@@ -325,9 +327,9 @@ function AccountDetail() {
                     }
                 >
                     <div className="flex items-center gap-4">
-                        <div className="text-right">
+                        <div className="text-left md:text-right">
                             <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Balance</div>
-                            <div className="text-2xl md:text-3xl font-bold">
+                            <div className="text-xl md:text-3xl font-bold">
                                 <SafeNumberFlow value={balanceValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
                             </div>
                         </div>
