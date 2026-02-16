@@ -335,7 +335,7 @@ function AccountDetail() {
                             <button className="p-2 rounded-md border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                                 <QrCode className="h-5 w-5 text-zinc-400" />
                             </button>
-                            <div className="absolute right-0 top-full mt-2 z-50 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 origin-top-right">
+                            <div className="absolute right-0 bottom-full mb-2 z-50 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 origin-bottom-right">
                                 <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md shadow-xl">
                                     <QRCodeSVG
                                         value={`0x${normalizedAddress}`}
