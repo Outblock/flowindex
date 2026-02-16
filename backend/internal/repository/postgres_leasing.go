@@ -235,13 +235,23 @@ func (r *Repository) AdvanceCheckpointSafe(ctx context.Context, workerType strin
 
 // DeleteFTTransfersByContractName deletes FT transfers with the given contract_name.
 // Used to clean up bogus data (e.g. contract_name='EVM' from mis-classified EVM bridge events).
-func (r *Repository) DeleteFTTransfersByContractName(ctx context.Context, contractName string) (int64, error) {
+// Returns (rows_deleted, min_block_height_of_deleted_rows, error).
+func (r *Repository) DeleteFTTransfersByContractName(ctx context.Context, contractName string) (int64, uint64, error) {
+	// Find the earliest affected height first
+	var minHeight uint64
+	err := r.db.QueryRow(ctx,
+		"SELECT COALESCE(MIN(block_height), 0) FROM app.ft_transfers WHERE contract_name = $1",
+		contractName).Scan(&minHeight)
+	if err != nil {
+		return 0, 0, err
+	}
+
 	tag, err := r.db.Exec(ctx,
 		"DELETE FROM app.ft_transfers WHERE contract_name = $1", contractName)
 	if err != nil {
-		return 0, err
+		return 0, minHeight, err
 	}
-	return tag.RowsAffected(), nil
+	return tag.RowsAffected(), minHeight, nil
 }
 
 // ResetWorkerToHeight resets a worker's checkpoint and leases so it re-processes from the given height.
