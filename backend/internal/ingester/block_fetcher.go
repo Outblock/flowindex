@@ -66,7 +66,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			return true
 		}
 		// If a node is rate-limited (ResourceExhausted) after all retries,
-		// sleep and retry the pin loop so the worker backs off.
+		// sleep and retry. Workers back off to give the node breathing room.
 		if st, ok := status.FromError(errors.Unwrap(err)); ok && st.Code() == codes.ResourceExhausted {
 			time.Sleep(5 * time.Second)
 			return true
