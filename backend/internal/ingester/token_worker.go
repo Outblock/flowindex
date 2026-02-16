@@ -347,6 +347,12 @@ func classifyTokenEvent(eventType string) (bool, bool) {
 	if strings.HasSuffix(eventType, ".Deposited") || strings.HasSuffix(eventType, ".Withdrawn") {
 		return true, false
 	}
+	// Mint/Burn events: TokensMinted (deposit, no from), TokensBurned (withdraw, no to).
+	// Skip FlowToken mints/burns as they are system-level operations.
+	if (strings.Contains(eventType, ".TokensMinted") || strings.Contains(eventType, ".TokensBurned")) &&
+		!strings.Contains(eventType, "FlowToken.") {
+		return true, false
+	}
 	return false, false
 }
 
@@ -357,6 +363,10 @@ func inferTransferDirection(eventType, fromAddr, toAddr string) string {
 		return "withdraw"
 	case strings.Contains(lower, "deposit"):
 		return "deposit"
+	case strings.Contains(lower, "minted"):
+		return "deposit"
+	case strings.Contains(lower, "burned"):
+		return "withdraw"
 	case fromAddr != "" && toAddr != "":
 		return "direct"
 	case fromAddr != "":

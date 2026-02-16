@@ -169,6 +169,11 @@ function classifyTokenEvent(eventType: string): { isToken: boolean; isNFT: boole
   if (eventType.endsWith('.Deposited') || eventType.endsWith('.Withdrawn')) {
     return { isToken: true, isNFT: false };
   }
+  // Mint/Burn events (skip FlowToken system-level mints/burns)
+  if ((eventType.includes('.TokensMinted') || eventType.includes('.TokensBurned')) &&
+    !eventType.includes('FlowToken.')) {
+    return { isToken: true, isNFT: false };
+  }
   return { isToken: false, isNFT: false };
 }
 
@@ -192,6 +197,8 @@ function inferDirection(eventType: string, fromAddr: string, toAddr: string): st
   const lower = eventType.toLowerCase();
   if (lower.includes('withdraw')) return 'withdraw';
   if (lower.includes('deposit')) return 'deposit';
+  if (lower.includes('minted')) return 'deposit';
+  if (lower.includes('burned')) return 'withdraw';
   if (fromAddr && toAddr) return 'direct';
   if (fromAddr) return 'withdraw';
   if (toAddr) return 'deposit';
