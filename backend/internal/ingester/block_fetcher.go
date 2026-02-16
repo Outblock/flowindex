@@ -465,9 +465,18 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 				r, rErr = pin.GetTransactionResult(ctx, t.ID())
 			}
 			if rErr != nil {
-				// Handle "key not found" on old spork nodes — return empty result
-				if strings.Contains(rErr.Error(), "key not found") || strings.Contains(rErr.Error(), "could not retrieve") {
-					log.Printf("[ingester] Warn: tx result not found for %s (idx=%d), returning empty result", t.ID(), idx)
+				// Handle non-fatal errors on old spork nodes — return empty sealed result
+				// so the block can still be saved. These include:
+				//   - "key not found": tx result missing from storage
+				//   - "could not retrieve": similar storage issue
+				//   - "failed to execute the script on the execution node": execution node down/errors
+				//   - "cadence runtime error": script replay failure
+				errMsg := rErr.Error()
+				if strings.Contains(errMsg, "key not found") ||
+					strings.Contains(errMsg, "could not retrieve") ||
+					strings.Contains(errMsg, "failed to execute the script on the execution node") ||
+					strings.Contains(errMsg, "cadence runtime error") {
+					log.Printf("[ingester] Warn: tx result unavailable for %s (idx=%d), returning empty result: %.120s", t.ID(), idx, errMsg)
 					ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
 					return
 				}
