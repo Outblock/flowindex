@@ -5,7 +5,7 @@ import { getFlowV1AccountByAddress, getFlowV1AccountByAddressTransaction } from 
 import { resolveApiBaseUrl } from '../../api';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark, AlertTriangle
+    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark, AlertTriangle, QrCode
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
@@ -28,6 +28,8 @@ import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { COABadge } from '../../components/ui/COABadge';
 import { cn } from '../../lib/utils';
+import { QRCodeSVG } from 'qrcode.react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'staking', 'keys', 'contracts', 'storage', 'linked'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
@@ -170,6 +172,7 @@ function AccountDetail() {
     };
 
     const normalizedAddress = normalizeAddress(address);
+    const { theme } = useTheme();
 
     const [onChainData, setOnChainData] = useState<{
         balance?: number; storage?: StorageInfo; staking?: StakingInfo; coaAddress?: string;
@@ -321,11 +324,30 @@ function AccountDetail() {
                         </div>
                     }
                 >
-                    <div className="flex gap-3">
+                    <div className="flex items-center gap-4">
                         <div className="text-right">
                             <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Balance</div>
                             <div className="text-2xl md:text-3xl font-bold">
                                 <SafeNumberFlow value={balanceValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
+                            </div>
+                        </div>
+                        <div className="relative group">
+                            <button className="p-2 rounded-md border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                                <QrCode className="h-5 w-5 text-zinc-400" />
+                            </button>
+                            <div className="absolute right-0 top-full mt-2 z-50 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 origin-top-right">
+                                <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md shadow-xl">
+                                    <QRCodeSVG
+                                        value={`0x${normalizedAddress}`}
+                                        size={120}
+                                        fgColor={theme === 'dark' ? '#ffffff' : '#18181b'}
+                                        bgColor="transparent"
+                                        level="M"
+                                    />
+                                    <div className="mt-2 text-[10px] text-zinc-400 text-center font-mono">
+                                        0x{normalizedAddress.slice(0, 4)}...{normalizedAddress.slice(-4)}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

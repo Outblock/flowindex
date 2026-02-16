@@ -33,6 +33,7 @@
     "lucide-react": "^0.563.0",
     "motion": "^12.34.0",
     "postprocessing": "^6.36.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hot-toast": "^2.6.0",
