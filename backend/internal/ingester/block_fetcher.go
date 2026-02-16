@@ -178,6 +178,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					return result
 				}
 				if repinRequested {
+					log.Printf("[ingester] fetchResultsPerTx requested repin for height %d (node=%s)", height, pin.Node())
 					continue
 				}
 			} else if isGRPCMessageTooLarge(err) {
@@ -407,14 +408,17 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 		if rErr != nil {
 			var sporkErr *flow.SporkRootNotFoundError
 			if errors.As(rErr, &sporkErr) {
+				log.Printf("[ingester] fetchResultsPerTx: SporkRootNotFoundError for tx %s (idx=%d)", tx.ID(), txIdx)
 				return nil, true, nil
 			}
 			var nodeErr *flow.NodeUnavailableError
 			if errors.As(rErr, &nodeErr) {
+				log.Printf("[ingester] fetchResultsPerTx: NodeUnavailableError for tx %s (idx=%d): %v", tx.ID(), txIdx, rErr)
 				return nil, true, nil
 			}
 			var exhaustedErr *flow.NodeExhaustedError
 			if errors.As(rErr, &exhaustedErr) {
+				log.Printf("[ingester] fetchResultsPerTx: NodeExhaustedError for tx %s (idx=%d)", tx.ID(), txIdx)
 				return nil, true, nil
 			}
 			return nil, false, fmt.Errorf("failed to get tx result %s: %w", tx.ID().String(), rErr)
