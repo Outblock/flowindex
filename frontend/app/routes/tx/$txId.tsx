@@ -801,6 +801,16 @@ function TransactionDetail() {
                                                             <span className="text-[10px] text-zinc-500 font-medium uppercase">
                                                                 {ft.token_symbol || ft.token?.split('.').pop() || ''}
                                                             </span>
+                                                            {ft.transfer_type === 'mint' && (
+                                                                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
+                                                                    Mint
+                                                                </span>
+                                                            )}
+                                                            {ft.transfer_type === 'burn' && (
+                                                                <span className="text-[9px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
+                                                                    Burn
+                                                                </span>
+                                                            )}
                                                             {ft.is_cross_vm && (
                                                                 <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
                                                                     <Globe className="w-2.5 h-2.5" />
@@ -864,6 +874,16 @@ function TransactionDetail() {
                                                             <span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
                                                                 {nt.collection_name || nt.token?.split('.').pop() || 'NFT'}
                                                             </span>
+                                                            {nt.transfer_type === 'mint' && (
+                                                                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
+                                                                    Mint
+                                                                </span>
+                                                            )}
+                                                            {nt.transfer_type === 'burn' && (
+                                                                <span className="text-[9px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
+                                                                    Burn
+                                                                </span>
+                                                            )}
                                                             {nt.nft_rarity && (
                                                                 <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
                                                                     {nt.nft_rarity}

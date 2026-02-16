@@ -9,12 +9,15 @@
 
 // ── Types ──
 
+export type TransferType = 'transfer' | 'mint' | 'burn';
+
 export interface FTTransfer {
   token: string;
   from_address: string;
   to_address: string;
   amount: string;
   event_index: number;
+  transfer_type: TransferType;
 }
 
 export interface NFTTransfer {
@@ -23,6 +26,7 @@ export interface NFTTransfer {
   to_address: string;
   token_id: string;
   event_index: number;
+  transfer_type: TransferType;
 }
 
 export interface EVMExecution {
@@ -527,6 +531,8 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
     const toNorm = normalizeFlowAddress(t.toAddress);
     if (fromNorm === FEE_VAULT_ADDRESS || toNorm === FEE_VAULT_ADDRESS) continue;
 
+    const transferType: TransferType = !t.fromAddress ? 'mint' : !t.toAddress ? 'burn' : 'transfer';
+
     if (t.isNFT) {
       nftTransfers.push({
         token: t.token,
@@ -534,6 +540,7 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
         to_address: formatAddr(t.toAddress),
         token_id: t.tokenID,
         event_index: t.eventIndex,
+        transfer_type: transferType,
       });
     } else {
       ftTransfers.push({
@@ -542,6 +549,7 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
         to_address: formatAddr(t.toAddress),
         amount: t.amount,
         event_index: t.eventIndex,
+        transfer_type: transferType,
       });
     }
   }
