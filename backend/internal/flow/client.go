@@ -34,6 +34,9 @@ type Client struct {
 	// Per-node temporary disable flag (unix nanos). Used to avoid repeatedly
 	// selecting nodes that are currently unreachable (e.g. DNS resolver produced zero addresses).
 	disabledUntil []int64
+	// Per-node flag: 1 = bulk APIs (GetTransactionsByBlockID, GetTransactionResultsByBlockID)
+	// are not supported. Set on first Unimplemented error to skip wasted round-trips.
+	noBulkAPI []uint32
 	// Parsed from hostname. Higher means "newer spork" (e.g. mainnet28 > mainnet27).
 	// Used to prefer newer spork nodes for a given height in mixed historic pools.
 	sporkRanks []int
@@ -86,6 +89,7 @@ func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
 		nodes:         connectedNodes,
 		minHeights:    make([]uint64, len(clients)),
 		disabledUntil: make([]int64, len(clients)),
+		noBulkAPI:     make([]uint32, len(clients)),
 		sporkRanks:    ranks,
 		limiter:       newLimiterFromEnv(len(clients)),
 	}
@@ -477,6 +481,22 @@ func (p *PinnedClient) Node() string {
 		return ""
 	}
 	return p.node
+}
+
+func (p *PinnedClient) NodeIndex() int {
+	return p.idx
+}
+
+// NoBulkAPI returns true if the pinned node does not support bulk transaction APIs.
+func (p *PinnedClient) NoBulkAPI() bool {
+	return atomic.LoadUint32(&p.parent.noBulkAPI[p.idx]) == 1
+}
+
+// MarkNoBulkAPI records that the pinned node does not support bulk transaction APIs.
+func (c *Client) MarkNoBulkAPI(idx int) {
+	if idx >= 0 && idx < len(c.noBulkAPI) {
+		atomic.StoreUint32(&c.noBulkAPI[idx], 1)
+	}
 }
 
 func (p *PinnedClient) withRetry(ctx context.Context, fn func() error) error {

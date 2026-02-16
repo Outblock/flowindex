@@ -129,72 +129,97 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 		// 2. Fetch All Transactions & Results for the Block
 		// Try bulk APIs first; fall back to per-collection/per-tx for old spork nodes.
+		// If a node has been flagged as not supporting bulk APIs, skip directly to fallback.
 		var txs []*flowsdk.Transaction
 		var results []*flowsdk.TransactionResult
 		usedBulkTxAPI := false
+		noBulk := pin.NoBulkAPI()
 
-		txs, err = pin.GetTransactionsByBlockID(ctx, block.ID)
-		if err != nil {
-			if shouldRepin(err) {
-				continue
-			}
-			if isUnimplementedError(err) {
-				// Old spork node: fall back to GetCollection + GetTransaction per-tx
-				txs, err = w.fetchTransactionsViaCollections(ctx, pin, block)
-				if err != nil {
-					if shouldRepin(err) {
-						continue
-					}
-					result.Error = fmt.Errorf("failed to get transactions via collections for block %s: %w", block.ID, err)
-					return result
+		if noBulk {
+			// Skip bulk API — go straight to per-collection/per-tx fallback.
+			txs, err = w.fetchTransactionsViaCollections(ctx, pin, block)
+			if err != nil {
+				if shouldRepin(err) {
+					continue
 				}
-			} else {
-				result.Error = fmt.Errorf("failed to get transactions for block %s: %w", block.ID, err)
+				result.Error = fmt.Errorf("failed to get transactions via collections for block %s: %w", block.ID, err)
 				return result
 			}
 		} else {
-			usedBulkTxAPI = true
+			txs, err = pin.GetTransactionsByBlockID(ctx, block.ID)
+			if err != nil {
+				if isUnimplementedError(err) {
+					// Old spork node: mark it and fall back to per-collection/per-tx
+					w.client.MarkNoBulkAPI(pin.NodeIndex())
+					txs, err = w.fetchTransactionsViaCollections(ctx, pin, block)
+					if err != nil {
+						if shouldRepin(err) {
+							continue
+						}
+						result.Error = fmt.Errorf("failed to get transactions via collections for block %s: %w", block.ID, err)
+						return result
+					}
+				} else if shouldRepin(err) {
+					continue
+				} else {
+					result.Error = fmt.Errorf("failed to get transactions for block %s: %w", block.ID, err)
+					return result
+				}
+			} else {
+				usedBulkTxAPI = true
+			}
 		}
 
 		// Track whether we should retry this height with a different node pin.
 		repinRequested := false
 
-		results, err = pin.GetTransactionResultsByBlockID(ctx, block.ID)
-		if err != nil {
-			if shouldRepin(err) {
+		if noBulk {
+			// Skip bulk result API — go straight to per-tx fallback.
+			results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, false)
+			if err != nil {
+				result.Error = err
+				return result
+			}
+			if repinRequested {
 				continue
 			}
-
-			if isUnimplementedError(err) || isExecutionNodeError(err) || isBulkResultInternalError(err) {
-				// Old spork node, execution nodes down, or bulk API bug: fall back to per-tx GetTransactionResult.
-				// Force ID-based lookup (not index-based) when execution nodes are the problem.
-				useIndexAPI := usedBulkTxAPI && !isExecutionNodeError(err)
-				if isExecutionNodeError(err) || isBulkResultInternalError(err) {
-					log.Printf("[ingester] Warn: bulk result API failed for block %s (height=%d), falling back to per-tx result calls: %v", block.ID, height, err)
+		} else {
+			results, err = pin.GetTransactionResultsByBlockID(ctx, block.ID)
+			if err != nil {
+				if isUnimplementedError(err) {
+					w.client.MarkNoBulkAPI(pin.NodeIndex())
 				}
-				results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, useIndexAPI)
-				if err != nil {
-					result.Error = err
+				if isUnimplementedError(err) || isExecutionNodeError(err) || isBulkResultInternalError(err) {
+					// Old spork node, execution nodes down, or bulk API bug: fall back to per-tx GetTransactionResult.
+					useIndexAPI := usedBulkTxAPI && !isExecutionNodeError(err)
+					if isExecutionNodeError(err) || isBulkResultInternalError(err) {
+						log.Printf("[ingester] Warn: bulk result API failed for block %s (height=%d), falling back to per-tx result calls: %v", block.ID, height, err)
+					}
+					results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, useIndexAPI)
+					if err != nil {
+						result.Error = err
+						return result
+					}
+					if repinRequested {
+						log.Printf("[ingester] fetchResultsPerTx requested repin for height %d (node=%s)", height, pin.Node())
+						continue
+					}
+				} else if shouldRepin(err) {
+					continue
+				} else if isGRPCMessageTooLarge(err) {
+					log.Printf("[ingester] Warn: tx results payload too large for block %s (height=%d), falling back to per-tx calls: %v", block.ID, height, err)
+					results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, usedBulkTxAPI)
+					if err != nil {
+						result.Error = err
+						return result
+					}
+					if repinRequested {
+						continue
+					}
+				} else {
+					result.Error = fmt.Errorf("failed to get transaction results for block %s: %w", block.ID, err)
 					return result
 				}
-				if repinRequested {
-					log.Printf("[ingester] fetchResultsPerTx requested repin for height %d (node=%s)", height, pin.Node())
-					continue
-				}
-			} else if isGRPCMessageTooLarge(err) {
-				// Payload too large: fall back to per-tx result calls
-				log.Printf("[ingester] Warn: tx results payload too large for block %s (height=%d), falling back to per-tx calls: %v", block.ID, height, err)
-				results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, usedBulkTxAPI)
-				if err != nil {
-					result.Error = err
-					return result
-				}
-				if repinRequested {
-					continue
-				}
-			} else {
-				result.Error = fmt.Errorf("failed to get transaction results for block %s: %w", block.ID, err)
-				return result
 			}
 		}
 
