@@ -171,7 +171,8 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 		out["ft_transfers"] = transfersOut
 	}
 
-	// Enrich: NFT transfers with item metadata
+	// Enrich: NFT transfers (lightweight — no public path or item metadata lookups,
+	// frontend can query NFT details via Cadence script when needed)
 	nftTransfers, _ := s.repo.GetNFTTransfersByTransactionID(r.Context(), tx.ID)
 	if len(nftTransfers) > 0 {
 		collIDSet := make(map[string]bool)
@@ -183,31 +184,6 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 			collIDs = append(collIDs, id)
 		}
 		nftCollMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), collIDs)
-
-		collPublicPaths := make(map[string]string)
-		for _, id := range collIDs {
-			parts := strings.SplitN(id, ".", 3)
-			if len(parts) >= 3 {
-				addr := strings.TrimPrefix(parts[1], "0x")
-				name := parts[2]
-				if pp, err := s.repo.GetCollectionPublicPath(r.Context(), addr, name); err == nil && pp != "" {
-					collPublicPaths[id] = pp
-				}
-			}
-		}
-
-		itemKeys := make([]repository.NFTItemKey, 0, len(nftTransfers))
-		for _, nt := range nftTransfers {
-			parts := strings.SplitN(nt.Token, ".", 3)
-			if len(parts) >= 3 && nt.TokenID != "" {
-				itemKeys = append(itemKeys, repository.NFTItemKey{
-					ContractAddress: strings.TrimPrefix(parts[1], "0x"),
-					ContractName:    parts[2],
-					NFTID:           nt.TokenID,
-				})
-			}
-		}
-		itemMeta, _ := s.repo.GetNFTItemsBatch(r.Context(), itemKeys)
 
 		nftAddrSet := make(map[string]bool)
 		for _, nt := range nftTransfers {
@@ -236,22 +212,6 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 			if meta, ok := nftCollMeta[nt.Token]; ok {
 				item["collection_name"] = meta.Name
 				item["collection_logo"] = meta.Logo
-			}
-			if pp, ok := collPublicPaths[nt.Token]; ok {
-				item["public_path"] = pp
-			}
-			parts := strings.SplitN(nt.Token, ".", 3)
-			if len(parts) >= 3 && nt.TokenID != "" {
-				key := repository.NFTItemKey{
-					ContractAddress: strings.TrimPrefix(parts[1], "0x"),
-					ContractName:    parts[2],
-					NFTID:           nt.TokenID,
-				}
-				if nftItem, ok := itemMeta[key]; ok {
-					item["nft_name"] = nftItem.Name
-					item["nft_thumbnail"] = nftItem.Thumbnail
-					item["nft_rarity"] = nftItem.RarityDescription
-				}
 			}
 			if nt.FromAddress != "" {
 				if flowAddr, ok := nftCOAMap[nt.FromAddress]; ok {
