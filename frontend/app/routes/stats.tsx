@@ -49,8 +49,10 @@ const FLOW_SPORK_BOUNDARIES = [
 ];
 
 // GCP parallel history containers — matches gcp-parallel-index.sh
+// GCP status endpoint — API-only container on GCP VM reading Cloud SQL checkpoints.
+const GCP_STATUS_URL = '/status/gcp-vms';
+
 const GCP_VMS = [
-    { key: 'gcp_forward_ingester', label: 'Forward Ingester', sporks: 'Live', direction: 'forward' as const, startBlock: 0, stopHeight: 0 },
     { key: 'history_s7', label: 'History S7', sporks: 'Spork 27', direction: 'backward' as const, startBlock: 137390146, stopHeight: 85981135 },
     { key: 'history_s6', label: 'History S6', sporks: 'Spork 26', direction: 'backward' as const, startBlock: 85981135, stopHeight: 65264629 },
     { key: 'history_s5', label: 'History S5', sporks: 'Spork 22-25', direction: 'backward' as const, startBlock: 65264629, stopHeight: 47169687 },
@@ -73,9 +75,12 @@ const WORKER_COLORS: Record<string, string> = {
 };
 
 function Stats() {
-    const [activeTab, setActiveTab] = useState('system'); // 'system' or 'mosaic'
+    const [activeTab, setActiveTab] = useState('system'); // 'system', 'vms', or 'mosaic'
     const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+
+    // Separate GCP status (from Cloud SQL via GCP VM proxy)
+    const [gcpStatus, setGcpStatus] = useState<any>(null);
 
     // State for Speed Calculations — sliding window (last 30s) for stable ETA
     const [historySpeed, setHistorySpeed] = useState(0); // blocks per second
@@ -137,7 +142,22 @@ function Stats() {
             }
         }
 
-        // Calculate per-VM speeds
+        setStatus(data);
+        setLoading(false);
+    }, []);
+
+    const loadStatus = async () => {
+        try {
+            await ensureHeyApiConfigured();
+            const data = await fetchStatusApi();
+            processStatus(data);
+        } catch (error) {
+            console.error('Failed to fetch status:', error);
+        }
+    };
+
+    const processGcpStatus = useCallback((data: any) => {
+        const now = Date.now();
         const cp = data.checkpoints || {};
         const newVmSpeeds: Record<string, number> = {};
         for (const vm of GCP_VMS) {
@@ -161,24 +181,26 @@ function Stats() {
             }
         }
         setVmSpeeds(prev => ({ ...prev, ...newVmSpeeds }));
-
-        setStatus(data);
-        setLoading(false);
+        setGcpStatus(data);
     }, []);
 
-    const loadStatus = async () => {
+    const loadGcpStatus = async () => {
         try {
             await ensureHeyApiConfigured();
-            const data = await fetchStatusApi();
-            processStatus(data);
+            const res = await fetch(`${window.location.origin}${GCP_STATUS_URL}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            processGcpStatus(data);
         } catch (error) {
-            console.error('Failed to fetch status:', error);
+            console.error('Failed to fetch GCP status:', error);
         }
     };
 
     useEffect(() => {
         loadStatus();
+        loadGcpStatus();
         const interval = setInterval(loadStatus, 3000);
+        const gcpInterval = setInterval(loadGcpStatus, 5000);
 
         let ws: WebSocket | undefined;
         try {
@@ -199,6 +221,7 @@ function Stats() {
 
         return () => {
             clearInterval(interval);
+            clearInterval(gcpInterval);
             if (ws) ws.close();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -627,9 +650,15 @@ function Stats() {
                             transition={{ duration: 0.2 }}
                             className="space-y-6"
                         >
+                            {!gcpStatus && (
+                                <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-600 dark:text-yellow-400 p-4 rounded-sm text-sm font-mono">
+                                    Connecting to GCP status endpoint...
+                                </div>
+                            )}
+
                             {/* Overall GCP Progress */}
                             {(() => {
-                                const cp = checkpoints || {};
+                                const cp = gcpStatus?.checkpoints || {};
                                 const backwardVMs = GCP_VMS.filter(v => v.direction === 'backward');
                                 const totalBlocks = backwardVMs.reduce((sum, v) => sum + (v.startBlock - v.stopHeight), 0);
                                 const doneBlocks = backwardVMs.reduce((sum, v) => {
@@ -695,7 +724,7 @@ function Stats() {
                             {/* Per-VM Cards */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {GCP_VMS.map((vm, idx) => {
-                                    const cp = checkpoints || {};
+                                    const cp = gcpStatus?.checkpoints || {};
                                     const h = cp[vm.key];
                                     const height = typeof h === 'number' ? h : 0;
                                     const speed = vmSpeeds[vm.key] || 0;

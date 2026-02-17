@@ -2,8 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"sync"
+	"time"
 )
 
 // Status endpoints
@@ -154,6 +159,56 @@ func (s *Server) handleStatusNodes(w http.ResponseWriter, r *http.Request) {
 		"limit":  limit,
 		"offset": offset,
 	}, nil)
+}
+
+// handleStatusGCPVMs proxies the /status endpoint from the GCP VM API-only container.
+// This avoids HTTPS→HTTP mixed content issues since the frontend calls same-origin.
+// Configure with GCP_STATUS_URL env var (default: http://34.30.229.27:8081/status).
+var gcpVMsCache struct {
+	mu        sync.Mutex
+	payload   []byte
+	expiresAt time.Time
+}
+
+func (s *Server) handleStatusGCPVMs(w http.ResponseWriter, r *http.Request) {
+	gcpURL := os.Getenv("GCP_STATUS_URL")
+	if gcpURL == "" {
+		gcpURL = "http://34.30.229.27:8081/status"
+	}
+
+	now := time.Now()
+	gcpVMsCache.mu.Lock()
+	if now.Before(gcpVMsCache.expiresAt) && len(gcpVMsCache.payload) > 0 {
+		cached := append([]byte(nil), gcpVMsCache.payload...)
+		gcpVMsCache.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(cached)
+		return
+	}
+	gcpVMsCache.mu.Unlock()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(gcpURL)
+	if err != nil {
+		log.Printf("[api] GCP status proxy error: %v", err)
+		http.Error(w, "GCP status unavailable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Failed to read GCP status", http.StatusBadGateway)
+		return
+	}
+
+	gcpVMsCache.mu.Lock()
+	gcpVMsCache.payload = body
+	gcpVMsCache.expiresAt = time.Now().Add(3 * time.Second)
+	gcpVMsCache.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(body)
 }
 
 func (s *Server) handleNotImplemented(w http.ResponseWriter, r *http.Request) {
