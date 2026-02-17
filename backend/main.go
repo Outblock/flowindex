@@ -57,12 +57,16 @@ func main() {
 	}
 	defer repo.Close()
 
-	// 2a. Auto-Migration
-	log.Println("Running Database Migration...")
-	if err := repo.Migrate("schema_v2.sql"); err != nil {
-		log.Fatalf("Migration failed: %v", err)
+	// 2a. Auto-Migration (skip with SKIP_MIGRATION=true for API-only containers)
+	if os.Getenv("SKIP_MIGRATION") == "true" {
+		log.Println("Database Migration SKIPPED (SKIP_MIGRATION=true)")
+	} else {
+		log.Println("Running Database Migration...")
+		if err := repo.Migrate("schema_v2.sql"); err != nil {
+			log.Fatalf("Migration failed: %v", err)
+		}
+		log.Println("Database Migration Complete.")
 	}
-	log.Println("Database Migration Complete.")
 
 	flowClient, err := flow.NewClientFromEnv("FLOW_ACCESS_NODES", flowURL)
 	if err != nil {
@@ -709,16 +713,9 @@ func main() {
 		historyDeriver.Start(ctx)
 	}
 
-	// Handle SIGINT
+	// Handle SIGINT/SIGTERM — will block on sigChan at end of main()
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		log.Println("Shutting down...")
-		apiServer.Shutdown(ctx)
-		cancel()
-	}()
 
 	// Start API in background
 	go func() {
@@ -1098,15 +1095,13 @@ func main() {
 		log.Println("Lookup Repair is DISABLED (ENABLE_LOOKUP_REPAIR=false)")
 	}
 
-	// Block until all workers finish or shutdown signal received.
-	// In API-only mode (no workers), wg.Wait() returns immediately,
-	// so we also block on ctx.Done() to keep the API server alive.
-	done := make(chan struct{})
-	go func() { wg.Wait(); close(done) }()
-	select {
-	case <-done:
-	case <-ctx.Done():
-	}
+	// Block until shutdown signal. Workers are in the WaitGroup but the
+	// API server also needs to stay alive even with zero workers (API-only mode).
+	<-sigChan
+	log.Println("Shutting down...")
+	apiServer.Shutdown(ctx)
+	cancel()
+	wg.Wait()
 }
 
 func redactDatabaseURL(raw string) string {
