@@ -224,9 +224,9 @@ function TokenDetailInner() {
           <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
             <SafeNumberFlow value={Number.isFinite(holdersCount) ? holdersCount : 0} format={{ useGrouping: true }} />
           </p>
-          <div className="mt-2 text-[10px] uppercase tracking-widest text-zinc-500">
-            Page size: {holdersState.length}
-          </div>
+          <p className="mt-2 text-[10px] text-amber-500 dark:text-amber-400">
+            May be inaccurate during indexing
+          </p>
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
           <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Name / Symbol</p>

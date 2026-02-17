@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { Coins, Database } from 'lucide-react';
+import { Coins, Database, Info } from 'lucide-react';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import NumberFlow from '@number-flow/react';
@@ -136,7 +136,15 @@ function Tokens() {
               <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Token</th>
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Address</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-right">Holders</th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-right">
+                  <span className="inline-flex items-center gap-1.5 group relative">
+                    Holders
+                    <Info className="h-3 w-3 text-zinc-400 cursor-help" />
+                    <span className="absolute right-0 top-full mt-1 z-50 w-48 p-2 text-[10px] normal-case tracking-normal font-normal bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
+                      Holder counts may be inaccurate while historical indexing is in progress.
+                    </span>
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
