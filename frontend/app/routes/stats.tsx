@@ -64,6 +64,17 @@ const VM_COLORS = [
     'bg-rose-500', 'bg-cyan-500', 'bg-orange-500', 'bg-pink-500',
 ];
 
+// Calculate how many blocks in [from, to) are covered by indexed ranges
+function coveredBlocks(from: number, to: number, ranges: { from: number; to: number }[]): number {
+    let covered = 0;
+    for (const r of ranges) {
+        const overlapStart = Math.max(from, r.from);
+        const overlapEnd = Math.min(to, r.to);
+        if (overlapEnd > overlapStart) covered += overlapEnd - overlapStart;
+    }
+    return covered;
+}
+
 const WORKER_COLORS: Record<string, string> = {
     main_ingester: 'bg-yellow-400',
     history_ingester: 'bg-cyan-400',
@@ -652,13 +663,11 @@ function Stats() {
 
                             {/* Overall GCP Progress */}
                             {(() => {
-                                const cp = gcpStatus?.checkpoints || {};
+                                const ranges = (gcpStatus?.indexed_ranges || []) as { from: number; to: number }[];
                                 const backwardVMs = GCP_VMS.filter(v => v.direction === 'backward');
                                 const totalBlocks = backwardVMs.reduce((sum, v) => sum + (v.startBlock - v.stopHeight), 0);
                                 const doneBlocks = backwardVMs.reduce((sum, v) => {
-                                    const h = cp[v.key];
-                                    if (typeof h !== 'number' || h === 0) return sum;
-                                    return sum + Math.max(0, v.startBlock - Math.max(h, v.stopHeight));
+                                    return sum + coveredBlocks(v.stopHeight, v.startBlock, ranges);
                                 }, 0);
                                 const overallPct = totalBlocks > 0 ? (doneBlocks / totalBlocks) * 100 : 0;
                                 const totalSpeed = backwardVMs.reduce((sum, v) => sum + (vmSpeeds[v.key] || 0), 0);
@@ -719,6 +728,7 @@ function Stats() {
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {GCP_VMS.map((vm, idx) => {
                                     const cp = gcpStatus?.checkpoints || {};
+                                    const ranges = (gcpStatus?.indexed_ranges || []) as { from: number; to: number }[];
                                     const h = cp[vm.key];
                                     const height = typeof h === 'number' ? h : 0;
                                     const speed = vmSpeeds[vm.key] || 0;
@@ -732,13 +742,12 @@ function Stats() {
 
                                     if (vm.direction === 'backward') {
                                         const total = vm.startBlock - vm.stopHeight;
-                                        const done = height > 0 ? Math.max(0, vm.startBlock - Math.max(height, vm.stopHeight)) : 0;
+                                        const done = coveredBlocks(vm.stopHeight, vm.startBlock, ranges);
                                         pct = total > 0 ? (done / total) * 100 : 0;
                                         remaining = total - done;
                                         rangeLabel = `#${vm.startBlock.toLocaleString()} → #${vm.stopHeight.toLocaleString()}`;
                                         isActive = height > 0 && height > vm.stopHeight && speed > 0;
                                     } else {
-                                        // Forward ingester
                                         const tip = latestHeight || 1;
                                         pct = height > 0 ? Math.min(100, (height / tip) * 100) : 0;
                                         remaining = Math.max(0, tip - height);
