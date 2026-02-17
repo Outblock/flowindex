@@ -582,20 +582,26 @@ function Stats() {
                                         const enabled = workerEnabled?.[worker.key];
                                         const config = workerConfig?.[worker.key] || {};
                                         const speed = workerSpeeds[worker.key] || 0;
-                                        // Progress relative to main ingester, not chain tip
+                                        // Progress: main/history compare to chain tip; other workers compare to main ingester
                                         const isMainOrHistory = worker.key === 'main_ingester' || worker.key === 'history_ingester';
                                         const refHeight = isMainOrHistory ? latestHeight : indexedHeight;
                                         const progress = refHeight > 0 && height > 0 ? Math.min(100, (height / refHeight) * 100) : 0;
                                         const behind = refHeight > height && height > 0 ? refHeight - height : 0;
+                                        // Also check if worker is behind history ingester (processing backfill)
+                                        const historyBehind = !isMainOrHistory && historyHeight > 0 && height > historyHeight ? height - historyHeight : 0;
+                                        const isProcessingHistory = !isMainOrHistory && historyHeight > 0 && height > 0 && height > historyHeight;
                                         const workerEta = speed > 0 && behind > 0 ? behind / speed : 0;
-                                        const statusLabel = enabled === false ? 'DISABLED' : speed > 0 ? 'SYNCING' : behind === 0 && height > 0 ? 'CAUGHT UP' : 'IDLE';
+                                        // Status: DISABLED > CAUGHT UP (behind=0) > SYNCING (behind>0, has work to do)
+                                        const statusLabel = enabled === false ? 'DISABLED'
+                                            : behind === 0 && height > 0 ? 'CAUGHT UP'
+                                            : behind > 0 ? 'SYNCING' : 'IDLE';
                                         return (
                                             <div key={worker.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm hover:border-zinc-300 dark:hover:border-white/30 transition-colors group">
                                                 <div className="flex items-center justify-between mb-4">
                                                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest truncate mr-2" title={worker.label}>{worker.label}</span>
                                                     <div className="flex items-center gap-1.5">
-                                                        <span className={`text-[9px] font-bold uppercase tracking-wider ${statusLabel === 'SYNCING' ? 'text-green-500' : statusLabel === 'CAUGHT UP' ? 'text-blue-400' : statusLabel === 'DISABLED' ? 'text-red-400' : 'text-zinc-400'}`}>{statusLabel}</span>
-                                                        <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : speed > 0 ? 'bg-green-500 animate-pulse shadow-[0_0_4px_rgba(34,197,94,0.6)]' : 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]'}`} />
+                                                        <span className={`text-[9px] font-bold uppercase tracking-wider ${statusLabel === 'SYNCING' ? 'text-yellow-500' : statusLabel === 'CAUGHT UP' ? 'text-green-500' : statusLabel === 'DISABLED' ? 'text-red-400' : 'text-zinc-400'}`}>{statusLabel}</span>
+                                                        <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : statusLabel === 'SYNCING' ? 'bg-yellow-500 animate-pulse shadow-[0_0_4px_rgba(234,179,8,0.6)]' : statusLabel === 'CAUGHT UP' ? 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]' : 'bg-zinc-400'}`} />
                                                     </div>
                                                 </div>
                                                 <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-1">
@@ -643,6 +649,11 @@ function Stats() {
                                                                 <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.range}</div>
                                                             </div>
                                                         )}
+                                                    </div>
+                                                )}
+                                                {isProcessingHistory && (
+                                                    <div className="mt-2 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded text-center">
+                                                        <span className="text-[9px] text-blue-400 uppercase tracking-wider font-bold">History backfill ahead by {historyBehind.toLocaleString()}</span>
                                                     </div>
                                                 )}
                                             </div>
