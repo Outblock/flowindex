@@ -313,6 +313,12 @@ func main() {
 		if enableDefiWorker {
 			histProcessors = append(histProcessors, ingester.NewDefiWorker(repo))
 		}
+		if enableFTHoldingsWorker {
+			histProcessors = append(histProcessors, ingester.NewFTHoldingsWorker(repo))
+		}
+		if enableNFTOwnershipWorker {
+			histProcessors = append(histProcessors, ingester.NewNFTOwnershipWorker(repo))
+		}
 
 		historyDeriver = ingester.NewHistoryDeriver(repo, histProcessors, ingester.HistoryDeriverConfig{
 			ChunkSize: historyDeriverChunk,
