@@ -180,6 +180,9 @@ func main() {
 		}()
 	}
 
+	// History stop height (for parallel indexing — each instance indexes a spork range)
+	historyStopHeight := getEnvUint("HISTORY_STOP_HEIGHT", 0)
+
 	// Async Workers (optional)
 	enableTokenWorker := os.Getenv("ENABLE_TOKEN_WORKER") != "false"
 	enableEVMWorker := os.Getenv("ENABLE_EVM_WORKER") != "false"
@@ -195,6 +198,32 @@ func main() {
 	enableDefiWorker := os.Getenv("ENABLE_DEFI_WORKER") != "false"
 	enableNFTItemMetadataWorker := os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false"
 	enableNFTReconciler := os.Getenv("ENABLE_NFT_RECONCILER") != "false"
+
+	// RAW_ONLY mode: disable all workers, derivers, and pollers — only run ingesters.
+	if os.Getenv("RAW_ONLY") == "true" {
+		enableTokenWorker = false
+		enableEVMWorker = false
+		enableMetaWorker = false
+		enableAccountsWorker = false
+		enableFTHoldingsWorker = false
+		enableNFTOwnershipWorker = false
+		enableTokenMetadataWorker = false
+		enableTxContractsWorker = false
+		enableTxMetricsWorker = false
+		enableStakingWorker = false
+		enableDailyBalanceWorker = false
+		enableDefiWorker = false
+		enableNFTItemMetadataWorker = false
+		enableNFTReconciler = false
+		os.Setenv("ENABLE_LIVE_DERIVERS", "false")
+		os.Setenv("ENABLE_HISTORY_DERIVERS", "false")
+		os.Setenv("ENABLE_LIVE_ADDRESS_BACKFILL", "false")
+		os.Setenv("ENABLE_DAILY_STATS", "false")
+		os.Setenv("ENABLE_PRICE_FEED", "false")
+		os.Setenv("ENABLE_NETWORK_POLLER", "false")
+		os.Setenv("ENABLE_LOOKUP_REPAIR", "false")
+		log.Println("RAW_ONLY mode: all workers, derivers, and pollers disabled")
+	}
 
 	// Live/head derivers: Blockscout-style "real-time head" materialization.
 	// These processors must be idempotent because they can overlap with backfills.
@@ -327,6 +356,7 @@ func main() {
 		BatchSize:      historyBatch,
 		WorkerCount:    historyWorkers,
 		StartBlock:     startBlock,
+		StopHeight:     historyStopHeight,
 		Mode:           "backward",
 		MaxReorgDepth:  maxReorgDepth,
 		OnIndexedRange: onHistoryIndexedRange,
