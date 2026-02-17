@@ -50,7 +50,7 @@ function Transactions() {
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(initialTxs?.length >= PAGE_SIZE);
-    const [liveFeed, setLiveFeed] = useState(false);
+    const [liveFeed, setLiveFeed] = useState(true);
     const [newTxIds, setNewTxIds] = useState<Set<string>>(new Set());
     const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
     const [filters, setFilters] = useState<Filters>({ status: '', address: '' });
