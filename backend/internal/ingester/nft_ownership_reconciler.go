@@ -19,19 +19,18 @@ import (
 // in nft_ownership against the chain. If the chain shows the owner no longer holds
 // certain NFTs, those rows are deleted from nft_ownership.
 //
-// Strategy: check the top-N holders (by count) each cycle. These are most likely
-// to be custodial/marketplace addresses with stale data.
-//
-// Uses reverse-verification: instead of fetching ALL chain IDs (which hits the 20MB
-// storage limit for large collections), we take the DB's known IDs and ask the chain
-// "which of these still exist?" via borrowNFT(id) — each call only touches one NFT's
-// storage, so it never exceeds limits.
+// Strategy: try getIDs() first (fast, single call). If it hits Flow's 20MB storage
+// interaction limit, fall back to borrowNFT(id) batch verification which only
+// touches one NFT's storage per check.
 type NFTOwnershipReconciler struct {
 	repo          *repository.Repository
 	flow          *flowclient.Client
 	pairsPerCycle int
 	verifyBatch   int
 	scriptTimeout time.Duration
+	// largePairs tracks owner+collection pairs that exceeded storage limits.
+	// These use the slower borrowNFT fallback path for the lifetime of this process.
+	largePairs map[string]struct{}
 }
 
 func NewNFTOwnershipReconciler(repo *repository.Repository, flow *flowclient.Client) *NFTOwnershipReconciler {
@@ -44,6 +43,7 @@ func NewNFTOwnershipReconciler(repo *repository.Repository, flow *flowclient.Cli
 		pairsPerCycle: pairsPerCycle,
 		verifyBatch:   verifyBatch,
 		scriptTimeout: time.Duration(timeoutMs) * time.Millisecond,
+		largePairs:    make(map[string]struct{}),
 	}
 }
 
@@ -87,7 +87,6 @@ func (w *NFTOwnershipReconciler) reconcilePair(ctx context.Context, pair reposit
 		}
 	}
 
-	// Strip /public/ prefix — PublicPath(identifier:) needs just the identifier.
 	publicPath = strings.TrimPrefix(publicPath, "/public/")
 
 	// 2. Get our DB's view of what this owner holds.
@@ -99,27 +98,34 @@ func (w *NFTOwnershipReconciler) reconcilePair(ctx context.Context, pair reposit
 		return nil
 	}
 
-	// 3. Reverse-verify: ask chain which of our DB IDs still exist, in batches.
+	pairKey := pair.Owner + "/" + pair.ContractAddress + "." + pair.ContractName
+
+	// 3. Find stale IDs — try fast path first, fallback for large collections.
 	var staleIDs []string
-	for i := 0; i < len(dbIDs); i += w.verifyBatch {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		end := i + w.verifyBatch
-		if end > len(dbIDs) {
-			end = len(dbIDs)
-		}
-		batch := dbIDs[i:end]
-		missing, err := w.verifyNFTIDsOnChain(ctx, pair.Owner, publicPath, batch)
+	if _, large := w.largePairs[pairKey]; large {
+		staleIDs, err = w.findStaleViaVerify(ctx, pair.Owner, publicPath, dbIDs)
 		if err != nil {
-			return fmt.Errorf("verify batch [%d:%d]: %w", i, end, err)
+			return err
 		}
-		staleIDs = append(staleIDs, missing...)
+	} else {
+		staleIDs, err = w.findStaleViaGetIDs(ctx, pair.Owner, publicPath, dbIDs)
+		if err != nil {
+			if strings.Contains(err.Error(), "max interaction with storage has exceeded") {
+				log.Printf("[nft_ownership_reconciler] %s: getIDs() hit storage limit (%d in DB), switching to borrowNFT fallback",
+					pairKey, pair.Count)
+				w.largePairs[pairKey] = struct{}{}
+				staleIDs, err = w.findStaleViaVerify(ctx, pair.Owner, publicPath, dbIDs)
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
 	}
 
 	if len(staleIDs) == 0 {
-		log.Printf("[nft_ownership_reconciler] %s/%s.%s: OK (%d DB, 0 stale)",
-			pair.Owner, pair.ContractAddress, pair.ContractName, len(dbIDs))
+		log.Printf("[nft_ownership_reconciler] %s: OK (%d DB, 0 stale)", pairKey, len(dbIDs))
 		return nil
 	}
 
@@ -138,9 +144,50 @@ func (w *NFTOwnershipReconciler) reconcilePair(ctx context.Context, pair reposit
 		totalDeleted += deleted
 	}
 
-	log.Printf("[nft_ownership_reconciler] %s/%s.%s: removed %d stale records (%d DB)",
-		pair.Owner, pair.ContractAddress, pair.ContractName, totalDeleted, len(dbIDs))
+	log.Printf("[nft_ownership_reconciler] %s: removed %d stale records (%d DB)", pairKey, totalDeleted, len(dbIDs))
 	return nil
+}
+
+// findStaleViaGetIDs uses getIDs() to fetch all chain IDs in one call, then diffs with DB.
+// Fast path for normal-sized collections.
+func (w *NFTOwnershipReconciler) findStaleViaGetIDs(ctx context.Context, owner, publicPathID string, dbIDs []string) ([]string, error) {
+	chainIDs, err := w.getChainNFTIDs(ctx, owner, publicPathID)
+	if err != nil {
+		return nil, err
+	}
+
+	chainSet := make(map[string]bool, len(chainIDs))
+	for _, id := range chainIDs {
+		chainSet[id] = true
+	}
+	var stale []string
+	for _, id := range dbIDs {
+		if !chainSet[id] {
+			stale = append(stale, id)
+		}
+	}
+	return stale, nil
+}
+
+// findStaleViaVerify uses borrowNFT(id) to check DB IDs in batches.
+// Fallback for large collections that exceed the storage interaction limit.
+func (w *NFTOwnershipReconciler) findStaleViaVerify(ctx context.Context, owner, publicPathID string, dbIDs []string) ([]string, error) {
+	var stale []string
+	for i := 0; i < len(dbIDs); i += w.verifyBatch {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		end := i + w.verifyBatch
+		if end > len(dbIDs) {
+			end = len(dbIDs)
+		}
+		missing, err := w.verifyNFTIDsOnChain(ctx, owner, publicPathID, dbIDs[i:end])
+		if err != nil {
+			return nil, fmt.Errorf("verify batch [%d:%d]: %w", i, end, err)
+		}
+		stale = append(stale, missing...)
+	}
+	return stale, nil
 }
 
 func (w *NFTOwnershipReconciler) resolvePublicPath(ctx context.Context, contractAddr, contractName string) (string, error) {
@@ -170,20 +217,64 @@ func (w *NFTOwnershipReconciler) resolvePublicPath(ctx context.Context, contract
 	return path, nil
 }
 
-// verifyNFTIDsOnChain takes a batch of NFT IDs from our DB and asks the chain
-// which ones the owner NO LONGER holds. Uses borrowNFT(id) per-ID which only
-// reads one NFT's storage — never hits the 20MB interaction limit.
-// Returns the list of IDs that are missing on-chain (stale).
+// getChainNFTIDs fetches all NFT IDs an owner holds via getIDs(). Single call, fast,
+// but fails for very large collections (50k+) due to Flow's 20MB storage limit.
+func (w *NFTOwnershipReconciler) getChainNFTIDs(ctx context.Context, owner, publicPathID string) ([]string, error) {
+	ownerAddr := flowsdk.HexToAddress(owner)
+	pathVal, _ := cadence.NewString(publicPathID)
+
+	ctxExec, cancel := context.WithTimeout(ctx, w.scriptTimeout)
+	defer cancel()
+
+	nftAddr := getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")
+	script := fmt.Sprintf(`
+		import NonFungibleToken from 0x%s
+
+		access(all) fun main(owner: Address, publicPathID: String): [UInt64] {
+			let account = getAccount(owner)
+			let path = PublicPath(identifier: publicPathID)!
+			let collectionRef = account.capabilities.borrow<&{NonFungibleToken.Collection}>(path)
+			if collectionRef == nil { return [] }
+			return collectionRef!.getIDs()
+		}
+	`, nftAddr)
+
+	v, err := w.flow.ExecuteScriptAtLatestBlock(ctxExec, []byte(script), []cadence.Value{
+		cadence.NewAddress([8]byte(ownerAddr)),
+		pathVal,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	arr, ok := v.(cadence.Array)
+	if !ok {
+		return nil, fmt.Errorf("expected array, got %T", v)
+	}
+
+	ids := make([]string, 0, len(arr.Values))
+	for _, val := range arr.Values {
+		switch n := val.(type) {
+		case cadence.UInt64:
+			ids = append(ids, strconv.FormatUint(uint64(n), 10))
+		default:
+			ids = append(ids, val.String())
+		}
+	}
+	return ids, nil
+}
+
+// verifyNFTIDsOnChain checks a batch of NFT IDs via borrowNFT(id).
+// Returns IDs that the owner no longer holds (missing on-chain).
 func (w *NFTOwnershipReconciler) verifyNFTIDsOnChain(ctx context.Context, owner, publicPathID string, nftIDs []string) ([]string, error) {
 	ownerAddr := flowsdk.HexToAddress(owner)
 	pathVal, _ := cadence.NewString(publicPathID)
 
-	// Convert string IDs to Cadence UInt64 array.
 	cadenceIDs := make([]cadence.Value, 0, len(nftIDs))
 	for _, idStr := range nftIDs {
 		n, err := strconv.ParseUint(idStr, 10, 64)
 		if err != nil {
-			continue // skip non-numeric IDs
+			continue
 		}
 		cadenceIDs = append(cadenceIDs, cadence.NewUInt64(n))
 	}
