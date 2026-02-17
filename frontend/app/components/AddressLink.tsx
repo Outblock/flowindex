@@ -26,6 +26,14 @@ interface Props {
     onClick?: (e: React.MouseEvent) => void;
 }
 
+/** Determine avatar variant by address type. */
+function avatarVariant(addr: string): 'beam' | 'bauhaus' | 'pixel' {
+    const hex = addr.replace(/^0x/, '');
+    if (hex.length <= 16) return 'beam';        // Flow
+    if (/^0{10,}/.test(hex)) return 'bauhaus';   // COA (EVM with 10+ leading zeros)
+    return 'pixel';                               // EVM
+}
+
 export function AddressLink({
     address,
     prefixLen = 8,
@@ -47,7 +55,7 @@ export function AddressLink({
                 <Avatar
                     size={size}
                     name={normalized}
-                    variant="beam"
+                    variant={avatarVariant(normalized)}
                     colors={colors}
                 />
             )}

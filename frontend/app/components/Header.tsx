@@ -61,7 +61,7 @@ function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 relative bg-zinc-50/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 py-4 pl-14 pr-4 md:px-8 transition-colors duration-300">
+    <header className="sticky top-0 z-40 relative bg-zinc-50/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 py-4 pl-[58px] pr-3 md:px-8 transition-colors duration-300 overflow-hidden">
       {isNavigating && (
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-nothing-green to-transparent animate-pulse" />
       )}

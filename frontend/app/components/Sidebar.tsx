@@ -36,7 +36,7 @@ export default function Sidebar() {
             {/* Mobile Hamburger Button */}
             <button
                 onClick={() => setIsMobileOpen(!isMobileOpen)}
-                className="md:hidden fixed top-[18px] left-4 z-[60] p-[11px] rounded-sm bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10"
+                className="md:hidden fixed top-[18px] left-3 z-[60] p-[11px] rounded-sm bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-white/10"
                 aria-label="Toggle menu"
             >
                 {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
