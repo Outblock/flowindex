@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -505,66 +504,68 @@ type IndexedRange struct {
 	To   uint64 `json:"to"`
 }
 
-// GetIndexedRanges computes the actual indexed height ranges by combining
-// checkpoint data. This avoids the false assumption that everything between
-// min_height and max_height is contiguous.
+// GetIndexedRanges finds actual contiguous indexed ranges by sampling
+// block existence at regular intervals. This correctly detects gaps
+// instead of assuming everything between checkpoints is contiguous.
 func (r *Repository) GetIndexedRanges(ctx context.Context) ([]IndexedRange, error) {
-	checkpoints, err := r.GetAllCheckpoints(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("GetIndexedRanges: checkpoints: %w", err)
-	}
-
-	minH, maxH, _, err := r.GetBlockRange(ctx)
+	minH, maxH, totalBlocks, err := r.GetBlockRange(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("GetIndexedRanges: block range: %w", err)
 	}
-	if maxH == 0 {
+	if maxH == 0 || totalBlocks == 0 {
 		return nil, nil
 	}
 
+	// Sample block counts in fixed-size buckets to find where data exists.
+	// Use ~500 buckets max to keep the query fast on large ranges.
+	span := maxH - minH + 1
+	bucketSize := span / 500
+	if bucketSize < 1000 {
+		bucketSize = 1000
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT (height / $1) * $1 AS bucket_start, COUNT(*) AS cnt
+		FROM raw.blocks
+		WHERE height >= $2 AND height <= $3
+		GROUP BY bucket_start
+		ORDER BY bucket_start
+	`, bucketSize, minH, maxH)
+	if err != nil {
+		return nil, fmt.Errorf("GetIndexedRanges: bucket query: %w", err)
+	}
+	defer rows.Close()
+
+	// Build ranges from non-empty buckets. Adjacent/overlapping buckets merge.
 	var ranges []IndexedRange
-
-	// Forward ingester range: main_ingester checkpoint → max_height
-	// (or gcp_forward_ingester if present)
-	forwardLow := maxH // default: just the max
-	if h, ok := checkpoints["main_ingester"]; ok && h > 0 && h < forwardLow {
-		forwardLow = h
-	}
-	if h, ok := checkpoints["gcp_forward_ingester"]; ok && h > 0 && h < forwardLow {
-		forwardLow = h
-	}
-	ranges = append(ranges, IndexedRange{From: forwardLow, To: maxH})
-
-	// History ingester range: minH → history_ingester checkpoint
-	if h, ok := checkpoints["history_ingester"]; ok && h > 0 {
-		// History goes downward, so minH is lowest block, h is where history started from
-		if minH < h {
-			ranges = append(ranges, IndexedRange{From: minH, To: h})
+	for rows.Next() {
+		var bucketStart uint64
+		var cnt int64
+		if err := rows.Scan(&bucketStart, &cnt); err != nil {
+			return nil, err
 		}
-	} else if minH < forwardLow {
-		// No history checkpoint but we have blocks below forward range
-		ranges = append(ranges, IndexedRange{From: minH, To: minH})
-	}
+		if cnt == 0 {
+			continue
+		}
+		bucketEnd := bucketStart + bucketSize - 1
+		if bucketEnd > maxH {
+			bucketEnd = maxH
+		}
 
-	// Merge overlapping/adjacent ranges
-	if len(ranges) == 0 {
-		return nil, nil
-	}
-	sort.Slice(ranges, func(i, j int) bool { return ranges[i].From < ranges[j].From })
-
-	merged := []IndexedRange{ranges[0]}
-	for _, r := range ranges[1:] {
-		last := &merged[len(merged)-1]
-		if r.From <= last.To+1 {
-			if r.To > last.To {
-				last.To = r.To
+		if len(ranges) > 0 {
+			last := &ranges[len(ranges)-1]
+			// Merge if this bucket is adjacent or overlapping with previous range
+			if bucketStart <= last.To+bucketSize {
+				if bucketEnd > last.To {
+					last.To = bucketEnd
+				}
+				continue
 			}
-		} else {
-			merged = append(merged, r)
 		}
+		ranges = append(ranges, IndexedRange{From: bucketStart, To: bucketEnd})
 	}
 
-	return merged, nil
+	return ranges, nil
 }
 
 // GetBlockTimestamp returns the timestamp of a block at the given height.
