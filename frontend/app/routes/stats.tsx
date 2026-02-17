@@ -48,6 +48,23 @@ const FLOW_SPORK_BOUNDARIES = [
     { name: 'Mainnet 28', height: 137390146 },
 ];
 
+// GCP parallel history containers — matches gcp-parallel-index.sh
+const GCP_VMS = [
+    { key: 'gcp_forward_ingester', label: 'Forward Ingester', sporks: 'Live', direction: 'forward' as const, startBlock: 0, stopHeight: 0 },
+    { key: 'history_s7', label: 'History S7', sporks: 'Spork 27', direction: 'backward' as const, startBlock: 137390146, stopHeight: 85981135 },
+    { key: 'history_s6', label: 'History S6', sporks: 'Spork 26', direction: 'backward' as const, startBlock: 85981135, stopHeight: 65264629 },
+    { key: 'history_s5', label: 'History S5', sporks: 'Spork 22-25', direction: 'backward' as const, startBlock: 65264629, stopHeight: 47169687 },
+    { key: 'history_s4', label: 'History S4', sporks: 'Spork 17-21', direction: 'backward' as const, startBlock: 47169687, stopHeight: 23830813 },
+    { key: 'history_s3', label: 'History S3', sporks: 'Spork 11-16', direction: 'backward' as const, startBlock: 23830813, stopHeight: 15791891 },
+    { key: 'history_s2', label: 'History S2', sporks: 'Spork 6-10', direction: 'backward' as const, startBlock: 15791891, stopHeight: 12020337 },
+    { key: 'history_s1', label: 'History S1', sporks: 'Spork 1-5', direction: 'backward' as const, startBlock: 12020337, stopHeight: 7601063 },
+];
+
+const VM_COLORS = [
+    'bg-emerald-500', 'bg-blue-500', 'bg-violet-500', 'bg-amber-500',
+    'bg-rose-500', 'bg-cyan-500', 'bg-orange-500', 'bg-pink-500',
+];
+
 const WORKER_COLORS: Record<string, string> = {
     main_ingester: 'bg-yellow-400',
     history_ingester: 'bg-cyan-400',
@@ -66,6 +83,10 @@ function Stats() {
     const historySamplesRef = useRef<{ time: number; height: number }[]>([]);
     const forwardSamplesRef = useRef<{ time: number; height: number }[]>([]);
     const SPEED_WINDOW_MS = 30_000; // 30 second sliding window
+
+    // VM speed tracking
+    const [vmSpeeds, setVmSpeeds] = useState<Record<string, number>>({});
+    const vmSamplesRef = useRef<Record<string, { time: number; height: number }[]>>({});
 
     // State for Indexing Map
     // Initialize with 100K
@@ -115,6 +136,31 @@ function Stats() {
                 }
             }
         }
+
+        // Calculate per-VM speeds
+        const cp = data.checkpoints || {};
+        const newVmSpeeds: Record<string, number> = {};
+        for (const vm of GCP_VMS) {
+            const h = cp[vm.key];
+            if (typeof h !== 'number' || h === 0) continue;
+            const samples = vmSamplesRef.current[vm.key] || [];
+            samples.push({ time: now, height: h });
+            const cutoff = now - SPEED_WINDOW_MS;
+            while (samples.length > 0 && samples[0].time < cutoff) samples.shift();
+            vmSamplesRef.current[vm.key] = samples;
+            if (samples.length >= 2) {
+                const oldest = samples[0];
+                const newest = samples[samples.length - 1];
+                const timeDiff = (newest.time - oldest.time) / 1000;
+                const blockDiff = vm.direction === 'backward'
+                    ? oldest.height - newest.height
+                    : newest.height - oldest.height;
+                if (timeDiff > 0 && blockDiff >= 0) {
+                    newVmSpeeds[vm.key] = blockDiff / timeDiff;
+                }
+            }
+        }
+        setVmSpeeds(prev => ({ ...prev, ...newVmSpeeds }));
 
         setStatus(data);
         setLoading(false);
@@ -309,6 +355,15 @@ function Stats() {
                                 }`}
                         >
                             System Metrics
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('vms')}
+                            className={`px-6 py-2 text-xs uppercase tracking-widest font-bold rounded-sm transition-all ${activeTab === 'vms'
+                                ? 'bg-white dark:bg-white/10 text-zinc-900 dark:text-white shadow-sm'
+                                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                                }`}
+                        >
+                            VM Progress
                         </button>
                         <button
                             onClick={() => setActiveTab('mosaic')}
@@ -561,6 +616,180 @@ function Stats() {
                                     <div className="text-zinc-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Network</div>
                                     <div className="text-zinc-900 dark:text-white font-bold">Flow Mainnet</div>
                                 </div>
+                            </div>
+                        </motion.div>
+                    ) : activeTab === 'vms' ? (
+                        <motion.div
+                            key="vms"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="space-y-6"
+                        >
+                            {/* Overall GCP Progress */}
+                            {(() => {
+                                const cp = checkpoints || {};
+                                const backwardVMs = GCP_VMS.filter(v => v.direction === 'backward');
+                                const totalBlocks = backwardVMs.reduce((sum, v) => sum + (v.startBlock - v.stopHeight), 0);
+                                const doneBlocks = backwardVMs.reduce((sum, v) => {
+                                    const h = cp[v.key];
+                                    if (typeof h !== 'number' || h === 0) return sum;
+                                    return sum + Math.max(0, v.startBlock - Math.max(h, v.stopHeight));
+                                }, 0);
+                                const overallPct = totalBlocks > 0 ? (doneBlocks / totalBlocks) * 100 : 0;
+                                const totalSpeed = backwardVMs.reduce((sum, v) => sum + (vmSpeeds[v.key] || 0), 0);
+                                const remaining = totalBlocks - doneBlocks;
+                                const etaSec = totalSpeed > 0 ? remaining / totalSpeed : 0;
+                                return (
+                                    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-8 rounded-sm shadow-sm dark:shadow-none">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center space-x-3">
+                                                <Server className="h-5 w-5 text-violet-500" />
+                                                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-wide">GCP History Indexing</h2>
+                                                <span className="text-[10px] text-zinc-500 font-mono">7 containers on e2-standard-16</span>
+                                            </div>
+                                            <span className="text-2xl font-bold text-violet-500">
+                                                <NumberFlow value={overallPct} format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }} />%
+                                            </span>
+                                        </div>
+                                        <div className="relative h-6 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-4">
+                                            <motion.div
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${overallPct}%` }}
+                                                transition={{ duration: 1, ease: "easeOut" }}
+                                                className="absolute h-full bg-violet-500"
+                                            />
+                                            {totalSpeed > 0 && (
+                                                <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-20 mix-blend-overlay" />
+                                            )}
+                                            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white mix-blend-difference">
+                                                {doneBlocks.toLocaleString()} / {totalBlocks.toLocaleString()} blocks
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-3 rounded-sm text-center">
+                                                <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Combined Speed</div>
+                                                <div className="text-lg font-bold text-violet-500">
+                                                    <NumberFlow value={totalSpeed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />
+                                                    <span className="text-xs text-zinc-500 ml-1">blk/s</span>
+                                                </div>
+                                            </div>
+                                            <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-3 rounded-sm text-center">
+                                                <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Remaining</div>
+                                                <div className="text-lg font-bold text-zinc-900 dark:text-white font-mono">
+                                                    {remaining.toLocaleString()}
+                                                </div>
+                                            </div>
+                                            <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-3 rounded-sm text-center">
+                                                <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Est. Completion</div>
+                                                <div className="text-lg font-bold text-zinc-900 dark:text-white">
+                                                    {formatDuration(etaSec)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Per-VM Cards */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {GCP_VMS.map((vm, idx) => {
+                                    const cp = checkpoints || {};
+                                    const h = cp[vm.key];
+                                    const height = typeof h === 'number' ? h : 0;
+                                    const speed = vmSpeeds[vm.key] || 0;
+                                    const color = VM_COLORS[idx % VM_COLORS.length];
+                                    const colorText = color.replace('bg-', 'text-');
+
+                                    let pct = 0;
+                                    let remaining = 0;
+                                    let rangeLabel = '';
+                                    let isActive = false;
+
+                                    if (vm.direction === 'backward') {
+                                        const total = vm.startBlock - vm.stopHeight;
+                                        const done = height > 0 ? Math.max(0, vm.startBlock - Math.max(height, vm.stopHeight)) : 0;
+                                        pct = total > 0 ? (done / total) * 100 : 0;
+                                        remaining = total - done;
+                                        rangeLabel = `#${vm.startBlock.toLocaleString()} → #${vm.stopHeight.toLocaleString()}`;
+                                        isActive = height > 0 && height > vm.stopHeight && speed > 0;
+                                    } else {
+                                        // Forward ingester
+                                        const tip = latestHeight || 1;
+                                        pct = height > 0 ? Math.min(100, (height / tip) * 100) : 0;
+                                        remaining = Math.max(0, tip - height);
+                                        rangeLabel = `→ #${latestHeight.toLocaleString()}`;
+                                        isActive = height > 0 && speed > 0;
+                                    }
+
+                                    const isDone = pct >= 99.99;
+                                    const etaSec = speed > 0 ? remaining / speed : 0;
+
+                                    return (
+                                        <div key={vm.key} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-3 h-3 rounded-full ${color} ${isActive ? 'animate-pulse' : ''}`} />
+                                                    <div>
+                                                        <h3 className="text-sm font-bold text-zinc-900 dark:text-white">{vm.label}</h3>
+                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{vm.sporks}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className={`text-xl font-bold ${isDone ? 'text-green-500' : colorText}`}>
+                                                        <NumberFlow value={pct} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />%
+                                                    </div>
+                                                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isDone ? 'text-green-500' : isActive ? 'text-green-500' : height > 0 ? 'text-yellow-500' : 'text-zinc-400'}`}>
+                                                        {isDone ? 'DONE' : isActive ? 'SYNCING' : height > 0 ? 'STALLED' : 'OFFLINE'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Progress Bar */}
+                                            <div className="relative h-4 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-4">
+                                                <motion.div
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${pct}%` }}
+                                                    transition={{ duration: 1, ease: "easeOut" }}
+                                                    className={`absolute h-full ${isDone ? 'bg-green-500' : color}`}
+                                                />
+                                                {isActive && !isDone && (
+                                                    <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-20 mix-blend-overlay" />
+                                                )}
+                                            </div>
+
+                                            {/* Stats Grid */}
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                                <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-2.5 rounded-sm">
+                                                    <div className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Current Height</div>
+                                                    <div className="font-bold font-mono text-zinc-900 dark:text-white">
+                                                        {height > 0 ? `#${height.toLocaleString()}` : '—'}
+                                                    </div>
+                                                </div>
+                                                <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-2.5 rounded-sm">
+                                                    <div className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Speed</div>
+                                                    <div className="font-bold text-zinc-900 dark:text-white">
+                                                        <NumberFlow value={speed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />
+                                                        <span className="text-zinc-500 ml-1 font-normal">blk/s</span>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-2.5 rounded-sm">
+                                                    <div className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Range</div>
+                                                    <div className="font-mono text-zinc-900 dark:text-white truncate" title={rangeLabel}>
+                                                        {rangeLabel}
+                                                    </div>
+                                                </div>
+                                                <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-2.5 rounded-sm">
+                                                    <div className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">ETA</div>
+                                                    <div className="font-bold text-zinc-900 dark:text-white">
+                                                        {isDone ? 'Complete' : formatDuration(etaSec)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </motion.div>
                     ) : (
