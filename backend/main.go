@@ -319,6 +319,15 @@ func main() {
 		if enableNFTOwnershipWorker {
 			histProcessors = append(histProcessors, ingester.NewNFTOwnershipWorker(repo))
 		}
+		if enableDailyBalanceWorker {
+			histProcessors = append(histProcessors, ingester.NewDailyBalanceWorker(repo))
+		}
+		if enableNFTItemMetadataWorker {
+			histProcessors = append(histProcessors, ingester.NewNFTItemMetadataWorker(repo, flowClient))
+		}
+		if enableNFTReconciler {
+			histProcessors = append(histProcessors, ingester.NewNFTOwnershipReconciler(repo, flowClient))
+		}
 
 		historyDeriver = ingester.NewHistoryDeriver(repo, histProcessors, ingester.HistoryDeriverConfig{
 			ChunkSize: historyDeriverChunk,
