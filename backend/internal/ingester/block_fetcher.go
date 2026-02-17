@@ -184,12 +184,23 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				continue
 			}
 		} else {
-			results, err = pin.GetTransactionResultsByBlockID(ctx, block.ID)
+			// Wrap in panic recovery — some old spork event payloads cause the
+			// Cadence JSON decoder to panic inside the Flow SDK.
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						err = fmt.Errorf("panic in GetTransactionResultsByBlockID for height %d: %v", height, r)
+						log.Printf("[ingester] Recovered from SDK panic at height %d: %v", height, r)
+					}
+				}()
+				results, err = pin.GetTransactionResultsByBlockID(ctx, block.ID)
+			}()
+			isPanic := err != nil && strings.Contains(err.Error(), "panic in GetTransactionResultsByBlockID")
 			if err != nil {
 				if isUnimplementedError(err) {
 					w.client.MarkNoBulkAPI(pin.NodeIndex())
 				}
-				if isUnimplementedError(err) || isExecutionNodeError(err) || isBulkResultInternalError(err) {
+				if isPanic || isUnimplementedError(err) || isExecutionNodeError(err) || isBulkResultInternalError(err) {
 					// Old spork node, execution nodes down, or bulk API bug: fall back to per-tx GetTransactionResult.
 					useIndexAPI := usedBulkTxAPI && !isExecutionNodeError(err)
 					if isExecutionNodeError(err) || isBulkResultInternalError(err) {
@@ -457,6 +468,12 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 		}
 		count++
 		go func(idx int, t *flowsdk.Transaction) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("[ingester] Recovered from SDK panic for tx %s (idx=%d): %v", t.ID(), idx, rec)
+					ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
+				}
+			}()
 			var r *flowsdk.TransactionResult
 			var rErr error
 			if usedBulkTxAPI {
