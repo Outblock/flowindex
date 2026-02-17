@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Flame, Droplets, CircleDollarSign, Coins } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Flame, Droplets, CircleDollarSign, Coins, Loader2 } from 'lucide-react';
 import { formatShort } from './account/accountUtils';
 import { AddressLink } from './AddressLink';
 import { formatRelativeTime } from '../lib/time';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { AvatarGroup, AvatarGroupTooltip } from '@/components/animate-ui/components/animate/avatar-group';
+import { resolveApiBaseUrl } from '../api';
 
 // --- Interfaces ---
 
@@ -239,18 +240,65 @@ export function buildSummaryLine(tx: any): string {
 }
 
 // --- Detail cache (persists across re-renders, shared across rows) ---
+const txDetailCache = new Map<string, any>();
 
-// --- Expanded Detail Panel (no API calls, uses list-level data only) ---
+// --- Expanded Detail Panel (fetches per-tx data on expand) ---
 
 export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; address: string; expanded?: boolean }) {
-    const summary: TransferSummary | undefined = tx.transfer_summary;
+    const [detail, setDetail] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+    const fetchedRef = useRef(false);
+
+    useEffect(() => {
+        if (fetchedRef.current) return;
+        const cached = txDetailCache.get(tx.id);
+        if (cached) { setDetail(cached); return; }
+        let cancelled = false;
+        setLoading(true);
+        fetchedRef.current = true;
+        (async () => {
+            try {
+                const baseUrl = await resolveApiBaseUrl();
+                const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(tx.id)}`);
+                if (!res.ok) throw new Error('fetch failed');
+                const json = await res.json();
+                const d = json.data?.[0];
+                if (d && !cancelled) {
+                    txDetailCache.set(tx.id, d);
+                    setDetail(d);
+                }
+            } catch { /* ignore */ }
+            if (!cancelled) setLoading(false);
+        })();
+        return () => { cancelled = true; };
+    }, [tx.id]);
+
+    // Merge: use fetched detail data if available, fall back to list-level data
+    const merged = detail || tx;
+    const ftTransfers: any[] = merged.ft_transfers || [];
+    const nftTransfers: any[] = merged.nft_transfers || [];
+    const defiEvents: any[] = merged.defi_events || [];
+    const evmExecs: any[] = merged.evm_executions || [];
+    const summary: TransferSummary | undefined = merged.transfer_summary || tx.transfer_summary;
     const tags: string[] = tx.tags || [];
     const tagsLower = tags.map((t: string) => t.toLowerCase());
-    const summaryLine = buildSummaryLine(tx);
-    const evmHash = tx.evm_hash;
+    const summaryLine = buildSummaryLine(detail ? { ...tx, ft_transfers: ftTransfers, nft_transfers: nftTransfers } : tx);
+    const evmHash = merged.evm_hash || tx.evm_hash;
+
+    // Prefer detail-level ft/nft transfers over summary
+    const hasFTDetail = ftTransfers.length > 0;
+    const hasNFTDetail = nftTransfers.length > 0;
 
     return (
         <div className="px-4 pb-4 pt-1 ml-[88px] space-y-3">
+            {/* Loading indicator */}
+            {loading && (
+                <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Loading details...</span>
+                </div>
+            )}
+
             {/* Summary line */}
             {summaryLine && (
                 <div className="text-xs text-zinc-600 dark:text-zinc-400">{summaryLine}</div>
@@ -281,8 +329,39 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
                 </div>
             )}
 
-            {/* FT Transfers from list summary */}
-            {summary?.ft && summary.ft.length > 0 && (
+            {/* FT Transfers from detail API (preferred) */}
+            {hasFTDetail && (
+                <div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Token Transfers</div>
+                    <div className="space-y-1.5">
+                        {ftTransfers.map((ft: any, i: number) => {
+                            const displayName = ft.token_symbol || ft.token_name || formatTokenName(ft.token || '');
+                            return (
+                                <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
+                                    <TokenIcon logo={ft.token_logo} symbol={displayName} size={18} />
+                                    <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
+                                        {Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                                    </span>
+                                    <span className="text-zinc-500">{displayName}</span>
+                                    {ft.from_address && ft.to_address && (
+                                        <span className="text-zinc-400 text-[10px] inline-flex items-center gap-1">
+                                            <AddressLink address={ft.from_address} size={14} onClick={(e) => e.stopPropagation()} />
+                                            <span>→</span>
+                                            <AddressLink address={ft.to_address} size={14} onClick={(e) => e.stopPropagation()} />
+                                        </span>
+                                    )}
+                                    {ft.is_cross_vm && (
+                                        <span className="text-[9px] px-1 py-0.5 rounded border border-purple-300 dark:border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 font-semibold">CROSS-VM</span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* FT Transfers from summary (fallback when no detail) */}
+            {!hasFTDetail && summary?.ft && summary.ft.length > 0 && (
                 <div>
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Token Transfers</div>
                     <div className="space-y-1.5">
@@ -290,7 +369,6 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
                             const displayName = f.symbol || f.name || formatTokenName(f.token);
                             const isOut = f.direction === 'out';
                             const isTransfer = f.direction === 'transfer';
-                            // For "transfer" direction (no address context), counterparty is "from>to"
                             const [cpFrom, cpTo] = isTransfer && f.counterparty ? f.counterparty.split('>') : [undefined, undefined];
                             return (
                                 <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
@@ -328,8 +406,34 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
                 </div>
             )}
 
-            {/* NFT Transfers from list summary */}
-            {summary?.nft && summary.nft.length > 0 && (
+            {/* NFT Transfers from detail API (preferred) */}
+            {hasNFTDetail && (
+                <div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">NFT Transfers</div>
+                    <div className="space-y-1.5">
+                        {nftTransfers.map((nt: any, i: number) => {
+                            const displayName = nt.collection_name || formatTokenName(nt.token || '');
+                            return (
+                                <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
+                                    <TokenIcon logo={nt.collection_logo} symbol={displayName} size={18} />
+                                    <span className="text-zinc-500">{displayName}</span>
+                                    {nt.token_id != null && <span className="font-mono text-zinc-600 dark:text-zinc-300">#{nt.token_id}</span>}
+                                    {nt.from_address && nt.to_address && (
+                                        <span className="text-zinc-400 text-[10px] inline-flex items-center gap-1">
+                                            <AddressLink address={nt.from_address} size={14} onClick={(e) => e.stopPropagation()} />
+                                            <span>→</span>
+                                            <AddressLink address={nt.to_address} size={14} onClick={(e) => e.stopPropagation()} />
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* NFT Transfers from summary (fallback) */}
+            {!hasNFTDetail && summary?.nft && summary.nft.length > 0 && (
                 <div>
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">NFT Transfers</div>
                     <div className="space-y-1.5">
@@ -368,6 +472,63 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
                                 </div>
                             );
                         })}
+                    </div>
+                </div>
+            )}
+
+            {/* DeFi Events */}
+            {defiEvents.length > 0 && (
+                <div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">DeFi Events</div>
+                    <div className="space-y-1.5">
+                        {defiEvents.map((de: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
+                                <Repeat className="h-3 w-3 text-teal-500" />
+                                <span className="font-medium text-teal-600 dark:text-teal-400">{de.event_type || 'Swap'}</span>
+                                {de.asset0_symbol && de.asset1_symbol && (
+                                    <span className="text-zinc-500">{de.asset0_symbol}/{de.asset1_symbol}</span>
+                                )}
+                                <span className="text-zinc-400 text-[10px]">{de.dex || ''}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* EVM Executions */}
+            {evmExecs.length > 0 && (
+                <div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">EVM Executions</div>
+                    <div className="space-y-1.5">
+                        {evmExecs.map((exec: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
+                                <Zap className="h-3 w-3 text-purple-500" />
+                                {exec.hash && (
+                                    <a
+                                        href={`https://evm.flowindex.dev/tx/0x${exec.hash.replace(/^0x/i, '')}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-mono text-purple-600 dark:text-purple-400 hover:underline"
+                                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                    >
+                                        0x{formatShort(exec.hash.replace(/^0x/i, ''), 10, 8)}
+                                    </a>
+                                )}
+                                {exec.from && (
+                                    <span className="text-zinc-400 text-[10px]">
+                                        from <AddressLink address={exec.from} size={14} onClick={(e) => e.stopPropagation()} />
+                                    </span>
+                                )}
+                                {exec.to && (
+                                    <span className="text-zinc-400 text-[10px]">
+                                        → <AddressLink address={exec.to} size={14} onClick={(e) => e.stopPropagation()} />
+                                    </span>
+                                )}
+                                {exec.value && Number(exec.value) > 0 && (
+                                    <span className="font-mono text-zinc-600 dark:text-zinc-300">{Number(exec.value).toLocaleString()} wei</span>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}

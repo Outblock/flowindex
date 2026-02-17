@@ -2,10 +2,16 @@ import Avatar from 'boring-avatars';
 import { Link } from '@tanstack/react-router';
 import { normalizeAddress, formatShort } from './account/accountUtils';
 
-/** Derive 5 colors from a Flow address (16 hex chars after 0x).
- *  Split into 3 base colors from the address, plus 2 mixed variants. */
+/** Derive 5 colors from an address.
+ *  For COA addresses (long hex with leading zeros), use the non-zero suffix
+ *  so avatars aren't all-black. */
 export function colorsFromAddress(addr: string): string[] {
-    const hex = addr.replace(/^0x/, '').padEnd(16, '0').slice(0, 16);
+    let hex = addr.replace(/^0x/, '');
+    // For COA/EVM addresses, strip leading zeros to use the meaningful part
+    if (hex.length > 16) {
+        hex = hex.replace(/^0+/, '') || hex;
+    }
+    hex = hex.padEnd(16, '0').slice(0, 16);
     // 3 segments of ~5-6 hex chars each → 3 base colors
     const c1 = `#${hex.slice(0, 6)}`;
     const c2 = `#${hex.slice(5, 11)}`;
