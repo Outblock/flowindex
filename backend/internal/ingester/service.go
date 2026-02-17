@@ -39,6 +39,7 @@ type Config struct {
 	WorkerCount      int
 	ServiceName      string
 	StartBlock       uint64
+	StopHeight       uint64 // backward mode: stop when reaching this height (0 = go to genesis)
 	Mode             string // "forward" (default) or "backward"
 	MaxReorgDepth    uint64
 	OnNewBlock       BlockCallback
@@ -133,6 +134,15 @@ func (s *Service) process(ctx context.Context) error {
 			return nil
 		}
 
+		// StopHeight: stop when we've reached the configured floor.
+		if s.config.StopHeight > 0 && currentTip <= s.config.StopHeight {
+			if !s.loggedHistoryFloor {
+				log.Printf("[%s] Reached stop height %d, done.", s.config.ServiceName, s.config.StopHeight)
+				s.loggedHistoryFloor = true
+			}
+			return nil
+		}
+
 		// Define batch: [currentTip - batch, currentTip - 1]
 		// But practically: We want to fetch decreasing.
 		// Let's settle on: range is [targetStart, targetEnd]
@@ -146,6 +156,11 @@ func (s *Service) process(ctx context.Context) error {
 
 		startHeight = targetStart
 		endHeight = targetEnd
+
+		// Clamp to configured StopHeight floor.
+		if s.config.StopHeight > 0 && startHeight < s.config.StopHeight {
+			startHeight = s.config.StopHeight
+		}
 
 		// If we've learned a spork root floor for this client, clamp the range.
 		// This avoids retrying a range that contains heights the node cannot serve.
