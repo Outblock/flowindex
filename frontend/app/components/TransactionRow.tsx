@@ -406,7 +406,7 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
                         {evmExecs.map((exec: any, i: number) => (
                             <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
                                 <a
-                                    href={`https://evm.flowscan.io/tx/0x${exec.hash}`}
+                                    href={`https://evm.flowindex.dev/tx/0x${exec.hash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="font-mono text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
@@ -419,7 +419,7 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
                                     <>
                                         <span className="text-zinc-400">from</span>
                                         <a
-                                            href={`https://evm.flowscan.io/address/0x${exec.from}`}
+                                            href={`https://evm.flowindex.dev/address/0x${exec.from}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
@@ -433,7 +433,7 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
                                     <>
                                         <span className="text-zinc-400">&rarr;</span>
                                         <a
-                                            href={`https://evm.flowscan.io/address/0x${exec.to}`}
+                                            href={`https://evm.flowindex.dev/address/0x${exec.to}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
