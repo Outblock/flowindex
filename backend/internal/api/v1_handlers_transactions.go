@@ -44,9 +44,17 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 			eventsByTx[e.TransactionID] = append(eventsByTx[e.TransactionID], e)
 		}
 	}
+
+	// Fetch transfer summaries for expand preview
+	transferSummaries, _ := s.repo.GetTransferSummariesByTxIDs(r.Context(), txIDs, "")
+	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
+	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
+
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
-		out = append(out, toFlowTransactionOutput(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
+		ts := transferSummaries[t.ID]
+		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
