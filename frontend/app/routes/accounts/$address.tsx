@@ -162,6 +162,7 @@ function AccountDetail() {
     const [account, setAccount] = useState<any>(initialAccount);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [error, setError] = useState<any>(initialAccount ? null : 'Account not found');
+    const [showQR, setShowQR] = useState(false);
     const activeTab: AccountTab = searchTab || 'activity';
     const activeSubTab: AccountSubTab | undefined = searchSubTab;
     const setActiveTab = (tab: AccountTab) => {
@@ -299,6 +300,12 @@ function AccountDetail() {
                                 />
                             </div>
                             <span>Account</span>
+                            <button
+                                onClick={() => setShowQR(true)}
+                                className="p-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                <QrCode className="h-4 w-4 text-zinc-400" />
+                            </button>
                         </div>
                     }
                     subtitle={
@@ -326,34 +333,83 @@ function AccountDetail() {
                         </div>
                     }
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="text-left md:text-right">
-                            <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Balance</div>
-                            <div className="text-xl md:text-3xl font-bold">
-                                <SafeNumberFlow value={balanceValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
-                            </div>
-                        </div>
-                        <div className="relative group">
-                            <button className="p-2 rounded-md border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
-                                <QrCode className="h-5 w-5 text-zinc-400" />
-                            </button>
-                            <div className="absolute right-0 bottom-full mb-2 z-50 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 origin-bottom-right">
-                                <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md shadow-xl">
-                                    <QRCodeSVG
-                                        value={`0x${normalizedAddress}`}
-                                        size={120}
-                                        fgColor={theme === 'dark' ? '#ffffff' : '#18181b'}
-                                        bgColor="transparent"
-                                        level="M"
-                                    />
-                                    <div className="mt-2 text-[10px] text-zinc-400 text-center font-mono">
-                                        0x{normalizedAddress.slice(0, 4)}...{normalizedAddress.slice(-4)}
-                                    </div>
-                                </div>
-                            </div>
+                    <div className="text-left md:text-right">
+                        <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Balance</div>
+                        <div className="text-xl md:text-3xl font-bold">
+                            <SafeNumberFlow value={balanceValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
                         </div>
                     </div>
                 </PageHeader>
+
+                {/* QR Code Modal */}
+                <AnimatePresence>
+                    {showQR && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                            onClick={() => setShowQR(false)}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                transition={{ duration: 0.15 }}
+                                className="relative w-[320px] rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-2xl p-8"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                {/* Avatar + Network */}
+                                <div className="flex flex-col items-center gap-3 mb-6">
+                                    <Avatar
+                                        size={48}
+                                        name={normalizedAddress}
+                                        variant="beam"
+                                        colors={colorsFromAddress(normalizedAddress)}
+                                    />
+                                    <span className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-medium">
+                                        Flow Mainnet
+                                    </span>
+                                </div>
+
+                                {/* QR Code */}
+                                <div className="flex justify-center mb-5">
+                                    <div className="p-4 rounded-xl bg-white">
+                                        <QRCodeSVG
+                                            value={normalizedAddress}
+                                            size={180}
+                                            fgColor="#18181b"
+                                            bgColor="#ffffff"
+                                            level="M"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Address */}
+                                <div className="flex items-center justify-center gap-1.5 mb-5">
+                                    <span className="text-xs font-mono text-zinc-600 dark:text-zinc-300 break-all text-center leading-relaxed">
+                                        {normalizedAddress}
+                                    </span>
+                                    <CopyButton
+                                        content={normalizedAddress}
+                                        variant="ghost"
+                                        size="xs"
+                                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 shrink-0"
+                                    />
+                                </div>
+
+                                {/* Warning */}
+                                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40">
+                                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                                    <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+                                        Only send <strong>Flow network</strong> assets to this address. Sending assets from other networks may result in permanent loss.
+                                    </p>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* RPC unavailable banner */}
                 {account._rpcUnavailable && (
