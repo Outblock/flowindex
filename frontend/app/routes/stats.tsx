@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Activity, HardDrive, Server, Layers, Info, Square } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
-import { ensureHeyApiConfigured, fetchStatus as fetchStatusApi } from '../api/heyapi';
+import { ensureHeyApiConfigured, fetchStatus as fetchStatusApi, fetchGcpVmStatus } from '../api/heyapi';
 
 export const Route = createFileRoute('/stats')({
     component: Stats,
@@ -49,9 +49,6 @@ const FLOW_SPORK_BOUNDARIES = [
 ];
 
 // GCP parallel history containers — matches gcp-parallel-index.sh
-// GCP status endpoint — API-only container on GCP VM reading Cloud SQL checkpoints.
-const GCP_STATUS_URL = '/status/gcp-vms';
-
 const GCP_VMS = [
     { key: 'history_s7', label: 'History S7', sporks: 'Spork 27', direction: 'backward' as const, startBlock: 137390146, stopHeight: 85981135 },
     { key: 'history_s6', label: 'History S6', sporks: 'Spork 26', direction: 'backward' as const, startBlock: 85981135, stopHeight: 65264629 },
@@ -186,11 +183,8 @@ function Stats() {
 
     const loadGcpStatus = async () => {
         try {
-            await ensureHeyApiConfigured();
-            const res = await fetch(`${window.location.origin}${GCP_STATUS_URL}`);
-            if (!res.ok) return;
-            const data = await res.json();
-            processGcpStatus(data);
+            const data = await fetchGcpVmStatus();
+            if (data) processGcpStatus(data);
         } catch (error) {
             console.error('Failed to fetch GCP status:', error);
         }
