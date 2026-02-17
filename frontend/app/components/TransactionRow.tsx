@@ -406,26 +406,26 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
                         {evmExecs.map((exec: any, i: number) => (
                             <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
                                 <a
-                                    href={`https://evm.flowindex.dev/tx/0x${exec.hash}`}
+                                    href={`https://evm.flowindex.dev/tx/0x${exec.hash?.replace(/^0x/i, '')}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="font-mono text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
                                     onClick={(e: React.MouseEvent) => e.stopPropagation()}
                                 >
-                                    0x{formatShort(exec.hash, 10, 8)}
+                                    0x{formatShort(exec.hash?.replace(/^0x/i, ''), 10, 8)}
                                     <ExternalLink className="h-3 w-3" />
                                 </a>
                                 {exec.from && (
                                     <>
                                         <span className="text-zinc-400">from</span>
                                         <a
-                                            href={`https://evm.flowindex.dev/address/0x${exec.from}`}
+                                            href={`https://evm.flowindex.dev/address/0x${exec.from?.replace(/^0x/i, '')}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
                                             onClick={(e: React.MouseEvent) => e.stopPropagation()}
                                         >
-                                            0x{formatShort(exec.from, 6, 4)}
+                                            0x{formatShort(exec.from?.replace(/^0x/i, ''), 6, 4)}
                                         </a>
                                     </>
                                 )}
@@ -433,13 +433,13 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
                                     <>
                                         <span className="text-zinc-400">&rarr;</span>
                                         <a
-                                            href={`https://evm.flowindex.dev/address/0x${exec.to}`}
+                                            href={`https://evm.flowindex.dev/address/0x${exec.to?.replace(/^0x/i, '')}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline"
                                             onClick={(e: React.MouseEvent) => e.stopPropagation()}
                                         >
-                                            0x{formatShort(exec.to, 6, 4)}
+                                            0x{formatShort(exec.to?.replace(/^0x/i, ''), 6, 4)}
                                         </a>
                                     </>
                                 )}

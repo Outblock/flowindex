@@ -1164,10 +1164,10 @@ function TransactionDetail() {
                                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">EVM Hash</p>
                                                     <div className="flex items-center gap-2">
                                                         <code className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">
-                                                            0x{exec.hash}
+                                                            0x{exec.hash?.replace(/^0x/i, '')}
                                                         </code>
                                                         <a
-                                                            href={`https://evm.flowindex.dev/tx/0x${exec.hash}`}
+                                                            href={`https://evm.flowindex.dev/tx/0x${exec.hash?.replace(/^0x/i, '')}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0"
@@ -1184,11 +1184,11 @@ function TransactionDetail() {
                                                         <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">From</p>
                                                         <div className="flex items-center gap-2">
                                                             <code className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">
-                                                                {exec.from ? `0x${exec.from}` : 'N/A'}
+                                                                {exec.from ? `0x${exec.from.replace(/^0x/i, '')}` : 'N/A'}
                                                             </code>
                                                             {exec.from && (
                                                                 <a
-                                                                    href={`https://evm.flowindex.dev/address/0x${exec.from}`}
+                                                                    href={`https://evm.flowindex.dev/address/0x${exec.from?.replace(/^0x/i, '')}`}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
                                                                     className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0"
@@ -1202,11 +1202,11 @@ function TransactionDetail() {
                                                         <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">To</p>
                                                         <div className="flex items-center gap-2">
                                                             <code className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">
-                                                                {exec.to ? `0x${exec.to}` : 'Contract Creation'}
+                                                                {exec.to ? `0x${exec.to.replace(/^0x/i, '')}` : 'Contract Creation'}
                                                             </code>
                                                             {exec.to && (
                                                                 <a
-                                                                    href={`https://evm.flowindex.dev/address/0x${exec.to}`}
+                                                                    href={`https://evm.flowindex.dev/address/0x${exec.to?.replace(/^0x/i, '')}`}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
                                                                     className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0"
