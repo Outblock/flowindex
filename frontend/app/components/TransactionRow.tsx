@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Loader2, Globe, Flame, Droplets, CircleDollarSign, Coins } from 'lucide-react';
 import { formatShort } from './account/accountUtils';
@@ -259,8 +259,10 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
     const [selectedNftCollectionName, setSelectedNftCollectionName] = useState('');
     const [nftLoadingIdx, setNftLoadingIdx] = useState<number | null>(null);
 
-    useEffect(() => {
-        if (!expanded || fetchedRef.current) return;
+    // No auto-fetch on expand — use list-level transfer_summary data instead.
+    // Users can click "View Details" to go to the full tx detail page.
+    const loadFullDetail = useCallback(() => {
+        if (fetchedRef.current) return;
         fetchedRef.current = true;
 
         const txId = tx.id;
@@ -269,25 +271,21 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
             return;
         }
 
-        let cancelled = false;
         setLoading(true);
         (async () => {
             try {
                 await ensureHeyApiConfigured();
                 const res = await getFlowV1TransactionById({ path: { id: txId } });
                 const raw: any = (res.data as any)?.data?.[0] ?? res.data;
-                if (!cancelled) {
-                    detailCache.set(txId, raw);
-                    setDetail(raw);
-                }
+                detailCache.set(txId, raw);
+                setDetail(raw);
             } catch {
-                if (!cancelled) setError(true);
+                setError(true);
             } finally {
-                if (!cancelled) setLoading(false);
+                setLoading(false);
             }
         })();
-        return () => { cancelled = true; };
-    }, [expanded, tx.id]);
+    }, [tx.id]);
 
     // Handler: click NFT transfer row → fetch full Cadence detail → show modal
     const handleNftClick = async (nt: any, idx: number) => {
@@ -387,7 +385,7 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
                 <div className="text-xs text-zinc-600 dark:text-zinc-400">{summaryLine}</div>
             )}
 
-            {/* Transfer flow diagram (auto-synthesized from transfer data) */}
+            {/* Transfer flow diagram (only shown after manual load) */}
             {detail && <TransferFlowDiagram detail={detail} />}
 
             {/* Loading indicator */}
@@ -497,7 +495,6 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
                 <div className="flex items-center gap-2 text-xs">
                     <UserPlus className="h-3 w-3 text-cyan-500" />
                     <span className="text-zinc-500">Created new account</span>
-                    {!loading && <span className="text-zinc-400 text-[10px]">(expand to see address)</span>}
                 </div>
             )}
 
@@ -723,6 +720,16 @@ export function ExpandedTransferDetails({ tx, address: _address, expanded }: { t
             {/* Error state */}
             {error && !detail && (
                 <div className="text-xs text-zinc-400">Failed to load details</div>
+            )}
+
+            {/* Load full details button (only if not already loaded) */}
+            {!detail && !loading && !error && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); loadFullDetail(); }}
+                    className="text-[10px] text-nothing-green-dark dark:text-nothing-green hover:underline uppercase tracking-wider"
+                >
+                    Load full details
+                </button>
             )}
 
             {/* General tx info */}
