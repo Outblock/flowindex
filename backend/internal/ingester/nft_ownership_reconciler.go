@@ -26,6 +26,9 @@ type NFTOwnershipReconciler struct {
 	flow          *flowclient.Client
 	pairsPerCycle int
 	scriptTimeout time.Duration
+	// skipPairs tracks owner+collection pairs that failed due to storage limits.
+	// These are skipped for the lifetime of this process to avoid log spam.
+	skipPairs map[string]struct{}
 }
 
 func NewNFTOwnershipReconciler(repo *repository.Repository, flow *flowclient.Client) *NFTOwnershipReconciler {
@@ -36,6 +39,7 @@ func NewNFTOwnershipReconciler(repo *repository.Repository, flow *flowclient.Cli
 		flow:          flow,
 		pairsPerCycle: pairsPerCycle,
 		scriptTimeout: time.Duration(timeoutMs) * time.Millisecond,
+		skipPairs:     make(map[string]struct{}),
 	}
 }
 
@@ -56,9 +60,22 @@ func (w *NFTOwnershipReconciler) ProcessRange(ctx context.Context, fromHeight, t
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		pairKey := pair.Owner + "/" + pair.ContractAddress + "." + pair.ContractName
+		if _, skip := w.skipPairs[pairKey]; skip {
+			continue
+		}
 		if err := w.reconcilePair(ctx, pair); err != nil {
-			log.Printf("[nft_ownership_reconciler] error reconciling %s/%s.%s (%d in DB): %v",
-				pair.Owner, pair.ContractAddress, pair.ContractName, pair.Count, err)
+			// If the chain query hit the storage interaction limit, skip this pair permanently
+			// to avoid log spam. These are very large collections (50k+ NFTs) that cannot
+			// be queried via getIDs() in a single script execution.
+			if strings.Contains(err.Error(), "max interaction with storage has exceeded") {
+				log.Printf("[nft_ownership_reconciler] skipping %s (too large: %d NFTs, storage limit exceeded)",
+					pairKey, pair.Count)
+				w.skipPairs[pairKey] = struct{}{}
+			} else {
+				log.Printf("[nft_ownership_reconciler] error reconciling %s (%d in DB): %v",
+					pairKey, pair.Count, err)
+			}
 		}
 	}
 	return nil
