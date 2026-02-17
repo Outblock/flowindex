@@ -98,6 +98,14 @@ export async function fetchNodeList(): Promise<any[]> {
   return json?.data ?? [];
 }
 
+/** Fetch GCP VM status (proxied via backend /status/gcp-vms) */
+export async function fetchGcpVmStatus(): Promise<any> {
+  await ensureHeyApiConfigured();
+  const res = await fetch(`${_baseURL}/status/gcp-vms`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
 /** Storage API helpers (returns raw Cadence JSON-CDC) */
 export async function fetchAccountStorage(address: string): Promise<any> {
   await ensureHeyApiConfigured();
