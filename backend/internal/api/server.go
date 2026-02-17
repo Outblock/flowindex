@@ -264,6 +264,28 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		}
 	}
 
+	// Get timestamps for all worker checkpoint heights
+	checkpointTimestamps := map[string]string{}
+	if len(checkpoints) > 0 {
+		heightSet := make(map[uint64]struct{})
+		for _, h := range checkpoints {
+			if h > 0 {
+				heightSet[h] = struct{}{}
+			}
+		}
+		heights := make([]uint64, 0, len(heightSet))
+		for h := range heightSet {
+			heights = append(heights, h)
+		}
+		if tsMap, err := s.repo.GetBlockTimestamps(ctx, heights); err == nil {
+			for name, h := range checkpoints {
+				if ts, ok := tsMap[h]; ok {
+					checkpointTimestamps[name] = ts.UTC().Format(time.RFC3339)
+				}
+			}
+		}
+	}
+
 	resp := map[string]interface{}{
 		"chain_id":               "flow",
 		"latest_height":          latestHeight,
@@ -287,7 +309,8 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"behind":                 behind,
 		"status":                 "ok",
 		"indexed_ranges":         indexedRanges,
-		"oldest_block_timestamp": oldestBlockTimestamp,
+		"oldest_block_timestamp":    oldestBlockTimestamp,
+		"checkpoint_timestamps": checkpointTimestamps,
 	}
 
 	payload, err := json.Marshal(resp)

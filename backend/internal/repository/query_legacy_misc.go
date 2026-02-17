@@ -578,3 +578,27 @@ func (r *Repository) GetBlockTimestamp(ctx context.Context, height uint64) (time
 	}
 	return ts, nil
 }
+
+// GetBlockTimestamps returns timestamps for multiple block heights in a single query.
+func (r *Repository) GetBlockTimestamps(ctx context.Context, heights []uint64) (map[uint64]time.Time, error) {
+	if len(heights) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx,
+		`SELECT height, timestamp FROM raw.blocks WHERE height = ANY($1)`, heights)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[uint64]time.Time, len(heights))
+	for rows.Next() {
+		var h uint64
+		var ts time.Time
+		if err := rows.Scan(&h, &ts); err != nil {
+			return nil, err
+		}
+		result[h] = ts
+	}
+	return result, rows.Err()
+}

@@ -244,6 +244,7 @@ function Stats() {
     const workerConfig = status?.worker_config || {};
     const generatedAt = status?.generated_at ? new Date(status.generated_at) : new Date();
     const checkpoints = status?.checkpoints || {};
+    const checkpointTimestamps = status?.checkpoint_timestamps || {};
     const workerOrder = [
         { key: 'main_ingester', label: 'Main Ingester' },
         { key: 'history_ingester', label: 'History Ingester' },
@@ -560,9 +561,14 @@ function Stats() {
                                                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest truncate mr-2" title={worker.label}>{worker.label}</span>
                                                     <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]'}`} />
                                                 </div>
-                                                <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-2">
+                                                <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-1">
                                                     <NumberFlow value={height} format={{ useGrouping: true }} />
                                                 </div>
+                                                {checkpointTimestamps?.[worker.key] && (
+                                                    <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mb-2">
+                                                        {new Date(checkpointTimestamps[worker.key]).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                    </div>
+                                                )}
                                                 <div className="h-1 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden mb-4">
                                                     <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
                                                 </div>
