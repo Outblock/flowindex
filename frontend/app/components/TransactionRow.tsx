@@ -7,6 +7,7 @@ import { formatRelativeTime } from '../lib/time';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import { AvatarGroup, AvatarGroupTooltip } from '@/components/animate-ui/components/animate/avatar-group';
 import { resolveApiBaseUrl } from '../api';
+import { deriveEnrichments } from '../lib/deriveFromEvents';
 
 // --- Interfaces ---
 
@@ -201,6 +202,24 @@ export function buildSummaryLine(tx: any): string {
     if (tagsLower.some(t => t.includes('account_created'))) return 'Created new account';
     if (tagsLower.some(t => t.includes('key_update'))) return 'Updated account key';
 
+    // Derived ft_transfers (from deriveEnrichments or detail API)
+    if (tx.ft_transfers?.length > 0) {
+        const parts = tx.ft_transfers.slice(0, 3).map((ft: any) => {
+            const displayName = ft.token_symbol || formatTokenName(ft.token || '');
+            const typeLabel = ft.transfer_type === 'mint' ? 'Minted' : ft.transfer_type === 'burn' ? 'Burned' : 'Transferred';
+            return `${typeLabel} ${Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${displayName}`;
+        });
+        return parts.join(', ');
+    }
+    if (tx.nft_transfers?.length > 0) {
+        const parts = tx.nft_transfers.slice(0, 3).map((nt: any) => {
+            const displayName = nt.collection_name || formatTokenName(nt.token || '');
+            const typeLabel = nt.transfer_type === 'mint' ? 'Minted' : nt.transfer_type === 'burn' ? 'Burned' : 'Transferred';
+            return `${typeLabel} ${displayName} #${nt.token_id ?? ''}`;
+        });
+        return parts.join(', ');
+    }
+
     // Transfer summary (available on detail/expand, not on list)
     if (summary?.ft && summary.ft.length > 0) {
         const parts = summary.ft.map(f => {
@@ -259,13 +278,24 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
         (async () => {
             try {
                 const baseUrl = await resolveApiBaseUrl();
-                const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(tx.id)}`);
+                // Use lite=true (fast, ~11ms) and derive transfers from events client-side
+                const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(tx.id)}?lite=true`);
                 if (!res.ok) throw new Error('fetch failed');
                 const json = await res.json();
                 const d = json.data?.[0];
                 if (d && !cancelled) {
-                    txDetailCache.set(tx.id, d);
-                    setDetail(d);
+                    // Derive FT/NFT transfers, EVM executions, fee from events
+                    const derived = deriveEnrichments(d.events || [], d.script);
+                    const enriched = {
+                        ...d,
+                        ft_transfers: derived.ft_transfers,
+                        nft_transfers: derived.nft_transfers,
+                        evm_executions: derived.evm_executions,
+                        fee: derived.fee,
+                        contract_imports: derived.contract_imports.length > 0 ? derived.contract_imports : d.contract_imports,
+                    };
+                    txDetailCache.set(tx.id, enriched);
+                    setDetail(enriched);
                 }
             } catch { /* ignore */ }
             if (!cancelled) setLoading(false);
@@ -282,7 +312,7 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
     const summary: TransferSummary | undefined = merged.transfer_summary || tx.transfer_summary;
     const tags: string[] = tx.tags || [];
     const tagsLower = tags.map((t: string) => t.toLowerCase());
-    const summaryLine = buildSummaryLine(detail ? { ...tx, ft_transfers: ftTransfers, nft_transfers: nftTransfers } : tx);
+    const summaryLine = buildSummaryLine(detail ? { ...tx, ft_transfers: ftTransfers, nft_transfers: nftTransfers, contract_imports: detail.contract_imports || tx.contract_imports } : tx);
     const evmHash = merged.evm_hash || tx.evm_hash;
 
     // Prefer detail-level ft/nft transfers over summary
@@ -336,6 +366,8 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
                     <div className="space-y-1.5">
                         {ftTransfers.map((ft: any, i: number) => {
                             const displayName = ft.token_symbol || ft.token_name || formatTokenName(ft.token || '');
+                            const isMint = ft.transfer_type === 'mint';
+                            const isBurn = ft.transfer_type === 'burn';
                             return (
                                 <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
                                     <TokenIcon logo={ft.token_logo} symbol={displayName} size={18} />
@@ -343,6 +375,8 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
                                         {Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })}
                                     </span>
                                     <span className="text-zinc-500">{displayName}</span>
+                                    {isMint && <span className="text-[9px] px-1 py-0.5 rounded border border-lime-300 dark:border-lime-500/30 text-lime-600 dark:text-lime-400 bg-lime-50 dark:bg-lime-500/10 font-semibold">MINT</span>}
+                                    {isBurn && <span className="text-[9px] px-1 py-0.5 rounded border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 font-semibold">BURN</span>}
                                     {ft.from_address && ft.to_address && (
                                         <span className="text-zinc-400 text-[10px] inline-flex items-center gap-1">
                                             <AddressLink address={ft.from_address} size={14} onClick={(e) => e.stopPropagation()} />
@@ -413,11 +447,15 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
                     <div className="space-y-1.5">
                         {nftTransfers.map((nt: any, i: number) => {
                             const displayName = nt.collection_name || formatTokenName(nt.token || '');
+                            const isMint = nt.transfer_type === 'mint';
+                            const isBurn = nt.transfer_type === 'burn';
                             return (
                                 <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
                                     <TokenIcon logo={nt.collection_logo} symbol={displayName} size={18} />
                                     <span className="text-zinc-500">{displayName}</span>
                                     {nt.token_id != null && <span className="font-mono text-zinc-600 dark:text-zinc-300">#{nt.token_id}</span>}
+                                    {isMint && <span className="text-[9px] px-1 py-0.5 rounded border border-lime-300 dark:border-lime-500/30 text-lime-600 dark:text-lime-400 bg-lime-50 dark:bg-lime-500/10 font-semibold">MINT</span>}
+                                    {isBurn && <span className="text-[9px] px-1 py-0.5 rounded border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 font-semibold">BURN</span>}
                                     {nt.from_address && nt.to_address && (
                                         <span className="text-zinc-400 text-[10px] inline-flex items-center gap-1">
                                             <AddressLink address={nt.from_address} size={14} onClick={(e) => e.stopPropagation()} />
