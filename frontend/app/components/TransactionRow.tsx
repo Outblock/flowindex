@@ -289,23 +289,38 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
                         {summary.ft.map((f, i) => {
                             const displayName = f.symbol || f.name || formatTokenName(f.token);
                             const isOut = f.direction === 'out';
+                            const isTransfer = f.direction === 'transfer';
+                            // For "transfer" direction (no address context), counterparty is "from>to"
+                            const [cpFrom, cpTo] = isTransfer && f.counterparty ? f.counterparty.split('>') : [undefined, undefined];
                             return (
-                                <div key={i} className="flex items-center gap-2 text-xs">
+                                <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
                                     <TokenIcon logo={f.logo} symbol={displayName} size={18} />
-                                    <span className={`inline-flex items-center gap-0.5 font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
-                                        {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
-                                        {isOut ? 'Sent' : 'Received'}
-                                    </span>
+                                    {isTransfer ? (
+                                        <span className="inline-flex items-center gap-0.5 font-medium text-blue-500">
+                                            <ArrowRightLeft className="h-3 w-3" />Transfer
+                                        </span>
+                                    ) : (
+                                        <span className={`inline-flex items-center gap-0.5 font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
+                                            {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                                            {isOut ? 'Sent' : 'Received'}
+                                        </span>
+                                    )}
                                     <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
                                         {Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })}
                                     </span>
                                     <span className="text-zinc-500">{displayName}</span>
-                                    {f.counterparty && (
+                                    {isTransfer && cpFrom && cpTo ? (
+                                        <span className="text-zinc-400 text-[10px] inline-flex items-center gap-1">
+                                            <AddressLink address={cpFrom} size={14} onClick={(e) => e.stopPropagation()} />
+                                            <span>→</span>
+                                            <AddressLink address={cpTo} size={14} onClick={(e) => e.stopPropagation()} />
+                                        </span>
+                                    ) : f.counterparty && !isTransfer ? (
                                         <span className="text-zinc-400 text-[10px]">
                                             {isOut ? 'to' : 'from'}{' '}
                                             <AddressLink address={f.counterparty} size={14} onClick={(e) => e.stopPropagation()} />
                                         </span>
-                                    )}
+                                    ) : null}
                                 </div>
                             );
                         })}
@@ -321,21 +336,35 @@ export function ExpandedTransferDetails({ tx, address: _address }: { tx: any; ad
                         {summary.nft.map((n, i) => {
                             const displayName = n.name || formatTokenName(n.collection);
                             const isOut = n.direction === 'out';
+                            const isTransfer = n.direction === 'transfer';
+                            const [cpFrom, cpTo] = isTransfer && n.counterparty ? n.counterparty.split('>') : [undefined, undefined];
                             return (
-                                <div key={i} className="flex items-center gap-2 text-xs">
+                                <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
                                     <TokenIcon logo={n.logo} symbol={displayName} size={18} />
-                                    <span className={`inline-flex items-center gap-0.5 font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
-                                        {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
-                                        {isOut ? 'Sent' : 'Received'}
-                                    </span>
+                                    {isTransfer ? (
+                                        <span className="inline-flex items-center gap-0.5 font-medium text-blue-500">
+                                            <ArrowRightLeft className="h-3 w-3" />Transfer
+                                        </span>
+                                    ) : (
+                                        <span className={`inline-flex items-center gap-0.5 font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
+                                            {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                                            {isOut ? 'Sent' : 'Received'}
+                                        </span>
+                                    )}
                                     <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">{n.count}x</span>
                                     <span className="text-zinc-500">{displayName}</span>
-                                    {n.counterparty && (
+                                    {isTransfer && cpFrom && cpTo ? (
+                                        <span className="text-zinc-400 text-[10px] inline-flex items-center gap-1">
+                                            <AddressLink address={cpFrom} size={14} onClick={(e) => e.stopPropagation()} />
+                                            <span>→</span>
+                                            <AddressLink address={cpTo} size={14} onClick={(e) => e.stopPropagation()} />
+                                        </span>
+                                    ) : n.counterparty && !isTransfer ? (
                                         <span className="text-zinc-400 text-[10px]">
                                             {isOut ? 'to' : 'from'}{' '}
                                             <AddressLink address={n.counterparty} size={14} onClick={(e) => e.stopPropagation()} />
                                         </span>
-                                    )}
+                                    ) : null}
                                 </div>
                             );
                         })}

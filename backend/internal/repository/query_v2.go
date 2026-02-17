@@ -409,24 +409,37 @@ type TransferSummary struct {
 }
 
 // GetTransferSummariesByTxIDs returns a map of transaction ID -> TransferSummary.
-// The address parameter is used to determine direction (withdraw vs deposit).
+// When address is provided, determines direction (out/in) relative to that address
+// (also resolves COA address for cross-VM matching).
+// When address is empty, returns transfers without direction grouping (from→to).
 func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []string, address string) (map[string]TransferSummary, error) {
 	if len(txIDs) == 0 {
 		return map[string]TransferSummary{}, nil
 	}
+
+	if address == "" {
+		return r.getTransferSummariesNoDirection(ctx, txIDs)
+	}
+
 	out := make(map[string]TransferSummary, len(txIDs))
 	txIDBytes := sliceHexToBytes(txIDs)
 	addrBytes := hexToBytes(address)
 
-	// FT transfers: group by (transaction_id, token_contract_address, contract_name, direction)
-	// Exclude generic FungibleToken events (duplicates of specific token events like FlowToken).
-	// Counterparty: when direction='out', show to_address; when 'in', show from_address.
+	// Resolve COA address for this Flow address so we can match cross-VM transfers.
+	var coaBytes []byte
+	var coaHex string
+	_ = r.db.QueryRow(ctx, `SELECT encode(coa_address, 'hex') FROM app.coa_accounts WHERE flow_address = $1`, addrBytes).Scan(&coaHex)
+	if coaHex != "" {
+		coaBytes = hexToBytes(coaHex)
+	}
+
+	// FT transfers: match both Flow address and COA address for direction detection.
 	ftRows, err := r.db.Query(ctx, `
 		SELECT encode(transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS token,
 		       SUM(CAST(amount AS NUMERIC)) AS total_amount,
-		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction,
-		       CASE WHEN from_address = $2
+		       CASE WHEN from_address = $2 OR from_address = $3 THEN 'out' ELSE 'in' END AS direction,
+		       CASE WHEN from_address = $2 OR from_address = $3
 		            THEN string_agg(DISTINCT encode(to_address, 'hex'), ',')
 		            ELSE string_agg(DISTINCT encode(from_address, 'hex'), ',')
 		       END AS counterparty
@@ -434,7 +447,7 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		WHERE transaction_id = ANY($1)
 		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
 		GROUP BY transaction_id, token_contract_address, contract_name,
-		         CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes)
+		         CASE WHEN from_address = $2 OR from_address = $3 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes, coaBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -449,14 +462,13 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		out[txID] = s
 	}
 
-	// NFT transfers: group by (transaction_id, token_contract_address, contract_name, direction)
-	// Exclude generic NonFungibleToken events (duplicates of specific collection events).
+	// NFT transfers
 	nftRows, err := r.db.Query(ctx, `
 		SELECT encode(transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS collection,
 		       COUNT(*) AS cnt,
-		       CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END AS direction,
-		       CASE WHEN from_address = $2
+		       CASE WHEN from_address = $2 OR from_address = $3 THEN 'out' ELSE 'in' END AS direction,
+		       CASE WHEN from_address = $2 OR from_address = $3
 		            THEN string_agg(DISTINCT encode(to_address, 'hex'), ',')
 		            ELSE string_agg(DISTINCT encode(from_address, 'hex'), ',')
 		       END AS counterparty
@@ -464,7 +476,7 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		WHERE transaction_id = ANY($1)
 		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
 		GROUP BY transaction_id, token_contract_address, contract_name,
-		         CASE WHEN from_address = $2 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes)
+		         CASE WHEN from_address = $2 OR from_address = $3 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes, coaBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -477,6 +489,64 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		}
 		s := out[txID]
 		s.NFT = append(s.NFT, NFTTransferSummaryItem{Collection: collection, Count: count, Direction: direction, Counterparty: counterparty})
+		out[txID] = s
+	}
+
+	return out, nil
+}
+
+// getTransferSummariesNoDirection returns transfer summaries without direction/grouping.
+// Used for the global tx list where there's no "current address" context.
+func (r *Repository) getTransferSummariesNoDirection(ctx context.Context, txIDs []string) (map[string]TransferSummary, error) {
+	out := make(map[string]TransferSummary, len(txIDs))
+	txIDBytes := sliceHexToBytes(txIDs)
+
+	ftRows, err := r.db.Query(ctx, `
+		SELECT encode(transaction_id, 'hex') AS tx_id,
+		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS token,
+		       SUM(CAST(amount AS NUMERIC)) AS total_amount,
+		       string_agg(DISTINCT encode(from_address, 'hex'), ',') AS from_addrs,
+		       string_agg(DISTINCT encode(to_address, 'hex'), ',') AS to_addrs
+		FROM app.ft_transfers
+		WHERE transaction_id = ANY($1)
+		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
+		GROUP BY transaction_id, token_contract_address, contract_name`, txIDBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer ftRows.Close()
+	for ftRows.Next() {
+		var txID, token, amount, fromAddrs, toAddrs string
+		if err := ftRows.Scan(&txID, &token, &amount, &fromAddrs, &toAddrs); err != nil {
+			return nil, err
+		}
+		s := out[txID]
+		s.FT = append(s.FT, FTTransferSummaryItem{Token: token, Amount: amount, Direction: "transfer", Counterparty: fromAddrs + ">" + toAddrs})
+		out[txID] = s
+	}
+
+	nftRows, err := r.db.Query(ctx, `
+		SELECT encode(transaction_id, 'hex') AS tx_id,
+		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS collection,
+		       COUNT(*) AS cnt,
+		       string_agg(DISTINCT encode(from_address, 'hex'), ',') AS from_addrs,
+		       string_agg(DISTINCT encode(to_address, 'hex'), ',') AS to_addrs
+		FROM app.nft_transfers
+		WHERE transaction_id = ANY($1)
+		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
+		GROUP BY transaction_id, token_contract_address, contract_name`, txIDBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer nftRows.Close()
+	for nftRows.Next() {
+		var txID, collection, fromAddrs, toAddrs string
+		var count int
+		if err := nftRows.Scan(&txID, &collection, &count, &fromAddrs, &toAddrs); err != nil {
+			return nil, err
+		}
+		s := out[txID]
+		s.NFT = append(s.NFT, NFTTransferSummaryItem{Collection: collection, Count: count, Direction: "transfer", Counterparty: fromAddrs + ">" + toAddrs})
 		out[txID] = s
 	}
 
