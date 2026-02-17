@@ -291,16 +291,19 @@ function Stats() {
     };
 
     // Derived values for Mosaic Map
+    // Flow mainnet genesis is NOT block 0 — start from the first spork boundary.
+    const FLOW_GENESIS = FLOW_SPORK_BOUNDARIES[0]?.height || 7601063;
+
     const chunks = useMemo(() => {
         if (!status) return [];
         const chainTip = Math.max(status.latest_height || 0, status.max_height || 0);
-        // Ensure we have at least one chunk
-        const totalChunks = Math.max(1, Math.ceil(chainTip / chunkSize));
-        // Generate chunks from 0 to Tip
+        // Align genesis to chunk boundary
+        const genesisAligned = Math.floor(FLOW_GENESIS / chunkSize) * chunkSize;
+        const totalChunks = Math.max(1, Math.ceil((chainTip - genesisAligned) / chunkSize));
         const result: any[] = [];
         for (let i = 0; i < totalChunks; i++) {
-            const start = i * chunkSize;
-            const end = Math.min((i + 1) * chunkSize - 1, chainTip);
+            const start = genesisAligned + i * chunkSize;
+            const end = Math.min(start + chunkSize - 1, chainTip);
             result.push({ index: i, start, end });
         }
         return result;
