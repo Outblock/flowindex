@@ -35,6 +35,28 @@ func (r *Repository) ListContractsByKindInRange(ctx context.Context, kind string
 	return out, rows.Err()
 }
 
+// HasFTTokenMetadata returns true if the given FT token already has name+symbol filled in.
+func (r *Repository) HasFTTokenMetadata(ctx context.Context, contractAddr, contractName string) bool {
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM app.ft_tokens
+		WHERE contract_address = $1 AND contract_name = $2
+		  AND COALESCE(name,'') != '' AND COALESCE(symbol,'') != ''`,
+		hexToBytes(contractAddr), contractName).Scan(&count)
+	return err == nil && count > 0
+}
+
+// HasNFTCollectionMetadata returns true if the given NFT collection already has name filled in.
+func (r *Repository) HasNFTCollectionMetadata(ctx context.Context, contractAddr, contractName string) bool {
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM app.nft_collections
+		WHERE contract_address = $1 AND contract_name = $2
+		  AND COALESCE(name,'') != ''`,
+		hexToBytes(contractAddr), contractName).Scan(&count)
+	return err == nil && count > 0
+}
+
 func (r *Repository) ListFTTokensMissingMetadata(ctx context.Context, limit int) ([]models.FTToken, error) {
 	if limit <= 0 {
 		return nil, nil

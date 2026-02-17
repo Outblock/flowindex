@@ -62,11 +62,19 @@ func (w *TokenMetadataWorker) ProcessRange(ctx context.Context, fromHeight, toHe
 		if c.Address == "" || c.Name == "" {
 			continue
 		}
+		// Skip if metadata already exists in DB (avoids redundant on-chain fetch on replay).
+		if w.repo.HasFTTokenMetadata(ctx, c.Address, c.Name) {
+			continue
+		}
 		key := c.Address + ":" + c.Name
 		ftCandidates[key] = models.FTToken{ContractAddress: c.Address, ContractName: c.Name}
 	}
 	for _, c := range nftNew {
 		if c.Address == "" || c.Name == "" {
+			continue
+		}
+		// Skip if metadata already exists in DB.
+		if w.repo.HasNFTCollectionMetadata(ctx, c.Address, c.Name) {
 			continue
 		}
 		key := c.Address + ":" + c.Name
