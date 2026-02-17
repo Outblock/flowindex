@@ -42,7 +42,7 @@ func (r *Repository) UpsertNFTItems(ctx context.Context, items []models.NFTItem)
 				$12, $13, $14,
 				NULL, 0, NULL,
 				NOW(),
-				to_tsvector('simple', coalesce($4,'') || ' ' || coalesce($5,'') || ' ' || $3)
+				to_tsvector('simple', coalesce($4,'') || ' ' || coalesce($5,'') || ' ' || $3::text)
 			)
 			ON CONFLICT (contract_address, contract_name, nft_id) DO UPDATE SET
 				name = EXCLUDED.name,
