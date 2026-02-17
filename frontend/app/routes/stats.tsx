@@ -97,6 +97,10 @@ function Stats() {
     const forwardSamplesRef = useRef<{ time: number; height: number }[]>([]);
     const SPEED_WINDOW_MS = 30_000; // 30 second sliding window
 
+    // Per-worker speed tracking
+    const [workerSpeeds, setWorkerSpeeds] = useState<Record<string, number>>({});
+    const workerSamplesRef = useRef<Record<string, { time: number; height: number }[]>>({});
+
     // VM speed tracking
     const [vmSpeeds, setVmSpeeds] = useState<Record<string, number>>({});
     const vmSamplesRef = useRef<Record<string, { time: number; height: number }[]>>({});
@@ -149,6 +153,29 @@ function Stats() {
                 }
             }
         }
+
+        // Calculate per-worker speeds — sliding window average
+        const cp = data.checkpoints || {};
+        const newWorkerSpeeds: Record<string, number> = {};
+        for (const [name, h] of Object.entries(cp)) {
+            const height = h as number;
+            if (!height) continue;
+            const samples = workerSamplesRef.current[name] || [];
+            samples.push({ time: now, height });
+            const cutoff = now - SPEED_WINDOW_MS;
+            while (samples.length > 0 && samples[0].time < cutoff) samples.shift();
+            workerSamplesRef.current[name] = samples;
+            if (samples.length >= 2) {
+                const oldest = samples[0];
+                const newest = samples[samples.length - 1];
+                const timeDiff = (newest.time - oldest.time) / 1000;
+                const blockDiff = newest.height - oldest.height;
+                if (timeDiff > 0 && blockDiff >= 0) {
+                    newWorkerSpeeds[name] = blockDiff / timeDiff;
+                }
+            }
+        }
+        setWorkerSpeeds(newWorkerSpeeds);
 
         setStatus(data);
         setLoading(false);
@@ -553,13 +580,23 @@ function Stats() {
                                     {workerOrder.map((worker) => {
                                         const height = checkpoints?.[worker.key] || 0;
                                         const enabled = workerEnabled?.[worker.key];
-                                        const progress = latestHeight > 0 && height > 0 ? Math.min(100, (height / latestHeight) * 100) : 0;
                                         const config = workerConfig?.[worker.key] || {};
+                                        const speed = workerSpeeds[worker.key] || 0;
+                                        // Progress relative to main ingester, not chain tip
+                                        const isMainOrHistory = worker.key === 'main_ingester' || worker.key === 'history_ingester';
+                                        const refHeight = isMainOrHistory ? latestHeight : indexedHeight;
+                                        const progress = refHeight > 0 && height > 0 ? Math.min(100, (height / refHeight) * 100) : 0;
+                                        const behind = refHeight > height && height > 0 ? refHeight - height : 0;
+                                        const workerEta = speed > 0 && behind > 0 ? behind / speed : 0;
+                                        const statusLabel = enabled === false ? 'DISABLED' : speed > 0 ? 'SYNCING' : behind === 0 && height > 0 ? 'CAUGHT UP' : 'IDLE';
                                         return (
                                             <div key={worker.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm hover:border-zinc-300 dark:hover:border-white/30 transition-colors group">
                                                 <div className="flex items-center justify-between mb-4">
                                                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest truncate mr-2" title={worker.label}>{worker.label}</span>
-                                                    <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]'}`} />
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`text-[9px] font-bold uppercase tracking-wider ${statusLabel === 'SYNCING' ? 'text-green-500' : statusLabel === 'CAUGHT UP' ? 'text-blue-400' : statusLabel === 'DISABLED' ? 'text-red-400' : 'text-zinc-400'}`}>{statusLabel}</span>
+                                                        <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : speed > 0 ? 'bg-green-500 animate-pulse shadow-[0_0_4px_rgba(34,197,94,0.6)]' : 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]'}`} />
+                                                    </div>
                                                 </div>
                                                 <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-1">
                                                     <NumberFlow value={height} format={{ useGrouping: true }} />
@@ -570,35 +607,40 @@ function Stats() {
                                                     </div>
                                                 )}
                                                 <div className="h-1 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden mb-4">
-                                                    <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
+                                                    <div className={`h-full ${behind === 0 && height > 0 ? 'bg-green-500' : 'bg-yellow-400'}`} style={{ width: `${progress}%` }} />
                                                 </div>
 
                                                 {height > 0 && (
                                                     <div className="pt-4 border-t border-zinc-200 dark:border-white/5 grid grid-cols-2 gap-y-3 gap-x-2">
-
-                                                        {config.workers !== undefined && (
-                                                            <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
-                                                                <div className="text-[9px] text-zinc-500 uppercase">Workers</div>
-                                                                <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.workers}</div>
+                                                        <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
+                                                            <div className="text-[9px] text-zinc-500 uppercase">Behind</div>
+                                                            <div className="text-xs text-zinc-900 dark:text-white font-mono">
+                                                                {behind > 0 ? <NumberFlow value={behind} format={{ useGrouping: true, notation: behind > 99999 ? 'compact' : 'standard' }} /> : '—'}
                                                             </div>
-                                                        )}
-
+                                                        </div>
+                                                        <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
+                                                            <div className="text-[9px] text-zinc-500 uppercase">Speed</div>
+                                                            <div className="text-xs text-zinc-900 dark:text-white font-mono">
+                                                                <NumberFlow value={speed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />
+                                                                <span className="text-zinc-400 ml-0.5">b/s</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
+                                                            <div className="text-[9px] text-zinc-500 uppercase">ETA</div>
+                                                            <div className="text-xs text-zinc-900 dark:text-white font-mono">
+                                                                {workerEta > 0 ? formatDuration(workerEta) : '—'}
+                                                            </div>
+                                                        </div>
                                                         {config.concurrency !== undefined && (
                                                             <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
                                                                 <div className="text-[9px] text-zinc-500 uppercase">Concurrency</div>
                                                                 <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.concurrency}</div>
                                                             </div>
                                                         )}
-                                                        {config.range !== undefined && config.range !== 0 && (
+                                                        {config.range !== undefined && config.range !== 0 && !config.concurrency && (
                                                             <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
                                                                 <div className="text-[9px] text-zinc-500 uppercase">Range</div>
                                                                 <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.range}</div>
-                                                            </div>
-                                                        )}
-                                                        {config.batch_size !== undefined && config.batch_size !== 0 && (
-                                                            <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
-                                                                <div className="text-[9px] text-zinc-500 uppercase">Batch</div>
-                                                                <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.batch_size}</div>
                                                             </div>
                                                         )}
                                                     </div>
