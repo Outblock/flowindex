@@ -943,6 +943,38 @@ function TransactionDetail() {
                                     {transaction.arguments ? (
                                         <div className="bg-zinc-50 dark:bg-black/50 border border-zinc-200 dark:border-white/5 p-4 rounded-sm">
                                             {(() => {
+                                                // Detect Flow (0x + 16 hex) or EVM (0x + 40 hex) addresses in values
+                                                const ADDRESS_RE = /^0x[a-fA-F0-9]{16}$|^0x[a-fA-F0-9]{40}$/;
+
+                                                const renderArgValue = (decoded: any): React.ReactNode => {
+                                                    if (typeof decoded === 'string' && ADDRESS_RE.test(decoded)) {
+                                                        return <AddressLink address={decoded.replace(/^0x/, '')} prefixLen={20} suffixLen={0} className="text-xs" />;
+                                                    }
+                                                    if (Array.isArray(decoded)) {
+                                                        const hasAddr = decoded.some((v: any) => typeof v === 'string' && ADDRESS_RE.test(v));
+                                                        if (hasAddr) {
+                                                            return (
+                                                                <div className="space-y-1">
+                                                                    {'['}
+                                                                    {decoded.map((v: any, i: number) => (
+                                                                        <div key={i} className="pl-4">
+                                                                            {typeof v === 'string' && ADDRESS_RE.test(v)
+                                                                                ? <AddressLink address={v.replace(/^0x/, '')} prefixLen={20} suffixLen={0} className="text-xs" />
+                                                                                : JSON.stringify(v)}
+                                                                            {i < decoded.length - 1 ? ',' : ''}
+                                                                        </div>
+                                                                    ))}
+                                                                    {']'}
+                                                                </div>
+                                                            );
+                                                        }
+                                                    }
+                                                    if (typeof decoded === 'object' && decoded !== null) {
+                                                        return <pre className="whitespace-pre-wrap">{JSON.stringify(decoded, null, 2)}</pre>;
+                                                    }
+                                                    return String(decoded);
+                                                };
+
                                                 const decodeCadenceValue = (val: any): any => {
                                                     if (!val || typeof val !== 'object') return val;
 
@@ -1044,10 +1076,7 @@ function TransactionDetail() {
                                                                         </div>
                                                                         {/* Value */}
                                                                         <div className="px-3 py-2.5 text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all leading-relaxed">
-                                                                            {typeof decoded === 'object' && decoded !== null
-                                                                                ? <pre className="whitespace-pre-wrap">{JSON.stringify(decoded, null, 2)}</pre>
-                                                                                : String(decoded)
-                                                                            }
+                                                                            {renderArgValue(decoded)}
                                                                         </div>
                                                                     </div>
                                                                 );
