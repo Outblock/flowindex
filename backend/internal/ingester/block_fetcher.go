@@ -200,11 +200,14 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				if isUnimplementedError(err) {
 					w.client.MarkNoBulkAPI(pin.NodeIndex())
 				}
-				if isPanic || isUnimplementedError(err) || isExecutionNodeError(err) || isBulkResultInternalError(err) {
-					// Old spork node, execution nodes down, or bulk API bug: fall back to per-tx GetTransactionResult.
+				if isPanic || isUnimplementedError(err) || isExecutionNodeError(err) || isBulkResultInternalError(err) || isCCFDecodeError(err) {
+					// Old spork node, execution nodes down, bulk API bug, or CCF decode error: fall back to per-tx GetTransactionResult.
 					useIndexAPI := usedBulkTxAPI && !isExecutionNodeError(err)
 					if isExecutionNodeError(err) || isBulkResultInternalError(err) {
 						log.Printf("[ingester] Warn: bulk result API failed for block %s (height=%d), falling back to per-tx result calls: %v", block.ID, height, err)
+					}
+					if isCCFDecodeError(err) {
+						log.Printf("[ingester] Warn: CCF decode error for block %s (height=%d), falling back to per-tx result calls: %v", block.ID, height, err)
 					}
 					results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, useIndexAPI)
 					if err != nil {
@@ -492,7 +495,8 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 				if strings.Contains(errMsg, "key not found") ||
 					strings.Contains(errMsg, "could not retrieve") ||
 					strings.Contains(errMsg, "failed to execute the script on the execution node") ||
-					strings.Contains(errMsg, "cadence runtime error") {
+					strings.Contains(errMsg, "cadence runtime error") ||
+					strings.Contains(errMsg, "ccf: failed to decode") {
 					log.Printf("[ingester] Warn: tx result unavailable for %s (idx=%d), returning empty result: %.120s", t.ID(), idx, errMsg)
 					ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
 					return
@@ -587,6 +591,15 @@ func isUnimplementedError(err error) bool {
 		return st.Code() == codes.Unimplemented
 	}
 	return strings.Contains(err.Error(), "Unimplemented")
+}
+
+func isCCFDecodeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "ccf: failed to decode") ||
+		strings.Contains(msg, "ccf convert")
 }
 
 func isGRPCMessageTooLarge(err error) bool {
