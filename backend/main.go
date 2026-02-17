@@ -1098,7 +1098,15 @@ func main() {
 		log.Println("Lookup Repair is DISABLED (ENABLE_LOOKUP_REPAIR=false)")
 	}
 
-	wg.Wait()
+	// Block until all workers finish or shutdown signal received.
+	// In API-only mode (no workers), wg.Wait() returns immediately,
+	// so we also block on ctx.Done() to keep the API server alive.
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }
 
 func redactDatabaseURL(raw string) string {
