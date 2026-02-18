@@ -322,12 +322,9 @@ func main() {
 		if enableDailyBalanceWorker {
 			histProcessors = append(histProcessors, ingester.NewDailyBalanceWorker(repo))
 		}
-		if enableNFTItemMetadataWorker {
-			histProcessors = append(histProcessors, ingester.NewNFTItemMetadataWorker(repo, flowClient))
-		}
-		if enableNFTReconciler {
-			histProcessors = append(histProcessors, ingester.NewNFTOwnershipReconciler(repo, flowClient))
-		}
+		// NOTE: nft_item_metadata_worker and nft_ownership_reconciler are NOT included here.
+		// They are queue-based (ignore block heights) and run as standalone async workers.
+		// Including them would serialize and block history derivation for ~1-2min per range.
 
 		historyDeriver = ingester.NewHistoryDeriver(repo, histProcessors, ingester.HistoryDeriverConfig{
 			ChunkSize: historyDeriverChunk,

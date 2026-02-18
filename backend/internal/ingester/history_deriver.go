@@ -3,6 +3,7 @@ package ingester
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"flowscan-clone/internal/repository"
@@ -251,21 +252,57 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// runProcessors executes processors concurrently for the given range.
+// Processors that depend on others (ft_holdings_worker depends on token_worker,
+// nft_ownership_worker depends on token_worker) run after their dependencies complete.
 func (h *HistoryDeriver) runProcessors(ctx context.Context, from, to uint64) {
+	if ctx.Err() != nil {
+		return
+	}
+
+	// Split processors into two phases:
+	// Phase 1: all processors except those that depend on token_worker output
+	// Phase 2: processors that need token_worker to finish first
+	dependsOnToken := map[string]bool{
+		"ft_holdings_worker":    true,
+		"nft_ownership_worker":  true,
+		"daily_balance_worker":  true,
+	}
+
+	var phase1, phase2 []Processor
 	for _, p := range h.processors {
-		if ctx.Err() != nil {
-			return
-		}
-		began := time.Now()
-		if err := p.ProcessRange(ctx, from, to); err != nil {
-			log.Printf("[history_deriver] %s range [%d,%d) failed: %v", p.Name(), from, to, err)
-			_ = h.repo.LogIndexingError(ctx, p.Name(), from, "", "HISTORY_DERIVER_ERROR", err.Error(), nil)
-			continue
-		}
-		if dur := time.Since(began); dur > 2*time.Second {
-			log.Printf("[history_deriver] %s range [%d,%d) took %s", p.Name(), from, to, dur)
+		if dependsOnToken[p.Name()] {
+			phase2 = append(phase2, p)
+		} else {
+			phase1 = append(phase1, p)
 		}
 	}
+
+	runParallel := func(processors []Processor) {
+		var wg sync.WaitGroup
+		for _, p := range processors {
+			wg.Add(1)
+			go func(proc Processor) {
+				defer wg.Done()
+				if ctx.Err() != nil {
+					return
+				}
+				began := time.Now()
+				if err := proc.ProcessRange(ctx, from, to); err != nil {
+					log.Printf("[history_deriver] %s range [%d,%d) failed: %v", proc.Name(), from, to, err)
+					_ = h.repo.LogIndexingError(ctx, proc.Name(), from, "", "HISTORY_DERIVER_ERROR", err.Error(), nil)
+					return
+				}
+				if dur := time.Since(began); dur > 2*time.Second {
+					log.Printf("[history_deriver] %s range [%d,%d) took %s", proc.Name(), from, to, dur)
+				}
+			}(p)
+		}
+		wg.Wait()
+	}
+
+	runParallel(phase1)
+	runParallel(phase2)
 }
 
 func (h *HistoryDeriver) findWorkerFloor(ctx context.Context) (uint64, error) {
