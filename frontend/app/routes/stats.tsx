@@ -272,20 +272,25 @@ function Stats() {
     const generatedAt = status?.generated_at ? new Date(status.generated_at) : new Date();
     const checkpoints = status?.checkpoints || {};
     const checkpointTimestamps = status?.checkpoint_timestamps || {};
-    const workerOrder = [
-        { key: 'main_ingester', label: 'Main Ingester' },
-        { key: 'history_ingester', label: 'History Ingester' },
-        { key: 'token_worker', label: 'Token Worker' },
-        { key: 'meta_worker', label: 'Meta Worker' },
-        { key: 'accounts_worker', label: 'Accounts Worker' },
-        { key: 'ft_holdings_worker', label: 'FT Holdings Worker' },
-        { key: 'nft_ownership_worker', label: 'NFT Ownership Worker' },
-        { key: 'tx_contracts_worker', label: 'TX Contracts Worker' },
-        { key: 'tx_metrics_worker', label: 'TX Metrics Worker' },
-        { key: 'evm_worker', label: 'EVM Worker' },
-        { key: 'staking_worker', label: 'Staking Worker' },
-        { key: 'defi_worker', label: 'DeFi Worker' },
-        { key: 'daily_balance_worker', label: 'Daily Balance Worker' },
+    // Live deriver phase 1: independent processors run in parallel
+    const liveDeriverPhase1 = [
+        { key: 'token_worker', label: 'Token' },
+        { key: 'evm_worker', label: 'EVM' },
+        { key: 'tx_contracts_worker', label: 'TX Contracts' },
+        { key: 'accounts_worker', label: 'Accounts' },
+        { key: 'meta_worker', label: 'Meta' },
+        { key: 'tx_metrics_worker', label: 'TX Metrics' },
+        { key: 'staking_worker', label: 'Staking' },
+        { key: 'defi_worker', label: 'DeFi' },
+    ];
+    // Live deriver phase 2: depend on token_worker completing first
+    const liveDeriverPhase2 = [
+        { key: 'ft_holdings_worker', label: 'FT Holdings' },
+        { key: 'nft_ownership_worker', label: 'NFT Ownership' },
+        { key: 'daily_balance_worker', label: 'Daily Balance' },
+    ];
+    // Queue-based workers (not block-range driven)
+    const queueWorkers = [
         { key: 'nft_item_metadata_worker', label: 'NFT Item Metadata' },
         { key: 'nft_ownership_reconciler', label: 'NFT Reconciler' },
     ];
@@ -569,100 +574,248 @@ function Stats() {
                                 </div>
                             </div>
 
-                            {/* Worker Progress Grid */}
-                            <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-8 mb-6 rounded-sm shadow-sm dark:shadow-none">
-                                <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-wide mb-6 flex items-center gap-2">
-                                    <Activity className="h-4 w-4 text-zinc-500" />
-                                    Worker Status
-                                </h2>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                    {workerOrder.map((worker) => {
-                                        const height = checkpoints?.[worker.key] || 0;
-                                        const enabled = workerEnabled?.[worker.key];
-                                        const config = workerConfig?.[worker.key] || {};
-                                        const speed = workerSpeeds[worker.key] || 0;
-                                        // Progress: main/history ingesters compare to chain tip;
-                                        // history_deriver compares to history_ingester (it processes history blocks);
-                                        // all other async workers compare to main_ingester (they only process forward blocks).
-                                        const isMainOrHistory = worker.key === 'main_ingester' || worker.key === 'history_ingester';
-                                        const isHistoryDeriver = worker.key === 'history_deriver' || worker.key === 'history_deriver_down';
-                                        const refHeight = isMainOrHistory ? latestHeight
-                                            : isHistoryDeriver ? indexedHeight  // history deriver scans up toward async worker floor
-                                            : indexedHeight;
-                                        const progress = refHeight > 0 && height > 0 ? Math.min(100, (height / refHeight) * 100) : 0;
-                                        const behind = refHeight > height && height > 0 ? refHeight - height : 0;
-                                        const workerEta = speed > 0 && behind > 0 ? behind / speed : 0;
-                                        // For non-ingester/deriver workers: history blocks are handled by history_deriver, not by these workers
-                                        const historyOnly = !isMainOrHistory && !isHistoryDeriver;
-                                        // Status: DISABLED > CAUGHT UP (behind=0) > SYNCING (behind>0, has work to do)
-                                        const statusLabel = enabled === false ? 'DISABLED'
-                                            : behind === 0 && height > 0 ? 'CAUGHT UP'
-                                            : behind > 0 ? 'SYNCING' : 'IDLE';
-                                        return (
-                                            <div key={worker.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm hover:border-zinc-300 dark:hover:border-white/30 transition-colors group">
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest truncate mr-2" title={worker.label}>{worker.label}</span>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className={`text-[9px] font-bold uppercase tracking-wider ${statusLabel === 'SYNCING' ? 'text-yellow-500' : statusLabel === 'CAUGHT UP' ? 'text-green-500' : statusLabel === 'DISABLED' ? 'text-red-400' : 'text-zinc-400'}`}>{statusLabel}</span>
-                                                        <div className={`h-1.5 w-1.5 rounded-full ${enabled === false ? 'bg-red-500' : statusLabel === 'SYNCING' ? 'bg-yellow-500 animate-pulse shadow-[0_0_4px_rgba(234,179,8,0.6)]' : statusLabel === 'CAUGHT UP' ? 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]' : 'bg-zinc-400'}`} />
+                            {/* Pipeline Status — 4 sections */}
+                            <div className="space-y-4 mb-6">
+                                {/* Section 1: Ingesters */}
+                                <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+                                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <Database className="h-3.5 w-3.5" />
+                                        Ingesters
+                                    </h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Main Ingester */}
+                                        {(() => {
+                                            const h = checkpoints?.['main_ingester'] || 0;
+                                            const behind = latestHeight > h && h > 0 ? latestHeight - h : 0;
+                                            const speed = workerSpeeds['main_ingester'] || 0;
+                                            const progress = latestHeight > 0 && h > 0 ? Math.min(100, (h / latestHeight) * 100) : 0;
+                                            const statusLabel = !forwardEnabled ? 'DISABLED' : behind === 0 && h > 0 ? 'CAUGHT UP' : behind > 0 ? 'SYNCING' : 'IDLE';
+                                            return (
+                                                <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-5 rounded-sm">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <span className="text-xs font-bold text-zinc-900 dark:text-white">Main Ingester</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`text-[9px] font-bold uppercase tracking-wider ${statusLabel === 'SYNCING' ? 'text-yellow-500' : statusLabel === 'CAUGHT UP' ? 'text-green-500' : statusLabel === 'DISABLED' ? 'text-red-400' : 'text-zinc-400'}`}>{statusLabel}</span>
+                                                            <div className={`h-2 w-2 rounded-full ${statusLabel === 'SYNCING' ? 'bg-yellow-500 animate-pulse' : statusLabel === 'CAUGHT UP' ? 'bg-green-500' : statusLabel === 'DISABLED' ? 'bg-red-500' : 'bg-zinc-400'}`} />
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-2">
+                                                        #<NumberFlow value={h} format={{ useGrouping: true }} />
+                                                    </div>
+                                                    <div className="h-1.5 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden mb-3">
+                                                        <div className={`h-full ${behind === 0 && h > 0 ? 'bg-green-500' : 'bg-yellow-400'}`} style={{ width: `${progress}%` }} />
+                                                    </div>
+                                                    <div className="flex items-center gap-4 text-xs text-zinc-500 font-mono">
+                                                        <span>Behind: <span className="text-zinc-900 dark:text-white">{behind > 0 ? behind.toLocaleString() : '0'}</span></span>
+                                                        <span>Speed: <span className="text-zinc-900 dark:text-white"><NumberFlow value={speed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /> b/s</span></span>
                                                     </div>
                                                 </div>
-                                                <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-1">
-                                                    <NumberFlow value={height} format={{ useGrouping: true }} />
-                                                </div>
-                                                {checkpointTimestamps?.[worker.key] && (
-                                                    <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mb-2">
-                                                        {new Date(checkpointTimestamps[worker.key]).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                            );
+                                        })()}
+                                        {/* History Ingester */}
+                                        {(() => {
+                                            const h = checkpoints?.['history_ingester'] || 0;
+                                            const speed = workerSpeeds['history_ingester'] || 0;
+                                            const progress = latestHeight > 0 && h > 0 ? Math.min(100, (h / latestHeight) * 100) : 0;
+                                            const statusLabel = !historyEnabled ? 'DISABLED' : speed > 0 ? 'SYNCING' : h > 0 ? 'IDLE' : 'OFFLINE';
+                                            return (
+                                                <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-5 rounded-sm">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <span className="text-xs font-bold text-zinc-900 dark:text-white">History Ingester</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`text-[9px] font-bold uppercase tracking-wider ${statusLabel === 'SYNCING' ? 'text-yellow-500' : statusLabel === 'DISABLED' ? 'text-red-400' : statusLabel === 'IDLE' ? 'text-zinc-400' : 'text-zinc-400'}`}>{statusLabel}</span>
+                                                            <div className={`h-2 w-2 rounded-full ${statusLabel === 'SYNCING' ? 'bg-yellow-500 animate-pulse' : statusLabel === 'DISABLED' ? 'bg-red-500' : 'bg-zinc-400'}`} />
+                                                        </div>
                                                     </div>
-                                                )}
-                                                <div className="h-1 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden mb-4">
-                                                    <div className={`h-full ${behind === 0 && height > 0 ? 'bg-green-500' : 'bg-yellow-400'}`} style={{ width: `${progress}%` }} />
-                                                </div>
-
-                                                {height > 0 && (
-                                                    <div className="pt-4 border-t border-zinc-200 dark:border-white/5 grid grid-cols-2 gap-y-3 gap-x-2">
-                                                        <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
-                                                            <div className="text-[9px] text-zinc-500 uppercase">Behind</div>
-                                                            <div className="text-xs text-zinc-900 dark:text-white font-mono">
-                                                                {behind > 0 ? <NumberFlow value={behind} format={{ useGrouping: true, notation: behind > 99999 ? 'compact' : 'standard' }} /> : '—'}
-                                                            </div>
-                                                        </div>
-                                                        <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
-                                                            <div className="text-[9px] text-zinc-500 uppercase">Speed</div>
-                                                            <div className="text-xs text-zinc-900 dark:text-white font-mono">
-                                                                <NumberFlow value={speed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />
-                                                                <span className="text-zinc-400 ml-0.5">b/s</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
-                                                            <div className="text-[9px] text-zinc-500 uppercase">ETA</div>
-                                                            <div className="text-xs text-zinc-900 dark:text-white font-mono">
-                                                                {workerEta > 0 ? formatDuration(workerEta) : '—'}
-                                                            </div>
-                                                        </div>
-                                                        {config.concurrency !== undefined && (
-                                                            <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
-                                                                <div className="text-[9px] text-zinc-500 uppercase">Concurrency</div>
-                                                                <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.concurrency}</div>
-                                                            </div>
+                                                    <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-2">
+                                                        #<NumberFlow value={h} format={{ useGrouping: true }} />
+                                                    </div>
+                                                    <div className="h-1.5 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden mb-3">
+                                                        <div className="h-full bg-cyan-400" style={{ width: `${progress}%` }} />
+                                                    </div>
+                                                    <div className="flex items-center gap-4 text-xs text-zinc-500 font-mono">
+                                                        {checkpointTimestamps?.['history_ingester'] && (
+                                                            <span>Oldest: <span className="text-zinc-900 dark:text-white">{new Date(checkpointTimestamps['history_ingester']).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}</span></span>
                                                         )}
-                                                        {config.range !== undefined && config.range !== 0 && !config.concurrency && (
-                                                            <div className="bg-white/50 dark:bg-white/5 p-1.5 rounded text-center">
-                                                                <div className="text-[9px] text-zinc-500 uppercase">Range</div>
-                                                                <div className="text-xs text-zinc-900 dark:text-white font-mono">{config.range}</div>
-                                                            </div>
+                                                        <span>Speed: <span className="text-zinc-900 dark:text-white"><NumberFlow value={speed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /> b/s</span></span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+
+                                {/* Section 2: Live Deriver */}
+                                <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                                            <Activity className="h-3.5 w-3.5" />
+                                            Live Deriver
+                                        </h2>
+                                        <span className="text-[9px] px-1.5 py-0.5 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded text-zinc-500 font-mono">chunk=10</span>
+                                    </div>
+                                    <p className="text-[10px] text-zinc-400 mb-4">Real-time processing of new blocks as they arrive</p>
+
+                                    {/* Phase 1 */}
+                                    <div className="mb-3">
+                                        <span className="text-[9px] text-zinc-400 uppercase tracking-wider font-bold">Phase 1</span>
+                                        <div className="flex flex-wrap gap-2 mt-1.5">
+                                            {liveDeriverPhase1.map((w) => {
+                                                const h = checkpoints?.[w.key] || 0;
+                                                const behind = indexedHeight > h && h > 0 ? indexedHeight - h : 0;
+                                                const isCaughtUp = behind === 0 && h > 0;
+                                                return (
+                                                    <div
+                                                        key={w.key}
+                                                        className="group relative flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 rounded-sm text-xs hover:border-zinc-300 dark:hover:border-white/20 transition-colors cursor-default"
+                                                        title={`#${h.toLocaleString()} | Behind: ${behind.toLocaleString()}`}
+                                                    >
+                                                        <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${isCaughtUp ? 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]' : h > 0 ? 'bg-yellow-500 animate-pulse' : 'bg-zinc-400'}`} />
+                                                        <span className="text-zinc-700 dark:text-zinc-300 font-medium">{w.label}</span>
+                                                        {behind > 0 && (
+                                                            <span className="text-[9px] text-yellow-500 font-mono ml-0.5">-{behind > 99999 ? `${(behind / 1000).toFixed(0)}K` : behind.toLocaleString()}</span>
                                                         )}
+                                                        {/* Tooltip on hover */}
+                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
+                                                            <div className="bg-zinc-900 dark:bg-black text-white text-[10px] font-mono px-2.5 py-1.5 rounded shadow-lg whitespace-nowrap border border-white/10">
+                                                                #{h.toLocaleString()}
+                                                                {workerSpeeds[w.key] ? ` | ${workerSpeeds[w.key].toFixed(1)} b/s` : ''}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                )}
-                                                {historyOnly && behind === 0 && height > 0 && (
-                                                    <div className="mt-2 px-2 py-1 bg-zinc-100 dark:bg-white/5 rounded text-center">
-                                                        <span className="text-[9px] text-zinc-400 uppercase tracking-wider">History via history_deriver</span>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Phase 2 */}
+                                    <div>
+                                        <span className="text-[9px] text-zinc-400 uppercase tracking-wider font-bold">Phase 2 <span className="text-zinc-300 dark:text-zinc-600 normal-case">(depends on Token)</span></span>
+                                        <div className="flex flex-wrap gap-2 mt-1.5">
+                                            {liveDeriverPhase2.map((w) => {
+                                                const h = checkpoints?.[w.key] || 0;
+                                                const behind = indexedHeight > h && h > 0 ? indexedHeight - h : 0;
+                                                const isCaughtUp = behind === 0 && h > 0;
+                                                return (
+                                                    <div
+                                                        key={w.key}
+                                                        className="group relative flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 rounded-sm text-xs hover:border-zinc-300 dark:hover:border-white/20 transition-colors cursor-default"
+                                                        title={`#${h.toLocaleString()} | Behind: ${behind.toLocaleString()}`}
+                                                    >
+                                                        <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${isCaughtUp ? 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]' : h > 0 ? 'bg-yellow-500 animate-pulse' : 'bg-zinc-400'}`} />
+                                                        <span className="text-zinc-700 dark:text-zinc-300 font-medium">{w.label}</span>
+                                                        {behind > 0 && (
+                                                            <span className="text-[9px] text-yellow-500 font-mono ml-0.5">-{behind > 99999 ? `${(behind / 1000).toFixed(0)}K` : behind.toLocaleString()}</span>
+                                                        )}
+                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
+                                                            <div className="bg-zinc-900 dark:bg-black text-white text-[10px] font-mono px-2.5 py-1.5 rounded shadow-lg whitespace-nowrap border border-white/10">
+                                                                #{h.toLocaleString()}
+                                                                {workerSpeeds[w.key] ? ` | ${workerSpeeds[w.key].toFixed(1)} b/s` : ''}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                )}
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 3: History Deriver */}
+                                {(() => {
+                                    const upCursor = checkpoints?.['history_deriver'] || 0;
+                                    // Worker floor: the lowest checkpoint among all live-deriver processors
+                                    const allLiveWorkers = [...liveDeriverPhase1, ...liveDeriverPhase2];
+                                    const workerHeights = allLiveWorkers.map(w => checkpoints?.[w.key]).filter((h): h is number => typeof h === 'number' && h > 0);
+                                    const ceiling = workerHeights.length > 0 ? Math.min(...workerHeights) : indexedHeight;
+                                    const floor = checkpoints?.['history_ingester'] || minHeight || 0;
+                                    const totalRange = ceiling > floor ? ceiling - floor : 0;
+                                    const processed = upCursor > floor ? upCursor - floor : 0;
+                                    const hdProgress = totalRange > 0 ? Math.min(100, (processed / totalRange) * 100) : 0;
+                                    const hdSpeed = workerSpeeds['history_deriver'] || 0;
+                                    const remaining = ceiling > upCursor ? ceiling - upCursor : 0;
+                                    const hdEta = hdSpeed > 0 && remaining > 0 ? remaining / hdSpeed : 0;
+                                    const hdStatus = upCursor === 0 ? 'IDLE' : remaining === 0 ? 'CAUGHT UP' : hdSpeed > 0 ? 'SYNCING' : 'STALLED';
+                                    return (
+                                        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+                                            <div className="flex items-center gap-3 mb-1">
+                                                <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                                                    <HardDrive className="h-3.5 w-3.5" />
+                                                    History Deriver
+                                                </h2>
+                                                <span className="text-[9px] px-1.5 py-0.5 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded text-zinc-500 font-mono">chunk=1000</span>
+                                                <div className="flex items-center gap-1.5 ml-auto">
+                                                    <span className={`text-[9px] font-bold uppercase tracking-wider ${hdStatus === 'SYNCING' ? 'text-yellow-500' : hdStatus === 'CAUGHT UP' ? 'text-green-500' : 'text-zinc-400'}`}>{hdStatus}</span>
+                                                    <div className={`h-2 w-2 rounded-full ${hdStatus === 'SYNCING' ? 'bg-pink-400 animate-pulse' : hdStatus === 'CAUGHT UP' ? 'bg-green-500' : 'bg-zinc-400'}`} />
+                                                </div>
                                             </div>
-                                        );
-                                    })}
+                                            <p className="text-[10px] text-zinc-400 mb-4">
+                                                Backfill processing: UP cursor toward worker floor
+                                                <span className="text-zinc-300 dark:text-zinc-600 mx-1">|</span>
+                                                includes token_metadata_worker
+                                            </p>
+
+                                            {/* Range display */}
+                                            <div className="flex items-center justify-between text-xs font-mono text-zinc-500 mb-2">
+                                                <span>#{floor.toLocaleString()}</span>
+                                                <span className="text-pink-400 font-bold">#{upCursor.toLocaleString()}</span>
+                                                <span>#{ceiling.toLocaleString()}</span>
+                                            </div>
+
+                                            {/* Progress bar */}
+                                            <div className="relative h-4 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-4">
+                                                <motion.div
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${hdProgress}%` }}
+                                                    transition={{ duration: 1, ease: "easeOut" }}
+                                                    className="absolute h-full bg-pink-400"
+                                                />
+                                                {hdSpeed > 0 && (
+                                                    <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-20 mix-blend-overlay" />
+                                                )}
+                                                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white mix-blend-difference">
+                                                    {hdProgress.toFixed(1)}%
+                                                </div>
+                                            </div>
+
+                                            {/* Stats row */}
+                                            <div className="flex items-center gap-6 text-xs text-zinc-500 font-mono">
+                                                <span>Speed: <span className="text-zinc-900 dark:text-white"><NumberFlow value={hdSpeed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /> b/s</span></span>
+                                                <span>Remaining: <span className="text-zinc-900 dark:text-white">{remaining.toLocaleString()}</span></span>
+                                                <span>ETA: <span className="text-zinc-900 dark:text-white">{hdEta > 0 ? formatDuration(hdEta) : '—'}</span></span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* Section 4: Queue Workers */}
+                                <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+                                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <Server className="h-3.5 w-3.5" />
+                                        Queue Workers
+                                    </h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {queueWorkers.map((w) => {
+                                            const h = checkpoints?.[w.key] || 0;
+                                            const speed = workerSpeeds[w.key] || 0;
+                                            const enabled = workerEnabled?.[w.key];
+                                            const statusLabel = enabled === false ? 'DISABLED' : speed > 0 ? 'ACTIVE' : h > 0 ? 'IDLE' : 'OFFLINE';
+                                            return (
+                                                <div key={w.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-xs font-bold text-zinc-900 dark:text-white">{w.label}</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`text-[9px] font-bold uppercase tracking-wider ${statusLabel === 'ACTIVE' ? 'text-green-500' : statusLabel === 'DISABLED' ? 'text-red-400' : 'text-zinc-400'}`}>{statusLabel}</span>
+                                                            <div className={`h-1.5 w-1.5 rounded-full ${statusLabel === 'ACTIVE' ? 'bg-green-500 animate-pulse' : statusLabel === 'DISABLED' ? 'bg-red-500' : 'bg-zinc-400'}`} />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4 text-xs text-zinc-500 font-mono">
+                                                        <span>Checkpoint: <span className="text-zinc-900 dark:text-white">#{h.toLocaleString()}</span></span>
+                                                        <span>Speed: <span className="text-zinc-900 dark:text-white"><NumberFlow value={speed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /> b/s</span></span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </div>
 
