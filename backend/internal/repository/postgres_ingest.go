@@ -15,6 +15,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// sanitizeNull removes PostgreSQL-incompatible null bytes (\u0000) from strings.
+// Old blockchain data occasionally contains these in script text or error messages.
+func sanitizeNull(s string) string {
+	if strings.ContainsRune(s, 0) {
+		return strings.ReplaceAll(s, "\x00", "")
+	}
+	return s
+}
+
 // SaveBatch atomicially saves a batch of blocks and all related data
 // SaveBatch saves a batch of blocks and related data atomically
 func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs []models.Transaction, events []models.Event, serviceName string, checkpointHeight uint64) error {
@@ -441,12 +450,17 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash)`,
 				t.BlockHeight, hexToBytes(t.ID), t.TransactionIndex,
 				hexToBytes(t.ProposerAddress), hexToBytes(t.PayerAddress), sliceHexToBytes(t.Authorizers),
-				scriptHash, scriptInline, t.Arguments,
+				scriptHash, func() any {
+				if s, ok := scriptInline.(string); ok {
+					return sanitizeNull(s)
+				}
+				return scriptInline
+			}(), sanitizeNull(string(t.Arguments)),
 				t.Status, func() any {
 					if strings.TrimSpace(t.ErrorMessage) == "" {
 						return nil
 					}
-					return t.ErrorMessage
+					return sanitizeNull(t.ErrorMessage)
 				}(), t.IsEVM,
 				t.GasLimit, t.GasUsed, eventCount,
 				txTimestamp,
@@ -503,7 +517,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 
 					var payload any
 					if len(e.Payload) > 0 {
-						payload = e.Payload
+						payload = sanitizeNull(string(e.Payload))
 					}
 
 					return []any{
