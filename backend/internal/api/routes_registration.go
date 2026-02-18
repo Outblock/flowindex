@@ -15,7 +15,6 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin := r.PathPrefix("/admin").Subrouter()
 	admin.Use(adminAuthMiddleware)
 	admin.HandleFunc("/refetch-token-metadata", s.handleAdminRefetchTokenMetadata).Methods("POST", "OPTIONS")
-	admin.HandleFunc("/batch-fetch-metadata", s.handleAdminBatchFetchMetadata).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/refetch-bridge", s.handleAdminRefetchBridge).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/ft", s.handleAdminListFTTokens).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/ft/{identifier}", s.handleAdminUpdateFTToken).Methods("PUT", "PATCH", "OPTIONS")
@@ -31,9 +30,6 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin.HandleFunc("/script-templates/{hash}", s.handleAdminUpdateScriptTemplate).Methods("PUT", "PATCH", "OPTIONS")
 	admin.HandleFunc("/script-templates/{hash}/script", s.handleAdminGetScriptText).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/reset-token-worker", s.handleAdminResetTokenWorker).Methods("POST", "OPTIONS")
-	admin.HandleFunc("/reset-history-deriver", s.handleAdminResetHistoryDeriver).Methods("POST", "OPTIONS")
-	admin.HandleFunc("/resolve-errors", s.handleAdminResolveErrors).Methods("POST", "OPTIONS")
-	admin.HandleFunc("/errors", s.handleAdminListErrors).Methods("GET", "OPTIONS")
 }
 
 func registerAPIRoutes(r *mux.Router, s *Server) {
@@ -131,6 +127,11 @@ func registerStatusRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/status/price", s.handleStatusPrice).Methods("GET", "OPTIONS")
 	r.HandleFunc("/status/nodes", s.handleStatusNodes).Methods("GET", "OPTIONS")
 	r.HandleFunc("/status/gcp-vms", s.handleStatusGCPVMs).Methods("GET", "OPTIONS")
+
+	// Compatibility endpoints (find.xyz style)
+	r.HandleFunc("/flowscan/v1/stats", s.handleCompatFlowscanStats).Methods("GET", "OPTIONS")
+	r.HandleFunc("/public/v1/totalSupply", s.handleCompatTotalSupply).Methods("GET", "OPTIONS")
+	r.HandleFunc("/public/v1/totalSupplyWithDecimal", s.handleCompatTotalSupplyWithDecimal).Methods("GET", "OPTIONS")
 }
 
 func registerDeferredRoutes(r *mux.Router, s *Server) {
