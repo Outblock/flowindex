@@ -582,15 +582,19 @@ function Stats() {
                                         const enabled = workerEnabled?.[worker.key];
                                         const config = workerConfig?.[worker.key] || {};
                                         const speed = workerSpeeds[worker.key] || 0;
-                                        // Progress: main/history compare to chain tip; other workers compare to main ingester
+                                        // Progress: main/history ingesters compare to chain tip;
+                                        // history_deriver compares to history_ingester (it processes history blocks);
+                                        // all other async workers compare to main_ingester (they only process forward blocks).
                                         const isMainOrHistory = worker.key === 'main_ingester' || worker.key === 'history_ingester';
-                                        const refHeight = isMainOrHistory ? latestHeight : indexedHeight;
+                                        const isHistoryDeriver = worker.key === 'history_deriver' || worker.key === 'history_deriver_down';
+                                        const refHeight = isMainOrHistory ? latestHeight
+                                            : isHistoryDeriver ? indexedHeight  // history deriver scans up toward async worker floor
+                                            : indexedHeight;
                                         const progress = refHeight > 0 && height > 0 ? Math.min(100, (height / refHeight) * 100) : 0;
                                         const behind = refHeight > height && height > 0 ? refHeight - height : 0;
-                                        // Also check if worker is behind history ingester (processing backfill)
-                                        const historyBehind = !isMainOrHistory && historyHeight > 0 && height > historyHeight ? height - historyHeight : 0;
-                                        const isProcessingHistory = !isMainOrHistory && historyHeight > 0 && height > 0 && height > historyHeight;
                                         const workerEta = speed > 0 && behind > 0 ? behind / speed : 0;
+                                        // For non-ingester/deriver workers: history blocks are handled by history_deriver, not by these workers
+                                        const historyOnly = !isMainOrHistory && !isHistoryDeriver;
                                         // Status: DISABLED > CAUGHT UP (behind=0) > SYNCING (behind>0, has work to do)
                                         const statusLabel = enabled === false ? 'DISABLED'
                                             : behind === 0 && height > 0 ? 'CAUGHT UP'
@@ -651,9 +655,9 @@ function Stats() {
                                                         )}
                                                     </div>
                                                 )}
-                                                {isProcessingHistory && (
-                                                    <div className="mt-2 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded text-center">
-                                                        <span className="text-[9px] text-blue-400 uppercase tracking-wider font-bold">History backfill ahead by {historyBehind.toLocaleString()}</span>
+                                                {historyOnly && behind === 0 && height > 0 && (
+                                                    <div className="mt-2 px-2 py-1 bg-zinc-100 dark:bg-white/5 rounded text-center">
+                                                        <span className="text-[9px] text-zinc-400 uppercase tracking-wider">History via history_deriver</span>
                                                     </div>
                                                 )}
                                             </div>
