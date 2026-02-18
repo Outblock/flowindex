@@ -1,12 +1,21 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Activity, HardDrive, Server, Layers, Info, Square } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured, fetchStatus as fetchStatusApi, fetchGcpVmStatus } from '../api/heyapi';
 
+type StatsTab = 'system' | 'vms' | 'mosaic';
+const VALID_TABS: StatsTab[] = ['system', 'vms', 'mosaic'];
+
 export const Route = createFileRoute('/stats')({
     component: Stats,
+    validateSearch: (search: Record<string, unknown>): { tab?: StatsTab } => {
+        const tab = search.tab as string;
+        return {
+            tab: VALID_TABS.includes(tab as StatsTab) ? (tab as StatsTab) : undefined,
+        };
+    },
 })
 
 const CHUNK_SIZES = [
@@ -83,7 +92,11 @@ const WORKER_COLORS: Record<string, string> = {
 };
 
 function Stats() {
-    const [activeTab, setActiveTab] = useState('system'); // 'system', 'vms', or 'mosaic'
+    const { tab: searchTab } = Route.useSearch();
+    const navigate = useNavigate({ from: Route.fullPath });
+    const activeTab: StatsTab = searchTab || 'system';
+    const setActiveTab = (t: StatsTab) => navigate({ search: { tab: t } as any });
+
     const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -109,6 +122,11 @@ function Stats() {
     // Initialize with 100K
     const [chunkSize, setChunkSize] = useState(100000);
     const [hoveredChunk, setHoveredChunk] = useState<any>(null);
+
+    // Stable callback for grid cells — grid is memoized so this won't cause re-renders
+    const updateTooltip = useCallback((chunk: any) => {
+        setHoveredChunk(chunk);
+    }, []);
 
     const processStatus = useCallback((data: any) => {
         const now = Date.now();
@@ -228,9 +246,14 @@ function Stats() {
         }
     };
 
+    // Always load once on mount; only poll/WS when NOT on mosaic (mosaic is static)
     useEffect(() => {
         loadStatus();
         loadGcpStatus();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (activeTab === 'mosaic') return; // no live updates for mosaic
         const interval = setInterval(loadStatus, 3000);
         const gcpInterval = setInterval(loadGcpStatus, 5000);
 
@@ -257,7 +280,7 @@ function Stats() {
             if (ws) ws.close();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [processStatus]);
+    }, [processStatus, activeTab]);
 
     // Derived values for System Stats
     const startHeight = status?.start_height || 0;
@@ -388,6 +411,67 @@ function Stats() {
     const getSporkInChunk = useCallback((chunk: any) => {
         return FLOW_SPORK_BOUNDARIES.find(s => s.height >= chunk.start && s.height <= chunk.end);
     }, []);
+
+    // Memoize the mosaic grid so it only re-renders when chunks/status change, not on hover
+    const mosaicGrid = useMemo(() => (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(12px,1fr))] gap-[2px] p-2 h-full content-start overflow-y-auto max-h-[80vh] custom-scrollbar">
+            {chunks.map((chunk) => {
+                const chunkStatus = getChunkStatus(chunk);
+                const workers = getWorkersInChunk(chunk);
+                const spork = getSporkInChunk(chunk);
+                let bgClass = '';
+                let animateClass = '';
+
+                switch (chunkStatus) {
+                    case 'indexed':
+                        bgClass = 'bg-nothing-green-dark dark:bg-nothing-green hover:opacity-80';
+                        break;
+                    case 'indexing':
+                        bgClass = 'bg-yellow-400 z-10';
+                        animateClass = 'animate-pulse';
+                        break;
+                    case 'missing':
+                        bgClass = 'bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 hover:bg-zinc-300 dark:hover:bg-white/10';
+                        break;
+                    case 'pending':
+                    default:
+                        bgClass = 'bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20';
+                        break;
+                }
+
+                const sporkBorder = spork ? 'border-l-2 !border-l-red-400' : '';
+
+                return (
+                    <div
+                        key={chunk.index}
+                        onMouseEnter={() => updateTooltip(chunk)}
+                        onMouseLeave={() => updateTooltip(null)}
+                        className={`aspect-square rounded-[1px] cursor-crosshair transition-colors duration-200 relative overflow-hidden ${bgClass} ${animateClass} ${sporkBorder}`}
+                    >
+                        {workers.map((w) => {
+                            const color = WORKER_COLORS[w.name] || 'bg-white/60';
+                            const isMain = w.name === 'main_ingester';
+                            const isHistory = w.name === 'history_ingester';
+                            const isDeriver = w.name.startsWith('history_deriver');
+                            const pos = isMain
+                                ? 'top-0 left-0'
+                                : isHistory
+                                    ? 'bottom-0 left-0'
+                                    : isDeriver
+                                        ? 'top-0 right-0'
+                                        : 'bottom-0 right-0';
+                            return (
+                                <span
+                                    key={w.name}
+                                    className={`absolute w-[4px] h-[4px] rounded-full ${color} ${pos}`}
+                                />
+                            );
+                        })}
+                    </div>
+                );
+            })}
+        </div>
+    ), [chunks, status, chunkSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (loading) {
         return (
@@ -1212,134 +1296,68 @@ function Stats() {
 
                                 {/* Main Grid */}
                                 <div className="lg:col-span-3 bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-2 rounded-sm shadow-sm dark:shadow-none min-h-[500px] relative">
-                                    {/* Floating Tooltip */}
-                                    <div className="absolute top-4 right-4 z-20 pointer-events-none">
-                                        <AnimatePresence mode="wait">
-                                            {hoveredChunk && (
-                                                <motion.div
-                                                    key={hoveredChunk.index}
-                                                    initial={{ opacity: 0, x: 10 }}
-                                                    animate={{ opacity: 1, x: 0 }}
-                                                    exit={{ opacity: 0 }}
-                                                    className="bg-white/95 dark:bg-black/90 text-zinc-900 dark:text-white p-4 rounded-sm shadow-xl border border-zinc-200 dark:border-white/20 text-xs backdrop-blur-md min-w-[200px]"
-                                                >
-                                                    <div className="flex items-center gap-2 mb-2 border-b border-zinc-200 dark:border-white/10 pb-2">
-                                                        <Square className="w-3 h-3 text-zinc-500" />
-                                                        <span className="uppercase tracking-widest text-[10px] font-bold">Sector #{hoveredChunk.index}</span>
-                                                    </div>
-                                                    <div className="space-y-1.5 font-mono">
-                                                        <div className="flex justify-between">
-                                                            <span className="text-zinc-500 font-sans">Range</span>
-                                                            <span className="font-bold">{(chunkSize / 1000)}K</span>
-                                                        </div>
-                                                        <div className="flex justify-between">
-                                                            <span className="text-zinc-500 font-sans">Start</span>
-                                                            <span>#{hoveredChunk.start.toLocaleString()}</span>
-                                                        </div>
-                                                        <div className="flex justify-between">
-                                                            <span className="text-zinc-500 font-sans">End</span>
-                                                            <span>#{hoveredChunk.end.toLocaleString()}</span>
-                                                        </div>
-                                                        <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-white/10 flex items-center justify-between font-sans">
-                                                            <span className="text-[10px] uppercase tracking-wider text-zinc-500">Status</span>
-                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getChunkStatus(hoveredChunk) === 'indexed' ? 'bg-nothing-green-dark/10 text-nothing-green-dark dark:bg-nothing-green/10 dark:text-nothing-green' : 'bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-400'
-                                                                }`}>
-                                                                {getChunkStatus(hoveredChunk)}
-                                                            </span>
-                                                        </div>
-                                                        {(() => {
-                                                            const spork = getSporkInChunk(hoveredChunk);
-                                                            return spork ? (
-                                                                <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-white/10 font-sans">
-                                                                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">Spork Boundary</span>
-                                                                    <div className="flex justify-between mt-1">
-                                                                        <span className="text-red-400 font-bold text-[11px]">{spork.name}</span>
-                                                                        <span className="font-mono text-[11px]">#{spork.height.toLocaleString()}</span>
-                                                                    </div>
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
-                                                        {(() => {
-                                                            const workers = getWorkersInChunk(hoveredChunk);
-                                                            return workers.length > 0 ? (
-                                                                <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-white/10 font-sans">
-                                                                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">Workers</span>
-                                                                    {workers.map((w) => (
-                                                                        <div key={w.name} className="flex justify-between mt-1">
-                                                                            <span className="text-[11px] flex items-center gap-1.5">
-                                                                                <span className={`inline-block w-2 h-2 rounded-full ${WORKER_COLORS[w.name] || 'bg-white/60'}`} />
-                                                                                {w.name.replace(/_/g, ' ')}
-                                                                            </span>
-                                                                            <span className="font-mono text-[11px]">#{w.height.toLocaleString()}</span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
-
-                                    {/* Grid Container */}
-                                    <div className="grid grid-cols-[repeat(auto-fill,minmax(12px,1fr))] gap-[2px] p-2 h-full content-start overflow-y-auto max-h-[80vh] custom-scrollbar">
-                                        {chunks.map((chunk) => {
-                                            const chunkStatus = getChunkStatus(chunk);
-                                            const workers = getWorkersInChunk(chunk);
-                                            const spork = getSporkInChunk(chunk);
-                                            let bgClass = '';
-                                            let animateClass = '';
-
-                                            switch (chunkStatus) {
-                                                case 'indexed':
-                                                    bgClass = 'bg-nothing-green-dark dark:bg-nothing-green hover:opacity-80';
-                                                    break;
-                                                case 'indexing':
-                                                    bgClass = 'bg-yellow-400 z-10';
-                                                    animateClass = 'animate-pulse';
-                                                    break;
-                                                case 'missing':
-                                                    bgClass = 'bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 hover:bg-zinc-300 dark:hover:bg-white/10';
-                                                    break;
-                                                case 'pending':
-                                                default:
-                                                    bgClass = 'bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20';
-                                                    break;
-                                            }
-
-                                            const sporkBorder = spork ? 'border-l-2 !border-l-red-400' : '';
-
-                                            return (
-                                                <div
-                                                    key={chunk.index}
-                                                    onMouseEnter={() => setHoveredChunk(chunk)}
-                                                    onMouseLeave={() => setHoveredChunk(null)}
-                                                    className={`aspect-square rounded-[1px] cursor-crosshair transition-colors duration-200 relative overflow-hidden ${bgClass} ${animateClass} ${sporkBorder}`}
-                                                >
-                                                    {workers.map((w) => {
-                                                        const color = WORKER_COLORS[w.name] || 'bg-white/60';
-                                                        const isMain = w.name === 'main_ingester';
-                                                        const isHistory = w.name === 'history_ingester';
-                                                        const isDeriver = w.name.startsWith('history_deriver');
-                                                        const pos = isMain
-                                                            ? 'top-0 left-0'
-                                                            : isHistory
-                                                                ? 'bottom-0 left-0'
-                                                                : isDeriver
-                                                                    ? 'top-0 right-0'
-                                                                    : 'bottom-0 right-0';
-                                                        return (
-                                                            <span
-                                                                key={w.name}
-                                                                className={`absolute w-[4px] h-[4px] rounded-full ${color} ${pos}`}
-                                                            />
-                                                        );
-                                                    })}
+                                    {/* Floating Tooltip — no AnimatePresence, instant update */}
+                                    {hoveredChunk && (
+                                        <div className="absolute top-4 right-4 z-20 pointer-events-none bg-white/95 dark:bg-black/90 text-zinc-900 dark:text-white p-4 rounded-sm shadow-xl border border-zinc-200 dark:border-white/20 text-xs backdrop-blur-md min-w-[200px]">
+                                            <div className="flex items-center gap-2 mb-2 border-b border-zinc-200 dark:border-white/10 pb-2">
+                                                <Square className="w-3 h-3 text-zinc-500" />
+                                                <span className="uppercase tracking-widest text-[10px] font-bold">Sector #{hoveredChunk.index}</span>
+                                            </div>
+                                            <div className="space-y-1.5 font-mono">
+                                                <div className="flex justify-between">
+                                                    <span className="text-zinc-500 font-sans">Range</span>
+                                                    <span className="font-bold">{(chunkSize / 1000)}K</span>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-zinc-500 font-sans">Start</span>
+                                                    <span>#{hoveredChunk.start.toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-zinc-500 font-sans">End</span>
+                                                    <span>#{hoveredChunk.end.toLocaleString()}</span>
+                                                </div>
+                                                <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-white/10 flex items-center justify-between font-sans">
+                                                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">Status</span>
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getChunkStatus(hoveredChunk) === 'indexed' ? 'bg-nothing-green-dark/10 text-nothing-green-dark dark:bg-nothing-green/10 dark:text-nothing-green' : 'bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-400'
+                                                        }`}>
+                                                        {getChunkStatus(hoveredChunk)}
+                                                    </span>
+                                                </div>
+                                                {(() => {
+                                                    const spork = getSporkInChunk(hoveredChunk);
+                                                    return spork ? (
+                                                        <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-white/10 font-sans">
+                                                            <span className="text-[10px] uppercase tracking-wider text-zinc-500">Spork Boundary</span>
+                                                            <div className="flex justify-between mt-1">
+                                                                <span className="text-red-400 font-bold text-[11px]">{spork.name}</span>
+                                                                <span className="font-mono text-[11px]">#{spork.height.toLocaleString()}</span>
+                                                            </div>
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                                {(() => {
+                                                    const workers = getWorkersInChunk(hoveredChunk);
+                                                    return workers.length > 0 ? (
+                                                        <div className="pt-2 mt-2 border-t border-zinc-200 dark:border-white/10 font-sans">
+                                                            <span className="text-[10px] uppercase tracking-wider text-zinc-500">Workers</span>
+                                                            {workers.map((w) => (
+                                                                <div key={w.name} className="flex justify-between mt-1">
+                                                                    <span className="text-[11px] flex items-center gap-1.5">
+                                                                        <span className={`inline-block w-2 h-2 rounded-full ${WORKER_COLORS[w.name] || 'bg-white/60'}`} />
+                                                                        {w.name.replace(/_/g, ' ')}
+                                                                    </span>
+                                                                    <span className="font-mono text-[11px]">#{w.height.toLocaleString()}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Grid Container — memoized cells */}
+                                    {mosaicGrid}
                                 </div>
                             </div>
                         </motion.div>
