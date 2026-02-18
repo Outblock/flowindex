@@ -144,21 +144,48 @@ func (d *LiveDeriver) processRange(ctx context.Context, fromHeight, toHeight uin
 			end = toHeight
 		}
 
+		// Run processors concurrently in two phases (same as history_deriver):
+		// Phase 1: independent processors
+		// Phase 2: processors that depend on token_worker output
+		dependsOnToken := map[string]bool{
+			"ft_holdings_worker":   true,
+			"nft_ownership_worker": true,
+			"daily_balance_worker": true,
+		}
+		var phase1, phase2 []Processor
 		for _, p := range d.processors {
-			if ctx.Err() != nil {
-				return
-			}
-			began := time.Now()
-			if err := p.ProcessRange(ctx, start, end); err != nil {
-				log.Printf("[live_deriver] %s range [%d,%d) failed: %v", p.Name(), start, end, err)
-				_ = d.repo.LogIndexingError(ctx, p.Name(), start, "", "LIVE_DERIVER_ERROR", err.Error(), nil)
-				d.enqueueRetry(p, start, end)
-				continue
-			}
-			if dur := time.Since(began); dur > 2*time.Second {
-				log.Printf("[live_deriver] %s range [%d,%d) took %s", p.Name(), start, end, dur)
+			if dependsOnToken[p.Name()] {
+				phase2 = append(phase2, p)
+			} else {
+				phase1 = append(phase1, p)
 			}
 		}
+
+		runPhase := func(processors []Processor) {
+			var wg sync.WaitGroup
+			for _, p := range processors {
+				wg.Add(1)
+				go func(proc Processor) {
+					defer wg.Done()
+					if ctx.Err() != nil {
+						return
+					}
+					began := time.Now()
+					if err := proc.ProcessRange(ctx, start, end); err != nil {
+						log.Printf("[live_deriver] %s range [%d,%d) failed: %v", proc.Name(), start, end, err)
+						_ = d.repo.LogIndexingError(ctx, proc.Name(), start, "", "LIVE_DERIVER_ERROR", err.Error(), nil)
+						d.enqueueRetry(proc, start, end)
+						return
+					}
+					if dur := time.Since(began); dur > 2*time.Second {
+						log.Printf("[live_deriver] %s range [%d,%d) took %s", proc.Name(), start, end, dur)
+					}
+				}(p)
+			}
+			wg.Wait()
+		}
+		runPhase(phase1)
+		runPhase(phase2)
 	}
 }
 

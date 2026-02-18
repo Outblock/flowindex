@@ -39,7 +39,7 @@ type HistoryDeriverConfig struct {
 
 func NewHistoryDeriver(repo *repository.Repository, processors []Processor, cfg HistoryDeriverConfig) *HistoryDeriver {
 	if cfg.ChunkSize == 0 {
-		cfg.ChunkSize = 1000
+		cfg.ChunkSize = 5000
 	}
 	return &HistoryDeriver{
 		repo:       repo,

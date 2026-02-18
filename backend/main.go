@@ -279,7 +279,7 @@ func main() {
 	// blocks below that checkpoint are unprocessed. The HistoryDeriver scans upward
 	// from the bottom of raw data, running the same processors.
 	enableHistoryDerivers := os.Getenv("ENABLE_HISTORY_DERIVERS") != "false"
-	historyDeriverChunk := getEnvUint("HISTORY_DERIVERS_CHUNK", 1000)
+	historyDeriverChunk := getEnvUint("HISTORY_DERIVERS_CHUNK", 5000)
 	historyDeriverSleep := getEnvInt("HISTORY_DERIVERS_SLEEP_MS", 0)
 
 	var historyDeriver *ingester.HistoryDeriver
