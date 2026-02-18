@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 )
 
 // GetBlockIDByHeight returns the block ID for a given height (if present).
@@ -32,6 +33,55 @@ func (r *Repository) RollbackFromHeight(ctx context.Context, rollbackHeight uint
 		return err
 	}
 	defer tx.Rollback(ctx)
+
+	// Capture affected keys before source rows are deleted.
+	if _, err := tx.Exec(ctx, `
+		CREATE TEMP TABLE tmp_rollback_tx_ids ON COMMIT DROP AS
+		SELECT id
+		FROM raw.transactions
+		WHERE block_height >= $1
+	`, rollbackHeight); err != nil {
+		return fmt.Errorf("rollback temp tx ids: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		CREATE TEMP TABLE tmp_rollback_addresses ON COMMIT DROP AS
+		SELECT DISTINCT address
+		FROM app.address_transactions
+		WHERE block_height >= $1
+	`, rollbackHeight); err != nil {
+		return fmt.Errorf("rollback temp addresses: %w", err)
+	}
+
+	// Capture the first affected day before raw.blocks are pruned.
+	var rollbackStartDate *time.Time
+	if err := tx.QueryRow(ctx, `
+		SELECT MIN(timestamp)::date
+		FROM raw.blocks
+		WHERE height >= $1
+	`, rollbackHeight).Scan(&rollbackStartDate); err != nil {
+		return fmt.Errorf("rollback load daily_stats cutoff: %w", err)
+	}
+
+	// Derived tables that depend on raw.transactions / address_transactions.
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM app.tx_contracts
+		WHERE transaction_id IN (SELECT id FROM tmp_rollback_tx_ids)
+	`); err != nil {
+		// Non-fatal: these are idempotently rebuilt
+		log.Printf("[rollback] Warning: could not prune tx_contracts: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM app.tx_tags
+		WHERE transaction_id IN (SELECT id FROM tmp_rollback_tx_ids)
+	`); err != nil {
+		log.Printf("[rollback] Warning: could not prune tx_tags: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM app.address_stats
+		WHERE address IN (SELECT address FROM tmp_rollback_addresses)
+	`); err != nil {
+		return fmt.Errorf("rollback app.address_stats: %w", err)
+	}
 
 	// Raw tables
 	if _, err := tx.Exec(ctx, "DELETE FROM raw.events WHERE block_height >= $1", rollbackHeight); err != nil {
@@ -82,38 +132,14 @@ func (r *Repository) RollbackFromHeight(ctx context.Context, rollbackHeight uint
 		return fmt.Errorf("rollback app.smart_contracts: %w", err)
 	}
 	// daily_stats: only delete recent days that could be affected
-	if _, err := tx.Exec(ctx, `
-		DELETE FROM app.daily_stats
-		WHERE date >= (SELECT MIN(timestamp)::date FROM raw.blocks WHERE height = $1)`, rollbackHeight); err != nil {
-		// Non-fatal: daily_stats are periodically refreshed anyway
-		log.Printf("[rollback] Warning: could not prune daily_stats: %v", err)
-	}
-	// address_stats: recalculate only affected addresses rather than truncating all.
-	// We delete stats for addresses that had transactions in the rolled-back range,
-	// and let the MetaWorker re-derive them.
-	if _, err := tx.Exec(ctx, `
-		DELETE FROM app.address_stats
-		WHERE address IN (
-			SELECT DISTINCT address FROM app.address_transactions WHERE block_height >= $1
-		)`, rollbackHeight); err != nil {
-		return fmt.Errorf("rollback app.address_stats: %w", err)
-	}
-	// tx_contracts: has transaction_id linkage but no direct height — delete via join
-	if _, err := tx.Exec(ctx, `
-		DELETE FROM app.tx_contracts
-		WHERE transaction_id IN (
-			SELECT id FROM raw.transactions WHERE block_height >= $1
-		)`, rollbackHeight); err != nil {
-		// Non-fatal: these are idempotently rebuilt
-		log.Printf("[rollback] Warning: could not prune tx_contracts: %v", err)
-	}
-	// tx_tags: same pattern
-	if _, err := tx.Exec(ctx, `
-		DELETE FROM app.tx_tags
-		WHERE transaction_id IN (
-			SELECT id FROM raw.transactions WHERE block_height >= $1
-		)`, rollbackHeight); err != nil {
-		log.Printf("[rollback] Warning: could not prune tx_tags: %v", err)
+	if rollbackStartDate != nil {
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM app.daily_stats
+			WHERE date >= $1::date
+		`, *rollbackStartDate); err != nil {
+			// Non-fatal: daily_stats are periodically refreshed anyway
+			log.Printf("[rollback] Warning: could not prune daily_stats: %v", err)
+		}
 	}
 
 	// Worker leases: only delete leases that overlap with the rollback range

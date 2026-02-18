@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"flowscan-clone/internal/flow"
@@ -25,6 +27,29 @@ import (
 // For these blocks we use raw gRPC with JSON-CDC encoding to bypass the decoder.
 // Spork 23-24 still trigger RestrictedType panics; spork 24-25 trigger CCF decode errors.
 const CrescendoHeight = 88226267
+
+const defaultTxFetchConcurrency = 24
+
+var (
+	txFetchConcurrencyOnce sync.Once
+	txFetchConcurrencyVal  = defaultTxFetchConcurrency
+)
+
+func txFetchConcurrency() int {
+	txFetchConcurrencyOnce.Do(func() {
+		raw := strings.TrimSpace(os.Getenv("FLOW_TX_FETCH_CONCURRENCY"))
+		if raw == "" {
+			return
+		}
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			log.Printf("[ingester] invalid FLOW_TX_FETCH_CONCURRENCY=%q, using default=%d", raw, defaultTxFetchConcurrency)
+			return
+		}
+		txFetchConcurrencyVal = n
+	})
+	return txFetchConcurrencyVal
+}
 
 // FetchWarning records a non-fatal issue encountered during block fetch.
 type FetchWarning struct {
@@ -67,9 +92,11 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		}
 		var nodeErr *flow.NodeUnavailableError
 		if errors.As(err, &nodeErr) {
-			// Permanently mark this node as unable to serve this height,
-			// so PinByHeight skips it for this and all lower heights.
-			w.client.MarkNodeMinHeight(nodeErr.NodeIndex, height+1)
+			// Only mark minHeight on permanent "height too low" style failures.
+			// For transient DNS/transport errors, keep the node eligible.
+			if shouldMarkNodeMinHeight(nodeErr.Err) {
+				w.client.MarkNodeMinHeight(nodeErr.NodeIndex, height+1)
+			}
 			return true
 		}
 		// If a node is rate-limited (ResourceExhausted) after all retries,
@@ -145,7 +172,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 
 		if noBulk {
 			// Skip bulk API — go straight to per-collection/per-tx fallback.
-			txs, err = w.fetchTransactionsViaCollections(ctx, pin, block)
+			var txWarns []FetchWarning
+			txs, txWarns, err = w.fetchTransactionsViaCollections(ctx, pin, block)
+			result.Warnings = append(result.Warnings, txWarns...)
 			if err != nil {
 				if shouldRepin(err) {
 					continue
@@ -159,7 +188,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				if isUnimplementedError(err) {
 					// Old spork node: mark it and fall back to per-collection/per-tx
 					w.client.MarkNoBulkAPI(pin.NodeIndex())
-					txs, err = w.fetchTransactionsViaCollections(ctx, pin, block)
+					var txWarns []FetchWarning
+					txs, txWarns, err = w.fetchTransactionsViaCollections(ctx, pin, block)
+					result.Warnings = append(result.Warnings, txWarns...)
 					if err != nil {
 						if shouldRepin(err) {
 							continue
@@ -184,7 +215,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		if height < CrescendoHeight {
 			// Pre-Cadence 1.0: use raw gRPC for ALL tx results to avoid SDK panics
 			// from unsupported old Cadence types (RestrictedType, etc.)
-			results, rawResultsByIdx, repinRequested, err = w.fetchResultsAllRaw(ctx, pin, block.ID, txs)
+			var warns []FetchWarning
+			results, rawResultsByIdx, warns, repinRequested, err = w.fetchResultsAllRaw(ctx, pin, block.ID, txs)
+			result.Warnings = append(result.Warnings, warns...)
 			if err != nil {
 				result.Error = err
 				return result
@@ -194,7 +227,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			}
 		} else if noBulk {
 			// Skip bulk result API — go straight to per-tx fallback.
-			results, rawResultsByIdx, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, false)
+			var warns []FetchWarning
+			results, rawResultsByIdx, warns, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, false)
+			result.Warnings = append(result.Warnings, warns...)
 			if err != nil {
 				result.Error = err
 				return result
@@ -228,7 +263,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					if isCCFDecodeError(err) {
 						log.Printf("[ingester] Warn: CCF decode error for block %s (height=%d), falling back to per-tx result calls: %v", block.ID, height, err)
 					}
-					results, rawResultsByIdx, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, useIndexAPI)
+					var warns []FetchWarning
+					results, rawResultsByIdx, warns, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, useIndexAPI)
+					result.Warnings = append(result.Warnings, warns...)
 					if err != nil {
 						result.Error = err
 						return result
@@ -241,7 +278,9 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					continue
 				} else if isGRPCMessageTooLarge(err) {
 					log.Printf("[ingester] Warn: tx results payload too large for block %s (height=%d), falling back to per-tx calls: %v", block.ID, height, err)
-					results, rawResultsByIdx, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, usedBulkTxAPI)
+					var warns []FetchWarning
+					results, rawResultsByIdx, warns, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, usedBulkTxAPI)
+					result.Warnings = append(result.Warnings, warns...)
 					if err != nil {
 						result.Error = err
 						return result
@@ -460,34 +499,55 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 	return result
 }
 
+func shouldMarkNodeMinHeight(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	// Only trust explicit spork boundary signals. Generic NotFound on old nodes can
+	// be transient or ambiguous and may incorrectly poison node minHeight forever.
+	return strings.Contains(msg, "spork root block height")
+}
+
 // fetchTransactionsViaCollections fetches all transactions in a block by iterating
 // over its collection guarantees concurrently. Used as fallback for old spork nodes
 // that don't support GetTransactionsByBlockID.
-func (w *Worker) fetchTransactionsViaCollections(ctx context.Context, pin *flow.PinnedClient, block *flowsdk.Block) ([]*flowsdk.Transaction, error) {
+func (w *Worker) fetchTransactionsViaCollections(ctx context.Context, pin *flow.PinnedClient, block *flowsdk.Block) ([]*flowsdk.Transaction, []FetchWarning, error) {
 	// First collect all transaction IDs from collections (sequential, fast).
 	type txRef struct {
 		id    flowsdk.Identifier
 		order int
 	}
 	var refs []txRef
+	var warns []FetchWarning
 	for _, cg := range block.CollectionGuarantees {
 		coll, err := pin.GetCollection(ctx, cg.CollectionID)
 		if err != nil {
-			return nil, fmt.Errorf("GetCollection(%s): %w", cg.CollectionID, err)
+			if isMissingCollectionError(err) {
+				log.Printf("[ingester] Warn: collection unavailable for block %d collection=%s, skipping: %.160s", block.Height, cg.CollectionID, err.Error())
+				warns = append(warns, FetchWarning{
+					Message: fmt.Sprintf("missing collection: block=%d collection_id=%s err=%v", block.Height, cg.CollectionID, err),
+				})
+				continue
+			}
+			return nil, warns, fmt.Errorf("GetCollection(%s): %w", cg.CollectionID, err)
 		}
 		for _, txID := range coll.TransactionIDs {
 			refs = append(refs, txRef{id: txID, order: len(refs)})
 		}
 	}
 	if len(refs) == 0 {
-		return nil, nil
+		return nil, warns, nil
 	}
 
 	// Fetch all transactions concurrently.
 	allTxs := make([]*flowsdk.Transaction, len(refs))
 	errCh := make(chan error, len(refs))
+	sem := make(chan struct{}, txFetchConcurrency())
 	for _, ref := range refs {
+		sem <- struct{}{}
 		go func(r txRef) {
+			defer func() { <-sem }()
 			tx, err := pin.GetTransaction(ctx, r.id)
 			if err != nil {
 				errCh <- fmt.Errorf("GetTransaction(%s): %w", r.id, err)
@@ -499,32 +559,52 @@ func (w *Worker) fetchTransactionsViaCollections(ctx context.Context, pin *flow.
 	}
 	for range refs {
 		if err := <-errCh; err != nil {
-			return nil, err
+			return nil, warns, err
 		}
 	}
-	return allTxs, nil
+	return allTxs, warns, nil
+}
+
+func isMissingCollectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if status.Code(err) != codes.NotFound {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "collection") {
+		return false
+	}
+	return strings.Contains(msg, "key not found") ||
+		strings.Contains(msg, "could not look up collection") ||
+		strings.Contains(msg, "no known collection")
 }
 
 // fetchResultsPerTx fetches transaction results concurrently. When usedBulkTxAPI is true,
 // it uses GetTransactionResultByIndex (index-based); otherwise it uses GetTransactionResult
 // (ID-based, for old spork nodes that also lack the index-based API).
-func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction, usedBulkTxAPI bool) ([]*flowsdk.TransactionResult, map[int]*flow.RawTransactionResult, bool, error) {
+func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction, usedBulkTxAPI bool) ([]*flowsdk.TransactionResult, map[int]*flow.RawTransactionResult, []FetchWarning, bool, error) {
 	type fetchRes struct {
 		idx       int
 		result    *flowsdk.TransactionResult
 		rawResult *flow.RawTransactionResult // Fallback when SDK panics
+		warning   *FetchWarning
 		err       error
 		repin     bool
 	}
 
 	ch := make(chan fetchRes, len(txs))
 	count := 0
+	sem := make(chan struct{}, txFetchConcurrency())
 	for txIdx, tx := range txs {
 		if tx == nil {
 			continue
 		}
 		count++
+		sem <- struct{}{}
 		go func(idx int, t *flowsdk.Transaction) {
+			defer func() { <-sem }()
 			defer func() {
 				if rec := recover(); rec != nil {
 					log.Printf("[ingester] SDK panic for tx %s (idx=%d): %v — trying raw gRPC fallback", t.ID(), idx, rec)
@@ -532,7 +612,15 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 					rawRes, rawErr := pin.GetTransactionResultRaw(ctx, t.ID())
 					if rawErr != nil {
 						log.Printf("[ingester] Raw gRPC fallback also failed for tx %s: %v, returning empty result", t.ID(), rawErr)
-						ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
+						ch <- fetchRes{
+							idx:    idx,
+							result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed},
+							warning: &FetchWarning{
+								TxID:    t.ID().String(),
+								TxIndex: idx,
+								Message: fmt.Sprintf("tx result fallback failed; using empty result: %v", rawErr),
+							},
+						}
 						return
 					}
 					log.Printf("[ingester] Raw gRPC fallback succeeded for tx %s: %d events recovered", t.ID(), len(rawRes.Events))
@@ -562,7 +650,15 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 					strings.Contains(errMsg, "cadence runtime error") ||
 					strings.Contains(errMsg, "ccf: failed to decode") {
 					log.Printf("[ingester] Warn: tx result unavailable for %s (idx=%d), returning empty result: %.120s", t.ID(), idx, errMsg)
-					ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
+					ch <- fetchRes{
+						idx:    idx,
+						result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed},
+						warning: &FetchWarning{
+							TxID:    t.ID().String(),
+							TxIndex: idx,
+							Message: fmt.Sprintf("tx result unavailable; using empty result: %v", rErr),
+						},
+					}
 					return
 				}
 				// NodeUnavailableError wraps NotFound — for per-tx results,
@@ -571,7 +667,15 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 				var nodeErr *flow.NodeUnavailableError
 				if errors.As(rErr, &nodeErr) {
 					log.Printf("[ingester] Warn: tx result NotFound for %s (idx=%d), returning empty result", t.ID(), idx)
-					ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
+					ch <- fetchRes{
+						idx:    idx,
+						result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed},
+						warning: &FetchWarning{
+							TxID:    t.ID().String(),
+							TxIndex: idx,
+							Message: fmt.Sprintf("tx result not found; using empty result: %v", rErr),
+						},
+					}
 					return
 				}
 				var sporkErr *flow.SporkRootNotFoundError
@@ -593,13 +697,17 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 
 	results := make([]*flowsdk.TransactionResult, len(txs))
 	rawResults := make(map[int]*flow.RawTransactionResult)
+	var warns []FetchWarning
 	for i := 0; i < count; i++ {
 		res := <-ch
 		if res.repin {
-			return nil, nil, true, nil
+			return nil, nil, nil, true, nil
 		}
 		if res.err != nil {
-			return nil, nil, false, res.err
+			return nil, nil, nil, false, res.err
+		}
+		if res.warning != nil {
+			warns = append(warns, *res.warning)
 		}
 		if res.rawResult != nil {
 			// SDK panicked — use raw result. Create a minimal TransactionResult
@@ -620,7 +728,7 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 			compact = append(compact, r)
 		}
 	}
-	return compact, rawResults, false, nil
+	return compact, rawResults, warns, false, nil
 }
 
 // fetchResultsAllRaw fetches ALL transaction results using raw gRPC with JSON-CDC encoding,
@@ -629,7 +737,7 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 //
 // Strategy: try bulk API (GetTransactionResultsByBlockIDRaw) first — 1 RPC call for all results.
 // If the node doesn't support bulk or returns an error, fall back to per-tx raw gRPC calls.
-func (w *Worker) fetchResultsAllRaw(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction) ([]*flowsdk.TransactionResult, map[int]*flow.RawTransactionResult, bool, error) {
+func (w *Worker) fetchResultsAllRaw(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction) ([]*flowsdk.TransactionResult, map[int]*flow.RawTransactionResult, []FetchWarning, bool, error) {
 	// Try bulk raw gRPC first (unless node is flagged as noBulkAPI)
 	if !pin.NoBulkAPI() {
 		rawAll, err := pin.GetTransactionResultsByBlockIDRaw(ctx, blockID)
@@ -641,17 +749,17 @@ func (w *Worker) fetchResultsAllRaw(ctx context.Context, pin *flow.PinnedClient,
 				rawResults[i] = r
 				results[i] = &flowsdk.TransactionResult{Status: r.Status}
 			}
-			return results, rawResults, false, nil
+			return results, rawResults, nil, false, nil
 		}
 
 		// Check if we should repin or fall back to per-tx
 		var sporkErr *flow.SporkRootNotFoundError
 		if errors.As(err, &sporkErr) {
-			return nil, nil, true, nil
+			return nil, nil, nil, true, nil
 		}
 		var exhaustedErr *flow.NodeExhaustedError
 		if errors.As(err, &exhaustedErr) {
-			return nil, nil, true, nil
+			return nil, nil, nil, true, nil
 		}
 		if isUnimplementedError(err) {
 			w.client.MarkNoBulkAPI(pin.NodeIndex())
@@ -669,22 +777,26 @@ func (w *Worker) fetchResultsAllRaw(ctx context.Context, pin *flow.PinnedClient,
 }
 
 // fetchResultsPerTxRaw fetches individual tx results via raw gRPC in parallel.
-func (w *Worker) fetchResultsPerTxRaw(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction) ([]*flowsdk.TransactionResult, map[int]*flow.RawTransactionResult, bool, error) {
+func (w *Worker) fetchResultsPerTxRaw(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction) ([]*flowsdk.TransactionResult, map[int]*flow.RawTransactionResult, []FetchWarning, bool, error) {
 	type fetchRes struct {
 		idx       int
 		rawResult *flow.RawTransactionResult
+		warning   *FetchWarning
 		err       error
 		repin     bool
 	}
 
 	ch := make(chan fetchRes, len(txs))
 	count := 0
+	sem := make(chan struct{}, txFetchConcurrency())
 	for txIdx, tx := range txs {
 		if tx == nil {
 			continue
 		}
 		count++
+		sem <- struct{}{}
 		go func(idx int, t *flowsdk.Transaction) {
+			defer func() { <-sem }()
 			rawRes, rawErr := pin.GetTransactionResultRaw(ctx, t.ID())
 			if rawErr != nil {
 				errMsg := rawErr.Error()
@@ -697,13 +809,29 @@ func (w *Worker) fetchResultsPerTxRaw(ctx context.Context, pin *flow.PinnedClien
 					strings.Contains(errMsg, "cadence runtime error") ||
 					strings.Contains(errMsg, "ccf: failed to decode") {
 					log.Printf("[ingester] Warn: raw tx result unavailable for %s (idx=%d): %.120s", t.ID(), idx, errMsg)
-					ch <- fetchRes{idx: idx, rawResult: &flow.RawTransactionResult{Status: flowsdk.TransactionStatusSealed}}
+					ch <- fetchRes{
+						idx:       idx,
+						rawResult: &flow.RawTransactionResult{Status: flowsdk.TransactionStatusSealed},
+						warning: &FetchWarning{
+							TxID:    t.ID().String(),
+							TxIndex: idx,
+							Message: fmt.Sprintf("raw tx result unavailable; using empty result: %v", rawErr),
+						},
+					}
 					return
 				}
 				var nodeErr *flow.NodeUnavailableError
 				if errors.As(rawErr, &nodeErr) {
 					log.Printf("[ingester] Warn: raw tx result NotFound for %s (idx=%d)", t.ID(), idx)
-					ch <- fetchRes{idx: idx, rawResult: &flow.RawTransactionResult{Status: flowsdk.TransactionStatusSealed}}
+					ch <- fetchRes{
+						idx:       idx,
+						rawResult: &flow.RawTransactionResult{Status: flowsdk.TransactionStatusSealed},
+						warning: &FetchWarning{
+							TxID:    t.ID().String(),
+							TxIndex: idx,
+							Message: fmt.Sprintf("raw tx result not found; using empty result: %v", rawErr),
+						},
+					}
 					return
 				}
 				var sporkErr *flow.SporkRootNotFoundError
@@ -725,13 +853,17 @@ func (w *Worker) fetchResultsPerTxRaw(ctx context.Context, pin *flow.PinnedClien
 
 	results := make([]*flowsdk.TransactionResult, len(txs))
 	rawResults := make(map[int]*flow.RawTransactionResult)
+	var warns []FetchWarning
 	for i := 0; i < count; i++ {
 		res := <-ch
 		if res.repin {
-			return nil, nil, true, nil
+			return nil, nil, nil, true, nil
 		}
 		if res.err != nil {
-			return nil, nil, false, res.err
+			return nil, nil, nil, false, res.err
+		}
+		if res.warning != nil {
+			warns = append(warns, *res.warning)
 		}
 		rawResults[res.idx] = res.rawResult
 		results[res.idx] = &flowsdk.TransactionResult{
@@ -745,7 +877,7 @@ func (w *Worker) fetchResultsPerTxRaw(ctx context.Context, pin *flow.PinnedClien
 			compact = append(compact, r)
 		}
 	}
-	return compact, rawResults, false, nil
+	return compact, rawResults, warns, false, nil
 }
 
 func isNotFoundError(err error) bool {

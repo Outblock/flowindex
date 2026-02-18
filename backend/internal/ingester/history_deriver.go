@@ -279,20 +279,24 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	// Build up to N chunk ranges scanning upward from minRaw toward downCursor.
+	// Build up to N chunk ranges directly below downCursor.
+	// This avoids repeatedly reprocessing [minRaw, minRaw+chunk) when the gap is large.
 	type chunkRange struct {
 		from, to uint64
 		index    int
 	}
 	var chunks []chunkRange
-	cursor := minRaw
-	for i := 0; i < h.concurrency && cursor < downCursor; i++ {
-		chunkTo := cursor + h.chunkSize
-		if chunkTo > downCursor {
-			chunkTo = downCursor
+	cursor := downCursor
+	for i := 0; i < h.concurrency && cursor > minRaw; i++ {
+		chunkFrom := minRaw
+		if cursor > h.chunkSize {
+			candidate := cursor - h.chunkSize
+			if candidate > minRaw {
+				chunkFrom = candidate
+			}
 		}
-		chunks = append(chunks, chunkRange{from: cursor, to: chunkTo, index: i})
-		cursor = chunkTo
+		chunks = append(chunks, chunkRange{from: chunkFrom, to: cursor, index: i})
+		cursor = chunkFrom
 	}
 
 	if len(chunks) == 0 {
@@ -335,26 +339,23 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 	}
 	wg.Wait()
 
-	// Find highest contiguous success.
-	advanceTo := minRaw
+	// Find lowest contiguous success from the top.
+	advanceTo := downCursor
 	for i, c := range chunks {
 		if results[i] != nil {
 			log.Printf("[history_deriver] DOWN: chunk [%d,%d) failed: %v — stopping at %d", c.from, c.to, results[i], advanceTo)
 			break
 		}
-		advanceTo = c.to
+		advanceTo = c.from
 	}
 
-	if advanceTo > minRaw {
-		// If we've closed the entire gap, move downCursor to minRaw.
-		if advanceTo >= downCursor {
-			if err := h.repo.UpdateCheckpoint(ctx, historyDeriverDownCheckpoint, minRaw); err != nil {
-				log.Printf("[history_deriver] Failed to update down checkpoint: %v", err)
-			}
+	if advanceTo < downCursor {
+		if err := h.repo.UpdateCheckpoint(ctx, historyDeriverDownCheckpoint, advanceTo); err != nil {
+			log.Printf("[history_deriver] Failed to update down checkpoint: %v", err)
 		}
 
-		if advanceTo%100000 < h.chunkSize*uint64(h.concurrency) {
-			log.Printf("[history_deriver] Progress DOWN: processed to %d (downCursor=%d, chunks=%d)", advanceTo, downCursor, len(chunks))
+		if advanceTo%100000 < h.chunkSize*uint64(h.concurrency) || advanceTo == minRaw {
+			log.Printf("[history_deriver] Progress DOWN: cursor %d -> %d (minRaw=%d, chunks=%d)", downCursor, advanceTo, minRaw, len(chunks))
 		}
 		return true, nil
 	}
