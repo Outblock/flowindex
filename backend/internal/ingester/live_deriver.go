@@ -186,6 +186,15 @@ func (d *LiveDeriver) processRange(ctx context.Context, fromHeight, toHeight uin
 		}
 		runPhase(phase1)
 		runPhase(phase2)
+
+		// Update checkpoints for all processors so history_deriver.findWorkerFloor()
+		// sees progress and can advance its upward scan. This replaces the async
+		// workers + committer pattern for block-range-based processors.
+		for _, p := range d.processors {
+			if err := d.repo.UpdateCheckpoint(ctx, p.Name(), end); err != nil {
+				log.Printf("[live_deriver] Failed to update checkpoint for %s: %v", p.Name(), err)
+			}
+		}
 	}
 }
 

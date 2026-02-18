@@ -141,32 +141,10 @@ func main() {
 	latestBatch := getEnvInt("LATEST_BATCH_SIZE", 1)    // Real-time
 	historyBatch := getEnvInt("HISTORY_BATCH_SIZE", 20) // Throughput
 	maxReorgDepth := getEnvUint("MAX_REORG_DEPTH", 1000)
-	tokenWorkerRange := getEnvUint("TOKEN_WORKER_RANGE", 1000)
-	evmWorkerRange := getEnvUint("EVM_WORKER_RANGE", 1000)
-	metaWorkerRange := getEnvUint("META_WORKER_RANGE", 1000)
-	accountsWorkerRange := getEnvUint("ACCOUNTS_WORKER_RANGE", 1000)
-	ftHoldingsWorkerRange := getEnvUint("FT_HOLDINGS_WORKER_RANGE", 1000)
-	nftOwnershipWorkerRange := getEnvUint("NFT_OWNERSHIP_WORKER_RANGE", 1000)
-	tokenMetadataWorkerRange := getEnvUint("TOKEN_METADATA_WORKER_RANGE", 1000)
-	txContractsWorkerRange := getEnvUint("TX_CONTRACTS_WORKER_RANGE", 1000)
-	txMetricsWorkerRange := getEnvUint("TX_METRICS_WORKER_RANGE", 1000)
-	stakingWorkerRange := getEnvUint("STAKING_WORKER_RANGE", 1000)
-	dailyBalanceWorkerRange := getEnvUint("DAILY_BALANCE_WORKER_RANGE", 1000)
-	defiWorkerRange := getEnvUint("DEFI_WORKER_RANGE", 1000)
+	metaWorkerRange := getEnvUint("META_WORKER_RANGE", 1000) // used as default for head backfill
+	// Queue-based async worker configs (block-range workers replaced by live_deriver)
 	nftItemMetadataWorkerRange := getEnvUint("NFT_ITEM_METADATA_WORKER_RANGE", 1000)
 	nftReconcilerRange := getEnvUint("NFT_RECONCILER_RANGE", 1000)
-	tokenWorkerConcurrency := getEnvInt("TOKEN_WORKER_CONCURRENCY", 1)
-	evmWorkerConcurrency := getEnvInt("EVM_WORKER_CONCURRENCY", 1)
-	metaWorkerConcurrency := getEnvInt("META_WORKER_CONCURRENCY", 1)
-	accountsWorkerConcurrency := getEnvInt("ACCOUNTS_WORKER_CONCURRENCY", 1)
-	ftHoldingsWorkerConcurrency := getEnvInt("FT_HOLDINGS_WORKER_CONCURRENCY", 1)
-	nftOwnershipWorkerConcurrency := getEnvInt("NFT_OWNERSHIP_WORKER_CONCURRENCY", 1)
-	tokenMetadataWorkerConcurrency := getEnvInt("TOKEN_METADATA_WORKER_CONCURRENCY", 1)
-	txContractsWorkerConcurrency := getEnvInt("TX_CONTRACTS_WORKER_CONCURRENCY", 1)
-	txMetricsWorkerConcurrency := getEnvInt("TX_METRICS_WORKER_CONCURRENCY", 1)
-	stakingWorkerConcurrency := getEnvInt("STAKING_WORKER_CONCURRENCY", 1)
-	dailyBalanceWorkerConcurrency := getEnvInt("DAILY_BALANCE_WORKER_CONCURRENCY", 1)
-	defiWorkerConcurrency := getEnvInt("DEFI_WORKER_CONCURRENCY", 1)
 	nftItemMetadataWorkerConcurrency := getEnvInt("NFT_ITEM_METADATA_WORKER_CONCURRENCY", 1)
 	nftReconcilerConcurrency := getEnvInt("NFT_RECONCILER_CONCURRENCY", 1)
 
@@ -265,6 +243,16 @@ func main() {
 		if enableDefiWorker {
 			processors = append(processors, ingester.NewDefiWorker(repo))
 		}
+		// Phase 2 processors (depend on token_worker output):
+		if enableFTHoldingsWorker {
+			processors = append(processors, ingester.NewFTHoldingsWorker(repo))
+		}
+		if enableNFTOwnershipWorker {
+			processors = append(processors, ingester.NewNFTOwnershipWorker(repo))
+		}
+		if enableDailyBalanceWorker {
+			processors = append(processors, ingester.NewDailyBalanceWorker(repo))
+		}
 
 		liveDeriver = ingester.NewLiveDeriver(repo, processors, ingester.LiveDeriverConfig{
 			ChunkSize: liveDeriverChunk,
@@ -279,7 +267,7 @@ func main() {
 	// blocks below that checkpoint are unprocessed. The HistoryDeriver scans upward
 	// from the bottom of raw data, running the same processors.
 	enableHistoryDerivers := os.Getenv("ENABLE_HISTORY_DERIVERS") != "false"
-	historyDeriverChunk := getEnvUint("HISTORY_DERIVERS_CHUNK", 5000)
+	historyDeriverChunk := getEnvUint("HISTORY_DERIVERS_CHUNK", 1000)
 	historyDeriverSleep := getEnvInt("HISTORY_DERIVERS_SLEEP_MS", 0)
 
 	var historyDeriver *ingester.HistoryDeriver
@@ -378,268 +366,20 @@ func main() {
 		OnIndexedRange: onHistoryIndexedRange,
 	})
 
-	var tokenWorkerProcessor *ingester.TokenWorker
-	var tokenWorkers []*ingester.AsyncWorker
-	var evmWorkerProcessor *ingester.EVMWorker
-	var evmWorkers []*ingester.AsyncWorker
-	var metaWorkerProcessor *ingester.MetaWorker
-	var metaWorkers []*ingester.AsyncWorker
-	var accountsWorkerProcessor *ingester.AccountsWorker
-	var accountsWorkers []*ingester.AsyncWorker
-	var ftHoldingsWorkerProcessor *ingester.FTHoldingsWorker
-	var ftHoldingsWorkers []*ingester.AsyncWorker
-	var nftOwnershipWorkerProcessor *ingester.NFTOwnershipWorker
-	var nftOwnershipWorkers []*ingester.AsyncWorker
-	var tokenMetadataWorkerProcessor *ingester.TokenMetadataWorker
-	var tokenMetadataWorkers []*ingester.AsyncWorker
-	var txContractsWorkerProcessor *ingester.TxContractsWorker
-	var txContractsWorkers []*ingester.AsyncWorker
-	var txMetricsWorkerProcessor *ingester.TxMetricsWorker
-	var txMetricsWorkers []*ingester.AsyncWorker
-	var stakingWorkerProcessor *ingester.StakingWorker
-	var stakingWorkers []*ingester.AsyncWorker
-	var dailyBalanceWorkerProcessor *ingester.DailyBalanceWorker
-	var dailyBalanceWorkers []*ingester.AsyncWorker
-	var defiWorkerProcessor *ingester.DefiWorker
-	var defiWorkers []*ingester.AsyncWorker
-	var nftItemMetadataWorkerProcessor *ingester.NFTItemMetadataWorker
+	// Block-range async workers are DISABLED (方案A): live_deriver processes all
+	// block-range processors in real-time and updates their checkpoints directly.
+	// Only queue-based workers (nft_item_metadata, nft_reconciler) still run as
+	// async workers since they don't process block ranges.
+
 	var nftItemMetadataWorkers []*ingester.AsyncWorker
-	var nftReconcilerProcessor *ingester.NFTOwnershipReconciler
 	var nftReconcilerWorkers []*ingester.AsyncWorker
 
-	workerTypes := make([]string, 0, 10)
-
-	if enableTokenWorker {
-		tokenWorkerProcessor = ingester.NewTokenWorker(repo)
-		if tokenWorkerConcurrency < 1 {
-			tokenWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < tokenWorkerConcurrency; i++ {
-			tokenWorkers = append(tokenWorkers, ingester.NewAsyncWorker(tokenWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: tokenWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-token-%d", hostname, pid, i),
-			}))
-		}
-		workerTypes = append(workerTypes, tokenWorkerProcessor.Name())
-	} else {
-		log.Println("Token Worker is DISABLED (ENABLE_TOKEN_WORKER=false)")
-	}
-
-	if enableEVMWorker {
-		evmWorkerProcessor = ingester.NewEVMWorker(repo)
-		if evmWorkerConcurrency < 1 {
-			evmWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < evmWorkerConcurrency; i++ {
-			evmWorkers = append(evmWorkers, ingester.NewAsyncWorker(evmWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: evmWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-evm-%d", hostname, pid, i),
-			}))
-		}
-		workerTypes = append(workerTypes, evmWorkerProcessor.Name())
-	} else {
-		log.Println("EVM Worker is DISABLED (ENABLE_EVM_WORKER=false)")
-	}
-
-	if enableMetaWorker {
-		metaWorkerProcessor = ingester.NewMetaWorker(repo, flowClient)
-		if metaWorkerConcurrency < 1 {
-			metaWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < metaWorkerConcurrency; i++ {
-			metaWorkers = append(metaWorkers, ingester.NewAsyncWorker(metaWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: metaWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-meta-%d", hostname, pid, i),
-			}))
-		}
-		workerTypes = append(workerTypes, metaWorkerProcessor.Name())
-	} else {
-		log.Println("Meta Worker is DISABLED (ENABLE_META_WORKER=false)")
-	}
-
-	if enableAccountsWorker {
-		accountsWorkerProcessor = ingester.NewAccountsWorker(repo)
-		if accountsWorkerConcurrency < 1 {
-			accountsWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < accountsWorkerConcurrency; i++ {
-			accountsWorkers = append(accountsWorkers, ingester.NewAsyncWorker(accountsWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: accountsWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-accounts-%d", hostname, pid, i),
-			}))
-		}
-		workerTypes = append(workerTypes, accountsWorkerProcessor.Name())
-	} else {
-		log.Println("Accounts Worker is DISABLED (ENABLE_ACCOUNTS_WORKER=false)")
-	}
-
-	// Downstream workers with dependency enforcement.
-	// These workers read from derived tables produced by upstream workers,
-	// so they must wait for upstream checkpoints before processing a range.
-	tokenWorkerDep := []string{"token_worker"}  // Workers that depend on TokenWorker
-	tokenMetaDeps := []string{"token_worker"}    // TokenMetadata reads app.contracts from TokenWorker
-
-	if enableFTHoldingsWorker {
-		ftHoldingsWorkerProcessor = ingester.NewFTHoldingsWorker(repo)
-		if ftHoldingsWorkerConcurrency < 1 {
-			ftHoldingsWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < ftHoldingsWorkerConcurrency; i++ {
-			ftHoldingsWorkers = append(ftHoldingsWorkers, ingester.NewAsyncWorker(ftHoldingsWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize:    ftHoldingsWorkerRange,
-				WorkerID:     fmt.Sprintf("%s-%d-ft-holdings-%d", hostname, pid, i),
-				Dependencies: tokenWorkerDep,
-			}))
-		}
-		workerTypes = append(workerTypes, ftHoldingsWorkerProcessor.Name())
-	} else {
-		log.Println("FT Holdings Worker is DISABLED (ENABLE_FT_HOLDINGS_WORKER=false)")
-	}
-
-	if enableNFTOwnershipWorker {
-		nftOwnershipWorkerProcessor = ingester.NewNFTOwnershipWorker(repo)
-		if nftOwnershipWorkerConcurrency < 1 {
-			nftOwnershipWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < nftOwnershipWorkerConcurrency; i++ {
-			nftOwnershipWorkers = append(nftOwnershipWorkers, ingester.NewAsyncWorker(nftOwnershipWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize:    nftOwnershipWorkerRange,
-				WorkerID:     fmt.Sprintf("%s-%d-nft-ownership-%d", hostname, pid, i),
-				Dependencies: tokenWorkerDep,
-			}))
-		}
-		workerTypes = append(workerTypes, nftOwnershipWorkerProcessor.Name())
-	} else {
-		log.Println("NFT Ownership Worker is DISABLED (ENABLE_NFT_OWNERSHIP_WORKER=false)")
-	}
-
-	if enableTokenMetadataWorker {
-		tokenMetadataWorkerProcessor = ingester.NewTokenMetadataWorker(repo, flowClient)
-		if tokenMetadataWorkerConcurrency < 1 {
-			tokenMetadataWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < tokenMetadataWorkerConcurrency; i++ {
-			tokenMetadataWorkers = append(tokenMetadataWorkers, ingester.NewAsyncWorker(tokenMetadataWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize:    tokenMetadataWorkerRange,
-				WorkerID:     fmt.Sprintf("%s-%d-token-metadata-%d", hostname, pid, i),
-				Dependencies: tokenMetaDeps,
-			}))
-		}
-		workerTypes = append(workerTypes, tokenMetadataWorkerProcessor.Name())
-	} else {
-		log.Println("Token Metadata Worker is DISABLED (ENABLE_TOKEN_METADATA_WORKER=false)")
-	}
-
-	if enableTxContractsWorker {
-		txContractsWorkerProcessor = ingester.NewTxContractsWorker(repo)
-		if txContractsWorkerConcurrency < 1 {
-			txContractsWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < txContractsWorkerConcurrency; i++ {
-			txContractsWorkers = append(txContractsWorkers, ingester.NewAsyncWorker(txContractsWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize:    txContractsWorkerRange,
-				WorkerID:     fmt.Sprintf("%s-%d-tx-contracts-%d", hostname, pid, i),
-				Dependencies: tokenWorkerDep,
-			}))
-		}
-		workerTypes = append(workerTypes, txContractsWorkerProcessor.Name())
-	} else {
-		log.Println("Tx Contracts Worker is DISABLED (ENABLE_TX_CONTRACTS_WORKER=false)")
-	}
-
-	if enableTxMetricsWorker {
-		txMetricsWorkerProcessor = ingester.NewTxMetricsWorker(repo)
-		if txMetricsWorkerConcurrency < 1 {
-			txMetricsWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < txMetricsWorkerConcurrency; i++ {
-			txMetricsWorkers = append(txMetricsWorkers, ingester.NewAsyncWorker(txMetricsWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: txMetricsWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-tx-metrics-%d", hostname, pid, i),
-			}))
-		}
-		workerTypes = append(workerTypes, txMetricsWorkerProcessor.Name())
-	} else {
-		log.Println("Tx Metrics Worker is DISABLED (ENABLE_TX_METRICS_WORKER=false)")
-	}
-
-	if enableStakingWorker {
-		stakingWorkerProcessor = ingester.NewStakingWorker(repo)
-		if stakingWorkerConcurrency < 1 {
-			stakingWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < stakingWorkerConcurrency; i++ {
-			stakingWorkers = append(stakingWorkers, ingester.NewAsyncWorker(stakingWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: stakingWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-staking-%d", hostname, pid, i),
-			}))
-		}
-		workerTypes = append(workerTypes, stakingWorkerProcessor.Name())
-	} else {
-		log.Println("Staking Worker is DISABLED (ENABLE_STAKING_WORKER=false)")
-	}
-
-	if enableDefiWorker {
-		defiWorkerProcessor = ingester.NewDefiWorker(repo)
-		if defiWorkerConcurrency < 1 {
-			defiWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < defiWorkerConcurrency; i++ {
-			defiWorkers = append(defiWorkers, ingester.NewAsyncWorker(defiWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize: defiWorkerRange,
-				WorkerID:  fmt.Sprintf("%s-%d-defi-%d", hostname, pid, i),
-			}))
-		}
-		workerTypes = append(workerTypes, defiWorkerProcessor.Name())
-	} else {
-		log.Println("DeFi Worker is DISABLED (ENABLE_DEFI_WORKER=false)")
-	}
-
-	if enableDailyBalanceWorker {
-		dailyBalanceWorkerProcessor = ingester.NewDailyBalanceWorker(repo)
-		if dailyBalanceWorkerConcurrency < 1 {
-			dailyBalanceWorkerConcurrency = 1
-		}
-		hostname, _ := os.Hostname()
-		pid := os.Getpid()
-		for i := 0; i < dailyBalanceWorkerConcurrency; i++ {
-			dailyBalanceWorkers = append(dailyBalanceWorkers, ingester.NewAsyncWorker(dailyBalanceWorkerProcessor, repo, ingester.WorkerConfig{
-				RangeSize:    dailyBalanceWorkerRange,
-				WorkerID:     fmt.Sprintf("%s-%d-daily-balance-%d", hostname, pid, i),
-				Dependencies: tokenWorkerDep,
-			}))
-		}
-		workerTypes = append(workerTypes, dailyBalanceWorkerProcessor.Name())
-	} else {
-		log.Println("Daily Balance Worker is DISABLED (ENABLE_DAILY_BALANCE_WORKER=false)")
-	}
+	workerTypes := make([]string, 0, 4)
 
 	nftOwnershipDep := []string{"nft_ownership_worker"}
 
 	if enableNFTItemMetadataWorker {
-		nftItemMetadataWorkerProcessor = ingester.NewNFTItemMetadataWorker(repo, flowClient)
+		nftItemMetadataWorkerProcessor := ingester.NewNFTItemMetadataWorker(repo, flowClient)
 		if nftItemMetadataWorkerConcurrency < 1 {
 			nftItemMetadataWorkerConcurrency = 1
 		}
@@ -649,7 +389,7 @@ func main() {
 			nftItemMetadataWorkers = append(nftItemMetadataWorkers, ingester.NewAsyncWorker(nftItemMetadataWorkerProcessor, repo, ingester.WorkerConfig{
 				RangeSize:    nftItemMetadataWorkerRange,
 				WorkerID:     fmt.Sprintf("%s-%d-nft-item-meta-%d", hostname, pid, i),
-				Dependencies: nil, // No dependency — this worker is queue-based (ignores block heights), just needs nft_ownership rows to exist
+				Dependencies: nil, // Queue-based: ignores block heights
 			}))
 		}
 		workerTypes = append(workerTypes, nftItemMetadataWorkerProcessor.Name())
@@ -658,7 +398,7 @@ func main() {
 	}
 
 	if enableNFTReconciler {
-		nftReconcilerProcessor = ingester.NewNFTOwnershipReconciler(repo, flowClient)
+		nftReconcilerProcessor := ingester.NewNFTOwnershipReconciler(repo, flowClient)
 		if nftReconcilerConcurrency < 1 {
 			nftReconcilerConcurrency = 1
 		}
@@ -763,127 +503,7 @@ func main() {
 		log.Println("History Ingester is DISABLED (ENABLE_HISTORY_INGESTER=false)")
 	}
 
-	// Start Async Workers
-	if enableTokenWorker {
-		for _, worker := range tokenWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableMetaWorker {
-		for _, worker := range metaWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableEVMWorker {
-		for _, worker := range evmWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableAccountsWorker {
-		for _, worker := range accountsWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableFTHoldingsWorker {
-		for _, worker := range ftHoldingsWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableNFTOwnershipWorker {
-		for _, worker := range nftOwnershipWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableTokenMetadataWorker {
-		for _, worker := range tokenMetadataWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableTxContractsWorker {
-		for _, worker := range txContractsWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableTxMetricsWorker {
-		for _, worker := range txMetricsWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableStakingWorker {
-		for _, worker := range stakingWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableDefiWorker {
-		for _, worker := range defiWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
-	if enableDailyBalanceWorker {
-		for _, worker := range dailyBalanceWorkers {
-			wg.Add(1)
-			go func(w *ingester.AsyncWorker) {
-				defer wg.Done()
-				w.Start(ctx)
-			}(worker)
-		}
-	}
-
+	// Start Async Workers (queue-based only — block-range workers replaced by live_deriver)
 	if enableNFTItemMetadataWorker {
 		for _, worker := range nftItemMetadataWorkers {
 			wg.Add(1)
