@@ -19,6 +19,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// CrescendoHeight is the root height of Spork 26 (mainnet26).
+// Blocks below this height may contain old Cadence types (e.g. RestrictedType)
+// that cause SDK panics, or CCF-encoded results that the SDK cannot decode.
+// For these blocks we use raw gRPC with JSON-CDC encoding to bypass the decoder.
+// Spork 23-24 still trigger RestrictedType panics; spork 24-25 trigger CCF decode errors.
+const CrescendoHeight = 88226267
+
 // FetchWarning records a non-fatal issue encountered during block fetch.
 type FetchWarning struct {
 	TxID    string
@@ -132,6 +139,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		// If a node has been flagged as not supporting bulk APIs, skip directly to fallback.
 		var txs []*flowsdk.Transaction
 		var results []*flowsdk.TransactionResult
+		var rawResultsByIdx map[int]*flow.RawTransactionResult // From raw gRPC fallback
 		usedBulkTxAPI := false
 		noBulk := pin.NoBulkAPI()
 
@@ -173,9 +181,20 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 		// Track whether we should retry this height with a different node pin.
 		repinRequested := false
 
-		if noBulk {
+		if height < CrescendoHeight {
+			// Pre-Cadence 1.0: use raw gRPC for ALL tx results to avoid SDK panics
+			// from unsupported old Cadence types (RestrictedType, etc.)
+			results, rawResultsByIdx, repinRequested, err = w.fetchResultsAllRaw(ctx, pin, block.ID, txs)
+			if err != nil {
+				result.Error = err
+				return result
+			}
+			if repinRequested {
+				continue
+			}
+		} else if noBulk {
 			// Skip bulk result API — go straight to per-tx fallback.
-			results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, false)
+			results, rawResultsByIdx, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, false)
 			if err != nil {
 				result.Error = err
 				return result
@@ -209,7 +228,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					if isCCFDecodeError(err) {
 						log.Printf("[ingester] Warn: CCF decode error for block %s (height=%d), falling back to per-tx result calls: %v", block.ID, height, err)
 					}
-					results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, useIndexAPI)
+					results, rawResultsByIdx, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, useIndexAPI)
 					if err != nil {
 						result.Error = err
 						return result
@@ -222,7 +241,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 					continue
 				} else if isGRPCMessageTooLarge(err) {
 					log.Printf("[ingester] Warn: tx results payload too large for block %s (height=%d), falling back to per-tx calls: %v", block.ID, height, err)
-					results, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, usedBulkTxAPI)
+					results, rawResultsByIdx, repinRequested, err = w.fetchResultsPerTx(ctx, pin, block.ID, txs, usedBulkTxAPI)
 					if err != nil {
 						result.Error = err
 						return result
@@ -356,31 +375,65 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				dbTx.ErrorMessage = res.Error.Error()
 			}
 
-			// Process Events
-			for _, evt := range res.Events {
-				payload := w.flattenCadenceValue(evt.Value)
-				payloadJSON, _ := json.Marshal(payload)
+			// Process Events — check if this tx has raw events from gRPC fallback
+			if rawRes, hasRaw := rawResultsByIdx[txIndex]; hasRaw && rawRes != nil {
+				// Use raw gRPC events (SDK panicked during Cadence decoding)
+				for _, rawEvt := range rawRes.Events {
+					parsed := parseJSONCDCEventPayload(rawEvt.Payload)
+					var payloadJSON []byte
+					if parsed != nil {
+						payloadJSON, _ = json.Marshal(parsed)
+					} else {
+						payloadJSON = rawEvt.Payload // Store raw JSON-CDC as fallback
+					}
 
-				addrStr, contractStr, eventStr := w.parseEventType(evt.Type)
+					addrStr, contractStr, eventStr := w.parseEventType(rawEvt.Type)
 
-				dbEvent := models.Event{
-					TransactionID:    txID,
-					TransactionIndex: txIndex,
-					Type:             evt.Type,
-					EventIndex:       evt.EventIndex,
-					ContractAddress:  addrStr,
-					ContractName:     contractStr,
-					EventName:        eventStr,
-					Payload:          payloadJSON,
-					BlockHeight:      height,
-					Timestamp:        block.Timestamp,
-					CreatedAt:        now,
+					dbEvent := models.Event{
+						TransactionID:    txID,
+						TransactionIndex: txIndex,
+						Type:             rawEvt.Type,
+						EventIndex:       int(rawEvt.EventIndex),
+						ContractAddress:  addrStr,
+						ContractName:     contractStr,
+						EventName:        eventStr,
+						Payload:          payloadJSON,
+						BlockHeight:      height,
+						Timestamp:        block.Timestamp,
+						CreatedAt:        now,
+					}
+					dbEvents = append(dbEvents, dbEvent)
+
+					if strings.Contains(rawEvt.Type, "EVM.TransactionExecuted") {
+						isEVM = true
+					}
 				}
-				dbEvents = append(dbEvents, dbEvent)
+			} else {
+				// Normal SDK events
+				for _, evt := range res.Events {
+					payload := w.safeExtractEventPayload(evt)
+					payloadJSON, _ := json.Marshal(payload)
 
-				// Detect EVM Events — only flag as EVM if there is an actual EVM.TransactionExecuted event
-				if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
-					isEVM = true
+					addrStr, contractStr, eventStr := w.parseEventType(evt.Type)
+
+					dbEvent := models.Event{
+						TransactionID:    txID,
+						TransactionIndex: txIndex,
+						Type:             evt.Type,
+						EventIndex:       evt.EventIndex,
+						ContractAddress:  addrStr,
+						ContractName:     contractStr,
+						EventName:        eventStr,
+						Payload:          payloadJSON,
+						BlockHeight:      height,
+						Timestamp:        block.Timestamp,
+						CreatedAt:        now,
+					}
+					dbEvents = append(dbEvents, dbEvent)
+
+					if strings.Contains(evt.Type, "EVM.TransactionExecuted") {
+						isEVM = true
+					}
 				}
 			}
 
@@ -455,12 +508,13 @@ func (w *Worker) fetchTransactionsViaCollections(ctx context.Context, pin *flow.
 // fetchResultsPerTx fetches transaction results concurrently. When usedBulkTxAPI is true,
 // it uses GetTransactionResultByIndex (index-based); otherwise it uses GetTransactionResult
 // (ID-based, for old spork nodes that also lack the index-based API).
-func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction, usedBulkTxAPI bool) ([]*flowsdk.TransactionResult, bool, error) {
+func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction, usedBulkTxAPI bool) ([]*flowsdk.TransactionResult, map[int]*flow.RawTransactionResult, bool, error) {
 	type fetchRes struct {
-		idx    int
-		result *flowsdk.TransactionResult
-		err    error
-		repin  bool
+		idx       int
+		result    *flowsdk.TransactionResult
+		rawResult *flow.RawTransactionResult // Fallback when SDK panics
+		err       error
+		repin     bool
 	}
 
 	ch := make(chan fetchRes, len(txs))
@@ -473,8 +527,16 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 		go func(idx int, t *flowsdk.Transaction) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					log.Printf("[ingester] Recovered from SDK panic for tx %s (idx=%d): %v", t.ID(), idx, rec)
-					ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
+					log.Printf("[ingester] SDK panic for tx %s (idx=%d): %v — trying raw gRPC fallback", t.ID(), idx, rec)
+					// Try raw gRPC with JSON-CDC encoding to bypass Cadence decoder
+					rawRes, rawErr := pin.GetTransactionResultRaw(ctx, t.ID())
+					if rawErr != nil {
+						log.Printf("[ingester] Raw gRPC fallback also failed for tx %s: %v, returning empty result", t.ID(), rawErr)
+						ch <- fetchRes{idx: idx, result: &flowsdk.TransactionResult{Status: flowsdk.TransactionStatusSealed}}
+						return
+					}
+					log.Printf("[ingester] Raw gRPC fallback succeeded for tx %s: %d events recovered", t.ID(), len(rawRes.Events))
+					ch <- fetchRes{idx: idx, rawResult: rawRes}
 				}
 			}()
 			var r *flowsdk.TransactionResult
@@ -495,6 +557,8 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 				if strings.Contains(errMsg, "key not found") ||
 					strings.Contains(errMsg, "could not retrieve") ||
 					strings.Contains(errMsg, "failed to execute the script on the execution node") ||
+					strings.Contains(errMsg, "failed to retrieve result from execution node") ||
+					strings.Contains(errMsg, "upstream request timeout") ||
 					strings.Contains(errMsg, "cadence runtime error") ||
 					strings.Contains(errMsg, "ccf: failed to decode") {
 					log.Printf("[ingester] Warn: tx result unavailable for %s (idx=%d), returning empty result: %.120s", t.ID(), idx, errMsg)
@@ -528,15 +592,25 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 	}
 
 	results := make([]*flowsdk.TransactionResult, len(txs))
+	rawResults := make(map[int]*flow.RawTransactionResult)
 	for i := 0; i < count; i++ {
 		res := <-ch
 		if res.repin {
-			return nil, true, nil
+			return nil, nil, true, nil
 		}
 		if res.err != nil {
-			return nil, false, res.err
+			return nil, nil, false, res.err
 		}
-		results[res.idx] = res.result
+		if res.rawResult != nil {
+			// SDK panicked — use raw result. Create a minimal TransactionResult
+			// so the index mapping works; actual events come from rawResults.
+			rawResults[res.idx] = res.rawResult
+			results[res.idx] = &flowsdk.TransactionResult{
+				Status: res.rawResult.Status,
+			}
+		} else {
+			results[res.idx] = res.result
+		}
 	}
 
 	// Compact: remove nil entries (from nil txs)
@@ -546,7 +620,132 @@ func (w *Worker) fetchResultsPerTx(ctx context.Context, pin *flow.PinnedClient, 
 			compact = append(compact, r)
 		}
 	}
-	return compact, false, nil
+	return compact, rawResults, false, nil
+}
+
+// fetchResultsAllRaw fetches ALL transaction results using raw gRPC with JSON-CDC encoding,
+// completely bypassing the Flow SDK's Cadence decoder. Used for pre-Crescendo blocks
+// where old Cadence types like RestrictedType cause SDK panics or CCF decode errors.
+//
+// Strategy: try bulk API (GetTransactionResultsByBlockIDRaw) first — 1 RPC call for all results.
+// If the node doesn't support bulk or returns an error, fall back to per-tx raw gRPC calls.
+func (w *Worker) fetchResultsAllRaw(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction) ([]*flowsdk.TransactionResult, map[int]*flow.RawTransactionResult, bool, error) {
+	// Try bulk raw gRPC first (unless node is flagged as noBulkAPI)
+	if !pin.NoBulkAPI() {
+		rawAll, err := pin.GetTransactionResultsByBlockIDRaw(ctx, blockID)
+		if err == nil {
+			// Success! Build the results maps.
+			results := make([]*flowsdk.TransactionResult, len(rawAll))
+			rawResults := make(map[int]*flow.RawTransactionResult, len(rawAll))
+			for i, r := range rawAll {
+				rawResults[i] = r
+				results[i] = &flowsdk.TransactionResult{Status: r.Status}
+			}
+			return results, rawResults, false, nil
+		}
+
+		// Check if we should repin or fall back to per-tx
+		var sporkErr *flow.SporkRootNotFoundError
+		if errors.As(err, &sporkErr) {
+			return nil, nil, true, nil
+		}
+		var exhaustedErr *flow.NodeExhaustedError
+		if errors.As(err, &exhaustedErr) {
+			return nil, nil, true, nil
+		}
+		if isUnimplementedError(err) {
+			w.client.MarkNoBulkAPI(pin.NodeIndex())
+		}
+		// For any other error (Internal, execution node down, etc.), fall through to per-tx
+		if isExecutionNodeError(err) || isBulkResultInternalError(err) || isCCFDecodeError(err) || isUnimplementedError(err) {
+			// Expected fallback — don't log at high verbosity
+		} else {
+			log.Printf("[ingester] Warn: bulk raw results failed for block %s, falling back to per-tx: %.120s", blockID, err.Error())
+		}
+	}
+
+	// Fallback: fetch each tx result individually via raw gRPC (parallel goroutines)
+	return w.fetchResultsPerTxRaw(ctx, pin, blockID, txs)
+}
+
+// fetchResultsPerTxRaw fetches individual tx results via raw gRPC in parallel.
+func (w *Worker) fetchResultsPerTxRaw(ctx context.Context, pin *flow.PinnedClient, blockID flowsdk.Identifier, txs []*flowsdk.Transaction) ([]*flowsdk.TransactionResult, map[int]*flow.RawTransactionResult, bool, error) {
+	type fetchRes struct {
+		idx       int
+		rawResult *flow.RawTransactionResult
+		err       error
+		repin     bool
+	}
+
+	ch := make(chan fetchRes, len(txs))
+	count := 0
+	for txIdx, tx := range txs {
+		if tx == nil {
+			continue
+		}
+		count++
+		go func(idx int, t *flowsdk.Transaction) {
+			rawRes, rawErr := pin.GetTransactionResultRaw(ctx, t.ID())
+			if rawErr != nil {
+				errMsg := rawErr.Error()
+				// Handle non-fatal errors: return empty sealed result
+				if strings.Contains(errMsg, "key not found") ||
+					strings.Contains(errMsg, "could not retrieve") ||
+					strings.Contains(errMsg, "failed to execute the script on the execution node") ||
+					strings.Contains(errMsg, "failed to retrieve result from execution node") ||
+					strings.Contains(errMsg, "upstream request timeout") ||
+					strings.Contains(errMsg, "cadence runtime error") ||
+					strings.Contains(errMsg, "ccf: failed to decode") {
+					log.Printf("[ingester] Warn: raw tx result unavailable for %s (idx=%d): %.120s", t.ID(), idx, errMsg)
+					ch <- fetchRes{idx: idx, rawResult: &flow.RawTransactionResult{Status: flowsdk.TransactionStatusSealed}}
+					return
+				}
+				var nodeErr *flow.NodeUnavailableError
+				if errors.As(rawErr, &nodeErr) {
+					log.Printf("[ingester] Warn: raw tx result NotFound for %s (idx=%d)", t.ID(), idx)
+					ch <- fetchRes{idx: idx, rawResult: &flow.RawTransactionResult{Status: flowsdk.TransactionStatusSealed}}
+					return
+				}
+				var sporkErr *flow.SporkRootNotFoundError
+				if errors.As(rawErr, &sporkErr) {
+					ch <- fetchRes{repin: true}
+					return
+				}
+				var exhaustedErr *flow.NodeExhaustedError
+				if errors.As(rawErr, &exhaustedErr) {
+					ch <- fetchRes{repin: true}
+					return
+				}
+				ch <- fetchRes{err: fmt.Errorf("raw gRPC failed for tx %s: %w", t.ID().String(), rawErr)}
+				return
+			}
+			ch <- fetchRes{idx: idx, rawResult: rawRes}
+		}(txIdx, tx)
+	}
+
+	results := make([]*flowsdk.TransactionResult, len(txs))
+	rawResults := make(map[int]*flow.RawTransactionResult)
+	for i := 0; i < count; i++ {
+		res := <-ch
+		if res.repin {
+			return nil, nil, true, nil
+		}
+		if res.err != nil {
+			return nil, nil, false, res.err
+		}
+		rawResults[res.idx] = res.rawResult
+		results[res.idx] = &flowsdk.TransactionResult{
+			Status: res.rawResult.Status,
+		}
+	}
+
+	compact := make([]*flowsdk.TransactionResult, 0, count)
+	for _, r := range results {
+		if r != nil {
+			compact = append(compact, r)
+		}
+	}
+	return compact, rawResults, false, nil
 }
 
 func isNotFoundError(err error) bool {
@@ -680,5 +879,201 @@ func (w *Worker) flattenCadenceValue(v cadence.Value) interface{} {
 		return fmt.Sprintf("0x%x", []byte(val))
 	default:
 		return val.String()
+	}
+}
+
+// safeExtractEventPayload extracts event payload, falling back to raw JSON-CDC
+// parsing if the Cadence decoder panics (e.g. "Restriction kind is not supported").
+func (w *Worker) safeExtractEventPayload(evt flowsdk.Event) (payload interface{}) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Cadence decoder panicked — try raw JSON-CDC parsing of the event Payload
+			if len(evt.Payload) > 0 {
+				parsed := parseJSONCDCEventPayload(evt.Payload)
+				if parsed != nil {
+					payload = parsed
+					return
+				}
+			}
+			payload = nil
+		}
+	}()
+	return w.flattenCadenceValue(evt.Value)
+}
+
+// parseJSONCDCEventPayload parses a JSON-CDC event payload into a flat map
+// without using Cadence type system. This avoids "Restriction kind is not supported" panics.
+func parseJSONCDCEventPayload(payload []byte) map[string]interface{} {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil
+	}
+
+	value, ok := raw["value"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	fields, ok := value["fields"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	result := make(map[string]interface{}, len(fields))
+	for _, f := range fields {
+		field, ok := f.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := field["name"].(string)
+		if name == "" {
+			continue
+		}
+		val, _ := field["value"].(map[string]interface{})
+		if val == nil {
+			continue
+		}
+		result[name] = extractCDCValue(val)
+	}
+	return result
+}
+
+// extractCDCValue recursively extracts a value from JSON-CDC format.
+func extractCDCValue(v map[string]interface{}) interface{} {
+	if v == nil {
+		return nil
+	}
+
+	typ, _ := v["type"].(string)
+	value := v["value"]
+
+	switch typ {
+	case "Optional":
+		if value == nil {
+			return nil
+		}
+		inner, ok := value.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		return extractCDCValue(inner)
+
+	case "Bool":
+		return value
+
+	case "String", "Character":
+		return value
+
+	case "Address":
+		// Strip 0x prefix to match SDK's .Hex() output
+		if s, ok := value.(string); ok {
+			return strings.TrimPrefix(s, "0x")
+		}
+		return value
+
+	case "UInt8", "UInt16", "UInt32", "UInt64", "UInt128", "UInt256",
+		"Int8", "Int16", "Int32", "Int64", "Int128", "Int256",
+		"Word8", "Word16", "Word32", "Word64",
+		"UFix64", "Fix64":
+		return value
+
+	case "Array":
+		arr, ok := value.([]interface{})
+		if !ok {
+			return nil
+		}
+		result := make([]interface{}, 0, len(arr))
+		for _, item := range arr {
+			m, ok := item.(map[string]interface{})
+			if !ok {
+				result = append(result, item)
+				continue
+			}
+			result = append(result, extractCDCValue(m))
+		}
+		return result
+
+	case "Dictionary":
+		arr, ok := value.([]interface{})
+		if !ok {
+			return nil
+		}
+		result := make(map[string]interface{}, len(arr))
+		for _, item := range arr {
+			pair, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			keyMap, _ := pair["key"].(map[string]interface{})
+			valMap, _ := pair["value"].(map[string]interface{})
+			if keyMap == nil {
+				continue
+			}
+			key := fmt.Sprintf("%v", extractCDCValue(keyMap))
+			if valMap != nil {
+				result[key] = extractCDCValue(valMap)
+			} else {
+				result[key] = nil
+			}
+		}
+		return result
+
+	case "Struct", "Resource", "Event", "Contract", "Enum":
+		inner, ok := value.(map[string]interface{})
+		if !ok {
+			return value
+		}
+		fields, ok := inner["fields"].([]interface{})
+		if !ok {
+			return value
+		}
+		result := make(map[string]interface{}, len(fields))
+		for _, f := range fields {
+			field, ok := f.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			name, _ := field["name"].(string)
+			val, _ := field["value"].(map[string]interface{})
+			if name != "" && val != nil {
+				result[name] = extractCDCValue(val)
+			}
+		}
+		return result
+
+	case "Type":
+		inner, ok := value.(map[string]interface{})
+		if !ok {
+			return value
+		}
+		staticType, ok := inner["staticType"].(map[string]interface{})
+		if ok {
+			if typeID, ok := staticType["typeID"].(string); ok {
+				return typeID
+			}
+		}
+		return inner
+
+	case "Path":
+		inner, ok := value.(map[string]interface{})
+		if !ok {
+			return value
+		}
+		domain, _ := inner["domain"].(string)
+		identifier, _ := inner["identifier"].(string)
+		return fmt.Sprintf("/%s/%s", domain, identifier)
+
+	case "Capability":
+		inner, ok := value.(map[string]interface{})
+		if !ok {
+			return value
+		}
+		return inner
+
+	case "Void":
+		return nil
+
+	default:
+		return value
 	}
 }

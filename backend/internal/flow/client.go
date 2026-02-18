@@ -2,6 +2,7 @@ package flow
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -12,9 +13,12 @@ import (
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow/protobuf/go/flow/access"
+	"github.com/onflow/flow/protobuf/go/flow/entities"
 	"golang.org/x/time/rate"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	flowgrpc "github.com/onflow/flow-go-sdk/access/grpc"
@@ -22,11 +26,9 @@ import (
 
 // Client wraps the Flow Access Client
 type Client struct {
-	// AccessClient access.Client
-	// The SDK interface changed in recent versions.
-	// Using the gRPC client directly usually returns an implementation of access.Client.
-	// For now, let's use the specific client to avoid interface confusion if versions mismatch.
 	grpcClients []*flowgrpc.Client
+	rawClients  []access.AccessAPIClient // Raw gRPC clients for JSON-CDC fallback
+	rawConns    []*grpc.ClientConn       // Raw gRPC connections (for cleanup)
 	nodes       []string
 	// Per-node spork root (inclusive). Height < minHeight cannot be served by that node.
 	// Learned dynamically from NotFound errors.
@@ -56,6 +58,8 @@ func NewClient(url string) (*Client, error) {
 func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
 	nodes := parseAccessNodesFromEnv(envKey, fallback)
 	clients := make([]*flowgrpc.Client, 0, len(nodes))
+	rawClients := make([]access.AccessAPIClient, 0, len(nodes))
+	rawConns := make([]*grpc.ClientConn, 0, len(nodes))
 	connectedNodes := make([]string, 0, len(nodes))
 	ranks := make([]int, 0, len(nodes))
 	var firstErr error
@@ -72,6 +76,25 @@ func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
 			log.Printf("[flow] Warn: failed to connect to access node %s: %v", node, err)
 			continue
 		}
+
+		// Create a raw gRPC connection for JSON-CDC fallback (bypasses Cadence decoder)
+		rawConn, rawErr := grpc.NewClient(node,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(64*1024*1024),
+				grpc.MaxCallSendMsgSize(16*1024*1024),
+			),
+		)
+		if rawErr != nil {
+			log.Printf("[flow] Warn: failed to create raw gRPC connection to %s: %v", node, rawErr)
+			// Non-fatal: raw fallback just won't work for this node
+			rawClients = append(rawClients, nil)
+			rawConns = append(rawConns, nil)
+		} else {
+			rawClients = append(rawClients, access.NewAccessAPIClient(rawConn))
+			rawConns = append(rawConns, rawConn)
+		}
+
 		clients = append(clients, c)
 		connectedNodes = append(connectedNodes, node)
 		ranks = append(ranks, extractSporkRank(node))
@@ -86,6 +109,8 @@ func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
 
 	c := &Client{
 		grpcClients:   clients,
+		rawClients:    rawClients,
+		rawConns:      rawConns,
 		nodes:         connectedNodes,
 		minHeights:    make([]uint64, len(clients)),
 		disabledUntil: make([]int64, len(clients)),
@@ -633,6 +658,140 @@ func (p *PinnedClient) GetTransactionResultByIndex(ctx context.Context, blockID 
 	return res, nil
 }
 
+// RawEvent holds event data from raw gRPC without Cadence type decoding.
+type RawEvent struct {
+	Type             string
+	TransactionID    string
+	TransactionIndex uint32
+	EventIndex       uint32
+	Payload          []byte // Raw JSON-CDC bytes
+}
+
+// RawTransactionResult holds tx result from raw gRPC without Cadence decoding.
+type RawTransactionResult struct {
+	Status       flow.TransactionStatus
+	StatusCode   uint
+	ErrorMessage string
+	Events       []RawEvent
+	BlockHeight  uint64
+}
+
+// GetTransactionResultRaw fetches a transaction result using raw gRPC with JSON-CDC encoding,
+// bypassing the SDK's Cadence decoder. This avoids panics from unsupported Cadence types
+// like "Restriction kind" in old spork data.
+func (p *PinnedClient) GetTransactionResultRaw(ctx context.Context, txID flow.Identifier) (*RawTransactionResult, error) {
+	if p.idx < 0 || p.idx >= len(p.parent.rawClients) || p.parent.rawClients[p.idx] == nil {
+		return nil, fmt.Errorf("raw gRPC client not available for node %s", p.node)
+	}
+
+	rawCli := p.parent.rawClients[p.idx]
+	idBytes, _ := hex.DecodeString(txID.String())
+
+	var resp *access.TransactionResultResponse
+	if err := p.withRetry(ctx, func() error {
+		var err error
+		resp, err = rawCli.GetTransactionResult(ctx, &access.GetTransactionRequest{
+			Id:                   idBytes,
+			EventEncodingVersion: entities.EventEncodingVersion_JSON_CDC_V0,
+		})
+		return err
+	}); err != nil {
+		return nil, err
+	}
+
+	result := &RawTransactionResult{
+		StatusCode:   uint(resp.StatusCode),
+		ErrorMessage: resp.ErrorMessage,
+		BlockHeight:  resp.BlockHeight,
+	}
+
+	// Map protobuf status to SDK status
+	switch resp.Status {
+	case entities.TransactionStatus_SEALED:
+		result.Status = flow.TransactionStatusSealed
+	case entities.TransactionStatus_EXECUTED:
+		result.Status = flow.TransactionStatusExecuted
+	case entities.TransactionStatus_FINALIZED:
+		result.Status = flow.TransactionStatusFinalized
+	case entities.TransactionStatus_PENDING:
+		result.Status = flow.TransactionStatusPending
+	case entities.TransactionStatus_EXPIRED:
+		result.Status = flow.TransactionStatusExpired
+	default:
+		result.Status = flow.TransactionStatusUnknown
+	}
+
+	for _, evt := range resp.Events {
+		result.Events = append(result.Events, RawEvent{
+			Type:             evt.Type,
+			TransactionID:    hex.EncodeToString(evt.TransactionId),
+			TransactionIndex: evt.TransactionIndex,
+			EventIndex:       evt.EventIndex,
+			Payload:          evt.Payload,
+		})
+	}
+
+	return result, nil
+}
+
+// GetTransactionResultsByBlockIDRaw fetches ALL transaction results for a block using raw gRPC
+// with JSON-CDC encoding, completely bypassing the SDK's Cadence decoder.
+// This is the bulk equivalent of GetTransactionResultRaw — one RPC call instead of N.
+func (p *PinnedClient) GetTransactionResultsByBlockIDRaw(ctx context.Context, blockID flow.Identifier) ([]*RawTransactionResult, error) {
+	if p.idx < 0 || p.idx >= len(p.parent.rawClients) || p.parent.rawClients[p.idx] == nil {
+		return nil, fmt.Errorf("raw gRPC client not available for node %s", p.node)
+	}
+
+	rawCli := p.parent.rawClients[p.idx]
+	idBytes, _ := hex.DecodeString(blockID.String())
+
+	var resp *access.TransactionResultsResponse
+	if err := p.withRetry(ctx, func() error {
+		var err error
+		resp, err = rawCli.GetTransactionResultsByBlockID(ctx, &access.GetTransactionsByBlockIDRequest{
+			BlockId:              idBytes,
+			EventEncodingVersion: entities.EventEncodingVersion_JSON_CDC_V0,
+		})
+		return err
+	}); err != nil {
+		return nil, err
+	}
+
+	results := make([]*RawTransactionResult, 0, len(resp.TransactionResults))
+	for _, tr := range resp.TransactionResults {
+		r := &RawTransactionResult{
+			StatusCode:   uint(tr.StatusCode),
+			ErrorMessage: tr.ErrorMessage,
+			BlockHeight:  tr.BlockHeight,
+		}
+		switch tr.Status {
+		case entities.TransactionStatus_SEALED:
+			r.Status = flow.TransactionStatusSealed
+		case entities.TransactionStatus_EXECUTED:
+			r.Status = flow.TransactionStatusExecuted
+		case entities.TransactionStatus_FINALIZED:
+			r.Status = flow.TransactionStatusFinalized
+		case entities.TransactionStatus_PENDING:
+			r.Status = flow.TransactionStatusPending
+		case entities.TransactionStatus_EXPIRED:
+			r.Status = flow.TransactionStatusExpired
+		default:
+			r.Status = flow.TransactionStatusUnknown
+		}
+		for _, evt := range tr.Events {
+			r.Events = append(r.Events, RawEvent{
+				Type:             evt.Type,
+				TransactionID:    hex.EncodeToString(evt.TransactionId),
+				TransactionIndex: evt.TransactionIndex,
+				EventIndex:       evt.EventIndex,
+				Payload:          evt.Payload,
+			})
+		}
+		results = append(results, r)
+	}
+	return results, nil
+}
+
 func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn func() error) error {
 	maxRetries := 8
 	backoff := 500 * time.Millisecond
@@ -792,11 +951,11 @@ var mainnetSporkRootHeights = map[int]uint64{
 	20: 40171634,
 	21: 44950207,
 	22: 47169687,
-	23: 47194634,
-	24: 53376277,
-	25: 55114467,
-	26: 65264629,
-	27: 85981135,
+	23: 55114467,
+	24: 65264619,
+	25: 85981135,
+	26: 88226267,
+	27: 130290659,
 	28: 137390146,
 }
 
@@ -840,6 +999,13 @@ func (c *Client) Close() error {
 	for _, client := range c.grpcClients {
 		if err := client.Close(); err != nil && firstErr == nil {
 			firstErr = err
+		}
+	}
+	for _, conn := range c.rawConns {
+		if conn != nil {
+			if err := conn.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
 	return firstErr
