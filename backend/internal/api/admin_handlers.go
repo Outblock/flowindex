@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"flowscan-clone/internal/models"
@@ -77,6 +78,122 @@ func (s *Server) handleAdminRefetchTokenMetadata(w http.ResponseWriter, r *http.
 		"nft_missing": len(nftMissing),
 		"nft_updated": nftUpdated,
 		"nft_failed":  nftFailed,
+	})
+}
+
+// handleAdminBatchFetchMetadata fetches metadata for all FT tokens and NFT collections
+// that are missing metadata, using up to 20 concurrent goroutines.
+func (s *Server) handleAdminBatchFetchMetadata(w http.ResponseWriter, r *http.Request) {
+	if s.client == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "no Flow client configured")
+		return
+	}
+
+	ctx := r.Context()
+	const maxConcurrency = 20
+
+	ftMissing, err := s.repo.ListFTTokensMissingMetadata(ctx, 500)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	nftMissing, err := s.repo.ListNFTCollectionsMissingMetadata(ctx, 500)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	type detail struct {
+		Identifier string `json:"identifier"`
+		Type       string `json:"type"`
+		Status     string `json:"status"`
+		Error      string `json:"error,omitempty"`
+	}
+
+	// Process FT tokens concurrently.
+	var ftMu sync.Mutex
+	ftUpdated := 0
+	ftFailed := 0
+	var details []detail
+	sem := make(chan struct{}, maxConcurrency)
+	var wg sync.WaitGroup
+
+	for _, t := range ftMissing {
+		wg.Add(1)
+		go func(t models.FTToken) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			id := fmt.Sprintf("A.%s.%s", t.ContractAddress, t.ContractName)
+			md, ok := fetchFTMetadataViaClient(ctx, s.client, t.ContractAddress, t.ContractName)
+			if !ok {
+				ftMu.Lock()
+				ftFailed++
+				details = append(details, detail{Identifier: id, Type: "ft", Status: "failed", Error: "metadata not available"})
+				ftMu.Unlock()
+				return
+			}
+			if err := s.repo.UpsertFTTokens(ctx, []models.FTToken{md}); err != nil {
+				log.Printf("[admin] ft upsert error %s: %v", id, err)
+				ftMu.Lock()
+				ftFailed++
+				details = append(details, detail{Identifier: id, Type: "ft", Status: "failed", Error: err.Error()})
+				ftMu.Unlock()
+				return
+			}
+			ftMu.Lock()
+			ftUpdated++
+			details = append(details, detail{Identifier: id, Type: "ft", Status: "updated"})
+			ftMu.Unlock()
+		}(t)
+	}
+	wg.Wait()
+
+	// Process NFT collections concurrently.
+	nftUpdated := 0
+	nftFailed := 0
+	for _, c := range nftMissing {
+		wg.Add(1)
+		go func(c models.NFTCollection) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			id := fmt.Sprintf("A.%s.%s", c.ContractAddress, c.ContractName)
+			md, ok := fetchNFTCollectionMetadataViaClient(ctx, s.client, c.ContractAddress, c.ContractName)
+			if !ok {
+				ftMu.Lock()
+				nftFailed++
+				details = append(details, detail{Identifier: id, Type: "nft", Status: "failed", Error: "metadata not available"})
+				ftMu.Unlock()
+				return
+			}
+			if err := s.repo.UpsertNFTCollections(ctx, []models.NFTCollection{md}); err != nil {
+				log.Printf("[admin] nft upsert error %s: %v", id, err)
+				ftMu.Lock()
+				nftFailed++
+				details = append(details, detail{Identifier: id, Type: "nft", Status: "failed", Error: err.Error()})
+				ftMu.Unlock()
+				return
+			}
+			ftMu.Lock()
+			nftUpdated++
+			details = append(details, detail{Identifier: id, Type: "nft", Status: "updated"})
+			ftMu.Unlock()
+		}(c)
+	}
+	wg.Wait()
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ft_total":    len(ftMissing),
+		"ft_updated":  ftUpdated,
+		"ft_failed":   ftFailed,
+		"nft_total":   len(nftMissing),
+		"nft_updated": nftUpdated,
+		"nft_failed":  nftFailed,
+		"details":     details,
 	})
 }
 

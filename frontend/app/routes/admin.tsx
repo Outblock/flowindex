@@ -180,6 +180,7 @@ function FTPanel({ token }: { token: string }) {
   const [loaded, setLoaded] = useState(false)
   const [page, setPage] = useState(1)
   const [hasNext, setHasNext] = useState(false)
+  const [fetchingMetadata, setFetchingMetadata] = useState(false)
 
   const doSearch = useCallback(async (p = page) => {
     setLoading(true)
@@ -203,12 +204,38 @@ function FTPanel({ token }: { token: string }) {
   const handlePageChange = (p: number) => { setPage(p); doSearch(p) }
   const handleVerifiedChange = (v: string) => { setVerified(v); setPage(1); setTimeout(() => doSearch(1), 0) }
 
+  const handleBatchFetchMetadata = async () => {
+    setFetchingMetadata(true)
+    try {
+      const data = await adminFetch('admin/batch-fetch-metadata', token, { method: 'POST' })
+      const msg = `FT: ${data.ft_updated}/${data.ft_total} updated, NFT: ${data.nft_updated}/${data.nft_total} updated`
+      if (data.ft_updated > 0 || data.nft_updated > 0) {
+        toast.success(msg)
+      } else {
+        toast(msg, { icon: '\u2139\uFE0F' })
+      }
+      doSearch(page)
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setFetchingMetadata(false)
+    }
+  }
+
   useEffect(() => { doSearch(1) }, [token]) // auto-load on mount
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <div className="flex-1"><SearchBar value={search} onChange={setSearch} onSearch={handleSearch} loading={loading} /></div>
+        <button
+          onClick={handleBatchFetchMetadata}
+          disabled={fetchingMetadata}
+          className="flex items-center gap-2 px-4 py-2 border border-zinc-200 dark:border-white/10 text-xs uppercase tracking-widest font-mono text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+        >
+          {fetchingMetadata ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Fetch Missing
+        </button>
         <VerifiedFilter value={verified} onChange={handleVerifiedChange} />
       </div>
       {loaded && items.length === 0 && (

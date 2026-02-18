@@ -28,26 +28,32 @@ import (
 // advancing the checkpoint. This prevents silently skipping ranges that the backward
 // ingester hasn't filled yet.
 type HistoryDeriver struct {
-	repo       *repository.Repository
-	processors []Processor
-	chunkSize  uint64
-	sleepMs    int
+	repo        *repository.Repository
+	processors  []Processor
+	chunkSize   uint64
+	sleepMs     int
+	concurrency int
 }
 
 type HistoryDeriverConfig struct {
-	ChunkSize uint64
-	SleepMs   int // milliseconds between chunks (throttle DB load)
+	ChunkSize   uint64
+	SleepMs     int // milliseconds between chunks (throttle DB load)
+	Concurrency int // number of chunks to process concurrently (default 1)
 }
 
 func NewHistoryDeriver(repo *repository.Repository, processors []Processor, cfg HistoryDeriverConfig) *HistoryDeriver {
 	if cfg.ChunkSize == 0 {
 		cfg.ChunkSize = 1000
 	}
+	if cfg.Concurrency < 1 {
+		cfg.Concurrency = 1
+	}
 	return &HistoryDeriver{
-		repo:       repo,
-		processors: processors,
-		chunkSize:  cfg.ChunkSize,
-		sleepMs:    cfg.SleepMs,
+		repo:        repo,
+		processors:  processors,
+		chunkSize:   cfg.ChunkSize,
+		sleepMs:     cfg.SleepMs,
+		concurrency: cfg.Concurrency,
 	}
 }
 
@@ -61,7 +67,7 @@ func (h *HistoryDeriver) Start(ctx context.Context) {
 		log.Printf("[history_deriver] Disabled: no processors configured")
 		return
 	}
-	log.Printf("[history_deriver] Starting (processors=%d chunk=%d)", len(h.processors), h.chunkSize)
+	log.Printf("[history_deriver] Starting (processors=%d chunk=%d concurrency=%d)", len(h.processors), h.chunkSize, h.concurrency)
 	go h.run(ctx)
 }
 
@@ -121,6 +127,8 @@ func (h *HistoryDeriver) processNext(ctx context.Context) (bool, error) {
 }
 
 // processUpward scans from the upCursor toward the async worker ceiling.
+// When concurrency > 1, it dispatches up to N chunks in parallel and
+// advances the checkpoint to the highest contiguous success from scanFrom.
 func (h *HistoryDeriver) processUpward(ctx context.Context) (bool, error) {
 	upCursor, err := h.repo.GetLastIndexedHeight(ctx, historyDeriverUpCheckpoint)
 	if err != nil {
@@ -154,44 +162,93 @@ func (h *HistoryDeriver) processUpward(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	scanTo := scanFrom + h.chunkSize
-	if scanTo > ceiling {
-		scanTo = ceiling
+	// Build up to N chunk ranges.
+	type chunkRange struct {
+		from, to uint64
+		index    int
+	}
+	var chunks []chunkRange
+	cursor := scanFrom
+	for i := 0; i < h.concurrency && cursor < ceiling; i++ {
+		chunkTo := cursor + h.chunkSize
+		if chunkTo > ceiling {
+			chunkTo = ceiling
+		}
+		chunks = append(chunks, chunkRange{from: cursor, to: chunkTo, index: i})
+		cursor = chunkTo
 	}
 
-	// Guard: verify raw blocks actually exist in this range before processing.
-	// If the backward ingester hasn't filled this range yet, don't advance —
-	// we'd silently skip these blocks and never come back.
-	hasBlocks, err := h.repo.HasBlocksInRange(ctx, scanFrom, scanTo)
+	if len(chunks) == 0 {
+		return false, nil
+	}
+
+	// Guard: verify raw blocks exist in the first chunk. If the backward
+	// ingester hasn't filled this range yet, don't attempt any chunks.
+	hasBlocks, err := h.repo.HasBlocksInRange(ctx, chunks[0].from, chunks[0].to)
 	if err != nil {
 		return false, err
 	}
 	if !hasBlocks {
-		// Log once per large gap to avoid spam.
 		if scanFrom%100000 < h.chunkSize {
-			log.Printf("[history_deriver] UP: no raw blocks in [%d,%d), waiting for backward ingester", scanFrom, scanTo)
+			log.Printf("[history_deriver] UP: no raw blocks in [%d,%d), waiting for backward ingester", chunks[0].from, chunks[0].to)
 		}
-		return false, nil // Don't advance checkpoint; retry later.
+		return false, nil
 	}
 
-	if err := h.runProcessors(ctx, scanFrom, scanTo); err != nil {
-		log.Printf("[history_deriver] UP: processors failed for [%d,%d): %v — NOT advancing checkpoint", scanFrom, scanTo, err)
-		return false, nil // Don't advance; will retry this range next iteration.
+	// Process chunks concurrently.
+	results := make([]error, len(chunks))
+	var wg sync.WaitGroup
+	for _, c := range chunks {
+		wg.Add(1)
+		go func(cr chunkRange) {
+			defer wg.Done()
+			if ctx.Err() != nil {
+				results[cr.index] = ctx.Err()
+				return
+			}
+			// Check that raw blocks exist for non-first chunks too.
+			if cr.index > 0 {
+				has, err := h.repo.HasBlocksInRange(ctx, cr.from, cr.to)
+				if err != nil {
+					results[cr.index] = err
+					return
+				}
+				if !has {
+					results[cr.index] = fmt.Errorf("no raw blocks in [%d,%d)", cr.from, cr.to)
+					return
+				}
+			}
+			results[cr.index] = h.runProcessors(ctx, cr.from, cr.to)
+		}(c)
+	}
+	wg.Wait()
+
+	// Find highest contiguous success from the start.
+	advanceTo := scanFrom
+	for i, c := range chunks {
+		if results[i] != nil {
+			log.Printf("[history_deriver] UP: chunk [%d,%d) failed: %v — stopping at %d", c.from, c.to, results[i], advanceTo)
+			break
+		}
+		advanceTo = c.to
 	}
 
-	if err := h.repo.UpdateCheckpoint(ctx, historyDeriverUpCheckpoint, scanTo); err != nil {
-		log.Printf("[history_deriver] Failed to update up checkpoint: %v", err)
+	if advanceTo > scanFrom {
+		if err := h.repo.UpdateCheckpoint(ctx, historyDeriverUpCheckpoint, advanceTo); err != nil {
+			log.Printf("[history_deriver] Failed to update up checkpoint: %v", err)
+		}
+		if advanceTo%100000 < h.chunkSize*uint64(h.concurrency) {
+			log.Printf("[history_deriver] Progress UP: processed to %d (ceiling=%d, chunks=%d)", advanceTo, ceiling, len(chunks))
+		}
+		return true, nil
 	}
 
-	if scanTo%100000 < h.chunkSize {
-		log.Printf("[history_deriver] Progress UP: processed to %d (ceiling=%d)", scanTo, ceiling)
-	}
-
-	return true, nil
+	return false, nil
 }
 
 // processDownward scans from the downCursor toward the current minRaw.
 // As the history ingester fills blocks going backward, minRaw decreases.
+// When concurrency > 1, it dispatches up to N chunks in parallel.
 func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 	downCursor, err := h.repo.GetLastIndexedHeight(ctx, historyDeriverDownCheckpoint)
 	if err != nil {
@@ -222,16 +279,28 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	// Process the lowest unprocessed chunk: [minRaw, minRaw + chunkSize)
-	// We scan upward from minRaw toward downCursor.
-	scanFrom := minRaw
-	scanTo := scanFrom + h.chunkSize
-	if scanTo > downCursor {
-		scanTo = downCursor
+	// Build up to N chunk ranges scanning upward from minRaw toward downCursor.
+	type chunkRange struct {
+		from, to uint64
+		index    int
+	}
+	var chunks []chunkRange
+	cursor := minRaw
+	for i := 0; i < h.concurrency && cursor < downCursor; i++ {
+		chunkTo := cursor + h.chunkSize
+		if chunkTo > downCursor {
+			chunkTo = downCursor
+		}
+		chunks = append(chunks, chunkRange{from: cursor, to: chunkTo, index: i})
+		cursor = chunkTo
 	}
 
-	// Guard: verify raw blocks actually exist in this range.
-	hasBlocks, err := h.repo.HasBlocksInRange(ctx, scanFrom, scanTo)
+	if len(chunks) == 0 {
+		return false, nil
+	}
+
+	// Guard: verify raw blocks exist in the first chunk.
+	hasBlocks, err := h.repo.HasBlocksInRange(ctx, chunks[0].from, chunks[0].to)
 	if err != nil {
 		return false, err
 	}
@@ -239,25 +308,58 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	if err := h.runProcessors(ctx, scanFrom, scanTo); err != nil {
-		log.Printf("[history_deriver] DOWN: processors failed for [%d,%d): %v — NOT advancing checkpoint", scanFrom, scanTo, err)
-		return false, nil // Don't advance; will retry this range next iteration.
+	// Process chunks concurrently.
+	results := make([]error, len(chunks))
+	var wg sync.WaitGroup
+	for _, c := range chunks {
+		wg.Add(1)
+		go func(cr chunkRange) {
+			defer wg.Done()
+			if ctx.Err() != nil {
+				results[cr.index] = ctx.Err()
+				return
+			}
+			if cr.index > 0 {
+				has, err := h.repo.HasBlocksInRange(ctx, cr.from, cr.to)
+				if err != nil {
+					results[cr.index] = err
+					return
+				}
+				if !has {
+					results[cr.index] = fmt.Errorf("no raw blocks in [%d,%d)", cr.from, cr.to)
+					return
+				}
+			}
+			results[cr.index] = h.runProcessors(ctx, cr.from, cr.to)
+		}(c)
 	}
+	wg.Wait()
 
-	// Advance by closing the gap between minRaw and downCursor.
-	if scanTo >= downCursor {
-		// Gap fully closed. Move downCursor to minRaw so next check picks up
-		// any newly filled blocks below.
-		if err := h.repo.UpdateCheckpoint(ctx, historyDeriverDownCheckpoint, minRaw); err != nil {
-			log.Printf("[history_deriver] Failed to update down checkpoint: %v", err)
+	// Find highest contiguous success.
+	advanceTo := minRaw
+	for i, c := range chunks {
+		if results[i] != nil {
+			log.Printf("[history_deriver] DOWN: chunk [%d,%d) failed: %v — stopping at %d", c.from, c.to, results[i], advanceTo)
+			break
 		}
+		advanceTo = c.to
 	}
 
-	if scanTo%100000 < h.chunkSize {
-		log.Printf("[history_deriver] Progress DOWN: processed [%d,%d) (downCursor=%d)", scanFrom, scanTo, downCursor)
+	if advanceTo > minRaw {
+		// If we've closed the entire gap, move downCursor to minRaw.
+		if advanceTo >= downCursor {
+			if err := h.repo.UpdateCheckpoint(ctx, historyDeriverDownCheckpoint, minRaw); err != nil {
+				log.Printf("[history_deriver] Failed to update down checkpoint: %v", err)
+			}
+		}
+
+		if advanceTo%100000 < h.chunkSize*uint64(h.concurrency) {
+			log.Printf("[history_deriver] Progress DOWN: processed to %d (downCursor=%d, chunks=%d)", advanceTo, downCursor, len(chunks))
+		}
+		return true, nil
 	}
 
-	return true, nil
+	return false, nil
 }
 
 // isDeadlock checks if an error is a PostgreSQL deadlock (SQLSTATE 40P01).

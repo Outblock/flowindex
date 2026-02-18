@@ -269,6 +269,7 @@ func main() {
 	enableHistoryDerivers := os.Getenv("ENABLE_HISTORY_DERIVERS") != "false"
 	historyDeriverChunk := getEnvUint("HISTORY_DERIVERS_CHUNK", 1000)
 	historyDeriverSleep := getEnvInt("HISTORY_DERIVERS_SLEEP_MS", 0)
+	historyDeriverConcurrency := getEnvInt("HISTORY_DERIVERS_CONCURRENCY", 1)
 
 	var historyDeriver *ingester.HistoryDeriver
 	var onHistoryIndexedRange ingester.RangeCallback
@@ -317,8 +318,9 @@ func main() {
 		// Including them would serialize and block history derivation for ~1-2min per range.
 
 		historyDeriver = ingester.NewHistoryDeriver(repo, histProcessors, ingester.HistoryDeriverConfig{
-			ChunkSize: historyDeriverChunk,
-			SleepMs:   historyDeriverSleep,
+			ChunkSize:   historyDeriverChunk,
+			SleepMs:     historyDeriverSleep,
+			Concurrency: historyDeriverConcurrency,
 		})
 
 		// Also create a live-style deriver for real-time processing of new history batches.
