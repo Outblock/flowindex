@@ -231,9 +231,9 @@ func main() {
 		if enableMetaWorker {
 			processors = append(processors, ingester.NewMetaWorker(repo, flowClient))
 		}
-		if enableTokenMetadataWorker {
-			processors = append(processors, ingester.NewTokenMetadataWorker(repo, flowClient))
-		}
+		// NOTE: token_metadata_worker is intentionally excluded from live_deriver.
+		// It calls on-chain scripts (~2s per range) and would block real-time processing.
+		// Metadata is fetched by history_deriver instead.
 		if enableTxMetricsWorker {
 			processors = append(processors, ingester.NewTxMetricsWorker(repo))
 		}
@@ -432,7 +432,7 @@ func main() {
 		liveDeriver.Start(ctx)
 
 		// Optional: seed the last N blocks so the UI has data immediately after deploy.
-		headBackfillBlocks := getEnvUint("LIVE_DERIVERS_HEAD_BACKFILL_BLOCKS", metaWorkerRange)
+		headBackfillBlocks := getEnvUint("LIVE_DERIVERS_HEAD_BACKFILL_BLOCKS", 100)
 		if headBackfillBlocks > 0 {
 			go func() {
 				// Give the ingester a moment to start and the DB to warm up.
