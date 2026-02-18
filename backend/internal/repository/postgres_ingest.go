@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -20,6 +21,19 @@ import (
 func sanitizeNull(s string) string {
 	if strings.ContainsRune(s, 0) {
 		return strings.ReplaceAll(s, "\x00", "")
+	}
+	return s
+}
+
+// sanitizeJSONB sanitizes a json.RawMessage for PostgreSQL JSONB insertion.
+// Removes null bytes, then validates JSON. Returns nil if invalid/empty.
+func sanitizeJSONB(raw json.RawMessage) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	s := sanitizeNull(string(raw))
+	if !json.Valid([]byte(s)) {
+		return nil
 	}
 	return s
 }
@@ -455,7 +469,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					return sanitizeNull(s)
 				}
 				return scriptInline
-			}(), sanitizeNull(string(t.Arguments)),
+			}(), sanitizeJSONB(t.Arguments),
 				t.Status, func() any {
 					if strings.TrimSpace(t.ErrorMessage) == "" {
 						return nil
@@ -517,7 +531,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 
 					var payload any
 					if len(e.Payload) > 0 {
-						payload = sanitizeNull(string(e.Payload))
+						payload = sanitizeJSONB(e.Payload)
 					}
 
 					return []any{
