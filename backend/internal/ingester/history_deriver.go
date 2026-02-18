@@ -2,7 +2,9 @@ package ingester
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -172,7 +174,10 @@ func (h *HistoryDeriver) processUpward(ctx context.Context) (bool, error) {
 		return false, nil // Don't advance checkpoint; retry later.
 	}
 
-	h.runProcessors(ctx, scanFrom, scanTo)
+	if err := h.runProcessors(ctx, scanFrom, scanTo); err != nil {
+		log.Printf("[history_deriver] UP: processors failed for [%d,%d): %v — NOT advancing checkpoint", scanFrom, scanTo, err)
+		return false, nil // Don't advance; will retry this range next iteration.
+	}
 
 	if err := h.repo.UpdateCheckpoint(ctx, historyDeriverUpCheckpoint, scanTo); err != nil {
 		log.Printf("[history_deriver] Failed to update up checkpoint: %v", err)
@@ -234,7 +239,10 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	h.runProcessors(ctx, scanFrom, scanTo)
+	if err := h.runProcessors(ctx, scanFrom, scanTo); err != nil {
+		log.Printf("[history_deriver] DOWN: processors failed for [%d,%d): %v — NOT advancing checkpoint", scanFrom, scanTo, err)
+		return false, nil // Don't advance; will retry this range next iteration.
+	}
 
 	// Advance by closing the gap between minRaw and downCursor.
 	if scanTo >= downCursor {
@@ -252,21 +260,33 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// isDeadlock checks if an error is a PostgreSQL deadlock (SQLSTATE 40P01).
+func isDeadlock(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "deadlock detected") || strings.Contains(msg, "40P01")
+}
+
+const maxDeadlockRetries = 3
+
 // runProcessors executes processors concurrently for the given range.
 // Processors that depend on others (ft_holdings_worker depends on token_worker,
 // nft_ownership_worker depends on token_worker) run after their dependencies complete.
-func (h *HistoryDeriver) runProcessors(ctx context.Context, from, to uint64) {
+// Returns an error if any processor fails after retries.
+func (h *HistoryDeriver) runProcessors(ctx context.Context, from, to uint64) error {
 	if ctx.Err() != nil {
-		return
+		return ctx.Err()
 	}
 
 	// Split processors into two phases:
 	// Phase 1: all processors except those that depend on token_worker output
 	// Phase 2: processors that need token_worker to finish first
 	dependsOnToken := map[string]bool{
-		"ft_holdings_worker":    true,
-		"nft_ownership_worker":  true,
-		"daily_balance_worker":  true,
+		"ft_holdings_worker":   true,
+		"nft_ownership_worker": true,
+		"daily_balance_worker": true,
 	}
 
 	var phase1, phase2 []Processor
@@ -278,7 +298,10 @@ func (h *HistoryDeriver) runProcessors(ctx context.Context, from, to uint64) {
 		}
 	}
 
-	runParallel := func(processors []Processor) {
+	runParallel := func(processors []Processor) error {
+		var mu sync.Mutex
+		var errs []string
+
 		var wg sync.WaitGroup
 		for _, p := range processors {
 			wg.Add(1)
@@ -288,21 +311,56 @@ func (h *HistoryDeriver) runProcessors(ctx context.Context, from, to uint64) {
 					return
 				}
 				began := time.Now()
-				if err := proc.ProcessRange(ctx, from, to); err != nil {
-					log.Printf("[history_deriver] %s range [%d,%d) failed: %v", proc.Name(), from, to, err)
-					_ = h.repo.LogIndexingError(ctx, proc.Name(), from, "", "HISTORY_DERIVER_ERROR", err.Error(), nil)
+
+				var lastErr error
+				for attempt := 1; attempt <= maxDeadlockRetries; attempt++ {
+					lastErr = proc.ProcessRange(ctx, from, to)
+					if lastErr == nil {
+						break
+					}
+					if !isDeadlock(lastErr) {
+						break // non-deadlock error, don't retry
+					}
+					if attempt < maxDeadlockRetries {
+						log.Printf("[history_deriver] %s range [%d,%d) deadlock (attempt %d/%d), retrying...",
+							proc.Name(), from, to, attempt, maxDeadlockRetries)
+						select {
+						case <-ctx.Done():
+							return
+						case <-time.After(time.Duration(attempt*500) * time.Millisecond):
+						}
+					}
+				}
+
+				if lastErr != nil {
+					log.Printf("[history_deriver] %s range [%d,%d) failed: %v", proc.Name(), from, to, lastErr)
+					_ = h.repo.LogIndexingError(ctx, proc.Name(), from, "", "HISTORY_DERIVER_ERROR", lastErr.Error(), nil)
+					mu.Lock()
+					errs = append(errs, fmt.Sprintf("%s: %v", proc.Name(), lastErr))
+					mu.Unlock()
 					return
 				}
+
 				if dur := time.Since(began); dur > 2*time.Second {
 					log.Printf("[history_deriver] %s range [%d,%d) took %s", proc.Name(), from, to, dur)
 				}
 			}(p)
 		}
 		wg.Wait()
+
+		if len(errs) > 0 {
+			return fmt.Errorf("%d processor(s) failed: %s", len(errs), strings.Join(errs, "; "))
+		}
+		return nil
 	}
 
-	runParallel(phase1)
-	runParallel(phase2)
+	if err := runParallel(phase1); err != nil {
+		return fmt.Errorf("phase1: %w", err)
+	}
+	if err := runParallel(phase2); err != nil {
+		return fmt.Errorf("phase2: %w", err)
+	}
+	return nil
 }
 
 func (h *HistoryDeriver) findWorkerFloor(ctx context.Context) (uint64, error) {

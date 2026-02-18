@@ -863,6 +863,72 @@ func (s *Server) handleAdminResetTokenWorker(w http.ResponseWriter, r *http.Requ
 	}, nil, nil)
 }
 
+// handleAdminResetHistoryDeriver resets history_deriver checkpoints to a given height.
+// POST /admin/reset-history-deriver  {"height": 123000000}
+// This allows re-processing of blocks that were skipped due to processor failures.
+func (s *Server) handleAdminResetHistoryDeriver(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Height uint64 `json:"height"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Height == 0 {
+		writeAPIError(w, http.StatusBadRequest, "height is required and must be > 0")
+		return
+	}
+
+	ctx := r.Context()
+
+	// Reset both UP and DOWN cursors.
+	if err := s.repo.UpdateCheckpoint(ctx, "history_deriver", req.Height); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "reset history_deriver: "+err.Error())
+		return
+	}
+	if err := s.repo.UpdateCheckpoint(ctx, "history_deriver_down", req.Height); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "reset history_deriver_down: "+err.Error())
+		return
+	}
+
+	log.Printf("[admin] Reset history_deriver UP and DOWN checkpoints to %d", req.Height)
+
+	writeAPIResponse(w, map[string]interface{}{
+		"reset_to_height": req.Height,
+		"message":         fmt.Sprintf("history_deriver checkpoints reset to %d. It will re-process from there.", req.Height),
+	}, nil, nil)
+}
+
+// handleAdminResolveErrors marks indexing errors as resolved for a given worker.
+// POST /admin/resolve-errors  {"worker": "accounts_worker"}
+func (s *Server) handleAdminResolveErrors(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Worker string `json:"worker"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Worker == "" {
+		writeAPIError(w, http.StatusBadRequest, "worker is required")
+		return
+	}
+
+	ctx := r.Context()
+	count, err := s.repo.ResolveErrorsByWorker(ctx, req.Worker)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	log.Printf("[admin] Resolved %d errors for worker %s", count, req.Worker)
+
+	writeAPIResponse(w, map[string]interface{}{
+		"worker":   req.Worker,
+		"resolved": count,
+	}, nil, nil)
+}
+
 // handleAdminListErrors returns unresolved indexing errors with optional worker filter.
 // GET /admin/errors?worker=accounts_worker&limit=100
 func (s *Server) handleAdminListErrors(w http.ResponseWriter, r *http.Request) {

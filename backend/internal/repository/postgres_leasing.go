@@ -643,3 +643,15 @@ func (r *Repository) GetErrorSummary(ctx context.Context) (*ErrorSummary, error)
 	}
 	return s, rows2.Err()
 }
+
+// ResolveErrorsByWorker marks all unresolved errors for a given worker as resolved.
+func (r *Repository) ResolveErrorsByWorker(ctx context.Context, workerName string) (int64, error) {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE raw.indexing_errors
+		SET resolved = TRUE
+		WHERE worker_name = $1 AND resolved = FALSE`, workerName)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
