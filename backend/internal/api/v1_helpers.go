@@ -231,6 +231,8 @@ func parseTokenParam(token string) (address, name string) {
 func toFlowBlockOutput(b models.Block) map[string]interface{} {
 	return map[string]interface{}{
 		"id":                 b.ID,
+		"parent_id":          b.ParentID,
+		"parent_hash":        b.ParentID, // backward-compatible alias used by frontend
 		"height":             b.Height,
 		"timestamp":          b.Timestamp.UTC().Format(time.RFC3339),
 		"tx":                 b.TxCount,
@@ -259,24 +261,24 @@ func toFlowTransactionOutput(t models.Transaction, events []models.Event, contra
 		evOut = append(evOut, toFlowEventOutput(e))
 	}
 	out := map[string]interface{}{
-		"id":                         t.ID,
-		"block_height":               t.BlockHeight,
-		"transaction_index":          t.TransactionIndex,
-		"timestamp":                  t.Timestamp.UTC().Format(time.RFC3339),
-		"payer":                      formatAddressV1(t.PayerAddress),
-		"proposer":                   formatAddressV1(t.ProposerAddress),
-		"proposer_key_index":         t.ProposerKeyIndex,
-		"proposer_sequence_number":   t.ProposerSequenceNumber,
-		"authorizers":                formatAddressListV1(t.Authorizers),
-		"status":                     t.Status,
-		"error":                      t.ErrorMessage,
-		"gas_used":                   t.GasUsed,
-		"event_count":                t.EventCount,
-		"events":                     evOut,
-		"contract_imports":           contracts,
-		"contract_outputs":           []string{},
-		"tags":                       tags,
-		"fee":                        fee,
+		"id":                       t.ID,
+		"block_height":             t.BlockHeight,
+		"transaction_index":        t.TransactionIndex,
+		"timestamp":                t.Timestamp.UTC().Format(time.RFC3339),
+		"payer":                    formatAddressV1(t.PayerAddress),
+		"proposer":                 formatAddressV1(t.ProposerAddress),
+		"proposer_key_index":       t.ProposerKeyIndex,
+		"proposer_sequence_number": t.ProposerSequenceNumber,
+		"authorizers":              formatAddressListV1(t.Authorizers),
+		"status":                   t.Status,
+		"error":                    t.ErrorMessage,
+		"gas_used":                 t.GasUsed,
+		"event_count":              t.EventCount,
+		"events":                   evOut,
+		"contract_imports":         contracts,
+		"contract_outputs":         []string{},
+		"tags":                     tags,
+		"fee":                      fee,
 	}
 	if t.Script != "" {
 		out["script"] = t.Script
@@ -326,17 +328,17 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 	}
 	identifier := formatTokenIdentifier(address, name)
 	out := map[string]interface{}{
-		"id":            identifier,
-		"address":       formatAddressV1(address),
-		"contract_name": name,
-		"name":          token.Name,
-		"symbol":        token.Symbol,
-		"decimals":      token.Decimals,
-		"holder_count":    token.HolderCount,
-		"transfer_count":  token.TransferCount,
-		"evm_address":     token.EVMAddress,
-		"evm_bridged":     token.EVMAddress != "",
-		"is_verified":     token.IsVerified,
+		"id":             identifier,
+		"address":        formatAddressV1(address),
+		"contract_name":  name,
+		"name":           token.Name,
+		"symbol":         token.Symbol,
+		"decimals":       token.Decimals,
+		"holder_count":   token.HolderCount,
+		"transfer_count": token.TransferCount,
+		"evm_address":    token.EVMAddress,
+		"evm_bridged":    token.EVMAddress != "",
+		"is_verified":    token.IsVerified,
 	}
 	if token.Description != "" {
 		out["description"] = token.Description
@@ -758,14 +760,14 @@ func collectTokenIdentifiers(summaries map[string]repository.TransferSummary) (f
 func toNFTItemOutput(item models.NFTItem) map[string]interface{} {
 	nftType := formatTokenIdentifier(item.ContractAddress, item.ContractName)
 	out := map[string]interface{}{
-		"id":            item.NFTID,
-		"nft_id":        item.NFTID,
-		"nft_type":      nftType,
-		"name":          item.Name,
-		"description":   item.Description,
-		"thumbnail":     item.Thumbnail,
-		"external_url":  item.ExternalURL,
-		"updated_at":    formatTime(item.UpdatedAt),
+		"id":           item.NFTID,
+		"nft_id":       item.NFTID,
+		"nft_type":     nftType,
+		"name":         item.Name,
+		"description":  item.Description,
+		"thumbnail":    item.Thumbnail,
+		"external_url": item.ExternalURL,
+		"updated_at":   formatTime(item.UpdatedAt),
 	}
 	if item.SerialNumber != nil {
 		out["serial_number"] = *item.SerialNumber
