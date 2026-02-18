@@ -273,42 +273,44 @@ func main() {
 	var historyDeriver *ingester.HistoryDeriver
 	var onHistoryIndexedRange ingester.RangeCallback
 	if enableHistoryDerivers {
+		// HISTORY_DERIVERS_EXCLUDE: comma-separated list of processor names to skip
+		// in the history deriver (e.g., "token_metadata_worker,daily_balance_worker").
+		histExcludeSet := map[string]bool{}
+		if excl := os.Getenv("HISTORY_DERIVERS_EXCLUDE"); excl != "" {
+			for _, name := range strings.Split(excl, ",") {
+				name = strings.TrimSpace(name)
+				if name != "" {
+					histExcludeSet[name] = true
+				}
+			}
+			log.Printf("History deriver excluding processors: %v", excl)
+		}
+
+		type procEntry struct {
+			name    string
+			enabled bool
+			create  func() ingester.Processor
+		}
+		allProcs := []procEntry{
+			{"token_worker", enableTokenWorker, func() ingester.Processor { return ingester.NewTokenWorker(repo) }},
+			{"evm_worker", enableEVMWorker, func() ingester.Processor { return ingester.NewEVMWorker(repo) }},
+			{"tx_contracts_worker", enableTxContractsWorker, func() ingester.Processor { return ingester.NewTxContractsWorker(repo) }},
+			{"accounts_worker", enableAccountsWorker, func() ingester.Processor { return ingester.NewAccountsWorker(repo) }},
+			{"meta_worker", enableMetaWorker, func() ingester.Processor { return ingester.NewMetaWorker(repo, flowClient) }},
+			{"token_metadata_worker", enableTokenMetadataWorker, func() ingester.Processor { return ingester.NewTokenMetadataWorker(repo, flowClient) }},
+			{"tx_metrics_worker", enableTxMetricsWorker, func() ingester.Processor { return ingester.NewTxMetricsWorker(repo) }},
+			{"staking_worker", enableStakingWorker, func() ingester.Processor { return ingester.NewStakingWorker(repo) }},
+			{"defi_worker", enableDefiWorker, func() ingester.Processor { return ingester.NewDefiWorker(repo) }},
+			{"ft_holdings_worker", enableFTHoldingsWorker, func() ingester.Processor { return ingester.NewFTHoldingsWorker(repo) }},
+			{"nft_ownership_worker", enableNFTOwnershipWorker, func() ingester.Processor { return ingester.NewNFTOwnershipWorker(repo) }},
+			{"daily_balance_worker", enableDailyBalanceWorker, func() ingester.Processor { return ingester.NewDailyBalanceWorker(repo) }},
+		}
+
 		var histProcessors []ingester.Processor
-		if enableTokenWorker {
-			histProcessors = append(histProcessors, ingester.NewTokenWorker(repo))
-		}
-		if enableEVMWorker {
-			histProcessors = append(histProcessors, ingester.NewEVMWorker(repo))
-		}
-		if enableTxContractsWorker {
-			histProcessors = append(histProcessors, ingester.NewTxContractsWorker(repo))
-		}
-		if enableAccountsWorker {
-			histProcessors = append(histProcessors, ingester.NewAccountsWorker(repo))
-		}
-		if enableMetaWorker {
-			histProcessors = append(histProcessors, ingester.NewMetaWorker(repo, flowClient))
-		}
-		if enableTokenMetadataWorker {
-			histProcessors = append(histProcessors, ingester.NewTokenMetadataWorker(repo, flowClient))
-		}
-		if enableTxMetricsWorker {
-			histProcessors = append(histProcessors, ingester.NewTxMetricsWorker(repo))
-		}
-		if enableStakingWorker {
-			histProcessors = append(histProcessors, ingester.NewStakingWorker(repo))
-		}
-		if enableDefiWorker {
-			histProcessors = append(histProcessors, ingester.NewDefiWorker(repo))
-		}
-		if enableFTHoldingsWorker {
-			histProcessors = append(histProcessors, ingester.NewFTHoldingsWorker(repo))
-		}
-		if enableNFTOwnershipWorker {
-			histProcessors = append(histProcessors, ingester.NewNFTOwnershipWorker(repo))
-		}
-		if enableDailyBalanceWorker {
-			histProcessors = append(histProcessors, ingester.NewDailyBalanceWorker(repo))
+		for _, p := range allProcs {
+			if p.enabled && !histExcludeSet[p.name] {
+				histProcessors = append(histProcessors, p.create())
+			}
 		}
 		// NOTE: nft_item_metadata_worker and nft_ownership_reconciler are NOT included here.
 		// They are queue-based (ignore block heights) and run as standalone async workers.
