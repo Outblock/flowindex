@@ -477,6 +477,113 @@ func (r *Repository) UpsertTokenTransfers(ctx context.Context, transfers []model
 	return nil
 }
 
+// IndexingError represents a single row from raw.indexing_errors.
+type IndexingError struct {
+	ID           int64   `json:"id"`
+	WorkerName   string  `json:"worker_name"`
+	BlockHeight  *int64  `json:"block_height"`
+	TransactionID string `json:"transaction_id,omitempty"`
+	ErrorHash    string  `json:"error_hash,omitempty"`
+	ErrorMessage string  `json:"error_message"`
+	Severity     string  `json:"severity"`
+	Resolved     bool    `json:"resolved"`
+	CreatedAt    string  `json:"created_at"`
+}
+
+// ListIndexingErrors returns unresolved errors, optionally filtered by worker.
+func (r *Repository) ListIndexingErrors(ctx context.Context, workerName string, limit int) ([]IndexingError, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	var query string
+	var args []interface{}
+	if workerName != "" {
+		query = `SELECT id, worker_name, block_height, COALESCE(transaction_id,''), COALESCE(error_hash,''), error_message, severity, resolved, created_at
+			FROM raw.indexing_errors
+			WHERE resolved = FALSE AND worker_name = $1
+			ORDER BY block_height ASC
+			LIMIT $2`
+		args = []interface{}{workerName, limit}
+	} else {
+		query = `SELECT id, worker_name, block_height, COALESCE(transaction_id,''), COALESCE(error_hash,''), error_message, severity, resolved, created_at
+			FROM raw.indexing_errors
+			WHERE resolved = FALSE
+			ORDER BY worker_name, block_height ASC
+			LIMIT $1`
+		args = []interface{}{limit}
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []IndexingError
+	for rows.Next() {
+		var e IndexingError
+		var ts interface{}
+		if err := rows.Scan(&e.ID, &e.WorkerName, &e.BlockHeight, &e.TransactionID, &e.ErrorHash, &e.ErrorMessage, &e.Severity, &e.Resolved, &ts); err != nil {
+			return nil, err
+		}
+		if t, ok := ts.(interface{ Format(string) string }); ok {
+			e.CreatedAt = t.Format("2006-01-02T15:04:05Z")
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// GetErrorMessageCounts returns the top N most common error messages for a worker.
+func (r *Repository) GetErrorMessageCounts(ctx context.Context, workerName string, limit int) ([]ErrorMessageCount, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	var query string
+	var args []interface{}
+	if workerName != "" {
+		query = `SELECT error_message, COUNT(*) as cnt, MIN(block_height) as min_h, MAX(block_height) as max_h
+			FROM raw.indexing_errors
+			WHERE resolved = FALSE AND worker_name = $1
+			GROUP BY error_message
+			ORDER BY cnt DESC
+			LIMIT $2`
+		args = []interface{}{workerName, limit}
+	} else {
+		query = `SELECT error_message, COUNT(*) as cnt, MIN(block_height) as min_h, MAX(block_height) as max_h
+			FROM raw.indexing_errors
+			WHERE resolved = FALSE
+			GROUP BY error_message
+			ORDER BY cnt DESC
+			LIMIT $1`
+		args = []interface{}{limit}
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ErrorMessageCount
+	for rows.Next() {
+		var e ErrorMessageCount
+		if err := rows.Scan(&e.Message, &e.Count, &e.MinHeight, &e.MaxHeight); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// ErrorMessageCount groups errors by message with count and affected height range.
+type ErrorMessageCount struct {
+	Message   string `json:"message"`
+	Count     int64  `json:"count"`
+	MinHeight *int64 `json:"min_height"`
+	MaxHeight *int64 `json:"max_height"`
+}
+
 // ErrorSummary holds per-worker error and dead-lease counts for the status endpoint.
 type ErrorSummary struct {
 	UnresolvedErrors     int64                      `json:"unresolved_errors"`

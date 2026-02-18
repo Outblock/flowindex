@@ -862,3 +862,35 @@ func (s *Server) handleAdminResetTokenWorker(w http.ResponseWriter, r *http.Requ
 		"message":               fmt.Sprintf("token_worker reset to height %d. It will re-process from there on next tick.", resetHeight),
 	}, nil, nil)
 }
+
+// handleAdminListErrors returns unresolved indexing errors with optional worker filter.
+// GET /admin/errors?worker=accounts_worker&limit=100
+func (s *Server) handleAdminListErrors(w http.ResponseWriter, r *http.Request) {
+	worker := r.URL.Query().Get("worker")
+	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if v, err := fmt.Sscanf(l, "%d", &limit); err != nil || v != 1 {
+			limit = 100
+		}
+	}
+
+	errors, err := s.repo.ListIndexingErrors(r.Context(), worker, limit)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	// Also get top error messages grouped
+	counts, err := s.repo.GetErrorMessageCounts(r.Context(), worker, 20)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	writeAPIResponse(w, map[string]interface{}{
+		"errors":         errors,
+		"message_counts": counts,
+		"total":          len(errors),
+		"filter_worker":  worker,
+	}, nil, nil)
+}
