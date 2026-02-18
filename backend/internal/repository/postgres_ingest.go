@@ -6,32 +6,37 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"flowscan-clone/internal/models"
 
 	"github.com/jackc/pgx/v5"
 )
 
-// sanitizeNull removes PostgreSQL-incompatible null bytes (\u0000) from strings.
-// Old blockchain data occasionally contains these in script text or error messages.
-func sanitizeNull(s string) string {
+// sanitizeForPG removes PostgreSQL-incompatible bytes from strings:
+// null bytes (\x00) and invalid UTF-8 sequences.
+func sanitizeForPG(s string) string {
 	if strings.ContainsRune(s, 0) {
-		return strings.ReplaceAll(s, "\x00", "")
+		s = strings.ReplaceAll(s, "\x00", "")
+	}
+	if !utf8.ValidString(s) {
+		s = strings.ToValidUTF8(s, "")
 	}
 	return s
 }
 
 // sanitizeJSONB sanitizes a json.RawMessage for PostgreSQL JSONB insertion.
-// Removes null bytes, then validates JSON. Returns nil if invalid/empty.
+// Removes null bytes and invalid UTF-8, then validates JSON. Returns nil if invalid/empty.
 func sanitizeJSONB(raw json.RawMessage) any {
 	if len(raw) == 0 {
 		return nil
 	}
-	s := sanitizeNull(string(raw))
+	s := sanitizeForPG(string(raw))
 	if !json.Valid([]byte(s)) {
 		return nil
 	}
@@ -444,6 +449,9 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				scriptInline = scriptInlines[i]
 			}
 
+			// Savepoint so a single bad tx doesn't abort the whole batch.
+			dbtx.Exec(ctx, "SAVEPOINT tx_insert")
+
 			_, err := dbtx.Exec(ctx, `
 				INSERT INTO raw.transactions (
 					block_height, id, transaction_index,
@@ -466,7 +474,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				hexToBytes(t.ProposerAddress), hexToBytes(t.PayerAddress), sliceHexToBytes(t.Authorizers),
 				scriptHash, func() any {
 				if s, ok := scriptInline.(string); ok {
-					return sanitizeNull(s)
+					return sanitizeForPG(s)
 				}
 				return scriptInline
 			}(), sanitizeJSONB(t.Arguments),
@@ -474,13 +482,16 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					if strings.TrimSpace(t.ErrorMessage) == "" {
 						return nil
 					}
-					return sanitizeNull(t.ErrorMessage)
+					return sanitizeForPG(t.ErrorMessage)
 				}(), t.IsEVM,
 				t.GasLimit, t.GasUsed, eventCount,
 				txTimestamp,
 			)
 			if err != nil {
-				return fmt.Errorf("failed to insert tx %s: %w", t.ID, err)
+				// Rollback to savepoint, log the error, and continue with remaining txs.
+				dbtx.Exec(ctx, "ROLLBACK TO SAVEPOINT tx_insert")
+				log.Printf("[ingest] Skipping tx %s at height %d: %v", t.ID, t.BlockHeight, err)
+				continue
 			}
 
 			// Insert into raw.tx_lookup (Atomic Lookup)
@@ -495,9 +506,13 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					hexToBytes(t.ID), t.BlockHeight, t.TransactionIndex, txTimestamp,
 				)
 				if err != nil {
-					return fmt.Errorf("failed to insert tx lookup %s: %w", t.ID, err)
+					dbtx.Exec(ctx, "ROLLBACK TO SAVEPOINT tx_insert")
+					log.Printf("[ingest] Skipping tx_lookup %s: %v", t.ID, err)
+					continue
 				}
 			}
+
+			dbtx.Exec(ctx, "RELEASE SAVEPOINT tx_insert")
 		}
 	}
 
@@ -580,12 +595,12 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 				ON CONFLICT (block_height, transaction_id, event_index) DO NOTHING`,
 				e.BlockHeight, hexToBytes(e.TransactionID), e.EventIndex,
-				e.TransactionIndex, e.Type, e.Payload,
+				e.TransactionIndex, e.Type, sanitizeJSONB(e.Payload),
 				hexToBytes(e.ContractAddress), e.EventName,
 				eventTimestamp,
 			)
 			if err != nil {
-				return fmt.Errorf("failed to insert event: %w", err)
+				return fmt.Errorf("failed to insert event %s idx=%d at height %d: %w", e.TransactionID, e.EventIndex, e.BlockHeight, err)
 			}
 		}
 	}
