@@ -272,8 +272,8 @@ function Stats() {
     const generatedAt = status?.generated_at ? new Date(status.generated_at) : new Date();
     const checkpoints = status?.checkpoints || {};
     const checkpointTimestamps = status?.checkpoint_timestamps || {};
-    // Live deriver phase 1: independent processors run in parallel
-    const liveDeriverPhase1 = [
+    // Deriver phase 1: independent processors run in parallel
+    const deriverPhase1 = [
         { key: 'token_worker', label: 'Token' },
         { key: 'evm_worker', label: 'EVM' },
         { key: 'tx_contracts_worker', label: 'TX Contracts' },
@@ -283,11 +283,15 @@ function Stats() {
         { key: 'staking_worker', label: 'Staking' },
         { key: 'defi_worker', label: 'DeFi' },
     ];
-    // Live deriver phase 2: depend on token_worker completing first
-    const liveDeriverPhase2 = [
+    // Deriver phase 2: depend on token_worker completing first
+    const deriverPhase2 = [
         { key: 'ft_holdings_worker', label: 'FT Holdings' },
         { key: 'nft_ownership_worker', label: 'NFT Ownership' },
         { key: 'daily_balance_worker', label: 'Daily Balance' },
+    ];
+    // History deriver also runs token_metadata_worker (excluded from live)
+    const historyOnlyWorkers = [
+        { key: 'token_metadata_worker', label: 'Token Metadata' },
     ];
     // Queue-based workers (not block-range driven)
     const queueWorkers = [
@@ -528,7 +532,23 @@ function Stats() {
                                     </span>
                                 </div>
 
-                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 relative z-10 mb-6">
+                                <div className="relative h-12 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-6 relative z-10">
+                                    <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${historyPercent}%` }}
+                                        transition={{ duration: 1, ease: "easeOut" }}
+                                        className="absolute h-full bg-blue-500"
+                                    />
+                                    {isHistoryActive && (
+                                        <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-30 mix-blend-overlay" />
+                                    )}
+                                    <div className="absolute inset-0 flex items-center justify-between px-4 text-[10px] uppercase font-mono tracking-widest font-bold">
+                                        <span className="text-white mix-blend-difference z-10">Oldest: #<NumberFlow value={historyHeight} /></span>
+                                        <span className="text-white mix-blend-difference z-10">Latest: #<NumberFlow value={latestHeight} /></span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
                                     <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
                                         <div className="text-zinc-500 dark:text-gray-400 text-[10px] uppercase tracking-wider mb-1">Backfilled Range</div>
                                         <div className="text-xl font-bold text-zinc-900 dark:text-white">
@@ -536,15 +556,12 @@ function Stats() {
                                         </div>
                                     </div>
                                     <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
-                                        <div className="text-zinc-500 dark:text-gray-400 text-[10px] uppercase tracking-wider mb-1">Oldest Indexed</div>
-                                        <div className="text-xl font-bold text-blue-500 font-mono">
-                                            #<NumberFlow value={historyHeight} />
+                                        <div className="text-zinc-500 dark:text-gray-400 text-[10px] uppercase tracking-wider mb-1">Oldest Block Date</div>
+                                        <div className="text-xl font-bold text-zinc-900 dark:text-white">
+                                            {status?.oldest_block_timestamp
+                                                ? new Date(status.oldest_block_timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                                                : '—'}
                                         </div>
-                                        {status?.oldest_block_timestamp && (
-                                            <div className="text-xs text-zinc-500 dark:text-gray-400 mt-1">
-                                                {new Date(status.oldest_block_timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                                            </div>
-                                        )}
                                     </div>
                                     <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
                                         <div className="text-zinc-500 dark:text-gray-400 text-[10px] uppercase tracking-wider mb-1">Sync Speed</div>
@@ -559,18 +576,6 @@ function Stats() {
                                             {historyEnabled ? formatDuration(historyEtaSeconds) : '—'}
                                         </div>
                                     </div>
-                                </div>
-
-                                <div className="relative h-2 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden z-10">
-                                    <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${historyPercent}%` }}
-                                        transition={{ duration: 1, ease: "easeOut" }}
-                                        className="absolute h-full bg-blue-500"
-                                    />
-                                    {isHistoryActive && (
-                                        <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-30 mix-blend-overlay" />
-                                    )}
                                 </div>
                             </div>
 
@@ -660,7 +665,7 @@ function Stats() {
                                     <div className="mb-3">
                                         <span className="text-[9px] text-zinc-400 uppercase tracking-wider font-bold">Phase 1</span>
                                         <div className="flex flex-wrap gap-2 mt-1.5">
-                                            {liveDeriverPhase1.map((w) => {
+                                            {deriverPhase1.map((w) => {
                                                 const h = checkpoints?.[w.key] || 0;
                                                 const behind = indexedHeight > h && h > 0 ? indexedHeight - h : 0;
                                                 const isCaughtUp = behind === 0 && h > 0;
@@ -692,7 +697,7 @@ function Stats() {
                                     <div>
                                         <span className="text-[9px] text-zinc-400 uppercase tracking-wider font-bold">Phase 2 <span className="text-zinc-300 dark:text-zinc-600 normal-case">(depends on Token)</span></span>
                                         <div className="flex flex-wrap gap-2 mt-1.5">
-                                            {liveDeriverPhase2.map((w) => {
+                                            {deriverPhase2.map((w) => {
                                                 const h = checkpoints?.[w.key] || 0;
                                                 const behind = indexedHeight > h && h > 0 ? indexedHeight - h : 0;
                                                 const isCaughtUp = behind === 0 && h > 0;
@@ -723,18 +728,32 @@ function Stats() {
                                 {/* Section 3: History Deriver */}
                                 {(() => {
                                     const upCursor = checkpoints?.['history_deriver'] || 0;
-                                    // Worker floor: the lowest checkpoint among all live-deriver processors
-                                    const allLiveWorkers = [...liveDeriverPhase1, ...liveDeriverPhase2];
-                                    const workerHeights = allLiveWorkers.map(w => checkpoints?.[w.key]).filter((h): h is number => typeof h === 'number' && h > 0);
-                                    const ceiling = workerHeights.length > 0 ? Math.min(...workerHeights) : indexedHeight;
-                                    const floor = checkpoints?.['history_ingester'] || minHeight || 0;
-                                    const totalRange = ceiling > floor ? ceiling - floor : 0;
-                                    const processed = upCursor > floor ? upCursor - floor : 0;
-                                    const hdProgress = totalRange > 0 ? Math.min(100, (processed / totalRange) * 100) : 0;
-                                    const hdSpeed = workerSpeeds['history_deriver'] || 0;
-                                    const remaining = ceiling > upCursor ? ceiling - upCursor : 0;
+                                    const downCursor = checkpoints?.['history_deriver_down'] || 0;
+                                    // Worker floor: the lowest checkpoint among core processors (same as backend findWorkerFloor)
+                                    const floorWorkers = ['token_worker', 'evm_worker', 'accounts_worker', 'meta_worker'];
+                                    const floorHeights = floorWorkers.map(k => checkpoints?.[k]).filter((h): h is number => typeof h === 'number' && h > 0);
+                                    const workerFloor = floorHeights.length > 0 ? Math.min(...floorHeights) : indexedHeight;
+                                    // History ingester's lowest point
+                                    const historyBottom = checkpoints?.['history_ingester'] || minHeight || 0;
+                                    // Total range that needs derivation: historyBottom → workerFloor
+                                    const totalGap = workerFloor > historyBottom ? workerFloor - historyBottom : 0;
+                                    // Covered: UP cursor covers [historyBottom, upCursor), DOWN cursor covers [downCursor, workerFloor)
+                                    const coveredUp = upCursor > historyBottom ? Math.min(upCursor, workerFloor) - historyBottom : 0;
+                                    const coveredDown = downCursor > 0 && downCursor < workerFloor ? workerFloor - downCursor : 0;
+                                    // Avoid double-counting overlap (if UP passed DOWN)
+                                    const covered = upCursor > 0 && downCursor > 0 && upCursor >= downCursor
+                                        ? Math.min(totalGap, workerFloor - historyBottom) // fully covered
+                                        : Math.min(totalGap, coveredUp + coveredDown);
+                                    const hdProgress = totalGap > 0 ? Math.min(100, (covered / totalGap) * 100) : (upCursor > 0 ? 100 : 0);
+                                    const hdSpeed = (workerSpeeds['history_deriver'] || 0) + (workerSpeeds['history_deriver_down'] || 0);
+                                    const remaining = totalGap - covered;
                                     const hdEta = hdSpeed > 0 && remaining > 0 ? remaining / hdSpeed : 0;
-                                    const hdStatus = upCursor === 0 ? 'IDLE' : remaining === 0 ? 'CAUGHT UP' : hdSpeed > 0 ? 'SYNCING' : 'STALLED';
+                                    const hdStatus = totalGap === 0 && upCursor > 0 ? 'CAUGHT UP'
+                                        : remaining === 0 && upCursor > 0 ? 'CAUGHT UP'
+                                        : hdSpeed > 0 ? 'SYNCING'
+                                        : upCursor > 0 || downCursor > 0 ? 'STALLED' : 'IDLE';
+                                    // All processors driven by history_deriver
+                                    const historyProcessors = [...deriverPhase1, ...deriverPhase2, ...historyOnlyWorkers];
                                     return (
                                         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
                                             <div className="flex items-center gap-3 mb-1">
@@ -749,19 +768,16 @@ function Stats() {
                                                 </div>
                                             </div>
                                             <p className="text-[10px] text-zinc-400 mb-4">
-                                                Backfill processing: UP cursor toward worker floor
+                                                Backfill: derives history blocks with same processors as live
                                                 <span className="text-zinc-300 dark:text-zinc-600 mx-1">|</span>
-                                                includes token_metadata_worker
+                                                UP #{upCursor.toLocaleString()} / DOWN #{downCursor.toLocaleString()}
                                             </p>
 
-                                            {/* Range display */}
+                                            {/* Range + Progress bar */}
                                             <div className="flex items-center justify-between text-xs font-mono text-zinc-500 mb-2">
-                                                <span>#{floor.toLocaleString()}</span>
-                                                <span className="text-pink-400 font-bold">#{upCursor.toLocaleString()}</span>
-                                                <span>#{ceiling.toLocaleString()}</span>
+                                                <span>#{historyBottom.toLocaleString()}</span>
+                                                <span>#{workerFloor.toLocaleString()}</span>
                                             </div>
-
-                                            {/* Progress bar */}
                                             <div className="relative h-4 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-4">
                                                 <motion.div
                                                     initial={{ width: 0 }}
@@ -778,10 +794,45 @@ function Stats() {
                                             </div>
 
                                             {/* Stats row */}
-                                            <div className="flex items-center gap-6 text-xs text-zinc-500 font-mono">
+                                            <div className="flex items-center gap-6 text-xs text-zinc-500 font-mono mb-4">
                                                 <span>Speed: <span className="text-zinc-900 dark:text-white"><NumberFlow value={hdSpeed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /> b/s</span></span>
                                                 <span>Remaining: <span className="text-zinc-900 dark:text-white">{remaining.toLocaleString()}</span></span>
                                                 <span>ETA: <span className="text-zinc-900 dark:text-white">{hdEta > 0 ? formatDuration(hdEta) : '—'}</span></span>
+                                            </div>
+
+                                            {/* Processor chips (same as live + token_metadata) */}
+                                            <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
+                                                <span className="text-[9px] text-zinc-400 uppercase tracking-wider font-bold">Processors</span>
+                                                <div className="flex flex-wrap gap-2 mt-1.5">
+                                                    {historyProcessors.map((w) => {
+                                                        const h = checkpoints?.[w.key] || 0;
+                                                        // For history context: compare to workerFloor (are they caught up to the forward tip?)
+                                                        const behind = indexedHeight > h && h > 0 ? indexedHeight - h : 0;
+                                                        const isCaughtUp = behind === 0 && h > 0;
+                                                        const isHistoryOnly = historyOnlyWorkers.some(hw => hw.key === w.key);
+                                                        return (
+                                                            <div
+                                                                key={w.key}
+                                                                className="group relative flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 rounded-sm text-xs hover:border-zinc-300 dark:hover:border-white/20 transition-colors cursor-default"
+                                                                title={`#${h.toLocaleString()} | Behind: ${behind.toLocaleString()}`}
+                                                            >
+                                                                <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${isCaughtUp ? 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]' : h > 0 ? 'bg-yellow-500 animate-pulse' : 'bg-zinc-400'}`} />
+                                                                <span className="text-zinc-700 dark:text-zinc-300 font-medium">{w.label}</span>
+                                                                {isHistoryOnly && <span className="text-[8px] text-pink-400 ml-0.5">*</span>}
+                                                                {behind > 0 && (
+                                                                    <span className="text-[9px] text-yellow-500 font-mono ml-0.5">-{behind > 99999 ? `${(behind / 1000).toFixed(0)}K` : behind.toLocaleString()}</span>
+                                                                )}
+                                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
+                                                                    <div className="bg-zinc-900 dark:bg-black text-white text-[10px] font-mono px-2.5 py-1.5 rounded shadow-lg whitespace-nowrap border border-white/10">
+                                                                        #{h.toLocaleString()}
+                                                                        {workerSpeeds[w.key] ? ` | ${workerSpeeds[w.key].toFixed(1)} b/s` : ''}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <p className="text-[9px] text-zinc-400 mt-2"><span className="text-pink-400">*</span> history-only (excluded from live deriver)</p>
                                             </div>
                                         </div>
                                     );
