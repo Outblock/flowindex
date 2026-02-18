@@ -286,6 +286,12 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		}
 	}
 
+	// Error summary (non-blocking — ok if it fails)
+	var errorSummary interface{}
+	if es, err := s.repo.GetErrorSummary(ctx); err == nil {
+		errorSummary = es
+	}
+
 	resp := map[string]interface{}{
 		"chain_id":               "flow",
 		"latest_height":          latestHeight,
@@ -311,6 +317,7 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"indexed_ranges":         indexedRanges,
 		"oldest_block_timestamp":    oldestBlockTimestamp,
 		"checkpoint_timestamps": checkpointTimestamps,
+		"error_summary":         errorSummary,
 	}
 
 	payload, err := json.Marshal(resp)

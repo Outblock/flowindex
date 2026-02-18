@@ -476,3 +476,63 @@ func (r *Repository) UpsertTokenTransfers(ctx context.Context, transfers []model
 	}
 	return nil
 }
+
+// ErrorSummary holds per-worker error and dead-lease counts for the status endpoint.
+type ErrorSummary struct {
+	UnresolvedErrors     int64                      `json:"unresolved_errors"`
+	DeadLeases           int64                      `json:"dead_leases"`
+	ErrorsByWorker       map[string]int64            `json:"errors_by_worker"`
+	DeadLeasesByWorker   map[string]int64            `json:"dead_leases_by_worker"`
+}
+
+// GetErrorSummary returns aggregate error/dead-lease counts for display.
+func (r *Repository) GetErrorSummary(ctx context.Context) (*ErrorSummary, error) {
+	s := &ErrorSummary{
+		ErrorsByWorker:     make(map[string]int64),
+		DeadLeasesByWorker: make(map[string]int64),
+	}
+
+	// Unresolved errors by worker
+	rows, err := r.db.Query(ctx, `
+		SELECT worker_name, COUNT(*)
+		FROM raw.indexing_errors
+		WHERE resolved = FALSE
+		GROUP BY worker_name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		var cnt int64
+		if err := rows.Scan(&name, &cnt); err != nil {
+			return nil, err
+		}
+		s.ErrorsByWorker[name] = cnt
+		s.UnresolvedErrors += cnt
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Dead leases by worker
+	rows2, err := r.db.Query(ctx, `
+		SELECT worker_type, COUNT(*)
+		FROM app.worker_leases
+		WHERE status = 'FAILED' AND attempt >= 20
+		GROUP BY worker_type`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var name string
+		var cnt int64
+		if err := rows2.Scan(&name, &cnt); err != nil {
+			return nil, err
+		}
+		s.DeadLeasesByWorker[name] = cnt
+		s.DeadLeases += cnt
+	}
+	return s, rows2.Err()
+}

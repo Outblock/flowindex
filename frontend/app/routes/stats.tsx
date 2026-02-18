@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Activity, HardDrive, Server, Layers, Info, Square } from 'lucide-react';
+import { Database, Activity, HardDrive, Server, Layers, Info, Square, AlertTriangle } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured, fetchStatus as fetchStatusApi, fetchGcpVmStatus } from '../api/heyapi';
 
@@ -616,19 +616,20 @@ function Stats() {
                                     </span>
                                 </div>
 
-                                <div className="relative h-12 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-6 relative z-10">
+                                <div className="relative h-12 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-6 z-10">
+                                    {/* Bar fills from right — history goes backward, so covered area is on the right side */}
                                     <motion.div
                                         initial={{ width: 0 }}
                                         animate={{ width: `${historyPercent}%` }}
                                         transition={{ duration: 1, ease: "easeOut" }}
-                                        className="absolute h-full bg-blue-500"
+                                        className="absolute h-full bg-blue-500 right-0"
                                     />
                                     {isHistoryActive && (
                                         <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-30 mix-blend-overlay" />
                                     )}
                                     <div className="absolute inset-0 flex items-center justify-between px-4 text-[10px] uppercase font-mono tracking-widest font-bold">
-                                        <span className="text-white mix-blend-difference z-10">Oldest: #<NumberFlow value={historyHeight} /></span>
-                                        <span className="text-white mix-blend-difference z-10">Latest: #<NumberFlow value={latestHeight} /></span>
+                                        <span className="text-white mix-blend-difference z-10">Target: #0</span>
+                                        <span className="text-white mix-blend-difference z-10">Frontier: #<NumberFlow value={historyHeight} /></span>
                                     </div>
                                 </div>
 
@@ -987,6 +988,50 @@ function Stats() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Error Summary */}
+                            {(() => {
+                                const es = status?.error_summary;
+                                if (!es) return null;
+                                const totalErrors = es.unresolved_errors || 0;
+                                const totalDead = es.dead_leases || 0;
+                                if (totalErrors === 0 && totalDead === 0) return null;
+                                const errorsByWorker = es.errors_by_worker || {};
+                                const deadByWorker = es.dead_leases_by_worker || {};
+                                return (
+                                    <div className={`border p-6 rounded-sm shadow-sm dark:shadow-none mb-6 ${totalDead > 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-500/30' : 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-500/30'}`}>
+                                        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <AlertTriangle className={`h-3.5 w-3.5 ${totalDead > 0 ? 'text-red-500' : 'text-yellow-500'}`} />
+                                            Indexing Errors
+                                        </h2>
+                                        <div className="grid grid-cols-2 gap-4 mb-4">
+                                            <div className="p-3 bg-white/50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-sm">
+                                                <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Unresolved Errors</div>
+                                                <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400 font-mono">{totalErrors}</div>
+                                            </div>
+                                            <div className="p-3 bg-white/50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-sm">
+                                                <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Dead Leases (20+ retries)</div>
+                                                <div className={`text-xl font-bold font-mono ${totalDead > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-white'}`}>{totalDead}</div>
+                                            </div>
+                                        </div>
+                                        {/* Per-worker breakdown */}
+                                        <div className="flex flex-wrap gap-2">
+                                            {Object.entries(errorsByWorker).map(([worker, count]) => (
+                                                <div key={`err-${worker}`} className="flex items-center gap-1.5 px-2 py-1 bg-white/50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-sm text-xs">
+                                                    <span className="text-zinc-500">{worker.replace(/_/g, ' ')}</span>
+                                                    <span className="text-yellow-600 dark:text-yellow-400 font-mono font-bold">{String(count)}</span>
+                                                </div>
+                                            ))}
+                                            {Object.entries(deadByWorker).map(([worker, count]) => (
+                                                <div key={`dead-${worker}`} className="flex items-center gap-1.5 px-2 py-1 bg-red-100/50 dark:bg-red-950/30 border border-red-200 dark:border-red-500/20 rounded-sm text-xs">
+                                                    <span className="text-zinc-500">{worker.replace(/_/g, ' ')}</span>
+                                                    <span className="text-red-600 dark:text-red-400 font-mono font-bold">{String(count)} dead</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Metadata */}
                             <div className="grid grid-cols-2 gap-4">
