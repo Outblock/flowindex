@@ -234,7 +234,8 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 			strings.Contains(evtType, ".FlowIDTableStaking.TokensUnstaked") ||
 			strings.Contains(evtType, ".FlowIDTableStaking.TokensCommitted") ||
 			strings.Contains(evtType, ".FlowIDTableStaking.RewardsPaid") ||
-			strings.Contains(evtType, ".FlowIDTableStaking.DelegatorRewardsPaid"):
+			strings.Contains(evtType, ".FlowIDTableStaking.DelegatorRewardsPaid") ||
+			strings.Contains(evtType, "FlowStakingCollection"):
 			addTag(evt.TransactionID, "STAKING")
 		case strings.Contains(evtType, "LiquidStaking") ||
 			strings.Contains(evtType, "stFlowToken"):
