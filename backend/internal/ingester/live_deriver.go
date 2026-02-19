@@ -86,6 +86,7 @@ func (d *LiveDeriver) Start(ctx context.Context) {
 		d.processorTimeoutMs,
 	)
 	go d.run(ctx)
+	go d.repairFailedRanges(ctx)
 }
 
 // NotifyRange schedules a half-open height range [fromHeight, toHeight) for derivation.
@@ -335,4 +336,99 @@ func getEnvIntDefaultLD(key string, def int) int {
 		return def
 	}
 	return n
+}
+
+// repairFailedRanges scans raw.indexing_errors for unresolved processor failures
+// and re-runs the corresponding processor to fill data gaps. This handles gaps
+// caused by deploys, restarts, and transient timeouts.
+func (d *LiveDeriver) repairFailedRanges(ctx context.Context) {
+	// Wait a bit after startup to let the system stabilize before doing repair work.
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(30 * time.Second):
+	}
+
+	// Build processor lookup map.
+	procMap := make(map[string]Processor)
+	for _, p := range d.processors {
+		procMap[p.Name()] = p
+	}
+
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		repaired := 0
+		for name, proc := range procMap {
+			if ctx.Err() != nil {
+				return
+			}
+			blocks, err := d.repo.ListUnresolvedErrorsByWorker(ctx, name, 500)
+			if err != nil {
+				log.Printf("[repair] Failed to list errors for %s: %v", name, err)
+				continue
+			}
+			if len(blocks) == 0 {
+				continue
+			}
+			log.Printf("[repair] %s: found %d failed block(s) to repair (%d..%d)",
+				name, len(blocks), blocks[0].BlockHeight, blocks[len(blocks)-1].BlockHeight)
+
+			// Group consecutive blocks into ranges for batch processing.
+			ranges := groupConsecutiveBlocks(blocks, 100)
+			for _, rng := range ranges {
+				if ctx.Err() != nil {
+					return
+				}
+				procCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+				err := safeProcessRangeLive(procCtx, proc, rng[0], rng[1])
+				cancel()
+				if err != nil {
+					log.Printf("[repair] %s range [%d,%d) failed: %v — will retry later", name, rng[0], rng[1], err)
+					// Don't mark as resolved; next cycle will pick it up again.
+					time.Sleep(2 * time.Second) // Back off on failure.
+					continue
+				}
+				// Mark all errors in this range as resolved.
+				resolved, _ := d.repo.ResolveErrorsInRange(ctx, name, rng[0], rng[1])
+				repaired += int(resolved)
+				log.Printf("[repair] %s range [%d,%d) repaired (%d errors resolved)", name, rng[0], rng[1], resolved)
+				time.Sleep(500 * time.Millisecond) // Gentle pacing.
+			}
+		}
+		if repaired == 0 {
+			// No more work; sleep longer before checking again.
+			log.Printf("[repair] No unresolved errors found, sleeping 5 minutes")
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Minute):
+			}
+		} else {
+			log.Printf("[repair] Repaired %d error(s) this cycle, checking for more...", repaired)
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+// groupConsecutiveBlocks groups failed blocks into [from, to) ranges.
+// maxGap controls how far apart two blocks can be to still be grouped together.
+func groupConsecutiveBlocks(blocks []repository.FailedBlock, maxGap uint64) [][2]uint64 {
+	if len(blocks) == 0 {
+		return nil
+	}
+	var ranges [][2]uint64
+	from := blocks[0].BlockHeight
+	prev := blocks[0].BlockHeight
+	for _, b := range blocks[1:] {
+		if b.BlockHeight-prev > maxGap {
+			// End current range, start new one.
+			ranges = append(ranges, [2]uint64{from, prev + 10}) // +10 because live_deriver chunk=10
+			from = b.BlockHeight
+		}
+		prev = b.BlockHeight
+	}
+	ranges = append(ranges, [2]uint64{from, prev + 10})
+	return ranges
 }

@@ -693,6 +693,54 @@ type SkippedRange struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+// FailedBlock represents a processor failure at a specific block height.
+type FailedBlock struct {
+	ID          int64
+	BlockHeight uint64
+}
+
+// ListUnresolvedErrorsByWorker returns unresolved block heights for a given worker.
+// Results are ordered by block_height ASC and deduplicated.
+func (r *Repository) ListUnresolvedErrorsByWorker(ctx context.Context, workerName string, limit int) ([]FailedBlock, error) {
+	if limit <= 0 {
+		limit = 5000
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT MIN(id) AS id, block_height
+		FROM raw.indexing_errors
+		WHERE worker_name = $1 AND resolved = FALSE
+		GROUP BY block_height
+		ORDER BY block_height ASC
+		LIMIT $2`, workerName, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []FailedBlock
+	for rows.Next() {
+		var f FailedBlock
+		if err := rows.Scan(&f.ID, &f.BlockHeight); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// ResolveErrorsInRange marks errors as resolved for a specific worker and block range.
+func (r *Repository) ResolveErrorsInRange(ctx context.Context, workerName string, fromHeight, toHeight uint64) (int64, error) {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE raw.indexing_errors
+		SET resolved = TRUE
+		WHERE worker_name = $1 AND block_height >= $2 AND block_height < $3 AND resolved = FALSE`,
+		workerName, fromHeight, toHeight)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 // ListSkippedRanges returns unresolved LIVE_DERIVER_SKIPPED errors.
 func (r *Repository) ListSkippedRanges(ctx context.Context, workerName string) ([]SkippedRange, error) {
 	query := `
