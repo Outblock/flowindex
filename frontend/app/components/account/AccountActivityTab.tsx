@@ -118,7 +118,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     // Transactions state
     const [transactions, setTransactions] = useState<any[]>(() => dedup(initialTransactions));
     const [currentPage, setCurrentPage] = useState(1);
-    const [txLoading, setTxLoading] = useState(false);
+    const [txLoading, setTxLoading] = useState(() => initialTransactions.length === 0);
     const [txCursors, setTxCursors] = useState<Record<number, string>>(() => {
         const init: Record<number, string> = { 1: '' };
         if (initialNextCursor) init[2] = initialNextCursor;
@@ -441,7 +441,21 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
 
             {/* === Unified Activity Feed === */}
             <div className="overflow-x-auto min-h-[200px] relative">
-                {isLoading && (filterMode === 'all' ? true : (filterMode === 'ft' ? ftTransfers.length === 0 : filterMode === 'nft' ? nftTransfers.length === 0 : scheduledTxs.length === 0)) && (
+                {isLoading && (filterMode === 'all' ? transactions.length === 0 : (filterMode === 'ft' ? ftTransfers.length === 0 : filterMode === 'nft' ? nftTransfers.length === 0 : scheduledTxs.length === 0)) && (
+                    <div className="space-y-0">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-zinc-100 dark:border-white/5 animate-pulse">
+                                <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+                                <div className="flex-1 space-y-2">
+                                    <div className="h-3 w-48 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                                    <div className="h-2.5 w-32 bg-zinc-100 dark:bg-zinc-800/60 rounded" />
+                                </div>
+                                <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {isLoading && (filterMode === 'all' ? transactions.length > 0 : true) && (filterMode === 'ft' ? ftTransfers.length > 0 : filterMode === 'nft' ? nftTransfers.length > 0 : filterMode === 'scheduled' ? scheduledTxs.length > 0 : true) && (
                     <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
                         <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin" />
                     </div>

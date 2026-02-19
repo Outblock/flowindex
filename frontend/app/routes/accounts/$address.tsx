@@ -97,33 +97,9 @@ export const Route = createFileRoute('/accounts/$address')({
                 _rpcUnavailable: accountPayload?._rpcUnavailable || false,
             };
 
-            // Only prefetch transactions when on the activity/all tab (no subtab)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let initialTransactions: any[] = [];
-            let initialNextCursor = '';
-            const activeTab = (search as any)?.tab;
-            const activeSubtab = (search as any)?.subtab;
-            const shouldPrefetchTxs = (!activeTab || activeTab === 'activity') && !activeSubtab;
-            if (shouldPrefetchTxs) {
-                try {
-                    const txRes = await getFlowV1AccountByAddressTransaction({ path: { address: normalized }, query: { offset: 0, limit: 20 } });
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const payload: any = txRes.data;
-                    const items = payload?.data ?? [];
-                    initialNextCursor = items.length >= 20 ? '20' : '';
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    initialTransactions = (items || []).map((tx: any) => ({
-                        ...tx,
-                        payer: tx.payer_address || tx.payer || tx.proposer_address,
-                        proposer: tx.proposer_address || tx.proposer,
-                        blockHeight: tx.block_height
-                    }));
-                } catch (e) {
-                    console.error("Failed to prefetch transactions", e);
-                }
-            }
-
-            return { account: initialAccount, initialTransactions, initialNextCursor, isCOA: false };
+            // Transactions are loaded client-side by AccountActivityTab to avoid
+            // blocking the entire page render on a potentially slow query.
+            return { account: initialAccount, initialTransactions: [], initialNextCursor: '', isCOA: false };
         } catch (e) {
             // Re-throw redirects (e.g. COA → Flow address redirect)
             if (isRedirect(e)) throw e;
