@@ -141,7 +141,8 @@ func (r *Repository) BulkUpsertTxContracts(ctx context.Context, rows []models.Tx
 
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO app.tx_contracts (transaction_id, contract_identifier, source)
-		SELECT transaction_id, contract_identifier, source FROM tmp_tx_contracts
+		SELECT DISTINCT ON (transaction_id, contract_identifier) transaction_id, contract_identifier, source
+		FROM tmp_tx_contracts
 		ON CONFLICT (transaction_id, contract_identifier) DO UPDATE SET
 			source = EXCLUDED.source`); err != nil {
 		return fmt.Errorf("upsert tx contracts: %w", err)
@@ -189,7 +190,8 @@ func (r *Repository) BulkUpsertTxTags(ctx context.Context, rows []models.TxTag) 
 
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO app.tx_tags (transaction_id, tag)
-		SELECT transaction_id, tag FROM tmp_tx_tags
+		SELECT DISTINCT ON (transaction_id, tag) transaction_id, tag
+		FROM tmp_tx_tags
 		ON CONFLICT (transaction_id, tag) DO NOTHING`); err != nil {
 		return fmt.Errorf("upsert tx tags: %w", err)
 	}

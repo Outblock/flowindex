@@ -682,3 +682,43 @@ func (r *Repository) ResolveErrorsByWorker(ctx context.Context, workerName strin
 	}
 	return tag.RowsAffected(), nil
 }
+
+// SkippedRange represents a processor range that was skipped by live_deriver.
+type SkippedRange struct {
+	ID           int64  `json:"id"`
+	WorkerName   string `json:"worker_name"`
+	BlockHeight  int64  `json:"block_height"`
+	RangeEnd     string `json:"range_end"`
+	ErrorMessage string `json:"error_message"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// ListSkippedRanges returns unresolved LIVE_DERIVER_SKIPPED errors.
+func (r *Repository) ListSkippedRanges(ctx context.Context, workerName string) ([]SkippedRange, error) {
+	query := `
+		SELECT id, worker_name, block_height, COALESCE(transaction_id, ''), error_message, created_at::text
+		FROM raw.indexing_errors
+		WHERE error_hash = 'LIVE_DERIVER_SKIPPED' AND resolved = FALSE`
+	args := []interface{}{}
+	if workerName != "" {
+		query += ` AND worker_name = $1`
+		args = append(args, workerName)
+	}
+	query += ` ORDER BY block_height ASC LIMIT 1000`
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []SkippedRange
+	for rows.Next() {
+		var s SkippedRange
+		if err := rows.Scan(&s.ID, &s.WorkerName, &s.BlockHeight, &s.RangeEnd, &s.ErrorMessage, &s.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}

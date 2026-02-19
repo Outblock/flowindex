@@ -1046,6 +1046,23 @@ func (s *Server) handleAdminResolveErrors(w http.ResponseWriter, r *http.Request
 	}, nil, nil)
 }
 
+// handleAdminListSkippedRanges returns unresolved LIVE_DERIVER_SKIPPED errors.
+// GET /admin/skipped-ranges?worker=tx_contracts_worker
+func (s *Server) handleAdminListSkippedRanges(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	worker := r.URL.Query().Get("worker")
+
+	rows, err := s.repo.ListSkippedRanges(ctx, worker)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, map[string]interface{}{
+		"skipped_ranges": rows,
+		"count":          len(rows),
+	}, nil, nil)
+}
+
 // handleAdminRedirectHistoryIngester resets the history_ingester checkpoint to a
 // specific height so it starts backfilling downward from there. This is used to
 // fill raw block gaps between the history ingester's current position and the

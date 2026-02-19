@@ -33,6 +33,7 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin.HandleFunc("/reset-history-deriver", s.handleAdminResetHistoryDeriver).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/redirect-history-ingester", s.handleAdminRedirectHistoryIngester).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/resolve-errors", s.handleAdminResolveErrors).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/skipped-ranges", s.handleAdminListSkippedRanges).Methods("GET", "OPTIONS")
 }
 
 func registerAPIRoutes(r *mux.Router, s *Server) {

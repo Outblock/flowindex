@@ -300,8 +300,14 @@ func (d *LiveDeriver) processRetries(ctx context.Context) {
 				})
 				d.retryMu.Unlock()
 			} else {
-				log.Printf("[live_deriver] Giving up on %s [%d,%d) after %d attempts — async worker will backfill",
+				log.Printf("[live_deriver] Giving up on %s [%d,%d) after %d attempts — logged as SKIPPED for reindex",
 					item.processor.Name(), item.from, item.to, maxLiveRetries)
+				// Persist the skipped range so it can be queried and reprocessed later.
+				_ = d.repo.LogIndexingError(ctx, item.processor.Name(), item.from,
+					fmt.Sprintf("range_end=%d", item.to),
+					"LIVE_DERIVER_SKIPPED",
+					fmt.Sprintf("gave up after %d retries: %v", maxLiveRetries, err),
+					nil)
 			}
 		} else {
 			log.Printf("[live_deriver] Retry succeeded for %s [%d,%d)", item.processor.Name(), item.from, item.to)

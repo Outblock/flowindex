@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -32,12 +33,38 @@ func NewRepository(dbURL string) (*Repository, error) {
 		}
 	}
 
+	// Prevent stale connections from surviving across deployments.
+	// MaxConnLifetime ensures connections are recycled periodically.
+	config.MaxConnLifetime = 30 * time.Minute
+	config.MaxConnIdleTime = 5 * time.Minute
+
+	// Set per-connection PostgreSQL parameters to auto-kill orphaned queries/transactions.
+	// - statement_timeout: kill any single query that runs longer than 5 minutes
+	// - idle_in_transaction_session_timeout: kill connections idle inside a transaction
+	//   for more than 2 minutes (prevents lock-holding ghosts after deploys)
+	if config.ConnConfig.RuntimeParams == nil {
+		config.ConnConfig.RuntimeParams = map[string]string{}
+	}
+	if _, ok := config.ConnConfig.RuntimeParams["statement_timeout"]; !ok {
+		config.ConnConfig.RuntimeParams["statement_timeout"] = getEnvDefault("DB_STATEMENT_TIMEOUT", "300000") // 5 min
+	}
+	if _, ok := config.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"]; !ok {
+		config.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"] = getEnvDefault("DB_IDLE_TX_TIMEOUT", "120000") // 2 min
+	}
+
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to database: %w", err)
 	}
 
 	return &Repository{db: pool}, nil
+}
+
+func getEnvDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 func (r *Repository) Migrate(schemaPath string) error {
