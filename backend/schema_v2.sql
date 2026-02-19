@@ -666,6 +666,12 @@ CREATE TABLE IF NOT EXISTS app.tx_contracts (
     PRIMARY KEY (transaction_id, contract_identifier)
 );
 
+CREATE TABLE IF NOT EXISTS app.script_imports (
+    script_hash         VARCHAR(64) NOT NULL,
+    contract_identifier TEXT NOT NULL,
+    PRIMARY KEY (script_hash, contract_identifier)
+);
+
 CREATE TABLE IF NOT EXISTS app.tx_tags (
     transaction_id BYTEA NOT NULL,
     tag            TEXT NOT NULL,

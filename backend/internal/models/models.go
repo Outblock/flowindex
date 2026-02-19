@@ -312,6 +312,12 @@ type TxContract struct {
 	Source             string `json:"source"`
 }
 
+// ScriptImport represents app.script_imports — one row per unique (script_hash, contract_identifier).
+type ScriptImport struct {
+	ScriptHash         string `json:"script_hash"`
+	ContractIdentifier string `json:"contract_identifier"`
+}
+
 // TxTag represents app.tx_tags
 type TxTag struct {
 	TransactionID string `json:"transaction_id"`
