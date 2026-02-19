@@ -904,10 +904,11 @@ func (r *Repository) GetTxContractsByTransactionIDs(ctx context.Context, txIDs [
 		return map[string][]string{}, nil
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(t.id, 'hex') AS transaction_id, si.contract_identifier
-		FROM raw.transactions t
+		SELECT encode(tl.id, 'hex') AS transaction_id, si.contract_identifier
+		FROM raw.tx_lookup tl
+		JOIN raw.transactions t ON t.id = tl.id AND t.block_height = tl.block_height
 		JOIN app.script_imports si ON si.script_hash = t.script_hash
-		WHERE t.id = ANY($1)`, sliceHexToBytes(txIDs))
+		WHERE tl.id = ANY($1)`, sliceHexToBytes(txIDs))
 	if err != nil {
 		return nil, err
 	}
