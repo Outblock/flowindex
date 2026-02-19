@@ -108,54 +108,75 @@ type txMetric struct {
 }
 
 func (r *Repository) loadTxMetrics(ctx context.Context, from, to int64) (map[txMetricKey]txMetric, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT block_height, encode(transaction_id, 'hex') AS transaction_id, type, payload
+	metrics := make(map[txMetricKey]txMetric)
+
+	// Step 1: event counts per transaction (lightweight — no payload transfer).
+	countRows, err := r.db.Query(ctx, `
+		SELECT block_height, encode(transaction_id, 'hex') AS transaction_id, COUNT(*) AS cnt
 		FROM raw.events
 		WHERE block_height BETWEEN $1 AND $2
-		ORDER BY block_height, transaction_id`, from, to)
+		GROUP BY block_height, transaction_id`, from, to)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer countRows.Close()
 
-	metrics := make(map[txMetricKey]txMetric)
-	for rows.Next() {
+	for countRows.Next() {
 		var height int64
-		var txID, typ string
+		var txID string
+		var cnt int
+		if err := countRows.Scan(&height, &txID, &cnt); err != nil {
+			return nil, err
+		}
+		metrics[txMetricKey{Height: height, ID: txID}] = txMetric{Count: cnt}
+	}
+	if err := countRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Step 2: fee data — only fetch payload for fee events (~14% of rows, ~5% of payload bytes).
+	feeRows, err := r.db.Query(ctx, `
+		SELECT block_height, encode(transaction_id, 'hex') AS transaction_id, payload
+		FROM raw.events
+		WHERE block_height BETWEEN $1 AND $2
+		  AND LOWER(type) LIKE '%flowfees.feesdeducted%'`, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer feeRows.Close()
+
+	for feeRows.Next() {
+		var height int64
+		var txID string
 		var payload []byte
-		if err := rows.Scan(&height, &txID, &typ, &payload); err != nil {
+		if err := feeRows.Scan(&height, &txID, &payload); err != nil {
 			return nil, err
 		}
 		key := txMetricKey{Height: height, ID: txID}
 		m := metrics[key]
-		m.Count++
-		if isFeeEventType(typ) {
-			var obj interface{}
-			if err := json.Unmarshal(payload, &obj); err == nil {
-				if fee, ok := findNumericField(obj, map[string]bool{"amount": true}); ok {
-					m.FeeAmount += fee
-				}
-				if inc, ok := findNumericField(obj, map[string]bool{"inclusioneffort": true}); ok {
-					m.InclusionEffort = inc
-				}
-				if exec, ok := findNumericField(obj, map[string]bool{"executioneffort": true}); ok {
-					m.ExecutionEffort = exec
-					if exec > 0 {
-						m.GasUsed = executionEffortToGas(exec)
-					}
+		var obj interface{}
+		if err := json.Unmarshal(payload, &obj); err == nil {
+			if fee, ok := findNumericField(obj, map[string]bool{"amount": true}); ok {
+				m.FeeAmount += fee
+			}
+			if inc, ok := findNumericField(obj, map[string]bool{"inclusioneffort": true}); ok {
+				m.InclusionEffort = inc
+			}
+			if exec, ok := findNumericField(obj, map[string]bool{"executioneffort": true}); ok {
+				m.ExecutionEffort = exec
+				if exec > 0 {
+					m.GasUsed = executionEffortToGas(exec)
 				}
 			}
-
-			// Fallback: if we still don't have gas, use any computation/gas field present.
-			if m.GasUsed == 0 {
-				if gas := parseGasUsed(payload); gas > 0 {
-					m.GasUsed = gas
-				}
+		}
+		if m.GasUsed == 0 {
+			if gas := parseGasUsed(payload); gas > 0 {
+				m.GasUsed = gas
 			}
 		}
 		metrics[key] = m
 	}
-	return metrics, rows.Err()
+	return metrics, feeRows.Err()
 }
 
 func (r *Repository) applyTxMetrics(ctx context.Context, metrics map[txMetricKey]txMetric) error {
