@@ -177,6 +177,10 @@ func (d *LiveDeriver) processRange(ctx context.Context, fromHeight, toHeight uin
 			}
 		}
 
+		// Track which processors failed so we skip their checkpoint update.
+		var failedMu sync.Mutex
+		failed := make(map[string]bool)
+
 		runPhase := func(processors []Processor) {
 			var wg sync.WaitGroup
 			for _, p := range processors {
@@ -198,6 +202,9 @@ func (d *LiveDeriver) processRange(ctx context.Context, fromHeight, toHeight uin
 						log.Printf("[live_deriver] %s range [%d,%d) failed: %v", proc.Name(), start, end, err)
 						_ = d.repo.LogIndexingError(ctx, proc.Name(), start, "", "LIVE_DERIVER_ERROR", err.Error(), nil)
 						d.enqueueRetry(proc, start, end)
+						failedMu.Lock()
+						failed[proc.Name()] = true
+						failedMu.Unlock()
 						return
 					}
 					if dur := time.Since(began); dur > 2*time.Second {
@@ -210,10 +217,13 @@ func (d *LiveDeriver) processRange(ctx context.Context, fromHeight, toHeight uin
 		runPhase(phase1)
 		runPhase(phase2)
 
-		// Update checkpoints for all processors so history_deriver.findWorkerFloor()
-		// sees progress and can advance its upward scan. This replaces the async
-		// workers + committer pattern for block-range-based processors.
+		// Update checkpoints for successful processors only.
+		// Failed processors get retried and their checkpoints remain behind,
+		// but they no longer block progress of other processors.
 		for _, p := range d.processors {
+			if failed[p.Name()] {
+				continue
+			}
 			if err := d.repo.UpdateCheckpoint(ctx, p.Name(), end); err != nil {
 				log.Printf("[live_deriver] Failed to update checkpoint for %s: %v", p.Name(), err)
 			}
