@@ -2,7 +2,11 @@ package ingester
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"os"
+	"runtime/debug"
+	"strconv"
 	"sync"
 	"time"
 
@@ -13,6 +17,8 @@ type LiveDeriverConfig struct {
 	// ChunkSize is the number of blocks processed per callback.
 	// Keep this small so the head stays "real-time" even during bursts.
 	ChunkSize uint64
+	// ProcessorTimeoutMs is per-processor timeout (0 to disable).
+	ProcessorTimeoutMs int
 }
 
 type heightRange struct {
@@ -39,9 +45,10 @@ const maxLiveRetries = 3
 // IMPORTANT: processors used here must be safe to run repeatedly, because head ranges
 // may overlap with backfills and restarts.
 type LiveDeriver struct {
-	repo       *repository.Repository
-	processors []Processor
-	chunkSize  uint64
+	repo               *repository.Repository
+	processors         []Processor
+	chunkSize          uint64
+	processorTimeoutMs int
 
 	mu      sync.Mutex
 	pending *heightRange
@@ -55,11 +62,15 @@ func NewLiveDeriver(repo *repository.Repository, processors []Processor, cfg Liv
 	if cfg.ChunkSize == 0 {
 		cfg.ChunkSize = 10
 	}
+	if cfg.ProcessorTimeoutMs == 0 {
+		cfg.ProcessorTimeoutMs = getEnvIntDefaultLD("LIVE_DERIVER_PROCESSOR_TIMEOUT_MS", 120000)
+	}
 	return &LiveDeriver{
-		repo:       repo,
-		processors: processors,
-		chunkSize:  cfg.ChunkSize,
-		wakeCh:     make(chan struct{}, 1),
+		repo:               repo,
+		processors:         processors,
+		chunkSize:          cfg.ChunkSize,
+		processorTimeoutMs: cfg.ProcessorTimeoutMs,
+		wakeCh:             make(chan struct{}, 1),
 	}
 }
 
@@ -68,7 +79,12 @@ func (d *LiveDeriver) Start(ctx context.Context) {
 		log.Printf("[live_deriver] Disabled: no processors configured")
 		return
 	}
-	log.Printf("[live_deriver] Starting (processors=%d chunk=%d)", len(d.processors), d.chunkSize)
+	log.Printf(
+		"[live_deriver] Starting (processors=%d chunk=%d timeout_ms=%d)",
+		len(d.processors),
+		d.chunkSize,
+		d.processorTimeoutMs,
+	)
 	go d.run(ctx)
 }
 
@@ -171,7 +187,14 @@ func (d *LiveDeriver) processRange(ctx context.Context, fromHeight, toHeight uin
 						return
 					}
 					began := time.Now()
-					if err := proc.ProcessRange(ctx, start, end); err != nil {
+					procCtx := ctx
+					cancel := func() {}
+					if d.processorTimeoutMs > 0 {
+						procCtx, cancel = context.WithTimeout(ctx, time.Duration(d.processorTimeoutMs)*time.Millisecond)
+					}
+					err := safeProcessRangeLive(procCtx, proc, start, end)
+					cancel()
+					if err != nil {
 						log.Printf("[live_deriver] %s range [%d,%d) failed: %v", proc.Name(), start, end, err)
 						_ = d.repo.LogIndexingError(ctx, proc.Name(), start, "", "LIVE_DERIVER_ERROR", err.Error(), nil)
 						d.enqueueRetry(proc, start, end)
@@ -244,7 +267,13 @@ func (d *LiveDeriver) processRetries(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		err := item.processor.ProcessRange(ctx, item.from, item.to)
+		procCtx := ctx
+		cancel := func() {}
+		if d.processorTimeoutMs > 0 {
+			procCtx, cancel = context.WithTimeout(ctx, time.Duration(d.processorTimeoutMs)*time.Millisecond)
+		}
+		err := safeProcessRangeLive(procCtx, item.processor, item.from, item.to)
+		cancel()
 		if err != nil {
 			log.Printf("[live_deriver] Retry %d/%d failed for %s [%d,%d): %v",
 				item.attempts+1, maxLiveRetries, item.processor.Name(), item.from, item.to, err)
@@ -268,4 +297,26 @@ func (d *LiveDeriver) processRetries(ctx context.Context) {
 			log.Printf("[live_deriver] Retry succeeded for %s [%d,%d)", item.processor.Name(), item.from, item.to)
 		}
 	}
+}
+
+func safeProcessRangeLive(ctx context.Context, proc Processor, from, to uint64) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+			log.Printf("[live_deriver] PANIC in %s range [%d,%d): %v\n%s", proc.Name(), from, to, r, string(debug.Stack()))
+		}
+	}()
+	return proc.ProcessRange(ctx, from, to)
+}
+
+func getEnvIntDefaultLD(key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
 }

@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,17 +31,19 @@ import (
 // advancing the checkpoint. This prevents silently skipping ranges that the backward
 // ingester hasn't filled yet.
 type HistoryDeriver struct {
-	repo        *repository.Repository
-	processors  []Processor
-	chunkSize   uint64
-	sleepMs     int
-	concurrency int
+	repo               *repository.Repository
+	processors         []Processor
+	chunkSize          uint64
+	sleepMs            int
+	concurrency        int
+	processorTimeoutMs int
 }
 
 type HistoryDeriverConfig struct {
-	ChunkSize   uint64
-	SleepMs     int // milliseconds between chunks (throttle DB load)
-	Concurrency int // number of chunks to process concurrently (default 1)
+	ChunkSize          uint64
+	SleepMs            int // milliseconds between chunks (throttle DB load)
+	Concurrency        int // number of chunks to process concurrently (default 1)
+	ProcessorTimeoutMs int // per-processor timeout (0 to disable)
 }
 
 func NewHistoryDeriver(repo *repository.Repository, processors []Processor, cfg HistoryDeriverConfig) *HistoryDeriver {
@@ -48,12 +53,16 @@ func NewHistoryDeriver(repo *repository.Repository, processors []Processor, cfg 
 	if cfg.Concurrency < 1 {
 		cfg.Concurrency = 1
 	}
+	if cfg.ProcessorTimeoutMs == 0 {
+		cfg.ProcessorTimeoutMs = getEnvIntDefaultHD("HISTORY_DERIVER_PROCESSOR_TIMEOUT_MS", 120000)
+	}
 	return &HistoryDeriver{
-		repo:        repo,
-		processors:  processors,
-		chunkSize:   cfg.ChunkSize,
-		sleepMs:     cfg.SleepMs,
-		concurrency: cfg.Concurrency,
+		repo:               repo,
+		processors:         processors,
+		chunkSize:          cfg.ChunkSize,
+		sleepMs:            cfg.SleepMs,
+		concurrency:        cfg.Concurrency,
+		processorTimeoutMs: cfg.ProcessorTimeoutMs,
 	}
 }
 
@@ -67,7 +76,13 @@ func (h *HistoryDeriver) Start(ctx context.Context) {
 		log.Printf("[history_deriver] Disabled: no processors configured")
 		return
 	}
-	log.Printf("[history_deriver] Starting (processors=%d chunk=%d concurrency=%d)", len(h.processors), h.chunkSize, h.concurrency)
+	log.Printf(
+		"[history_deriver] Starting (processors=%d chunk=%d concurrency=%d timeout_ms=%d)",
+		len(h.processors),
+		h.chunkSize,
+		h.concurrency,
+		h.processorTimeoutMs,
+	)
 	go h.run(ctx)
 }
 
@@ -414,10 +429,15 @@ func (h *HistoryDeriver) runProcessors(ctx context.Context, from, to uint64) err
 					return
 				}
 				began := time.Now()
-
 				var lastErr error
 				for attempt := 1; attempt <= maxDeadlockRetries; attempt++ {
-					lastErr = proc.ProcessRange(ctx, from, to)
+					procCtx := ctx
+					cancel := func() {}
+					if h.processorTimeoutMs > 0 {
+						procCtx, cancel = context.WithTimeout(ctx, time.Duration(h.processorTimeoutMs)*time.Millisecond)
+					}
+					lastErr = safeProcessRange(procCtx, proc, from, to)
+					cancel()
 					if lastErr == nil {
 						break
 					}
@@ -480,4 +500,26 @@ func (h *HistoryDeriver) findWorkerFloor(ctx context.Context) (uint64, error) {
 		}
 	}
 	return minCheckpoint, nil
+}
+
+func safeProcessRange(ctx context.Context, proc Processor, from, to uint64) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+			log.Printf("[history_deriver] PANIC in %s range [%d,%d): %v\n%s", proc.Name(), from, to, r, string(debug.Stack()))
+		}
+	}()
+	return proc.ProcessRange(ctx, from, to)
+}
+
+func getEnvIntDefaultHD(key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
 }
