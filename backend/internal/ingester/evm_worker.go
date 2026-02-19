@@ -29,16 +29,14 @@ func (w *EVMWorker) Name() string {
 }
 
 func (w *EVMWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint64) error {
-	events, err := w.repo.GetRawEventsInRange(ctx, fromHeight, toHeight)
+	// Only fetch EVM events (with payload) — ~4% of total events.
+	events, err := w.repo.GetEVMEventsInRange(ctx, fromHeight, toHeight)
 	if err != nil {
-		return fmt.Errorf("fetch raw events: %w", err)
+		return fmt.Errorf("fetch evm events: %w", err)
 	}
 
 	hashes := make([]models.EVMTxHash, 0)
 	for _, evt := range events {
-		if !isEVMTransactionExecutedEvent(evt.Type) {
-			continue
-		}
 
 		var payload map[string]interface{}
 		dec := json.NewDecoder(bytes.NewReader(evt.Payload))

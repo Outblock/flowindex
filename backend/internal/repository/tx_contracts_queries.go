@@ -100,6 +100,42 @@ func (r *Repository) GetTransferTxIDsInRange(ctx context.Context, fromHeight, to
 	return out, rows.Err()
 }
 
+// GetEVMEventsInRange fetches only EVM.TransactionExecuted events (with payload).
+// Much lighter than GetRawEventsInRange which returns ALL events (~4% filter ratio).
+func (r *Repository) GetEVMEventsInRange(ctx context.Context, fromHeight, toHeight uint64) ([]models.Event, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			block_height,
+			encode(transaction_id, 'hex') AS transaction_id,
+			event_index,
+			transaction_index,
+			type,
+			payload,
+			COALESCE(encode(contract_address, 'hex'), '') AS contract_address,
+			event_name,
+			timestamp
+		FROM raw.events
+		WHERE block_height >= $1 AND block_height < $2
+		  AND type LIKE '%EVM.TransactionExecuted%'
+		ORDER BY block_height ASC, transaction_index ASC, event_index ASC`,
+		fromHeight, toHeight,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []models.Event
+	for rows.Next() {
+		var e models.Event
+		if err := rows.Scan(&e.BlockHeight, &e.TransactionID, &e.EventIndex, &e.TransactionIndex, &e.Type, &e.Payload, &e.ContractAddress, &e.EventName, &e.Timestamp); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, rows.Err()
+}
+
 // BulkUpsertTxContracts uses COPY + temp table for fewer round trips and less lock time
 // compared to the batch INSERT approach.
 func (r *Repository) BulkUpsertTxContracts(ctx context.Context, rows []models.TxContract) error {
