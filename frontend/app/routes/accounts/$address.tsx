@@ -259,10 +259,10 @@ function AccountDetail() {
         <div className="min-h-screen bg-gray-50/50 dark:bg-black text-zinc-900 dark:text-white font-mono transition-colors duration-300 selection:bg-nothing-green selection:text-black">
             <div className="max-w-7xl mx-auto px-4 pt-12 pb-24">
 
-                <Link to="/" className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-6 group">
+                <button onClick={() => window.history.back()} className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-6 group">
                     <ArrowLeft className="h-4 w-4 transform group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-xs uppercase tracking-widest">Back to Dashboard</span>
-                </Link>
+                    <span className="text-xs uppercase tracking-widest">Back</span>
+                </button>
 
                 <PageHeader
                     title={
