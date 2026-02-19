@@ -438,17 +438,16 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		SELECT encode(ft.transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(ft.token_contract_address, 'hex') || '.' || NULLIF(ft.contract_name, ''), encode(ft.token_contract_address, 'hex')) AS token,
 		       SUM(CAST(ft.amount AS NUMERIC)) AS total_amount,
-		       CASE WHEN ft.from_address = $2 OR ft.from_address = $3 THEN 'out' ELSE 'in' END AS direction,
-		       CASE WHEN ft.from_address = $2 OR ft.from_address = $3
-		            THEN string_agg(DISTINCT encode(ft.to_address, 'hex'), ',')
-		            ELSE string_agg(DISTINCT encode(ft.from_address, 'hex'), ',')
-		       END AS counterparty
+		       CASE WHEN ft.from_address = $2 OR ($3::bytea IS NOT NULL AND ft.from_address = $3) THEN 'out' ELSE 'in' END AS direction,
+		       string_agg(DISTINCT CASE WHEN ft.from_address = $2 OR ($3::bytea IS NOT NULL AND ft.from_address = $3)
+		            THEN encode(ft.to_address, 'hex')
+		            ELSE encode(ft.from_address, 'hex') END, ',') AS counterparty
 		FROM raw.tx_lookup tl
 		JOIN app.ft_transfers ft ON ft.block_height = tl.block_height AND ft.transaction_id = tl.id
 		WHERE tl.id = ANY($1)
 		  AND ft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
 		GROUP BY ft.transaction_id, ft.token_contract_address, ft.contract_name,
-		         CASE WHEN ft.from_address = $2 OR ft.from_address = $3 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes, coaBytes)
+		         CASE WHEN ft.from_address = $2 OR ($3::bytea IS NOT NULL AND ft.from_address = $3) THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes, coaBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -468,17 +467,16 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		SELECT encode(nft.transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(nft.token_contract_address, 'hex') || '.' || NULLIF(nft.contract_name, ''), encode(nft.token_contract_address, 'hex')) AS collection,
 		       COUNT(*) AS cnt,
-		       CASE WHEN nft.from_address = $2 OR nft.from_address = $3 THEN 'out' ELSE 'in' END AS direction,
-		       CASE WHEN nft.from_address = $2 OR nft.from_address = $3
-		            THEN string_agg(DISTINCT encode(nft.to_address, 'hex'), ',')
-		            ELSE string_agg(DISTINCT encode(nft.from_address, 'hex'), ',')
-		       END AS counterparty
+		       CASE WHEN nft.from_address = $2 OR ($3::bytea IS NOT NULL AND nft.from_address = $3) THEN 'out' ELSE 'in' END AS direction,
+		       string_agg(DISTINCT CASE WHEN nft.from_address = $2 OR ($3::bytea IS NOT NULL AND nft.from_address = $3)
+		            THEN encode(nft.to_address, 'hex')
+		            ELSE encode(nft.from_address, 'hex') END, ',') AS counterparty
 		FROM raw.tx_lookup tl
 		JOIN app.nft_transfers nft ON nft.block_height = tl.block_height AND nft.transaction_id = tl.id
 		WHERE tl.id = ANY($1)
 		  AND nft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
 		GROUP BY nft.transaction_id, nft.token_contract_address, nft.contract_name,
-		         CASE WHEN nft.from_address = $2 OR nft.from_address = $3 THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes, coaBytes)
+		         CASE WHEN nft.from_address = $2 OR ($3::bytea IS NOT NULL AND nft.from_address = $3) THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes, coaBytes)
 	if err != nil {
 		return nil, err
 	}
