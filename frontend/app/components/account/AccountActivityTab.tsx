@@ -118,7 +118,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     // Transactions state
     const [transactions, setTransactions] = useState<any[]>(() => dedup(initialTransactions));
     const [currentPage, setCurrentPage] = useState(1);
-    const [txLoading, setTxLoading] = useState(() => initialTransactions.length === 0);
+    const [txLoading, setTxLoading] = useState(false);
     const [txCursors, setTxCursors] = useState<Record<number, string>>(() => {
         const init: Record<number, string> = { 1: '' };
         if (initialNextCursor) init[2] = initialNextCursor;
@@ -225,10 +225,10 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         }
     }, [txCursors, normalizedAddress]);
 
-    // Fallback: if loader didn't provide data (e.g., client-side nav failure), fetch page 1
-    // Only fetch when viewing 'all' activity — subtabs have their own loaders
+    // If loader didn't provide data, fetch page 1 client-side.
+    // Only fetch when viewing 'all' activity — subtabs have their own loaders.
     useEffect(() => {
-        if (!didFetchRef.current && !txLoading && filterMode === 'all') {
+        if (!didFetchRef.current && filterMode === 'all') {
             didFetchRef.current = true;
             loadTransactions(1);
         }
@@ -241,8 +241,10 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     }, [currentPage]);
 
     // --- Timeline mode ---
+    const timelineLoadingRef = useRef(false);
     const loadMoreTimeline = useCallback(async () => {
-        if (timelineLoading || !timelineHasMore) return;
+        if (timelineLoadingRef.current || !timelineHasMore) return;
+        timelineLoadingRef.current = true;
         setTimelineLoading(true);
         try {
             await ensureHeyApiConfigured();
@@ -261,9 +263,10 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         } catch (err) {
             console.error('Failed to load timeline transactions', err);
         } finally {
+            timelineLoadingRef.current = false;
             setTimelineLoading(false);
         }
-    }, [timelineLoading, timelineHasMore, timelineOffset, normalizedAddress]);
+    }, [timelineHasMore, timelineOffset, normalizedAddress]);
 
     // Seed timeline when switching to timeline mode
     useEffect(() => {
