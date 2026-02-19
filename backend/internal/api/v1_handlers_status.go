@@ -100,13 +100,13 @@ func (s *Server) handleStatusPrice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeAPIResponse(w, []interface{}{map[string]interface{}{
-		"asset":             mp.Asset,
-		"currency":          mp.Currency,
-		"price":             mp.Price,
-		"price_change_24h":  mp.PriceChange24h,
-		"market_cap":        mp.MarketCap,
-		"source":            mp.Source,
-		"as_of":             mp.AsOf,
+		"asset":            mp.Asset,
+		"currency":         mp.Currency,
+		"price":            mp.Price,
+		"price_change_24h": mp.PriceChange24h,
+		"market_cap":       mp.MarketCap,
+		"source":           mp.Source,
+		"as_of":            mp.AsOf,
 	}}, nil, nil)
 }
 
@@ -168,6 +168,7 @@ var gcpVMsCache struct {
 	mu        sync.Mutex
 	payload   []byte
 	expiresAt time.Time
+	fetchedAt time.Time
 }
 
 func (s *Server) handleStatusGCPVMs(w http.ResponseWriter, r *http.Request) {
@@ -187,10 +188,24 @@ func (s *Server) handleStatusGCPVMs(w http.ResponseWriter, r *http.Request) {
 	}
 	gcpVMsCache.mu.Unlock()
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(gcpURL)
 	if err != nil {
 		log.Printf("[api] GCP status proxy error: %v", err)
+		// Graceful degradation: if we have any previous successful payload, serve it
+		// instead of failing hard and breaking VM progress UI.
+		gcpVMsCache.mu.Lock()
+		hasStale := len(gcpVMsCache.payload) > 0
+		stale := append([]byte(nil), gcpVMsCache.payload...)
+		staleAt := gcpVMsCache.fetchedAt
+		gcpVMsCache.mu.Unlock()
+		if hasStale {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("X-Data-Stale", "true")
+			w.Header().Set("X-Data-Stale-At", staleAt.UTC().Format(time.RFC3339))
+			w.Write(stale)
+			return
+		}
 		http.Error(w, "GCP status unavailable", http.StatusBadGateway)
 		return
 	}
@@ -201,10 +216,28 @@ func (s *Server) handleStatusGCPVMs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to read GCP status", http.StatusBadGateway)
 		return
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("[api] GCP status proxy upstream status=%d body=%s", resp.StatusCode, string(body))
+		gcpVMsCache.mu.Lock()
+		hasStale := len(gcpVMsCache.payload) > 0
+		stale := append([]byte(nil), gcpVMsCache.payload...)
+		staleAt := gcpVMsCache.fetchedAt
+		gcpVMsCache.mu.Unlock()
+		if hasStale {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("X-Data-Stale", "true")
+			w.Header().Set("X-Data-Stale-At", staleAt.UTC().Format(time.RFC3339))
+			w.Write(stale)
+			return
+		}
+		http.Error(w, "GCP status unavailable", http.StatusBadGateway)
+		return
+	}
 
 	gcpVMsCache.mu.Lock()
 	gcpVMsCache.payload = body
-	gcpVMsCache.expiresAt = time.Now().Add(3 * time.Second)
+	gcpVMsCache.expiresAt = time.Now().Add(5 * time.Second)
+	gcpVMsCache.fetchedAt = time.Now()
 	gcpVMsCache.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
