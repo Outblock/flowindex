@@ -365,7 +365,7 @@ func (h *HistoryDeriver) processDownward(ctx context.Context) (bool, error) {
 	}
 
 	if advanceTo < downCursor {
-		if err := h.repo.UpdateCheckpoint(ctx, historyDeriverDownCheckpoint, advanceTo); err != nil {
+		if err := h.repo.UpdateCheckpointDown(ctx, historyDeriverDownCheckpoint, advanceTo); err != nil {
 			log.Printf("[history_deriver] Failed to update down checkpoint: %v", err)
 		}
 

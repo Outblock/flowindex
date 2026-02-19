@@ -998,12 +998,12 @@ func (s *Server) handleAdminResetHistoryDeriver(w http.ResponseWriter, r *http.R
 
 	ctx := r.Context()
 
-	// Reset both UP and DOWN cursors.
-	if err := s.repo.UpdateCheckpoint(ctx, "history_deriver", req.Height); err != nil {
+	// Reset both UP and DOWN cursors (force set, ignoring GREATEST/LEAST).
+	if err := s.repo.SetCheckpoint(ctx, "history_deriver", req.Height); err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "reset history_deriver: "+err.Error())
 		return
 	}
-	if err := s.repo.UpdateCheckpoint(ctx, "history_deriver_down", req.Height); err != nil {
+	if err := s.repo.SetCheckpoint(ctx, "history_deriver_down", req.Height); err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "reset history_deriver_down: "+err.Error())
 		return
 	}
@@ -1043,6 +1043,44 @@ func (s *Server) handleAdminResolveErrors(w http.ResponseWriter, r *http.Request
 	writeAPIResponse(w, map[string]interface{}{
 		"worker":   req.Worker,
 		"resolved": count,
+	}, nil, nil)
+}
+
+// handleAdminRedirectHistoryIngester resets the history_ingester checkpoint to a
+// specific height so it starts backfilling downward from there. This is used to
+// fill raw block gaps between the history ingester's current position and the
+// forward ingester's starting range.
+// POST /admin/redirect-history-ingester  {"height": 140000000}
+func (s *Server) handleAdminRedirectHistoryIngester(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Height uint64 `json:"height"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Height == 0 {
+		writeAPIError(w, http.StatusBadRequest, "height is required and must be > 0")
+		return
+	}
+
+	ctx := r.Context()
+
+	// Get current checkpoint for logging.
+	current, _ := s.repo.GetLastIndexedHeight(ctx, "history_ingester")
+
+	// Force-set the history_ingester checkpoint.
+	if err := s.repo.SetCheckpoint(ctx, "history_ingester", req.Height); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "set history_ingester: "+err.Error())
+		return
+	}
+
+	log.Printf("[admin] Redirected history_ingester from %d to %d (will backfill downward from there)", current, req.Height)
+
+	writeAPIResponse(w, map[string]interface{}{
+		"previous_height": current,
+		"new_height":      req.Height,
+		"message":         fmt.Sprintf("history_ingester checkpoint moved from %d to %d. It will backfill downward from there on next restart.", current, req.Height),
 	}, nil, nil)
 }
 

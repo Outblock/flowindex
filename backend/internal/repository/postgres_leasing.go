@@ -172,6 +172,33 @@ func (r *Repository) UpdateCheckpoint(ctx context.Context, serviceName string, h
 	return err
 }
 
+// UpdateCheckpointDown updates a checkpoint that moves downward (uses LEAST instead of GREATEST).
+func (r *Repository) UpdateCheckpointDown(ctx context.Context, serviceName string, height uint64) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO app.indexing_checkpoints (service_name, last_height, updated_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (service_name) DO UPDATE SET
+			last_height = LEAST(app.indexing_checkpoints.last_height, EXCLUDED.last_height),
+			updated_at = NOW()`,
+		serviceName, height,
+	)
+	return err
+}
+
+// SetCheckpoint unconditionally sets a checkpoint to a specific height (no GREATEST/LEAST guard).
+// Use for admin resets where you need to force the value regardless of current state.
+func (r *Repository) SetCheckpoint(ctx context.Context, serviceName string, height uint64) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO app.indexing_checkpoints (service_name, last_height, updated_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (service_name) DO UPDATE SET
+			last_height = EXCLUDED.last_height,
+			updated_at = NOW()`,
+		serviceName, height,
+	)
+	return err
+}
+
 // AdvanceCheckpointSafe moves the checkpoint to the highest contiguous completed height
 func (r *Repository) AdvanceCheckpointSafe(ctx context.Context, workerType string) (uint64, error) {
 	// 1. Get current checkpoint

@@ -822,13 +822,12 @@ function Stats() {
                                     const historyBottom = checkpoints?.['history_ingester'] || minHeight || 0;
                                     // Total range that needs derivation: historyBottom → workerFloor
                                     const totalGap = workerFloor > historyBottom ? workerFloor - historyBottom : 0;
-                                    // Covered: UP cursor covers [historyBottom, upCursor), DOWN cursor covers [downCursor, workerFloor)
-                                    const coveredUp = upCursor > historyBottom ? Math.min(upCursor, workerFloor) - historyBottom : 0;
-                                    const coveredDown = downCursor > 0 && downCursor < workerFloor ? workerFloor - downCursor : 0;
-                                    // Avoid double-counting overlap (if UP passed DOWN)
-                                    const covered = upCursor > 0 && downCursor > 0 && upCursor >= downCursor
-                                        ? Math.min(totalGap, workerFloor - historyBottom) // fully covered
-                                        : Math.min(totalGap, coveredUp + coveredDown);
+                                    // UP covers [historyBottom, upCursor) going upward toward workerFloor.
+                                    // DOWN covers [downCursor, ~initial_upCursor) going downward as history ingester extends range.
+                                    // Combined derived region: [min(downCursor, historyBottom), upCursor)
+                                    const derivedLow = downCursor > 0 ? Math.min(downCursor, historyBottom) : historyBottom;
+                                    const derivedHigh = upCursor > 0 ? Math.min(upCursor, workerFloor) : 0;
+                                    const covered = derivedHigh > derivedLow ? Math.min(totalGap, derivedHigh - derivedLow) : 0;
                                     const hdProgress = totalGap > 0 ? Math.min(100, (covered / totalGap) * 100) : (upCursor > 0 ? 100 : 0);
                                     const hdSpeed = (workerSpeeds['history_deriver'] || 0) + (workerSpeeds['history_deriver_down'] || 0);
                                     const remaining = totalGap - covered;
