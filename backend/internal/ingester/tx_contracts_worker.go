@@ -25,7 +25,9 @@ func (w *TxContractsWorker) Name() string {
 var importRe = regexp.MustCompile(`(?m)^\s*import\s+([A-Za-z0-9_]+)(?:\s+from\s+0x([0-9a-fA-F]+))?`)
 
 func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint64) error {
-	txs, err := w.repo.GetRawTransactionsInRange(ctx, fromHeight, toHeight)
+	// Use lightweight query: only fetches (id, script) — skips proposer, payer,
+	// authorizers, gas_used, timestamp that we don't need.
+	txScripts, err := w.repo.GetTxScriptsInRange(ctx, fromHeight, toHeight)
 	if err != nil {
 		return err
 	}
@@ -45,7 +47,7 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 		tags = append(tags, models.TxTag{TransactionID: txID, Tag: tag})
 	}
 
-	for _, tx := range txs {
+	for _, tx := range txScripts {
 		if tx.Script != "" {
 			matches := importRe.FindAllStringSubmatch(tx.Script, -1)
 			for _, m := range matches {
@@ -67,24 +69,24 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 		}
 	}
 
-	// Tag transactions based on token transfers (fee transfers excluded by TokenWorker).
-	transfers, err := w.repo.GetTokenTransfersByRange(ctx, fromHeight, toHeight, false)
+	// Tag transactions that have FT/NFT transfers (lightweight: only fetches distinct tx IDs).
+	ftTxIDs, err := w.repo.GetTransferTxIDsInRange(ctx, fromHeight, toHeight, false)
 	if err == nil {
-		for _, t := range transfers {
-			addTag(t.TransactionID, "FT_TRANSFER")
+		for _, txID := range ftTxIDs {
+			addTag(txID, "FT_TRANSFER")
 		}
 	}
-	nftTransfers, err := w.repo.GetTokenTransfersByRange(ctx, fromHeight, toHeight, true)
+	nftTxIDs, err := w.repo.GetTransferTxIDsInRange(ctx, fromHeight, toHeight, true)
 	if err == nil {
-		for _, t := range nftTransfers {
-			addTag(t.TransactionID, "NFT_TRANSFER")
+		for _, txID := range nftTxIDs {
+			addTag(txID, "NFT_TRANSFER")
 		}
 	}
 
-	// Additional tags derived directly from raw events (Blockscout-style classification).
-	events, err := w.repo.GetRawEventsInRange(ctx, fromHeight, toHeight)
+	// Additional tags derived from raw event types (no payload needed).
+	eventTypes, err := w.repo.GetEventTypesInRange(ctx, fromHeight, toHeight)
 	if err == nil {
-		for _, evt := range events {
+		for _, evt := range eventTypes {
 			evtType := evt.Type
 			switch {
 			case isEVMTransactionExecutedEvent(evtType):
@@ -130,10 +132,10 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 		}
 	}
 
-	if err := w.repo.UpsertTxContracts(ctx, contracts); err != nil {
+	if err := w.repo.BulkUpsertTxContracts(ctx, contracts); err != nil {
 		return err
 	}
-	if err := w.repo.UpsertTxTags(ctx, tags); err != nil {
+	if err := w.repo.BulkUpsertTxTags(ctx, tags); err != nil {
 		return err
 	}
 	return nil
