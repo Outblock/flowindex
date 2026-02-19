@@ -44,6 +44,7 @@ func (w *EVMWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint6
 		if err := dec.Decode(&payload); err != nil {
 			log.Printf("[evm_worker] skip: JSON decode error at block %d tx %s event %d: %v",
 				evt.BlockHeight, evt.TransactionID, evt.EventIndex, err)
+			_ = w.repo.LogIndexingError(ctx, w.Name(), evt.BlockHeight, evt.TransactionID, "EVM_PAYLOAD_DECODE", err.Error(), nil)
 			continue
 		}
 
@@ -51,6 +52,7 @@ func (w *EVMWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint6
 		if h == "" {
 			log.Printf("[evm_worker] skip: no EVM hash in payload at block %d tx %s event %d",
 				evt.BlockHeight, evt.TransactionID, evt.EventIndex)
+			_ = w.repo.LogIndexingError(ctx, w.Name(), evt.BlockHeight, evt.TransactionID, "EVM_HASH_MISSING", "no EVM hash in payload", nil)
 			continue
 		}
 		fromAddr, toAddr, dataHex := "", "", ""

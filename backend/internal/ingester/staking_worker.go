@@ -68,6 +68,7 @@ func (w *StakingWorker) ProcessRange(ctx context.Context, fromHeight, toHeight u
 
 		fields, ok := parseCadenceEventFields(evt.Payload)
 		if !ok {
+			_ = w.repo.LogIndexingError(ctx, w.Name(), evt.BlockHeight, evt.TransactionID, "STAKING_PAYLOAD_PARSE", "failed to parse cadence event payload", nil)
 			continue
 		}
 

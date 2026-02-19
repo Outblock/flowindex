@@ -376,7 +376,7 @@ func (d *LiveDeriver) repairFailedRanges(ctx context.Context) {
 				name, len(blocks), blocks[0].BlockHeight, blocks[len(blocks)-1].BlockHeight)
 
 			// Group consecutive blocks into ranges for batch processing.
-			ranges := groupConsecutiveBlocks(blocks, 100)
+			ranges := groupConsecutiveBlocks(blocks, 100, d.chunkSize)
 			for _, rng := range ranges {
 				if ctx.Err() != nil {
 					return
@@ -414,9 +414,12 @@ func (d *LiveDeriver) repairFailedRanges(ctx context.Context) {
 
 // groupConsecutiveBlocks groups failed blocks into [from, to) ranges.
 // maxGap controls how far apart two blocks can be to still be grouped together.
-func groupConsecutiveBlocks(blocks []repository.FailedBlock, maxGap uint64) [][2]uint64 {
+func groupConsecutiveBlocks(blocks []repository.FailedBlock, maxGap, chunkSize uint64) [][2]uint64 {
 	if len(blocks) == 0 {
 		return nil
+	}
+	if chunkSize == 0 {
+		chunkSize = 10
 	}
 	var ranges [][2]uint64
 	from := blocks[0].BlockHeight
@@ -424,11 +427,11 @@ func groupConsecutiveBlocks(blocks []repository.FailedBlock, maxGap uint64) [][2
 	for _, b := range blocks[1:] {
 		if b.BlockHeight-prev > maxGap {
 			// End current range, start new one.
-			ranges = append(ranges, [2]uint64{from, prev + 10}) // +10 because live_deriver chunk=10
+			ranges = append(ranges, [2]uint64{from, prev + chunkSize})
 			from = b.BlockHeight
 		}
 		prev = b.BlockHeight
 	}
-	ranges = append(ranges, [2]uint64{from, prev + 10})
+	ranges = append(ranges, [2]uint64{from, prev + chunkSize})
 	return ranges
 }

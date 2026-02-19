@@ -48,7 +48,7 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 		return fmt.Errorf("fetch raw events: %w", err)
 	}
 
-	accountKeys := w.extractAccountKeys(events)
+	accountKeys := w.extractAccountKeys(ctx, events)
 	contracts, contractEvents := w.extractContracts(ctx, events)
 	// UpsertSmartContracts handles code + version; UpsertContractRegistry handles kind/first_seen/last_seen.
 	// Both write to the same unified app.smart_contracts table with complementary ON CONFLICT clauses.
@@ -127,7 +127,7 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 	return nil
 }
 
-func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountKey {
+func (w *MetaWorker) extractAccountKeys(ctx context.Context, events []models.Event) []models.AccountKey {
 	var keys []models.AccountKey
 	for _, evt := range events {
 		// We materialize a state table of account keys from Flow system events.
@@ -139,6 +139,7 @@ func (w *MetaWorker) extractAccountKeys(events []models.Event) []models.AccountK
 
 		var payload map[string]interface{}
 		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+			_ = w.repo.LogIndexingError(ctx, w.Name(), evt.BlockHeight, evt.TransactionID, "META_PAYLOAD_DECODE", err.Error(), nil)
 			continue
 		}
 
@@ -255,6 +256,7 @@ func (w *MetaWorker) extractContracts(ctx context.Context, events []models.Event
 
 		var payload map[string]interface{}
 		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+			_ = w.repo.LogIndexingError(ctx, w.Name(), evt.BlockHeight, evt.TransactionID, "META_PAYLOAD_DECODE", err.Error(), nil)
 			continue
 		}
 

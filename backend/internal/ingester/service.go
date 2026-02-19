@@ -93,14 +93,14 @@ func (s *Service) Start(ctx context.Context) error {
 			// or when "startHeight > latestHeight" (Forward).
 
 			// Sleep to avoid hot loop when caught up (forward) or done (backward).
-		// For backward mode we only pause briefly between batches to let the
-		// DB breathe; the 1-second wait is wasteful when there are millions of
-		// blocks remaining.
-		if s.config.Mode == "backward" {
-			time.Sleep(50 * time.Millisecond)
-		} else {
-			time.Sleep(1 * time.Second)
-		}
+			// For backward mode we only pause briefly between batches to let the
+			// DB breathe; the 1-second wait is wasteful when there are millions of
+			// blocks remaining.
+			if s.config.Mode == "backward" {
+				time.Sleep(50 * time.Millisecond)
+			} else {
+				time.Sleep(1 * time.Second)
+			}
 		}
 	}
 }
@@ -290,6 +290,9 @@ func (s *Service) process(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := s.ensureBatchCoverage(ctx, results, startHeight, endHeight); err != nil {
+		return err
+	}
 
 	// 8. Save Batch
 	fetchDuration := time.Since(fetchStart)
@@ -395,6 +398,47 @@ func (s *Service) ensureContinuity(ctx context.Context, results []*FetchResult, 
 	}
 
 	return nil
+}
+
+func (s *Service) ensureBatchCoverage(ctx context.Context, results []*FetchResult, startHeight, endHeight uint64) error {
+	if len(results) == 0 {
+		return fmt.Errorf("empty fetch results for range %d->%d", startHeight, endHeight)
+	}
+
+	covered := make(map[uint64]bool, len(results))
+	for _, res := range results {
+		if res == nil {
+			continue
+		}
+		if res.Block != nil {
+			covered[res.Height] = true
+			continue
+		}
+		for _, w := range res.Warnings {
+			if err := s.repo.LogIndexingError(ctx, s.config.ServiceName, res.Height, w.TxID, "fetch_warning", w.Message, nil); err != nil {
+				log.Printf("[%s] failed to log fetch warning before retry: %v", s.config.ServiceName, err)
+			}
+		}
+	}
+
+	var missing []uint64
+	for h := startHeight; h <= endHeight; h++ {
+		if !covered[h] {
+			missing = append(missing, h)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+
+	for _, h := range missing {
+		msg := fmt.Sprintf("incomplete batch range=%d->%d missing_block_height=%d", startHeight, endHeight, h)
+		if err := s.repo.LogIndexingError(ctx, s.config.ServiceName, h, "", "incomplete_batch_missing_block", msg, nil); err != nil {
+			log.Printf("[%s] failed to log missing-block anomaly: %v", s.config.ServiceName, err)
+		}
+	}
+
+	return fmt.Errorf("incomplete batch %d->%d: missing %d block(s), refusing checkpoint advance", startHeight, endHeight, len(missing))
 }
 
 func (s *Service) handleReorg(ctx context.Context, rollbackHeight, lastIndexed uint64, reason string) error {

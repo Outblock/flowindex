@@ -73,6 +73,7 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 		if evt.Type == "flow.AccountCreated" {
 			var payload map[string]interface{}
 			if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+				_ = w.repo.LogIndexingError(ctx, w.Name(), evt.BlockHeight, evt.TransactionID, "ACCOUNTS_PAYLOAD_DECODE", err.Error(), nil)
 				continue
 			}
 			if addr, ok := payload["address"].(string); ok {
@@ -84,6 +85,7 @@ func (w *AccountsWorker) ProcessRange(ctx context.Context, fromHeight, toHeight 
 		if strings.Contains(evt.Type, "CadenceOwnedAccountCreated") {
 			var payload map[string]interface{}
 			if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+				_ = w.repo.LogIndexingError(ctx, w.Name(), evt.BlockHeight, evt.TransactionID, "ACCOUNTS_PAYLOAD_DECODE", err.Error(), nil)
 				continue
 			}
 			coaAddr, ok := payload["address"].(string)

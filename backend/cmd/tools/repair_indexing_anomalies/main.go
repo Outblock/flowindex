@@ -132,15 +132,28 @@ func loadTargets(ctx context.Context, pool *pgxpool.Pool, limit int) ([]repairTa
 				block_height,
 				array_agg(id ORDER BY id) AS error_ids,
 				min(created_at) AS first_seen
-			FROM raw.indexing_errors
-			WHERE resolved = FALSE
-			  AND block_height IS NOT NULL
-			  AND worker_name LIKE 'history_s%'
-			  AND error_hash IN (
-				'empty_block_with_collections',
-				'empty_tx_range',
-				'block_tx_count_mismatch'
-			  )
+				FROM raw.indexing_errors
+				WHERE resolved = FALSE
+				  AND block_height IS NOT NULL
+				  AND (
+					worker_name = 'main_ingester'
+					OR worker_name LIKE 'history%'
+				  )
+				  AND (
+					error_hash IN (
+						'empty_block_with_collections',
+						'empty_tx_range',
+						'block_tx_count_mismatch',
+						'batch_skipped_blocks'
+					)
+					OR (
+						error_hash = 'fetch_warning'
+						AND (
+							error_message LIKE 'block fetch failed:%'
+							OR error_message LIKE 'missing collection:%'
+						)
+					)
+				  )
 			GROUP BY worker_name, block_height
 		)
 		SELECT worker_name, block_height, error_ids
