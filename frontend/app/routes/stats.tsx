@@ -822,15 +822,21 @@ function Stats() {
                                     const historyBottom = checkpoints?.['history_ingester'] || minHeight || 0;
                                     // Total range that needs derivation: historyBottom → workerFloor
                                     const totalGap = workerFloor > historyBottom ? workerFloor - historyBottom : 0;
-                                    // UP covers [historyBottom, upCursor) going upward toward workerFloor.
-                                    // DOWN covers [downCursor, ~initial_upCursor) going downward as history ingester extends range.
-                                    // Combined derived region: [min(downCursor, historyBottom), upCursor)
-                                    const derivedLow = downCursor > 0 ? Math.min(downCursor, historyBottom) : historyBottom;
-                                    const derivedHigh = upCursor > 0 ? Math.min(upCursor, workerFloor) : 0;
-                                    const covered = derivedHigh > derivedLow ? Math.min(totalGap, derivedHigh - derivedLow) : 0;
-                                    const hdProgress = totalGap > 0 ? Math.min(100, (covered / totalGap) * 100) : (upCursor > 0 ? 100 : 0);
+                                    // The deriver starts from a middle point and scans in two directions:
+                                    // UP: middle → workerFloor (rightward on the bar)
+                                    // DOWN: middle → historyBottom (leftward on the bar)
+                                    // Covered region = [downCursor, upCursor) as a band in the bar.
+                                    // downPct = left edge (shrinks toward 0 as DOWN progresses)
+                                    // upPct = right edge (grows toward 100 as UP progresses)
+                                    const downPct = totalGap > 0 && downCursor >= historyBottom
+                                        ? Math.min(100, ((downCursor - historyBottom) / totalGap) * 100) : 0;
+                                    const upPct = totalGap > 0 && upCursor > historyBottom
+                                        ? Math.min(100, ((Math.min(upCursor, workerFloor) - historyBottom) / totalGap) * 100) : 0;
+                                    const covered = upPct > downPct ? (upPct - downPct) : 0;
+                                    const hdProgress = covered; // already in %
                                     const hdSpeed = (workerSpeeds['history_deriver'] || 0) + (workerSpeeds['history_deriver_down'] || 0);
-                                    const remaining = totalGap - covered;
+                                    const coveredBlocks = totalGap > 0 ? Math.round((covered / 100) * totalGap) : 0;
+                                    const remaining = totalGap - coveredBlocks;
                                     const hdEta = hdSpeed > 0 && remaining > 0 ? remaining / hdSpeed : 0;
                                     const hdStatus = totalGap === 0 && upCursor > 0 ? 'CAUGHT UP'
                                         : remaining === 0 && upCursor > 0 ? 'CAUGHT UP'
@@ -863,9 +869,10 @@ function Stats() {
                                                 <span>#{workerFloor.toLocaleString()}</span>
                                             </div>
                                             <div className="relative h-4 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-4">
+                                                {/* Covered band: [downCursor, upCursor) growing outward from middle */}
                                                 <motion.div
-                                                    initial={{ width: 0 }}
-                                                    animate={{ width: `${hdProgress}%` }}
+                                                    initial={{ left: `${downPct}%`, width: 0 }}
+                                                    animate={{ left: `${downPct}%`, width: `${upPct - downPct}%` }}
                                                     transition={{ duration: 1, ease: "easeOut" }}
                                                     className="absolute h-full bg-pink-400"
                                                 />
