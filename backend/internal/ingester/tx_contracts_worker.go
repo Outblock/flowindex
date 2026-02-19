@@ -141,66 +141,108 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 		}
 	}
 
-	// Tag transactions that have FT/NFT transfers (lightweight: only fetches distinct tx IDs).
-	ftTxIDs, err := w.repo.GetTransferTxIDsInRange(ctx, fromHeight, toHeight, false)
-	if err == nil {
-		for _, txID := range ftTxIDs {
-			addTag(txID, "FT_TRANSFER")
-		}
+	// Fetch tag sources in parallel: FT transfers, NFT transfers, event types.
+	type tagResult struct {
+		ftTxIDs    []string
+		nftTxIDs   []string
+		eventTypes []repository.EventTypeRow
 	}
-	nftTxIDs, err := w.repo.GetTransferTxIDsInRange(ctx, fromHeight, toHeight, true)
-	if err == nil {
-		for _, txID := range nftTxIDs {
-			addTag(txID, "NFT_TRANSFER")
+	var tr tagResult
+	var tagWg sync.WaitGroup
+	var tagMu sync.Mutex
+	var tagErr error
+	setTagErr := func(e error) {
+		tagMu.Lock()
+		if tagErr == nil {
+			tagErr = e
 		}
+		tagMu.Unlock()
+	}
+
+	tagWg.Add(3)
+	go func() {
+		defer tagWg.Done()
+		ids, e := w.repo.GetTransferTxIDsInRange(ctx, fromHeight, toHeight, false)
+		if e != nil {
+			setTagErr(e)
+			return
+		}
+		tagMu.Lock()
+		tr.ftTxIDs = ids
+		tagMu.Unlock()
+	}()
+	go func() {
+		defer tagWg.Done()
+		ids, e := w.repo.GetTransferTxIDsInRange(ctx, fromHeight, toHeight, true)
+		if e != nil {
+			setTagErr(e)
+			return
+		}
+		tagMu.Lock()
+		tr.nftTxIDs = ids
+		tagMu.Unlock()
+	}()
+	go func() {
+		defer tagWg.Done()
+		evts, e := w.repo.GetEventTypesInRange(ctx, fromHeight, toHeight)
+		if e != nil {
+			setTagErr(e)
+			return
+		}
+		tagMu.Lock()
+		tr.eventTypes = evts
+		tagMu.Unlock()
+	}()
+	tagWg.Wait()
+	if tagErr != nil {
+		return tagErr
+	}
+
+	for _, txID := range tr.ftTxIDs {
+		addTag(txID, "FT_TRANSFER")
+	}
+	for _, txID := range tr.nftTxIDs {
+		addTag(txID, "NFT_TRANSFER")
 	}
 
 	// Additional tags derived from raw event types (no payload needed).
-	eventTypes, err := w.repo.GetEventTypesInRange(ctx, fromHeight, toHeight)
-	if err == nil {
-		for _, evt := range eventTypes {
-			evtType := evt.Type
-			switch {
-			case isEVMTransactionExecutedEvent(evtType):
-				addTag(evt.TransactionID, "EVM")
-			case strings.Contains(evtType, "FlowFees.FeesDeducted"):
-				addTag(evt.TransactionID, "FEE")
-			case strings.Contains(evtType, "NFTStorefront"):
-				addTag(evt.TransactionID, "MARKETPLACE")
-			case strings.Contains(evtType, "AccountContractAdded") || strings.Contains(evtType, "AccountContractUpdated"):
-				addTag(evt.TransactionID, "CONTRACT_DEPLOY")
-			case evtType == "flow.AccountCreated":
-				addTag(evt.TransactionID, "ACCOUNT_CREATED")
-			case strings.Contains(evtType, "AccountKeyAdded") || strings.Contains(evtType, "AccountKeyRemoved"):
-				addTag(evt.TransactionID, "KEY_UPDATE")
-			case strings.Contains(evtType, "FlowTransactionScheduler"):
-				addTag(evt.TransactionID, "SCHEDULED_TX")
-			// DeFi: DEX swaps and liquidity
-			case strings.Contains(evtType, ".SwapPair.Swap") ||
-				strings.Contains(evtType, ".BloctoSwapPair.Swap") ||
-				strings.Contains(evtType, ".MetaPierSwapPair.Swap"):
-				addTag(evt.TransactionID, "SWAP")
-			case strings.Contains(evtType, ".SwapPair.AddLiquidity") ||
-				strings.Contains(evtType, ".SwapPair.RemoveLiquidity"):
-				addTag(evt.TransactionID, "LIQUIDITY")
-			// Staking
-			case strings.Contains(evtType, ".FlowIDTableStaking.TokensStaked") ||
-				strings.Contains(evtType, ".FlowIDTableStaking.TokensUnstaked") ||
-				strings.Contains(evtType, ".FlowIDTableStaking.TokensCommitted") ||
-				strings.Contains(evtType, ".FlowIDTableStaking.RewardsPaid") ||
-				strings.Contains(evtType, ".FlowIDTableStaking.DelegatorRewardsPaid"):
-				addTag(evt.TransactionID, "STAKING")
-			// Lending / borrowing (common DeFi patterns on Flow)
-			case strings.Contains(evtType, "LiquidStaking") ||
-				strings.Contains(evtType, "stFlowToken"):
-				addTag(evt.TransactionID, "LIQUID_STAKING")
-			// Token minting
-			case strings.Contains(evtType, ".TokensMinted") && !strings.Contains(evtType, "FlowToken.TokensMinted"):
-				addTag(evt.TransactionID, "TOKEN_MINT")
-			// Token burning
-			case strings.Contains(evtType, ".TokensBurned") && !strings.Contains(evtType, "FlowToken.TokensBurned"):
-				addTag(evt.TransactionID, "TOKEN_BURN")
-			}
+	for _, evt := range tr.eventTypes {
+		evtType := evt.Type
+		switch {
+		case isEVMTransactionExecutedEvent(evtType):
+			addTag(evt.TransactionID, "EVM")
+		case strings.Contains(evtType, "FlowFees.FeesDeducted"):
+			addTag(evt.TransactionID, "FEE")
+		case strings.Contains(evtType, "NFTStorefront"):
+			addTag(evt.TransactionID, "MARKETPLACE")
+		case strings.Contains(evtType, "AccountContractAdded") || strings.Contains(evtType, "AccountContractUpdated"):
+			addTag(evt.TransactionID, "CONTRACT_DEPLOY")
+		case evtType == "flow.AccountCreated":
+			addTag(evt.TransactionID, "ACCOUNT_CREATED")
+		case strings.Contains(evtType, "AccountKeyAdded") || strings.Contains(evtType, "AccountKeyRemoved"):
+			addTag(evt.TransactionID, "KEY_UPDATE")
+		case strings.Contains(evtType, "FlowTransactionScheduler"):
+			addTag(evt.TransactionID, "SCHEDULED_TX")
+		case strings.Contains(evtType, ".SwapPair.Swap") ||
+			strings.Contains(evtType, ".BloctoSwapPair.Swap") ||
+			strings.Contains(evtType, ".MetaPierSwapPair.Swap"):
+			addTag(evt.TransactionID, "SWAP")
+		case strings.Contains(evtType, ".SwapPair.AddLiquidity") ||
+			strings.Contains(evtType, ".SwapPair.RemoveLiquidity"):
+			addTag(evt.TransactionID, "LIQUIDITY")
+		case strings.Contains(evtType, ".FlowIDTableStaking.TokensStaked") ||
+			strings.Contains(evtType, ".FlowIDTableStaking.TokensUnstaked") ||
+			strings.Contains(evtType, ".FlowIDTableStaking.TokensCommitted") ||
+			strings.Contains(evtType, ".FlowIDTableStaking.RewardsPaid") ||
+			strings.Contains(evtType, ".FlowIDTableStaking.DelegatorRewardsPaid"):
+			addTag(evt.TransactionID, "STAKING")
+		case strings.Contains(evtType, "LiquidStaking") ||
+			strings.Contains(evtType, "stFlowToken"):
+			addTag(evt.TransactionID, "LIQUID_STAKING")
+		case strings.Contains(evtType, ".TokensMinted") && !strings.Contains(evtType, "FlowToken.TokensMinted"):
+			addTag(evt.TransactionID, "TOKEN_MINT")
+		case strings.Contains(evtType, ".TokensBurned") && !strings.Contains(evtType, "FlowToken.TokensBurned"):
+			addTag(evt.TransactionID, "TOKEN_BURN")
 		}
 	}
 

@@ -192,6 +192,129 @@ func (r *Repository) UpsertFTHoldingsDelta(ctx context.Context, address, contrac
 	return err
 }
 
+// FTHoldingDelta represents an aggregated balance delta for a single (address, contract, contractName).
+type FTHoldingDelta struct {
+	Address      string
+	Contract     string
+	ContractName string
+	Delta        string
+	Height       uint64
+}
+
+// BulkUpsertFTHoldingsDeltas inserts/updates multiple FT holdings in one batch using COPY + temp table.
+func (r *Repository) BulkUpsertFTHoldingsDeltas(ctx context.Context, deltas []FTHoldingDelta) error {
+	if len(deltas) == 0 {
+		return nil
+	}
+	conn, err := r.db.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("bulk upsert ft holdings: %w", err)
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("bulk upsert ft holdings: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `
+		CREATE TEMP TABLE tmp_ft_deltas (
+			address BYTEA,
+			contract_address BYTEA,
+			contract_name TEXT,
+			delta NUMERIC,
+			last_height BIGINT
+		) ON COMMIT DROP`); err != nil {
+		return fmt.Errorf("bulk upsert ft holdings: %w", err)
+	}
+
+	copyRows := make([][]interface{}, len(deltas))
+	for i, d := range deltas {
+		copyRows[i] = []interface{}{hexToBytes(d.Address), hexToBytes(d.Contract), d.ContractName, d.Delta, int64(d.Height)}
+	}
+	if _, err := tx.CopyFrom(ctx,
+		pgx.Identifier{"tmp_ft_deltas"},
+		[]string{"address", "contract_address", "contract_name", "delta", "last_height"},
+		pgx.CopyFromRows(copyRows),
+	); err != nil {
+		return fmt.Errorf("bulk upsert ft holdings: %w", err)
+	}
+
+	// Aggregate deltas per (address, contract_address, contract_name), then upsert.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO app.ft_holdings (address, contract_address, contract_name, balance, last_height, updated_at)
+		SELECT address, contract_address, contract_name, SUM(delta), MAX(last_height), NOW()
+		FROM tmp_ft_deltas
+		GROUP BY address, contract_address, contract_name
+		ON CONFLICT (address, contract_address, contract_name) DO UPDATE SET
+			balance = app.ft_holdings.balance + EXCLUDED.balance,
+			last_height = GREATEST(app.ft_holdings.last_height, EXCLUDED.last_height),
+			updated_at = NOW()`); err != nil {
+		return fmt.Errorf("bulk upsert ft holdings: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+// BulkUpsertNFTOwnershipFromTransfers inserts/updates multiple NFT ownerships in one batch using COPY + temp table.
+func (r *Repository) BulkUpsertNFTOwnershipFromTransfers(ctx context.Context, rows []models.NFTOwnership) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	conn, err := r.db.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("bulk upsert nft ownership: %w", err)
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("bulk upsert nft ownership: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `
+		CREATE TEMP TABLE tmp_nft_ownership (
+			contract_address BYTEA,
+			contract_name TEXT,
+			nft_id TEXT,
+			owner BYTEA,
+			last_height BIGINT
+		) ON COMMIT DROP`); err != nil {
+		return fmt.Errorf("bulk upsert nft ownership: %w", err)
+	}
+
+	copyRows := make([][]interface{}, len(rows))
+	for i, o := range rows {
+		copyRows[i] = []interface{}{hexToBytes(o.ContractAddress), o.ContractName, o.NFTID, nullIfEmptyBytes(hexToBytes(o.Owner)), int64(o.LastHeight)}
+	}
+	if _, err := tx.CopyFrom(ctx,
+		pgx.Identifier{"tmp_nft_ownership"},
+		[]string{"contract_address", "contract_name", "nft_id", "owner", "last_height"},
+		pgx.CopyFromRows(copyRows),
+	); err != nil {
+		return fmt.Errorf("bulk upsert nft ownership: %w", err)
+	}
+
+	// Keep only the latest ownership per NFT, then upsert.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO app.nft_ownership (contract_address, contract_name, nft_id, owner, last_height, updated_at)
+		SELECT DISTINCT ON (contract_address, contract_name, nft_id)
+			contract_address, contract_name, nft_id, owner, last_height, NOW()
+		FROM tmp_nft_ownership
+		ORDER BY contract_address, contract_name, nft_id, last_height DESC
+		ON CONFLICT (contract_address, contract_name, nft_id) DO UPDATE SET
+			owner = EXCLUDED.owner,
+			last_height = EXCLUDED.last_height,
+			updated_at = NOW()
+		WHERE EXCLUDED.last_height >= app.nft_ownership.last_height`); err != nil {
+		return fmt.Errorf("bulk upsert nft ownership: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (r *Repository) UpsertDailyBalanceDelta(ctx context.Context, address, contract, contractName, date, delta string, height uint64) error {
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO app.daily_balance_deltas (address, contract_address, contract_name, date, delta, tx_count, last_height)

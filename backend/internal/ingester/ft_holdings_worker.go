@@ -27,14 +27,12 @@ func (w *FTHoldingsWorker) ProcessRange(ctx context.Context, fromHeight, toHeigh
 		return err
 	}
 
+	// Collect all deltas in a slice — DB-side aggregation handles dedup.
+	deltas := make([]repository.FTHoldingDelta, 0, len(events)*2)
 	for _, t := range events {
 		contract := strings.TrimSpace(t.TokenContractAddress)
 		contractName := strings.TrimSpace(t.ContractName)
-		if contract == "" {
-			continue
-		}
-		if contractName == "" {
-			// Avoid ambiguous holdings when multiple contracts share the same address.
+		if contract == "" || contractName == "" {
 			continue
 		}
 		amount := strings.TrimSpace(t.Amount)
@@ -43,17 +41,20 @@ func (w *FTHoldingsWorker) ProcessRange(ctx context.Context, fromHeight, toHeigh
 		}
 
 		if addr := normalizeAddressLower(t.FromAddress); addr != "" {
-			if err := w.repo.UpsertFTHoldingsDelta(ctx, addr, contract, contractName, negate(amount), t.BlockHeight); err != nil {
-				return err
-			}
+			deltas = append(deltas, repository.FTHoldingDelta{
+				Address: addr, Contract: contract, ContractName: contractName,
+				Delta: negate(amount), Height: t.BlockHeight,
+			})
 		}
 		if addr := normalizeAddressLower(t.ToAddress); addr != "" {
-			if err := w.repo.UpsertFTHoldingsDelta(ctx, addr, contract, contractName, amount, t.BlockHeight); err != nil {
-				return err
-			}
+			deltas = append(deltas, repository.FTHoldingDelta{
+				Address: addr, Contract: contract, ContractName: contractName,
+				Delta: amount, Height: t.BlockHeight,
+			})
 		}
 	}
-	return nil
+
+	return w.repo.BulkUpsertFTHoldingsDeltas(ctx, deltas)
 }
 
 func negate(amount string) string {

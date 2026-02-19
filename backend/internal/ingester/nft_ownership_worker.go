@@ -51,6 +51,7 @@ func (w *NFTOwnershipWorker) ProcessRange(ctx context.Context, fromHeight, toHei
 		return err
 	}
 
+	batch := make([]models.NFTOwnership, 0, len(transfers))
 	for _, t := range transfers {
 		if t.TokenID == "" || t.TokenContractAddress == "" {
 			continue
@@ -66,16 +67,13 @@ func (w *NFTOwnershipWorker) ProcessRange(ctx context.Context, fromHeight, toHei
 		if w.custodialAddresses[owner] {
 			continue
 		}
-		ownership := models.NFTOwnership{
+		batch = append(batch, models.NFTOwnership{
 			ContractAddress: t.TokenContractAddress,
 			ContractName:    t.ContractName,
 			NFTID:           t.TokenID,
 			Owner:           owner,
 			LastHeight:      t.BlockHeight,
-		}
-		if err := w.repo.UpsertNFTOwnership(ctx, ownership); err != nil {
-			return err
-		}
+		})
 	}
-	return nil
+	return w.repo.BulkUpsertNFTOwnershipFromTransfers(ctx, batch)
 }
