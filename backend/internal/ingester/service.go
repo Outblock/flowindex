@@ -471,6 +471,17 @@ func (s *Service) fetchBatchParallel(ctx context.Context, start, end uint64) ([]
 	if skipped > 0 {
 		log.Printf("[%s] Batch %d->%d: skipped %d/%d blocks due to errors (will retry later)",
 			s.config.ServiceName, start, end, skipped, total)
+		if err := s.repo.LogIndexingError(
+			ctx,
+			s.config.ServiceName,
+			start,
+			"",
+			"batch_skipped_blocks",
+			fmt.Sprintf("range=%d->%d skipped=%d total=%d", start, end, skipped, total),
+			nil,
+		); err != nil {
+			log.Printf("[%s] failed to log skipped-batch summary: %v", s.config.ServiceName, err)
+		}
 	}
 
 	return results, nil
@@ -509,6 +520,21 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 
 		if res.Block == nil {
 			continue
+		}
+
+		// Persist anomaly markers for later targeted repair.
+		if res.Block.CollectionCount > 0 && len(res.Transactions) == 0 {
+			if err := s.repo.LogIndexingError(
+				ctx,
+				s.config.ServiceName,
+				res.Height,
+				"",
+				"empty_block_with_collections",
+				fmt.Sprintf("block=%d has collection_count=%d but tx_count=0", res.Height, res.Block.CollectionCount),
+				nil,
+			); err != nil {
+				log.Printf("[%s] failed to log empty-block anomaly: %v", s.config.ServiceName, err)
+			}
 		}
 
 		// Trigger Callbacks (Real-time updates)

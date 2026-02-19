@@ -19,8 +19,10 @@ import (
 )
 
 // sanitizeForPG removes PostgreSQL-incompatible bytes from strings:
-// null bytes (\x00) and invalid UTF-8 sequences.
+// null bytes (\x00 / \u0000) and invalid UTF-8 sequences.
 func sanitizeForPG(s string) string {
+	s = strings.ReplaceAll(s, "\\u0000", "")
+	s = strings.ReplaceAll(s, "\\U0000", "")
 	if strings.ContainsRune(s, 0) {
 		s = strings.ReplaceAll(s, "\x00", "")
 	}
@@ -40,7 +42,7 @@ func sanitizeJSONB(raw json.RawMessage) any {
 	if !json.Valid([]byte(s)) {
 		return nil
 	}
-	return s
+	return []byte(s)
 }
 
 // SaveBatch atomicially saves a batch of blocks and all related data
@@ -324,17 +326,17 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					}
 					var scriptInline any
 					if scriptInlines[i] != "" {
-						scriptInline = scriptInlines[i]
+						scriptInline = sanitizeForPG(scriptInlines[i])
 					}
 
 					var args any
 					if len(t.Arguments) > 0 {
-						args = t.Arguments
+						args = sanitizeJSONB(t.Arguments)
 					}
 
 					var errMsg any
 					if strings.TrimSpace(t.ErrorMessage) != "" {
-						errMsg = t.ErrorMessage
+						errMsg = sanitizeForPG(t.ErrorMessage)
 					}
 
 					return []any{
@@ -473,11 +475,11 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				t.BlockHeight, hexToBytes(t.ID), t.TransactionIndex,
 				hexToBytes(t.ProposerAddress), hexToBytes(t.PayerAddress), sliceHexToBytes(t.Authorizers),
 				scriptHash, func() any {
-				if s, ok := scriptInline.(string); ok {
-					return sanitizeForPG(s)
-				}
-				return scriptInline
-			}(), sanitizeJSONB(t.Arguments),
+					if s, ok := scriptInline.(string); ok {
+						return sanitizeForPG(s)
+					}
+					return scriptInline
+				}(), sanitizeJSONB(t.Arguments),
 				t.Status, func() any {
 					if strings.TrimSpace(t.ErrorMessage) == "" {
 						return nil

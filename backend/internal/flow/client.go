@@ -13,8 +13,11 @@ import (
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
+	flowgrpcconvert "github.com/onflow/flow-go-sdk/access/grpc/convert"
 	"github.com/onflow/flow/protobuf/go/flow/access"
 	"github.com/onflow/flow/protobuf/go/flow/entities"
+	legacyaccess "github.com/onflow/flow/protobuf/go/flow/legacy/access"
+	legacyentities "github.com/onflow/flow/protobuf/go/flow/legacy/entities"
 	"golang.org/x/time/rate"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -27,8 +30,9 @@ import (
 // Client wraps the Flow Access Client
 type Client struct {
 	grpcClients []*flowgrpc.Client
-	rawClients  []access.AccessAPIClient // Raw gRPC clients for JSON-CDC fallback
-	rawConns    []*grpc.ClientConn       // Raw gRPC connections (for cleanup)
+	rawClients  []access.AccessAPIClient       // Raw modern gRPC clients for JSON-CDC fallback
+	legacyRaw   []legacyaccess.AccessAPIClient // Raw legacy gRPC clients (/access.AccessAPI) for old candidate sporks
+	rawConns    []*grpc.ClientConn             // Raw gRPC connections (for cleanup)
 	nodes       []string
 	// Per-node spork root (inclusive). Height < minHeight cannot be served by that node.
 	// Learned dynamically from NotFound errors.
@@ -39,11 +43,8 @@ type Client struct {
 	// Per-node flag: 1 = bulk APIs (GetTransactionsByBlockID, GetTransactionResultsByBlockID)
 	// are not supported. Set on first Unimplemented error to skip wasted round-trips.
 	noBulkAPI []uint32
-	// Parsed from hostname. Higher means "newer spork" (e.g. mainnet28 > mainnet27).
-	// Used to prefer newer spork nodes for a given height in mixed historic pools.
-	sporkRanks []int
-	limiter    *rate.Limiter
-	rr         uint32
+	limiter   *rate.Limiter
+	rr        uint32
 }
 
 // NewClient creates a new Flow gRPC client
@@ -59,9 +60,9 @@ func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
 	nodes := parseAccessNodesFromEnv(envKey, fallback)
 	clients := make([]*flowgrpc.Client, 0, len(nodes))
 	rawClients := make([]access.AccessAPIClient, 0, len(nodes))
+	legacyRaw := make([]legacyaccess.AccessAPIClient, 0, len(nodes))
 	rawConns := make([]*grpc.ClientConn, 0, len(nodes))
 	connectedNodes := make([]string, 0, len(nodes))
-	ranks := make([]int, 0, len(nodes))
 	var firstErr error
 	dialOpts := grpcDialOptionsFromEnv()
 	for _, node := range nodes {
@@ -89,15 +90,16 @@ func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
 			log.Printf("[flow] Warn: failed to create raw gRPC connection to %s: %v", node, rawErr)
 			// Non-fatal: raw fallback just won't work for this node
 			rawClients = append(rawClients, nil)
+			legacyRaw = append(legacyRaw, nil)
 			rawConns = append(rawConns, nil)
 		} else {
 			rawClients = append(rawClients, access.NewAccessAPIClient(rawConn))
+			legacyRaw = append(legacyRaw, legacyaccess.NewAccessAPIClient(rawConn))
 			rawConns = append(rawConns, rawConn)
 		}
 
 		clients = append(clients, c)
 		connectedNodes = append(connectedNodes, node)
-		ranks = append(ranks, extractSporkRank(node))
 	}
 
 	if len(clients) == 0 {
@@ -110,12 +112,12 @@ func NewClientFromEnv(envKey string, fallback string) (*Client, error) {
 	c := &Client{
 		grpcClients:   clients,
 		rawClients:    rawClients,
+		legacyRaw:     legacyRaw,
 		rawConns:      rawConns,
 		nodes:         connectedNodes,
 		minHeights:    make([]uint64, len(clients)),
 		disabledUntil: make([]int64, len(clients)),
 		noBulkAPI:     make([]uint32, len(clients)),
-		sporkRanks:    ranks,
 		limiter:       newLimiterFromEnv(len(clients)),
 	}
 	c.initSporkMinHeights()
@@ -369,44 +371,57 @@ func (c *Client) pickClientForHeight(height uint64) (int, *flowgrpc.Client) {
 	start := int(atomic.AddUint32(&c.rr, 1) % uint32(len(c.grpcClients)))
 	now := time.Now().UnixNano()
 
-	// Prefer the newest spork node that can serve this height. This avoids randomly
-	// selecting an older spork node that doesn't have newer heights.
-	bestRank := -1
+	// Determine the strict best known floor (largest minHeight <= target), regardless
+	// of temporary disabled state. This keeps us on the correct spork lane.
+	var bestMin uint64
+	hasBest := false
 	for i := 0; i < len(c.grpcClients); i++ {
 		idx := (start + i) % len(c.grpcClients)
-
-		disabledUntil := atomic.LoadInt64(&c.disabledUntil[idx])
-		if disabledUntil > now {
-			continue
-		}
-
 		minH := atomic.LoadUint64(&c.minHeights[idx])
 		if minH != 0 && height < minH {
 			continue
 		}
-
-		if idx < len(c.sporkRanks) && c.sporkRanks[idx] > bestRank {
-			bestRank = c.sporkRanks[idx]
+		if minH == 0 {
+			continue
+		}
+		if !hasBest || minH > bestMin {
+			bestMin = minH
+			hasBest = true
 		}
 	}
 
-	if bestRank >= 0 {
+	if hasBest {
+		disabledBest := -1
 		for i := 0; i < len(c.grpcClients); i++ {
 			idx := (start + i) % len(c.grpcClients)
-
-			disabledUntil := atomic.LoadInt64(&c.disabledUntil[idx])
-			if disabledUntil > now {
-				continue
-			}
-
 			minH := atomic.LoadUint64(&c.minHeights[idx])
-			if minH != 0 && height < minH {
-				continue
+			if minH == bestMin {
+				disabledUntil := atomic.LoadInt64(&c.disabledUntil[idx])
+				if disabledUntil <= now {
+					return idx, c.grpcClients[idx]
+				}
+				if disabledBest == -1 {
+					disabledBest = idx
+				}
 			}
+		}
+		// If all best-floor nodes are temporarily disabled, keep using that spork
+		// instead of falling back to older sporks that cannot serve this height.
+		if disabledBest >= 0 {
+			return disabledBest, c.grpcClients[disabledBest]
+		}
+	}
 
-			if idx < len(c.sporkRanks) && c.sporkRanks[idx] == bestRank {
-				return idx, c.grpcClients[idx]
-			}
+	// No known floor can serve this height. Try an unknown-floor node (archive or
+	// generic endpoint) before full fallback.
+	for i := 0; i < len(c.grpcClients); i++ {
+		idx := (start + i) % len(c.grpcClients)
+		disabledUntil := atomic.LoadInt64(&c.disabledUntil[idx])
+		if disabledUntil > now {
+			continue
+		}
+		if atomic.LoadUint64(&c.minHeights[idx]) == 0 {
+			return idx, c.grpcClients[idx]
 		}
 	}
 
@@ -533,6 +548,9 @@ func (p *PinnedClient) GetBlockByHeight(ctx context.Context, height uint64) (*fl
 	if err := p.withRetry(ctx, func() error {
 		var err error
 		block, err = p.cli.GetBlockByHeight(ctx, height)
+		if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+			block, err = p.getBlockByHeightLegacy(ctx, height)
+		}
 		return err
 	}); err != nil {
 		return nil, nil, fmt.Errorf("failed to get block by height %d: %w", height, err)
@@ -544,6 +562,9 @@ func (p *PinnedClient) GetBlockByHeight(ctx context.Context, height uint64) (*fl
 		if err := p.withRetry(ctx, func() error {
 			var err error
 			coll, err = p.cli.GetCollection(ctx, guarantee.CollectionID)
+			if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+				coll, err = p.getCollectionLegacy(ctx, guarantee.CollectionID)
+			}
 			return err
 		}); err != nil {
 			return nil, nil, fmt.Errorf("failed to get collection %s: %w", guarantee.CollectionID, err)
@@ -561,6 +582,9 @@ func (p *PinnedClient) GetBlockHeaderByHeight(ctx context.Context, height uint64
 	if err := p.withRetry(ctx, func() error {
 		var err error
 		block, err = p.cli.GetBlockByHeight(ctx, height)
+		if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+			block, err = p.getBlockByHeightLegacy(ctx, height)
+		}
 		return err
 	}); err != nil {
 		return nil, fmt.Errorf("failed to get block by height %d: %w", height, err)
@@ -574,6 +598,10 @@ func (p *PinnedClient) GetTransactionsByBlockID(ctx context.Context, blockID flo
 	if err := p.withRetry(ctx, func() error {
 		var err error
 		txs, err = p.cli.GetTransactionsByBlockID(ctx, blockID)
+		if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+			// Legacy candidate access API has no bulk tx-by-block endpoint.
+			return status.Error(codes.Unimplemented, "legacy access API does not support GetTransactionsByBlockID")
+		}
 		return err
 	}); err != nil {
 		return nil, err
@@ -588,6 +616,10 @@ func (p *PinnedClient) GetTransactionResultsByBlockID(ctx context.Context, block
 	if err := p.withRetry(ctx, func() error {
 		var err error
 		results, err = p.cli.GetTransactionResultsByBlockID(ctx, blockID)
+		if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+			// Legacy candidate access API has no bulk results-by-block endpoint.
+			return status.Error(codes.Unimplemented, "legacy access API does not support GetTransactionResultsByBlockID")
+		}
 		return err
 	}); err != nil {
 		return nil, err
@@ -601,6 +633,9 @@ func (p *PinnedClient) GetExecutionResultForBlockID(ctx context.Context, blockID
 	if err := p.withRetry(ctx, func() error {
 		var err error
 		result, err = p.cli.GetExecutionResultForBlockID(ctx, blockID)
+		if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+			return status.Error(codes.Unimplemented, "legacy access API does not support GetExecutionResultForBlockID")
+		}
 		return err
 	}); err != nil {
 		return nil, err
@@ -613,6 +648,9 @@ func (p *PinnedClient) GetCollection(ctx context.Context, collID flow.Identifier
 	if err := p.withRetry(ctx, func() error {
 		var err error
 		coll, err = p.cli.GetCollection(ctx, collID)
+		if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+			coll, err = p.getCollectionLegacy(ctx, collID)
+		}
 		return err
 	}); err != nil {
 		return nil, err
@@ -625,6 +663,9 @@ func (p *PinnedClient) GetTransaction(ctx context.Context, txID flow.Identifier)
 	if err := p.withRetry(ctx, func() error {
 		var err error
 		tx, err = p.cli.GetTransaction(ctx, txID)
+		if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+			tx, err = p.getTransactionLegacy(ctx, txID)
+		}
 		return err
 	}); err != nil {
 		return nil, err
@@ -637,6 +678,9 @@ func (p *PinnedClient) GetTransactionResult(ctx context.Context, txID flow.Ident
 	if err := p.withRetry(ctx, func() error {
 		var err error
 		res, err = p.cli.GetTransactionResult(ctx, txID)
+		if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+			res, err = p.getTransactionResultLegacy(ctx, txID)
+		}
 		return err
 	}); err != nil {
 		return nil, err
@@ -651,11 +695,81 @@ func (p *PinnedClient) GetTransactionResultByIndex(ctx context.Context, blockID 
 	if err := p.withRetry(ctx, func() error {
 		var err error
 		res, err = p.cli.GetTransactionResultByIndex(ctx, blockID, index)
+		if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+			return status.Error(codes.Unimplemented, "legacy access API does not support GetTransactionResultByIndex")
+		}
 		return err
 	}); err != nil {
 		return nil, err
 	}
 	return res, nil
+}
+
+func (p *PinnedClient) getBlockByHeightLegacy(ctx context.Context, height uint64) (*flow.Block, error) {
+	cli := p.parent.legacyClient(p.idx)
+	if cli == nil {
+		return nil, fmt.Errorf("legacy access API client not available for node %s", p.node)
+	}
+	resp, err := cli.GetBlockByHeight(ctx, &legacyaccess.GetBlockByHeightRequest{Height: height})
+	if err != nil {
+		return nil, err
+	}
+	block, err := flowgrpcconvert.MessageToBlock(legacyBlockToMessage(resp.GetBlock()))
+	if err != nil {
+		return nil, err
+	}
+	return block, nil
+}
+
+func (p *PinnedClient) getCollectionLegacy(ctx context.Context, collID flow.Identifier) (*flow.Collection, error) {
+	cli := p.parent.legacyClient(p.idx)
+	if cli == nil {
+		return nil, fmt.Errorf("legacy access API client not available for node %s", p.node)
+	}
+	idBytes, _ := hex.DecodeString(collID.String())
+	resp, err := cli.GetCollectionByID(ctx, &legacyaccess.GetCollectionByIDRequest{Id: idBytes})
+	if err != nil {
+		return nil, err
+	}
+	coll, err := flowgrpcconvert.MessageToCollection(legacyCollectionToMessage(resp.GetCollection()))
+	if err != nil {
+		return nil, err
+	}
+	return &coll, nil
+}
+
+func (p *PinnedClient) getTransactionLegacy(ctx context.Context, txID flow.Identifier) (*flow.Transaction, error) {
+	cli := p.parent.legacyClient(p.idx)
+	if cli == nil {
+		return nil, fmt.Errorf("legacy access API client not available for node %s", p.node)
+	}
+	idBytes, _ := hex.DecodeString(txID.String())
+	resp, err := cli.GetTransaction(ctx, &legacyaccess.GetTransactionRequest{Id: idBytes})
+	if err != nil {
+		return nil, err
+	}
+	tx, err := flowgrpcconvert.MessageToTransaction(legacyTransactionToMessage(resp.GetTransaction()))
+	if err != nil {
+		return nil, err
+	}
+	return &tx, nil
+}
+
+func (p *PinnedClient) getTransactionResultLegacy(ctx context.Context, txID flow.Identifier) (*flow.TransactionResult, error) {
+	cli := p.parent.legacyClient(p.idx)
+	if cli == nil {
+		return nil, fmt.Errorf("legacy access API client not available for node %s", p.node)
+	}
+	idBytes, _ := hex.DecodeString(txID.String())
+	resp, err := cli.GetTransactionResult(ctx, &legacyaccess.GetTransactionRequest{Id: idBytes})
+	if err != nil {
+		return nil, err
+	}
+	result, err := flowgrpcconvert.MessageToTransactionResult(legacyResultToMessage(resp, idBytes), nil)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // RawEvent holds event data from raw gRPC without Cadence type decoding.
@@ -681,22 +795,44 @@ type RawTransactionResult struct {
 // like "Restriction kind" in old spork data.
 func (p *PinnedClient) GetTransactionResultRaw(ctx context.Context, txID flow.Identifier) (*RawTransactionResult, error) {
 	if p.idx < 0 || p.idx >= len(p.parent.rawClients) || p.parent.rawClients[p.idx] == nil {
-		return nil, fmt.Errorf("raw gRPC client not available for node %s", p.node)
+		if !p.parent.hasLegacyRawClient(p.idx) {
+			return nil, fmt.Errorf("raw gRPC client not available for node %s", p.node)
+		}
 	}
 
-	rawCli := p.parent.rawClients[p.idx]
 	idBytes, _ := hex.DecodeString(txID.String())
 
 	var resp *access.TransactionResultResponse
+	var legacyResp *legacyaccess.TransactionResultResponse
 	if err := p.withRetry(ctx, func() error {
 		var err error
-		resp, err = rawCli.GetTransactionResult(ctx, &access.GetTransactionRequest{
-			Id:                   idBytes,
-			EventEncodingVersion: entities.EventEncodingVersion_JSON_CDC_V0,
-		})
+		if rawCli := p.parent.rawClients[p.idx]; rawCli != nil {
+			resp, err = rawCli.GetTransactionResult(ctx, &access.GetTransactionRequest{
+				Id:                   idBytes,
+				EventEncodingVersion: entities.EventEncodingVersion_JSON_CDC_V0,
+			})
+			if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+				legacyResp, err = p.parent.legacyClient(p.idx).GetTransactionResult(ctx, &legacyaccess.GetTransactionRequest{
+					Id: idBytes,
+				})
+			}
+		} else if p.parent.hasLegacyRawClient(p.idx) {
+			legacyResp, err = p.parent.legacyClient(p.idx).GetTransactionResult(ctx, &legacyaccess.GetTransactionRequest{
+				Id: idBytes,
+			})
+		} else {
+			err = fmt.Errorf("raw gRPC client not available for node %s", p.node)
+		}
 		return err
 	}); err != nil {
 		return nil, err
+	}
+
+	if resp == nil && legacyResp != nil {
+		resp = legacyResultToMessage(legacyResp, idBytes)
+	}
+	if resp == nil {
+		return nil, fmt.Errorf("empty tx result response for %s", txID)
 	}
 
 	result := &RawTransactionResult{
@@ -739,19 +875,30 @@ func (p *PinnedClient) GetTransactionResultRaw(ctx context.Context, txID flow.Id
 // This is the bulk equivalent of GetTransactionResultRaw — one RPC call instead of N.
 func (p *PinnedClient) GetTransactionResultsByBlockIDRaw(ctx context.Context, blockID flow.Identifier) ([]*RawTransactionResult, error) {
 	if p.idx < 0 || p.idx >= len(p.parent.rawClients) || p.parent.rawClients[p.idx] == nil {
-		return nil, fmt.Errorf("raw gRPC client not available for node %s", p.node)
+		if !p.parent.hasLegacyRawClient(p.idx) {
+			return nil, fmt.Errorf("raw gRPC client not available for node %s", p.node)
+		}
 	}
 
-	rawCli := p.parent.rawClients[p.idx]
 	idBytes, _ := hex.DecodeString(blockID.String())
 
 	var resp *access.TransactionResultsResponse
 	if err := p.withRetry(ctx, func() error {
 		var err error
-		resp, err = rawCli.GetTransactionResultsByBlockID(ctx, &access.GetTransactionsByBlockIDRequest{
-			BlockId:              idBytes,
-			EventEncodingVersion: entities.EventEncodingVersion_JSON_CDC_V0,
-		})
+		if rawCli := p.parent.rawClients[p.idx]; rawCli != nil {
+			resp, err = rawCli.GetTransactionResultsByBlockID(ctx, &access.GetTransactionsByBlockIDRequest{
+				BlockId:              idBytes,
+				EventEncodingVersion: entities.EventEncodingVersion_JSON_CDC_V0,
+			})
+			if err != nil && isUnknownAccessAPIServiceError(err) && p.parent.hasLegacyRawClient(p.idx) {
+				// Legacy API has no bulk-by-block tx results endpoint.
+				return status.Error(codes.Unimplemented, "legacy access API does not support GetTransactionResultsByBlockID")
+			}
+		} else if p.parent.hasLegacyRawClient(p.idx) {
+			return status.Error(codes.Unimplemented, "legacy access API does not support GetTransactionResultsByBlockID")
+		} else {
+			err = fmt.Errorf("raw gRPC client not available for node %s", p.node)
+		}
 		return err
 	}); err != nil {
 		return nil, err
@@ -811,7 +958,17 @@ func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn f
 
 		// If the node cannot resolve to any address, mark it disabled and let the caller repin.
 		if isZeroAddressesResolverError(err) {
-			c.disableNodeFor(idx, 5*time.Minute)
+			c.disableNodeFor(idx, getNodeUnavailableDisableDuration())
+			return &NodeUnavailableError{Node: node, NodeIndex: idx, Err: err}
+		}
+		// Some very old candidate nodes do not implement modern AccessAPI at all.
+		// If legacy AccessAPI is available for this node, let the caller fallback.
+		// Otherwise disable for a long window so history backfill doesn't keep hammering.
+		if isUnknownAccessAPIServiceError(err) {
+			if c.hasLegacyRawClient(idx) {
+				return err
+			}
+			c.disableNodeFor(idx, 12*time.Hour)
 			return &NodeUnavailableError{Node: node, NodeIndex: idx, Err: err}
 		}
 
@@ -858,6 +1015,17 @@ func (c *Client) withRetryPinned(ctx context.Context, idx int, node string, fn f
 	return nil
 }
 
+func (c *Client) hasLegacyRawClient(idx int) bool {
+	return idx >= 0 && idx < len(c.legacyRaw) && c.legacyRaw[idx] != nil
+}
+
+func (c *Client) legacyClient(idx int) legacyaccess.AccessAPIClient {
+	if !c.hasLegacyRawClient(idx) {
+		return nil
+	}
+	return c.legacyRaw[idx]
+}
+
 func isZeroAddressesResolverError(err error) bool {
 	if err == nil {
 		return false
@@ -865,6 +1033,25 @@ func isZeroAddressesResolverError(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "name resolver error: produced zero addresses") ||
 		strings.Contains(msg, "produced zero addresses")
+}
+
+func isUnknownAccessAPIServiceError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "unknown service flow.access.AccessAPI")
+}
+
+func getNodeUnavailableDisableDuration() time.Duration {
+	sec := int(getEnvFloat("FLOW_NODE_UNAVAILABLE_DISABLE_SEC", 20))
+	if sec < 1 {
+		sec = 1
+	}
+	if sec > 300 {
+		sec = 300
+	}
+	return time.Duration(sec) * time.Second
 }
 
 func extractSporkRootHeight(err error) (uint64, bool) {
@@ -899,35 +1086,198 @@ func parseLeadingUint64(s string) (uint64, bool) {
 	return v, true
 }
 
-func extractSporkRank(node string) int {
-	// We expect hostnames like: access-001.mainnet28.nodes.onflow.org:9000
-	const needle = "mainnet"
-	idx := strings.Index(node, needle)
-	if idx == -1 {
-		return 0
+func legacyBlockToMessage(b *legacyentities.Block) *entities.Block {
+	if b == nil {
+		return nil
 	}
-	rest := node[idx+len(needle):]
-	n := 0
-	for n < len(rest) {
-		ch := rest[n]
-		if ch < '0' || ch > '9' {
-			break
+	out := &entities.Block{
+		Id:                   b.Id,
+		ParentId:             b.ParentId,
+		Height:               b.Height,
+		Timestamp:            b.Timestamp,
+		CollectionGuarantees: make([]*entities.CollectionGuarantee, 0, len(b.CollectionGuarantees)),
+		BlockSeals:           make([]*entities.BlockSeal, 0, len(b.BlockSeals)),
+		Signatures:           b.Signatures,
+	}
+	for _, cg := range b.CollectionGuarantees {
+		out.CollectionGuarantees = append(out.CollectionGuarantees, &entities.CollectionGuarantee{
+			CollectionId: cg.CollectionId,
+			Signatures:   cg.Signatures,
+		})
+	}
+	for _, bs := range b.BlockSeals {
+		out.BlockSeals = append(out.BlockSeals, &entities.BlockSeal{
+			BlockId:                    bs.BlockId,
+			ExecutionReceiptId:         bs.ExecutionReceiptId,
+			ExecutionReceiptSignatures: bs.ExecutionReceiptSignatures,
+			ResultApprovalSignatures:   bs.ResultApprovalSignatures,
+		})
+	}
+	return out
+}
+
+func legacyCollectionToMessage(c *legacyentities.Collection) *entities.Collection {
+	if c == nil {
+		return nil
+	}
+	return &entities.Collection{
+		Id:             c.Id,
+		TransactionIds: c.TransactionIds,
+	}
+}
+
+func legacyTransactionToMessage(t *legacyentities.Transaction) *entities.Transaction {
+	if t == nil {
+		return nil
+	}
+	out := &entities.Transaction{
+		Script:             t.Script,
+		Arguments:          t.Arguments,
+		ReferenceBlockId:   t.ReferenceBlockId,
+		GasLimit:           t.GasLimit,
+		Payer:              t.Payer,
+		Authorizers:        t.Authorizers,
+		PayloadSignatures:  make([]*entities.Transaction_Signature, 0, len(t.PayloadSignatures)),
+		EnvelopeSignatures: make([]*entities.Transaction_Signature, 0, len(t.EnvelopeSignatures)),
+	}
+	if t.ProposalKey != nil {
+		out.ProposalKey = &entities.Transaction_ProposalKey{
+			Address:        t.ProposalKey.Address,
+			KeyId:          t.ProposalKey.KeyId,
+			SequenceNumber: t.ProposalKey.SequenceNumber,
 		}
-		n++
 	}
-	if n == 0 {
-		return 0
+	for _, sig := range t.PayloadSignatures {
+		out.PayloadSignatures = append(out.PayloadSignatures, &entities.Transaction_Signature{
+			Address:   sig.Address,
+			KeyId:     sig.KeyId,
+			Signature: sig.Signature,
+		})
 	}
-	v, err := strconv.Atoi(rest[:n])
-	if err != nil || v < 0 {
-		return 0
+	for _, sig := range t.EnvelopeSignatures {
+		out.EnvelopeSignatures = append(out.EnvelopeSignatures, &entities.Transaction_Signature{
+			Address:   sig.Address,
+			KeyId:     sig.KeyId,
+			Signature: sig.Signature,
+		})
 	}
-	return v
+	return out
+}
+
+func legacyResultToMessage(r *legacyaccess.TransactionResultResponse, txID []byte) *access.TransactionResultResponse {
+	if r == nil {
+		return nil
+	}
+	out := &access.TransactionResultResponse{
+		Status:           legacyStatusToStatus(r.Status),
+		StatusCode:       r.StatusCode,
+		ErrorMessage:     r.ErrorMessage,
+		TransactionId:    txID,
+		BlockHeight:      0,
+		Events:           make([]*entities.Event, 0, len(r.Events)),
+		Metadata:         nil,
+		BlockId:          nil,
+		CollectionId:     nil,
+		ComputationUsage: 0,
+	}
+	for _, evt := range r.Events {
+		out.Events = append(out.Events, &entities.Event{
+			Type:             evt.Type,
+			TransactionId:    evt.TransactionId,
+			TransactionIndex: evt.TransactionIndex,
+			EventIndex:       evt.EventIndex,
+			Payload:          evt.Payload,
+		})
+	}
+	return out
+}
+
+func legacyStatusToStatus(s legacyentities.TransactionStatus) entities.TransactionStatus {
+	switch s {
+	case legacyentities.TransactionStatus_PENDING:
+		return entities.TransactionStatus_PENDING
+	case legacyentities.TransactionStatus_FINALIZED:
+		return entities.TransactionStatus_FINALIZED
+	case legacyentities.TransactionStatus_EXECUTED:
+		return entities.TransactionStatus_EXECUTED
+	case legacyentities.TransactionStatus_SEALED:
+		return entities.TransactionStatus_SEALED
+	case legacyentities.TransactionStatus_EXPIRED:
+		return entities.TransactionStatus_EXPIRED
+	default:
+		return entities.TransactionStatus_UNKNOWN
+	}
+}
+
+func extractNodeSporkKey(node string) string {
+	for _, network := range []string{"mainnet", "candidate"} {
+		idx := strings.Index(node, network)
+		if idx == -1 {
+			continue
+		}
+		rest := node[idx+len(network):]
+		n := 0
+		for n < len(rest) {
+			ch := rest[n]
+			if ch < '0' || ch > '9' {
+				break
+			}
+			n++
+		}
+		if n == 0 {
+			continue
+		}
+		v, err := strconv.Atoi(rest[:n])
+		if err != nil || v < 0 {
+			continue
+		}
+		return fmt.Sprintf("%s%d", network, v)
+	}
+	return ""
+}
+
+// sporkRootHeights maps node spork key to root block height.
+// Each spork access node can only serve blocks at or above its root height.
+// Source: https://raw.githubusercontent.com/onflow/flow/refs/heads/master/sporks.json
+var sporkRootHeights = map[string]uint64{
+	"candidate4": 1065711,
+	"candidate5": 2033592,
+	"candidate6": 3187931,
+	"candidate7": 4132133,
+	"candidate8": 4972987,
+	"candidate9": 6483246,
+	"mainnet1":   7601063,
+	"mainnet2":   8742959,
+	"mainnet3":   9737133,
+	"mainnet4":   9992020,
+	"mainnet5":   12020337,
+	"mainnet6":   12609237,
+	"mainnet7":   13404174,
+	"mainnet8":   13950742,
+	"mainnet9":   14892104,
+	"mainnet10":  15791891,
+	"mainnet11":  16755602,
+	"mainnet12":  17544523,
+	"mainnet13":  18587478,
+	"mainnet14":  19050753,
+	"mainnet15":  21291692,
+	"mainnet16":  23830813,
+	"mainnet17":  27341470,
+	"mainnet18":  31735955,
+	"mainnet19":  35858811,
+	"mainnet20":  40171634,
+	"mainnet21":  44950207,
+	"mainnet22":  47169687,
+	"mainnet23":  55114467,
+	"mainnet24":  65264619,
+	"mainnet25":  85981135,
+	"mainnet26":  88226267,
+	"mainnet27":  130290659,
+	"mainnet28":  137390146,
 }
 
 // mainnetSporkRootHeights maps spork number to the root block height for that spork.
-// Each spork's access node can only serve blocks at or above its root height.
-// Source: https://developers.flow.com/networks/flow-port/staking-guide
+// Deprecated: kept for backward compatibility with tests/tools referencing this symbol.
 var mainnetSporkRootHeights = map[int]uint64{
 	1:  7601063,
 	2:  8742959,
@@ -960,13 +1310,14 @@ var mainnetSporkRootHeights = map[int]uint64{
 }
 
 // initSporkMinHeights pre-populates minHeights for nodes whose hostnames contain
-// a mainnet spork number, so pickClientForHeight can immediately skip nodes that
-// cannot serve a given height range.
+// a known spork key (mainnet/candidate), so pickClientForHeight can immediately
+// skip nodes that cannot serve a given height range.
 func (c *Client) initSporkMinHeights() {
-	for i, rank := range c.sporkRanks {
-		if root, ok := mainnetSporkRootHeights[rank]; ok && rank > 0 {
+	for i := range c.nodes {
+		key := extractNodeSporkKey(c.nodes[i])
+		if root, ok := sporkRootHeights[key]; ok {
 			atomic.StoreUint64(&c.minHeights[i], root)
-			log.Printf("[flow] Node %s (spork %d) → minHeight %d", c.nodes[i], rank, root)
+			log.Printf("[flow] Node %s (%s) → minHeight %d", c.nodes[i], key, root)
 		}
 	}
 }
