@@ -445,9 +445,9 @@ func (r *Repository) GetTransferSummariesByTxRefs(ctx context.Context, refs []Tx
 		       COALESCE('A.' || encode(ft.token_contract_address, 'hex') || '.' || NULLIF(ft.contract_name, ''), encode(ft.token_contract_address, 'hex')) AS token,
 		       SUM(CAST(ft.amount AS NUMERIC)) AS total_amount,
 		       CASE WHEN ft.from_address = $3 OR ($4::bytea IS NOT NULL AND ft.from_address = $4) THEN 'out' ELSE 'in' END AS direction,
-		       string_agg(DISTINCT CASE WHEN ft.from_address = $3 OR ($4::bytea IS NOT NULL AND ft.from_address = $4)
+		       COALESCE(string_agg(DISTINCT CASE WHEN ft.from_address = $3 OR ($4::bytea IS NOT NULL AND ft.from_address = $4)
 		            THEN encode(ft.to_address, 'hex')
-		            ELSE encode(ft.from_address, 'hex') END, ',') AS counterparty
+		            ELSE encode(ft.from_address, 'hex') END, ','), '') AS counterparty
 		FROM app.ft_transfers ft
 		WHERE ft.transaction_id = ANY($1) AND ft.block_height = ANY($2)
 		  AND ft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
@@ -474,9 +474,9 @@ func (r *Repository) GetTransferSummariesByTxRefs(ctx context.Context, refs []Tx
 		       COALESCE('A.' || encode(nft.token_contract_address, 'hex') || '.' || NULLIF(nft.contract_name, ''), encode(nft.token_contract_address, 'hex')) AS collection,
 		       COUNT(*) AS cnt,
 		       CASE WHEN nft.from_address = $3 OR ($4::bytea IS NOT NULL AND nft.from_address = $4) THEN 'out' ELSE 'in' END AS direction,
-		       string_agg(DISTINCT CASE WHEN nft.from_address = $3 OR ($4::bytea IS NOT NULL AND nft.from_address = $4)
+		       COALESCE(string_agg(DISTINCT CASE WHEN nft.from_address = $3 OR ($4::bytea IS NOT NULL AND nft.from_address = $4)
 		            THEN encode(nft.to_address, 'hex')
-		            ELSE encode(nft.from_address, 'hex') END, ',') AS counterparty
+		            ELSE encode(nft.from_address, 'hex') END, ','), '') AS counterparty
 		FROM app.nft_transfers nft
 		WHERE nft.transaction_id = ANY($1) AND nft.block_height = ANY($2)
 		  AND nft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
@@ -511,8 +511,8 @@ func (r *Repository) getTransferSummariesNoDirectionByRefs(ctx context.Context, 
 		SELECT encode(ft.transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(ft.token_contract_address, 'hex') || '.' || NULLIF(ft.contract_name, ''), encode(ft.token_contract_address, 'hex')) AS token,
 		       SUM(CAST(ft.amount AS NUMERIC)) AS total_amount,
-		       string_agg(DISTINCT encode(ft.from_address, 'hex'), ',') AS from_addrs,
-		       string_agg(DISTINCT encode(ft.to_address, 'hex'), ',') AS to_addrs
+		       COALESCE(string_agg(DISTINCT encode(ft.from_address, 'hex'), ','), '') AS from_addrs,
+		       COALESCE(string_agg(DISTINCT encode(ft.to_address, 'hex'), ','), '') AS to_addrs
 		FROM app.ft_transfers ft
 		WHERE ft.transaction_id = ANY($1) AND ft.block_height = ANY($2)
 		  AND ft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
@@ -535,8 +535,8 @@ func (r *Repository) getTransferSummariesNoDirectionByRefs(ctx context.Context, 
 		SELECT encode(nft.transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(nft.token_contract_address, 'hex') || '.' || NULLIF(nft.contract_name, ''), encode(nft.token_contract_address, 'hex')) AS collection,
 		       COUNT(*) AS cnt,
-		       string_agg(DISTINCT encode(nft.from_address, 'hex'), ',') AS from_addrs,
-		       string_agg(DISTINCT encode(nft.to_address, 'hex'), ',') AS to_addrs
+		       COALESCE(string_agg(DISTINCT encode(nft.from_address, 'hex'), ','), '') AS from_addrs,
+		       COALESCE(string_agg(DISTINCT encode(nft.to_address, 'hex'), ','), '') AS to_addrs
 		FROM app.nft_transfers nft
 		WHERE nft.transaction_id = ANY($1) AND nft.block_height = ANY($2)
 		  AND nft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
