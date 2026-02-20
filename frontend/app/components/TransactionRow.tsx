@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Flame, Droplets, CircleDollarSign, Coins, Loader2, Fuel, Receipt, Layers, User, Wallet, Shield, Image as ImageIcon } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, FileCode, Zap, Box, UserPlus, Key, ShoppingBag, Clock, ChevronDown, ChevronRight, ExternalLink, Flame, Droplets, CircleDollarSign, Coins, Loader2, Fuel, Receipt, Layers, User, Users, Wallet, Shield, Image as ImageIcon } from 'lucide-react';
 import { formatShort, resolveIPFS } from './account/accountUtils';
 import { AddressLink } from './AddressLink';
 import { formatRelativeTime } from '../lib/time';
@@ -74,33 +74,17 @@ export function deriveActivityType(tx: any): { type: string; label: string; colo
         return { type: 'marketplace', label: 'Marketplace', color: 'text-pink-600 dark:text-pink-400', bgColor: 'border-pink-300 dark:border-pink-500/30 bg-pink-50 dark:bg-pink-500/10' };
     }
     if (summary?.nft && summary.nft.length > 0) {
-        const nftName = summary.nft[0].name || formatTokenName(summary.nft[0].collection);
-        return { type: 'nft', label: nftName ? `${nftName} Transfer` : 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
+        return { type: 'nft', label: 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
     }
     if (summary?.ft && summary.ft.length > 0) {
-        const ftName = summary.ft[0].symbol || summary.ft[0].name || formatTokenName(summary.ft[0].token);
-        return { type: 'ft', label: ftName ? `${ftName} Transfer` : 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
+        return { type: 'ft', label: 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
     }
     // Check ft_transfers array directly (transfer_summary may be null even when ft_transfers exist)
-    if (tx.ft_transfers?.length > 0) {
-        const ft = tx.ft_transfers[0];
-        const ftName = ft.token_symbol || ft.token_name || formatTokenName(ft.token || '');
-        return { type: 'ft', label: ftName ? `${ftName} Transfer` : 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
+    if (tx.ft_transfers?.length > 0 || tagsLower.some(t => t.includes('ft_transfer'))) {
+        return { type: 'ft', label: 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
     }
-    if (tagsLower.some(t => t.includes('ft_transfer'))) {
-        const contractNames = imports.map(c => formatTokenName(c)).filter(n => n && n !== 'Crypto' && n !== 'FungibleToken' && n !== 'NonFungibleToken' && n !== 'MetadataViews');
-        const ftName = contractNames[0] || '';
-        return { type: 'ft', label: ftName ? `${ftName} Transfer` : 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
-    }
-    if (tx.nft_transfers?.length > 0) {
-        const nt = tx.nft_transfers[0];
-        const nftName = nt.collection_name || formatTokenName(nt.token || '');
-        return { type: 'nft', label: nftName ? `${nftName} Transfer` : 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
-    }
-    if (tagsLower.some(t => t.includes('nft_transfer'))) {
-        const contractNames = imports.map(c => formatTokenName(c)).filter(n => n && n !== 'Crypto' && n !== 'FungibleToken' && n !== 'NonFungibleToken' && n !== 'MetadataViews');
-        const nftName = contractNames[0] || '';
-        return { type: 'nft', label: nftName ? `${nftName} Transfer` : 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
+    if (tx.nft_transfers?.length > 0 || tagsLower.some(t => t.includes('nft_transfer'))) {
+        return { type: 'nft', label: 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
     }
     // Check defi_events for swaps
     if (tx.defi_events?.length > 0) {
@@ -479,17 +463,32 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
         </span>
     );
 
-    // Collect signers for the roles section
-    const signers: { role: string; icon: React.ReactNode; addr: string }[] = [];
-    if (tx.proposer) signers.push({ role: 'Proposer', icon: <User className="h-3 w-3" />, addr: tx.proposer });
-    if (tx.payer && tx.payer !== tx.proposer) signers.push({ role: 'Payer', icon: <Wallet className="h-3 w-3" />, addr: tx.payer });
-    if (tx.authorizers?.length > 0) {
-        for (const auth of tx.authorizers) {
-            if (auth !== tx.proposer && auth !== tx.payer) {
-                signers.push({ role: 'Authorizer', icon: <Shield className="h-3 w-3" />, addr: auth });
-            }
-        }
+    // Collect signers: group roles by address for compact display
+    const rolesByAddr = new Map<string, string[]>();
+    const addRole = (addr: string, role: string) => {
+        if (!addr) return;
+        const key = normalizeAddr(addr);
+        const roles = rolesByAddr.get(key) || [];
+        if (!roles.includes(role)) roles.push(role);
+        rolesByAddr.set(key, roles);
+    };
+    if (tx.proposer) addRole(tx.proposer, 'Proposer');
+    if (tx.payer) addRole(tx.payer, 'Payer');
+    const authorizers: string[] = tx.authorizers || merged.authorizers || [];
+    for (const auth of authorizers) {
+        addRole(auth, 'Authorizer');
     }
+    // Build display list with original-cased addresses
+    const addrMap = new Map<string, string>(); // normalized → original
+    if (tx.proposer) addrMap.set(normalizeAddr(tx.proposer), tx.proposer);
+    if (tx.payer) addrMap.set(normalizeAddr(tx.payer), tx.payer);
+    for (const auth of authorizers) addrMap.set(normalizeAddr(auth), auth);
+
+    const signers = Array.from(rolesByAddr.entries()).map(([norm, roles]) => ({
+        addr: addrMap.get(norm) || norm,
+        roles,
+    }));
+    const isMultiSign = authorizers.length > 1;
 
     return (
         <div className="px-4 sm:px-6 pb-4 pt-1 ml-7 sm:ml-[88px] space-y-3">
@@ -746,13 +745,24 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                 {/* Row 2: Signers (Proposer / Payer / Authorizer) */}
                 {signers.length > 0 && (
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-zinc-500">
-                        {signers.map((s, i) => (
-                            <span key={i} className="inline-flex items-center gap-1">
-                                <span className="text-zinc-400">{s.icon}</span>
-                                <span className="text-zinc-500">{s.role}</span>
-                                <AddressWithTag addr={s.addr} size={12} />
+                        {isMultiSign && (
+                            <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                                <Users className="h-3 w-3" />
+                                <span className="font-medium text-[10px]">Multi-Sign</span>
                             </span>
-                        ))}
+                        )}
+                        {signers.map((s, i) => {
+                            const roleIcon = s.roles.includes('Proposer') ? <User className="h-3 w-3" />
+                                : s.roles.includes('Payer') ? <Wallet className="h-3 w-3" />
+                                : <Shield className="h-3 w-3" />;
+                            return (
+                                <span key={i} className="inline-flex items-center gap-1">
+                                    <span className="text-zinc-400">{roleIcon}</span>
+                                    <span className="text-zinc-500 text-[10px]">{s.roles.join(' / ')}</span>
+                                    <AddressWithTag addr={s.addr} size={12} />
+                                </span>
+                            );
+                        })}
                     </div>
                 )}
             </div>
