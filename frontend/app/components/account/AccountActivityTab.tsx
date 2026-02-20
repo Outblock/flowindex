@@ -42,46 +42,36 @@ function getTimeSection(timestamp: string, now: Date): string {
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-// Module-level token metadata cache (persists across re-renders, shared across pages)
+// Token metadata cache — populated on-demand from transfer_summary data in API responses.
+// No bulk fetch needed: the backend enriches transfer_summary with symbol/name/logo.
 const tokenMetaCache = new Map<string, TokenMetaEntry>();
-let tokenMetaCacheLoaded = false;
 
-export async function loadTokenMetaCache(): Promise<Map<string, TokenMetaEntry>> {
-    if (tokenMetaCacheLoaded && tokenMetaCache.size > 0) return tokenMetaCache;
-    try {
-        const baseUrl = await resolveApiBaseUrl();
-        const [ftRes, nftRes] = await Promise.all([
-            fetch(`${baseUrl}/flow/ft?limit=500`),
-            fetch(`${baseUrl}/flow/nft?limit=500`),
-        ]);
-        const ftPayload: any = await ftRes.json();
-        const nftPayload: any = await nftRes.json();
-        const ftTokens: any[] = ftPayload?.data ?? [];
-        const nftColls: any[] = nftPayload?.data ?? [];
-        for (const t of ftTokens) {
-            const id = t.id || t.identifier || t.token || '';
-            if (!id) continue;
-            tokenMetaCache.set(id, {
-                name: t.name || '',
-                symbol: t.symbol || '',
-                logo: t.logo || null,
-                type: 'ft',
-            });
+/** Merge token metadata from transfer summaries into the shared cache. */
+function mergeTokenMetaFromTransactions(txs: any[]): Map<string, TokenMetaEntry> {
+    for (const tx of txs) {
+        const summary = tx.transfer_summary;
+        if (!summary) continue;
+        for (const f of summary.ft || []) {
+            if (f.token && !tokenMetaCache.has(f.token)) {
+                tokenMetaCache.set(f.token, {
+                    name: f.name || '',
+                    symbol: f.symbol || '',
+                    logo: f.logo || null,
+                    type: 'ft',
+                });
+            }
         }
-        for (const c of nftColls) {
-            const id = c.id || c.identifier || c.token || '';
-            if (!id) continue;
-            tokenMetaCache.set(id, {
-                name: c.name || '',
-                symbol: c.symbol || '',
-                logo: c.square_image || c.logo || null,
-                type: 'nft',
-                banner_image: c.banner_image || null,
-            });
+        for (const n of summary.nft || []) {
+            if (n.collection && !tokenMetaCache.has(n.collection)) {
+                tokenMetaCache.set(n.collection, {
+                    name: n.name || '',
+                    symbol: '',
+                    logo: n.logo || null,
+                    type: 'nft',
+                    banner_image: n.banner_image || null,
+                });
+            }
         }
-        tokenMetaCacheLoaded = true;
-    } catch (err) {
-        console.warn('Failed to load token metadata cache', err);
     }
     return tokenMetaCache;
 }
@@ -144,12 +134,8 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     const [scheduledHasMore, setScheduledHasMore] = useState(false);
     const [scheduledLoading, setScheduledLoading] = useState(false);
 
-    // Token metadata cache for enriching list rows
-    // Must create a new Map reference so React detects the state change
+    // Token metadata — incrementally populated from transfer_summary in API responses
     const [tokenMeta, setTokenMeta] = useState<Map<string, TokenMetaEntry>>(() => new Map(tokenMetaCache));
-    useEffect(() => {
-        loadTokenMetaCache().then(cache => setTokenMeta(new Map(cache)));
-    }, []);
 
     // Reset only when address changes (not on every initialTransactions reference change)
     const prevAddressRef = useRef(normalizedAddress);
@@ -206,12 +192,14 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             const txRes = await getFlowV1AccountByAddressTransaction({ path: { address: normalizedAddress }, query: { offset, limit: 20 } });
             const payload: any = txRes.data;
             const items = payload?.data ?? [];
-            setTransactions(dedup(items.map((tx: any) => ({
+            const mapped = items.map((tx: any) => ({
                 ...tx,
                 payer: tx.payer_address || tx.payer || tx.proposer_address,
                 proposer: tx.proposer_address || tx.proposer,
                 blockHeight: tx.block_height,
-            }))));
+            }));
+            setTransactions(dedup(mapped));
+            setTokenMeta(new Map(mergeTokenMetaFromTransactions(mapped)));
             if (items.length >= 20) {
                 setTxCursors(prev => ({ ...prev, [page + 1]: String(offset + 20) }));
                 setTxHasNext(true);
@@ -260,6 +248,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             setTimelineTxs(prev => dedup([...prev, ...mapped]));
             setTimelineOffset(prev => prev + items.length);
             setTimelineHasMore(items.length >= 20);
+            setTokenMeta(new Map(mergeTokenMetaFromTransactions(mapped)));
         } catch (err) {
             console.error('Failed to load timeline transactions', err);
         } finally {

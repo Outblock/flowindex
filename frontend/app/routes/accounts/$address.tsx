@@ -14,7 +14,7 @@ import { colorsFromAddress } from '../../components/AddressLink';
 import { normalizeAddress, backfillCOAMapping } from '../../components/account/accountUtils';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import type { StakingInfo, StorageInfo } from '../../../cadence/cadence.gen';
-import { AccountActivityTab, loadTokenMetaCache } from '../../components/account/AccountActivityTab';
+import { AccountActivityTab } from '../../components/account/AccountActivityTab';
 import { AccountTokensTab } from '../../components/account/AccountTokensTab';
 import { AccountNFTsTab } from '../../components/account/AccountNFTsTab';
 import { AccountKeysTab } from '../../components/account/AccountInfoTab';
@@ -72,8 +72,6 @@ export const Route = createFileRoute('/accounts/$address')({
             }
 
             await ensureHeyApiConfigured();
-            // Kick off token meta cache load in parallel — no await needed, fires and fills module cache
-            loadTokenMetaCache();
             const accountRes = await getFlowV1AccountByAddress({ path: { address: normalized } });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const accountPayload: any = (accountRes.data as any)?.data?.[0] ?? null;
