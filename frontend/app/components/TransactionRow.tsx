@@ -9,6 +9,7 @@ import { AvatarGroup, AvatarGroupTooltip } from '@/components/animate-ui/compone
 import { resolveApiBaseUrl } from '../api';
 import { deriveEnrichments } from '../lib/deriveFromEvents';
 import { cadenceService } from '../fclConfig';
+import { NFTDetailModal } from './NFTDetailModal';
 
 // --- Interfaces ---
 
@@ -351,13 +352,8 @@ async function fetchNFTThumbnail(token: string, tokenId: string, ownerAddress: s
     return detail ? (nftThumbnailCache.get(cacheKey) || null) : null;
 }
 
-/** Reusable NFT image that lazy-loads thumbnail via cadence when API data is missing */
-export function NFTTransferImage({ nft, size = 48, onClick, className = '' }: {
-    nft: { nft_thumbnail?: string; collection_logo?: string; token?: string; token_id?: string | number; from_address?: string; to_address?: string; transfer_type?: string };
-    size?: number;
-    onClick?: () => void;
-    className?: string;
-}) {
+/** Hook: lazy-load NFT detail (thumbnail + name) via cadence when API data is missing */
+export function useNFTLazyDetail(nft: { nft_thumbnail?: string; nft_name?: string; collection_logo?: string; token?: string; token_id?: string | number; from_address?: string; to_address?: string; transfer_type?: string }) {
     const thumbUrl = nft.nft_thumbnail ? resolveIPFS(String(nft.nft_thumbnail)) : null;
     const logoUrl = nft.collection_logo ? resolveIPFS(String(nft.collection_logo)) : null;
 
@@ -378,7 +374,21 @@ export function NFTTransferImage({ nft, size = 48, onClick, className = '' }: {
         });
     }, [nft.token, nft.token_id, nft.from_address, nft.to_address, thumbUrl]);
 
-    const src = thumbUrl || fetched?.thumbnail || logoUrl;
+    return {
+        thumbnailSrc: thumbUrl || fetched?.thumbnail || logoUrl,
+        displayName: fetched?.name || nft.nft_name || '',
+        loading,
+    };
+}
+
+/** Reusable NFT image that lazy-loads thumbnail via cadence when API data is missing */
+export function NFTTransferImage({ nft, size = 48, onClick, className = '' }: {
+    nft: { nft_thumbnail?: string; collection_logo?: string; token?: string; token_id?: string | number; from_address?: string; to_address?: string; transfer_type?: string };
+    size?: number;
+    onClick?: () => void;
+    className?: string;
+}) {
+    const { thumbnailSrc: src, loading } = useNFTLazyDetail(nft);
     const cursor = onClick ? 'cursor-pointer' : '';
 
     if (loading) {
@@ -409,13 +419,14 @@ export function NFTTransferImage({ nft, size = 48, onClick, className = '' }: {
     );
 }
 
-/** NFT thumbnail card — fetches thumbnail lazily */
+/** NFT thumbnail card — fetches thumbnail lazily, clickable to open detail modal */
 function NFTThumbnailCard({ token, tokenId, displayName, ownerAddress, isMint, isBurn }: {
     token: string; tokenId: string; displayName: string; ownerAddress: string;
     isMint?: boolean; isBurn?: boolean;
 }) {
     const [thumb, setThumb] = useState<{ thumbnail: string; name: string } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [showModal, setShowModal] = useState(false);
     const fetchedRef = useRef(false);
 
     useEffect(() => {
@@ -433,43 +444,72 @@ function NFTThumbnailCard({ token, tokenId, displayName, ownerAddress, isMint, i
         });
     }, [token, tokenId, ownerAddress]);
 
-    const nftName = thumb?.name || `#${tokenId}`;
+    const nftName = thumb?.name || displayName;
+
+    const handleClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        // Fetch full detail for modal (uses cache if available)
+        await fetchNFTFullDetail(token, tokenId, ownerAddress);
+        setShowModal(true);
+    };
+
+    // Build cadence-format nft object for modal
+    const modalNft = showModal ? (() => {
+        const detail = nftDetailCache.get(`${token}:${tokenId}`);
+        if (detail) return { ...detail, tokenId };
+        // Fallback: minimal object
+        return {
+            tokenId,
+            name: nftName,
+            thumbnail: thumb?.thumbnail || '',
+        };
+    })() : null;
 
     return (
-        <div className="flex-shrink-0 w-[72px] group/nft">
-            {/* Thumbnail */}
-            <div className="w-[72px] h-[72px] rounded-lg overflow-hidden bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 relative">
-                {loading && (
-                    <div className="absolute inset-0 flex items-center justify-center animate-pulse">
-                        <ImageIcon className="w-5 h-5 text-zinc-300 dark:text-zinc-700" />
-                    </div>
-                )}
-                {!loading && thumb?.thumbnail ? (
-                    <img
-                        src={thumb.thumbnail}
-                        alt={nftName}
-                        className="w-full h-full object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                ) : !loading ? (
-                    <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon className="w-5 h-5 text-zinc-300 dark:text-zinc-700" />
-                    </div>
-                ) : null}
-                {/* MINT / BURN badge overlay */}
-                {isMint && (
-                    <span className="absolute top-1 left-1 text-[8px] px-1 py-px rounded bg-lime-500/90 text-white font-bold">MINT</span>
-                )}
-                {isBurn && (
-                    <span className="absolute top-1 left-1 text-[8px] px-1 py-px rounded bg-red-500/90 text-white font-bold">BURN</span>
-                )}
+        <>
+            <div className="flex-shrink-0 w-[96px] group/nft cursor-pointer" onClick={handleClick}>
+                {/* Thumbnail */}
+                <div className="w-[96px] h-[96px] rounded-lg overflow-hidden bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 relative group-hover/nft:border-purple-400 dark:group-hover/nft:border-purple-500/50 transition-colors">
+                    {loading && (
+                        <div className="absolute inset-0 flex items-center justify-center animate-pulse">
+                            <ImageIcon className="w-6 h-6 text-zinc-300 dark:text-zinc-700" />
+                        </div>
+                    )}
+                    {!loading && thumb?.thumbnail ? (
+                        <img
+                            src={thumb.thumbnail}
+                            alt={nftName}
+                            className="w-full h-full object-cover group-hover/nft:scale-105 transition-transform"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                    ) : !loading ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <ImageIcon className="w-6 h-6 text-zinc-300 dark:text-zinc-700" />
+                        </div>
+                    ) : null}
+                    {/* MINT / BURN badge overlay */}
+                    {isMint && (
+                        <span className="absolute top-1 left-1 text-[8px] px-1 py-px rounded bg-lime-500/90 text-white font-bold">MINT</span>
+                    )}
+                    {isBurn && (
+                        <span className="absolute top-1 left-1 text-[8px] px-1 py-px rounded bg-red-500/90 text-white font-bold">BURN</span>
+                    )}
+                </div>
+                {/* Label */}
+                <div className="mt-1.5 text-center">
+                    <div className="text-[10px] text-zinc-600 dark:text-zinc-300 truncate font-medium" title={nftName}>{nftName}</div>
+                    <div className="text-[9px] font-mono text-zinc-400 dark:text-zinc-500 truncate" title={`#${tokenId}`}>#{tokenId}</div>
+                </div>
             </div>
-            {/* Label */}
-            <div className="mt-1 text-center">
-                <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate" title={displayName}>{displayName}</div>
-                <div className="text-[10px] font-mono text-zinc-600 dark:text-zinc-300 truncate" title={`#${tokenId}`}>#{tokenId}</div>
-            </div>
-        </div>
+            {showModal && modalNft && (
+                <NFTDetailModal
+                    nft={modalNft}
+                    collectionId={token}
+                    collectionName={displayName}
+                    onClose={() => setShowModal(false)}
+                />
+            )}
+        </>
     );
 }
 

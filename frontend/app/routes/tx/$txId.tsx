@@ -12,7 +12,7 @@ import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/
 import { useTheme } from '../../contexts/ThemeContext';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import DecryptedText from '../../components/ui/DecryptedText';
-import { deriveActivityType, TokenIcon, formatTokenName, buildSummaryLine, NFTTransferImage, fetchNFTFullDetail } from '../../components/TransactionRow';
+import { deriveActivityType, TokenIcon, formatTokenName, buildSummaryLine, NFTTransferImage, fetchNFTFullDetail, useNFTLazyDetail } from '../../components/TransactionRow';
 import { formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
 import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
@@ -27,6 +27,111 @@ SyntaxHighlighter.registerLanguage('cadence', swift);
 function cleanUrl(url: string | undefined | null): string {
     if (!url) return '';
     return url.replace(/^["'\s]+|["'\s]+$/g, '');
+}
+
+/** NFT transfer row with lazy-loaded name + thumbnail */
+function NFTSummaryRow({ nt, onClick, isAdmin, fmtAddr }: { nt: any; onClick?: () => void; isAdmin?: boolean; fmtAddr: (a: string) => string }) {
+    const { thumbnailSrc, displayName, loading } = useNFTLazyDetail(nt);
+    const name = displayName || nt.nft_name || `#${nt.token_id}`;
+    const imgSize = 48;
+    return (
+        <div className={`flex items-center gap-3 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-sm p-2.5 ${onClick ? 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-black/40 transition-colors' : ''}`} onClick={onClick}>
+            <div className="flex-shrink-0">
+                {loading ? (
+                    <div style={{ width: imgSize, height: imgSize }} className="rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center animate-pulse">
+                        <ImageIcon style={{ width: 14, height: 14 }} className="text-purple-500" />
+                    </div>
+                ) : thumbnailSrc ? (
+                    <img src={thumbnailSrc} alt="" style={{ width: imgSize, height: imgSize }} className="rounded border border-zinc-200 dark:border-white/10 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                    <div style={{ width: imgSize, height: imgSize }} className="rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center">
+                        <ImageIcon style={{ width: 14, height: 14 }} className="text-purple-500" />
+                    </div>
+                )}
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">{name}</span>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
+                        {nt.collection_name || nt.token?.split('.').pop() || 'NFT'}
+                    </span>
+                    {nt.nft_rarity && (
+                        <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">{nt.nft_rarity}</span>
+                    )}
+                    {isAdmin && nt.token && (
+                        <Link to="/admin" search={{ tab: 'nft', q: nt.token } as any} className="text-[9px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 font-mono" onClick={(e) => e.stopPropagation()}>[admin]</Link>
+                    )}
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
+                    {nt.from_address && <span className="inline-flex items-center gap-1">From <span className="font-mono">{fmtAddr(nt.from_address)}</span></span>}
+                    {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
+                    {nt.to_address && <span className="inline-flex items-center gap-1">To <span className="font-mono">{fmtAddr(nt.to_address)}</span></span>}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/** NFT transfer detail row (larger, in the Transfers tab) with lazy-loaded name + thumbnail */
+function NFTDetailRow({ nt, onClick, isAdmin }: { nt: any; onClick?: () => void; isAdmin?: boolean }) {
+    const { thumbnailSrc, displayName, loading } = useNFTLazyDetail(nt);
+    const name = displayName || nt.nft_name || `#${nt.token_id}`;
+    const imgSize = 64;
+    return (
+        <div className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors cursor-pointer" onClick={onClick}>
+            <div className="flex-shrink-0">
+                {loading ? (
+                    <div style={{ width: imgSize, height: imgSize }} className="rounded-md bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center animate-pulse">
+                        <ImageIcon style={{ width: 19, height: 19 }} className="text-purple-500" />
+                    </div>
+                ) : thumbnailSrc ? (
+                    <img src={thumbnailSrc} alt="" style={{ width: imgSize, height: imgSize }} className="rounded-md border border-zinc-200 dark:border-white/10 object-cover shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                    <div style={{ width: imgSize, height: imgSize }} className="rounded-md bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center">
+                        <ImageIcon style={{ width: 19, height: 19 }} className="text-purple-500" />
+                    </div>
+                )}
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">{name}</span>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
+                        {nt.collection_name || nt.token?.split('.').pop() || 'NFT'}
+                    </span>
+                    {nt.transfer_type === 'mint' && (
+                        <span className="text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Mint</span>
+                    )}
+                    {nt.transfer_type === 'burn' && (
+                        <span className="text-[9px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Burn</span>
+                    )}
+                    {nt.nft_rarity && (
+                        <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">{nt.nft_rarity}</span>
+                    )}
+                    {nt.is_cross_vm && (
+                        <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            <Globe className="w-2.5 h-2.5" /> Cross-VM
+                        </span>
+                    )}
+                    {isAdmin && nt.token && (
+                        <Link to="/admin" search={{ tab: 'nft', q: nt.token } as any} className="text-[9px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 font-mono" onClick={(e) => e.stopPropagation()}>[admin]</Link>
+                    )}
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
+                    {nt.from_address && (
+                        <span className="inline-flex items-center gap-1">From <AddressLink address={nt.from_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
+                            {nt.from_coa_flow_address && <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={nt.from_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>}
+                        </span>
+                    )}
+                    {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
+                    {nt.to_address && (
+                        <span className="inline-flex items-center gap-1">To <AddressLink address={nt.to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
+                            {nt.to_coa_flow_address && <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={nt.to_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>}
+                        </span>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 }
 
 export const Route = createFileRoute('/tx/$txId')({
@@ -229,36 +334,7 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
                         <span className="text-[9px] text-zinc-400 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">{transaction.nft_transfers.length}</span>
                     </div>
                     {transaction.nft_transfers.slice(0, 6).map((nt: any, idx: number) => (
-                        <div key={idx} className={`flex items-center gap-3 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-sm p-2.5 ${onNftClick ? 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-black/40 transition-colors' : ''}`} onClick={onNftClick ? () => onNftClick(nt) : undefined}>
-                            <div className="flex-shrink-0">
-                                <NFTTransferImage nft={nt} size={48} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">
-                                        {nt.nft_name || `#${nt.token_id}`}
-                                    </span>
-                                    <span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
-                                        {nt.collection_name || nt.token?.split('.').pop() || 'NFT'}
-                                    </span>
-                                    {nt.nft_rarity && (
-                                        <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                            {nt.nft_rarity}
-                                        </span>
-                                    )}
-                                    {isAdmin && nt.token && (
-                                        <Link to="/admin" search={{ tab: 'nft', q: nt.token } as any} className="text-[9px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 font-mono" onClick={(e) => e.stopPropagation()}>
-                                            [admin]
-                                        </Link>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
-                                    {nt.from_address && <span className="inline-flex items-center gap-1">From <span className="font-mono">{fmtAddr(nt.from_address)}</span></span>}
-                                    {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
-                                    {nt.to_address && <span className="inline-flex items-center gap-1">To <span className="font-mono">{fmtAddr(nt.to_address)}</span></span>}
-                                </div>
-                            </div>
-                        </div>
+                        <NFTSummaryRow key={idx} nt={nt} onClick={onNftClick ? () => onNftClick(nt) : undefined} isAdmin={isAdmin} fmtAddr={fmtAddr} />
                     ))}
                     {transaction.nft_transfers.length > 6 && (
                         <p className="text-[10px] text-zinc-400 uppercase tracking-wider pl-1">+{transaction.nft_transfers.length - 6} more</p>
@@ -942,68 +1018,7 @@ function TransactionDetail() {
                                         </h3>
                                         <div className="divide-y divide-zinc-100 dark:divide-white/5 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
                                             {fullTx.nft_transfers.map((nt: any, idx: number) => (
-                                                <div key={idx} className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors cursor-pointer" onClick={() => handleNftClick(nt)}>
-                                                    <div className="flex-shrink-0">
-                                                        <NFTTransferImage nft={nt} size={64} />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">
-                                                                {nt.nft_name || `#${nt.token_id}`}
-                                                            </span>
-                                                            <span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded font-medium">
-                                                                {nt.collection_name || nt.token?.split('.').pop() || 'NFT'}
-                                                            </span>
-                                                            {nt.transfer_type === 'mint' && (
-                                                                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
-                                                                    Mint
-                                                                </span>
-                                                            )}
-                                                            {nt.transfer_type === 'burn' && (
-                                                                <span className="text-[9px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
-                                                                    Burn
-                                                                </span>
-                                                            )}
-                                                            {nt.nft_rarity && (
-                                                                <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                                                    {nt.nft_rarity}
-                                                                </span>
-                                                            )}
-                                                            {nt.is_cross_vm && (
-                                                                <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                                                    <Globe className="w-2.5 h-2.5" />
-                                                                    Cross-VM
-                                                                </span>
-                                                            )}
-                                                            {isAdmin && nt.token && (
-                                                                <Link to="/admin" search={{ tab: 'nft', q: nt.token } as any} className="text-[9px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 font-mono" onClick={(e) => e.stopPropagation()}>
-                                                                    [admin]
-                                                                </Link>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
-                                                            {nt.from_address && (
-                                                                <span className="inline-flex items-center gap-1">
-                                                                    From{' '}
-                                                                    <AddressLink address={nt.from_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
-                                                                    {nt.from_coa_flow_address && (
-                                                                        <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={nt.from_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
-                                                                    )}
-                                                                </span>
-                                                            )}
-                                                            {nt.from_address && nt.to_address && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
-                                                            {nt.to_address && (
-                                                                <span className="inline-flex items-center gap-1">
-                                                                    To{' '}
-                                                                    <AddressLink address={nt.to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
-                                                                    {nt.to_coa_flow_address && (
-                                                                        <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={nt.to_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
-                                                                    )}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <NFTDetailRow key={idx} nt={nt} onClick={() => handleNftClick(nt)} isAdmin={isAdmin} />
                                             ))}
                                         </div>
                                     </div>
