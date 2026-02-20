@@ -11,7 +11,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, children, className, backgroundImage }: PageHeaderProps) {
     return (
-        <div className={cn("relative overflow-hidden mb-8 p-8 md:p-12", className)}>
+        <div className={cn("relative overflow-hidden mb-8 p-4 sm:p-8 md:p-12", className)}>
             {/* Background with gradient and optional image/texture */}
             <div className="absolute inset-0 bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-900 dark:to-black z-0" />
 

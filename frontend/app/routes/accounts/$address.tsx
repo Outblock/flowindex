@@ -264,10 +264,10 @@ function AccountDetail() {
 
                 <PageHeader
                     title={
-                        <div className="flex items-center gap-3 md:gap-4">
-                            <div className="shrink-0 w-10 h-10 md:w-16 md:h-16">
+                        <div className="flex items-center gap-3">
+                            <div className="shrink-0 w-8 h-8 sm:w-10 sm:h-10 md:w-14 md:h-14 [&>svg]:w-full [&>svg]:h-full">
                                 <Avatar
-                                    size={64}
+                                    size={56}
                                     name={normalizedAddress}
                                     variant="beam"
                                     colors={colorsFromAddress(normalizedAddress)}
@@ -285,7 +285,7 @@ function AccountDetail() {
                     subtitle={
                         <div className="space-y-1.5 min-w-0">
                             <div className="flex items-center gap-1 group min-w-0">
-                                <span className="truncate">{normalizedAddress}</span>
+                                <span className="truncate text-xs sm:text-sm md:text-base">{normalizedAddress}</span>
                                 <CopyButton
                                     content={normalizedAddress}
                                     variant="ghost"
@@ -308,10 +308,16 @@ function AccountDetail() {
                     }
                 >
                     <div className="text-left md:text-right">
-                        <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Balance</div>
+                        <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Total Balance</div>
                         <div className="text-xl md:text-3xl font-bold">
-                            <SafeNumberFlow value={balanceValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
+                            <SafeNumberFlow value={balanceValue + stakedValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
                         </div>
+                        {stakedValue > 0 && (
+                            <div className="flex flex-col sm:flex-row gap-x-4 gap-y-0.5 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                                <span>Available: <span className="text-zinc-700 dark:text-zinc-300 font-medium"><SafeNumberFlow value={balanceValue} /></span></span>
+                                <span>Staked: <span className="text-zinc-700 dark:text-zinc-300 font-medium"><SafeNumberFlow value={stakedValue} /></span></span>
+                            </div>
+                        )}
                     </div>
                 </PageHeader>
 
