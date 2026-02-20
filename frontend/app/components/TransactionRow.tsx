@@ -74,17 +74,33 @@ export function deriveActivityType(tx: any): { type: string; label: string; colo
         return { type: 'marketplace', label: 'Marketplace', color: 'text-pink-600 dark:text-pink-400', bgColor: 'border-pink-300 dark:border-pink-500/30 bg-pink-50 dark:bg-pink-500/10' };
     }
     if (summary?.nft && summary.nft.length > 0) {
-        return { type: 'nft', label: 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
+        const nftName = summary.nft[0].name || formatTokenName(summary.nft[0].collection);
+        return { type: 'nft', label: nftName ? `${nftName} Transfer` : 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
     }
     if (summary?.ft && summary.ft.length > 0) {
-        return { type: 'ft', label: 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
+        const ftName = summary.ft[0].symbol || summary.ft[0].name || formatTokenName(summary.ft[0].token);
+        return { type: 'ft', label: ftName ? `${ftName} Transfer` : 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
     }
     // Check ft_transfers array directly (transfer_summary may be null even when ft_transfers exist)
-    if (tx.ft_transfers?.length > 0 || tagsLower.some(t => t.includes('ft_transfer'))) {
-        return { type: 'ft', label: 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
+    if (tx.ft_transfers?.length > 0) {
+        const ft = tx.ft_transfers[0];
+        const ftName = ft.token_symbol || ft.token_name || formatTokenName(ft.token || '');
+        return { type: 'ft', label: ftName ? `${ftName} Transfer` : 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
     }
-    if (tx.nft_transfers?.length > 0 || tagsLower.some(t => t.includes('nft_transfer'))) {
-        return { type: 'nft', label: 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
+    if (tagsLower.some(t => t.includes('ft_transfer'))) {
+        const contractNames = imports.map(c => formatTokenName(c)).filter(n => n && n !== 'Crypto' && n !== 'FungibleToken' && n !== 'NonFungibleToken' && n !== 'MetadataViews');
+        const ftName = contractNames[0] || '';
+        return { type: 'ft', label: ftName ? `${ftName} Transfer` : 'FT Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' };
+    }
+    if (tx.nft_transfers?.length > 0) {
+        const nt = tx.nft_transfers[0];
+        const nftName = nt.collection_name || formatTokenName(nt.token || '');
+        return { type: 'nft', label: nftName ? `${nftName} Transfer` : 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
+    }
+    if (tagsLower.some(t => t.includes('nft_transfer'))) {
+        const contractNames = imports.map(c => formatTokenName(c)).filter(n => n && n !== 'Crypto' && n !== 'FungibleToken' && n !== 'NonFungibleToken' && n !== 'MetadataViews');
+        const nftName = contractNames[0] || '';
+        return { type: 'nft', label: nftName ? `${nftName} Transfer` : 'NFT Transfer', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' };
     }
     // Check defi_events for swaps
     if (tx.defi_events?.length > 0) {
