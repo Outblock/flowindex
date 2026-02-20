@@ -268,54 +268,61 @@ const txDetailCache = new Map<string, any>();
 const nftDetailCache = new Map<string, Record<string, any> | null>();
 const nftThumbnailCache = new Map<string, { thumbnail: string; name: string } | null>();
 
+/** Try cadence script to fetch NFT detail from a specific owner. Returns cadence detail or null. */
+async function tryCadenceFetch(token: string, tokenId: string, owner: string, parts: string[]): Promise<Record<string, any> | null> {
+    const contractName = parts[2];
+    const pathCandidates = [
+        `${contractName}Collection`,
+        `${contractName}`,
+        `${contractName[0].toLowerCase()}${contractName.slice(1)}Collection`,
+    ];
+    const addr = owner.startsWith('0x') ? owner : `0x${owner}`;
+    for (const pathId of pathCandidates) {
+        try {
+            const result = await cadenceService.getNftDetail(addr, pathId, [Number(tokenId)]);
+            if (result && result.length > 0 && result[0]?.thumbnail) {
+                const detail = result[0];
+                const cacheKey = `${token}:${tokenId}`;
+                nftDetailCache.set(cacheKey, detail);
+                const thumb = resolveIPFS(String(detail.thumbnail));
+                const name = detail.name ? String(detail.name) : '';
+                nftThumbnailCache.set(cacheKey, { thumbnail: thumb, name });
+                // Fire-and-forget backfill to backend
+                resolveApiBaseUrl().then(baseUrl => {
+                    fetch(`${baseUrl}/flow/nft/backfill`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify([{
+                            contract_address: parts[1],
+                            contract_name: contractName,
+                            nft_id: String(tokenId),
+                            name: name,
+                            thumbnail: thumb,
+                        }]),
+                    }).catch(() => {});
+                });
+                return detail;
+            }
+        } catch { /* try next path candidate */ }
+    }
+    return null;
+}
+
 /** Fetch full NFT detail via cadence script (for modal). Returns cadence-format object. */
 export async function fetchNFTFullDetail(token: string, tokenId: string, ownerAddress: string): Promise<Record<string, any> | null> {
     const cacheKey = `${token}:${tokenId}`;
     if (nftDetailCache.has(cacheKey)) return nftDetailCache.get(cacheKey) || null;
 
     const parts = token.split('.');
+
+    // 1. Try cadence with the provided owner (e.g. to_address from the transfer)
     if (parts.length >= 3 && ownerAddress) {
-        const contractName = parts[2];
-        const pathCandidates = [
-            `${contractName}Collection`,
-            `${contractName}`,
-            `${contractName[0].toLowerCase()}${contractName.slice(1)}Collection`,
-        ];
-        for (const pathId of pathCandidates) {
-            try {
-                const result = await cadenceService.getNftDetail(
-                    ownerAddress.startsWith('0x') ? ownerAddress : `0x${ownerAddress}`,
-                    pathId,
-                    [Number(tokenId)]
-                );
-                if (result && result.length > 0 && result[0]?.thumbnail) {
-                    const detail = result[0];
-                    nftDetailCache.set(cacheKey, detail);
-                    // Also populate thumbnail cache
-                    const thumb = resolveIPFS(String(detail.thumbnail));
-                    const name = detail.name ? String(detail.name) : '';
-                    nftThumbnailCache.set(cacheKey, { thumbnail: thumb, name });
-                    // Fire-and-forget backfill to backend
-                    resolveApiBaseUrl().then(baseUrl => {
-                        fetch(`${baseUrl}/flow/nft/backfill`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify([{
-                                contract_address: parts[1],
-                                contract_name: contractName,
-                                nft_id: String(tokenId),
-                                name: name,
-                                thumbnail: thumb,
-                            }]),
-                        }).catch(() => {});
-                    });
-                    return detail;
-                }
-            } catch { /* try next path candidate */ }
-        }
+        const result = await tryCadenceFetch(token, tokenId, ownerAddress, parts);
+        if (result) return result;
     }
 
-    // Fallback: backend API
+    // 2. Fallback: backend API — may have metadata, or at least the current owner
+    let currentOwner: string | null = null;
     try {
         const baseUrl = await resolveApiBaseUrl();
         const res = await fetch(`${baseUrl}/flow/nft/${encodeURIComponent(token)}/item/${encodeURIComponent(tokenId)}`);
@@ -323,7 +330,6 @@ export async function fetchNFTFullDetail(token: string, tokenId: string, ownerAd
             const json = await res.json();
             const item = json.data?.[0];
             if (item?.thumbnail) {
-                // Convert API format to cadence-like format for modal
                 const detail: Record<string, any> = {
                     tokenId: tokenId,
                     thumbnail: resolveIPFS(item.thumbnail),
@@ -337,8 +343,16 @@ export async function fetchNFTFullDetail(token: string, tokenId: string, ownerAd
                 nftThumbnailCache.set(cacheKey, { thumbnail: detail.thumbnail, name: detail.name });
                 return detail;
             }
+            // No metadata but has current owner — try cadence with that owner
+            if (item?.owner) currentOwner = item.owner;
         }
     } catch { /* ignore */ }
+
+    // 3. Retry cadence with the current owner from backend (NFT may have been transferred since tx)
+    if (parts.length >= 3 && currentOwner && currentOwner !== ownerAddress) {
+        const result = await tryCadenceFetch(token, tokenId, currentOwner, parts);
+        if (result) return result;
+    }
 
     nftDetailCache.set(cacheKey, null);
     return null;
