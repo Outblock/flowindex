@@ -77,13 +77,22 @@ func (r *Repository) GetScriptTextsByHashes(ctx context.Context, hashes []string
 	return out, rows.Err()
 }
 
-// GetEventTypesInRange fetches only (transaction_id, type) from raw events.
-// Skips payload, event_index, timestamp, contract_address — massive data savings.
+// GetEventTypesInRange fetches only (transaction_id, type) from raw events,
+// excluding high-volume events that never produce tags. This reduces data transfer
+// by ~90% while remaining safe for future tag additions — only known-irrelevant
+// event patterns are excluded. FT/NFT transfer tags come from separate queries
+// on app.ft_transfers/nft_transfers, not from these events.
 func (r *Repository) GetEventTypesInRange(ctx context.Context, fromHeight, toHeight uint64) ([]EventTypeRow, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(transaction_id, 'hex') AS transaction_id, type
 		FROM raw.events
-		WHERE block_height >= $1 AND block_height < $2`,
+		WHERE block_height >= $1 AND block_height < $2
+		  AND type NOT LIKE '%FlowToken.Tokens%'
+		  AND type NOT LIKE '%FungibleToken.Deposited%'
+		  AND type NOT LIKE '%FungibleToken.Withdrawn%'
+		  AND type NOT LIKE '%NonFungibleToken.Deposited%'
+		  AND type NOT LIKE '%NonFungibleToken.Withdrawn%'
+		  AND type NOT LIKE '%EVM.FLOWTokens%'`,
 		fromHeight, toHeight)
 	if err != nil {
 		return nil, err
