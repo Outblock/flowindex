@@ -408,21 +408,26 @@ type TransferSummary struct {
 	NFT []NFTTransferSummaryItem `json:"nft"`
 }
 
-// GetTransferSummariesByTxIDs returns a map of transaction ID -> TransferSummary.
-// When address is provided, determines direction (out/in) relative to that address
-// (also resolves COA address for cross-VM matching).
+// TxRef is a lightweight (ID, BlockHeight) pair used for partition-pruned queries.
+type TxRef struct {
+	ID          string
+	BlockHeight uint64
+}
+
+// GetTransferSummariesByTxRefs returns a map of transaction ID -> TransferSummary.
+// Uses explicit (tx_id, block_height) pairs for direct partition pruning.
+// When address is provided, determines direction (out/in) relative to that address.
 // When address is empty, returns transfers without direction grouping (from→to).
-func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []string, address string) (map[string]TransferSummary, error) {
-	if len(txIDs) == 0 {
+func (r *Repository) GetTransferSummariesByTxRefs(ctx context.Context, refs []TxRef, address string) (map[string]TransferSummary, error) {
+	if len(refs) == 0 {
 		return map[string]TransferSummary{}, nil
 	}
 
 	if address == "" {
-		return r.getTransferSummariesNoDirection(ctx, txIDs)
+		return r.getTransferSummariesNoDirectionByRefs(ctx, refs)
 	}
 
-	out := make(map[string]TransferSummary, len(txIDs))
-	txIDBytes := sliceHexToBytes(txIDs)
+	out := make(map[string]TransferSummary, len(refs))
 	addrBytes := hexToBytes(address)
 
 	// Resolve COA address for this Flow address so we can match cross-VM transfers.
@@ -433,21 +438,26 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		coaBytes = hexToBytes(coaHex)
 	}
 
-	// FT transfers: route through tx_lookup for partition pruning on ft_transfers.
-	ftRows, err := r.db.Query(ctx, `
+	// Build VALUES list for (tx_id, block_height) pairs — enables partition pruning.
+	// $1=addrBytes, $2=coaBytes, then $3+ for VALUES entries.
+	valuesSQL, refArgs := buildTxRefValuesOffset(refs, 2)
+
+	// FT transfers: direct partition access via VALUES list.
+	ftQuery := fmt.Sprintf(`
 		SELECT encode(ft.transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(ft.token_contract_address, 'hex') || '.' || NULLIF(ft.contract_name, ''), encode(ft.token_contract_address, 'hex')) AS token,
 		       SUM(CAST(ft.amount AS NUMERIC)) AS total_amount,
-		       CASE WHEN ft.from_address = $2 OR ($3::bytea IS NOT NULL AND ft.from_address = $3) THEN 'out' ELSE 'in' END AS direction,
-		       string_agg(DISTINCT CASE WHEN ft.from_address = $2 OR ($3::bytea IS NOT NULL AND ft.from_address = $3)
+		       CASE WHEN ft.from_address = $1 OR ($2::bytea IS NOT NULL AND ft.from_address = $2) THEN 'out' ELSE 'in' END AS direction,
+		       string_agg(DISTINCT CASE WHEN ft.from_address = $1 OR ($2::bytea IS NOT NULL AND ft.from_address = $2)
 		            THEN encode(ft.to_address, 'hex')
 		            ELSE encode(ft.from_address, 'hex') END, ',') AS counterparty
-		FROM raw.tx_lookup tl
-		JOIN app.ft_transfers ft ON ft.block_height = tl.block_height AND ft.transaction_id = tl.id
-		WHERE tl.id = ANY($1)
-		  AND ft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
+		FROM (VALUES %s) AS v(id, bh)
+		JOIN app.ft_transfers ft ON ft.block_height = v.bh AND ft.transaction_id = v.id
+		WHERE ft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
 		GROUP BY ft.transaction_id, ft.token_contract_address, ft.contract_name,
-		         CASE WHEN ft.from_address = $2 OR ($3::bytea IS NOT NULL AND ft.from_address = $3) THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes, coaBytes)
+		         CASE WHEN ft.from_address = $1 OR ($2::bytea IS NOT NULL AND ft.from_address = $2) THEN 'out' ELSE 'in' END`, valuesSQL)
+	ftArgs := append([]interface{}{addrBytes, coaBytes}, refArgs...)
+	ftRows, err := r.db.Query(ctx, ftQuery, ftArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -462,21 +472,22 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 		out[txID] = s
 	}
 
-	// NFT transfers: route through tx_lookup for partition pruning on nft_transfers.
-	nftRows, err := r.db.Query(ctx, `
+	// NFT transfers: direct partition access via VALUES list.
+	nftQuery := fmt.Sprintf(`
 		SELECT encode(nft.transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(nft.token_contract_address, 'hex') || '.' || NULLIF(nft.contract_name, ''), encode(nft.token_contract_address, 'hex')) AS collection,
 		       COUNT(*) AS cnt,
-		       CASE WHEN nft.from_address = $2 OR ($3::bytea IS NOT NULL AND nft.from_address = $3) THEN 'out' ELSE 'in' END AS direction,
-		       string_agg(DISTINCT CASE WHEN nft.from_address = $2 OR ($3::bytea IS NOT NULL AND nft.from_address = $3)
+		       CASE WHEN nft.from_address = $1 OR ($2::bytea IS NOT NULL AND nft.from_address = $2) THEN 'out' ELSE 'in' END AS direction,
+		       string_agg(DISTINCT CASE WHEN nft.from_address = $1 OR ($2::bytea IS NOT NULL AND nft.from_address = $2)
 		            THEN encode(nft.to_address, 'hex')
 		            ELSE encode(nft.from_address, 'hex') END, ',') AS counterparty
-		FROM raw.tx_lookup tl
-		JOIN app.nft_transfers nft ON nft.block_height = tl.block_height AND nft.transaction_id = tl.id
-		WHERE tl.id = ANY($1)
-		  AND nft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
+		FROM (VALUES %s) AS v(id, bh)
+		JOIN app.nft_transfers nft ON nft.block_height = v.bh AND nft.transaction_id = v.id
+		WHERE nft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
 		GROUP BY nft.transaction_id, nft.token_contract_address, nft.contract_name,
-		         CASE WHEN nft.from_address = $2 OR ($3::bytea IS NOT NULL AND nft.from_address = $3) THEN 'out' ELSE 'in' END`, txIDBytes, addrBytes, coaBytes)
+		         CASE WHEN nft.from_address = $1 OR ($2::bytea IS NOT NULL AND nft.from_address = $2) THEN 'out' ELSE 'in' END`, valuesSQL)
+	nftArgs := append([]interface{}{addrBytes, coaBytes}, refArgs...)
+	nftRows, err := r.db.Query(ctx, nftQuery, nftArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -495,23 +506,23 @@ func (r *Repository) GetTransferSummariesByTxIDs(ctx context.Context, txIDs []st
 	return out, nil
 }
 
-// getTransferSummariesNoDirection returns transfer summaries without direction/grouping.
+// getTransferSummariesNoDirectionByRefs returns transfer summaries without direction/grouping.
 // Used for the global tx list where there's no "current address" context.
-func (r *Repository) getTransferSummariesNoDirection(ctx context.Context, txIDs []string) (map[string]TransferSummary, error) {
-	out := make(map[string]TransferSummary, len(txIDs))
-	txIDBytes := sliceHexToBytes(txIDs)
+func (r *Repository) getTransferSummariesNoDirectionByRefs(ctx context.Context, refs []TxRef) (map[string]TransferSummary, error) {
+	out := make(map[string]TransferSummary, len(refs))
+	valuesSQL, refArgs := buildTxRefValues(refs)
 
-	ftRows, err := r.db.Query(ctx, `
+	ftQuery := fmt.Sprintf(`
 		SELECT encode(ft.transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(ft.token_contract_address, 'hex') || '.' || NULLIF(ft.contract_name, ''), encode(ft.token_contract_address, 'hex')) AS token,
 		       SUM(CAST(ft.amount AS NUMERIC)) AS total_amount,
 		       string_agg(DISTINCT encode(ft.from_address, 'hex'), ',') AS from_addrs,
 		       string_agg(DISTINCT encode(ft.to_address, 'hex'), ',') AS to_addrs
-		FROM raw.tx_lookup tl
-		JOIN app.ft_transfers ft ON ft.block_height = tl.block_height AND ft.transaction_id = tl.id
-		WHERE tl.id = ANY($1)
-		  AND ft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
-		GROUP BY ft.transaction_id, ft.token_contract_address, ft.contract_name`, txIDBytes)
+		FROM (VALUES %s) AS v(id, bh)
+		JOIN app.ft_transfers ft ON ft.block_height = v.bh AND ft.transaction_id = v.id
+		WHERE ft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
+		GROUP BY ft.transaction_id, ft.token_contract_address, ft.contract_name`, valuesSQL)
+	ftRows, err := r.db.Query(ctx, ftQuery, refArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -526,17 +537,17 @@ func (r *Repository) getTransferSummariesNoDirection(ctx context.Context, txIDs 
 		out[txID] = s
 	}
 
-	nftRows, err := r.db.Query(ctx, `
+	nftQuery := fmt.Sprintf(`
 		SELECT encode(nft.transaction_id, 'hex') AS tx_id,
 		       COALESCE('A.' || encode(nft.token_contract_address, 'hex') || '.' || NULLIF(nft.contract_name, ''), encode(nft.token_contract_address, 'hex')) AS collection,
 		       COUNT(*) AS cnt,
 		       string_agg(DISTINCT encode(nft.from_address, 'hex'), ',') AS from_addrs,
 		       string_agg(DISTINCT encode(nft.to_address, 'hex'), ',') AS to_addrs
-		FROM raw.tx_lookup tl
-		JOIN app.nft_transfers nft ON nft.block_height = tl.block_height AND nft.transaction_id = tl.id
-		WHERE tl.id = ANY($1)
-		  AND nft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
-		GROUP BY nft.transaction_id, nft.token_contract_address, nft.contract_name`, txIDBytes)
+		FROM (VALUES %s) AS v(id, bh)
+		JOIN app.nft_transfers nft ON nft.block_height = v.bh AND nft.transaction_id = v.id
+		WHERE nft.contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
+		GROUP BY nft.transaction_id, nft.token_contract_address, nft.contract_name`, valuesSQL)
+	nftRows, err := r.db.Query(ctx, nftQuery, refArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -553,6 +564,31 @@ func (r *Repository) getTransferSummariesNoDirection(ctx context.Context, txIDs 
 	}
 
 	return out, nil
+}
+
+// buildTxRefValues builds a SQL VALUES clause and args for (tx_id, block_height) pairs.
+// Returns something like "($3::bytea, $4::bigint), ($5::bytea, $6::bigint)" and the corresponding args.
+// The offset parameter controls the starting $N index (useful when other params come first).
+func buildTxRefValues(refs []TxRef) (string, []interface{}) {
+	parts := make([]string, 0, len(refs))
+	args := make([]interface{}, 0, len(refs)*2)
+	for i, ref := range refs {
+		parts = append(parts, fmt.Sprintf("($%d::bytea, $%d::bigint)", i*2+1, i*2+2))
+		args = append(args, hexToBytes(ref.ID), ref.BlockHeight)
+	}
+	return strings.Join(parts, ", "), args
+}
+
+// buildTxRefValuesOffset is like buildTxRefValues but starts parameter numbering at offset+1.
+// Used when other parameters ($1, $2, ...) precede the VALUES list.
+func buildTxRefValuesOffset(refs []TxRef, offset int) (string, []interface{}) {
+	parts := make([]string, 0, len(refs))
+	args := make([]interface{}, 0, len(refs)*2)
+	for i, ref := range refs {
+		parts = append(parts, fmt.Sprintf("($%d::bytea, $%d::bigint)", offset+i*2+1, offset+i*2+2))
+		args = append(args, hexToBytes(ref.ID), ref.BlockHeight)
+	}
+	return strings.Join(parts, ", "), args
 }
 
 // TokenMetadataInfo is a lightweight struct for token display info (icon, symbol, name).

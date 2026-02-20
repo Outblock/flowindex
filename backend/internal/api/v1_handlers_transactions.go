@@ -47,9 +47,10 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Fetch transfer summaries for expand preview
-	transferSummaries, tsErr := s.repo.GetTransferSummariesByTxIDs(r.Context(), txIDs, "")
+	txRefs := collectTxRefs(txs)
+	transferSummaries, tsErr := s.repo.GetTransferSummariesByTxRefs(r.Context(), txRefs, "")
 	if tsErr != nil {
-		log.Printf("[WARN] GetTransferSummariesByTxIDs (list) failed txIDs=%d: %v", len(txIDs), tsErr)
+		log.Printf("[WARN] GetTransferSummariesByTxRefs (list) failed refs=%d: %v", len(txRefs), tsErr)
 	}
 	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
 	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)

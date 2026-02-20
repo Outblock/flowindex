@@ -144,6 +144,14 @@ func collectTxIDs(txs []models.Transaction) []string {
 	return out
 }
 
+func collectTxRefs(txs []models.Transaction) []repository.TxRef {
+	out := make([]repository.TxRef, 0, len(txs))
+	for _, t := range txs {
+		out = append(out, repository.TxRef{ID: t.ID, BlockHeight: t.BlockHeight})
+	}
+	return out
+}
+
 func formatTime(ts time.Time) string {
 	if ts.IsZero() {
 		return ""

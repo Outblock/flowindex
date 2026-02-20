@@ -287,9 +287,10 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 	}
 
 	// Fetch transfer summaries for expand preview
-	transferSummaries, tsErr := s.repo.GetTransferSummariesByTxIDs(r.Context(), txIDs, address)
+	txRefs := collectTxRefs(txs)
+	transferSummaries, tsErr := s.repo.GetTransferSummariesByTxRefs(r.Context(), txRefs, address)
 	if tsErr != nil {
-		log.Printf("[WARN] GetTransferSummariesByTxIDs failed for address=%s txIDs=%d: %v", address, len(txIDs), tsErr)
+		log.Printf("[WARN] GetTransferSummariesByTxRefs failed for address=%s refs=%d: %v", address, len(txRefs), tsErr)
 	}
 	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
 	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
