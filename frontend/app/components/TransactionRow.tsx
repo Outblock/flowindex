@@ -331,6 +331,60 @@ async function fetchNFTThumbnail(token: string, tokenId: string, ownerAddress: s
     return null;
 }
 
+/** Reusable NFT image that lazy-loads thumbnail via cadence when API data is missing */
+export function NFTTransferImage({ nft, size = 48 }: {
+    nft: { nft_thumbnail?: string; collection_logo?: string; token?: string; token_id?: string | number; from_address?: string; to_address?: string; transfer_type?: string };
+    size?: number;
+}) {
+    const thumbUrl = nft.nft_thumbnail ? resolveIPFS(String(nft.nft_thumbnail)) : null;
+    const logoUrl = nft.collection_logo ? resolveIPFS(String(nft.collection_logo)) : null;
+
+    const [fetched, setFetched] = useState<{ thumbnail: string; name: string } | null>(null);
+    const [loading, setLoading] = useState(!thumbUrl);
+    const fetchedRef = useRef(false);
+
+    useEffect(() => {
+        if (thumbUrl || fetchedRef.current) { setLoading(false); return; }
+        fetchedRef.current = true;
+        const token = nft.token || '';
+        const tokenId = String(nft.token_id ?? '');
+        const owner = nft.transfer_type === 'burn' ? nft.from_address : nft.to_address;
+        if (!token || !tokenId || !owner) { setLoading(false); return; }
+        fetchNFTThumbnail(token, tokenId, owner).then(r => {
+            setFetched(r);
+            setLoading(false);
+        });
+    }, [nft.token, nft.token_id, nft.from_address, nft.to_address, thumbUrl]);
+
+    const src = thumbUrl || fetched?.thumbnail || logoUrl;
+
+    if (loading) {
+        return (
+            <div style={{ width: size, height: size }} className="rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center animate-pulse">
+                <ImageIcon style={{ width: size * 0.3, height: size * 0.3 }} className="text-purple-500" />
+            </div>
+        );
+    }
+
+    if (src) {
+        return (
+            <img
+                src={src}
+                alt=""
+                style={{ width: size, height: size }}
+                className="rounded border border-zinc-200 dark:border-white/10 object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+        );
+    }
+
+    return (
+        <div style={{ width: size, height: size }} className="rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center">
+            <ImageIcon style={{ width: size * 0.3, height: size * 0.3 }} className="text-purple-500" />
+        </div>
+    );
+}
+
 /** NFT thumbnail card — fetches thumbnail lazily */
 function NFTThumbnailCard({ token, tokenId, displayName, ownerAddress, isMint, isBurn }: {
     token: string; tokenId: string; displayName: string; ownerAddress: string;

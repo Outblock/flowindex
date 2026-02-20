@@ -12,7 +12,7 @@ import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/
 import { useTheme } from '../../contexts/ThemeContext';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import DecryptedText from '../../components/ui/DecryptedText';
-import { deriveActivityType, TokenIcon, formatTokenName, buildSummaryLine } from '../../components/TransactionRow';
+import { deriveActivityType, TokenIcon, formatTokenName, buildSummaryLine, NFTTransferImage } from '../../components/TransactionRow';
 import { formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
 import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
@@ -211,15 +211,7 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress }: 
                     {transaction.nft_transfers.slice(0, 6).map((nt: any, idx: number) => (
                         <div key={idx} className="flex items-center gap-3 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-sm p-2.5">
                             <div className="flex-shrink-0">
-                                {cleanUrl(nt.nft_thumbnail) ? (
-                                    <img src={cleanUrl(nt.nft_thumbnail)} alt="" className="w-12 h-12 rounded border border-zinc-200 dark:border-white/10 object-cover" />
-                                ) : cleanUrl(nt.collection_logo) ? (
-                                    <img src={cleanUrl(nt.collection_logo)} alt="" className="w-12 h-12 rounded border border-zinc-200 dark:border-white/10 object-cover" />
-                                ) : (
-                                    <div className="w-12 h-12 rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center">
-                                        <ImageIcon className="w-5 h-5 text-purple-500" />
-                                    </div>
-                                )}
+                                <NFTTransferImage nft={nt} size={48} />
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -856,15 +848,7 @@ function TransactionDetail() {
                                             {fullTx.nft_transfers.map((nt: any, idx: number) => (
                                                 <div key={idx} className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors">
                                                     <div className="flex-shrink-0">
-                                                        {cleanUrl(nt.nft_thumbnail) ? (
-                                                            <img src={cleanUrl(nt.nft_thumbnail)} alt="" className="w-16 h-16 rounded-md border border-zinc-200 dark:border-white/10 object-cover shadow-sm" />
-                                                        ) : cleanUrl(nt.collection_logo) ? (
-                                                            <img src={cleanUrl(nt.collection_logo)} alt="" className="w-16 h-16 rounded-md border border-zinc-200 dark:border-white/10 object-cover shadow-sm" />
-                                                        ) : (
-                                                            <div className="w-16 h-16 rounded-md bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center">
-                                                                <ImageIcon className="w-6 h-6 text-purple-500" />
-                                                            </div>
-                                                        )}
+                                                        <NFTTransferImage nft={nt} size={64} />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2 flex-wrap">

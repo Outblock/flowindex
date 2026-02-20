@@ -215,20 +215,31 @@ function transfersToFlows(detail: any): Flow[] {
         });
     }
 
-    // NFT transfers: one flow per transfer
+    // Aggregate NFT transfers by (from, to, collection)
+    const nftAgg = new Map<string, { from: string; to: string; count: number; collection: string; items: string[] }>();
     for (const nt of nftTransfers) {
         const from = nt.from_address;
         const to = nt.to_address;
         if (!from || !to) continue;
         const name = nt.collection_name || nt.token?.split('.').pop() || 'NFT';
-        const label = nt.nft_name || `#${nt.token_id}`;
+        const key = `${from}|${to}|${name}`;
+        const existing = nftAgg.get(key);
+        if (existing) {
+            existing.count++;
+            if (existing.items.length < 3) existing.items.push(nt.nft_name || `#${nt.token_id}`);
+        } else {
+            nftAgg.set(key, { from, to, count: 1, collection: name, items: [nt.nft_name || `#${nt.token_id}`] });
+        }
+    }
+    for (const agg of nftAgg.values()) {
+        const label = agg.count > 1 ? `${agg.collection} x${agg.count}` : `${agg.collection} ${agg.items[0]}`;
         flows.push({
-            from,
-            fromLabel: formatShort(from, 8, 4),
-            to,
-            toLabel: formatShort(to, 8, 4),
-            token: `${name} ${label}`,
-            amount: '1',
+            from: agg.from,
+            fromLabel: formatShort(agg.from, 8, 4),
+            to: agg.to,
+            toLabel: formatShort(agg.to, 8, 4),
+            token: label,
+            amount: agg.count.toString(),
         });
     }
 
