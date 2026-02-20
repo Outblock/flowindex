@@ -262,19 +262,19 @@ export function buildSummaryLine(tx: any): string {
 // --- Detail cache (persists across re-renders, shared across rows) ---
 const txDetailCache = new Map<string, any>();
 
-// --- NFT thumbnail cache (shared across all rows) ---
+// --- NFT detail cache (shared across all rows) ---
+// Stores full cadence detail for modal use; thumbnail/name is a subset
+const nftDetailCache = new Map<string, Record<string, any> | null>();
 const nftThumbnailCache = new Map<string, { thumbnail: string; name: string } | null>();
 
-async function fetchNFTThumbnail(token: string, tokenId: string, ownerAddress: string): Promise<{ thumbnail: string; name: string } | null> {
+/** Fetch full NFT detail via cadence script (for modal). Returns cadence-format object. */
+export async function fetchNFTFullDetail(token: string, tokenId: string, ownerAddress: string): Promise<Record<string, any> | null> {
     const cacheKey = `${token}:${tokenId}`;
-    if (nftThumbnailCache.has(cacheKey)) return nftThumbnailCache.get(cacheKey) || null;
+    if (nftDetailCache.has(cacheKey)) return nftDetailCache.get(cacheKey) || null;
 
-    // Try frontend Cadence call first via cadenceService.getNftDetail
-    // token format: "A.{addr}.{name}" → extract addr and name
     const parts = token.split('.');
     if (parts.length >= 3 && ownerAddress) {
         const contractName = parts[2];
-        // Common public path patterns for Flow NFT collections
         const pathCandidates = [
             `${contractName}Collection`,
             `${contractName}`,
@@ -288,10 +288,12 @@ async function fetchNFTThumbnail(token: string, tokenId: string, ownerAddress: s
                     [Number(tokenId)]
                 );
                 if (result && result.length > 0 && result[0]?.thumbnail) {
-                    const thumb = resolveIPFS(String(result[0].thumbnail));
-                    const name = result[0].name ? String(result[0].name) : '';
-                    const entry = { thumbnail: thumb, name };
-                    nftThumbnailCache.set(cacheKey, entry);
+                    const detail = result[0];
+                    nftDetailCache.set(cacheKey, detail);
+                    // Also populate thumbnail cache
+                    const thumb = resolveIPFS(String(detail.thumbnail));
+                    const name = detail.name ? String(detail.name) : '';
+                    nftThumbnailCache.set(cacheKey, { thumbnail: thumb, name });
                     // Fire-and-forget backfill to backend
                     resolveApiBaseUrl().then(baseUrl => {
                         fetch(`${baseUrl}/flow/nft/backfill`, {
@@ -306,7 +308,7 @@ async function fetchNFTThumbnail(token: string, tokenId: string, ownerAddress: s
                             }]),
                         }).catch(() => {});
                     });
-                    return entry;
+                    return detail;
                 }
             } catch { /* try next path candidate */ }
         }
@@ -320,21 +322,41 @@ async function fetchNFTThumbnail(token: string, tokenId: string, ownerAddress: s
             const json = await res.json();
             const item = json.data?.[0];
             if (item?.thumbnail) {
-                const entry = { thumbnail: resolveIPFS(item.thumbnail), name: item.name || '' };
-                nftThumbnailCache.set(cacheKey, entry);
-                return entry;
+                // Convert API format to cadence-like format for modal
+                const detail: Record<string, any> = {
+                    tokenId: tokenId,
+                    thumbnail: resolveIPFS(item.thumbnail),
+                    name: item.name || '',
+                    ...(item.serial_number != null && { serial: item.serial_number }),
+                    ...(item.traits && { traits: item.traits }),
+                    ...(item.rarity_description && { rarity: item.rarity_description }),
+                    ...(item.external_url && { externalURL: item.external_url }),
+                };
+                nftDetailCache.set(cacheKey, detail);
+                nftThumbnailCache.set(cacheKey, { thumbnail: detail.thumbnail, name: detail.name });
+                return detail;
             }
         }
     } catch { /* ignore */ }
 
-    nftThumbnailCache.set(cacheKey, null);
+    nftDetailCache.set(cacheKey, null);
     return null;
 }
 
+async function fetchNFTThumbnail(token: string, tokenId: string, ownerAddress: string): Promise<{ thumbnail: string; name: string } | null> {
+    const cacheKey = `${token}:${tokenId}`;
+    if (nftThumbnailCache.has(cacheKey)) return nftThumbnailCache.get(cacheKey) || null;
+    // Delegate to full detail fetch which populates thumbnail cache
+    const detail = await fetchNFTFullDetail(token, tokenId, ownerAddress);
+    return detail ? (nftThumbnailCache.get(cacheKey) || null) : null;
+}
+
 /** Reusable NFT image that lazy-loads thumbnail via cadence when API data is missing */
-export function NFTTransferImage({ nft, size = 48 }: {
+export function NFTTransferImage({ nft, size = 48, onClick, className = '' }: {
     nft: { nft_thumbnail?: string; collection_logo?: string; token?: string; token_id?: string | number; from_address?: string; to_address?: string; transfer_type?: string };
     size?: number;
+    onClick?: () => void;
+    className?: string;
 }) {
     const thumbUrl = nft.nft_thumbnail ? resolveIPFS(String(nft.nft_thumbnail)) : null;
     const logoUrl = nft.collection_logo ? resolveIPFS(String(nft.collection_logo)) : null;
@@ -357,10 +379,11 @@ export function NFTTransferImage({ nft, size = 48 }: {
     }, [nft.token, nft.token_id, nft.from_address, nft.to_address, thumbUrl]);
 
     const src = thumbUrl || fetched?.thumbnail || logoUrl;
+    const cursor = onClick ? 'cursor-pointer' : '';
 
     if (loading) {
         return (
-            <div style={{ width: size, height: size }} className="rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center animate-pulse">
+            <div style={{ width: size, height: size }} className={`rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center animate-pulse ${cursor} ${className}`} onClick={onClick}>
                 <ImageIcon style={{ width: size * 0.3, height: size * 0.3 }} className="text-purple-500" />
             </div>
         );
@@ -372,14 +395,15 @@ export function NFTTransferImage({ nft, size = 48 }: {
                 src={src}
                 alt=""
                 style={{ width: size, height: size }}
-                className="rounded border border-zinc-200 dark:border-white/10 object-cover"
+                className={`rounded border border-zinc-200 dark:border-white/10 object-cover ${cursor} ${className}`}
+                onClick={onClick}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
         );
     }
 
     return (
-        <div style={{ width: size, height: size }} className="rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center">
+        <div style={{ width: size, height: size }} className={`rounded bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center ${cursor} ${className}`} onClick={onClick}>
             <ImageIcon style={{ width: size * 0.3, height: size * 0.3 }} className="text-purple-500" />
         </div>
     );

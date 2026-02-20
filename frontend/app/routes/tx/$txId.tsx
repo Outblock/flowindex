@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
@@ -12,12 +12,14 @@ import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/
 import { useTheme } from '../../contexts/ThemeContext';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import DecryptedText from '../../components/ui/DecryptedText';
-import { deriveActivityType, TokenIcon, formatTokenName, buildSummaryLine, NFTTransferImage } from '../../components/TransactionRow';
+import { deriveActivityType, TokenIcon, formatTokenName, buildSummaryLine, NFTTransferImage, fetchNFTFullDetail } from '../../components/TransactionRow';
 import { formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
 import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import { deriveEnrichments } from '../../lib/deriveFromEvents';
+import { NFTDetailModal } from '../../components/NFTDetailModal';
+import { apiItemToCadenceFormat } from '../../components/NFTDetailContent';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -115,7 +117,7 @@ function FlowRow({ from, to, amount, symbol, logo, badge, formatAddr: _formatAdd
     );
 }
 
-function TransactionSummaryCard({ transaction, formatAddress: _formatAddress }: { transaction: any; formatAddress: (addr: string) => string }) {
+function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, onNftClick, isAdmin }: { transaction: any; formatAddress: (addr: string) => string; onNftClick?: (nt: any) => void; isAdmin?: boolean }) {
     const activity = deriveActivityType(transaction);
     const summaryLine = buildSummaryLine(transaction);
     const hasFT = transaction.ft_transfers?.length > 0;
@@ -127,10 +129,28 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress }: 
 
     const fmtAddr = (addr: string) => formatShort(addr, 8, 4);
 
+    // NFT collection banner image (gradient overlay like tx list)
+    const nftBannerUrl = transaction.nft_transfers?.length > 0
+        ? cleanUrl(transaction.nft_transfers[0].collection_logo)
+        : '';
+
     return (
-        <div className="border border-zinc-200 dark:border-white/10 p-6 mb-8 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+        <div className="relative overflow-hidden border border-zinc-200 dark:border-white/10 p-6 mb-8 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+            {/* NFT collection banner gradient */}
+            {nftBannerUrl && (
+                <div
+                    className="absolute right-0 top-0 bottom-0 w-60 pointer-events-none opacity-[0.12] dark:opacity-[0.08]"
+                    style={{
+                        backgroundImage: `url(${nftBannerUrl})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        maskImage: 'linear-gradient(to right, transparent, black)',
+                        WebkitMaskImage: 'linear-gradient(to right, transparent, black)',
+                    }}
+                />
+            )}
             {/* Header row: title + activity badge */}
-            <div className="flex items-center justify-between mb-4 border-b border-zinc-200 dark:border-white/10 pb-3">
+            <div className="relative flex items-center justify-between mb-4 border-b border-zinc-200 dark:border-white/10 pb-3">
                 <h2 className="text-sm uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
                     Transaction Summary
                 </h2>
@@ -209,7 +229,7 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress }: 
                         <span className="text-[9px] text-zinc-400 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">{transaction.nft_transfers.length}</span>
                     </div>
                     {transaction.nft_transfers.slice(0, 6).map((nt: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-3 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-sm p-2.5">
+                        <div key={idx} className={`flex items-center gap-3 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-sm p-2.5 ${onNftClick ? 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-black/40 transition-colors' : ''}`} onClick={onNftClick ? () => onNftClick(nt) : undefined}>
                             <div className="flex-shrink-0">
                                 <NFTTransferImage nft={nt} size={48} />
                             </div>
@@ -225,6 +245,11 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress }: 
                                         <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
                                             {nt.nft_rarity}
                                         </span>
+                                    )}
+                                    {isAdmin && nt.token && (
+                                        <Link to="/admin" search={{ tab: 'nft', q: nt.token } as any} className="text-[9px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 font-mono" onClick={(e) => e.stopPropagation()}>
+                                            [admin]
+                                        </Link>
                                     )}
                                 </div>
                                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
@@ -364,16 +389,40 @@ function TransactionDetail() {
     }, [transaction?.events, transaction?.script]);
 
     // Merge derived enrichments into the transaction object
-    const fullTx = enrichments
-        ? {
+    const fullTx = useMemo(() => {
+        if (!enrichments) return transaction;
+        // Enrich derived NFT transfers with API metadata (collection_name, collection_logo, nft_thumbnail, etc.)
+        let mergedNfts = enrichments.nft_transfers;
+        if (mergedNfts.length > 0 && transaction?.nft_transfers?.length > 0) {
+            const apiByKey = new Map<string, any>();
+            for (const nt of transaction.nft_transfers) {
+                apiByKey.set(`${nt.token}:${nt.token_id}`, nt);
+            }
+            mergedNfts = mergedNfts.map((nt: any) => {
+                const api = apiByKey.get(`${nt.token}:${nt.token_id}`);
+                if (!api) return nt;
+                return {
+                    ...nt,
+                    collection_name: nt.collection_name || api.collection_name,
+                    collection_logo: nt.collection_logo || api.collection_logo,
+                    nft_thumbnail: nt.nft_thumbnail || api.nft_thumbnail,
+                    nft_name: nt.nft_name || api.nft_name,
+                    nft_rarity: nt.nft_rarity || api.nft_rarity,
+                    is_cross_vm: nt.is_cross_vm ?? api.is_cross_vm,
+                    from_coa_flow_address: nt.from_coa_flow_address || api.from_coa_flow_address,
+                    to_coa_flow_address: nt.to_coa_flow_address || api.to_coa_flow_address,
+                };
+            });
+        }
+        return {
             ...transaction,
             ft_transfers: enrichments.ft_transfers.length > 0 ? enrichments.ft_transfers : transaction?.ft_transfers,
-            nft_transfers: enrichments.nft_transfers.length > 0 ? enrichments.nft_transfers : transaction?.nft_transfers,
+            nft_transfers: mergedNfts.length > 0 ? mergedNfts : transaction?.nft_transfers,
             evm_executions: enrichments.evm_executions.length > 0 ? enrichments.evm_executions : transaction?.evm_executions,
             contract_imports: enrichments.contract_imports.length > 0 ? enrichments.contract_imports : transaction?.contract_imports,
             fee: enrichments.fee || transaction?.fee,
-        }
-        : transaction;
+        };
+    }, [enrichments, transaction]);
 
     const hasTransfers = fullTx?.ft_transfers?.length > 0 || fullTx?.nft_transfers?.length > 0 || fullTx?.defi_events?.length > 0;
     const showTransfersTab = hasTransfers;
@@ -386,6 +435,53 @@ function TransactionDetail() {
     const { theme } = useTheme();
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
     const [expandedPayloads, setExpandedPayloads] = useState<Record<number, boolean>>({});
+    const [selectedNft, setSelectedNft] = useState<any | null>(null);
+    const [selectedNftCollection, setSelectedNftCollection] = useState<{ id: string; name: string }>({ id: '', name: '' });
+    const isAdmin = typeof window !== 'undefined' && !!localStorage.getItem('flowindex_admin_token');
+
+    // Click handler for NFT transfer cards — fetch full detail then open modal
+    const handleNftClick = useCallback((nt: any) => {
+        const token = nt.token || '';
+        const tokenId = String(nt.token_id ?? '');
+        const owner = nt.transfer_type === 'burn' ? nt.from_address : nt.to_address;
+        const collectionName = nt.collection_name || token.split('.').pop() || 'NFT';
+        setSelectedNftCollection({ id: token, name: collectionName });
+
+        // If we already have cadence detail cached, use it directly
+        fetchNFTFullDetail(token, tokenId, owner || '').then(detail => {
+            if (detail) {
+                // Cadence detail has: tokenId, name, thumbnail, rarity, serial, editions, traits, medias, externalURL
+                // NFTDetailContent expects { display: { name, thumbnail }, tokenId, ... }
+                const modalNft = detail.display?.name
+                    ? detail  // Already in cadence format
+                    : {
+                        tokenId: detail.tokenId || tokenId,
+                        display: {
+                            name: detail.name || nt.nft_name || `#${tokenId}`,
+                            description: detail.description || '',
+                            thumbnail: detail.thumbnail || nt.nft_thumbnail || '',
+                        },
+                        ...(detail.serial != null && { serial: { number: detail.serial } }),
+                        ...(detail.editions && { editions: detail.editions }),
+                        ...(detail.rarity && { rarity: typeof detail.rarity === 'string' ? { description: detail.rarity } : detail.rarity }),
+                        ...(detail.traits && { traits: detail.traits }),
+                        ...(detail.medias && { medias: detail.medias }),
+                        ...(detail.externalURL && { externalURL: typeof detail.externalURL === 'string' ? { url: detail.externalURL } : detail.externalURL }),
+                    };
+                setSelectedNft(modalNft);
+            } else {
+                // Fallback: show what we have from the transfer data
+                setSelectedNft({
+                    tokenId: tokenId,
+                    display: {
+                        name: nt.nft_name || `#${tokenId}`,
+                        description: '',
+                        thumbnail: nt.nft_thumbnail || nt.collection_logo || '',
+                    },
+                });
+            }
+        });
+    }, []);
 
     // Sync tab to URL
     const switchTab = (tab: string) => {
@@ -620,7 +716,7 @@ function TransactionDetail() {
                 )}
 
                 {/* Transaction Summary Card */}
-                <TransactionSummaryCard transaction={fullTx} formatAddress={formatAddress} />
+                <TransactionSummaryCard transaction={fullTx} formatAddress={formatAddress} onNftClick={handleNftClick} isAdmin={isAdmin} />
 
                 {/* Tabs Section */}
                 <div className="mt-12">
@@ -846,7 +942,7 @@ function TransactionDetail() {
                                         </h3>
                                         <div className="divide-y divide-zinc-100 dark:divide-white/5 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
                                             {fullTx.nft_transfers.map((nt: any, idx: number) => (
-                                                <div key={idx} className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors">
+                                                <div key={idx} className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors cursor-pointer" onClick={() => handleNftClick(nt)}>
                                                     <div className="flex-shrink-0">
                                                         <NFTTransferImage nft={nt} size={64} />
                                                     </div>
@@ -878,6 +974,11 @@ function TransactionDetail() {
                                                                     <Globe className="w-2.5 h-2.5" />
                                                                     Cross-VM
                                                                 </span>
+                                                            )}
+                                                            {isAdmin && nt.token && (
+                                                                <Link to="/admin" search={{ tab: 'nft', q: nt.token } as any} className="text-[9px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 font-mono" onClick={(e) => e.stopPropagation()}>
+                                                                    [admin]
+                                                                </Link>
                                                             )}
                                                         </div>
                                                         <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
@@ -1372,6 +1473,16 @@ function TransactionDetail() {
                     </div>
                 </div>
             </div>
+
+            {/* NFT Detail Modal */}
+            {selectedNft && (
+                <NFTDetailModal
+                    nft={selectedNft}
+                    collectionId={selectedNftCollection.id}
+                    collectionName={selectedNftCollection.name}
+                    onClose={() => setSelectedNft(null)}
+                />
+            )}
         </div>
     );
 }
