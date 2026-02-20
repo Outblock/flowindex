@@ -418,6 +418,22 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                 const d = json.data?.[0];
                 if (d && !cancelled) {
                     const derived = deriveEnrichments(d.events || [], d.script);
+                    // Enrich derived ft_transfers with logo/symbol/name from transfer_summary
+                    const summaryFT: any[] = tx.transfer_summary?.ft || [];
+                    if (summaryFT.length > 0 && derived.ft_transfers.length > 0) {
+                        const metaByToken = new Map<string, { logo?: string; symbol?: string; name?: string }>();
+                        for (const sf of summaryFT) {
+                            if (sf.token) metaByToken.set(sf.token, { logo: sf.logo, symbol: sf.symbol, name: sf.name });
+                        }
+                        for (const ft of derived.ft_transfers) {
+                            const meta = metaByToken.get(ft.token);
+                            if (meta) {
+                                if (meta.logo && !ft.token_logo) ft.token_logo = meta.logo;
+                                if (meta.symbol && !ft.token_symbol) ft.token_symbol = meta.symbol;
+                                if (meta.name && !ft.token_name) ft.token_name = meta.name;
+                            }
+                        }
+                    }
                     const enriched = {
                         ...d,
                         ft_transfers: derived.ft_transfers,
