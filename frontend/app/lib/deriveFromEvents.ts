@@ -514,6 +514,10 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
   const evmWithdrawals: { coaAddress: string; amount: string }[] = [];
   const evmDeposits: { coaAddress: string; amount: string }[] = [];
 
+  // Track whether staking/system events are present — when they are,
+  // unpaired FlowToken deposits/withdrawals are staking operations, not mints/burns.
+  let hasStakingEvents = false;
+
   for (const event of events) {
     const eventType = event.type || '';
 
@@ -569,6 +573,18 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
         const exec = parseEVMExecution(event);
         if (exec) evmExecutions.push(exec);
       } catch { /* skip */ }
+    }
+
+    // Detect staking/system events that cause unpaired FlowToken movements
+    if (!hasStakingEvents && (
+      eventType.includes('FlowIDTableStaking.') ||
+      eventType.includes('FlowStakingCollection.') ||
+      eventType.includes('LockedTokens.') ||
+      eventType.includes('FlowEpoch.') ||
+      eventType.includes('LiquidStaking') ||
+      eventType.includes('stFlowToken')
+    )) {
+      hasStakingEvents = true;
     }
   }
 
@@ -628,7 +644,12 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
     const toNorm = normalizeFlowAddress(t.toAddress);
     if (fromNorm === FEE_VAULT_ADDRESS || toNorm === FEE_VAULT_ADDRESS) continue;
 
-    const transferType: TransferType = !t.fromAddress ? 'mint' : !t.toAddress ? 'burn' : 'transfer';
+    // Unpaired FlowToken legs in staking txs are staking operations, not mints/burns.
+    const isFlowToken = t.token.includes('FlowToken');
+    const transferType: TransferType =
+      (!t.fromAddress && !(isFlowToken && hasStakingEvents)) ? 'mint' :
+      (!t.toAddress && !(isFlowToken && hasStakingEvents)) ? 'burn' :
+      'transfer';
 
     if (t.isNFT) {
       nftTransfers.push({
