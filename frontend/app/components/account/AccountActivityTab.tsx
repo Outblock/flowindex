@@ -84,7 +84,7 @@ interface Props {
     onSubTabChange?: (subtab: FilterMode | undefined) => void;
 }
 
-export { ActivityRow, dedup };
+export { ActivityRow, dedup, mergeTokenMetaFromTransactions };
 
 export function AccountActivityTab({ address, initialTransactions, initialNextCursor, subtab, onSubTabChange }: Props) {
     const normalizedAddress = normalizeAddress(address);

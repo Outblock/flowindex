@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Search, Filter, Radio, ChevronDown, X, Loader2, Circle } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
@@ -8,6 +8,7 @@ import { getFlowV1Transaction } from '../../api/gen/find';
 import { useWebSocketMessages, useWebSocketStatus } from '../../hooks/useWebSocket';
 import { Pagination } from '../../components/Pagination';
 import { ActivityRow, deriveActivityType } from '../../components/TransactionRow';
+import { mergeTokenMetaFromTransactions } from '../../components/account/AccountActivityTab';
 
 const PAGE_SIZE = 20;
 
@@ -56,6 +57,8 @@ function Transactions() {
     const [filters, setFilters] = useState<Filters>({ status: '', address: '' });
     const [showFilters, setShowFilters] = useState(false);
     const [activeTypeFilter, setActiveTypeFilter] = useState('');
+
+    const tokenMeta = useMemo(() => mergeTokenMetaFromTransactions(transactions), [transactions]);
 
     const { isConnected: _isConnected } = useWebSocketStatus();
     const { lastMessage } = useWebSocketMessages();
@@ -362,6 +365,7 @@ function Transactions() {
                                             tx={tx}
                                             expanded={expandedTxId === tx.id}
                                             onToggle={() => setExpandedTxId(prev => prev === tx.id ? null : tx.id)}
+                                            tokenMeta={tokenMeta}
                                         />
                                     </motion.div>
                                 );
