@@ -257,7 +257,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 		scriptHash := hex.EncodeToString(sum[:])
 		scriptHashes[i] = scriptHash
 		if _, ok := scriptsByHash[scriptHash]; !ok {
-			scriptsByHash[scriptHash] = scriptText
+			scriptsByHash[scriptHash] = sanitizeForPG(scriptText)
 		}
 		if scriptInlineMaxBytes > 0 && len(scriptText) <= scriptInlineMaxBytes {
 			scriptInlines[i] = scriptText

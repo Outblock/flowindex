@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"flowscan-clone/internal/ingester"
 	"flowscan-clone/internal/models"
 
 	"github.com/onflow/cadence"
@@ -1130,5 +1131,48 @@ func (s *Server) handleAdminListErrors(w http.ResponseWriter, r *http.Request) {
 		"message_counts": counts,
 		"total":          len(errors),
 		"filter_worker":  worker,
+	}, nil, nil)
+}
+
+// handleAdminBackfillStakingBlocks runs staking_worker on specific block heights.
+// POST /admin/backfill-staking  {"heights": [142651980, 141896604, ...]}
+func (s *Server) handleAdminBackfillStakingBlocks(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Heights []uint64 `json:"heights"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if len(req.Heights) == 0 {
+		writeAPIError(w, http.StatusBadRequest, "heights array is required")
+		return
+	}
+	if len(req.Heights) > 500 {
+		writeAPIError(w, http.StatusBadRequest, "max 500 heights per request")
+		return
+	}
+
+	ctx := r.Context()
+	worker := ingester.NewStakingWorker(s.repo)
+
+	var processed, errored int
+	var errMsgs []string
+	for _, h := range req.Heights {
+		if err := worker.ProcessRange(ctx, h, h); err != nil {
+			errored++
+			errMsgs = append(errMsgs, fmt.Sprintf("height %d: %v", h, err))
+		} else {
+			processed++
+		}
+	}
+
+	log.Printf("[admin] backfill-staking: processed=%d errored=%d total=%d", processed, errored, len(req.Heights))
+
+	writeAPIResponse(w, map[string]interface{}{
+		"processed": processed,
+		"errored":   errored,
+		"total":     len(req.Heights),
+		"errors":    errMsgs,
 	}, nil, nil)
 }

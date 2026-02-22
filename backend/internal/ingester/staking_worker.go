@@ -116,6 +116,13 @@ func (w *StakingWorker) ProcessRange(ctx context.Context, fromHeight, toHeight u
 				epochStats = append(epochStats, *es)
 			}
 		}
+
+		// Process EpochTotalRewardsPaid (from FlowIDTableStaking, not FlowEpoch)
+		if eventName == "EpochTotalRewardsPaid" {
+			if es := w.processPayoutEvent(evt, fields); es != nil {
+				epochStats = append(epochStats, *es)
+			}
+		}
 	}
 
 	if len(stakingEvents) == 0 {
@@ -275,4 +282,29 @@ func (w *StakingWorker) processEpochEvent(
 	}
 
 	return nil
+}
+
+// processPayoutEvent extracts payout data from EpochTotalRewardsPaid events.
+func (w *StakingWorker) processPayoutEvent(
+	evt models.Event,
+	fields map[string]interface{},
+) *models.EpochStats {
+	epochStr := extractString(fields["epochCounterForRewards"])
+	if epochStr == "" {
+		return nil
+	}
+	epoch, err := strconv.ParseInt(epochStr, 10, 64)
+	if err != nil {
+		return nil
+	}
+
+	return &models.EpochStats{
+		Epoch:            epoch,
+		PayoutTotal:      extractString(fields["total"]),
+		PayoutFromFees:   extractString(fields["fromFees"]),
+		PayoutMinted:     extractString(fields["minted"]),
+		PayoutFeesBurned: extractString(fields["feesBurned"]),
+		PayoutHeight:     evt.BlockHeight,
+		PayoutTime:       evt.Timestamp,
+	}
 }

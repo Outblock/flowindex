@@ -55,6 +55,9 @@ export SSR_API_ORIGIN="${SSR_API_ORIGIN:-http://127.0.0.1:8080}"
 mkdir -p /etc/nginx/http.d
 envsubst '$DNS_RESOLVER $BACKEND_API $BACKEND_WS' < /etc/nginx/templates/default.conf.template > /etc/nginx/http.d/default.conf
 
+# Patch Bun.serve idleTimeout (default 10s is too short for SSR rendering)
+sed -i 's/bun: { websocket: void 0 }/bun: { websocket: void 0, idleTimeout: 255 }/' /app/.output/server/index.mjs
+
 # Start Nitro SSR server on port 3000
 echo "Starting Nitro SSR server on :3000"
 PORT=3000 bun /app/.output/server/index.mjs &

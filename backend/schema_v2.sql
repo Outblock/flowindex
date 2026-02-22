@@ -748,4 +748,12 @@ ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS balance_path TEXT;
 ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS socials JSONB;
 ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS evm_address TEXT;
 
+-- Epoch payout columns (EpochTotalRewardsPaid event data)
+ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_total NUMERIC(78,8) DEFAULT 0;
+ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_from_fees NUMERIC(78,8) DEFAULT 0;
+ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_minted NUMERIC(78,8) DEFAULT 0;
+ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_fees_burned NUMERIC(78,8) DEFAULT 0;
+ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_height BIGINT;
+ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_time TIMESTAMPTZ;
+
 COMMIT;

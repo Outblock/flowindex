@@ -34,6 +34,7 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin.HandleFunc("/redirect-history-ingester", s.handleAdminRedirectHistoryIngester).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/resolve-errors", s.handleAdminResolveErrors).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/skipped-ranges", s.handleAdminListSkippedRanges).Methods("GET", "OPTIONS")
+	admin.HandleFunc("/backfill-staking", s.handleAdminBackfillStakingBlocks).Methods("POST", "OPTIONS")
 }
 
 func registerAPIRoutes(r *mux.Router, s *Server) {
@@ -136,6 +137,7 @@ func registerStatusRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flowscan/v1/stats", s.handleCompatFlowscanStats).Methods("GET", "OPTIONS")
 	r.HandleFunc("/public/v1/totalSupply", s.handleCompatTotalSupply).Methods("GET", "OPTIONS")
 	r.HandleFunc("/public/v1/totalSupplyWithDecimal", s.handleCompatTotalSupplyWithDecimal).Methods("GET", "OPTIONS")
+	r.HandleFunc("/public/v1/epoch/payout", s.handlePublicEpochPayout).Methods("GET", "OPTIONS")
 }
 
 func registerDeferredRoutes(r *mux.Router, s *Server) {

@@ -445,6 +445,14 @@ type EpochStats struct {
 	TotalStaked   string    `json:"total_staked"`
 	TotalRewarded string    `json:"total_rewarded"`
 	UpdatedAt     time.Time `json:"updated_at"`
+
+	// Payout fields from EpochTotalRewardsPaid event
+	PayoutTotal    string    `json:"payout_total"`
+	PayoutFromFees string    `json:"payout_from_fees"`
+	PayoutMinted   string    `json:"payout_minted"`
+	PayoutFeesBurned string  `json:"payout_fees_burned"`
+	PayoutHeight   uint64    `json:"payout_height"`
+	PayoutTime     time.Time `json:"payout_time"`
 }
 
 // NodeMetadata represents GeoIP metadata for a staking node from app.node_metadata.

@@ -285,6 +285,46 @@ func (s *Server) handleStakingRewardsStaking(w http.ResponseWriter, r *http.Requ
 	}, nil)
 }
 
+// handlePublicEpochPayout handles GET /public/v1/epoch/payout
+func (s *Server) handlePublicEpochPayout(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parseLimitOffset(r)
+	if limit > 100 {
+		limit = 100
+	}
+
+	payouts, err := s.repo.ListEpochPayouts(r.Context(), limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	out := make([]interface{}, 0, len(payouts))
+	for _, p := range payouts {
+		out = append(out, map[string]interface{}{
+			"block_height": p.PayoutHeight,
+			"timestamp":    formatTime(p.PayoutTime),
+			"epoch":        strconv.FormatInt(p.Epoch, 10),
+			"fields": map[string]interface{}{
+				"total":      parseFloatOrZero(p.PayoutTotal),
+				"fromFees":   parseFloatOrZero(p.PayoutFromFees),
+				"minted":     parseFloatOrZero(p.PayoutMinted),
+				"feesBurned": parseFloatOrZero(p.PayoutFeesBurned),
+			},
+		})
+	}
+
+	selfLink := "/public/v1/epoch/payout?limit=" + strconv.Itoa(limit)
+	if offset > 0 {
+		selfLink += "&offset=" + strconv.Itoa(offset)
+	}
+	nextLink := "/public/v1/epoch/payout?limit=" + strconv.Itoa(limit) + "&offset=" + strconv.Itoa(offset+limit)
+
+	writeAPIResponse(w, out, nil, map[string]string{
+		"self": selfLink,
+		"next": nextLink,
+	})
+}
+
 // handleStakingTokenomics handles GET /staking/tokenomics
 func (s *Server) handleStakingTokenomics(w http.ResponseWriter, r *http.Request) {
 	snapshot, err := s.repo.GetLatestTokenomicsSnapshot(r.Context())

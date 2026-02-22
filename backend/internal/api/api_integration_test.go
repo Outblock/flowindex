@@ -453,7 +453,7 @@ func TestIntegration_Accounting(t *testing.T) {
 func TestIntegration_PublicV1(t *testing.T) {
 	runEndpointTests(t, []endpointTest{
 		{"public_account", sub("/public/v1/account/{address}"), 200, true, false, nil},
-		{"epoch_payout", "/public/v1/epoch/payout", 501, false, false, nil},
+		{"epoch_payout", "/public/v1/epoch/payout", 200, false, false, nil},
 		{"resolver", "/public/v1/resolver?name=flowscan", 501, false, false, nil},
 	})
 }

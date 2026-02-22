@@ -91,9 +91,11 @@ func (r *Repository) UpsertEpochStats(ctx context.Context, stats models.EpochSta
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO app.epoch_stats (
 			epoch, start_height, end_height, start_time, end_time,
-			total_nodes, total_staked, total_rewarded, updated_at
+			total_nodes, total_staked, total_rewarded,
+			payout_total, payout_from_fees, payout_minted, payout_fees_burned,
+			payout_height, payout_time, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		ON CONFLICT (epoch) DO UPDATE SET
 			start_height = COALESCE(EXCLUDED.start_height, app.epoch_stats.start_height),
 			end_height = COALESCE(EXCLUDED.end_height, app.epoch_stats.end_height),
@@ -102,9 +104,18 @@ func (r *Repository) UpsertEpochStats(ctx context.Context, stats models.EpochSta
 			total_nodes = CASE WHEN EXCLUDED.total_nodes > 0 THEN EXCLUDED.total_nodes ELSE app.epoch_stats.total_nodes END,
 			total_staked = CASE WHEN EXCLUDED.total_staked > 0 THEN EXCLUDED.total_staked ELSE app.epoch_stats.total_staked END,
 			total_rewarded = CASE WHEN EXCLUDED.total_rewarded > 0 THEN EXCLUDED.total_rewarded ELSE app.epoch_stats.total_rewarded END,
+			payout_total = CASE WHEN EXCLUDED.payout_total > 0 THEN EXCLUDED.payout_total ELSE app.epoch_stats.payout_total END,
+			payout_from_fees = CASE WHEN EXCLUDED.payout_from_fees > 0 THEN EXCLUDED.payout_from_fees ELSE app.epoch_stats.payout_from_fees END,
+			payout_minted = CASE WHEN EXCLUDED.payout_minted > 0 THEN EXCLUDED.payout_minted ELSE app.epoch_stats.payout_minted END,
+			payout_fees_burned = CASE WHEN EXCLUDED.payout_fees_burned > 0 THEN EXCLUDED.payout_fees_burned ELSE app.epoch_stats.payout_fees_burned END,
+			payout_height = CASE WHEN EXCLUDED.payout_height > 0 THEN EXCLUDED.payout_height ELSE app.epoch_stats.payout_height END,
+			payout_time = CASE WHEN EXCLUDED.payout_height > 0 THEN EXCLUDED.payout_time ELSE app.epoch_stats.payout_time END,
 			updated_at = EXCLUDED.updated_at`,
 		stats.Epoch, stats.StartHeight, stats.EndHeight, stats.StartTime, stats.EndTime,
-		stats.TotalNodes, numericOrZero(stats.TotalStaked), numericOrZero(stats.TotalRewarded), time.Now(),
+		stats.TotalNodes, numericOrZero(stats.TotalStaked), numericOrZero(stats.TotalRewarded),
+		numericOrZero(stats.PayoutTotal), numericOrZero(stats.PayoutFromFees),
+		numericOrZero(stats.PayoutMinted), numericOrZero(stats.PayoutFeesBurned),
+		stats.PayoutHeight, stats.PayoutTime, time.Now(),
 	)
 	return err
 }
@@ -265,6 +276,40 @@ func (r *Repository) ListEpochStats(ctx context.Context, limit, offset int) ([]m
 			&s.StartTime, &s.EndTime,
 			&s.TotalNodes, &s.TotalStaked,
 			&s.TotalRewarded, &s.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		stats = append(stats, s)
+	}
+	return stats, rows.Err()
+}
+
+// ListEpochPayouts returns epoch payout data ordered by epoch descending.
+func (r *Repository) ListEpochPayouts(ctx context.Context, limit, offset int) ([]models.EpochStats, error) {
+	query := `
+		SELECT epoch,
+			COALESCE(payout_total, 0)::TEXT, COALESCE(payout_from_fees, 0)::TEXT,
+			COALESCE(payout_minted, 0)::TEXT, COALESCE(payout_fees_burned, 0)::TEXT,
+			COALESCE(payout_height, 0), COALESCE(payout_time, '1970-01-01'::TIMESTAMPTZ)
+		FROM app.epoch_stats
+		WHERE payout_height IS NOT NULL AND payout_height > 0
+		ORDER BY epoch DESC
+		LIMIT $1 OFFSET $2`
+
+	rows, err := r.db.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list epoch payouts: %w", err)
+	}
+	defer rows.Close()
+
+	var stats []models.EpochStats
+	for rows.Next() {
+		var s models.EpochStats
+		if err := rows.Scan(
+			&s.Epoch,
+			&s.PayoutTotal, &s.PayoutFromFees,
+			&s.PayoutMinted, &s.PayoutFeesBurned,
+			&s.PayoutHeight, &s.PayoutTime,
 		); err != nil {
 			return nil, err
 		}

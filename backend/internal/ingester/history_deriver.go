@@ -387,7 +387,7 @@ func isDeadlock(err error) bool {
 	return strings.Contains(msg, "deadlock detected") || strings.Contains(msg, "40P01")
 }
 
-const maxDeadlockRetries = 3
+var maxDeadlockRetries = getEnvIntDefaultHD("HISTORY_DERIVER_MAX_DEADLOCK_RETRIES", 10)
 
 // runProcessors executes processors concurrently for the given range.
 // Processors that depend on others (ft_holdings_worker depends on token_worker,

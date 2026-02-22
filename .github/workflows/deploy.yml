@@ -1,0 +1,151 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_ID: flowindex-mainnet
+  REGION: us-central1
+  REGISTRY: us-central1-docker.pkg.dev/flowindex-mainnet/flowindex
+
+jobs:
+  # Detect which services changed
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'openapi-v1.json'
+              - 'openapi-v2.json'
+              - 'find-api.json'
+              - 'api.json'
+            frontend:
+              - 'frontend/**'
+            docs:
+              - 'devportal/**'
+              - 'docs/**'
+
+  build-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build & push backend
+        run: |
+          docker build -f backend/Dockerfile \
+            -t ${{ env.REGISTRY }}/backend:latest \
+            -t ${{ env.REGISTRY }}/backend:${{ github.sha }} \
+            .
+          docker push ${{ env.REGISTRY }}/backend --all-tags
+
+      - name: Deploy backend (pull & restart on GCE)
+        run: |
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+            docker pull ${{ env.REGISTRY }}/backend:${{ github.sha }} && \
+            docker stop backend && docker rm backend && \
+            docker run -d --restart=always --name backend \
+              --network=host \
+              --env-file /mnt/stateful_partition/pgdata/backend.env \
+              ${{ env.REGISTRY }}/backend:${{ github.sha }}
+          '
+
+  build-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build & push frontend
+        run: |
+          docker build -f frontend/Dockerfile \
+            --build-arg VITE_API_URL=/api \
+            -t ${{ env.REGISTRY }}/frontend:latest \
+            -t ${{ env.REGISTRY }}/frontend:${{ github.sha }} \
+            .
+          docker push ${{ env.REGISTRY }}/frontend --all-tags
+
+      - name: Deploy frontend to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: flowindex-frontend
+          region: us-central1
+          image: ${{ env.REGISTRY }}/frontend:${{ github.sha }}
+
+  build-docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build & push docs
+        run: |
+          docker build -f devportal/Dockerfile \
+            -t ${{ env.REGISTRY }}/docs:latest \
+            -t ${{ env.REGISTRY }}/docs:${{ github.sha }} \
+            .
+          docker push ${{ env.REGISTRY }}/docs --all-tags
+
+      - name: Deploy docs to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: flowindex-docs
+          region: us-central1
+          image: ${{ env.REGISTRY }}/docs:${{ github.sha }}
