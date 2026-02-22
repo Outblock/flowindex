@@ -97,10 +97,10 @@ func (r *Repository) UpsertEpochStats(ctx context.Context, stats models.EpochSta
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		ON CONFLICT (epoch) DO UPDATE SET
-			start_height = COALESCE(EXCLUDED.start_height, app.epoch_stats.start_height),
-			end_height = COALESCE(EXCLUDED.end_height, app.epoch_stats.end_height),
-			start_time = COALESCE(EXCLUDED.start_time, app.epoch_stats.start_time),
-			end_time = COALESCE(EXCLUDED.end_time, app.epoch_stats.end_time),
+			start_height = COALESCE(NULLIF(EXCLUDED.start_height, 0), app.epoch_stats.start_height),
+			end_height = COALESCE(NULLIF(EXCLUDED.end_height, 0), app.epoch_stats.end_height),
+			start_time = CASE WHEN EXCLUDED.start_time > '1970-01-02'::TIMESTAMPTZ THEN EXCLUDED.start_time ELSE app.epoch_stats.start_time END,
+			end_time = CASE WHEN EXCLUDED.end_time > '1970-01-02'::TIMESTAMPTZ THEN EXCLUDED.end_time ELSE app.epoch_stats.end_time END,
 			total_nodes = CASE WHEN EXCLUDED.total_nodes > 0 THEN EXCLUDED.total_nodes ELSE app.epoch_stats.total_nodes END,
 			total_staked = CASE WHEN EXCLUDED.total_staked > 0 THEN EXCLUDED.total_staked ELSE app.epoch_stats.total_staked END,
 			total_rewarded = CASE WHEN EXCLUDED.total_rewarded > 0 THEN EXCLUDED.total_rewarded ELSE app.epoch_stats.total_rewarded END,
