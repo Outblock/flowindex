@@ -1159,7 +1159,7 @@ func (s *Server) handleAdminBackfillStakingBlocks(w http.ResponseWriter, r *http
 	var processed, errored int
 	var errMsgs []string
 	for _, h := range req.Heights {
-		if err := worker.ProcessRange(ctx, h, h); err != nil {
+		if err := worker.ProcessRange(ctx, h, h+1); err != nil {
 			errored++
 			errMsgs = append(errMsgs, fmt.Sprintf("height %d: %v", h, err))
 		} else {
