@@ -71,8 +71,9 @@ jobs:
       - name: Deploy backend (pull & restart on GCE)
         run: |
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
             docker pull ${{ env.REGISTRY }}/backend:${{ github.sha }} && \
-            docker stop backend && docker rm backend && \
+            docker stop backend 2>/dev/null; docker rm backend 2>/dev/null; \
             docker run -d --restart=always --name backend \
               --network=host \
               --env-file /mnt/stateful_partition/pgdata/backend.env \
