@@ -199,10 +199,10 @@ function Stats() {
         setLoading(false);
     }, []);
 
-    const loadStatus = async () => {
+    const loadStatus = async (includeRanges: boolean) => {
         try {
             await ensureHeyApiConfigured();
-            const data = await fetchStatusApi();
+            const data = await fetchStatusApi({ includeRanges, timeoutMs: includeRanges ? 15000 : 5000 });
             processStatus(data);
         } catch (error) {
             console.error('Failed to fetch status:', error);
@@ -248,14 +248,14 @@ function Stats() {
 
     // Always load once on mount; only poll/WS when NOT on mosaic (mosaic is static)
     useEffect(() => {
-        loadStatus();
+        loadStatus(activeTab === 'mosaic');
         loadGcpStatus();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (activeTab === 'mosaic') return; // no live updates for mosaic
-        const interval = setInterval(loadStatus, 3000);
-        const gcpInterval = setInterval(loadGcpStatus, 5000);
+        const interval = setInterval(() => loadStatus(false), 10000);
+        const gcpInterval = setInterval(loadGcpStatus, 15000);
 
         let ws: WebSocket | undefined;
         try {
@@ -280,7 +280,7 @@ function Stats() {
             if (ws) ws.close();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [processStatus, activeTab]);
+    }, [processStatus, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Derived values for System Stats
     const startHeight = status?.start_height || 0;

@@ -15,31 +15,54 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	now := time.Now()
-	s.statusCache.mu.Lock()
-	if now.Before(s.statusCache.expiresAt) && len(s.statusCache.payload) > 0 {
-		cached := append([]byte(nil), s.statusCache.payload...)
-		s.statusCache.mu.Unlock()
-		w.Write(cached)
-		return
+	includeRanges := false
+	if q := r.URL.Query().Get("include_ranges"); q == "1" || q == "true" {
+		includeRanges = true
 	}
-	s.statusCache.mu.Unlock()
 
-	payload, err := s.buildStatusPayload(r.Context())
+	now := time.Now()
+	if includeRanges {
+		s.statusRangesCache.mu.Lock()
+		if now.Before(s.statusRangesCache.expiresAt) && len(s.statusRangesCache.payload) > 0 {
+			cached := append([]byte(nil), s.statusRangesCache.payload...)
+			s.statusRangesCache.mu.Unlock()
+			w.Write(cached)
+			return
+		}
+		s.statusRangesCache.mu.Unlock()
+	} else {
+		s.statusCache.mu.Lock()
+		if now.Before(s.statusCache.expiresAt) && len(s.statusCache.payload) > 0 {
+			cached := append([]byte(nil), s.statusCache.payload...)
+			s.statusCache.mu.Unlock()
+			w.Write(cached)
+			return
+		}
+		s.statusCache.mu.Unlock()
+	}
+
+	payload, err := s.buildStatusPayload(r.Context(), includeRanges)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	s.statusCache.mu.Lock()
-	s.statusCache.payload = payload
-	s.statusCache.expiresAt = time.Now().Add(3 * time.Second)
-	s.statusCache.mu.Unlock()
+	if includeRanges {
+		s.statusRangesCache.mu.Lock()
+		s.statusRangesCache.payload = payload
+		s.statusRangesCache.expiresAt = time.Now().Add(10 * time.Second)
+		s.statusRangesCache.mu.Unlock()
+	} else {
+		s.statusCache.mu.Lock()
+		s.statusCache.payload = payload
+		s.statusCache.expiresAt = time.Now().Add(10 * time.Second)
+		s.statusCache.mu.Unlock()
+	}
 
 	w.Write(payload)
 }
 
-func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
+func (s *Server) buildStatusPayload(ctx context.Context, includeRanges bool) ([]byte, error) {
 	getEnvInt := func(key string, defaultVal int) int {
 		if valStr := os.Getenv(key); valStr != "" {
 			if val, err := strconv.Atoi(valStr); err == nil {
@@ -98,22 +121,22 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 	forwardEnabled := os.Getenv("ENABLE_FORWARD_INGESTER") != "false"
 	historyEnabled := os.Getenv("ENABLE_HISTORY_INGESTER") != "false"
 	workerEnabled := map[string]bool{
-		"main_ingester":         forwardEnabled,
-		"history_ingester":      historyEnabled,
-		"token_worker":          os.Getenv("ENABLE_TOKEN_WORKER") != "false",
-		"evm_worker":            os.Getenv("ENABLE_EVM_WORKER") != "false",
-		"meta_worker":           os.Getenv("ENABLE_META_WORKER") != "false",
-		"accounts_worker":       os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false",
-		"ft_holdings_worker":    os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false",
-		"nft_ownership_worker":  os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false",
-		"token_metadata_worker": os.Getenv("ENABLE_TOKEN_METADATA_WORKER") != "false",
-		"tx_contracts_worker":   os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false",
-		"tx_metrics_worker":          os.Getenv("ENABLE_TX_METRICS_WORKER") != "false",
-		"staking_worker":             os.Getenv("ENABLE_STAKING_WORKER") != "false",
-		"defi_worker":                os.Getenv("ENABLE_DEFI_WORKER") != "false",
-		"daily_balance_worker":       os.Getenv("ENABLE_DAILY_BALANCE_WORKER") != "false",
-		"nft_item_metadata_worker":   os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false",
-		"nft_ownership_reconciler":   os.Getenv("ENABLE_NFT_OWNERSHIP_RECONCILER") != "false",
+		"main_ingester":            forwardEnabled,
+		"history_ingester":         historyEnabled,
+		"token_worker":             os.Getenv("ENABLE_TOKEN_WORKER") != "false",
+		"evm_worker":               os.Getenv("ENABLE_EVM_WORKER") != "false",
+		"meta_worker":              os.Getenv("ENABLE_META_WORKER") != "false",
+		"accounts_worker":          os.Getenv("ENABLE_ACCOUNTS_WORKER") != "false",
+		"ft_holdings_worker":       os.Getenv("ENABLE_FT_HOLDINGS_WORKER") != "false",
+		"nft_ownership_worker":     os.Getenv("ENABLE_NFT_OWNERSHIP_WORKER") != "false",
+		"token_metadata_worker":    os.Getenv("ENABLE_TOKEN_METADATA_WORKER") != "false",
+		"tx_contracts_worker":      os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false",
+		"tx_metrics_worker":        os.Getenv("ENABLE_TX_METRICS_WORKER") != "false",
+		"staking_worker":           os.Getenv("ENABLE_STAKING_WORKER") != "false",
+		"defi_worker":              os.Getenv("ENABLE_DEFI_WORKER") != "false",
+		"daily_balance_worker":     os.Getenv("ENABLE_DAILY_BALANCE_WORKER") != "false",
+		"nft_item_metadata_worker": os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false",
+		"nft_ownership_reconciler": os.Getenv("ENABLE_NFT_OWNERSHIP_RECONCILER") != "false",
 	}
 
 	workerConfig := map[string]map[string]interface{}{
@@ -252,8 +275,18 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		historyHeight = minH
 	}
 
-	// Get indexed ranges for accurate mosaic display
-	indexedRanges, _ := s.repo.GetIndexedRanges(ctx)
+	indexedRanges := make([]interface{}, 0)
+	if includeRanges {
+		// Only compute indexed_ranges for pages that need the mosaic.
+		// This query can be expensive under DB load.
+		ranges, err := s.repo.GetIndexedRanges(ctx)
+		if err == nil {
+			indexedRanges = make([]interface{}, 0, len(ranges))
+			for _, r := range ranges {
+				indexedRanges = append(indexedRanges, r)
+			}
+		}
+	}
 
 	// Get oldest block timestamp
 	var oldestBlockTimestamp *string
@@ -315,9 +348,9 @@ func (s *Server) buildStatusPayload(ctx context.Context) ([]byte, error) {
 		"behind":                 behind,
 		"status":                 "ok",
 		"indexed_ranges":         indexedRanges,
-		"oldest_block_timestamp":    oldestBlockTimestamp,
-		"checkpoint_timestamps": checkpointTimestamps,
-		"error_summary":         errorSummary,
+		"oldest_block_timestamp": oldestBlockTimestamp,
+		"checkpoint_timestamps":  checkpointTimestamps,
+		"error_summary":          errorSummary,
 	}
 
 	payload, err := json.Marshal(resp)

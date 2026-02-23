@@ -19,11 +19,15 @@ export const Route = createFileRoute('/blocks/')({
         // For now, we load the first page's data.
         try {
             await ensureHeyApiConfigured();
-            const [blocksRes, statusRes] = await Promise.all([
+            const [blocksRes, statusRes] = await Promise.allSettled([
                 getFlowV1Block({ query: { limit: 20, offset: 0 } }),
-                fetchStatus()
+                fetchStatus({ timeoutMs: 4000 })
             ]);
-            return { blocksRes: blocksRes.data?.data ?? [], statusRes: statusRes, page };
+            return {
+                blocksRes: blocksRes.status === 'fulfilled' ? (blocksRes.value.data?.data ?? []) : [],
+                statusRes: statusRes.status === 'fulfilled' ? statusRes.value : null,
+                page
+            };
         } catch (e) {
             console.error("Failed to load blocks data", e);
             return { blocksRes: [], statusRes: null, page: 1 };
@@ -145,7 +149,7 @@ function Blocks() {
             }
         };
 
-        const statusTimer = setInterval(refreshStatus, 10000);
+        const statusTimer = setInterval(refreshStatus, 20000);
         return () => clearInterval(statusTimer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
