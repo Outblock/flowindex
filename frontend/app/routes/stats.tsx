@@ -629,7 +629,7 @@ function Stats() {
                                     )}
                                     <div className="absolute inset-0 flex items-center justify-between px-4 text-[10px] uppercase font-mono tracking-widest font-bold">
                                         <span className="text-white mix-blend-difference z-10">Target: #0</span>
-                                        <span className="text-white mix-blend-difference z-10">Frontier: #<NumberFlow value={historyHeight} /></span>
+                                        <span className="text-white mix-blend-difference z-10">Frontier: #<NumberFlow value={minHeight || historyHeight} /></span>
                                     </div>
                                 </div>
 
@@ -706,7 +706,10 @@ function Stats() {
                                         {(() => {
                                             const h = checkpoints?.['history_ingester'] || 0;
                                             const speed = workerSpeeds['history_ingester'] || 0;
-                                            const progress = latestHeight > 0 && h > 0 ? Math.min(100, (h / latestHeight) * 100) : 0;
+                                            // Raw data may extend below ingester (e.g. archive import)
+                                            const rawFloor = minHeight || h;
+                                            const effectiveFloor = rawFloor > 0 && rawFloor < h ? rawFloor : h;
+                                            const progress = latestHeight > 0 && effectiveFloor > 0 ? Math.min(100, ((latestHeight - effectiveFloor) / latestHeight) * 100) : 0;
                                             const statusLabel = !historyEnabled ? 'DISABLED' : speed > 0 ? 'SYNCING' : h > 0 ? 'IDLE' : 'OFFLINE';
                                             return (
                                                 <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-5 rounded-sm">
@@ -718,7 +721,10 @@ function Stats() {
                                                         </div>
                                                     </div>
                                                     <div className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mb-2">
-                                                        #<NumberFlow value={h} format={{ useGrouping: true }} />
+                                                        #<NumberFlow value={effectiveFloor} format={{ useGrouping: true }} />
+                                                        {effectiveFloor < h && (
+                                                            <span className="text-xs text-zinc-400 ml-2">(RPC: #{h.toLocaleString()})</span>
+                                                        )}
                                                     </div>
                                                     <div className="h-1.5 bg-zinc-200 dark:bg-white/10 w-full rounded-sm overflow-hidden mb-3">
                                                         <div className="h-full bg-cyan-400" style={{ width: `${progress}%` }} />
@@ -818,8 +824,8 @@ function Stats() {
                                     const floorWorkers = ['token_worker', 'evm_worker', 'accounts_worker', 'meta_worker'];
                                     const floorHeights = floorWorkers.map(k => checkpoints?.[k]).filter((h): h is number => typeof h === 'number' && h > 0);
                                     const workerFloor = floorHeights.length > 0 ? Math.min(...floorHeights) : indexedHeight;
-                                    // History ingester's lowest point
-                                    const historyBottom = checkpoints?.['history_ingester'] || minHeight || 0;
+                                    // Lowest raw block height — includes archive-imported data below history_ingester
+                                    const historyBottom = minHeight || checkpoints?.['history_ingester'] || 0;
                                     // Total range that needs derivation: historyBottom → workerFloor
                                     const totalGap = workerFloor > historyBottom ? workerFloor - historyBottom : 0;
                                     // UP scans from historyBottom upward → covered = [historyBottom, upCursor)
