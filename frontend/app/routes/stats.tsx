@@ -863,14 +863,20 @@ function Stats() {
                                             </p>
 
                                             {/* Range + Progress bar */}
+                                            {(() => {
+                                                // Position cursors as % within [historyBottom, workerFloor]
+                                                const downPct = totalGap > 0 ? Math.max(0, Math.min(100, ((derivedLow - historyBottom) / totalGap) * 100)) : 0;
+                                                const upPct = totalGap > 0 ? Math.max(0, Math.min(100, ((derivedHigh - historyBottom) / totalGap) * 100)) : 0;
+                                                return (<>
                                             <div className="flex items-center justify-between text-xs font-mono text-zinc-500 mb-2">
                                                 <span>#{historyBottom.toLocaleString()}</span>
                                                 <span>#{workerFloor.toLocaleString()}</span>
                                             </div>
-                                            <div className="relative h-4 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-4">
+                                            <div className="relative h-5 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-1">
+                                                {/* Derived range bar: positioned from downCursor to upCursor */}
                                                 <motion.div
-                                                    initial={{ width: 0 }}
-                                                    animate={{ width: `${hdProgress}%` }}
+                                                    initial={{ left: `${downPct}%`, width: 0 }}
+                                                    animate={{ left: `${downPct}%`, width: `${upPct - downPct}%` }}
                                                     transition={{ duration: 1, ease: "easeOut" }}
                                                     className="absolute h-full bg-pink-400"
                                                 />
@@ -881,6 +887,21 @@ function Stats() {
                                                     {hdProgress.toFixed(1)}%
                                                 </div>
                                             </div>
+                                            {/* Cursor labels below the bar */}
+                                            <div className="relative h-4 mb-4">
+                                                {downCursor > 0 && (
+                                                    <div className="absolute flex flex-col items-center" style={{ left: `${downPct}%`, transform: 'translateX(-50%)' }}>
+                                                        <span className="text-[9px] font-mono text-pink-400 whitespace-nowrap">▼ DOWN #{downCursor.toLocaleString()}</span>
+                                                    </div>
+                                                )}
+                                                {upCursor > 0 && (
+                                                    <div className="absolute flex flex-col items-center" style={{ left: `${upPct}%`, transform: 'translateX(-50%)' }}>
+                                                        <span className="text-[9px] font-mono text-pink-400 whitespace-nowrap">▲ UP #{upCursor.toLocaleString()}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                                </>);
+                                            })()}
 
                                             {/* Stats row */}
                                             <div className="flex items-center gap-6 text-xs text-zinc-500 font-mono mb-4">
