@@ -23,15 +23,15 @@ export const Route = createFileRoute('/')({
         // so the page renders immediately.
         try {
             await ensureHeyApiConfigured();
-            const [status, networkStats, blocks] = await Promise.all([
-                fetchStatus(),
+            const [statusRes, networkStatsRes, blocksRes] = await Promise.allSettled([
+                fetchStatus({ timeoutMs: 4000 }),
                 fetchNetworkStats(),
                 getFlowV1Block({ query: { limit: 50, offset: 0 } }),
             ]);
             return {
-                status: status,
-                networkStats: networkStats,
-                blocks: blocks.data?.data ?? [],
+                status: statusRes.status === 'fulfilled' ? statusRes.value : null,
+                networkStats: networkStatsRes.status === 'fulfilled' ? networkStatsRes.value : null,
+                blocks: blocksRes.status === 'fulfilled' ? (blocksRes.value.data?.data ?? []) : [],
             };
         } catch (e) {
             console.error("Failed to load initial data", e);
@@ -392,7 +392,7 @@ function Home() {
         loadTokens();
         loadNftCollections();
 
-        const statusTimer = setInterval(refreshStatus, 10000);
+        const statusTimer = setInterval(refreshStatus, 20000);
         const networkStatsTimer = setInterval(refreshNetworkStats, 60000);
         // Fallback polling when websocket is unavailable.
         const txRefreshTimer = setInterval(() => {

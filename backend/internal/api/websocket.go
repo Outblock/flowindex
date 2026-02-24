@@ -127,7 +127,7 @@ func (s *Server) handleStatusWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer ticker.Stop()
 
 	for {
-		payload, err := s.buildStatusPayload(r.Context())
+		payload, err := s.buildStatusPayload(r.Context(), false)
 		if err != nil {
 			payload = []byte(`{"status":"error"}`)
 		}

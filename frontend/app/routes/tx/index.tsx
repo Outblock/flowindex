@@ -22,12 +22,15 @@ export const Route = createFileRoute('/tx/')({
     loader: async () => {
         try {
             await ensureHeyApiConfigured();
-            const [transactionsRes, statusRes] = await Promise.all([
+            const [transactionsRes, statusRes] = await Promise.allSettled([
                 getFlowV1Transaction({ query: { limit: PAGE_SIZE, offset: 0 } }),
-                fetchStatus()
+                fetchStatus({ timeoutMs: 4000 })
             ]);
-            const items = transactionsRes.data?.data ?? [];
-            return { initialTxs: Array.isArray(items) ? items : [], statusRes } as any;
+            const items = transactionsRes.status === 'fulfilled' ? (transactionsRes.value.data?.data ?? []) : [];
+            return {
+                initialTxs: Array.isArray(items) ? items : [],
+                statusRes: statusRes.status === 'fulfilled' ? statusRes.value : null
+            } as any;
         } catch (e) {
             console.error("Failed to load transactions", e);
             return { initialTxs: [], statusRes: null };

@@ -34,12 +34,24 @@ export async function ensureHeyApiConfigured() {
   await configuring;
 }
 
+async function fetchJsonWithTimeout(url: string, timeoutMs = 4500): Promise<any> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    return res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Simple fetch for /status (base route, not in generated SDK) */
-export async function fetchStatus(): Promise<any> {
+export async function fetchStatus(opts?: { includeRanges?: boolean; timeoutMs?: number }): Promise<any> {
   await ensureHeyApiConfigured();
-  const res = await fetch(`${_baseURL}/status`);
-  if (!res.ok) throw new Error(`status ${res.status}`);
-  return res.json();
+  const includeRanges = opts?.includeRanges === true;
+  const qs = includeRanges ? '?include_ranges=1' : '';
+  return fetchJsonWithTimeout(`${_baseURL}/status${qs}`, opts?.timeoutMs ?? 4500);
 }
 
 /** Fetch Flow price from CoinGecko as fallback when backend has no data */

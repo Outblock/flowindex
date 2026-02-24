@@ -24,6 +24,11 @@ type Server struct {
 		payload   []byte
 		expiresAt time.Time
 	}
+	statusRangesCache struct {
+		mu        sync.Mutex
+		payload   []byte
+		expiresAt time.Time
+	}
 	latestHeightCache struct {
 		mu        sync.Mutex
 		height    uint64
