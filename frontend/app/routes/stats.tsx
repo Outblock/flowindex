@@ -828,11 +828,10 @@ function Stats() {
                                     const historyBottom = minHeight || checkpoints?.['history_ingester'] || 0;
                                     // Total range that needs derivation: historyBottom → workerFloor
                                     const totalGap = workerFloor > historyBottom ? workerFloor - historyBottom : 0;
-                                    // UP scans from historyBottom upward → covered = [historyBottom, upCursor)
-                                    // DOWN fills below as history ingester extends range → covered = [downCursor, ...)
-                                    // Combined: [min(downCursor, historyBottom), upCursor)
-                                    const derivedLow = downCursor > 0 ? Math.min(downCursor, historyBottom) : historyBottom;
+                                    // UP scans upward toward live tip, DOWN scans downward toward historyBottom.
+                                    // Derived range = [downCursor, upCursor] (contiguous from where DOWN has reached to where UP has reached)
                                     const derivedHigh = upCursor > 0 ? Math.min(upCursor, workerFloor) : 0;
+                                    const derivedLow = downCursor > 0 ? downCursor : (upCursor > 0 ? historyBottom : 0);
                                     const coveredBlocks = derivedHigh > derivedLow ? derivedHigh - derivedLow : 0;
                                     const hdProgress = totalGap > 0 ? Math.min(100, (coveredBlocks / totalGap) * 100) : (upCursor > 0 ? 100 : 0);
                                     const hdSpeed = (workerSpeeds['history_deriver'] || 0) + (workerSpeeds['history_deriver_down'] || 0);
