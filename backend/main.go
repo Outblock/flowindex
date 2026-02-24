@@ -271,44 +271,42 @@ func main() {
 	historyDeriverSleep := getEnvInt("HISTORY_DERIVERS_SLEEP_MS", 0)
 	historyDeriverConcurrency := getEnvInt("HISTORY_DERIVERS_CONCURRENCY", 1)
 
+	// History deriver processor list — declared at outer scope so a second instance can reuse it.
+	type histProcEntry struct {
+		name    string
+		enabled bool
+		create  func() ingester.Processor
+	}
+	histExcludeSet := map[string]bool{}
+	if excl := os.Getenv("HISTORY_DERIVERS_EXCLUDE"); excl != "" {
+		for _, name := range strings.Split(excl, ",") {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				histExcludeSet[name] = true
+			}
+		}
+		log.Printf("History deriver excluding processors: %v", excl)
+	}
+	allHistProcs := []histProcEntry{
+		{"token_worker", enableTokenWorker, func() ingester.Processor { return ingester.NewTokenWorker(repo) }},
+		{"evm_worker", enableEVMWorker, func() ingester.Processor { return ingester.NewEVMWorker(repo) }},
+		{"tx_contracts_worker", enableTxContractsWorker, func() ingester.Processor { return ingester.NewTxContractsWorker(repo) }},
+		{"accounts_worker", enableAccountsWorker, func() ingester.Processor { return ingester.NewAccountsWorker(repo) }},
+		{"meta_worker", enableMetaWorker, func() ingester.Processor { return ingester.NewMetaWorker(repo, flowClient) }},
+		{"token_metadata_worker", enableTokenMetadataWorker, func() ingester.Processor { return ingester.NewTokenMetadataWorker(repo, flowClient) }},
+		{"tx_metrics_worker", enableTxMetricsWorker, func() ingester.Processor { return ingester.NewTxMetricsWorker(repo) }},
+		{"staking_worker", enableStakingWorker, func() ingester.Processor { return ingester.NewStakingWorker(repo) }},
+		{"defi_worker", enableDefiWorker, func() ingester.Processor { return ingester.NewDefiWorker(repo) }},
+		{"ft_holdings_worker", enableFTHoldingsWorker, func() ingester.Processor { return ingester.NewFTHoldingsWorker(repo) }},
+		{"nft_ownership_worker", enableNFTOwnershipWorker, func() ingester.Processor { return ingester.NewNFTOwnershipWorker(repo) }},
+		{"daily_balance_worker", enableDailyBalanceWorker, func() ingester.Processor { return ingester.NewDailyBalanceWorker(repo) }},
+	}
+
 	var historyDeriver *ingester.HistoryDeriver
 	var onHistoryIndexedRange ingester.RangeCallback
 	if enableHistoryDerivers {
-		// HISTORY_DERIVERS_EXCLUDE: comma-separated list of processor names to skip
-		// in the history deriver (e.g., "token_metadata_worker,daily_balance_worker").
-		histExcludeSet := map[string]bool{}
-		if excl := os.Getenv("HISTORY_DERIVERS_EXCLUDE"); excl != "" {
-			for _, name := range strings.Split(excl, ",") {
-				name = strings.TrimSpace(name)
-				if name != "" {
-					histExcludeSet[name] = true
-				}
-			}
-			log.Printf("History deriver excluding processors: %v", excl)
-		}
-
-		type procEntry struct {
-			name    string
-			enabled bool
-			create  func() ingester.Processor
-		}
-		allProcs := []procEntry{
-			{"token_worker", enableTokenWorker, func() ingester.Processor { return ingester.NewTokenWorker(repo) }},
-			{"evm_worker", enableEVMWorker, func() ingester.Processor { return ingester.NewEVMWorker(repo) }},
-			{"tx_contracts_worker", enableTxContractsWorker, func() ingester.Processor { return ingester.NewTxContractsWorker(repo) }},
-			{"accounts_worker", enableAccountsWorker, func() ingester.Processor { return ingester.NewAccountsWorker(repo) }},
-			{"meta_worker", enableMetaWorker, func() ingester.Processor { return ingester.NewMetaWorker(repo, flowClient) }},
-			{"token_metadata_worker", enableTokenMetadataWorker, func() ingester.Processor { return ingester.NewTokenMetadataWorker(repo, flowClient) }},
-			{"tx_metrics_worker", enableTxMetricsWorker, func() ingester.Processor { return ingester.NewTxMetricsWorker(repo) }},
-			{"staking_worker", enableStakingWorker, func() ingester.Processor { return ingester.NewStakingWorker(repo) }},
-			{"defi_worker", enableDefiWorker, func() ingester.Processor { return ingester.NewDefiWorker(repo) }},
-			{"ft_holdings_worker", enableFTHoldingsWorker, func() ingester.Processor { return ingester.NewFTHoldingsWorker(repo) }},
-			{"nft_ownership_worker", enableNFTOwnershipWorker, func() ingester.Processor { return ingester.NewNFTOwnershipWorker(repo) }},
-			{"daily_balance_worker", enableDailyBalanceWorker, func() ingester.Processor { return ingester.NewDailyBalanceWorker(repo) }},
-		}
-
 		var histProcessors []ingester.Processor
-		for _, p := range allProcs {
+		for _, p := range allHistProcs {
 			if p.enabled && !histExcludeSet[p.name] {
 				histProcessors = append(histProcessors, p.create())
 			}
@@ -321,6 +319,8 @@ func main() {
 			ChunkSize:   historyDeriverChunk,
 			SleepMs:     historyDeriverSleep,
 			Concurrency: historyDeriverConcurrency,
+			DisableUp:   os.Getenv("HISTORY_DERIVER_DISABLE_UP") == "true",
+			DisableDown: os.Getenv("HISTORY_DERIVER_DISABLE_DOWN") == "true",
 		})
 
 		// Optionally create a live-style deriver for real-time processing of new history batches.
@@ -472,6 +472,38 @@ func main() {
 	// Start history derivers if enabled.
 	if historyDeriver != nil {
 		historyDeriver.Start(ctx)
+	}
+
+	// Optional second history deriver instance (e.g., UP-only scanning toward instance 1's DOWN).
+	if enableHistoryDerivers && os.Getenv("HISTORY_DERIVER2_ENABLED") == "true" {
+		hd2Chunk := getEnvUint("HISTORY_DERIVER2_CHUNK", historyDeriverChunk)
+		hd2Concurrency := getEnvInt("HISTORY_DERIVER2_CONCURRENCY", historyDeriverConcurrency)
+		hd2Sleep := getEnvInt("HISTORY_DERIVER2_SLEEP_MS", historyDeriverSleep)
+		hd2Prefix := os.Getenv("HISTORY_DERIVER2_CHECKPOINT")
+		if hd2Prefix == "" {
+			hd2Prefix = "history_deriver_2"
+		}
+		hd2Ceiling := getEnvUint("HISTORY_DERIVER2_CEILING", 0)
+
+		// Build a fresh processor list (separate instances, no shared state).
+		var hd2Processors []ingester.Processor
+		for _, p := range allHistProcs {
+			if p.enabled && !histExcludeSet[p.name] {
+				hd2Processors = append(hd2Processors, p.create())
+			}
+		}
+
+		hd2 := ingester.NewHistoryDeriver(repo, hd2Processors, ingester.HistoryDeriverConfig{
+			ChunkSize:      hd2Chunk,
+			SleepMs:        hd2Sleep,
+			Concurrency:    hd2Concurrency,
+			CheckpointPrefix: hd2Prefix,
+			DisableUp:      os.Getenv("HISTORY_DERIVER2_DISABLE_UP") == "true",
+			DisableDown:    os.Getenv("HISTORY_DERIVER2_DISABLE_DOWN") == "true",
+			CeilingHeight:  hd2Ceiling,
+		})
+		hd2.Start(ctx)
+		log.Printf("History Deriver 2 started (prefix=%s chunk=%d concurrency=%d ceiling=%d)", hd2Prefix, hd2Chunk, hd2Concurrency, hd2Ceiling)
 	}
 
 	// Handle SIGINT/SIGTERM — will block on sigChan at end of main()

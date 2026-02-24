@@ -89,6 +89,8 @@ const WORKER_COLORS: Record<string, string> = {
     history_ingester: 'bg-cyan-400',
     history_deriver: 'bg-pink-400',
     history_deriver_down: 'bg-pink-400',
+    history_deriver_2: 'bg-cyan-400',
+    history_deriver_2_down: 'bg-cyan-400',
 };
 
 function Stats() {
@@ -820,6 +822,9 @@ function Stats() {
                                 {(() => {
                                     const upCursor = checkpoints?.['history_deriver'] || 0;
                                     const downCursor = checkpoints?.['history_deriver_down'] || 0;
+                                    // Second deriver instance (UP-only, scanning toward instance 1's DOWN)
+                                    const hd2UpCursor = checkpoints?.['history_deriver_2'] || 0;
+                                    const hd2DownCursor = checkpoints?.['history_deriver_2_down'] || 0;
                                     // Worker floor: the lowest checkpoint among core processors (same as backend findWorkerFloor)
                                     const floorWorkers = ['token_worker', 'evm_worker', 'accounts_worker', 'meta_worker'];
                                     const floorHeights = floorWorkers.map(k => checkpoints?.[k]).filter((h): h is number => typeof h === 'number' && h > 0);
@@ -828,19 +833,26 @@ function Stats() {
                                     const historyBottom = minHeight || checkpoints?.['history_ingester'] || 0;
                                     // Total range that needs derivation: historyBottom → workerFloor
                                     const totalGap = workerFloor > historyBottom ? workerFloor - historyBottom : 0;
-                                    // UP scans upward toward live tip, DOWN scans downward toward historyBottom.
-                                    // Derived range = [downCursor, upCursor] (contiguous from where DOWN has reached to where UP has reached)
+                                    // Instance 1: derived range = [downCursor, upCursor]
                                     const derivedHigh = upCursor > 0 ? Math.min(upCursor, workerFloor) : 0;
                                     const derivedLow = downCursor > 0 ? downCursor : (upCursor > 0 ? historyBottom : 0);
-                                    const coveredBlocks = derivedHigh > derivedLow ? derivedHigh - derivedLow : 0;
+                                    const range1 = derivedHigh > derivedLow ? derivedHigh - derivedLow : 0;
+                                    // Instance 2: derived range = [hd2DownCursor, hd2UpCursor]
+                                    const hd2High = hd2UpCursor > 0 ? Math.min(hd2UpCursor, workerFloor) : 0;
+                                    const hd2Low = hd2DownCursor > 0 ? hd2DownCursor : (hd2UpCursor > 0 ? historyBottom : 0);
+                                    const range2 = hd2High > hd2Low ? hd2High - hd2Low : 0;
+                                    // Total covered = union of both ranges (may overlap, so clamp)
+                                    const coveredBlocks = Math.min(totalGap, range1 + range2);
                                     const hdProgress = totalGap > 0 ? Math.min(100, (coveredBlocks / totalGap) * 100) : (upCursor > 0 ? 100 : 0);
-                                    const hdSpeed = (workerSpeeds['history_deriver'] || 0) + (workerSpeeds['history_deriver_down'] || 0);
+                                    const hdSpeed = (workerSpeeds['history_deriver'] || 0) + (workerSpeeds['history_deriver_down'] || 0)
+                                        + (workerSpeeds['history_deriver_2'] || 0) + (workerSpeeds['history_deriver_2_down'] || 0);
                                     const remaining = totalGap - coveredBlocks;
                                     const hdEta = hdSpeed > 0 && remaining > 0 ? remaining / hdSpeed : 0;
-                                    const hdStatus = totalGap === 0 && upCursor > 0 ? 'CAUGHT UP'
-                                        : remaining === 0 && upCursor > 0 ? 'CAUGHT UP'
+                                    const hasAnyCursor = upCursor > 0 || downCursor > 0 || hd2UpCursor > 0 || hd2DownCursor > 0;
+                                    const hdStatus = totalGap === 0 && hasAnyCursor ? 'CAUGHT UP'
+                                        : remaining === 0 && hasAnyCursor ? 'CAUGHT UP'
                                         : hdSpeed > 0 ? 'SYNCING'
-                                        : upCursor > 0 || downCursor > 0 ? 'STALLED' : 'IDLE';
+                                        : hasAnyCursor ? 'STALLED' : 'IDLE';
                                     // All processors driven by history_deriver
                                     const historyProcessors = [...deriverPhase1, ...deriverPhase2, ...historyOnlyWorkers];
                                     return (
@@ -859,27 +871,44 @@ function Stats() {
                                             <p className="text-[10px] text-zinc-400 mb-4">
                                                 Backfill: derives history blocks with same processors as live
                                                 <span className="text-zinc-300 dark:text-zinc-600 mx-1">|</span>
-                                                UP #{upCursor.toLocaleString()} / DOWN #{downCursor.toLocaleString()}
+                                                ① UP #{upCursor.toLocaleString()} / DOWN #{downCursor.toLocaleString()}
+                                                {hd2UpCursor > 0 || hd2DownCursor > 0 ? (<>
+                                                    <span className="text-zinc-300 dark:text-zinc-600 mx-1">|</span>
+                                                    ② UP #{hd2UpCursor.toLocaleString()} / DOWN #{hd2DownCursor.toLocaleString()}
+                                                </>) : null}
                                             </p>
 
                                             {/* Range + Progress bar */}
                                             {(() => {
                                                 // Position cursors as % within [historyBottom, workerFloor]
-                                                const downPct = totalGap > 0 ? Math.max(0, Math.min(100, ((derivedLow - historyBottom) / totalGap) * 100)) : 0;
-                                                const upPct = totalGap > 0 ? Math.max(0, Math.min(100, ((derivedHigh - historyBottom) / totalGap) * 100)) : 0;
+                                                const pct = (v: number) => totalGap > 0 ? Math.max(0, Math.min(100, ((v - historyBottom) / totalGap) * 100)) : 0;
+                                                const downPct = pct(derivedLow);
+                                                const upPct = pct(derivedHigh);
+                                                const hd2LowPct = pct(hd2Low);
+                                                const hd2HighPct = pct(hd2High);
+                                                const hasHd2 = hd2UpCursor > 0 || hd2DownCursor > 0;
                                                 return (<>
                                             <div className="flex items-center justify-between text-xs font-mono text-zinc-500 mb-2">
                                                 <span>#{historyBottom.toLocaleString()}</span>
                                                 <span>#{workerFloor.toLocaleString()}</span>
                                             </div>
                                             <div className="relative h-5 bg-zinc-100 dark:bg-black/50 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden mb-1">
-                                                {/* Derived range bar: positioned from downCursor to upCursor */}
+                                                {/* Instance 1 derived range bar */}
                                                 <motion.div
                                                     initial={{ left: `${downPct}%`, width: 0 }}
                                                     animate={{ left: `${downPct}%`, width: `${upPct - downPct}%` }}
                                                     transition={{ duration: 1, ease: "easeOut" }}
                                                     className="absolute h-full bg-pink-400"
                                                 />
+                                                {/* Instance 2 derived range bar (cyan to distinguish) */}
+                                                {hasHd2 && (
+                                                    <motion.div
+                                                        initial={{ left: `${hd2LowPct}%`, width: 0 }}
+                                                        animate={{ left: `${hd2LowPct}%`, width: `${hd2HighPct - hd2LowPct}%` }}
+                                                        transition={{ duration: 1, ease: "easeOut" }}
+                                                        className="absolute h-full bg-cyan-400"
+                                                    />
+                                                )}
                                                 {hdSpeed > 0 && (
                                                     <div className="absolute inset-0 bg-buffering-stripe animate-buffering opacity-20 mix-blend-overlay" />
                                                 )}
@@ -891,12 +920,22 @@ function Stats() {
                                             <div className="relative h-4 mb-4">
                                                 {downCursor > 0 && (
                                                     <div className="absolute flex flex-col items-center" style={{ left: `${downPct}%`, transform: 'translateX(-50%)' }}>
-                                                        <span className="text-[9px] font-mono text-pink-400 whitespace-nowrap">▼ DOWN #{downCursor.toLocaleString()}</span>
+                                                        <span className="text-[9px] font-mono text-pink-400 whitespace-nowrap">▼ ①DOWN #{downCursor.toLocaleString()}</span>
                                                     </div>
                                                 )}
                                                 {upCursor > 0 && (
                                                     <div className="absolute flex flex-col items-center" style={{ left: `${upPct}%`, transform: 'translateX(-50%)' }}>
-                                                        <span className="text-[9px] font-mono text-pink-400 whitespace-nowrap">▲ UP #{upCursor.toLocaleString()}</span>
+                                                        <span className="text-[9px] font-mono text-pink-400 whitespace-nowrap">▲ ①UP #{upCursor.toLocaleString()}</span>
+                                                    </div>
+                                                )}
+                                                {hasHd2 && hd2DownCursor > 0 && (
+                                                    <div className="absolute flex flex-col items-center" style={{ left: `${hd2LowPct}%`, transform: 'translateX(-50%)', top: '-2px' }}>
+                                                        <span className="text-[9px] font-mono text-cyan-400 whitespace-nowrap">▼ ②DOWN #{hd2DownCursor.toLocaleString()}</span>
+                                                    </div>
+                                                )}
+                                                {hasHd2 && hd2UpCursor > 0 && (
+                                                    <div className="absolute flex flex-col items-center" style={{ left: `${hd2HighPct}%`, transform: 'translateX(-50%)', top: '-2px' }}>
+                                                        <span className="text-[9px] font-mono text-cyan-400 whitespace-nowrap">▲ ②UP #{hd2UpCursor.toLocaleString()}</span>
                                                     </div>
                                                 )}
                                             </div>
