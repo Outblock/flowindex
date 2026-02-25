@@ -134,7 +134,7 @@ const templateCategoryStyles: Record<string, { type: string; label: string; colo
     system:           { type: 'contract', label: 'System', color: 'text-zinc-600 dark:text-zinc-400', bgColor: 'border-zinc-300 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/10' },
 };
 
-function mapTemplateCategoryToActivity(category: string, templateLabel?: string): { type: string; label: string; color: string; bgColor: string } | null {
+function mapTemplateCategoryToActivity(category: string, _templateLabel?: string): { type: string; label: string; color: string; bgColor: string } | null {
     // Support comma-separated multi-categories — use first match for badge styling
     const cats = category.split(',').map(c => c.trim()).filter(Boolean);
     for (const cat of cats) {
