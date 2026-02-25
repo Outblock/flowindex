@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
-import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
+import { useState, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
@@ -19,7 +19,6 @@ import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import { deriveEnrichments } from '../../lib/deriveFromEvents';
 import { NFTDetailModal } from '../../components/NFTDetailModal';
-import { apiItemToCadenceFormat } from '../../components/NFTDetailContent';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 

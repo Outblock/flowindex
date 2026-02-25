@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect, isRedirect } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
-import { getFlowV1AccountByAddress, getFlowV1AccountByAddressTransaction } from '../../api/gen/find';
+import { getFlowV1AccountByAddress } from '../../api/gen/find';
 import { resolveApiBaseUrl } from '../../api';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
@@ -29,7 +29,6 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { COABadge } from '../../components/ui/COABadge';
 import { cn } from '../../lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
-import { useTheme } from '../../contexts/ThemeContext';
 
 const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'staking', 'keys', 'contracts', 'storage', 'linked'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
@@ -147,7 +146,6 @@ function AccountDetail() {
     };
 
     const normalizedAddress = normalizeAddress(address);
-    const { theme } = useTheme();
 
     const [onChainData, setOnChainData] = useState<{
         balance?: number; storage?: StorageInfo; staking?: StakingInfo; coaAddress?: string;
