@@ -197,7 +197,14 @@ function Stats() {
         }
         setWorkerSpeeds(newWorkerSpeeds);
 
-        setStatus(data);
+        setStatus((prev: any) => {
+            // Preserve indexed_ranges from a previous range-inclusive fetch
+            // if this response doesn't include them (e.g. WS or non-range poll)
+            if (prev?.indexed_ranges?.length > 0 && (!data.indexed_ranges || data.indexed_ranges.length === 0)) {
+                return { ...data, indexed_ranges: prev.indexed_ranges };
+            }
+            return data;
+        });
         setLoading(false);
     }, []);
 
