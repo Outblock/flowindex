@@ -276,7 +276,8 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 					COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
 					COALESCE(encode(et.from_address, 'hex'), '') AS from_address,
 					COALESCE(encode(et.to_address, 'hex'), '') AS to_address,
-					'' AS evm_value
+					'' AS evm_value,
+					COALESCE(t.script_hash, '') AS script_hash
 				FROM raw.transactions t
 				LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 				LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
@@ -312,7 +313,8 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 						COALESCE(encode(et.evm_hash, 'hex'), '') AS evm_hash,
 						COALESCE(encode(et.from_address, 'hex'), '') AS from_address,
 						COALESCE(encode(et.to_address, 'hex'), '') AS to_address,
-						'' AS evm_value
+						'' AS evm_value,
+						COALESCE(t.script_hash, '') AS script_hash
 					FROM raw.transactions t
 					LEFT JOIN raw.scripts s ON t.script_hash = s.script_hash
 					LEFT JOIN app.evm_transactions et ON t.id = et.transaction_id AND t.block_height = et.block_height
