@@ -131,6 +131,7 @@ func registerStatusRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/status/epoch/stat", s.handleStatusEpochStat).Methods("GET", "OPTIONS")
 	r.HandleFunc("/status/tokenomics", s.handleStatusTokenomics).Methods("GET", "OPTIONS")
 	r.HandleFunc("/status/price", s.handleStatusPrice).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/price/history", s.handleStatusPriceHistory).Methods("GET", "OPTIONS")
 	r.HandleFunc("/status/nodes", s.handleStatusNodes).Methods("GET", "OPTIONS")
 	r.HandleFunc("/status/gcp-vms", s.handleStatusGCPVMs).Methods("GET", "OPTIONS")
 

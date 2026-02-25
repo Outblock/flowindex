@@ -6,7 +6,7 @@ import { getStatusV1Stat } from '../api/gen/find';
 export function DailyStatsChart() {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [rangeDays, setRangeDays] = useState(1);
+    const [rangeDays, setRangeDays] = useState(7);
 
     useEffect(() => {
         const loadStats = async () => {
@@ -70,7 +70,6 @@ export function DailyStatsChart() {
                 <h2 className="text-xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Transaction History</h2>
                 <div className="flex items-center gap-1">
                     {[
-                        { label: '24H', value: 1 },
                         { label: '7D', value: 7 },
                         { label: '30D', value: 30 },
                         { label: '90D', value: 90 },

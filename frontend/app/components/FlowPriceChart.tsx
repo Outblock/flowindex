@@ -1,38 +1,36 @@
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, YAxis, Tooltip } from 'recharts';
 import { memo, useEffect, useMemo, useState } from 'react';
+import { ensureHeyApiConfigured, getBaseURL } from '../api/heyapi';
 
-// Mock data generator for the sparkline (since we only have current price)
-// In a real app, we'd fetch historical price data
-const generateSparkline = (currentPrice: number) => {
-    // IMPORTANT: Must be deterministic for SSR hydration.
-    // Avoid Math.random() or Date-based values here.
-    const base = Number.isFinite(currentPrice) ? currentPrice : 0;
-    const amp = Math.max(Math.abs(base) * 0.02, 0.0005);
-    const data = [];
-    const total = 30;
-    for (let i = 0; i < total; i++) {
-        const a = i * 0.65;
-        const b = i * 1.35;
-        const value = base + (Math.sin(a) * amp) + (Math.sin(b) * amp * 0.25);
-        const daysAgo = total - 1 - i;
-        const label = daysAgo === 0 ? 'Today' : `${daysAgo}d ago`;
-        data.push({ value, label });
+async function fetchPriceHistory(): Promise<{ value: number; label: string }[]> {
+    try {
+        await ensureHeyApiConfigured();
+        const baseURL = getBaseURL();
+        const res = await fetch(`${baseURL}/status/price/history?limit=168`);
+        if (!res.ok) return [];
+        const json = await res.json();
+        const data = json?.data;
+        if (!Array.isArray(data) || data.length === 0) return [];
+        return data.map((d: any) => {
+            const date = new Date(d.as_of);
+            const hours = Math.round((Date.now() - date.getTime()) / 3600000);
+            const label = hours <= 0 ? 'Now' : hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+            return { value: d.price, label };
+        });
+    } catch {
+        return [];
     }
-    return data;
-};
+}
 
 export const FlowPriceChart = memo(function FlowPriceChart({ data }: { data: { price: number; price_change_24h: number; market_cap: number } | null }) {
     const [mounted, setMounted] = useState(false);
+    const [sparklineData, setSparklineData] = useState<{ value: number; label: string }[]>([]);
 
     useEffect(() => {
         setMounted(true);
+        fetchPriceHistory().then(setSparklineData);
     }, []);
-
-    // Hooks must be called unconditionally, even when rendering a skeleton.
-    const price = data?.price ?? 0;
-    // Avoid generating a new random dataset on every parent rerender (blocks/ws updates).
-    const sparklineData = useMemo(() => generateSparkline(price), [price]);
 
     if (!data) {
         return (
@@ -53,7 +51,7 @@ export const FlowPriceChart = memo(function FlowPriceChart({ data }: { data: { p
         );
     }
 
-    const { price_change_24h, market_cap } = data;
+    const { price, price_change_24h, market_cap } = data;
     const isPositive = price_change_24h >= 0;
 
     return (
@@ -86,7 +84,7 @@ export const FlowPriceChart = memo(function FlowPriceChart({ data }: { data: { p
 
             {/* Sparkline Chart */}
             <div className="h-16 w-full -mx-2 opacity-50 group-hover:opacity-100 transition-opacity duration-500">
-                {mounted ? (
+                {mounted && sparklineData.length > 1 ? (
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={sparklineData}>
                             <defs>
@@ -117,7 +115,6 @@ export const FlowPriceChart = memo(function FlowPriceChart({ data }: { data: { p
                                 strokeWidth={2}
                                 fillOpacity={1}
                                 fill="url(#colorPrice)"
-                                // Recharts animations can accumulate work when rerendering frequently.
                                 isAnimationActive={false}
                             />
                         </AreaChart>

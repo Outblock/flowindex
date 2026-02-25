@@ -46,6 +46,9 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 4500): Promise<any>
   }
 }
 
+/** Return the resolved base URL (e.g. for ad-hoc fetch calls outside the SDK) */
+export function getBaseURL(): string { return _baseURL; }
+
 /** Simple fetch for /status (base route, not in generated SDK) */
 export async function fetchStatus(opts?: { includeRanges?: boolean; timeoutMs?: number }): Promise<any> {
   await ensureHeyApiConfigured();

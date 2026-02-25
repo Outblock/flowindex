@@ -110,6 +110,28 @@ func (s *Server) handleStatusPrice(w http.ResponseWriter, r *http.Request) {
 	}}, nil, nil)
 }
 
+func (s *Server) handleStatusPriceHistory(w http.ResponseWriter, r *http.Request) {
+	limit := 168 // default: 7 days of hourly data
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 720 {
+			limit = n
+		}
+	}
+	prices, err := s.repo.GetMarketPriceHistory(r.Context(), "FLOW", "USD", limit)
+	if err != nil {
+		writeAPIResponse(w, []interface{}{}, nil, nil)
+		return
+	}
+	out := make([]interface{}, 0, len(prices))
+	for _, p := range prices {
+		out = append(out, map[string]interface{}{
+			"price": p.Price,
+			"as_of": p.AsOf,
+		})
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"count": len(out)}, nil)
+}
+
 func (s *Server) handleStatusNodes(w http.ResponseWriter, r *http.Request) {
 	// Return nodes from the latest epoch via the staking_nodes table
 	limit, offset := parseLimitOffset(r)

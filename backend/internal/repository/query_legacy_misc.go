@@ -246,20 +246,40 @@ func (r *Repository) GetContractByAddress(ctx context.Context, address string) (
 	return &c, nil
 }
 
-// RefreshDailyStats aggregates transaction counts by date into daily_stats table
+// RefreshDailyStats aggregates transaction counts by date into daily_stats table.
+// EVM tx count uses GREATEST of the is_evm flag and a distinct count from
+// EVM.TransactionExecuted events (covers rows ingested before is_evm was set).
 func (r *Repository) RefreshDailyStats(ctx context.Context) error {
 	_, err := r.db.Exec(ctx, `
+		WITH tx_counts AS (
+			SELECT
+				DATE(timestamp) as date,
+				COUNT(*) as tx_count,
+				COUNT(*) FILTER (WHERE is_evm = TRUE) as evm_flag_count
+			FROM raw.transactions
+			WHERE timestamp IS NOT NULL
+			  AND timestamp >= NOW() - INTERVAL '30 days'
+			GROUP BY DATE(timestamp)
+		),
+		evm_event_counts AS (
+			SELECT
+				DATE(e.timestamp) as date,
+				COUNT(DISTINCT e.transaction_id) as evm_event_count
+			FROM raw.events e
+			WHERE e.timestamp IS NOT NULL
+			  AND e.timestamp >= NOW() - INTERVAL '30 days'
+			  AND e.type LIKE '%EVM.TransactionExecuted%'
+			GROUP BY DATE(e.timestamp)
+		)
 		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, updated_at)
-		SELECT 
-			DATE(timestamp) as date, 
-			COUNT(*) as tx_count,
-			COUNT(*) FILTER (WHERE is_evm = TRUE) as evm_tx_count,
-			NOW() as updated_at
-		FROM raw.transactions
-		WHERE timestamp IS NOT NULL
-		  AND timestamp >= NOW() - INTERVAL '30 days'
-		GROUP BY DATE(timestamp)
-		ON CONFLICT (date) DO UPDATE SET 
+		SELECT
+			t.date,
+			t.tx_count,
+			GREATEST(t.evm_flag_count, COALESCE(ev.evm_event_count, 0)),
+			NOW()
+		FROM tx_counts t
+		LEFT JOIN evm_event_counts ev ON t.date = ev.date
+		ON CONFLICT (date) DO UPDATE SET
 			tx_count = EXCLUDED.tx_count,
 			evm_tx_count = EXCLUDED.evm_tx_count,
 			updated_at = NOW();
