@@ -4,7 +4,8 @@ import { getFlowV1ContractByIdentifier } from '../../api/gen/find';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Code, FileText, ChevronRight } from 'lucide-react';
+import { Code, FileText, ChevronRight, ExternalLink } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 import { normalizeAddress } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -96,6 +97,14 @@ export function AccountContractsTab({ address, contracts }: Props) {
                                                     }`}>
                                                     {name}
                                                 </span>
+                                                <Link
+                                                    to={`/contracts/A.${normalizedAddress.replace(/^0x/, '')}.${name}` as any}
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-nothing-green"
+                                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                                    title="View contract details"
+                                                >
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </Link>
                                             </div>
                                             <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform ${selectedContract === name ? 'rotate-90 text-nothing-green' : 'text-zinc-400 group-hover:translate-x-1'
                                                 }`} />

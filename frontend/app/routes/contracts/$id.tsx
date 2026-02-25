@@ -315,7 +315,7 @@ function ContractDetail() {
                                 <Layers className="h-3 w-3" /> Dependents
                             </p>
                             <span className="text-sm font-mono text-zinc-900 dark:text-white">
-                                {contract.dependents_count || 0} <span className="text-zinc-500 text-xs">imports</span>
+                                {contract.imported_count || contract.import_count || 0} <span className="text-zinc-500 text-xs">imports</span>
                             </span>
                         </div>
                     </div>

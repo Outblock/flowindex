@@ -438,6 +438,34 @@ func (r *Repository) GetScriptImportsByHashes(ctx context.Context, hashes []stri
 	return out, rows.Err()
 }
 
+// GetContractDependentCounts returns how many distinct script_hashes import each contract identifier.
+// The identifiers should be in "A.addr.Name" format.
+func (r *Repository) GetContractDependentCounts(ctx context.Context, identifiers []string) (map[string]int64, error) {
+	if len(identifiers) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT contract_identifier, COUNT(DISTINCT script_hash) AS cnt
+		FROM app.script_imports
+		WHERE contract_identifier = ANY($1::varchar[])
+		GROUP BY contract_identifier`, identifiers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]int64, len(identifiers))
+	for rows.Next() {
+		var id string
+		var cnt int64
+		if err := rows.Scan(&id, &cnt); err != nil {
+			return nil, err
+		}
+		out[id] = cnt
+	}
+	return out, rows.Err()
+}
+
 func nilIfEmpty(s string) interface{} {
 	if s == "" {
 		return nil

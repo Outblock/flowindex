@@ -709,14 +709,15 @@ func (r *Repository) GetNFTCollection(ctx context.Context, contract, contractNam
 
 // Contracts
 type ContractListFilter struct {
-	Address   string
-	Name      string
-	Body      string
-	ValidFrom *uint64
-	Sort      string
-	SortOrder string
-	Limit     int
-	Offset    int
+	Address    string
+	Name       string
+	NameSearch string // ILIKE keyword search on contract name
+	Body       string
+	ValidFrom  *uint64
+	Sort       string
+	SortOrder  string
+	Limit      int
+	Offset     int
 }
 
 func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFilter) ([]models.SmartContract, error) {
@@ -732,6 +733,11 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 	if f.Name != "" {
 		clauses = append(clauses, fmt.Sprintf("sc.name = $%d", arg))
 		args = append(args, f.Name)
+		arg++
+	}
+	if f.NameSearch != "" {
+		clauses = append(clauses, fmt.Sprintf("name ILIKE $%d", arg))
+		args = append(args, "%"+f.NameSearch+"%")
 		arg++
 	}
 	if f.Body != "" {

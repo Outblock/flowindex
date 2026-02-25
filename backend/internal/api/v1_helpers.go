@@ -470,8 +470,12 @@ func toCombinedNFTDetails(ownership models.NFTOwnership) map[string]interface{} 
 	}
 }
 
-func toContractOutput(contract models.SmartContract) map[string]interface{} {
+func toContractOutput(contract models.SmartContract, dependentCounts ...map[string]int64) map[string]interface{} {
 	identifier := formatTokenIdentifier(contract.Address, contract.Name)
+	var depCount int64
+	if len(dependentCounts) > 0 && dependentCounts[0] != nil {
+		depCount = dependentCounts[0][identifier]
+	}
 	return map[string]interface{}{
 		"id":                 identifier,
 		"identifier":         identifier,
@@ -485,9 +489,9 @@ func toContractOutput(contract models.SmartContract) map[string]interface{} {
 		"tags":               []string{},
 		"deployments":        0,
 		"diff":               "",
-		"import_count":       0,
+		"import_count":       depCount,
 		"imported_by":        []string{},
-		"imported_count":     0,
+		"imported_count":     depCount,
 		"parent_contract_id": "",
 		"transaction_hash":   "",
 	}

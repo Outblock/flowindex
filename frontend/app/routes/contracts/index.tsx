@@ -165,7 +165,7 @@ function Contracts() {
                 <input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="identifier or address (e.g. A.82ed... .MyContract or 0x82ed...)"
+                    placeholder="Search by name, identifier, or address (e.g. FlowToken, A.82ed...MyContract, 0x82ed...)"
                     className="flex-1 bg-transparent border border-zinc-200 dark:border-white/10 px-3 py-2 rounded-sm text-sm font-mono text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-nothing-green/30"
                 />
                 <button
