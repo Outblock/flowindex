@@ -95,7 +95,7 @@ export function DailyStatsChart() {
                     ))}
                 </div>
             </div>
-            <div className="h-[200px] w-full" key={rangeDays}>
+            <div className="h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
                         data={visibleData}
@@ -133,7 +133,7 @@ export function DailyStatsChart() {
                             cursor={{ stroke: '#333', strokeDasharray: '5 5' }}
                             labelFormatter={(label) => label}
                         />
-                        <Area type="monotone" dataKey="txs" stroke="#00ef8b" strokeWidth={2} fillOpacity={1} fill="url(#colorTxs)" />
+                        <Area type="monotone" dataKey="txs" stroke="#00ef8b" strokeWidth={2} fillOpacity={1} fill="url(#colorTxs)" animationDuration={500} animationEasing="ease-out" />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>

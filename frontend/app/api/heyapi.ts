@@ -143,3 +143,29 @@ export async function fetchAccountStorageItem(address: string, path: string): Pr
   if (!res.ok) throw new Error(`status ${res.status}`);
   return res.json();
 }
+
+/** Fetch analytics daily stats (enriched with error rates, EVM split) */
+export async function fetchAnalyticsDaily(from?: string, to?: string): Promise<any[]> {
+  await ensureHeyApiConfigured();
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`${_baseURL}/analytics/daily${qs}`);
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json?.data ?? [];
+}
+
+/** Fetch daily FT/NFT transfer counts */
+export async function fetchAnalyticsTransfersDaily(from?: string, to?: string): Promise<any[]> {
+  await ensureHeyApiConfigured();
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`${_baseURL}/analytics/transfers/daily${qs}`);
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json?.data ?? [];
+}

@@ -1,5 +1,6 @@
 import { BookOpen, Github, SquareTerminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { resolveApiBaseUrl } from '../api';
 
 function getDocsBaseUrl() {
   return import.meta.env.VITE_DOCS_URL;
@@ -9,9 +10,12 @@ function stripTrailingSlash(url: string | undefined): string | undefined {
   return typeof url === 'string' ? url.replace(/\/+$/, '') : url;
 }
 
+const frontendCommit = (typeof import.meta.env.VITE_GIT_COMMIT === 'string' && import.meta.env.VITE_GIT_COMMIT) || '';
+
 function Footer() {
   // IMPORTANT: Keep SSR deterministic. Read runtime overrides after hydration.
   const [docsBase, setDocsBase] = useState(() => stripTrailingSlash(getDocsBaseUrl()));
+  const [backendCommit, setBackendCommit] = useState('');
 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,6 +25,15 @@ function Footer() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDocsBase((prev) => (normalized && normalized !== prev ? normalized : prev));
     }
+
+    // Fetch backend commit hash from /status
+    resolveApiBaseUrl().then((base) =>
+      fetch(`${base}/status`).then((r) => r.json()).then((data) => {
+        if (data?.build_commit && data.build_commit !== 'dev') {
+          setBackendCommit(data.build_commit);
+        }
+      }).catch(() => {})
+    ).catch(() => {});
   }, []);
 
   const docsHref = docsBase ? `${docsBase}/docs` : null;
@@ -32,6 +45,13 @@ function Footer() {
         <div className="flex items-center gap-2 uppercase tracking-widest">
           <span>Built by</span>
           <span className="text-zinc-900 dark:text-white">Flow Community</span>
+          {(frontendCommit || backendCommit) && (
+            <span className="text-zinc-400 dark:text-zinc-600 font-mono text-[10px] normal-case tracking-normal">
+              {frontendCommit && <span title={`Frontend: ${frontendCommit}`}>fe:{frontendCommit.slice(0, 7)}</span>}
+              {frontendCommit && backendCommit && <span className="mx-0.5">/</span>}
+              {backendCommit && <span title={`Backend: ${backendCommit}`}>be:{backendCommit.slice(0, 7)}</span>}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-5 uppercase tracking-widest">
           {docsHref ? (

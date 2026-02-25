@@ -81,7 +81,8 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.timestamp AS created_at,
-		       COALESCE(m.event_count, t.event_count) AS event_count
+		       COALESCE(m.event_count, t.event_count) AS event_count,
+		       COALESCE(t.script_hash, '') AS script_hash
 		FROM raw.transactions t
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 		`+where+`
@@ -97,7 +98,7 @@ func (r *Repository) ListTransactionsFiltered(ctx context.Context, f Transaction
 	for rows.Next() {
 		var t models.Transaction
 		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
-			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount, &t.ScriptHash); err != nil {
 			return nil, err
 		}
 		if seen[t.ID] {
@@ -127,7 +128,8 @@ func (r *Repository) listLatestTransactions(ctx context.Context, limit, offset i
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.timestamp AS created_at,
-		       COALESCE(m.event_count, t.event_count) AS event_count
+		       COALESCE(m.event_count, t.event_count) AS event_count,
+		       COALESCE(t.script_hash, '') AS script_hash
 		FROM latest l
 		JOIN raw.transactions t ON t.id = l.id AND t.block_height = l.block_height
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
@@ -142,7 +144,7 @@ func (r *Repository) listLatestTransactions(ctx context.Context, limit, offset i
 	for rows.Next() {
 		var t models.Transaction
 		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
-			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount, &t.ScriptHash); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -159,7 +161,8 @@ func (r *Repository) ListTransactionsByBlock(ctx context.Context, height uint64,
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.timestamp AS created_at,
-		       COALESCE(m.event_count, t.event_count) AS event_count
+		       COALESCE(m.event_count, t.event_count) AS event_count,
+		       COALESCE(t.script_hash, '') AS script_hash
 		FROM raw.transactions t
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 		WHERE t.block_height = $1
@@ -173,7 +176,7 @@ func (r *Repository) ListTransactionsByBlock(ctx context.Context, height uint64,
 	for rows.Next() {
 		var t models.Transaction
 		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
-			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount, &t.ScriptHash); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -678,7 +681,8 @@ func (r *Repository) GetScheduledTransactionsByAddress(ctx context.Context, addr
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.timestamp AS created_at,
-		       COALESCE(m.event_count, t.event_count) AS event_count
+		       COALESCE(m.event_count, t.event_count) AS event_count,
+		       COALESCE(t.script_hash, '') AS script_hash
 		FROM app.tx_contracts tc
 		JOIN app.address_transactions at ON at.transaction_id = tc.transaction_id
 		JOIN raw.transactions t ON t.id = tc.transaction_id AND t.block_height = at.block_height
@@ -694,7 +698,7 @@ func (r *Repository) GetScheduledTransactionsByAddress(ctx context.Context, addr
 	for rows.Next() {
 		var t models.Transaction
 		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
-			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount, &t.ScriptHash); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -718,7 +722,8 @@ func (r *Repository) GetScheduledTransactions(ctx context.Context, limit, offset
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.timestamp AS created_at,
-		       COALESCE(m.event_count, t.event_count) AS event_count
+		       COALESCE(m.event_count, t.event_count) AS event_count,
+		       COALESCE(t.script_hash, '') AS script_hash
 		FROM app.tx_contracts tc
 		JOIN raw.transactions t ON t.id = tc.transaction_id
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
@@ -733,7 +738,7 @@ func (r *Repository) GetScheduledTransactions(ctx context.Context, limit, offset
 	for rows.Next() {
 		var t models.Transaction
 		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
-			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount, &t.ScriptHash); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -757,7 +762,8 @@ func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIden
 		       t.status, COALESCE(t.error_message, '') AS error_message, t.is_evm, t.gas_limit,
 		       COALESCE(m.gas_used, t.gas_used) AS gas_used,
 		       t.timestamp, t.timestamp AS created_at,
-		       COALESCE(m.event_count, t.event_count) AS event_count
+		       COALESCE(m.event_count, t.event_count) AS event_count,
+		       COALESCE(t.script_hash, '') AS script_hash
 		FROM app.tx_contracts tc
 		JOIN raw.transactions t ON t.id = tc.transaction_id
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
@@ -772,7 +778,7 @@ func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIden
 	for rows.Next() {
 		var t models.Transaction
 		if err := rows.Scan(&t.ID, &t.BlockHeight, &t.TransactionIndex, &t.ProposerAddress, &t.PayerAddress, &t.Authorizers,
-			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount); err != nil {
+			&t.Status, &t.ErrorMessage, &t.IsEVM, &t.GasLimit, &t.GasUsed, &t.Timestamp, &t.CreatedAt, &t.EventCount, &t.ScriptHash); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

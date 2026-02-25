@@ -58,6 +58,8 @@ type Transaction struct {
 	EVMTo    string `json:"evm_to,omitempty"`
 	EVMValue string `json:"evm_value,omitempty"`
 
+	ScriptHash string `json:"script_hash,omitempty"`
+
 	GasLimit         uint64    `json:"gas_limit"`
 	GasUsed          uint64    `json:"gas_used"`
 	ComputationUsage uint64    `json:"computation_usage"`

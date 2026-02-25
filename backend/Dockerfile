@@ -12,7 +12,8 @@ COPY backend/ .
 # OpenAPI specs live at the repo root but are served by the backend.
 COPY openapi-v1.json openapi-v2.json find-api.json api.json ./
 RUN go mod tidy
-RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o indexer main.go
+ARG GIT_COMMIT=unknown
+RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -ldflags="-X main.BuildCommit=${GIT_COMMIT}" -o indexer main.go
 RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o backfill_token_transfers ./cmd/tools/backfill_token_transfers
 
 FROM debian:bookworm-slim

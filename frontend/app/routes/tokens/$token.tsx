@@ -328,7 +328,7 @@ function TokenDetailInner() {
                       >
                         <td className="p-4">
                           <div className="flex items-center gap-2">
-                            <Link to={`/tx/${normalizeHex(tx)}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
+                            <Link to={`/txs/${normalizeHex(tx)}` as any} className="font-mono text-nothing-green-dark dark:text-nothing-green hover:underline">
                               {normalizeHex(tx).slice(0, 18)}...
                             </Link>
                             <CopyButton

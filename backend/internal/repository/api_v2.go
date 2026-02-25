@@ -709,14 +709,15 @@ func (r *Repository) GetNFTCollection(ctx context.Context, contract, contractNam
 
 // Contracts
 type ContractListFilter struct {
-	Address   string
-	Name      string
-	Body      string
-	ValidFrom *uint64
-	Sort      string
-	SortOrder string
-	Limit     int
-	Offset    int
+	Address    string
+	Name       string
+	NameSearch string // ILIKE keyword search on contract name
+	Body       string
+	ValidFrom  *uint64
+	Sort       string
+	SortOrder  string
+	Limit      int
+	Offset     int
 }
 
 func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFilter) ([]models.SmartContract, error) {
@@ -725,22 +726,27 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 	arg := 1
 
 	if f.Address != "" {
-		clauses = append(clauses, fmt.Sprintf("address = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("sc.address = $%d", arg))
 		args = append(args, hexToBytes(f.Address))
 		arg++
 	}
 	if f.Name != "" {
-		clauses = append(clauses, fmt.Sprintf("name = $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("sc.name = $%d", arg))
 		args = append(args, f.Name)
 		arg++
 	}
+	if f.NameSearch != "" {
+		clauses = append(clauses, fmt.Sprintf("name ILIKE $%d", arg))
+		args = append(args, "%"+f.NameSearch+"%")
+		arg++
+	}
 	if f.Body != "" {
-		clauses = append(clauses, fmt.Sprintf("code ILIKE $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("sc.code ILIKE $%d", arg))
 		args = append(args, "%"+f.Body+"%")
 		arg++
 	}
 	if f.ValidFrom != nil {
-		clauses = append(clauses, fmt.Sprintf("COALESCE(last_updated_height,0) <= $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("COALESCE(sc.last_updated_height,0) <= $%d", arg))
 		args = append(args, int64(*f.ValidFrom))
 		arg++
 	}
@@ -757,27 +763,35 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 		dir = "ASC"
 	}
 
-	orderBy := "COALESCE(last_updated_height,0) DESC, address ASC, name ASC"
+	orderBy := "COALESCE(sc.last_updated_height,0) DESC, sc.address ASC, sc.name ASC"
 	switch sort {
 	case "", "valid_from", "activity":
-		orderBy = "COALESCE(last_updated_height,0) " + dir + ", address ASC, name ASC"
+		orderBy = "COALESCE(sc.last_updated_height,0) " + dir + ", sc.address ASC, sc.name ASC"
 	case "created_at":
-		orderBy = "created_at " + dir + ", address ASC, name ASC"
+		orderBy = "sc.created_at " + dir + ", sc.address ASC, sc.name ASC"
 	case "updated_at":
-		orderBy = "updated_at " + dir + ", address ASC, name ASC"
+		orderBy = "sc.updated_at " + dir + ", sc.address ASC, sc.name ASC"
 	case "address":
-		orderBy = "address " + dir + ", name ASC"
+		orderBy = "sc.address " + dir + ", sc.name ASC"
 	case "name":
-		orderBy = "name " + dir + ", address ASC"
+		orderBy = "sc.name " + dir + ", sc.address ASC"
 	case "usage", "import":
 		// Not modeled yet; approximate with activity.
-		orderBy = "COALESCE(last_updated_height,0) " + dir + ", address ASC, name ASC"
+		orderBy = "COALESCE(sc.last_updated_height,0) " + dir + ", sc.address ASC, sc.name ASC"
 	}
 
 	args = append(args, f.Limit, f.Offset)
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(address, 'hex') AS address, name, COALESCE(code,''), COALESCE(version,1), COALESCE(last_updated_height,0), created_at, updated_at
-		FROM app.smart_contracts
+		SELECT encode(sc.address, 'hex') AS address, sc.name, COALESCE(sc.code,''), COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
+		       COALESCE(b.timestamp, sc.created_at) AS created_at,
+		       sc.updated_at
+		FROM app.smart_contracts sc
+		LEFT JOIN LATERAL (
+			SELECT cv.block_height FROM app.contract_versions cv
+			WHERE cv.address = sc.address AND cv.name = sc.name
+			ORDER BY cv.version ASC LIMIT 1
+		) first_ver ON true
+		LEFT JOIN raw.blocks b ON b.height = first_ver.block_height
 		`+where+`
 		ORDER BY `+orderBy+`
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
@@ -823,10 +837,18 @@ func (r *Repository) GetContractByIdentifier(ctx context.Context, identifier str
 		return nil, nil
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(address, 'hex') AS address, name, COALESCE(code,''), COALESCE(version,1), COALESCE(last_updated_height,0), created_at, updated_at
-		FROM app.smart_contracts
-		WHERE address = $1 AND ($2 = '' OR name = $2)
-		ORDER BY address ASC, name ASC`, hexToBytes(address), name)
+		SELECT encode(sc.address, 'hex') AS address, sc.name, COALESCE(sc.code,''), COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
+		       COALESCE(b.timestamp, sc.created_at) AS created_at,
+		       sc.updated_at
+		FROM app.smart_contracts sc
+		LEFT JOIN LATERAL (
+			SELECT cv.block_height FROM app.contract_versions cv
+			WHERE cv.address = sc.address AND cv.name = sc.name
+			ORDER BY cv.version ASC LIMIT 1
+		) first_ver ON true
+		LEFT JOIN raw.blocks b ON b.height = first_ver.block_height
+		WHERE sc.address = $1 AND ($2 = '' OR sc.name = $2)
+		ORDER BY sc.address ASC, sc.name ASC`, hexToBytes(address), name)
 	if err != nil {
 		return nil, err
 	}
@@ -995,12 +1017,13 @@ func (r *Repository) ListContractVersions(ctx context.Context, address, name str
 		limit = 20
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(address, 'hex') AS address, name, version, block_height,
-		       COALESCE(encode(transaction_id, 'hex'), '') AS transaction_id,
-		       created_at
-		FROM app.contract_versions
-		WHERE address = $1 AND name = $2
-		ORDER BY version DESC
+		SELECT encode(cv.address, 'hex') AS address, cv.name, cv.version, cv.block_height,
+		       COALESCE(encode(cv.transaction_id, 'hex'), '') AS transaction_id,
+		       COALESCE(b.timestamp, cv.created_at) AS created_at
+		FROM app.contract_versions cv
+		LEFT JOIN raw.blocks b ON b.height = cv.block_height
+		WHERE cv.address = $1 AND cv.name = $2
+		ORDER BY cv.version DESC
 		LIMIT $3 OFFSET $4`, hexToBytes(address), name, limit, offset)
 	if err != nil {
 		return nil, err
@@ -1021,11 +1044,12 @@ func (r *Repository) ListContractVersions(ctx context.Context, address, name str
 func (r *Repository) GetContractVersion(ctx context.Context, address, name string, version int) (*models.ContractVersion, error) {
 	var v models.ContractVersion
 	err := r.db.QueryRow(ctx, `
-		SELECT encode(address, 'hex') AS address, name, version, COALESCE(code, '') AS code, block_height,
-		       COALESCE(encode(transaction_id, 'hex'), '') AS transaction_id,
-		       created_at
-		FROM app.contract_versions
-		WHERE address = $1 AND name = $2 AND version = $3`,
+		SELECT encode(cv.address, 'hex') AS address, cv.name, cv.version, COALESCE(cv.code, '') AS code, cv.block_height,
+		       COALESCE(encode(cv.transaction_id, 'hex'), '') AS transaction_id,
+		       COALESCE(b.timestamp, cv.created_at) AS created_at
+		FROM app.contract_versions cv
+		LEFT JOIN raw.blocks b ON b.height = cv.block_height
+		WHERE cv.address = $1 AND cv.name = $2 AND cv.version = $3`,
 		hexToBytes(address), name, version).Scan(
 		&v.Address, &v.Name, &v.Version, &v.Code, &v.BlockHeight, &v.TransactionID, &v.CreatedAt)
 	if err == pgx.ErrNoRows {
@@ -1035,6 +1059,32 @@ func (r *Repository) GetContractVersion(ctx context.Context, address, name strin
 		return nil, err
 	}
 	return &v, nil
+}
+
+// BackfillContractVersionCode updates a contract version's code when it was originally stored empty.
+func (r *Repository) BackfillContractVersionCode(ctx context.Context, address, name string, version int, code string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE app.contract_versions SET code = $4
+		WHERE address = $1 AND name = $2 AND version = $3 AND (code IS NULL OR code = '')`,
+		hexToBytes(address), name, version, code)
+	return err
+}
+
+// CountContractDependents counts how many other contracts import the given contract.
+// Searches for Cadence import patterns like "import ContractName from 0xAddress".
+func (r *Repository) CountContractDependents(ctx context.Context, address, name string) (int, error) {
+	// Cadence import: "import TopShot from 0x0b2a3299cc857e29"
+	pattern := "import " + name + " from 0x" + strings.TrimPrefix(strings.ToLower(address), "0x")
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM app.smart_contracts
+		WHERE code LIKE '%' || $1 || '%'
+		  AND NOT (address = $2 AND name = $3)`,
+		pattern, hexToBytes(address), name).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 // --- Status snapshots ---

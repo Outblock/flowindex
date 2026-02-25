@@ -61,6 +61,20 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 		ts := transferSummaries[t.ID]
 		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta))
 	}
+
+	// Enrich with script template classification.
+	// script_hash is already in each tx from the list query, so we skip the
+	// expensive raw.transactions re-query and go straight to script_templates + script_imports.
+	uniqueHashes := collectUniqueScriptHashes(txs)
+	if len(uniqueHashes) > 0 {
+		if templates, err := s.repo.GetScriptTemplatesByHashes(r.Context(), uniqueHashes); err == nil {
+			enrichWithTemplates(out, templates)
+		}
+		if imports, err := s.repo.GetScriptImportsByHashes(r.Context(), uniqueHashes); err == nil {
+			enrichWithScriptImports(out, imports)
+		}
+	}
+
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
 
@@ -99,9 +113,14 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 	}
 	out := toFlowTransactionOutput(*tx, events, contracts[tx.ID], tags[tx.ID], feesByTx[tx.ID], evmExecs)
 
-	// Enrich: script template classification
-	if templates, err := s.repo.GetScriptTemplatesByTxIDs(r.Context(), []string{tx.ID}); err == nil {
-		enrichWithTemplates([]map[string]interface{}{out}, templates)
+	// Enrich: script template classification using script_hash from the tx record directly
+	if tx.ScriptHash != "" {
+		if templates, err := s.repo.GetScriptTemplatesByHashes(r.Context(), []string{tx.ScriptHash}); err == nil {
+			enrichWithTemplates([]map[string]interface{}{out}, templates)
+		}
+		if imports, err := s.repo.GetScriptImportsByHashes(r.Context(), []string{tx.ScriptHash}); err == nil {
+			enrichWithScriptImports([]map[string]interface{}{out}, imports)
+		}
 	}
 
 	s.enrichTransactionOutput(r, out, tx)

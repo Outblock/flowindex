@@ -22,7 +22,7 @@ export const Route = createFileRoute('/blocks/$height')({
             const rawTxs: any[] = txRes.data?.data ?? [];
             const transformedBlock = {
                 ...rawBlock,
-                txCount: rawBlock.tx ?? rawTxs.length,
+                txCount: rawBlock.tx_count ?? rawBlock.tx ?? rawTxs.length,
                 transactions: rawTxs.map(tx => ({
                     ...tx,
                     type: tx.tags?.[0] || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
@@ -192,7 +192,7 @@ function BlockDetail() {
                                         <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors group">
                                             <td className="p-4">
                                                 <div className="flex items-center gap-2">
-                                                    <Link to={`/tx/${tx.id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                                                    <Link to={`/txs/${tx.id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
                                                         {tx.id.slice(0, 16)}...
                                                     </Link>
                                                     <CopyButton

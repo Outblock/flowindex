@@ -246,7 +246,7 @@ function parseTokenLeg(event: any, isNFT: boolean): TokenLeg | null {
   const fromAddr = extractAddressFromFields(fields,
     'from', 'fromAddress', 'sender', 'fromAccount', 'fromAddr', 'from_address',
     'withdrawnFrom', 'withdrawFrom', 'fromVault', 'burnedFrom', 'owner');
-  let tokenID = String(fields.id ?? fields.tokenId ?? '');
+  const tokenID = String(fields.id ?? fields.tokenId ?? '');
 
   const eventType = event.type || '';
   const contractAddr = normalizeFlowAddress(event.contract_address) || parseContractAddress(eventType);

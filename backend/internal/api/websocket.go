@@ -1,13 +1,16 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"flowscan-clone/internal/models"
+	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/websocket"
 )
@@ -152,14 +155,19 @@ type WSBlock struct {
 }
 
 type WSTransaction struct {
-	ID              string    `json:"id"`
-	BlockHeight     uint64    `json:"block_height"`
-	Status          string    `json:"status"`
-	PayerAddress    string    `json:"payer_address,omitempty"`
-	ProposerAddress string    `json:"proposer_address,omitempty"`
-	Timestamp       time.Time `json:"timestamp"`
-	ExecutionStatus string    `json:"execution_status,omitempty"`
-	ErrorMessage    string    `json:"error_message,omitempty"`
+	ID               string    `json:"id"`
+	BlockHeight      uint64    `json:"block_height"`
+	Status           string    `json:"status"`
+	PayerAddress     string    `json:"payer_address,omitempty"`
+	ProposerAddress  string    `json:"proposer_address,omitempty"`
+	Timestamp        time.Time `json:"timestamp"`
+	ExecutionStatus  string    `json:"execution_status,omitempty"`
+	ErrorMessage     string    `json:"error_message,omitempty"`
+	IsEVM            bool      `json:"is_evm,omitempty"`
+	ScriptHash       string    `json:"script_hash,omitempty"`
+	TemplateCategory string    `json:"template_category,omitempty"`
+	TemplateLabel    string    `json:"template_label,omitempty"`
+	Tags             []string  `json:"tags,omitempty"`
 }
 
 func BroadcastNewBlock(block models.Block) {
@@ -193,10 +201,187 @@ func BroadcastNewTransaction(tx models.Transaction) {
 		Timestamp:       ts,
 		ExecutionStatus: tx.ExecutionStatus,
 		ErrorMessage:    tx.ErrorMessage,
+		IsEVM:           tx.IsEVM,
+		ScriptHash:      tx.ScriptHash,
 	}
 	msg := BroadcastMessage{Type: "new_transaction", Payload: payload}
 	data, _ := json.Marshal(msg)
 	hub.broadcast <- data
+}
+
+// MakeBroadcastNewTransactions returns a batch broadcast callback that enriches
+// transactions with template_category, template_label, and tags derived from
+// events before broadcasting over WebSocket.
+func MakeBroadcastNewTransactions(repo *repository.Repository) func([]models.Transaction, []models.Event) {
+	return func(txs []models.Transaction, events []models.Event) {
+		if len(txs) == 0 {
+			return
+		}
+
+		// Derive tags from events (same logic as tx_contracts_worker)
+		tagsByTx := deriveTagsFromEvents(txs, events)
+
+		// Collect unique script hashes for batch enrichment
+		hashSet := make(map[string]bool)
+		for _, tx := range txs {
+			if tx.ScriptHash != "" {
+				hashSet[tx.ScriptHash] = true
+			}
+		}
+		hashes := make([]string, 0, len(hashSet))
+		for h := range hashSet {
+			hashes = append(hashes, h)
+		}
+
+		// Batch lookup: script_templates (category/label) + script_imports (contract identifiers)
+		categoryByHash := make(map[string]string)
+		labelByHash := make(map[string]string)
+		if len(hashes) > 0 {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+
+			if templates, err := repo.GetScriptTemplatesByHashes(ctx, hashes); err == nil {
+				for hash, tmpl := range templates {
+					if tmpl.Category != "" {
+						categoryByHash[hash] = tmpl.Category
+					}
+					if tmpl.Label != "" {
+						labelByHash[hash] = tmpl.Label
+					}
+				}
+			}
+
+			// For hashes without a template category, derive from imports
+			uncovered := make([]string, 0)
+			for _, h := range hashes {
+				if _, ok := categoryByHash[h]; !ok {
+					uncovered = append(uncovered, h)
+				}
+			}
+			if len(uncovered) > 0 {
+				if imports, err := repo.GetScriptImportsByHashes(ctx, uncovered); err == nil {
+					for hash, contractIDs := range imports {
+						cat := deriveCategoryFromImports(contractIDs)
+						// Skip "token_transfer" for WS broadcasts — we can't distinguish
+						// real FT transfers from gas-only txs without fee-filtered transfer
+						// records. The tx_contracts_worker will assign the proper FT_TRANSFER
+						// tag later once it processes the block.
+						if cat != "" && cat != "token_transfer" {
+							categoryByHash[hash] = cat
+						}
+					}
+				}
+			}
+		}
+
+		// Broadcast each tx with enrichment
+		for _, tx := range txs {
+			ts := tx.Timestamp
+			if ts.IsZero() {
+				ts = tx.CreatedAt
+			}
+			payload := WSTransaction{
+				ID:               tx.ID,
+				BlockHeight:      tx.BlockHeight,
+				Status:           tx.Status,
+				PayerAddress:     tx.PayerAddress,
+				ProposerAddress:  tx.ProposerAddress,
+				Timestamp:        ts,
+				ExecutionStatus:  tx.ExecutionStatus,
+				ErrorMessage:     tx.ErrorMessage,
+				IsEVM:            tx.IsEVM,
+				ScriptHash:       tx.ScriptHash,
+				TemplateCategory: categoryByHash[tx.ScriptHash],
+				TemplateLabel:    labelByHash[tx.ScriptHash],
+				Tags:             tagsByTx[tx.ID],
+			}
+			msg := BroadcastMessage{Type: "new_transaction", Payload: payload}
+			data, _ := json.Marshal(msg)
+			hub.broadcast <- data
+		}
+	}
+}
+
+// deriveTagsFromEvents derives tx tags from event types, mirroring tx_contracts_worker logic.
+func deriveTagsFromEvents(txs []models.Transaction, events []models.Event) map[string][]string {
+	tagsByTx := make(map[string][]string)
+	seen := make(map[string]map[string]bool) // txID -> tag -> seen
+
+	addTag := func(txID, tag string) {
+		if seen[txID] == nil {
+			seen[txID] = make(map[string]bool)
+		}
+		if seen[txID][tag] {
+			return
+		}
+		seen[txID][tag] = true
+		tagsByTx[txID] = append(tagsByTx[txID], tag)
+	}
+
+	// Check IsEVM flag on transactions
+	for _, tx := range txs {
+		if tx.IsEVM {
+			addTag(tx.ID, "EVM")
+		}
+	}
+
+	// Derive tags from event types
+	for _, evt := range events {
+		evtType := evt.Type
+		switch {
+		case strings.Contains(evtType, "EVM.TransactionExecuted"):
+			addTag(evt.TransactionID, "EVM")
+		case strings.Contains(evtType, "NFTStorefront"):
+			addTag(evt.TransactionID, "MARKETPLACE")
+		case strings.Contains(evtType, "AccountContractAdded") || strings.Contains(evtType, "AccountContractUpdated"):
+			addTag(evt.TransactionID, "CONTRACT_DEPLOY")
+		case evtType == "flow.AccountCreated":
+			addTag(evt.TransactionID, "ACCOUNT_CREATED")
+		case strings.Contains(evtType, "AccountKeyAdded") || strings.Contains(evtType, "AccountKeyRemoved"):
+			addTag(evt.TransactionID, "KEY_UPDATE")
+		case strings.Contains(evtType, "FlowTransactionScheduler"):
+			addTag(evt.TransactionID, "SCHEDULED_TX")
+		case strings.Contains(evtType, ".SwapPair.Swap") ||
+			strings.Contains(evtType, ".BloctoSwapPair.Swap") ||
+			strings.Contains(evtType, ".MetaPierSwapPair.Swap"):
+			addTag(evt.TransactionID, "SWAP")
+		case strings.Contains(evtType, ".SwapPair.AddLiquidity") ||
+			strings.Contains(evtType, ".SwapPair.RemoveLiquidity"):
+			addTag(evt.TransactionID, "LIQUIDITY")
+		case strings.Contains(evtType, "FlowIDTableStaking") || strings.Contains(evtType, "FlowStakingCollection"):
+			addTag(evt.TransactionID, "STAKING")
+		case strings.Contains(evtType, "LiquidStaking") || strings.Contains(evtType, "stFlowToken"):
+			addTag(evt.TransactionID, "LIQUID_STAKING")
+		// Note: FungibleToken.Deposited/Withdrawn and NonFungibleToken.Deposited/Withdrawn
+		// are NOT matched here — they fire on nearly every tx due to gas fees.
+		// FT_TRANSFER/NFT_TRANSFER tags are derived by tx_contracts_worker from
+		// actual token_transfers records (which filter out fee movements).
+		}
+	}
+
+	return tagsByTx
+}
+
+// deriveCategoryFromImports picks the highest-priority category from contract identifiers.
+func deriveCategoryFromImports(contractIDs []string) string {
+	bestCategory := ""
+	bestPriority := 999
+	for _, cid := range contractIDs {
+		name := cid
+		if parts := strings.SplitN(cid, ".", 3); len(parts) == 3 {
+			name = parts[2]
+		}
+		if cat, found := importCategoryMap[name]; found {
+			if p, ok := categoryPriority[cat]; ok && p < bestPriority {
+				bestPriority = p
+				bestCategory = cat
+			}
+		}
+	}
+	if bestCategory == "" && len(contractIDs) > 0 {
+		bestCategory = "contract_call"
+	}
+	return bestCategory
 }
 
 func init() {

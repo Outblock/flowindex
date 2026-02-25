@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Home, Box, ArrowRightLeft, Users, FileText, Layers, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, Menu, X } from 'lucide-react';
+import { Home, Box, ArrowRightLeft, Users, FileText, Layers, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, Menu, X, BarChart3 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,7 +19,8 @@ export default function Sidebar() {
 
     const navItems: Array<{ label: string; path: string; icon: typeof Home; disabled?: boolean }> = [
         { label: 'Home Page', path: '/', icon: Home },
-        { label: 'Transactions', path: '/tx', icon: ArrowRightLeft },
+        { label: 'Analytics', path: '/analytics', icon: BarChart3 },
+        { label: 'Transactions', path: '/txs', icon: ArrowRightLeft },
         { label: 'Blocks', path: '/blocks', icon: Box },
         { label: 'Tokens', path: '/tokens', icon: Coins },
         { label: 'NFTs', path: '/nfts', icon: Image },

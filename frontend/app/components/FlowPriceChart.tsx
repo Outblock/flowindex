@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, YAxis, Tooltip } from 'recharts';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { ensureHeyApiConfigured, getBaseURL } from '../api/heyapi';
 
 async function fetchPriceHistory(): Promise<{ value: number; label: string }[]> {

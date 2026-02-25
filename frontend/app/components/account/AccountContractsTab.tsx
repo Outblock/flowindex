@@ -4,7 +4,8 @@ import { getFlowV1ContractByIdentifier } from '../../api/gen/find';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Code, FileText, ChevronRight } from 'lucide-react';
+import { Code, FileText, ChevronRight, ExternalLink } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 import { normalizeAddress } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -96,6 +97,14 @@ export function AccountContractsTab({ address, contracts }: Props) {
                                                     }`}>
                                                     {name}
                                                 </span>
+                                                <Link
+                                                    to={`/contracts/A.${normalizedAddress.replace(/^0x/, '')}.${name}` as any}
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-nothing-green"
+                                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                                    title="View contract details"
+                                                >
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </Link>
                                             </div>
                                             <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform ${selectedContract === name ? 'rotate-90 text-nothing-green' : 'text-zinc-400 group-hover:translate-x-1'
                                                 }`} />
@@ -143,10 +152,22 @@ export function AccountContractsTab({ address, contracts }: Props) {
                         <div className="sticky top-24">
                             <GlassCard className="p-0 overflow-hidden min-h-[400px] flex flex-col">
                                 <div className="p-3 bg-zinc-50 dark:bg-white/5 border-b border-zinc-200 dark:border-white/10 flex items-center justify-between">
-                                    <span className="text-xs font-mono text-zinc-500 flex items-center gap-2">
-                                        <Code className="w-3 h-3" />
-                                        {selectedContract ? `${selectedContract}.cdc` : 'Select a contract'}
-                                    </span>
+                                    {selectedContract ? (
+                                        <Link
+                                            to={`/contracts/A.${normalizedAddress.replace(/^0x/, '')}.${selectedContract}` as any}
+                                            className="text-xs font-mono text-zinc-500 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-2 transition-colors"
+                                            title="View contract details"
+                                        >
+                                            <Code className="w-3 h-3" />
+                                            {selectedContract}.cdc
+                                            <ExternalLink className="w-3 h-3" />
+                                        </Link>
+                                    ) : (
+                                        <span className="text-xs font-mono text-zinc-500 flex items-center gap-2">
+                                            <Code className="w-3 h-3" />
+                                            Select a contract
+                                        </span>
+                                    )}
                                 </div>
 
                                 <div className="flex-1 bg-[#1e1e1e] overflow-auto max-h-[calc(100vh-200px)]">

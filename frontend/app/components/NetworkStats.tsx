@@ -4,6 +4,14 @@ import { motion } from 'framer-motion';
 
 const FALLBACK_TOTAL_SUPPLY = 1_630_000_000;
 
+const ROLE_META: Record<number, { label: string; color: string; bg: string }> = {
+  1: { label: 'Collection', color: 'bg-blue-400', bg: 'bg-blue-400/15' },
+  2: { label: 'Consensus', color: 'bg-purple-400', bg: 'bg-purple-400/15' },
+  3: { label: 'Execution', color: 'bg-orange-400', bg: 'bg-orange-400/15' },
+  4: { label: 'Verification', color: 'bg-emerald-400', bg: 'bg-emerald-400/15' },
+  5: { label: 'Access', color: 'bg-cyan-400', bg: 'bg-cyan-400/15' },
+};
+
 function formatCompact(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `${(n / 1e6).toFixed(0)}M`;
@@ -16,6 +24,24 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
   totalSupply?: number;
   activeNodes?: number;
 }) {
+  const [roleCounts, setRoleCounts] = useState<Record<number, number> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('../api/heyapi').then(({ fetchNodeList }) =>
+      fetchNodeList().then((data) => {
+        if (cancelled) return;
+        const counts: Record<number, number> = {};
+        for (const n of data) {
+          const r = n.role ?? 0;
+          if (r >= 1 && r <= 5) counts[r] = (counts[r] || 0) + 1;
+        }
+        if (Object.keys(counts).length > 0) setRoleCounts(counts);
+      }),
+    ).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   if (!totalStaked) {
     return (
       <div className="grid grid-cols-2 gap-4 h-full">
@@ -40,18 +66,63 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
       {/* Staked — progress bar from bottom */}
       <StakeCard staked={totalStaked} supply={supply} pct={pct} />
 
-      {/* Active Nodes */}
-      <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4 flex flex-col justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 hover:shadow-sm dark:hover:border-white/30 transition-all duration-300 relative overflow-hidden group">
-        <div className="absolute top-0 right-0 w-16 h-16 bg-nothing-green/5 dark:bg-white/5 blur-2xl rounded-full group-hover:bg-nothing-green/10 dark:group-hover:bg-white/10 transition-colors" />
-        <div className="flex justify-between items-start mb-2">
-          <div className="p-1.5 rounded-sm bg-orange-500/10 border-orange-500/20 border">
-            <Server className="w-4 h-4 text-orange-400" />
-          </div>
+      {/* Active Nodes with role breakdown */}
+      <NodesCard activeNodes={activeNodes} roleCounts={roleCounts} />
+    </div>
+  );
+}
+
+function NodesCard({ activeNodes, roleCounts }: { activeNodes?: number; roleCounts: Record<number, number> | null }) {
+  const total = roleCounts ? Object.values(roleCounts).reduce((a, b) => a + b, 0) : 0;
+
+  return (
+    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4 flex flex-col justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 hover:shadow-sm dark:hover:border-white/30 transition-all duration-300 relative overflow-hidden group">
+      <div className="absolute top-0 right-0 w-16 h-16 bg-nothing-green/5 dark:bg-white/5 blur-2xl rounded-full group-hover:bg-nothing-green/10 dark:group-hover:bg-white/10 transition-colors" />
+      <div className="flex justify-between items-start mb-2">
+        <div className="p-1.5 rounded-sm bg-orange-500/10 border-orange-500/20 border">
+          <Server className="w-4 h-4 text-orange-400" />
         </div>
-        <div>
-          <p className="text-[10px] text-zinc-500 dark:text-gray-500 uppercase tracking-widest mb-1">Active Nodes</p>
-          <p className="text-xl font-mono font-bold text-zinc-900 dark:text-white">{activeNodes}</p>
-        </div>
+      </div>
+      <div>
+        <p className="text-[10px] text-zinc-500 dark:text-gray-500 uppercase tracking-widest mb-1">Active Nodes</p>
+        <p className="text-xl font-mono font-bold text-zinc-900 dark:text-white mb-2">{activeNodes}</p>
+
+        {roleCounts && total > 0 && (
+          <>
+            {/* Stacked bar */}
+            <div className="flex h-1.5 overflow-hidden mb-2">
+              {[1, 2, 3, 4, 5].map((r) => {
+                const count = roleCounts[r] || 0;
+                if (!count) return null;
+                return (
+                  <motion.div
+                    key={r}
+                    className={ROLE_META[r].color}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(count / total) * 100}%` }}
+                    transition={{ duration: 0.8, delay: r * 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Role labels */}
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+              {[1, 2, 3, 4, 5].map((r) => {
+                const count = roleCounts[r] || 0;
+                if (!count) return null;
+                return (
+                  <div key={r} className="flex items-center gap-1">
+                    <div className={`w-1.5 h-1.5 ${ROLE_META[r].color}`} />
+                    <span className="text-[9px] text-zinc-500 dark:text-gray-500 font-mono">
+                      {ROLE_META[r].label} {count}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

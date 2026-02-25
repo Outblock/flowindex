@@ -32,6 +32,7 @@ type Service struct {
 // Callback type for real-time updates
 type BlockCallback func(models.Block)
 type TxCallback func(models.Transaction)
+type TxBatchCallback func([]models.Transaction, []models.Event)
 type RangeCallback func(fromHeight, toHeight uint64)
 
 type Config struct {
@@ -42,8 +43,9 @@ type Config struct {
 	StopHeight       uint64 // backward mode: stop when reaching this height (0 = go to genesis)
 	Mode             string // "forward" (default) or "backward"
 	MaxReorgDepth    uint64
-	OnNewBlock       BlockCallback
-	OnNewTransaction TxCallback
+	OnNewBlock        BlockCallback
+	OnNewTransaction  TxCallback        // deprecated: use OnNewTransactions for batch enrichment
+	OnNewTransactions TxBatchCallback
 	// OnIndexedRange is invoked after a batch has been persisted to raw.* tables.
 	// It is intended for lightweight, real-time derived materialization at the chain head.
 	// Range is half-open: [fromHeight, toHeight).
@@ -587,7 +589,18 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 			if s.config.OnNewBlock != nil {
 				s.config.OnNewBlock(*res.Block)
 			}
-			if s.config.OnNewTransaction != nil {
+			// Collect non-system txs for batch broadcast
+			if s.config.OnNewTransactions != nil {
+				var userTxs []models.Transaction
+				for _, tx := range res.Transactions {
+					if !isSystemFlowTransaction(tx) {
+						userTxs = append(userTxs, tx)
+					}
+				}
+				if len(userTxs) > 0 {
+					s.config.OnNewTransactions(userTxs, res.Events)
+				}
+			} else if s.config.OnNewTransaction != nil {
 				for _, tx := range res.Transactions {
 					if isSystemFlowTransaction(tx) {
 						continue

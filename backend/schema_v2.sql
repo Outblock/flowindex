@@ -526,6 +526,11 @@ CREATE TABLE IF NOT EXISTS app.market_prices (
 );
 CREATE INDEX IF NOT EXISTS idx_market_prices_asset_currency_time
     ON app.market_prices (asset, currency, as_of DESC);
+-- Drop the broken unique index if it was partially created, then create a non-unique one.
+-- Cannot use UNIQUE because existing data may have multiple rows per day.
+DROP INDEX IF EXISTS app.idx_market_prices_daily_unique;
+CREATE INDEX IF NOT EXISTS idx_market_prices_daily_lookup
+    ON app.market_prices (asset, currency, CAST(as_of AT TIME ZONE 'UTC' AS DATE));
 
 -- Migrate app.contracts → app.smart_contracts for existing installs.
 ALTER TABLE IF EXISTS app.smart_contracts

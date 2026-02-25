@@ -50,7 +50,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if includeRanges {
 		s.statusRangesCache.mu.Lock()
 		s.statusRangesCache.payload = payload
-		s.statusRangesCache.expiresAt = time.Now().Add(10 * time.Second)
+		s.statusRangesCache.expiresAt = time.Now().Add(5 * time.Minute)
 		s.statusRangesCache.mu.Unlock()
 	} else {
 		s.statusCache.mu.Lock()
@@ -351,6 +351,7 @@ func (s *Server) buildStatusPayload(ctx context.Context, includeRanges bool) ([]
 		"oldest_block_timestamp": oldestBlockTimestamp,
 		"checkpoint_timestamps":  checkpointTimestamps,
 		"error_summary":          errorSummary,
+		"build_commit":           BuildCommit,
 	}
 
 	payload, err := json.Marshal(resp)

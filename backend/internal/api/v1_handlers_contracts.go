@@ -34,13 +34,16 @@ func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request)
 	}
 
 	address := normalizeFlowAddr(r.URL.Query().Get("address"))
+	nameSearch := "" // for keyword/name-only search
 	identifierRaw := strings.TrimSpace(r.URL.Query().Get("identifier"))
 	if identifierRaw != "" {
 		addr2, name2, _ := splitContractIdentifier(identifierRaw)
 		if addr2 != "" {
 			address = addr2
+		} else {
+			// No address parsed — treat as a contract name keyword search
+			nameSearch = identifierRaw
 		}
-		// name2 can be empty (address-only identifier).
 		_ = name2
 	}
 
@@ -81,28 +84,36 @@ func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request)
 	}
 
 	name := ""
-	if identifierRaw != "" {
+	if identifierRaw != "" && nameSearch == "" {
 		_, name2, _ := splitContractIdentifier(identifierRaw)
 		name = name2
 	}
 
 	contracts, err := s.repo.ListContractsFiltered(r.Context(), repository.ContractListFilter{
-		Address:   address,
-		Name:      name,
-		Body:      body,
-		ValidFrom: validFrom,
-		Sort:      sort,
-		SortOrder: sortOrder,
-		Limit:     limit,
-		Offset:    offset,
+		Address:    address,
+		Name:       name,
+		NameSearch: nameSearch,
+		Body:       body,
+		ValidFrom:  validFrom,
+		Sort:       sort,
+		SortOrder:  sortOrder,
+		Limit:      limit,
+		Offset:     offset,
 	})
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Batch-fetch dependent counts for all contracts in the result
+	identifiers := make([]string, 0, len(contracts))
+	for _, c := range contracts {
+		identifiers = append(identifiers, formatTokenIdentifier(c.Address, c.Name))
+	}
+	depCounts, _ := s.repo.GetContractDependentCounts(r.Context(), identifiers)
+
 	out := make([]map[string]interface{}, 0, len(contracts))
 	for _, c := range contracts {
-		out = append(out, toContractOutput(c))
+		out = append(out, toContractOutput(c, depCounts))
 	}
 	if total, err := s.repo.GetTotalContracts(r.Context()); err == nil && total > 0 {
 		meta["count"] = total
@@ -176,6 +187,13 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Batch-fetch dependent counts
+	cIdentifiers := make([]string, 0, len(contracts))
+	for _, c := range contracts {
+		cIdentifiers = append(cIdentifiers, formatTokenIdentifier(c.Address, c.Name))
+	}
+	cDepCounts, _ := s.repo.GetContractDependentCounts(r.Context(), cIdentifiers)
+
 	out := make([]map[string]interface{}, 0, len(contracts))
 	for _, c := range contracts {
 		// If contract in DB but code is empty, fetch on-demand from RPC
@@ -193,7 +211,7 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		out = append(out, toContractOutput(c))
+		out = append(out, toContractOutput(c, cDepCounts))
 	}
 	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}
 	if validFrom != nil {
@@ -230,6 +248,20 @@ func (s *Server) handleFlowGetContractVersion(w http.ResponseWriter, r *http.Req
 	if v == nil {
 		writeAPIError(w, http.StatusNotFound, "version not found")
 		return
+	}
+
+	// On-demand backfill: if code is empty, fetch from RPC at that block height
+	if v.Code == "" && s.client != nil && v.BlockHeight > 0 {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		acc, rpcErr := s.client.GetAccountAtBlockHeight(ctx, flow.HexToAddress(address), v.BlockHeight)
+		cancel()
+		if rpcErr == nil && acc != nil {
+			if b, ok := acc.Contracts[name]; ok && len(b) > 0 {
+				v.Code = string(b)
+				// Persist so future requests are fast
+				_ = s.repo.BackfillContractVersionCode(r.Context(), address, name, v.Version, v.Code)
+			}
+		}
 	}
 
 	out := map[string]interface{}{

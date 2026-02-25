@@ -385,6 +385,87 @@ func (r *Repository) AdminListUnlabeledScriptTemplates(ctx context.Context, minT
 	return result, rows.Err()
 }
 
+// GetScriptTemplatesByHashes batch-looks up template category/label for a set of script hashes.
+// This skips the expensive raw.transactions query that GetScriptTemplatesByTxIDs does.
+func (r *Repository) GetScriptTemplatesByHashes(ctx context.Context, hashes []string) (map[string]TxScriptTemplate, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT script_hash, COALESCE(category, ''), COALESCE(label, ''), COALESCE(description, '')
+		FROM app.script_templates
+		WHERE script_hash = ANY($1::varchar[])`, hashes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]TxScriptTemplate, len(hashes))
+	for rows.Next() {
+		var scriptHash, category, label, description string
+		if err := rows.Scan(&scriptHash, &category, &label, &description); err != nil {
+			return nil, err
+		}
+		out[scriptHash] = TxScriptTemplate{ScriptHash: scriptHash, Category: category, Label: label, Description: description}
+	}
+	return out, rows.Err()
+}
+
+// GetScriptImportsByHashes batch-looks up script imports for a set of script hashes.
+// Returns map[script_hash][]contract_identifier.
+func (r *Repository) GetScriptImportsByHashes(ctx context.Context, hashes []string) (map[string][]string, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT script_hash, contract_identifier
+		FROM app.script_imports
+		WHERE script_hash = ANY($1::varchar[])
+		ORDER BY script_hash`, hashes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string][]string, len(hashes))
+	for rows.Next() {
+		var hash, contractID string
+		if err := rows.Scan(&hash, &contractID); err != nil {
+			return nil, err
+		}
+		out[hash] = append(out[hash], contractID)
+	}
+	return out, rows.Err()
+}
+
+// GetContractDependentCounts returns how many distinct script_hashes import each contract identifier.
+// The identifiers should be in "A.addr.Name" format.
+func (r *Repository) GetContractDependentCounts(ctx context.Context, identifiers []string) (map[string]int64, error) {
+	if len(identifiers) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT contract_identifier, COUNT(DISTINCT script_hash) AS cnt
+		FROM app.script_imports
+		WHERE contract_identifier = ANY($1::varchar[])
+		GROUP BY contract_identifier`, identifiers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]int64, len(identifiers))
+	for rows.Next() {
+		var id string
+		var cnt int64
+		if err := rows.Scan(&id, &cnt); err != nil {
+			return nil, err
+		}
+		out[id] = cnt
+	}
+	return out, rows.Err()
+}
+
 func nilIfEmpty(s string) interface{} {
 	if s == "" {
 		return nil

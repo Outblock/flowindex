@@ -144,6 +144,18 @@ func collectTxIDs(txs []models.Transaction) []string {
 	return out
 }
 
+func collectUniqueScriptHashes(txs []models.Transaction) []string {
+	seen := make(map[string]bool, len(txs))
+	var out []string
+	for _, t := range txs {
+		if t.ScriptHash != "" && !seen[t.ScriptHash] {
+			seen[t.ScriptHash] = true
+			out = append(out, t.ScriptHash)
+		}
+	}
+	return out
+}
+
 func collectTxRefs(txs []models.Transaction) []repository.TxRef {
 	out := make([]repository.TxRef, 0, len(txs))
 	for _, t := range txs {
@@ -243,7 +255,7 @@ func toFlowBlockOutput(b models.Block) map[string]interface{} {
 		"parent_hash":        b.ParentID, // backward-compatible alias used by frontend
 		"height":             b.Height,
 		"timestamp":          b.Timestamp.UTC().Format(time.RFC3339),
-		"tx":                 b.TxCount,
+		"tx_count":           b.TxCount,
 		"system_event_count": b.EventCount,
 		"total_gas_used":     b.TotalGasUsed,
 		"evm_tx_count":       0,
@@ -287,6 +299,9 @@ func toFlowTransactionOutput(t models.Transaction, events []models.Event, contra
 		"contract_outputs":         []string{},
 		"tags":                     tags,
 		"fee":                      fee,
+	}
+	if t.ScriptHash != "" {
+		out["script_hash"] = t.ScriptHash
 	}
 	if t.Script != "" {
 		out["script"] = t.Script
@@ -455,8 +470,12 @@ func toCombinedNFTDetails(ownership models.NFTOwnership) map[string]interface{} 
 	}
 }
 
-func toContractOutput(contract models.SmartContract) map[string]interface{} {
+func toContractOutput(contract models.SmartContract, dependentCounts ...map[string]int64) map[string]interface{} {
 	identifier := formatTokenIdentifier(contract.Address, contract.Name)
+	var depCount int64
+	if len(dependentCounts) > 0 && dependentCounts[0] != nil {
+		depCount = dependentCounts[0][identifier]
+	}
 	return map[string]interface{}{
 		"id":                 identifier,
 		"identifier":         identifier,
@@ -470,9 +489,9 @@ func toContractOutput(contract models.SmartContract) map[string]interface{} {
 		"tags":               []string{},
 		"deployments":        0,
 		"diff":               "",
-		"import_count":       0,
+		"import_count":       depCount,
 		"imported_by":        []string{},
-		"imported_count":     0,
+		"imported_count":     depCount,
 		"parent_contract_id": "",
 		"transaction_hash":   "",
 	}
@@ -838,25 +857,116 @@ func enrichNFTItemOutput(out map[string]interface{}, meta *models.NFTItem) {
 }
 
 // enrichWithTemplates adds script_hash, template_category and template_label fields to transaction outputs.
+// Uses script_hash already present in each output (from the tx query) to look up templates directly,
+// avoiding the expensive raw.transactions re-query.
 func enrichWithTemplates(outputs []map[string]interface{}, templates map[string]repository.TxScriptTemplate) {
 	if len(templates) == 0 {
 		return
 	}
 	for _, out := range outputs {
-		txID, ok := out["id"].(string)
-		if !ok {
+		hash, _ := out["script_hash"].(string)
+		if hash == "" {
 			continue
 		}
-		txID = strings.TrimPrefix(strings.ToLower(txID), "0x")
-		if tmpl, found := templates[txID]; found {
-			if tmpl.ScriptHash != "" {
-				out["script_hash"] = tmpl.ScriptHash
-			}
+		if tmpl, found := templates[hash]; found {
 			if tmpl.Category != "" {
 				out["template_category"] = tmpl.Category
 				out["template_label"] = tmpl.Label
 				out["template_description"] = tmpl.Description
 			}
+		}
+	}
+}
+
+// importCategoryMap maps well-known contract names to human-readable categories.
+var importCategoryMap = map[string]string{
+	"FlowToken":                   "token_transfer",
+	"FungibleToken":               "token_transfer",
+	"NonFungibleToken":            "nft",
+	"MetadataViews":               "nft",
+	"NFTStorefrontV2":             "marketplace",
+	"NFTStorefront":               "marketplace",
+	"TopShot":                     "nft",
+	"TopShotMarketV3":             "marketplace",
+	"FlowStakingCollection":       "staking",
+	"FlowIDTableStaking":          "staking",
+	"LockedTokens":                "staking",
+	"StakingProxy":                "staking",
+	"EVM":                         "evm",
+	"FlowClusterQC":               "system",
+	"FlowDKG":                     "system",
+	"FlowEpoch":                   "system",
+	"FlowServiceAccount":          "system",
+	"FlowFees":                    "system",
+	"IncrementSwapRouter":         "defi",
+	"IncrementSwapPair":           "defi",
+	"SwapRouter":                  "defi",
+	"SwapFactory":                 "defi",
+	"BloctoSwapPair":              "defi",
+	"HybridCustody":               "account_linking",
+	"AccountCreator":              "account_creation",
+	"Crypto":                      "crypto",
+	"FungibleTokenSwitchboard":    "token_transfer",
+	"FungibleTokenMetadataViews":  "token_transfer",
+	"ViewResolver":                "nft",
+	"Burner":                      "token_transfer",
+}
+
+// categoryPriority defines precedence when multiple imports match.
+// Lower number = higher priority.
+var categoryPriority = map[string]int{
+	"marketplace":    1,
+	"defi":           2,
+	"staking":        3,
+	"nft":            4,
+	"evm":            5,
+	"account_linking": 6,
+	"account_creation": 7,
+	"token_transfer": 8,
+	"crypto":         9,
+	"system":         10,
+}
+
+// enrichWithScriptImports derives template_category from script imports for txs that have no category yet.
+func enrichWithScriptImports(outputs []map[string]interface{}, imports map[string][]string) {
+	if len(imports) == 0 {
+		return
+	}
+	for _, out := range outputs {
+		// Skip if already has a category
+		if cat, _ := out["template_category"].(string); cat != "" {
+			continue
+		}
+		hash, _ := out["script_hash"].(string)
+		if hash == "" {
+			continue
+		}
+		contractIDs, ok := imports[hash]
+		if !ok || len(contractIDs) == 0 {
+			continue
+		}
+
+		// Find highest-priority category from imports
+		bestCategory := ""
+		bestPriority := 999
+		for _, cid := range contractIDs {
+			// Extract contract name from identifier like "A.1654653399040a61.FlowToken"
+			name := cid
+			if parts := strings.SplitN(cid, ".", 3); len(parts) == 3 {
+				name = parts[2]
+			}
+			if cat, found := importCategoryMap[name]; found {
+				if p, ok := categoryPriority[cat]; ok && p < bestPriority {
+					bestPriority = p
+					bestCategory = cat
+				}
+			}
+		}
+		if bestCategory != "" {
+			out["template_category"] = bestCategory
+		} else {
+			// Has imports but none matched a known category — label as generic contract_call
+			out["template_category"] = "contract_call"
 		}
 	}
 }

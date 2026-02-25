@@ -31,6 +31,10 @@ func (m *mockFlowClient) GetAccount(ctx context.Context, address flowsdk.Address
 	return m.account, nil
 }
 
+func (m *mockFlowClient) GetAccountAtBlockHeight(ctx context.Context, address flowsdk.Address, blockHeight uint64) (*flowsdk.Account, error) {
+	return m.account, nil
+}
+
 func (m *mockFlowClient) ExecuteScriptAtLatestBlock(ctx context.Context, script []byte, args []cadence.Value) (cadence.Value, error) {
 	return cadence.NewVoid(), nil
 }

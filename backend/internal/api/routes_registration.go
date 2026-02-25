@@ -140,6 +140,10 @@ func registerStatusRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/public/v1/totalSupply", s.handleCompatTotalSupply).Methods("GET", "OPTIONS")
 	r.HandleFunc("/public/v1/totalSupplyWithDecimal", s.handleCompatTotalSupplyWithDecimal).Methods("GET", "OPTIONS")
 	r.HandleFunc("/public/v1/epoch/payout", s.handlePublicEpochPayout).Methods("GET", "OPTIONS")
+
+	// Analytics endpoints
+	r.HandleFunc("/analytics/daily", s.handleAnalyticsDaily).Methods("GET", "OPTIONS")
+	r.HandleFunc("/analytics/transfers/daily", s.handleAnalyticsTransfersDaily).Methods("GET", "OPTIONS")
 }
 
 func registerDeferredRoutes(r *mux.Router, s *Server) {

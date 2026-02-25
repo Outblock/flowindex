@@ -26,10 +26,10 @@ function Header() {
     if (/^\d+$/.test(query)) {
       navigate({ to: '/blocks/$height', params: { height: query } });
     } else if (/^0x[a-fA-F0-9]{64}$/.test(query)) {
-      // EVM tx hash -> try Flow tx route (backend resolves if mapping exists)
-      navigate({ to: '/tx/$txId', params: { txId: query }, search: { tab: undefined } });
+      // EVM tx hash -> resolve to Cadence tx via /txs/evm route
+      navigate({ to: '/txs/evm/$txId', params: { txId: query } } as any);
     } else if (/^[a-fA-F0-9]{64}$/.test(query)) {
-      navigate({ to: '/tx/$txId', params: { txId: query }, search: { tab: undefined } });
+      navigate({ to: '/txs/$txId', params: { txId: query }, search: { tab: undefined } });
     } else if (/^0x[a-fA-F0-9]{40}$/.test(query)) {
       // COA (EVM) address -> resolve to Flow address via /flow/coa/{address}
       try {
@@ -55,7 +55,7 @@ function Header() {
     } else if (query.startsWith('0x')) {
       navigate({ to: '/accounts/$address', params: { address: query } });
     } else {
-      navigate({ to: '/tx/$txId', params: { txId: query }, search: { tab: undefined } });
+      navigate({ to: '/txs/$txId', params: { txId: query }, search: { tab: undefined } });
     }
     setSearchQuery('');
   };

@@ -32,6 +32,9 @@ func (c *realFlowClient) GetTransactionResult(ctx context.Context, txID flowsdk.
 func (c *realFlowClient) GetAccount(ctx context.Context, address flowsdk.Address) (*flowsdk.Account, error) {
 	return c.client.GetAccount(ctx, address)
 }
+func (c *realFlowClient) GetAccountAtBlockHeight(ctx context.Context, address flowsdk.Address, blockHeight uint64) (*flowsdk.Account, error) {
+	return c.client.GetAccountAtBlockHeight(ctx, address, blockHeight)
+}
 func (c *realFlowClient) ExecuteScriptAtLatestBlock(ctx context.Context, script []byte, args []cadence.Value) (cadence.Value, error) {
 	return c.client.ExecuteScriptAtLatestBlock(ctx, script, args)
 }
