@@ -527,7 +527,7 @@ CREATE TABLE IF NOT EXISTS app.market_prices (
 CREATE INDEX IF NOT EXISTS idx_market_prices_asset_currency_time
     ON app.market_prices (asset, currency, as_of DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_market_prices_daily_unique
-    ON app.market_prices (asset, currency, (DATE_TRUNC('day', as_of)));
+    ON app.market_prices (asset, currency, CAST(as_of AT TIME ZONE 'UTC' AS DATE));
 
 -- Migrate app.contracts → app.smart_contracts for existing installs.
 ALTER TABLE IF EXISTS app.smart_contracts

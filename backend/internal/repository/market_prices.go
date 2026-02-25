@@ -112,7 +112,7 @@ func (r *Repository) BulkInsertMarketPrices(ctx context.Context, prices []Market
 	// Ensure the unique index exists (idempotent).
 	_, err := r.db.Exec(ctx, `
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_market_prices_daily_unique
-		    ON app.market_prices (asset, currency, (DATE_TRUNC('day', as_of)));
+		    ON app.market_prices (asset, currency, CAST(as_of AT TIME ZONE 'UTC' AS DATE));
 	`)
 	if err != nil {
 		return 0, fmt.Errorf("ensure daily unique index: %w", err)
@@ -127,7 +127,7 @@ func (r *Repository) BulkInsertMarketPrices(ctx context.Context, prices []Market
 			INSERT INTO app.market_prices (
 				asset, currency, price, price_change_24h, market_cap, source, as_of, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-			ON CONFLICT (asset, currency, (DATE_TRUNC('day', as_of))) DO NOTHING
+			ON CONFLICT (asset, currency, CAST(as_of AT TIME ZONE 'UTC' AS DATE)) DO NOTHING
 		`, asset, currency, p.Price, p.PriceChange24h, p.MarketCap, p.Source, p.AsOf)
 		if err != nil {
 			return total, fmt.Errorf("insert market price at %v: %w", p.AsOf, err)
