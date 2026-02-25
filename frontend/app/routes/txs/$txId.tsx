@@ -141,36 +141,72 @@ export const Route = createFileRoute('/txs/$txId')({
     loader: async ({ params }) => {
         try {
             const baseUrl = await resolveApiBaseUrl();
-            let res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}?lite=true`);
-            // If direct lookup fails and ID looks like an EVM hash, try evm_hash query
-            if (!res.ok && /^0x[a-fA-F0-9]{64}$/.test(params.txId)) {
-                const evmRes = await fetch(`${baseUrl}/flow/transaction?evm_hash=${encodeURIComponent(params.txId)}&lite=true&limit=1`);
-                if (evmRes.ok) res = evmRes;
+            const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}?lite=true`);
+            if (res.ok) {
+                const json = await res.json();
+                const rawTx: any = json?.data?.[0] ?? json;
+                const transformedTx = {
+                    ...rawTx,
+                    type: rawTx.type || (rawTx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
+                    payer: rawTx.payer_address || rawTx.payer || 'Unknown',
+                    proposer: rawTx.proposer_address || rawTx.proposer || 'Unknown',
+                    proposerKeyIndex: rawTx.proposer_key_index ?? -1,
+                    proposerSequenceNumber: rawTx.proposer_sequence_number ?? -1,
+                    blockHeight: rawTx.block_height,
+                    gasLimit: rawTx.gas_limit,
+                    gasUsed: rawTx.gas_used,
+                    events: rawTx.events || [],
+                    status: rawTx.status || 'UNKNOWN',
+                    errorMessage: rawTx.error_message || rawTx.error,
+                    arguments: rawTx.arguments
+                };
+                return { transaction: transformedTx, error: null as string | null };
             }
-            if (!res.ok) {
-                if (res.status === 404) {
-                    return { transaction: null, error: 'Transaction not found' };
+            // If direct lookup fails and ID looks like an EVM hash, try Blockscout proxy
+            if (/^0x[a-fA-F0-9]{64}$/.test(params.txId)) {
+                const evmRes = await fetch(`${baseUrl}/flow/evm/transaction/${params.txId}`);
+                if (evmRes.ok) {
+                    const evm: any = await evmRes.json();
+                    const transformedTx = {
+                        id: params.txId,
+                        is_evm: true,
+                        evm_hash: evm.hash || params.txId,
+                        type: 'EVM',
+                        status: evm.status === 'ok' || evm.result === 'success' ? 'SEALED' : 'FAILED',
+                        block_height: evm.block_number || evm.block,
+                        blockHeight: evm.block_number || evm.block,
+                        payer: evm.from?.hash || evm.from || 'Unknown',
+                        proposer: evm.from?.hash || evm.from || 'Unknown',
+                        proposerKeyIndex: -1,
+                        proposerSequenceNumber: -1,
+                        gasLimit: evm.gas_limit,
+                        gasUsed: evm.gas_used,
+                        events: [],
+                        errorMessage: evm.revert_reason || evm.error || null,
+                        arguments: null,
+                        evm_data: {
+                            hash: evm.hash || params.txId,
+                            from: evm.from?.hash || evm.from,
+                            to: evm.to?.hash || evm.to,
+                            value: evm.value,
+                            gas_used: evm.gas_used,
+                            gas_limit: evm.gas_limit,
+                            gas_price: evm.gas_price,
+                            nonce: evm.nonce,
+                            block_number: evm.block_number || evm.block,
+                            status: evm.status,
+                            method: evm.method,
+                            timestamp: evm.timestamp,
+                            fee: evm.fee?.value,
+                        },
+                    };
+                    return { transaction: transformedTx, error: null as string | null };
                 }
-                return { transaction: null, error: 'Failed to load transaction details' };
             }
-            const json = await res.json();
-            const rawTx: any = json?.data?.[0] ?? json;
-            const transformedTx = {
-                ...rawTx,
-                type: rawTx.type || (rawTx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
-                payer: rawTx.payer_address || rawTx.payer || 'Unknown',
-                proposer: rawTx.proposer_address || rawTx.proposer || 'Unknown',
-                proposerKeyIndex: rawTx.proposer_key_index ?? -1,
-                proposerSequenceNumber: rawTx.proposer_sequence_number ?? -1,
-                blockHeight: rawTx.block_height,
-                gasLimit: rawTx.gas_limit,
-                gasUsed: rawTx.gas_used,
-                events: rawTx.events || [],
-                status: rawTx.status || 'UNKNOWN',
-                errorMessage: rawTx.error_message || rawTx.error,
-                arguments: rawTx.arguments
-            };
-            return { transaction: transformedTx, error: null as string | null };
+            if (res.status === 404) {
+                return { transaction: null, error: 'Transaction not found' };
+            }
+            return { transaction: null, error: 'Failed to load transaction details' };
         } catch (e) {
             const message = (e as any)?.message;
             console.error('Failed to load transaction data', { message });

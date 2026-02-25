@@ -7,18 +7,19 @@ export const Route = createFileRoute('/txs/evm/$txId')({
         const evmHash = params.txId.startsWith('0x') ? params.txId : `0x${params.txId}`;
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/transaction?evm_hash=${encodeURIComponent(evmHash)}&lite=true&limit=1`);
+            // Try direct Cadence lookup first (works if EVM hash is indexed in evm_tx_hashes)
+            const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(evmHash)}?lite=true`);
             if (res.ok) {
                 const json = await res.json();
                 const rawTx: any = json?.data?.[0] ?? json;
-                if (rawTx?.id) {
+                if (rawTx?.id && rawTx.id !== evmHash) {
                     throw redirect({ to: '/txs/$txId', params: { txId: rawTx.id }, search: {} });
                 }
             }
         } catch (e) {
             if ((e as any)?.isRedirect || (e as any)?.to) throw e;
         }
-        // If resolution failed, try loading directly with the EVM hash
+        // Redirect to main tx page with EVM hash — it will fetch from Blockscout proxy
         throw redirect({ to: '/txs/$txId', params: { txId: evmHash }, search: {} });
     },
 })
