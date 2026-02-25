@@ -90,14 +90,14 @@ function NodesCard({ activeNodes, roleCounts }: { activeNodes?: number; roleCoun
         {roleCounts && total > 0 && (
           <>
             {/* Stacked bar */}
-            <div className="flex h-1.5 rounded-full overflow-hidden mb-2">
+            <div className="flex h-1.5 overflow-hidden mb-2">
               {[1, 2, 3, 4, 5].map((r) => {
                 const count = roleCounts[r] || 0;
                 if (!count) return null;
                 return (
                   <motion.div
                     key={r}
-                    className={`${ROLE_META[r].color} first:rounded-l-full last:rounded-r-full`}
+                    className={ROLE_META[r].color}
                     initial={{ width: 0 }}
                     animate={{ width: `${(count / total) * 100}%` }}
                     transition={{ duration: 0.8, delay: r * 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -113,7 +113,7 @@ function NodesCard({ activeNodes, roleCounts }: { activeNodes?: number; roleCoun
                 if (!count) return null;
                 return (
                   <div key={r} className="flex items-center gap-1">
-                    <div className={`w-1.5 h-1.5 rounded-full ${ROLE_META[r].color}`} />
+                    <div className={`w-1.5 h-1.5 ${ROLE_META[r].color}`} />
                     <span className="text-[9px] text-zinc-500 dark:text-gray-500 font-mono">
                       {ROLE_META[r].label} {count}
                     </span>
