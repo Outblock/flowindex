@@ -22,7 +22,7 @@ export const Route = createFileRoute('/blocks/$height')({
             const rawTxs: any[] = txRes.data?.data ?? [];
             const transformedBlock = {
                 ...rawBlock,
-                txCount: rawBlock.tx ?? rawTxs.length,
+                txCount: rawBlock.tx_count ?? rawBlock.tx ?? rawTxs.length,
                 transactions: rawTxs.map(tx => ({
                     ...tx,
                     type: tx.tags?.[0] || (tx.status === 'SEALED' ? 'TRANSFER' : 'PENDING'),
