@@ -243,7 +243,7 @@ func toFlowBlockOutput(b models.Block) map[string]interface{} {
 		"parent_hash":        b.ParentID, // backward-compatible alias used by frontend
 		"height":             b.Height,
 		"timestamp":          b.Timestamp.UTC().Format(time.RFC3339),
-		"tx":                 b.TxCount,
+		"tx_count":           b.TxCount,
 		"system_event_count": b.EventCount,
 		"total_gas_used":     b.TotalGasUsed,
 		"evm_tx_count":       0,
