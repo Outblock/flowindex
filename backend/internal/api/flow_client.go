@@ -14,5 +14,6 @@ type FlowClient interface {
 	GetTransaction(ctx context.Context, txID flowsdk.Identifier) (*flowsdk.Transaction, error)
 	GetTransactionResult(ctx context.Context, txID flowsdk.Identifier) (*flowsdk.TransactionResult, error)
 	GetAccount(ctx context.Context, address flowsdk.Address) (*flowsdk.Account, error)
+	GetAccountAtBlockHeight(ctx context.Context, address flowsdk.Address, blockHeight uint64) (*flowsdk.Account, error)
 	ExecuteScriptAtLatestBlock(ctx context.Context, script []byte, args []cadence.Value) (cadence.Value, error)
 }

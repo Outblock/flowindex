@@ -1061,6 +1061,15 @@ func (r *Repository) GetContractVersion(ctx context.Context, address, name strin
 	return &v, nil
 }
 
+// BackfillContractVersionCode updates a contract version's code when it was originally stored empty.
+func (r *Repository) BackfillContractVersionCode(ctx context.Context, address, name string, version int, code string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE app.contract_versions SET code = $4
+		WHERE address = $1 AND name = $2 AND version = $3 AND (code IS NULL OR code = '')`,
+		hexToBytes(address), name, version, code)
+	return err
+}
+
 // CountContractDependents counts how many other contracts import the given contract.
 // Searches for Cadence import patterns like "import ContractName from 0xAddress".
 func (r *Repository) CountContractDependents(ctx context.Context, address, name string) (int, error) {

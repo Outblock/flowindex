@@ -250,6 +250,20 @@ func (s *Server) handleFlowGetContractVersion(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// On-demand backfill: if code is empty, fetch from RPC at that block height
+	if v.Code == "" && s.client != nil && v.BlockHeight > 0 {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		acc, rpcErr := s.client.GetAccountAtBlockHeight(ctx, flow.HexToAddress(address), v.BlockHeight)
+		cancel()
+		if rpcErr == nil && acc != nil {
+			if b, ok := acc.Contracts[name]; ok && len(b) > 0 {
+				v.Code = string(b)
+				// Persist so future requests are fast
+				_ = s.repo.BackfillContractVersionCode(r.Context(), address, name, v.Version, v.Code)
+			}
+		}
+	}
+
 	out := map[string]interface{}{
 		"address":        formatAddressV1(v.Address),
 		"name":           v.Name,
