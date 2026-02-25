@@ -109,12 +109,19 @@ jobs:
             .
           docker push ${{ env.REGISTRY }}/frontend --all-tags
 
-      - name: Deploy frontend to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: flowindex-frontend
-          region: us-central1
-          image: ${{ env.REGISTRY }}/frontend:${{ github.sha }}
+      - name: Deploy frontend (pull & restart on GCE)
+        run: |
+          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
+            docker pull ${{ env.REGISTRY }}/frontend:${{ github.sha }} && \
+            docker stop frontend 2>/dev/null; docker rm frontend 2>/dev/null; \
+            docker run -d --restart=always --name frontend \
+              --network=host \
+              -e BACKEND_API=http://10.128.0.2:8080 \
+              -e BACKEND_WS=http://10.128.0.2:8080 \
+              -e VITE_API_URL=https://flowindex.io/api \
+              ${{ env.REGISTRY }}/frontend:${{ github.sha }}
+          '
 
   build-docs:
     needs: changes
