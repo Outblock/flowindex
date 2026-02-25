@@ -960,6 +960,9 @@ func enrichWithScriptImports(outputs []map[string]interface{}, imports map[strin
 		}
 		if bestCategory != "" {
 			out["template_category"] = bestCategory
+		} else {
+			// Has imports but none matched a known category — label as generic contract_call
+			out["template_category"] = "contract_call"
 		}
 	}
 }
