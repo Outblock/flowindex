@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate, redirect } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { useState, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
@@ -204,6 +204,20 @@ export const Route = createFileRoute('/txs/$txId')({
                 }
             }
             if (res.status === 404) {
+                // Fallback: try EVM hash lookup — redirect to /txs/evm/:hash
+                const evmHash = params.txId.startsWith('0x') ? params.txId : `0x${params.txId}`;
+                try {
+                    const evmLookup = await fetch(`${baseUrl}/flow/transaction?evm_hash=${encodeURIComponent(evmHash)}&lite=true&limit=1`);
+                    if (evmLookup.ok) {
+                        const evmJson = await evmLookup.json();
+                        const cadenceTx = evmJson?.data?.[0];
+                        if (cadenceTx?.id) {
+                            throw redirect({ to: '/txs/evm/$txId', params: { txId: evmHash } } as any);
+                        }
+                    }
+                } catch (e: any) {
+                    if (e?.isRedirect || e?.to) throw e;
+                }
                 return { transaction: null, error: 'Transaction not found' };
             }
             return { transaction: null, error: 'Failed to load transaction details' };
