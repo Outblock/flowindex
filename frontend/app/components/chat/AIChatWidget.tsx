@@ -5,7 +5,7 @@ import type { UIMessage } from 'ai';
 import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.dev';
+const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'http://localhost:3001';
 
 /* ── SQL Result Table (compact, inline) ── */
 
@@ -372,11 +372,47 @@ const SUGGESTIONS = [
 
 /* ── Main Widget ── */
 
+const MIN_WIDTH = 360;
+const MAX_WIDTH = 900;
+const DEFAULT_WIDTH = 420;
+
 export default function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+  const isDragging = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Drag-to-resize handler
+  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent | TouchEvent) => {
+      if (!isDragging.current) return;
+      const clientX = 'touches' in ev ? ev.touches[0].clientX : ev.clientX;
+      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - clientX));
+      setPanelWidth(newWidth);
+    };
+
+    const onUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove);
+    window.addEventListener('touchend', onUp);
+  }, []);
 
   const { messages, sendMessage, status, stop, setMessages } = useChat({
     transport: new DefaultChatTransport({
@@ -456,8 +492,18 @@ export default function AIChatWidget() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: '100%', opacity: 0 }}
               transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-              className="fixed top-0 right-0 h-full z-[71] w-full md:w-[420px] bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-white/10 flex flex-col shadow-2xl"
+              style={{ width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}
+              className="fixed top-0 right-0 h-full z-[71] w-full md:w-auto bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-white/10 flex flex-col shadow-2xl"
             >
+              {/* Resize handle */}
+              <div
+                onMouseDown={handleDragStart}
+                onTouchStart={handleDragStart}
+                className="hidden md:flex absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize items-center justify-center group hover:bg-nothing-green/10 active:bg-nothing-green/20 transition-colors z-10"
+                title="Drag to resize"
+              >
+                <div className="w-0.5 h-8 rounded-full bg-zinc-300 dark:bg-zinc-600 group-hover:bg-nothing-green group-active:bg-nothing-green transition-colors" />
+              </div>
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-white/10 shrink-0">
                 <div className="flex items-center gap-2">
