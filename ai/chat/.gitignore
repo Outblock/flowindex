@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+chroma_data/
+
+# Environment
+.env
+
+# Node
+web/node_modules/
+web/.next/
+
+# Data
+*.heapsnapshot
