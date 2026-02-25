@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "bun next dev --port 3001",
-    "build": "bun next build",
-    "start": "bun next start --port 3001"
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001"
   },
   "keywords": [],
   "author": "",
@@ -14,6 +14,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.42",
     "@ai-sdk/mcp": "^1.0.20",
+    "@ai-sdk/react": "^3.0.101",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@rive-app/react-webgl2": "^4.26.2",
     "@streamdown/cjk": "^1.0.2",
@@ -43,6 +44,7 @@
     "react-jsx-parser": "^2.4.1",
     "react-markdown": "^9.0.0",
     "remark-gfm": "^4.0.1",
+    "shadcn": "^3.8.5",
     "shiki": "^3.22.0",
     "streamdown": "^2.2.0",
     "tailwind-merge": "^3.4.0",

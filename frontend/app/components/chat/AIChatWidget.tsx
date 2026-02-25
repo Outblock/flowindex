@@ -5,7 +5,7 @@ import type { UIMessage } from 'ai';
 import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.dev';
+const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io';
 
 /* ── SQL Result Table (compact, inline) ── */
 
