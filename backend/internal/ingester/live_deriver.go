@@ -349,67 +349,120 @@ func (d *LiveDeriver) repairFailedRanges(ctx context.Context) {
 	case <-time.After(30 * time.Second):
 	}
 
+	// Configurable concurrency per worker (default 4).
+	repairConcurrency := 4
+	if v := os.Getenv("REPAIR_CONCURRENCY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			repairConcurrency = n
+		}
+	}
+	// Configurable batch size (default 2000).
+	repairBatch := 2000
+	if v := os.Getenv("REPAIR_BATCH"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			repairBatch = n
+		}
+	}
+
 	// Build processor lookup map.
 	procMap := make(map[string]Processor)
 	for _, p := range d.processors {
 		procMap[p.Name()] = p
 	}
 
+	log.Printf("[repair] Starting with concurrency=%d batch=%d", repairConcurrency, repairBatch)
+
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		repaired := 0
-		for name, proc := range procMap {
-			if ctx.Err() != nil {
-				return
-			}
-			blocks, err := d.repo.ListUnresolvedErrorsByWorker(ctx, name, 500)
-			if err != nil {
-				log.Printf("[repair] Failed to list errors for %s: %v", name, err)
-				continue
-			}
-			if len(blocks) == 0 {
-				continue
-			}
-			log.Printf("[repair] %s: found %d failed block(s) to repair (%d..%d)",
-				name, len(blocks), blocks[0].BlockHeight, blocks[len(blocks)-1].BlockHeight)
 
-			// Group consecutive blocks into ranges for batch processing.
-			ranges := groupConsecutiveBlocks(blocks, 100, d.chunkSize)
-			for _, rng := range ranges {
-				if ctx.Err() != nil {
-					return
-				}
-				procCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-				err := safeProcessRangeLive(procCtx, proc, rng[0], rng[1])
-				cancel()
-				if err != nil {
-					log.Printf("[repair] %s range [%d,%d) failed: %v — will retry later", name, rng[0], rng[1], err)
-					// Don't mark as resolved; next cycle will pick it up again.
-					time.Sleep(2 * time.Second) // Back off on failure.
-					continue
-				}
-				// Mark all errors in this range as resolved.
-				resolved, _ := d.repo.ResolveErrorsInRange(ctx, name, rng[0], rng[1])
-				repaired += int(resolved)
-				log.Printf("[repair] %s range [%d,%d) repaired (%d errors resolved)", name, rng[0], rng[1], resolved)
-				time.Sleep(500 * time.Millisecond) // Gentle pacing.
+		// Run all workers in parallel, each with its own concurrency pool.
+		// Workers that do heavy upserts (accounts_worker) use lower concurrency to avoid deadlocks.
+		var wg sync.WaitGroup
+		totalRepaired := make([]int64, len(d.processors))
+		i := 0
+		for name, proc := range procMap {
+			wg.Add(1)
+			workerConc := repairConcurrency
+			if name == "accounts_worker" || name == "token_worker" {
+				workerConc = 1 // serialize to avoid deadlocks on upsert
 			}
+			go func(name string, proc Processor, idx, conc int) {
+				defer wg.Done()
+				totalRepaired[idx] = d.repairWorker(ctx, name, proc, conc, repairBatch)
+			}(name, proc, i, workerConc)
+			i++
 		}
-		if repaired == 0 {
-			// No more work; sleep longer before checking again.
-			log.Printf("[repair] No unresolved errors found, sleeping 5 minutes")
+		wg.Wait()
+
+		var sum int64
+		for _, n := range totalRepaired {
+			sum += n
+		}
+		if sum == 0 {
+			log.Printf("[repair] No unresolved errors found, sleeping 2 minutes")
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(5 * time.Minute):
+			case <-time.After(2 * time.Minute):
 			}
 		} else {
-			log.Printf("[repair] Repaired %d error(s) this cycle, checking for more...", repaired)
-			time.Sleep(5 * time.Second)
+			log.Printf("[repair] Cycle done: repaired %d error(s) total, continuing...", sum)
+			time.Sleep(2 * time.Second)
 		}
 	}
+}
+
+// repairWorker repairs errors for a single processor with concurrency.
+func (d *LiveDeriver) repairWorker(ctx context.Context, name string, proc Processor, concurrency, batchSize int) int64 {
+	blocks, err := d.repo.ListUnresolvedErrorsByWorker(ctx, name, batchSize)
+	if err != nil {
+		log.Printf("[repair] Failed to list errors for %s: %v", name, err)
+		return 0
+	}
+	if len(blocks) == 0 {
+		return 0
+	}
+	log.Printf("[repair] %s: found %d failed block(s) to repair (%d..%d)",
+		name, len(blocks), blocks[0].BlockHeight, blocks[len(blocks)-1].BlockHeight)
+
+	ranges := groupConsecutiveBlocks(blocks, 100, d.chunkSize)
+
+	var repaired int64
+	sem := make(chan struct{}, concurrency)
+	var mu sync.Mutex
+
+	var wg sync.WaitGroup
+	for _, rng := range ranges {
+		if ctx.Err() != nil {
+			break
+		}
+		rng := rng
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			procCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			err := safeProcessRangeLive(procCtx, proc, rng[0], rng[1])
+			cancel()
+			if err != nil {
+				log.Printf("[repair] %s range [%d,%d) failed: %v", name, rng[0], rng[1], err)
+				return
+			}
+			resolved, _ := d.repo.ResolveErrorsInRange(ctx, name, rng[0], rng[1])
+			mu.Lock()
+			repaired += resolved
+			mu.Unlock()
+			if resolved > 0 {
+				log.Printf("[repair] %s range [%d,%d) repaired (%d errors resolved)", name, rng[0], rng[1], resolved)
+			}
+		}()
+	}
+	wg.Wait()
+	return repaired
 }
 
 // groupConsecutiveBlocks groups failed blocks into [from, to) ranges.
