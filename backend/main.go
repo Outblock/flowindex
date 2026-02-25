@@ -364,9 +364,9 @@ func main() {
 		StartBlock:       startBlock,
 		Mode:             "forward",
 		MaxReorgDepth:    maxReorgDepth,
-		OnNewBlock:       api.BroadcastNewBlock,
-		OnNewTransaction: api.BroadcastNewTransaction,
-		OnIndexedRange:   onIndexedRange,
+		OnNewBlock:        api.BroadcastNewBlock,
+		OnNewTransactions: api.MakeBroadcastNewTransactions(repo),
+		OnIndexedRange:    onIndexedRange,
 	})
 
 	// Backward Ingester (History Backfill)
