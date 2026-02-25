@@ -502,10 +502,14 @@ CREATE INDEX IF NOT EXISTS idx_address_txs_address_height ON app.address_transac
 CREATE TABLE IF NOT EXISTS app.daily_stats (
     date DATE PRIMARY KEY,
     tx_count BIGINT DEFAULT 0,
+    evm_tx_count BIGINT DEFAULT 0,
     active_accounts BIGINT DEFAULT 0,
     new_contracts BIGINT DEFAULT 0,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE IF EXISTS app.daily_stats
+  ADD COLUMN IF NOT EXISTS evm_tx_count BIGINT DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS app.market_prices (
     id BIGSERIAL PRIMARY KEY,
