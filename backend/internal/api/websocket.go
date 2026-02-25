@@ -348,10 +348,10 @@ func deriveTagsFromEvents(txs []models.Transaction, events []models.Event) map[s
 			addTag(evt.TransactionID, "STAKING")
 		case strings.Contains(evtType, "LiquidStaking") || strings.Contains(evtType, "stFlowToken"):
 			addTag(evt.TransactionID, "LIQUID_STAKING")
-		case strings.Contains(evtType, "FungibleToken.Deposited") || strings.Contains(evtType, "FungibleToken.Withdrawn"):
-			addTag(evt.TransactionID, "FT_TRANSFER")
-		case strings.Contains(evtType, "NonFungibleToken.Deposited") || strings.Contains(evtType, "NonFungibleToken.Withdrawn"):
-			addTag(evt.TransactionID, "NFT_TRANSFER")
+		// Note: FungibleToken.Deposited/Withdrawn and NonFungibleToken.Deposited/Withdrawn
+		// are NOT matched here — they fire on nearly every tx due to gas fees.
+		// FT_TRANSFER/NFT_TRANSFER tags are derived by tx_contracts_worker from
+		// actual token_transfers records (which filter out fee movements).
 		}
 	}
 

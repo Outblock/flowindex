@@ -140,9 +140,6 @@ function mapTemplateCategoryToActivity(category: string, templateLabel?: string)
     for (const cat of cats) {
         const style = templateCategoryStyles[cat];
         if (style) {
-            if (templateLabel) {
-                return { ...style, label: templateLabel };
-            }
             return style;
         }
     }
