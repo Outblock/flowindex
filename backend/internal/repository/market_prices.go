@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,11 +20,14 @@ type MarketPrice struct {
 }
 
 func (r *Repository) InsertMarketPrice(ctx context.Context, p MarketPrice) error {
+	asset := strings.ToUpper(strings.TrimSpace(p.Asset))
+	currency := strings.ToUpper(strings.TrimSpace(p.Currency))
+
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO app.market_prices (
 			asset, currency, price, price_change_24h, market_cap, source, as_of, created_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-	`, p.Asset, p.Currency, p.Price, p.PriceChange24h, p.MarketCap, p.Source, p.AsOf)
+	`, asset, currency, p.Price, p.PriceChange24h, p.MarketCap, p.Source, p.AsOf)
 	return err
 }
 
@@ -32,7 +36,7 @@ func (r *Repository) GetLatestMarketPrice(ctx context.Context, asset, currency s
 	err := r.db.QueryRow(ctx, `
 		SELECT asset, currency, price, price_change_24h, market_cap, source, as_of, created_at
 		FROM app.market_prices
-		WHERE asset = $1 AND currency = $2
+		WHERE UPPER(asset) = UPPER($1) AND UPPER(currency) = UPPER($2)
 		ORDER BY as_of DESC
 		LIMIT 1
 	`, asset, currency).Scan(
@@ -47,4 +51,3 @@ func (r *Repository) GetLatestMarketPrice(ctx context.Context, asset, currency s
 func IsNoRows(err error) bool {
 	return err == pgx.ErrNoRows
 }
-
