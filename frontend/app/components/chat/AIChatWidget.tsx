@@ -1,13 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useChat } from '@ai-sdk/react';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, RotateCcw, Loader2, Sparkles, Database, ChevronDown, Copy, Check, Download, Search, Bot } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
-import sql from 'react-syntax-highlighter/dist/esm/languages/hljs/sql';
-import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
-
-SyntaxHighlighter.registerLanguage('sql', sql);
 
 const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.dev';
 
@@ -150,21 +145,9 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
           {copied ? <Check size={12} className="text-nothing-green" /> : <Copy size={12} />}
         </button>
       </div>
-      <SyntaxHighlighter
-        language={language}
-        style={atomOneDark}
-        customStyle={{
-          margin: 0,
-          padding: '12px',
-          fontSize: '11px',
-          lineHeight: '1.5',
-          background: 'transparent',
-          backgroundColor: 'rgb(24 24 27)',
-        }}
-        wrapLongLines
-      >
-        {code}
-      </SyntaxHighlighter>
+      <pre className="p-3 text-[11px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
+        <code>{code}</code>
+      </pre>
     </div>
   );
 }
@@ -390,10 +373,11 @@ const SUGGESTIONS = [
 
 export default function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const { messages, input, setInput, handleSubmit, status, stop, setMessages } = useChat({
+  const { messages, sendMessage, status, stop, setMessages } = useChat({
     api: `${AI_CHAT_URL}/api/chat`,
   });
 
@@ -411,20 +395,11 @@ export default function AIChatWidget() {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  const handleSendSuggestion = (text: string) => {
-    setInput(text);
-    // Submit using a synthetic form event
-    const form = document.createElement('form');
-    const event = new Event('submit', { bubbles: true, cancelable: true });
-    // Instead, just set and let user click send, or use sendMessage approach:
-    // Actually, let's use the AI SDK properly
-    setInput(text);
-    // We need to trigger submit after input is set
-    setTimeout(() => {
-      const formEl = document.getElementById('ai-chat-form') as HTMLFormElement | null;
-      if (formEl) formEl.requestSubmit();
-    }, 0);
-  };
+  const handleSend = useCallback((text: string) => {
+    if (!text.trim() || isStreaming) return;
+    sendMessage({ text });
+    setInput('');
+  }, [sendMessage, isStreaming]);
 
   const handleClear = () => {
     setMessages([]);
@@ -433,8 +408,7 @@ export default function AIChatWidget() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      const formEl = document.getElementById('ai-chat-form') as HTMLFormElement | null;
-      if (formEl) formEl.requestSubmit();
+      handleSend(input);
     }
   };
 
@@ -533,7 +507,7 @@ export default function AIChatWidget() {
                       {SUGGESTIONS.map((s) => (
                         <button
                           key={s}
-                          onClick={() => handleSendSuggestion(s)}
+                          onClick={() => handleSend(s)}
                           className="text-left px-3 py-2.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 rounded-sm hover:border-nothing-green/30 hover:text-zinc-900 dark:hover:text-white hover:bg-nothing-green/5 transition-all"
                         >
                           {s}
@@ -561,11 +535,7 @@ export default function AIChatWidget() {
 
               {/* Input */}
               <div className="shrink-0 border-t border-zinc-200 dark:border-white/10 px-4 py-3">
-                <form
-                  id="ai-chat-form"
-                  onSubmit={handleSubmit}
-                  className="flex items-end gap-2"
-                >
+                <div className="flex items-end gap-2">
                   <div className="flex-1 relative">
                     <textarea
                       ref={inputRef}
@@ -581,7 +551,7 @@ export default function AIChatWidget() {
                   {isStreaming ? (
                     <button
                       type="button"
-                      onClick={stop}
+                      onClick={() => stop()}
                       className="shrink-0 w-9 h-9 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors"
                       title="Stop"
                     >
@@ -589,7 +559,8 @@ export default function AIChatWidget() {
                     </button>
                   ) : (
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={() => handleSend(input)}
                       disabled={!input.trim()}
                       className="shrink-0 w-9 h-9 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       title="Send"
@@ -597,7 +568,7 @@ export default function AIChatWidget() {
                       <Send size={14} />
                     </button>
                   )}
-                </form>
+                </div>
                 <div className="flex items-center gap-1.5 mt-2">
                   <Sparkles size={9} className="text-zinc-400" />
                   <span className="text-[9px] text-zinc-400">
