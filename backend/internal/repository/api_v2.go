@@ -1047,6 +1047,23 @@ func (r *Repository) GetContractVersion(ctx context.Context, address, name strin
 	return &v, nil
 }
 
+// CountContractDependents counts how many other contracts import the given contract.
+// Searches for Cadence import patterns like "import ContractName from 0xAddress".
+func (r *Repository) CountContractDependents(ctx context.Context, address, name string) (int, error) {
+	// Cadence import: "import TopShot from 0x0b2a3299cc857e29"
+	pattern := "import " + name + " from 0x" + strings.TrimPrefix(strings.ToLower(address), "0x")
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM app.smart_contracts
+		WHERE code LIKE '%' || $1 || '%'
+		  AND NOT (address = $2 AND name = $3)`,
+		pattern, hexToBytes(address), name).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // --- Status snapshots ---
 
 func (r *Repository) UpsertStatusSnapshot(ctx context.Context, kind string, payload []byte, asOf time.Time) error {

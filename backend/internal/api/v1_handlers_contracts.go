@@ -193,7 +193,14 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		out = append(out, toContractOutput(c))
+		o := toContractOutput(c)
+		// For single-contract queries, compute dependents count
+		if name != "" {
+			if cnt, err := s.repo.CountContractDependents(r.Context(), c.Address, c.Name); err == nil {
+				o["dependents_count"] = cnt
+			}
+		}
+		out = append(out, o)
 	}
 	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}
 	if validFrom != nil {
