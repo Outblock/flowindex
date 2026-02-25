@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
-import { Search } from 'lucide-react';
+import { Search, Menu, X } from 'lucide-react';
 import { useWebSocketStatus } from '../hooks/useWebSocket';
+import { useMobileMenu } from '../contexts/MobileMenuContext';
 import { resolveApiBaseUrl } from '../api';
 
 function Header() {
@@ -9,6 +10,7 @@ function Header() {
   const navigate = useNavigate();
   const { isConnected } = useWebSocketStatus();
   const isNavigating = useRouterState({ select: (s) => s.status === 'pending' });
+  const { isOpen: isMobileOpen, toggle: toggleMobileMenu } = useMobileMenu();
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,16 +63,25 @@ function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 relative bg-zinc-50/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 py-4 pl-[58px] pr-3 md:px-8 transition-colors duration-300 overflow-hidden">
+    <header className="sticky top-0 z-40 relative bg-zinc-50/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 py-3 px-3 md:py-4 md:px-8 transition-colors duration-300 overflow-hidden">
       {isNavigating && (
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-nothing-green to-transparent animate-pulse" />
       )}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-3 md:gap-4">
 
-        {/* Search Bar - Now on the left/center as the main focus of header since sidebar handles nav */}
+        {/* Mobile hamburger - inline in header for perfect alignment */}
+        <button
+          onClick={toggleMobileMenu}
+          className="md:hidden p-2.5 rounded-sm bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-white/10 shrink-0"
+          aria-label="Toggle menu"
+        >
+          {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+
+        {/* Search Bar */}
         <form
           onSubmit={handleSearch}
-          className="w-full md:max-w-xl relative"
+          className="flex-1 md:max-w-xl relative"
         >
           <div className="relative group">
             <input

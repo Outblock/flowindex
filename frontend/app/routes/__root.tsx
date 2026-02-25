@@ -5,6 +5,7 @@ import Footer from '../components/Footer';
 import Sidebar from '../components/Sidebar';
 import { WebSocketProvider } from '../components/WebSocketProvider';
 import { ThemeProvider } from '../contexts/ThemeContext';
+import { MobileMenuProvider } from '../contexts/MobileMenuContext';
 import { Toaster } from 'react-hot-toast';
 import { lazy, Suspense } from 'react';
 
@@ -20,6 +21,7 @@ function RootComponent() {
         <RootDocument>
             <ThemeProvider>
                 <WebSocketProvider>
+                    <MobileMenuProvider>
                     <div className="bg-gray-50 dark:bg-black min-h-screen text-zinc-700 dark:text-zinc-300 font-mono antialiased selection:bg-nothing-green selection:text-black flex transition-colors duration-300">
                         {/* Sidebar */}
                         <Sidebar />
@@ -37,6 +39,7 @@ function RootComponent() {
                     </div>
                     <Suspense fallback={null}><AIChatWidget /></Suspense>
                     <Toaster position="bottom-right" />
+                    </MobileMenuProvider>
                 </WebSocketProvider>
             </ThemeProvider>
             <ScrollRestoration />

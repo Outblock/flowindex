@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Home, Box, ArrowRightLeft, Users, FileText, Layers, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, Menu, X, BarChart3 } from 'lucide-react';
+import { Home, Box, ArrowRightLeft, Users, FileText, Layers, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, BarChart3 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useMobileMenu } from '../contexts/MobileMenuContext';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -10,7 +11,7 @@ export default function Sidebar() {
     const location = routerState.location;
     const { theme, toggleTheme } = useTheme();
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const [isMobileOpen, setIsMobileOpen] = useState(false);
+    const { isOpen: isMobileOpen, close: closeMobileMenu } = useMobileMenu();
 
     const isActive = (path: string) => {
         if (path === '/') return location.pathname === '/';
@@ -19,6 +20,7 @@ export default function Sidebar() {
 
     const navItems: Array<{ label: string; path: string; icon: typeof Home; disabled?: boolean }> = [
         { label: 'Home Page', path: '/', icon: Home },
+        { label: 'Analytics', path: '/analytics', icon: BarChart3 },
         { label: 'Transactions', path: '/txs', icon: ArrowRightLeft },
         { label: 'Blocks', path: '/blocks', icon: Box },
         { label: 'Tokens', path: '/tokens', icon: Coins },
@@ -28,21 +30,11 @@ export default function Sidebar() {
         { label: 'Scheduled Txs', path: '/scheduled', icon: Clock },
         { label: 'Nodes', path: '/nodes', icon: Layers },
         { label: 'Indexing Status', path: '/stats', icon: Layers },
-        { label: 'Analytics', path: '/analytics', icon: BarChart3 },
         { label: 'API Docs', path: '/api-docs', icon: FileText },
     ];
 
     return (
         <>
-            {/* Mobile Hamburger Button */}
-            <button
-                onClick={() => setIsMobileOpen(!isMobileOpen)}
-                className="md:hidden fixed top-[18px] left-3 z-[60] p-[11px] rounded-sm bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-white/10"
-                aria-label="Toggle menu"
-            >
-                {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-
             {/* Mobile Slide-out Drawer */}
             <AnimatePresence>
                 {isMobileOpen && (
@@ -51,7 +43,7 @@ export default function Sidebar() {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            onClick={() => setIsMobileOpen(false)}
+                            onClick={() => closeMobileMenu()}
                             className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
                         />
                         <motion.div
@@ -77,7 +69,7 @@ export default function Sidebar() {
                                         to={item.disabled ? '#' : item.path}
                                         onClick={(e) => {
                                             if (item.disabled) e.preventDefault();
-                                            else setIsMobileOpen(false);
+                                            else closeMobileMenu();
                                         }}
                                         className={`flex items-center space-x-3 px-4 py-3 rounded-sm transition-colors ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-white/5'
                                             } ${isActive(item.path) && !item.disabled ? 'text-nothing-green bg-nothing-green/10' : 'text-zinc-600 dark:text-zinc-400'}`}
