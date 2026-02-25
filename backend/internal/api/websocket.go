@@ -167,6 +167,7 @@ type WSTransaction struct {
 	ScriptHash       string    `json:"script_hash,omitempty"`
 	TemplateCategory string    `json:"template_category,omitempty"`
 	TemplateLabel    string    `json:"template_label,omitempty"`
+	Tags             []string  `json:"tags,omitempty"`
 }
 
 func BroadcastNewBlock(block models.Block) {
@@ -209,13 +210,16 @@ func BroadcastNewTransaction(tx models.Transaction) {
 }
 
 // MakeBroadcastNewTransactions returns a batch broadcast callback that enriches
-// transactions with template_category from script_templates + script_imports
-// before broadcasting over WebSocket.
-func MakeBroadcastNewTransactions(repo *repository.Repository) func([]models.Transaction) {
-	return func(txs []models.Transaction) {
+// transactions with template_category, template_label, and tags derived from
+// events before broadcasting over WebSocket.
+func MakeBroadcastNewTransactions(repo *repository.Repository) func([]models.Transaction, []models.Event) {
+	return func(txs []models.Transaction, events []models.Event) {
 		if len(txs) == 0 {
 			return
 		}
+
+		// Derive tags from events (same logic as tx_contracts_worker)
+		tagsByTx := deriveTagsFromEvents(txs, events)
 
 		// Collect unique script hashes for batch enrichment
 		hashSet := make(map[string]bool)
@@ -285,12 +289,73 @@ func MakeBroadcastNewTransactions(repo *repository.Repository) func([]models.Tra
 				ScriptHash:       tx.ScriptHash,
 				TemplateCategory: categoryByHash[tx.ScriptHash],
 				TemplateLabel:    labelByHash[tx.ScriptHash],
+				Tags:             tagsByTx[tx.ID],
 			}
 			msg := BroadcastMessage{Type: "new_transaction", Payload: payload}
 			data, _ := json.Marshal(msg)
 			hub.broadcast <- data
 		}
 	}
+}
+
+// deriveTagsFromEvents derives tx tags from event types, mirroring tx_contracts_worker logic.
+func deriveTagsFromEvents(txs []models.Transaction, events []models.Event) map[string][]string {
+	tagsByTx := make(map[string][]string)
+	seen := make(map[string]map[string]bool) // txID -> tag -> seen
+
+	addTag := func(txID, tag string) {
+		if seen[txID] == nil {
+			seen[txID] = make(map[string]bool)
+		}
+		if seen[txID][tag] {
+			return
+		}
+		seen[txID][tag] = true
+		tagsByTx[txID] = append(tagsByTx[txID], tag)
+	}
+
+	// Check IsEVM flag on transactions
+	for _, tx := range txs {
+		if tx.IsEVM {
+			addTag(tx.ID, "EVM")
+		}
+	}
+
+	// Derive tags from event types
+	for _, evt := range events {
+		evtType := evt.Type
+		switch {
+		case strings.Contains(evtType, "EVM.TransactionExecuted"):
+			addTag(evt.TransactionID, "EVM")
+		case strings.Contains(evtType, "NFTStorefront"):
+			addTag(evt.TransactionID, "MARKETPLACE")
+		case strings.Contains(evtType, "AccountContractAdded") || strings.Contains(evtType, "AccountContractUpdated"):
+			addTag(evt.TransactionID, "CONTRACT_DEPLOY")
+		case evtType == "flow.AccountCreated":
+			addTag(evt.TransactionID, "ACCOUNT_CREATED")
+		case strings.Contains(evtType, "AccountKeyAdded") || strings.Contains(evtType, "AccountKeyRemoved"):
+			addTag(evt.TransactionID, "KEY_UPDATE")
+		case strings.Contains(evtType, "FlowTransactionScheduler"):
+			addTag(evt.TransactionID, "SCHEDULED_TX")
+		case strings.Contains(evtType, ".SwapPair.Swap") ||
+			strings.Contains(evtType, ".BloctoSwapPair.Swap") ||
+			strings.Contains(evtType, ".MetaPierSwapPair.Swap"):
+			addTag(evt.TransactionID, "SWAP")
+		case strings.Contains(evtType, ".SwapPair.AddLiquidity") ||
+			strings.Contains(evtType, ".SwapPair.RemoveLiquidity"):
+			addTag(evt.TransactionID, "LIQUIDITY")
+		case strings.Contains(evtType, "FlowIDTableStaking") || strings.Contains(evtType, "FlowStakingCollection"):
+			addTag(evt.TransactionID, "STAKING")
+		case strings.Contains(evtType, "LiquidStaking") || strings.Contains(evtType, "stFlowToken"):
+			addTag(evt.TransactionID, "LIQUID_STAKING")
+		case strings.Contains(evtType, "FungibleToken.Deposited") || strings.Contains(evtType, "FungibleToken.Withdrawn"):
+			addTag(evt.TransactionID, "FT_TRANSFER")
+		case strings.Contains(evtType, "NonFungibleToken.Deposited") || strings.Contains(evtType, "NonFungibleToken.Withdrawn"):
+			addTag(evt.TransactionID, "NFT_TRANSFER")
+		}
+	}
+
+	return tagsByTx
 }
 
 // deriveCategoryFromImports picks the highest-priority category from contract identifiers.

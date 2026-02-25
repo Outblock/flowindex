@@ -32,7 +32,7 @@ type Service struct {
 // Callback type for real-time updates
 type BlockCallback func(models.Block)
 type TxCallback func(models.Transaction)
-type TxBatchCallback func([]models.Transaction)
+type TxBatchCallback func([]models.Transaction, []models.Event)
 type RangeCallback func(fromHeight, toHeight uint64)
 
 type Config struct {
@@ -598,7 +598,7 @@ func (s *Service) saveBatch(ctx context.Context, results []*FetchResult, checkpo
 					}
 				}
 				if len(userTxs) > 0 {
-					s.config.OnNewTransactions(userTxs)
+					s.config.OnNewTransactions(userTxs, res.Events)
 				}
 			} else if s.config.OnNewTransaction != nil {
 				for _, tx := range res.Transactions {

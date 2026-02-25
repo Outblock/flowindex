@@ -925,28 +925,34 @@ function Home() {
                                             >
                                                 {isNew && <div className="absolute top-0 right-0 w-2 h-2 bg-white animate-ping" />}
                                                 <div className="flex items-center justify-between h-full">
-                                                    <div className="flex flex-col min-w-0">
-                                                        <span
-                                                            className="text-xs text-gray-400 font-mono truncate w-52 sm:w-64"
-                                                            title={txIdFull || ''}
-                                                        >
-                                                            {txIdShort || tx.id}
+                                                    <div className="flex flex-col min-w-0 gap-1.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <span
+                                                                className="text-xs text-gray-400 font-mono truncate"
+                                                                title={txIdFull || ''}
+                                                            >
+                                                                {txIdShort || tx.id}
+                                                            </span>
+                                                            {isError && (
+                                                                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-sm border border-red-500/50 text-red-500 bg-red-500/10 shrink-0">
+                                                                    Error
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-sm tracking-wider w-fit font-semibold ${activity.color} bg-transparent border-0`}>
+                                                            {activity.label}
                                                         </span>
                                                     </div>
-                                                    <div className="flex flex-col items-end">
+                                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
                                                         <span
                                                             className="text-[10px] text-gray-500 font-mono"
                                                             title={txTimeAbsolute || ''}
                                                         >
                                                             {txTimeText || ''}
                                                         </span>
-                                                        {isError ? (
-                                                            <span className="mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border border-red-500/50 text-red-500 bg-red-500/10">
-                                                                Error
-                                                            </span>
-                                                        ) : (
-                                                            <span className={`mt-1 text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${activity.bgColor} ${activity.color}`}>
-                                                                {activity.label}
+                                                        {(tx.template_label) && (
+                                                            <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${activity.bgColor} ${activity.color}`}>
+                                                                {tx.template_label}
                                                             </span>
                                                         )}
                                                     </div>
