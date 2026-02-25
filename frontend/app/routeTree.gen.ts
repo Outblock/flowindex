@@ -15,6 +15,7 @@ import { Route as ApiDocsRouteImport } from './routes/api-docs'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TxsIndexRouteImport } from './routes/txs/index'
 import { Route as TxIndexRouteImport } from './routes/tx/index'
 import { Route as TransactionsIndexRouteImport } from './routes/transactions/index'
 import { Route as TokensIndexRouteImport } from './routes/tokens/index'
@@ -23,6 +24,7 @@ import { Route as NftsIndexRouteImport } from './routes/nfts/index'
 import { Route as ContractsIndexRouteImport } from './routes/contracts/index'
 import { Route as BlocksIndexRouteImport } from './routes/blocks/index'
 import { Route as AccountsIndexRouteImport } from './routes/accounts/index'
+import { Route as TxsTxIdRouteImport } from './routes/txs/$txId'
 import { Route as TxTxIdRouteImport } from './routes/tx/$txId'
 import { Route as TransactionsTxIdRouteImport } from './routes/transactions/$txId'
 import { Route as TokensTokenRouteImport } from './routes/tokens/$token'
@@ -63,6 +65,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TxsIndexRoute = TxsIndexRouteImport.update({
+  id: '/txs/',
+  path: '/txs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TxIndexRoute = TxIndexRouteImport.update({
   id: '/tx/',
   path: '/tx/',
@@ -101,6 +108,11 @@ const BlocksIndexRoute = BlocksIndexRouteImport.update({
 const AccountsIndexRoute = AccountsIndexRouteImport.update({
   id: '/accounts/',
   path: '/accounts/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TxsTxIdRoute = TxsTxIdRouteImport.update({
+  id: '/txs/$txId',
+  path: '/txs/$txId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TxTxIdRoute = TxTxIdRouteImport.update({
@@ -164,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
   '/tx/$txId': typeof TxTxIdRoute
+  '/txs/$txId': typeof TxsTxIdRoute
   '/accounts/': typeof AccountsIndexRoute
   '/blocks/': typeof BlocksIndexRoute
   '/contracts/': typeof ContractsIndexRoute
@@ -172,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/tokens/': typeof TokensIndexRoute
   '/transactions/': typeof TransactionsIndexRoute
   '/tx/': typeof TxIndexRoute
+  '/txs/': typeof TxsIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
 export interface FileRoutesByTo {
@@ -189,6 +203,7 @@ export interface FileRoutesByTo {
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
   '/tx/$txId': typeof TxTxIdRoute
+  '/txs/$txId': typeof TxsTxIdRoute
   '/accounts': typeof AccountsIndexRoute
   '/blocks': typeof BlocksIndexRoute
   '/contracts': typeof ContractsIndexRoute
@@ -197,6 +212,7 @@ export interface FileRoutesByTo {
   '/tokens': typeof TokensIndexRoute
   '/transactions': typeof TransactionsIndexRoute
   '/tx': typeof TxIndexRoute
+  '/txs': typeof TxsIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
 export interface FileRoutesById {
@@ -215,6 +231,7 @@ export interface FileRoutesById {
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
   '/tx/$txId': typeof TxTxIdRoute
+  '/txs/$txId': typeof TxsTxIdRoute
   '/accounts/': typeof AccountsIndexRoute
   '/blocks/': typeof BlocksIndexRoute
   '/contracts/': typeof ContractsIndexRoute
@@ -223,6 +240,7 @@ export interface FileRoutesById {
   '/tokens/': typeof TokensIndexRoute
   '/transactions/': typeof TransactionsIndexRoute
   '/tx/': typeof TxIndexRoute
+  '/txs/': typeof TxsIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
 export interface FileRouteTypes {
@@ -242,6 +260,7 @@ export interface FileRouteTypes {
     | '/tokens/$token'
     | '/transactions/$txId'
     | '/tx/$txId'
+    | '/txs/$txId'
     | '/accounts/'
     | '/blocks/'
     | '/contracts/'
@@ -250,6 +269,7 @@ export interface FileRouteTypes {
     | '/tokens/'
     | '/transactions/'
     | '/tx/'
+    | '/txs/'
     | '/nfts/$nftType/item/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -267,6 +287,7 @@ export interface FileRouteTypes {
     | '/tokens/$token'
     | '/transactions/$txId'
     | '/tx/$txId'
+    | '/txs/$txId'
     | '/accounts'
     | '/blocks'
     | '/contracts'
@@ -275,6 +296,7 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/transactions'
     | '/tx'
+    | '/txs'
     | '/nfts/$nftType/item/$id'
   id:
     | '__root__'
@@ -292,6 +314,7 @@ export interface FileRouteTypes {
     | '/tokens/$token'
     | '/transactions/$txId'
     | '/tx/$txId'
+    | '/txs/$txId'
     | '/accounts/'
     | '/blocks/'
     | '/contracts/'
@@ -300,6 +323,7 @@ export interface FileRouteTypes {
     | '/tokens/'
     | '/transactions/'
     | '/tx/'
+    | '/txs/'
     | '/nfts/$nftType/item/$id'
   fileRoutesById: FileRoutesById
 }
@@ -318,6 +342,7 @@ export interface RootRouteChildren {
   TokensTokenRoute: typeof TokensTokenRoute
   TransactionsTxIdRoute: typeof TransactionsTxIdRoute
   TxTxIdRoute: typeof TxTxIdRoute
+  TxsTxIdRoute: typeof TxsTxIdRoute
   AccountsIndexRoute: typeof AccountsIndexRoute
   BlocksIndexRoute: typeof BlocksIndexRoute
   ContractsIndexRoute: typeof ContractsIndexRoute
@@ -326,6 +351,7 @@ export interface RootRouteChildren {
   TokensIndexRoute: typeof TokensIndexRoute
   TransactionsIndexRoute: typeof TransactionsIndexRoute
   TxIndexRoute: typeof TxIndexRoute
+  TxsIndexRoute: typeof TxsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -370,6 +396,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/txs/': {
+      id: '/txs/'
+      path: '/txs'
+      fullPath: '/txs/'
+      preLoaderRoute: typeof TxsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tx/': {
@@ -426,6 +459,13 @@ declare module '@tanstack/react-router' {
       path: '/accounts'
       fullPath: '/accounts/'
       preLoaderRoute: typeof AccountsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/txs/$txId': {
+      id: '/txs/$txId'
+      path: '/txs/$txId'
+      fullPath: '/txs/$txId'
+      preLoaderRoute: typeof TxsTxIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tx/$txId': {
@@ -521,6 +561,7 @@ const rootRouteChildren: RootRouteChildren = {
   TokensTokenRoute: TokensTokenRoute,
   TransactionsTxIdRoute: TransactionsTxIdRoute,
   TxTxIdRoute: TxTxIdRoute,
+  TxsTxIdRoute: TxsTxIdRoute,
   AccountsIndexRoute: AccountsIndexRoute,
   BlocksIndexRoute: BlocksIndexRoute,
   ContractsIndexRoute: ContractsIndexRoute,
@@ -529,6 +570,7 @@ const rootRouteChildren: RootRouteChildren = {
   TokensIndexRoute: TokensIndexRoute,
   TransactionsIndexRoute: TransactionsIndexRoute,
   TxIndexRoute: TxIndexRoute,
+  TxsIndexRoute: TxsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1087,6 +1087,7 @@ function findNftBannerImage(tx: any, tokenMeta?: Map<string, TokenMetaEntry>): s
 export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }: { tx: any; address?: string; expanded: boolean; onToggle: () => void; tokenMeta?: Map<string, TokenMetaEntry> }) {
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
     const tags: string[] = (tx.tags || []).filter((t: string) => t !== 'FEE');
+    const activity = deriveActivityType(tx);
     const hasDetails = true;
     const transferPreview = deriveTransferPreview(tx, tokenMeta);
     const bannerUrl = findNftBannerImage(tx, tokenMeta);
@@ -1125,14 +1126,14 @@ export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }:
                     {/* Line 1: txid + tags + error */}
                     <div className="flex items-center gap-2 flex-wrap">
                         <Link
-                            to={`/tx/${tx.id}` as any}
+                            to={`/txs/${tx.id}` as any}
                             className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-xs flex-shrink-0"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {formatShort(tx.id, 12, 8)}
                         </Link>
                         {/* Tags */}
-                        {tags.map((tag) => {
+                        {tags.length > 0 ? tags.map((tag) => {
                             const Icon = tagIcons[tag];
                             return (
                                 <span
@@ -1143,7 +1144,11 @@ export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }:
                                     {formatTagLabel(tag)}
                                 </span>
                             );
-                        })}
+                        }) : activity.type !== 'tx' && (
+                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 border rounded-sm text-[9px] font-bold uppercase tracking-wider ${activity.bgColor} ${activity.color}`}>
+                                {activity.label}
+                            </span>
+                        )}
                         {/* Error badge (only for sealed-with-error, not normal status) */}
                         {(tx.error_message || tx.error) && tx.status === 'SEALED' && (
                             <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-sm border font-semibold text-red-600 dark:text-red-400 border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
