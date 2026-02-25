@@ -247,55 +247,43 @@ func (r *Repository) GetContractByAddress(ctx context.Context, address string) (
 }
 
 // RefreshDailyStats aggregates transaction counts by date into daily_stats table.
-// EVM tx count uses GREATEST of the is_evm flag and a distinct count from
-// EVM.TransactionExecuted events (covers rows ingested before is_evm was set).
-func (r *Repository) RefreshDailyStats(ctx context.Context) error {
-	_, err := r.db.Exec(ctx, `
-		WITH tx_counts AS (
-			SELECT
-				DATE(timestamp) as date,
-				COUNT(*) as tx_count,
-				COUNT(*) FILTER (WHERE is_evm = TRUE) as evm_flag_count
-			FROM raw.transactions
-			WHERE timestamp IS NOT NULL
-			  AND timestamp >= NOW() - INTERVAL '30 days'
-			GROUP BY DATE(timestamp)
-		),
-		evm_event_counts AS (
-			SELECT
-				DATE(e.timestamp) as date,
-				COUNT(DISTINCT e.transaction_id) as evm_event_count
-			FROM raw.events e
-			WHERE e.timestamp IS NOT NULL
-			  AND e.timestamp >= NOW() - INTERVAL '30 days'
-			  AND e.type LIKE '%EVM.TransactionExecuted%'
-			GROUP BY DATE(e.timestamp)
-		)
-		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, updated_at)
+// When fullScan is true, it processes ALL transactions (used on startup);
+// otherwise it only refreshes the last 30 days (periodic tick).
+func (r *Repository) RefreshDailyStats(ctx context.Context, fullScan bool) error {
+	whereClause := "AND timestamp >= NOW() - INTERVAL '30 days'"
+	if fullScan {
+		whereClause = "" // scan everything
+	}
+	query := fmt.Sprintf(`
+		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, updated_at)
 		SELECT
-			t.date,
-			t.tx_count,
-			GREATEST(t.evm_flag_count, COALESCE(ev.evm_event_count, 0)),
-			NOW()
-		FROM tx_counts t
-		LEFT JOIN evm_event_counts ev ON t.date = ev.date
+			DATE(timestamp) as date,
+			COUNT(*) as tx_count,
+			COUNT(*) FILTER (WHERE is_evm = TRUE) as evm_tx_count,
+			COALESCE(SUM(gas_used), 0) as total_gas_used,
+			NOW() as updated_at
+		FROM raw.transactions
+		WHERE timestamp IS NOT NULL
+		  %s
+		GROUP BY DATE(timestamp)
 		ON CONFLICT (date) DO UPDATE SET
 			tx_count = EXCLUDED.tx_count,
 			evm_tx_count = EXCLUDED.evm_tx_count,
+			total_gas_used = EXCLUDED.total_gas_used,
 			updated_at = NOW();
-	`)
+	`, whereClause)
+	_, err := r.db.Exec(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to refresh daily stats: %w", err)
 	}
 	return nil
 }
 
-// GetDailyStats retrieves the last 30 days of stats
+// GetDailyStats retrieves all available daily stats
 func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT date::text, tx_count, COALESCE(evm_tx_count, 0), active_accounts, new_contracts
+		SELECT date::text, tx_count, COALESCE(evm_tx_count, 0), COALESCE(total_gas_used, 0), active_accounts, new_contracts
 		FROM app.daily_stats
-		WHERE date >= CURRENT_DATE - INTERVAL '29 days'
 		ORDER BY date ASC`)
 	if err != nil {
 		return nil, err
@@ -305,7 +293,7 @@ func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, err
 	var stats []models.DailyStat
 	for rows.Next() {
 		var s models.DailyStat
-		if err := rows.Scan(&s.Date, &s.TxCount, &s.EVMTxCount, &s.ActiveAccounts, &s.NewContracts); err != nil {
+		if err := rows.Scan(&s.Date, &s.TxCount, &s.EVMTxCount, &s.TotalGasUsed, &s.ActiveAccounts, &s.NewContracts); err != nil {
 			return nil, err
 		}
 		stats = append(stats, s)

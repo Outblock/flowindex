@@ -647,10 +647,10 @@ func main() {
 		go func() {
 			defer wg.Done()
 
-			// Run immediately
-			log.Println("Running initial Daily Stats Aggregation...")
-			if err := repo.RefreshDailyStats(ctx); err != nil {
-				log.Printf("Failed to refresh daily stats: %v", err)
+			// Run full scan on startup to backfill any historical gaps
+			log.Println("Running initial Daily Stats Aggregation (full scan)...")
+			if err := repo.RefreshDailyStats(ctx, true); err != nil {
+				log.Printf("Failed to refresh daily stats (full): %v", err)
 			}
 
 			ticker := time.NewTicker(5 * time.Minute)
@@ -661,7 +661,7 @@ func main() {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					if err := repo.RefreshDailyStats(ctx); err != nil {
+					if err := repo.RefreshDailyStats(ctx, false); err != nil {
 						log.Printf("Failed to refresh daily stats: %v", err)
 					}
 				}

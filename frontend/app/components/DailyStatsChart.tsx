@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ensureHeyApiConfigured } from '../api/heyapi';
 import { getStatusV1Stat } from '../api/gen/find';
+
+function formatTickLabel(dateStr: string, rangeDays: number): string {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return dateStr;
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    if (rangeDays <= 7) return `${mm}-${dd}`;
+    if (rangeDays <= 90) return `${mm}-${dd}`;
+    return `${d.getFullYear()}-${mm}`;
+}
 
 export function DailyStatsChart() {
     const [data, setData] = useState<any[]>([]);
@@ -12,8 +22,6 @@ export function DailyStatsChart() {
         const loadStats = async () => {
             try {
                 await ensureHeyApiConfigured();
-                // getStatusV1Stat returns {data: [{metric, number, time, timescale}]}
-                // We request daily transaction stats for the last 180 days.
                 const fromDate = new Date();
                 fromDate.setDate(fromDate.getDate() - 180);
                 const res = await getStatusV1Stat({
@@ -25,21 +33,19 @@ export function DailyStatsChart() {
                 });
                 const stats: any = (res?.data as any)?.data;
 
-                // Handle null/empty response
                 if (stats && Array.isArray(stats)) {
                     const chartData = stats.map((s: any) => ({
                         name: (s.date || s.time || '').split('T')[0],
                         txs: s.tx_count ?? s.number ?? 0,
-                        evm_txs: s.evm_tx_count ?? 0,
                     })).sort((a: any, b: any) => new Date(a.name).getTime() - new Date(b.name).getTime());
                     setData(chartData);
                 } else {
                     console.warn("Daily stats is empty or invalid format");
-                    setData([]);  // Set empty array if no data
+                    setData([]);
                 }
             } catch (err) {
                 console.error("Failed to load daily stats:", err);
-                setData([]);  // Set empty array on error
+                setData([]);
             } finally {
                 setLoading(false);
             }
@@ -63,6 +69,7 @@ export function DailyStatsChart() {
         );
     }
 
+    // "All" uses a sentinel of 9999
     const visibleData = rangeDays >= data.length ? data : data.slice(-rangeDays);
     return (
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 group hover:border-nothing-green/30 transition-all duration-300">
@@ -73,7 +80,7 @@ export function DailyStatsChart() {
                         { label: '7D', value: 7 },
                         { label: '30D', value: 30 },
                         { label: '90D', value: 90 },
-                        { label: '180D', value: 180 }
+                        { label: 'All', value: 9999 }
                     ].map((range) => (
                         <button
                             key={range.value}
@@ -113,19 +120,20 @@ export function DailyStatsChart() {
                             tickLine={false}
                             axisLine={false}
                             tick={{ fill: '#666', fontFamily: 'monospace' }}
+                            tickFormatter={(v) => formatTickLabel(v, rangeDays)}
                             angle={-45}
                             textAnchor="end"
                             height={50}
                             minTickGap={20}
                         />
-                        <YAxis stroke="#666" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} tick={{ fill: '#666', fontFamily: 'monospace' }} width={30} />
+                        <YAxis stroke="#666" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}k` : `${value}`} tick={{ fill: '#666', fontFamily: 'monospace' }} width={35} />
                         <Tooltip
                             contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff', fontSize: '12px' }}
                             itemStyle={{ color: '#00ef8b', fontFamily: 'monospace' }}
                             cursor={{ stroke: '#333', strokeDasharray: '5 5' }}
+                            labelFormatter={(label) => label}
                         />
                         <Area type="monotone" dataKey="txs" stroke="#00ef8b" strokeWidth={2} fillOpacity={1} fill="url(#colorTxs)" />
-                        <Line type="monotone" dataKey="evm_txs" stroke="#a855f7" strokeWidth={2} dot={false} />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>

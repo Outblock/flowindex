@@ -236,6 +236,7 @@ type DailyStat struct {
 	Date           string `json:"date"`
 	TxCount        int64  `json:"tx_count"`
 	EVMTxCount     int64  `json:"evm_tx_count"`
+	TotalGasUsed   int64  `json:"total_gas_used"`
 	ActiveAccounts int64  `json:"active_accounts"`
 	NewContracts   int    `json:"new_contracts"`
 }
