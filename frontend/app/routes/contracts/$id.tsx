@@ -217,9 +217,9 @@ function ContractDetail() {
                     <FileText className="h-12 w-12 text-red-500 mx-auto mb-4" />
                     <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-2">Contract Not Found</h2>
                     <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">{error || 'The requested contract identifier could not be found.'}</p>
-                    <Link to="/contracts" className="inline-block w-full border border-zinc-200 dark:border-white/20 hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-900 dark:text-white text-xs uppercase tracking-widest py-3 transition-all rounded-sm">
-                        Back to Contracts
-                    </Link>
+                    <button onClick={() => window.history.back()} className="inline-block w-full border border-zinc-200 dark:border-white/20 hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-900 dark:text-white text-xs uppercase tracking-widest py-3 transition-all rounded-sm">
+                        Back
+                    </button>
                 </div>
             </div>
         );
@@ -239,10 +239,10 @@ function ContractDetail() {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono selection:bg-nothing-green selection:text-black transition-colors duration-300">
             <div className="container mx-auto px-4 py-8 max-w-7xl">
-                <Link to="/contracts" className="inline-flex items-center space-x-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-8 group">
+                <button onClick={() => window.history.back()} className="inline-flex items-center space-x-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-8 group">
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-xs uppercase tracking-widest">Back to Contracts</span>
-                </Link>
+                    <span className="text-xs uppercase tracking-widest">Back</span>
+                </button>
 
                 {/* Header */}
                 <div className="border border-zinc-200 dark:border-white/10 p-8 mb-6 relative overflow-hidden bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none rounded-sm">

@@ -37,10 +37,10 @@ function KeySearchResults() {
         <div className="min-h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono selection:bg-nothing-green selection:text-black transition-colors duration-300">
             <div className="container mx-auto px-4 py-8 max-w-6xl">
                 {/* Back Button */}
-                <Link to="/" className="inline-flex items-center space-x-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-8 group">
+                <button onClick={() => window.history.back()} className="inline-flex items-center space-x-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors mb-8 group">
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-xs uppercase tracking-widest">Return to Dashboard</span>
-                </Link>
+                    <span className="text-xs uppercase tracking-widest">Back</span>
+                </button>
 
                 {/* Header */}
                 <div className="border border-zinc-200 dark:border-white/10 p-8 mb-8 relative overflow-hidden bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">

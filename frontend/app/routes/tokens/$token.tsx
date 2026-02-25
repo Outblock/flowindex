@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Coins, Users, ArrowRightLeft } from 'lucide-react';
+import { Coins, Users, ArrowRightLeft, ArrowLeft } from 'lucide-react';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
@@ -161,6 +161,10 @@ function TokenDetailInner() {
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
+      <button onClick={() => window.history.back()} className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors group">
+        <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+        <span className="text-xs uppercase tracking-widest">Back</span>
+      </button>
       {isLoading && (
         <div className="text-xs uppercase tracking-widest text-nothing-green-dark dark:text-nothing-green">
           Loading...

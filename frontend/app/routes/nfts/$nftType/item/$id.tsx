@@ -74,16 +74,15 @@ function NFTItemInner() {
 
   return (
     <>
-      {/* Back to collection */}
+      {/* Back */}
       <div className="mb-6">
-        <Link
-          to="/nfts/$nftType"
-          params={{ nftType: String(nftType) }}
+        <button
+          onClick={() => window.history.back()}
           className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors group"
         >
           <Package className="h-4 w-4 transform group-hover:-translate-x-1 transition-transform" />
-          <span className="text-xs uppercase tracking-widest">Back to {collectionName}</span>
-        </Link>
+          <span className="text-xs uppercase tracking-widest">Back</span>
+        </button>
       </div>
 
       {/* NFT Detail Card — reuses the same component as the modal */}
