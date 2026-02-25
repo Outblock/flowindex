@@ -458,26 +458,26 @@ function Home() {
                             <FlowPriceChart {...{ data: networkStats } as any} />
                         </motion.div>
 
-                        {/* 2. Network Stats Grid */}
+                        {/* 2. Epoch Progress */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.5, delay: 0.15 }}
-                        >
-                            <NetworkStats totalStaked={networkStats?.total_staked} totalSupply={networkStats?.total_supply} activeNodes={networkStats?.active_nodes} />
-                        </motion.div>
-
-                        {/* 3. Epoch Progress */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5, delay: 0.2 }}
                         >
                             <EpochProgress
                                 epoch={networkStats?.epoch}
                                 progress={networkStats?.epoch_progress}
                                 updatedAt={networkStats?.updated_at}
                             />
+                        </motion.div>
+
+                        {/* 3. Network Stats Grid */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5, delay: 0.2 }}
+                        >
+                            <NetworkStats totalStaked={networkStats?.total_staked} totalSupply={networkStats?.total_supply} activeNodes={networkStats?.active_nodes} />
                         </motion.div>
                     </div>
                 </div>

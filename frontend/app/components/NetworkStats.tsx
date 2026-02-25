@@ -1,8 +1,6 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { Lock, Server } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-const MiniGlobe = lazy(() => import('./MiniGlobe'));
 
 const FALLBACK_TOTAL_SUPPLY = 1_630_000_000;
 
@@ -18,35 +16,6 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
   totalSupply?: number;
   activeNodes?: number;
 }) {
-  const FALLBACK_NODES = [
-    { lat: 37.7, lon: -122.4, role: 1, tokens_staked: 500000 },
-    { lat: 40.7, lon: -74.0, role: 2, tokens_staked: 800000 },
-    { lat: 51.5, lon: -0.1, role: 3, tokens_staked: 600000 },
-    { lat: 35.7, lon: 139.7, role: 4, tokens_staked: 400000 },
-    { lat: 1.3, lon: 103.8, role: 5, tokens_staked: 300000 },
-    { lat: 48.9, lon: 2.3, role: 2, tokens_staked: 700000 },
-    { lat: -33.9, lon: 151.2, role: 1, tokens_staked: 500000 },
-    { lat: 52.5, lon: 13.4, role: 3, tokens_staked: 550000 },
-    { lat: 43.7, lon: -79.4, role: 4, tokens_staked: 450000 },
-    { lat: 47.6, lon: -122.3, role: 2, tokens_staked: 650000 },
-  ];
-  const [miniNodes, setMiniNodes] = useState(FALLBACK_NODES);
-
-  useEffect(() => {
-    let cancelled = false;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5000);
-    import('../api/heyapi').then(({ fetchNodeList }) =>
-      fetchNodeList().then((data) => {
-        if (cancelled) return;
-        const filtered = data
-          .filter((n: any) => typeof n.lat === 'number' && typeof n.lon === 'number')
-          .map((n: any) => ({ lat: n.lat, lon: n.lon, role: n.role ?? 0, tokens_staked: n.tokens_staked ?? 0 }));
-        if (filtered.length > 0) setMiniNodes(filtered);
-      }),
-    ).catch(() => {}).finally(() => clearTimeout(timer));
-    return () => { cancelled = true; ctrl.abort(); };
-  }, []);
   if (!totalStaked) {
     return (
       <div className="grid grid-cols-2 gap-4 h-full">
@@ -73,19 +42,13 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
 
       {/* Active Nodes */}
       <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4 flex flex-col justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 hover:shadow-sm dark:hover:border-white/30 transition-all duration-300 relative overflow-hidden group">
-        {miniNodes.length > 0 && (
-          <div className="absolute inset-0 pointer-events-none opacity-80">
-            <Suspense fallback={null}>
-              <MiniGlobe nodes={miniNodes} />
-            </Suspense>
-          </div>
-        )}
-        <div className="relative z-10 flex justify-between items-start mb-2">
+        <div className="absolute top-0 right-0 w-16 h-16 bg-nothing-green/5 dark:bg-white/5 blur-2xl rounded-full group-hover:bg-nothing-green/10 dark:group-hover:bg-white/10 transition-colors" />
+        <div className="flex justify-between items-start mb-2">
           <div className="p-1.5 rounded-sm bg-orange-500/10 border-orange-500/20 border">
             <Server className="w-4 h-4 text-orange-400" />
           </div>
         </div>
-        <div className="relative z-10">
+        <div>
           <p className="text-[10px] text-zinc-500 dark:text-gray-500 uppercase tracking-widest mb-1">Active Nodes</p>
           <p className="text-xl font-mono font-bold text-zinc-900 dark:text-white">{activeNodes}</p>
         </div>
