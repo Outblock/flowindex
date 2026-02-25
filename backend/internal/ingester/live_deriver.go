@@ -19,6 +19,9 @@ type LiveDeriverConfig struct {
 	ChunkSize uint64
 	// ProcessorTimeoutMs is per-processor timeout (0 to disable).
 	ProcessorTimeoutMs int
+	// DisableRepair skips the background repairFailedRanges goroutine.
+	// Use this for secondary LiveDeriver instances to avoid duplicate repair work.
+	DisableRepair bool
 }
 
 type heightRange struct {
@@ -49,6 +52,7 @@ type LiveDeriver struct {
 	processors         []Processor
 	chunkSize          uint64
 	processorTimeoutMs int
+	disableRepair      bool
 
 	mu      sync.Mutex
 	pending *heightRange
@@ -70,6 +74,7 @@ func NewLiveDeriver(repo *repository.Repository, processors []Processor, cfg Liv
 		processors:         processors,
 		chunkSize:          cfg.ChunkSize,
 		processorTimeoutMs: cfg.ProcessorTimeoutMs,
+		disableRepair:      cfg.DisableRepair,
 		wakeCh:             make(chan struct{}, 1),
 	}
 }
@@ -86,7 +91,11 @@ func (d *LiveDeriver) Start(ctx context.Context) {
 		d.processorTimeoutMs,
 	)
 	go d.run(ctx)
-	go d.repairFailedRanges(ctx)
+	if !d.disableRepair {
+		go d.repairFailedRanges(ctx)
+	} else {
+		log.Printf("[live_deriver] Repair disabled for this instance")
+	}
 }
 
 // NotifyRange schedules a half-open height range [fromHeight, toHeight) for derivation.

@@ -329,7 +329,8 @@ func main() {
 		// Disable with ENABLE_HISTORY_LIVE_DERIVER=false to reduce DB contention.
 		if os.Getenv("ENABLE_HISTORY_LIVE_DERIVER") != "false" {
 			historyLiveDeriver := ingester.NewLiveDeriver(repo, histProcessors, ingester.LiveDeriverConfig{
-				ChunkSize: liveDeriverChunk,
+				ChunkSize:     liveDeriverChunk,
+				DisableRepair: true, // Only the primary LiveDeriver runs repair to avoid duplicate work
 			})
 			historyLiveDeriver.Start(context.Background())
 			onHistoryIndexedRange = historyLiveDeriver.NotifyRange
