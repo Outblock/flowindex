@@ -939,7 +939,7 @@ function Home() {
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-sm tracking-wider w-fit font-semibold ${activity.color} bg-transparent border-0`}>
+                                                        <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider w-fit ${activity.bgColor} ${activity.color}`}>
                                                             {activity.label}
                                                         </span>
                                                     </div>
@@ -950,8 +950,8 @@ function Home() {
                                                         >
                                                             {txTimeText || ''}
                                                         </span>
-                                                        {(tx.template_label) && (
-                                                            <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${activity.bgColor} ${activity.color}`}>
+                                                        {tx.template_label && tx.template_label !== activity.label && (
+                                                            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono truncate max-w-[180px]" title={tx.template_label}>
                                                                 {tx.template_label}
                                                             </span>
                                                         )}
