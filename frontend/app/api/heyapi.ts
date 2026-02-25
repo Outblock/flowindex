@@ -71,12 +71,13 @@ async function fetchPriceFromCoinGecko(): Promise<{ price: number; price_change_
 }
 
 /** Fetch network stats: price, epoch, tokenomics (combined) */
-export async function fetchNetworkStats(): Promise<any> {
+export async function fetchNetworkStats(opts?: { timeoutMs?: number }): Promise<any> {
   await ensureHeyApiConfigured();
+  const timeoutMs = opts?.timeoutMs ?? 6000;
   const [priceRes, epochRes, tokenomicsRes] = await Promise.allSettled([
-    fetch(`${_baseURL}/status/price`).then(r => r.ok ? r.json() : null),
-    fetch(`${_baseURL}/status/epoch/status`).then(r => r.ok ? r.json() : null),
-    fetch(`${_baseURL}/status/tokenomics`).then(r => r.ok ? r.json() : null),
+    fetchJsonWithTimeout(`${_baseURL}/status/price`, timeoutMs).catch(() => null),
+    fetchJsonWithTimeout(`${_baseURL}/status/epoch/status`, timeoutMs).catch(() => null),
+    fetchJsonWithTimeout(`${_baseURL}/status/tokenomics`, timeoutMs).catch(() => null),
   ]);
   let price = priceRes.status === 'fulfilled' ? priceRes.value?.data?.[0] : null;
   const epoch = epochRes.status === 'fulfilled' ? epochRes.value?.data?.[0] : null;
