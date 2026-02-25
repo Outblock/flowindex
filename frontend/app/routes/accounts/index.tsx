@@ -62,12 +62,6 @@ const TABS: { key: Tab; label: string; icon: typeof Users }[] = [
     { key: 'nft_collectors', label: 'Top NFT Collectors', icon: ImageIcon },
 ];
 
-const SORT_OPTIONS = [
-    { key: 'block_height', label: 'Recent' },
-    { key: 'tx_count', label: 'Most TXs' },
-    { key: 'storage', label: 'Most Storage' },
-];
-
 const DEFAULT_FLOW_TOKEN = 'A.1654653399040a61.FlowToken';
 
 function Accounts() {
@@ -178,34 +172,33 @@ function Accounts() {
     );
 }
 
+// ─── Sortable Header ─────────────────────────────────────────────────
+function SortableHeader({ label, sortKey, currentSort, onSort, align }: { label: string; sortKey: string; currentSort: string; onSort: (key: string) => void; align?: 'left' | 'right' }) {
+    const active = currentSort === sortKey;
+    return (
+        <th
+            className={`p-4 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-nothing-green-dark dark:hover:text-nothing-green ${active ? 'text-nothing-green-dark dark:text-nothing-green' : 'text-zinc-500 dark:text-gray-400'} ${align === 'right' ? 'text-right' : ''}`}
+            onClick={() => onSort(sortKey)}
+        >
+            <span className="inline-flex items-center gap-1">
+                {label}
+                {active && <ArrowUpDown className="w-3 h-3" />}
+            </span>
+        </th>
+    );
+}
+
 // ─── All Accounts Tab ────────────────────────────────────────────────
 function AllAccountsTab({ accounts, meta: _meta, page, sortBy, totalCount, hasNext, nowTick, normalizeHex, onSortChange, onPageChange }: any) {
     return (
         <>
-            {/* Sort Pills + Stats */}
+            {/* Stats */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                className="flex items-center justify-end"
             >
-                <div className="flex items-center gap-2">
-                    <ArrowUpDown className="w-4 h-4 text-zinc-400" />
-                    <span className="text-xs text-zinc-500 uppercase tracking-wider mr-1">Sort:</span>
-                    {SORT_OPTIONS.map(opt => (
-                        <button
-                            key={opt.key}
-                            onClick={() => onSortChange(opt.key)}
-                            className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-sm border transition-colors ${
-                                sortBy === opt.key
-                                    ? 'bg-nothing-green/10 border-nothing-green/30 text-nothing-green-dark dark:text-nothing-green'
-                                    : 'bg-white dark:bg-nothing-dark border-zinc-200 dark:border-white/10 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                            }`}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
-                </div>
                 <div className="text-xs text-zinc-500 font-mono">
                     <NumberFlow value={Number.isFinite(totalCount) ? totalCount : 0} format={{ useGrouping: true }} /> accounts
                 </div>
@@ -219,9 +212,8 @@ function AllAccountsTab({ accounts, meta: _meta, page, sortBy, totalCount, hasNe
                             <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
                                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider w-8">#</th>
                                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Address</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">TX Count</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Storage Used (MB)</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Last Seen Height</th>
+                                <SortableHeader label="TX Count" sortKey="tx_count" currentSort={sortBy} onSort={onSortChange} align="right" />
+                                <SortableHeader label="Last Seen Height" sortKey="block_height" currentSort={sortBy} onSort={onSortChange} align="right" />
                                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Updated</th>
                             </tr>
                         </thead>
@@ -233,7 +225,6 @@ function AllAccountsTab({ accounts, meta: _meta, page, sortBy, totalCount, hasNe
                                     const ts = a?.timestamp || '';
                                     const rel = ts ? formatRelativeTime(ts, nowTick) : '';
                                     const abs = ts ? formatAbsoluteTime(ts) : '';
-                                    const used = Number(a?.storage_used || 0);
                                     const txCount = Number(a?.tx_count || 0);
                                     const rank = ((page - 1) * 20) + i + 1;
 
@@ -252,11 +243,6 @@ function AllAccountsTab({ accounts, meta: _meta, page, sortBy, totalCount, hasNe
                                             <td className="p-4 text-right">
                                                 <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300">
                                                     {txCount.toLocaleString()}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <span className="font-mono text-sm bg-zinc-100 dark:bg-white/10 px-2 py-1 rounded">
-                                                    {Number.isFinite(used) ? used.toFixed(2) : '0.00'}
                                                 </span>
                                             </td>
                                             <td className="p-4 text-right">

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { EffectComposer, RenderPass, EffectPass, BloomEffect } from 'postprocessing';
 
@@ -58,7 +58,7 @@ function greatCircleArc(a: THREE.Vector3, b: THREE.Vector3, segments: number, el
 }
 
 // Fibonacci sphere — evenly distributed points on sphere surface
-function buildSurfaceDots(count: number, radius: number): THREE.Points {
+function buildSurfaceDots(count: number, radius: number, dark = true): THREE.Points {
   const positions = new Float32Array(count * 3);
   const goldenRatio = (1 + Math.sqrt(5)) / 2;
 
@@ -76,10 +76,10 @@ function buildSurfaceDots(count: number, radius: number): THREE.Points {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   const mat = new THREE.PointsMaterial({
-    color: 0x2d6b4a,
+    color: dark ? 0x2d6b4a : 0x166534,
     size: 0.007,
     transparent: true,
-    opacity: 0.7,
+    opacity: dark ? 0.7 : 0.6,
     sizeAttenuation: true,
   });
   return new THREE.Points(geo, mat);
@@ -98,7 +98,7 @@ function extractRings(geometry: any): number[][][] {
   return rings;
 }
 
-function buildCountryLines(geojson: any, radius: number): THREE.LineSegments {
+function buildCountryLines(geojson: any, radius: number, dark = true): THREE.LineSegments {
   const vertices: number[] = [];
 
   for (const feature of geojson.features) {
@@ -115,15 +115,28 @@ function buildCountryLines(geojson: any, radius: number): THREE.LineSegments {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   const mat = new THREE.LineBasicMaterial({
-    color: 0x00e599,
+    color: dark ? 0x00e599 : 0x0d5226,
     transparent: true,
-    opacity: 0.2,
+    opacity: dark ? 0.2 : 0.7,
   });
   return new THREE.LineSegments(geo, mat);
 }
 
+function useIsDark() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return dark;
+}
+
 export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const isDark = useIsDark();
 
   useEffect(() => {
     const container = containerRef.current;
@@ -147,10 +160,10 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     const pivot = new THREE.Group();
     scene.add(pivot);
 
-    // --- Globe sphere (dark solid base) ---
+    // --- Globe sphere ---
     const globeGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
     const globeMat = new THREE.MeshBasicMaterial({
-      color: 0x050505,
+      color: isDark ? 0x050505 : 0xd4e8dc,
       transparent: true,
       opacity: 0.95,
     });
@@ -158,7 +171,7 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
     pivot.add(globeMesh);
 
     // --- Surface dot grid (fibonacci sphere — fills entire globe uniformly) ---
-    const surfaceDots = buildSurfaceDots(SURFACE_DOT_COUNT, GLOBE_RADIUS * 1.001);
+    const surfaceDots = buildSurfaceDots(SURFACE_DOT_COUNT, GLOBE_RADIUS * 1.001, isDark);
     pivot.add(surfaceDots);
 
     // --- Country border lines (async load) ---
@@ -167,7 +180,7 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
       .then((r) => r.json())
       .then((geojson) => {
         if (disposed) return;
-        const lines = buildCountryLines(geojson, GLOBE_RADIUS * 1.002);
+        const lines = buildCountryLines(geojson, GLOBE_RADIUS * 1.002, isDark);
         countryDisposables.push(lines);
         pivot.add(lines);
       })
@@ -224,9 +237,9 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
       const pts = greatCircleArc(a, b, ARC_SEGMENTS, 0.15);
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
       const mat = new THREE.LineBasicMaterial({
-        color: 0x00e599,
+        color: isDark ? 0x00e599 : 0x166534,
         transparent: true,
-        opacity: 0.6,
+        opacity: isDark ? 0.6 : 0.5,
       });
       const line = new THREE.Line(geo, mat);
       arcGroup.add(line);
@@ -367,7 +380,7 @@ export default function NodeGlobe({ nodes }: { nodes: GlobeNode[] }) {
         renderer.domElement.parentElement.removeChild(renderer.domElement);
       }
     };
-  }, [nodes]);
+  }, [nodes, isDark]);
 
   return (
     <div

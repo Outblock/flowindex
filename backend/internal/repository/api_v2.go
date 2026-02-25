@@ -76,35 +76,51 @@ func (r *Repository) ListAccountsForAPI(ctx context.Context, cursorHeight *uint6
 		sort = sortBy[0]
 	}
 
-	var cursor interface{}
-	if cursorHeight != nil {
-		cursor = int64(*cursorHeight)
-	}
+	sysAddr := hexToBytes(systemFlowAddressHex)
 
-	orderBy := "COALESCE(a.last_seen_height, 0) DESC NULLS LAST, a.address ASC"
+	// Use CTE to first select top-N rows from the primary sort table (index-driven),
+	// then JOIN only the small result set with other tables. This avoids sorting 10M+ joined rows.
+	var query string
 	switch sort {
 	case "tx_count":
-		orderBy = "COALESCE(st.tx_count, 0) DESC, a.address ASC"
-	case "storage":
-		orderBy = "COALESCE(s.storage_used, 0) DESC, a.address ASC"
-	}
-
-	rows, err := r.db.Query(ctx, `
-		SELECT encode(a.address, 'hex') AS address,
+		query = `
+		WITH top AS (
+			SELECT address, tx_count
+			FROM app.address_stats
+			WHERE address <> $3
+			ORDER BY tx_count DESC, address ASC
+			LIMIT $1 OFFSET $2
+		)
+		SELECT encode(COALESCE(a.address, t.address), 'hex'),
 		       COALESCE(a.first_seen_height, 0),
 		       COALESCE(a.last_seen_height, 0),
 		       a.created_at, a.updated_at,
-		       COALESCE(s.storage_used, 0),
-		       COALESCE(s.storage_capacity, 0),
-		       COALESCE(s.storage_available, 0),
+		       0::bigint, 0::bigint, 0::bigint,
+		       COALESCE(t.tx_count, 0)
+		FROM top t
+		LEFT JOIN app.accounts a ON a.address = t.address
+		ORDER BY t.tx_count DESC, t.address ASC`
+	default: // "recent" — sort by last_seen_height
+		query = `
+		WITH top AS (
+			SELECT address, first_seen_height, last_seen_height, created_at, updated_at
+			FROM app.accounts
+			WHERE address <> $3
+			ORDER BY last_seen_height DESC NULLS LAST, address ASC
+			LIMIT $1 OFFSET $2
+		)
+		SELECT encode(a.address, 'hex'),
+		       COALESCE(a.first_seen_height, 0),
+		       COALESCE(a.last_seen_height, 0),
+		       a.created_at, a.updated_at,
+		       0::bigint, 0::bigint, 0::bigint,
 		       COALESCE(st.tx_count, 0)
-		FROM app.accounts a
-		LEFT JOIN app.account_storage_snapshots s ON s.address = a.address
+		FROM top a
 		LEFT JOIN app.address_stats st ON st.address = a.address
-		WHERE a.address <> $4
-		  AND ($1::bigint IS NULL OR COALESCE(a.last_seen_height, 0) <= $1)
-		ORDER BY `+orderBy+`
-		LIMIT $2 OFFSET $3`, cursor, limit, offset, hexToBytes(systemFlowAddressHex))
+		ORDER BY a.last_seen_height DESC NULLS LAST, a.address ASC`
+	}
+
+	rows, err := r.db.Query(ctx, query, limit, offset, sysAddr)
 	if err != nil {
 		return nil, err
 	}
