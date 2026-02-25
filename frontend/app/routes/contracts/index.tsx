@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Search, Database } from 'lucide-react';
+import { FileText, Search } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Contract } from '../../api/gen/find';
@@ -176,34 +176,17 @@ function Contracts() {
                 </button>
             </motion.form>
 
-            {/* Stats Cards */}
+            {/* Stats */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="grid grid-cols-1 md:grid-cols-3 gap-6"
+                className="grid grid-cols-1 gap-6"
             >
                 <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
                     <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Total Contracts</p>
                     <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                         <NumberFlow value={Number.isFinite(totalCount) ? totalCount : 0} format={{ useGrouping: true }} />
-                    </p>
-                </div>
-
-                <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-                    <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Valid From Height</p>
-                    <div className="flex items-center gap-2">
-                        <Database className="w-4 h-4 text-zinc-400" />
-                            <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
-                            <NumberFlow value={Number(contractsMeta?.valid_from || 0)} format={{ useGrouping: true }} />
-                        </p>
-                    </div>
-                </div>
-
-                <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-                    <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Filter</p>
-                    <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
-                        {query || '(none)'}
                     </p>
                     {contractsMeta?.warning ? (
                         <p className="mt-2 text-[10px] text-amber-600 dark:text-amber-400 uppercase tracking-widest">{contractsMeta.warning}</p>
@@ -219,39 +202,37 @@ function Contracts() {
                             <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
                                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Identifier</th>
                                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Address</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Valid From</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Created</th>
-                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Imports</th>
+                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Deployed</th>
+                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Last Updated</th>
                             </tr>
                         </thead>
                         <tbody>
                             {contractsLoading ? (
                                 <tr>
-                                    <td colSpan={5} className="p-8 text-center text-zinc-500 text-sm">Loading contract list...</td>
+                                    <td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">Loading contract list...</td>
                                 </tr>
                             ) : contractsError ? (
                                 <tr>
-                                    <td colSpan={5} className="p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{contractsError}</td>
+                                    <td colSpan={4} className="p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{contractsError}</td>
                                 </tr>
                             ) : contractsData.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="p-8 text-center text-zinc-500 text-sm">No contracts found</td>
+                                    <td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">No contracts found</td>
                                 </tr>
                             ) : (
                             <AnimatePresence mode="popLayout">
                                 {contractsData.map((c: any) => {
                                     const identifier = String(c?.identifier || c?.id || '');
                                     const addr = normalizeHex(c?.address);
-                                    const validFrom = Number(c?.valid_from || 0);
+                                    const lastUpdatedHeight = Number(c?.valid_from || 0);
                                     const createdAt = c?.created_at || '';
                                     const rel = createdAt ? formatRelativeTime(createdAt, nowTick) : '';
                                     const abs = createdAt ? formatAbsoluteTime(createdAt) : '';
-                                    const imports = Number(c?.import_count || 0);
 
                                     return (
                                         <motion.tr
                                             layout
-                                            key={identifier || `${addr}-${validFrom}`}
+                                            key={identifier || `${addr}-${lastUpdatedHeight}`}
                                             initial={{ opacity: 0, x: -10 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
@@ -272,11 +253,6 @@ function Contracts() {
                                                     <span className="text-zinc-500">N/A</span>
                                                 )}
                                             </td>
-                                            <td className="p-4 text-right">
-                                                <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300">
-                                                    {validFrom ? validFrom.toLocaleString() : '0'}
-                                                </span>
-                                            </td>
                                             <td className="p-4">
                                                 <div className="flex flex-col">
                                                     <span className="text-sm text-zinc-900 dark:text-white">{rel}</span>
@@ -284,9 +260,17 @@ function Contracts() {
                                                 </div>
                                             </td>
                                             <td className="p-4 text-right">
-                                                <span className="font-mono text-sm bg-zinc-100 dark:bg-white/10 px-2 py-1 rounded">
-                                                    {Number.isFinite(imports) ? imports : 0}
-                                                </span>
+                                                {lastUpdatedHeight > 0 ? (
+                                                    <Link
+                                                        to="/blocks/$heightOrId"
+                                                        params={{ heightOrId: String(lastUpdatedHeight) }}
+                                                        className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                                    >
+                                                        {lastUpdatedHeight.toLocaleString()}
+                                                    </Link>
+                                                ) : (
+                                                    <span className="font-mono text-sm text-zinc-500">—</span>
+                                                )}
                                             </td>
                                         </motion.tr>
                                     );
