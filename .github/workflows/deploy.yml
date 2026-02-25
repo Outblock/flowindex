@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      services:
+        description: "Services to deploy (comma-separated: backend,frontend,docs,ai-chat or 'all')"
+        required: false
+        default: "all"
+        type: string
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -16,18 +22,19 @@ env:
   REGISTRY: us-central1-docker.pkg.dev/flowindex-mainnet/flowindex
 
 jobs:
-  # Detect which services changed
+  # Detect which services changed (or use manual input)
   changes:
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      docs: ${{ steps.filter.outputs.docs }}
-      ai-chat: ${{ steps.filter.outputs.ai-chat }}
+      backend: ${{ steps.result.outputs.backend }}
+      frontend: ${{ steps.result.outputs.frontend }}
+      docs: ${{ steps.result.outputs.docs }}
+      ai-chat: ${{ steps.result.outputs.ai-chat }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
+        if: github.event_name == 'push'
         with:
           filters: |
             backend:
@@ -46,6 +53,33 @@ jobs:
             ai-chat:
               - 'ai/chat/**'
               - '.github/workflows/deploy.yml'
+      - name: Resolve outputs
+        id: result
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SERVICES="${{ inputs.services }}"
+            if [ "$SERVICES" = "all" ] || [ -z "$SERVICES" ]; then
+              echo "backend=true" >> $GITHUB_OUTPUT
+              echo "frontend=true" >> $GITHUB_OUTPUT
+              echo "docs=true" >> $GITHUB_OUTPUT
+              echo "ai-chat=true" >> $GITHUB_OUTPUT
+            else
+              echo "backend=false" >> $GITHUB_OUTPUT
+              echo "frontend=false" >> $GITHUB_OUTPUT
+              echo "docs=false" >> $GITHUB_OUTPUT
+              echo "ai-chat=false" >> $GITHUB_OUTPUT
+              IFS=',' read -ra PARTS <<< "$SERVICES"
+              for svc in "${PARTS[@]}"; do
+                svc=$(echo "$svc" | xargs)
+                echo "${svc}=true" >> $GITHUB_OUTPUT
+              done
+            fi
+          else
+            echo "backend=${{ steps.filter.outputs.backend }}" >> $GITHUB_OUTPUT
+            echo "frontend=${{ steps.filter.outputs.frontend }}" >> $GITHUB_OUTPUT
+            echo "docs=${{ steps.filter.outputs.docs }}" >> $GITHUB_OUTPUT
+            echo "ai-chat=${{ steps.filter.outputs.ai-chat }}" >> $GITHUB_OUTPUT
+          fi
 
   build-backend:
     needs: changes
