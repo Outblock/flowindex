@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StatsRouteImport } from './routes/stats'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as NodesRouteImport } from './routes/nodes'
 import { Route as ApiDocsRouteImport } from './routes/api-docs'
 import { Route as AdminRouteImport } from './routes/admin'
@@ -36,6 +37,11 @@ import { Route as AccountsAddressRouteImport } from './routes/accounts/$address'
 import { Route as TxsEvmTxIdRouteImport } from './routes/txs/evm/$txId'
 import { Route as NftsNftTypeItemIdRouteImport } from './routes/nfts/$nftType/item/$id'
 
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StatsRoute = StatsRouteImport.update({
   id: '/stats',
   path: '/stats',
@@ -167,10 +173,11 @@ const NftsNftTypeItemIdRoute = NftsNftTypeItemIdRouteImport.update({
   getParentRoute: () => NftsNftTypeRoute,
 } as any)
 
-export interface FileRoutesByFullPath {
+interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
+  '/analytics': typeof AnalyticsRoute
   '/api-docs': typeof ApiDocsRoute
   '/nodes': typeof NodesRoute
   '/stats': typeof StatsRoute
@@ -195,10 +202,11 @@ export interface FileRoutesByFullPath {
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
-export interface FileRoutesByTo {
+interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
+  '/analytics': typeof AnalyticsRoute
   '/api-docs': typeof ApiDocsRoute
   '/nodes': typeof NodesRoute
   '/stats': typeof StatsRoute
@@ -223,11 +231,12 @@ export interface FileRoutesByTo {
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
-export interface FileRoutesById {
+interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
+  '/analytics': typeof AnalyticsRoute
   '/api-docs': typeof ApiDocsRoute
   '/nodes': typeof NodesRoute
   '/stats': typeof StatsRoute
@@ -252,12 +261,13 @@ export interface FileRoutesById {
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
-export interface FileRouteTypes {
+interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/$'
     | '/admin'
+    | '/analytics'
     | '/api-docs'
     | '/nodes'
     | '/stats'
@@ -286,6 +296,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/admin'
+    | '/analytics'
     | '/api-docs'
     | '/nodes'
     | '/stats'
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/admin'
+    | '/analytics'
     | '/api-docs'
     | '/nodes'
     | '/stats'
@@ -339,10 +351,11 @@ export interface FileRouteTypes {
     | '/nfts/$nftType/item/$id'
   fileRoutesById: FileRoutesById
 }
-export interface RootRouteChildren {
+interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   AdminRoute: typeof AdminRoute
+  AnalyticsRoute: typeof AnalyticsRoute
   ApiDocsRoute: typeof ApiDocsRoute
   NodesRoute: typeof NodesRoute
   StatsRoute: typeof StatsRoute
@@ -388,6 +401,13 @@ declare module '@tanstack/react-router' {
       path: '/api-docs'
       fullPath: '/api-docs'
       preLoaderRoute: typeof ApiDocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -570,6 +590,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   AdminRoute: AdminRoute,
+  AnalyticsRoute: AnalyticsRoute,
   ApiDocsRoute: ApiDocsRoute,
   NodesRoute: NodesRoute,
   StatsRoute: StatsRoute,
