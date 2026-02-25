@@ -163,8 +163,8 @@ jobs:
             docker stop frontend 2>/dev/null; docker rm frontend 2>/dev/null; \
             docker run -d --restart=always --name frontend \
               --network=host \
-              -e BACKEND_API=http://10.128.0.2:8080 \
-              -e BACKEND_WS=http://10.128.0.2:8080 \
+              -e BACKEND_API=http://10.128.0.4:8080 \
+              -e BACKEND_WS=http://10.128.0.4:8080 \
               -e VITE_API_URL=https://flowindex.io/api \
               ${{ env.REGISTRY }}/frontend:${{ github.sha }}
           '
