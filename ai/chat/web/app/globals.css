@@ -1,0 +1,227 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* OLED Dark Base */
+  --bg-app: #000000;
+  --bg-panel: #080808;
+  --bg-element: #111111;
+  --bg-elevated: #161616;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.10);
+
+  /* Flow Green */
+  --flow-green: #00ef8b;
+  --flow-green-dim: #00c472;
+  --flow-green-glow: rgba(0, 239, 139, 0.15);
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #475569;
+
+  --radius: 0.625rem;
+
+  /* shadcn mapping */
+  --background: oklch(0.03 0 0);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.06 0 0);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.06 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.82 0.19 163);
+  --primary-foreground: oklch(0.1 0 0);
+  --secondary: oklch(0.15 0 0);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.15 0 0);
+  --muted-foreground: oklch(0.6 0 0);
+  --accent: oklch(0.15 0 0);
+  --accent-foreground: oklch(0.95 0 0);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.95 0 0);
+  --border: oklch(0.15 0 0);
+  --input: oklch(0.15 0 0);
+  --ring: oklch(0.82 0.19 163);
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mono-font {
+  font-family: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+}
+
+/* Glass Effect */
+.glass {
+  background: rgba(8, 8, 8, 0.8);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-strong);
+}
+
+/* Glow */
+.flow-glow {
+  box-shadow: 0 0 24px -4px var(--flow-green-glow);
+}
+
+/* Animations */
+.animate-reveal {
+  animation: reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 25%, rgba(0, 239, 139, 0.04) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* Markdown */
+.prose-flow {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: #cbd5e1;
+}
+.prose-flow p { margin-bottom: 0.75em; }
+.prose-flow p:last-child { margin-bottom: 0; }
+.prose-flow strong { color: #f1f5f9; font-weight: 600; }
+.prose-flow code {
+  background: rgba(0, 239, 139, 0.08);
+  color: var(--flow-green);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.8125em;
+  font-family: "JetBrains Mono", monospace;
+}
+.prose-flow pre {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+.prose-flow pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.8125rem;
+}
+.prose-flow ul, .prose-flow ol {
+  padding-left: 1.25em;
+  margin-bottom: 0.75em;
+}
+.prose-flow li { margin-bottom: 0.25em; }
+.prose-flow h1, .prose-flow h2, .prose-flow h3 {
+  color: #f1f5f9;
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+}
+
+/* Focus */
+:focus-visible {
+  outline: 2px solid var(--flow-green);
+  outline-offset: 2px;
+}
+
+/* Prompt input override — soften focus ring */
+.prompt-input-flow [data-slot="input-group"] {
+  border-radius: 1rem !important;
+  border-color: var(--border-subtle) !important;
+  background: var(--bg-panel) !important;
+  box-shadow: 0 4px 24px -4px rgba(0,0,0,0.3) !important;
+}
+.prompt-input-flow [data-slot="input-group"]:has([data-slot="input-group-control"]:focus-visible) {
+  border-color: rgba(0, 239, 139, 0.20) !important;
+  box-shadow: 0 0 0 2px rgba(0, 239, 139, 0.06), 0 4px 24px -4px rgba(0,0,0,0.3) !important;
+  --tw-ring-shadow: none !important;
+}
+.prompt-input-flow [data-slot="input-group-control"]:focus-visible {
+  outline: none !important;
+  --tw-ring-shadow: none !important;
+  border-color: transparent !important;
+}
+.prompt-input-flow textarea:focus-visible {
+  outline: none !important;
+  --tw-ring-shadow: none !important;
+  border-color: transparent !important;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-reveal { animation: none; opacity: 1; }
+  .animate-shimmer { animation: none; }
+  .animate-pulse { animation: none; }
+  .animate-spin { animation: none; }
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

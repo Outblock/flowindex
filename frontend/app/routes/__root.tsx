@@ -6,6 +6,9 @@ import Sidebar from '../components/Sidebar';
 import { WebSocketProvider } from '../components/WebSocketProvider';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { Toaster } from 'react-hot-toast';
+import { lazy, Suspense } from 'react';
+
+const AIChatWidget = lazy(() => import('../components/chat/AIChatWidget'));
 import '../index.css';
 
 export const Route = createRootRoute({
@@ -32,6 +35,7 @@ function RootComponent() {
                             </main>
                         </div>
                     </div>
+                    <Suspense fallback={null}><AIChatWidget /></Suspense>
                     <Toaster position="bottom-right" />
                 </WebSocketProvider>
             </ThemeProvider>
