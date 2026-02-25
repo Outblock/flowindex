@@ -162,52 +162,9 @@ export const Route = createFileRoute('/txs/$txId')({
                 };
                 return { transaction: transformedTx, error: null as string | null };
             }
-            // If direct Cadence lookup fails and ID looks like an EVM hash,
-            // fetch from Blockscout proxy and construct an EVM tx object
-            if (/^0x[a-fA-F0-9]{64}$/.test(params.txId)) {
-                try {
-                    const evmRes = await fetch(`${baseUrl}/flow/evm/transaction/${params.txId}`);
-                    if (evmRes.ok) {
-                        const evm: any = await evmRes.json();
-                        const transformedTx = {
-                            id: params.txId,
-                            is_evm: true,
-                            evm_hash: evm.hash || params.txId,
-                            type: 'EVM',
-                            status: evm.status === 'ok' || evm.result === 'success' ? 'SEALED' : 'FAILED',
-                            block_height: evm.block_number || evm.block,
-                            blockHeight: evm.block_number || evm.block,
-                            payer: evm.from?.hash || evm.from || 'Unknown',
-                            proposer: evm.from?.hash || evm.from || 'Unknown',
-                            proposerKeyIndex: -1,
-                            proposerSequenceNumber: -1,
-                            gasLimit: evm.gas_limit,
-                            gasUsed: evm.gas_used,
-                            events: [],
-                            errorMessage: evm.revert_reason || evm.error || null,
-                            arguments: null,
-                            evm_data: {
-                                hash: evm.hash || params.txId,
-                                from: evm.from?.hash || evm.from,
-                                to: evm.to?.hash || evm.to,
-                                value: evm.value,
-                                gas_used: evm.gas_used,
-                                gas_limit: evm.gas_limit,
-                                gas_price: evm.gas_price,
-                                nonce: evm.nonce,
-                                block_number: evm.block_number || evm.block,
-                                status: evm.status,
-                                method: evm.method,
-                                timestamp: evm.timestamp,
-                                fee: evm.fee?.value,
-                            },
-                        };
-                        return { transaction: transformedTx, error: null as string | null };
-                    }
-                } catch (e: any) {
-                    if (e?.isRedirect || e?.to) throw e;
-                }
-            }
+            // Backend's /flow/transaction/{id} already checks evm_tx_hashes
+            // and evm_transactions tables for EVM hash → Cadence tx resolution.
+            // If it returned 404, the EVM hash isn't indexed yet.
             if (res.status === 404) {
                 return { transaction: null, error: 'Transaction not found' };
             }
