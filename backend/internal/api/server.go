@@ -351,6 +351,7 @@ func (s *Server) buildStatusPayload(ctx context.Context, includeRanges bool) ([]
 		"oldest_block_timestamp": oldestBlockTimestamp,
 		"checkpoint_timestamps":  checkpointTimestamps,
 		"error_summary":          errorSummary,
+		"build_commit":           BuildCommit,
 	}
 
 	payload, err := json.Marshal(resp)

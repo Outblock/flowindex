@@ -13,6 +13,9 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// BuildCommit is set by main to the git commit hash baked in at build time.
+var BuildCommit = "dev"
+
 type Server struct {
 	repo          *repository.Repository
 	client        FlowClient

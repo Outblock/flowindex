@@ -22,6 +22,9 @@ import (
 	"flowscan-clone/internal/repository"
 )
 
+// BuildCommit is set at build time via -ldflags.
+var BuildCommit = "dev"
+
 func main() {
 	// 1. Config
 	dbURL := os.Getenv("DB_URL")
@@ -436,6 +439,7 @@ func main() {
 		committer = ingester.NewCheckpointCommitter(repo, workerTypes)
 	}
 
+	api.BuildCommit = BuildCommit
 	apiServer := api.NewServer(repo, flowClient, apiPort, startBlock)
 
 	// 4. Run

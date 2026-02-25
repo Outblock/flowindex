@@ -66,6 +66,7 @@ jobs:
       - name: Build & push backend
         run: |
           docker build -f backend/Dockerfile \
+            --build-arg GIT_COMMIT=${{ github.sha }} \
             -t ${{ env.REGISTRY }}/backend:latest \
             -t ${{ env.REGISTRY }}/backend:${{ github.sha }} \
             .
@@ -110,6 +111,7 @@ jobs:
         run: |
           docker build -f frontend/Dockerfile \
             --build-arg VITE_API_URL=/api \
+            --build-arg VITE_GIT_COMMIT=${{ github.sha }} \
             -t ${{ env.REGISTRY }}/frontend:latest \
             -t ${{ env.REGISTRY }}/frontend:${{ github.sha }} \
             .
