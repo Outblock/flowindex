@@ -1190,14 +1190,14 @@ export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }:
                     </div>
                 </div>
 
-                {/* Col 3: Label + Transfer preview (right-aligned) */}
+                {/* Col 3: Label + Transfer preview (right-aligned, vertically centered) */}
                 {tx.template_label && tx.template_label !== activity.label && (
-                    <span className={`flex-shrink-0 text-[10px] font-medium truncate max-w-[180px] ${activity.color}`} title={tx.template_label}>
+                    <span className={`flex-shrink-0 self-center text-[10px] font-medium truncate max-w-[180px] ${activity.color}`} title={tx.template_label}>
                         {tx.template_label}
                     </span>
                 )}
                 {transferPreview.length > 0 && (
-                    <div className="flex-shrink-0 relative z-[1]" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex-shrink-0 self-center relative z-[1]" onClick={(e) => e.stopPropagation()}>
                         <AvatarGroup className="h-7 -space-x-2">
                             {transferPreview.map((item, i) => {
                                 const logoUrl = extractLogoUrl(item.icon);

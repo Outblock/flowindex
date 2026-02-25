@@ -262,7 +262,11 @@ func MakeBroadcastNewTransactions(repo *repository.Repository) func([]models.Tra
 				if imports, err := repo.GetScriptImportsByHashes(ctx, uncovered); err == nil {
 					for hash, contractIDs := range imports {
 						cat := deriveCategoryFromImports(contractIDs)
-						if cat != "" {
+						// Skip "token_transfer" for WS broadcasts — we can't distinguish
+						// real FT transfers from gas-only txs without fee-filtered transfer
+						// records. The tx_contracts_worker will assign the proper FT_TRANSFER
+						// tag later once it processes the block.
+						if cat != "" && cat != "token_transfer" {
 							categoryByHash[hash] = cat
 						}
 					}
