@@ -4,6 +4,9 @@ import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
 import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { Components } from 'react-markdown';
 
 const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io';
 
@@ -153,96 +156,83 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   );
 }
 
-/* ── Inline Markdown (lightweight) ── */
+/* ── Markdown Renderer ── */
 
-function InlineMarkdown({ text }: { text: string }) {
+const markdownComponents: Components = {
+  h1: ({ children }) => <h1 className="text-base font-bold text-zinc-900 dark:text-white mt-3 mb-1">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-sm font-bold text-zinc-900 dark:text-white mt-3 mb-1">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-[12px] font-bold text-zinc-900 dark:text-white mt-2 mb-1">{children}</h3>,
+  h4: ({ children }) => <h4 className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 mt-2 mb-0.5">{children}</h4>,
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  strong: ({ children }) => <strong className="font-bold text-zinc-900 dark:text-white">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-nothing-green hover:underline">
+      {children}
+    </a>
+  ),
+  ul: ({ children }) => <ul className="ml-3 mb-2 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="ml-3 mb-2 space-y-0.5 list-decimal list-inside">{children}</ol>,
+  li: ({ children }) => (
+    <li className="flex gap-1.5">
+      <span className="text-nothing-green shrink-0 mt-[1px]">-</span>
+      <span className="flex-1">{children}</span>
+    </li>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-nothing-green/40 pl-3 my-2 text-zinc-500 dark:text-zinc-400 italic">
+      {children}
+    </blockquote>
+  ),
+  hr: () => <hr className="my-3 border-zinc-200 dark:border-white/10" />,
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-2 rounded-sm border border-zinc-200 dark:border-white/10">
+      <table className="w-full text-left border-collapse text-[11px]">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="bg-zinc-50 dark:bg-white/[0.03]">{children}</thead>,
+  th: ({ children }) => (
+    <th className="px-3 py-1.5 text-[10px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-white/10 whitespace-nowrap">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="px-3 py-1.5 text-zinc-600 dark:text-zinc-400 border-b border-zinc-100 dark:border-white/5 font-mono">
+      {children}
+    </td>
+  ),
+  code: ({ className, children }) => {
+    const match = /language-(\w+)/.exec(className || '');
+    const lang = match ? match[1] : '';
+    const codeString = String(children).replace(/\n$/, '');
+
+    if (lang || codeString.includes('\n')) {
+      return <CodeBlock code={codeString} language={lang || 'text'} />;
+    }
+
+    return (
+      <code className="text-[10px] bg-zinc-100 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-purple-600 dark:text-purple-400">
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }) => <>{children}</>,
+};
+
+function MarkdownContent({ text }: { text: string }) {
   if (!text) return null;
-
-  // Split on code blocks first
-  const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-  const segments: Array<{ type: 'text' | 'code'; content: string; lang?: string }> = [];
-  let lastIdx = 0;
-  let m: RegExpExecArray | null;
-
-  codeBlockRegex.lastIndex = 0;
-  while ((m = codeBlockRegex.exec(text)) !== null) {
-    if (m.index > lastIdx) {
-      segments.push({ type: 'text', content: text.slice(lastIdx, m.index) });
-    }
-    segments.push({ type: 'code', content: m[2].trim(), lang: m[1] || 'text' });
-    lastIdx = m.index + m[0].length;
-  }
-  if (lastIdx < text.length) {
-    segments.push({ type: 'text', content: text.slice(lastIdx) });
-  }
-
   return (
-    <>
-      {segments.map((seg, i) => {
-        if (seg.type === 'code') {
-          return <CodeBlock key={i} code={seg.content} language={seg.lang || 'text'} />;
-        }
-        return <TextBlock key={i} text={seg.content} />;
-      })}
-    </>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {text}
+    </ReactMarkdown>
   );
-}
-
-function TextBlock({ text }: { text: string }) {
-  // Process inline markdown: **bold**, `code`, [link](url), bullet lists
-  const lines = text.split('\n');
-  return (
-    <>
-      {lines.map((line, i) => {
-        if (!line.trim()) return <br key={i} />;
-
-        const isBullet = /^[-*]\s/.test(line.trim());
-        const content = isBullet ? line.trim().slice(2) : line;
-
-        const tokens = tokenizeInline(content);
-
-        if (isBullet) {
-          return (
-            <div key={i} className="flex gap-2 ml-2">
-              <span className="text-nothing-green shrink-0">-</span>
-              <span>{tokens}</span>
-            </div>
-          );
-        }
-
-        return <span key={i}>{tokens}{i < lines.length - 1 ? ' ' : ''}</span>;
-      })}
-    </>
-  );
-}
-
-function tokenizeInline(text: string): React.ReactNode {
-  const pattern = /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)/g;
-  const tokens: React.ReactNode[] = [];
-  let lastIdx = 0;
-  let m: RegExpExecArray | null;
-
-  pattern.lastIndex = 0;
-  while ((m = pattern.exec(text)) !== null) {
-    if (m.index > lastIdx) tokens.push(text.slice(lastIdx, m.index));
-    if (m[1] !== undefined) {
-      tokens.push(<strong key={m.index} className="font-bold text-zinc-900 dark:text-white">{m[1]}</strong>);
-    } else if (m[2] !== undefined) {
-      tokens.push(<code key={m.index} className="text-[10px] bg-zinc-100 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-purple-600 dark:text-purple-400">{m[2]}</code>);
-    } else if (m[3] !== undefined && m[4] !== undefined) {
-      tokens.push(<a key={m.index} href={m[4]} target="_blank" rel="noopener noreferrer" className="text-nothing-green hover:underline">{m[3]}</a>);
-    }
-    lastIdx = m.index + m[0].length;
-  }
-  if (lastIdx < text.length) tokens.push(text.slice(lastIdx));
-  return <>{tokens}</>;
 }
 
 /* ── Tool Part Renderers ── */
 
 function SqlToolPart({ part }: { part: any }) {
   const toolName = part.toolName ?? part.type?.split('-').slice(1).join('-') ?? '';
-  if (toolName !== 'runSQL' && toolName !== 'run_sql') return null;
+  if (toolName !== 'runSQL' && toolName !== 'run_sql' && toolName !== 'run_flowindex_sql' && toolName !== 'run_evm_sql') return null;
 
   const isDone = part.state === 'output-available' || part.state === 'result';
   const isError = part.state === 'output-error';
@@ -332,7 +322,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
               if (!(part as any).text?.trim()) return null;
               return (
                 <div key={i} className="text-[12px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                  <InlineMarkdown text={(part as any).text} />
+                  <MarkdownContent text={(part as any).text} />
                 </div>
               );
             }
@@ -341,7 +331,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
               const toolPart = part as any;
               const name = toolPart.toolName ?? toolPart.type?.split('-').slice(1).join('-') ?? '';
               if (name === 'run_cadence') return <CadenceToolPart key={i} part={toolPart} />;
-              if (name === 'run_sql' || name === 'runSQL') return <SqlToolPart key={i} part={toolPart} />;
+              if (name === 'run_sql' || name === 'runSQL' || name === 'run_flowindex_sql' || name === 'run_evm_sql') return <SqlToolPart key={i} part={toolPart} />;
               // Generic tool fallback
               return (
                 <div key={i} className="flex items-center gap-2 py-1 text-[10px] text-zinc-400">
@@ -585,24 +575,22 @@ export default function AIChatWidget() {
 
               {/* Input */}
               <div className="shrink-0 border-t border-zinc-200 dark:border-white/10 px-4 py-3">
-                <div className="flex items-end gap-2">
-                  <div className="flex-1 relative">
-                    <textarea
-                      ref={inputRef}
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Ask a question..."
-                      rows={1}
-                      className="w-full resize-none text-[12px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm px-3 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
-                      style={{ maxHeight: '80px' }}
-                    />
-                  </div>
+                <div className="relative flex items-end">
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask a question..."
+                    rows={1}
+                    className="w-full resize-none text-[12px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-11 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
+                    style={{ maxHeight: '80px' }}
+                  />
                   {isStreaming ? (
                     <button
                       type="button"
                       onClick={() => stop()}
-                      className="shrink-0 w-9 h-9 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors"
+                      className="absolute right-1.5 bottom-1.5 w-7 h-7 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors"
                       title="Stop"
                     >
                       <X size={14} />
@@ -612,18 +600,12 @@ export default function AIChatWidget() {
                       type="button"
                       onClick={() => handleSend(input)}
                       disabled={!input.trim()}
-                      className="shrink-0 w-9 h-9 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      className="absolute right-1.5 bottom-1.5 w-7 h-7 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       title="Send"
                     >
-                      <Send size={14} />
+                      <Send size={13} />
                     </button>
                   )}
-                </div>
-                <div className="flex items-center gap-1.5 mt-2">
-                  <Sparkles size={9} className="text-zinc-400" />
-                  <span className="text-[9px] text-zinc-400">
-                    Powered by Claude - Results may be inaccurate
-                  </span>
                 </div>
               </div>
             </motion.div>
