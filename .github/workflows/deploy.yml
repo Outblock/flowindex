@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -34,8 +35,10 @@ jobs:
               - 'openapi-v2.json'
               - 'find-api.json'
               - 'api.json'
+              - '.github/workflows/deploy.yml'
             frontend:
               - 'frontend/**'
+              - '.github/workflows/deploy.yml'
             docs:
               - 'devportal/**'
               - 'docs/**'
