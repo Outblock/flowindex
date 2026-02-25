@@ -35,23 +35,28 @@ export const Route = createFileRoute('/accounts/')({
     },
     loaderDeps: ({ search: { page, tab, sort_by } }) => ({ page, tab, sort_by }),
     loader: async ({ deps: { page, tab, sort_by } }) => {
+        const isSSR = import.meta.env.SSR;
         const limit = 20;
         const offset = ((page || 1) - 1) * limit;
         try {
             await ensureHeyApiConfigured();
             if (tab === 'accounts') {
-                const res = await getFlowV1Account({ query: { limit, offset, sort_by } });
+                const res = await getFlowV1Account({
+                    query: { limit, offset, sort_by },
+                    timeout: isSSR ? 2500 : 12000,
+                });
                 const payload: any = res.data;
                 return {
                     accounts: payload?.data || [],
                     meta: payload?._meta || null,
                     page,
+                    deferred: false,
                 };
             }
-            return { accounts: [], meta: null, page };
+            return { accounts: [], meta: null, page, deferred: false };
         } catch (e) {
             console.error("Failed to load accounts", e);
-            return { accounts: [], meta: null, page };
+            return { accounts: [], meta: null, page, deferred: isSSR && tab === 'accounts' };
         }
     }
 })
@@ -65,9 +70,13 @@ const TABS: { key: Tab; label: string; icon: typeof Users }[] = [
 const DEFAULT_FLOW_TOKEN = 'A.1654653399040a61.FlowToken';
 
 function Accounts() {
-    const { accounts, meta, page } = Route.useLoaderData();
+    const { accounts, meta, page, deferred } = Route.useLoaderData();
     const navigate = Route.useNavigate();
     const { tab, sort_by, token, collection } = Route.useSearch();
+    const [accountsData, setAccountsData] = useState<any[]>(accounts);
+    const [accountsMeta, setAccountsMeta] = useState<any>(meta);
+    const [accountsLoading, setAccountsLoading] = useState(Boolean(tab === 'accounts' && deferred));
+    const [accountsError, setAccountsError] = useState('');
 
     const { isConnected } = useWebSocketStatus();
     const nowTick = useTimeTicker(20000);
@@ -80,8 +89,45 @@ function Accounts() {
 
     const limit = 20;
     const offset = ((page || 1) - 1) * limit;
-    const totalCount = Number(meta?.count || 0);
-    const hasNext = totalCount > 0 ? offset + limit < totalCount : accounts.length === limit;
+    const totalCount = Number(accountsMeta?.count || 0);
+    const hasNext = totalCount > 0 ? offset + limit < totalCount : accountsData.length === limit;
+
+    useEffect(() => {
+        setAccountsData(accounts);
+        setAccountsMeta(meta);
+        setAccountsError('');
+        setAccountsLoading(Boolean(tab === 'accounts' && deferred));
+    }, [accounts, meta, tab, deferred]);
+
+    useEffect(() => {
+        if (tab !== 'accounts' || !deferred) return;
+        let cancelled = false;
+        const loadAccountsClientSide = async () => {
+            setAccountsLoading(true);
+            try {
+                await ensureHeyApiConfigured();
+                const res = await getFlowV1Account({
+                    query: { limit, offset, sort_by },
+                    timeout: 12000,
+                });
+                if (cancelled) return;
+                const payload: any = res.data;
+                setAccountsData(payload?.data || []);
+                setAccountsMeta(payload?._meta || null);
+            } catch (err) {
+                if (!cancelled) {
+                    console.error('Client fallback: failed to load accounts', err);
+                    setAccountsError('Account list is temporarily slow. Please retry in a few seconds.');
+                }
+            } finally {
+                if (!cancelled) setAccountsLoading(false);
+            }
+        };
+        loadAccountsClientSide();
+        return () => {
+            cancelled = true;
+        };
+    }, [tab, deferred, limit, offset, sort_by]);
 
     const setSearch = (updates: Partial<AccountsSearch>) => {
         navigate({ search: (prev: AccountsSearch) => ({ ...prev, ...updates }) });
@@ -138,12 +184,14 @@ function Accounts() {
             {/* Tab Content */}
             {tab === 'accounts' && (
                 <AllAccountsTab
-                    accounts={accounts}
-                    meta={meta}
+                    accounts={accountsData}
+                    meta={accountsMeta}
                     page={page}
                     sortBy={sort_by || 'block_height'}
                     totalCount={totalCount}
                     hasNext={hasNext}
+                    isLoading={accountsLoading}
+                    error={accountsError}
                     nowTick={nowTick}
                     normalizeHex={normalizeHex}
                     onSortChange={(s: string) => setSearch({ sort_by: s, page: 1 })}
@@ -189,7 +237,7 @@ function SortableHeader({ label, sortKey, currentSort, onSort, align }: { label:
 }
 
 // ─── All Accounts Tab ────────────────────────────────────────────────
-function AllAccountsTab({ accounts, meta: _meta, page, sortBy, totalCount, hasNext, nowTick, normalizeHex, onSortChange, onPageChange }: any) {
+function AllAccountsTab({ accounts, meta: _meta, page, sortBy, totalCount, hasNext, isLoading, error, nowTick, normalizeHex, onSortChange, onPageChange }: any) {
     return (
         <>
             {/* Stats */}
@@ -218,6 +266,19 @@ function AllAccountsTab({ accounts, meta: _meta, page, sortBy, totalCount, hasNe
                             </tr>
                         </thead>
                         <tbody>
+                            {isLoading ? (
+                                <tr>
+                                    <td colSpan={7} className="p-8 text-center text-zinc-500 text-sm">Loading account list...</td>
+                                </tr>
+                            ) : error ? (
+                                <tr>
+                                    <td colSpan={7} className="p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{error}</td>
+                                </tr>
+                            ) : accounts.length === 0 ? (
+                                <tr>
+                                    <td colSpan={7} className="p-8 text-center text-zinc-500 text-sm">No accounts found</td>
+                                </tr>
+                            ) : (
                             <AnimatePresence mode="popLayout">
                                 {accounts.map((a: any, i: number) => {
                                     const addr = normalizeHex(a?.address);
@@ -260,6 +321,7 @@ function AllAccountsTab({ accounts, meta: _meta, page, sortBy, totalCount, hasNe
                                     );
                                 })}
                             </AnimatePresence>
+                            )}
                         </tbody>
                     </table>
                 </div>

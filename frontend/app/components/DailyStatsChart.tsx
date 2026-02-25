@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ensureHeyApiConfigured } from '../api/heyapi';
 import { getStatusV1Stat } from '../api/gen/find';
 
 export function DailyStatsChart() {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [rangeDays, setRangeDays] = useState(30);
+    const [rangeDays, setRangeDays] = useState(1);
 
     useEffect(() => {
         const loadStats = async () => {
@@ -30,6 +30,7 @@ export function DailyStatsChart() {
                     const chartData = stats.map((s: any) => ({
                         name: (s.date || s.time || '').split('T')[0],
                         txs: s.tx_count ?? s.number ?? 0,
+                        evm_txs: s.evm_tx_count ?? 0,
                     })).sort((a: any, b: any) => new Date(a.name).getTime() - new Date(b.name).getTime());
                     setData(chartData);
                 } else {
@@ -69,8 +70,8 @@ export function DailyStatsChart() {
                 <h2 className="text-xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Transaction History</h2>
                 <div className="flex items-center gap-1">
                     {[
+                        { label: '24H', value: 1 },
                         { label: '7D', value: 7 },
-                        { label: '14D', value: 14 },
                         { label: '30D', value: 30 },
                         { label: '90D', value: 90 },
                         { label: '180D', value: 180 }
@@ -125,6 +126,7 @@ export function DailyStatsChart() {
                             cursor={{ stroke: '#333', strokeDasharray: '5 5' }}
                         />
                         <Area type="monotone" dataKey="txs" stroke="#00ef8b" strokeWidth={2} fillOpacity={1} fill="url(#colorTxs)" />
+                        <Line type="monotone" dataKey="evm_txs" stroke="#a855f7" strokeWidth={2} dot={false} />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>

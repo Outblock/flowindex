@@ -27,29 +27,38 @@ export const Route = createFileRoute('/contracts/')({
     },
     loaderDeps: ({ search: { page, query } }) => ({ page, query }),
     loader: async ({ deps: { page, query } }) => {
+        const isSSR = import.meta.env.SSR;
         const limit = 25;
         const offset = ((page || 1) - 1) * limit;
         try {
             await ensureHeyApiConfigured();
-            const res = await getFlowV1Contract({ query: { limit, offset, identifier: query } });
+            const res = await getFlowV1Contract({
+                query: { limit, offset, identifier: query },
+                timeout: isSSR ? 2500 : 12000,
+            });
             const payload: any = res.data;
             return {
                 contracts: payload?.data || [],
                 meta: payload?._meta || null,
                 page,
-                query
+                query,
+                deferred: false,
             };
         } catch (e) {
             console.error("Failed to load contracts", e);
-            return { contracts: [], meta: null, page, query };
+            return { contracts: [], meta: null, page, query, deferred: isSSR };
         }
     }
 })
 
 function Contracts() {
-    const { contracts, meta, page, query } = Route.useLoaderData();
+    const { contracts, meta, page, query, deferred } = Route.useLoaderData();
     const navigate = Route.useNavigate();
     const [searchQuery, setSearchQuery] = useState(query); // Local state for input
+    const [contractsData, setContractsData] = useState<any[]>(contracts);
+    const [contractsMeta, setContractsMeta] = useState<any>(meta);
+    const [contractsLoading, setContractsLoading] = useState(Boolean(deferred));
+    const [contractsError, setContractsError] = useState('');
 
     useEffect(() => {
         setSearchQuery(query);
@@ -60,8 +69,45 @@ function Contracts() {
 
     const limit = 25;
     const offset = ((page || 1) - 1) * limit;
-    const totalCount = Number(meta?.count || 0);
-    const hasNext = totalCount > 0 ? offset + limit < totalCount : contracts.length === limit;
+    const totalCount = Number(contractsMeta?.count || 0);
+    const hasNext = totalCount > 0 ? offset + limit < totalCount : contractsData.length === limit;
+
+    useEffect(() => {
+        setContractsData(contracts);
+        setContractsMeta(meta);
+        setContractsError('');
+        setContractsLoading(Boolean(deferred));
+    }, [contracts, meta, deferred]);
+
+    useEffect(() => {
+        if (!deferred) return;
+        let cancelled = false;
+        const loadContractsClientSide = async () => {
+            setContractsLoading(true);
+            try {
+                await ensureHeyApiConfigured();
+                const res = await getFlowV1Contract({
+                    query: { limit, offset, identifier: query },
+                    timeout: 12000,
+                });
+                if (cancelled) return;
+                const payload: any = res.data;
+                setContractsData(payload?.data || []);
+                setContractsMeta(payload?._meta || null);
+            } catch (err) {
+                if (!cancelled) {
+                    console.error('Client fallback: failed to load contracts', err);
+                    setContractsError('Contract list is temporarily slow. Please retry in a few seconds.');
+                }
+            } finally {
+                if (!cancelled) setContractsLoading(false);
+            }
+        };
+        loadContractsClientSide();
+        return () => {
+            cancelled = true;
+        };
+    }, [deferred, limit, offset, query]);
 
     const normalizeHex = (value: any) => {
         if (!value) return '';
@@ -148,8 +194,8 @@ function Contracts() {
                     <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Valid From Height</p>
                     <div className="flex items-center gap-2">
                         <Database className="w-4 h-4 text-zinc-400" />
-                        <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
-                            <NumberFlow value={Number(meta?.valid_from || 0)} format={{ useGrouping: true }} />
+                            <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
+                            <NumberFlow value={Number(contractsMeta?.valid_from || 0)} format={{ useGrouping: true }} />
                         </p>
                     </div>
                 </div>
@@ -159,8 +205,8 @@ function Contracts() {
                     <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
                         {query || '(none)'}
                     </p>
-                    {meta?.warning ? (
-                        <p className="mt-2 text-[10px] text-amber-600 dark:text-amber-400 uppercase tracking-widest">{meta.warning}</p>
+                    {contractsMeta?.warning ? (
+                        <p className="mt-2 text-[10px] text-amber-600 dark:text-amber-400 uppercase tracking-widest">{contractsMeta.warning}</p>
                     ) : null}
                 </div>
             </motion.div>
@@ -179,8 +225,21 @@ function Contracts() {
                             </tr>
                         </thead>
                         <tbody>
+                            {contractsLoading ? (
+                                <tr>
+                                    <td colSpan={5} className="p-8 text-center text-zinc-500 text-sm">Loading contract list...</td>
+                                </tr>
+                            ) : contractsError ? (
+                                <tr>
+                                    <td colSpan={5} className="p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{contractsError}</td>
+                                </tr>
+                            ) : contractsData.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="p-8 text-center text-zinc-500 text-sm">No contracts found</td>
+                                </tr>
+                            ) : (
                             <AnimatePresence mode="popLayout">
-                                {contracts.map((c: any) => {
+                                {contractsData.map((c: any) => {
                                     const identifier = String(c?.identifier || c?.id || '');
                                     const addr = normalizeHex(c?.address);
                                     const validFrom = Number(c?.valid_from || 0);
@@ -233,6 +292,7 @@ function Contracts() {
                                     );
                                 })}
                             </AnimatePresence>
+                            )}
                         </tbody>
                     </table>
                 </div>

@@ -235,6 +235,7 @@ type AddressStats struct {
 type DailyStat struct {
 	Date           string `json:"date"`
 	TxCount        int64  `json:"tx_count"`
+	EVMTxCount     int64  `json:"evm_tx_count"`
 	ActiveAccounts int64  `json:"active_accounts"`
 	NewContracts   int    `json:"new_contracts"`
 }

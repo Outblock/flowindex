@@ -249,10 +249,11 @@ func (r *Repository) GetContractByAddress(ctx context.Context, address string) (
 // RefreshDailyStats aggregates transaction counts by date into daily_stats table
 func (r *Repository) RefreshDailyStats(ctx context.Context) error {
 	_, err := r.db.Exec(ctx, `
-		INSERT INTO app.daily_stats (date, tx_count, updated_at)
+		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, updated_at)
 		SELECT 
 			DATE(timestamp) as date, 
 			COUNT(*) as tx_count,
+			COUNT(*) FILTER (WHERE is_evm = TRUE) as evm_tx_count,
 			NOW() as updated_at
 		FROM raw.transactions
 		WHERE timestamp IS NOT NULL
@@ -260,6 +261,7 @@ func (r *Repository) RefreshDailyStats(ctx context.Context) error {
 		GROUP BY DATE(timestamp)
 		ON CONFLICT (date) DO UPDATE SET 
 			tx_count = EXCLUDED.tx_count,
+			evm_tx_count = EXCLUDED.evm_tx_count,
 			updated_at = NOW();
 	`)
 	if err != nil {
@@ -271,7 +273,7 @@ func (r *Repository) RefreshDailyStats(ctx context.Context) error {
 // GetDailyStats retrieves the last 30 days of stats
 func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT date::text, tx_count, active_accounts, new_contracts
+		SELECT date::text, tx_count, COALESCE(evm_tx_count, 0), active_accounts, new_contracts
 		FROM app.daily_stats
 		WHERE date >= CURRENT_DATE - INTERVAL '29 days'
 		ORDER BY date ASC`)
@@ -283,7 +285,7 @@ func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, err
 	var stats []models.DailyStat
 	for rows.Next() {
 		var s models.DailyStat
-		if err := rows.Scan(&s.Date, &s.TxCount, &s.ActiveAccounts, &s.NewContracts); err != nil {
+		if err := rows.Scan(&s.Date, &s.TxCount, &s.EVMTxCount, &s.ActiveAccounts, &s.NewContracts); err != nil {
 			return nil, err
 		}
 		stats = append(stats, s)
