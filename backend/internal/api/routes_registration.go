@@ -15,6 +15,7 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin := r.PathPrefix("/admin").Subrouter()
 	admin.Use(adminAuthMiddleware)
 	admin.HandleFunc("/refetch-token-metadata", s.handleAdminRefetchTokenMetadata).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/batch-fetch-metadata", s.handleAdminBatchFetchMetadata).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/refetch-bridge", s.handleAdminRefetchBridge).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/ft", s.handleAdminListFTTokens).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/ft/{identifier}", s.handleAdminUpdateFTToken).Methods("PUT", "PATCH", "OPTIONS")
