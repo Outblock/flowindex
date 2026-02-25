@@ -18,15 +18,16 @@ import { formatNumber } from '../lib/format';
 export const Route = createFileRoute('/')({
     component: Home,
     loader: async () => {
+        const ssrFastTimeoutMs = import.meta.env.SSR ? 2200 : 10000;
         // Only fetch fast, critical data in the SSR loader.
         // Slower endpoints (transactions, tokens, nfts) load client-side
         // so the page renders immediately.
         try {
             await ensureHeyApiConfigured();
             const [statusRes, networkStatsRes, blocksRes] = await Promise.allSettled([
-                fetchStatus({ timeoutMs: 4000 }),
-                fetchNetworkStats(),
-                getFlowV1Block({ query: { limit: 50, offset: 0 } }),
+                fetchStatus({ timeoutMs: ssrFastTimeoutMs }),
+                fetchNetworkStats({ timeoutMs: ssrFastTimeoutMs }),
+                getFlowV1Block({ query: { limit: 50, offset: 0 }, timeout: ssrFastTimeoutMs }),
             ]);
             return {
                 status: statusRes.status === 'fulfilled' ? statusRes.value : null,

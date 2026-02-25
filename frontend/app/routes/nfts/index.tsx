@@ -5,7 +5,7 @@ import { Image, Database, Layers, LayoutGrid, LayoutList, Users } from 'lucide-r
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import NumberFlow from '@number-flow/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Nft } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
@@ -21,16 +21,17 @@ export const Route = createFileRoute('/nfts/')({
   }),
   loaderDeps: ({ search: { page } }) => ({ page }),
   loader: async ({ deps: { page } }) => {
+    const isSSR = import.meta.env.SSR;
     const limit = 25;
     const offset = ((page ?? 1) - 1) * limit;
     try {
       await ensureHeyApiConfigured();
-      const res = await getFlowV1Nft({ query: { limit, offset } });
+      const res = await getFlowV1Nft({ query: { limit, offset }, timeout: isSSR ? 2500 : 12000 });
       const payload: any = res.data;
-      return { collections: payload?.data || [], meta: payload?._meta || null, page };
+      return { collections: payload?.data || [], meta: payload?._meta || null, page, deferred: false };
     } catch (e) {
       console.error('Failed to load NFT collections', e);
-      return { collections: [], meta: null, page };
+      return { collections: [], meta: null, page, deferred: isSSR };
     }
   },
 })
@@ -51,6 +52,8 @@ function CollectionImage({ name, src }: { name: string; src?: string }) {
         <img
           src={src}
           alt={name}
+          loading="lazy"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover"
           onError={() => setFailed(true)}
         />
@@ -70,6 +73,8 @@ function CollectionLogo({ name, src }: { name: string; src?: string }) {
         alt={name}
         width={32}
         height={32}
+        loading="lazy"
+        decoding="async"
         className="w-8 h-8 object-contain"
         onError={() => setFailed(true)}
       />
@@ -84,14 +89,52 @@ function CollectionLogo({ name, src }: { name: string; src?: string }) {
 }
 
 function NFTs() {
-  const { collections, meta, page } = Route.useLoaderData();
+  const { collections, meta, page, deferred } = Route.useLoaderData();
   const navigate = Route.useNavigate();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [collectionsData, setCollectionsData] = useState<any[]>(collections);
+  const [collectionsMeta, setCollectionsMeta] = useState<any>(meta);
+  const [collectionsLoading, setCollectionsLoading] = useState(Boolean(deferred));
+  const [collectionsError, setCollectionsError] = useState('');
 
   const limit = 25;
   const offset = ((page ?? 1) - 1) * limit;
-  const totalCount = Number(meta?.count || 0);
-  const hasNext = totalCount > 0 ? offset + limit < totalCount : collections.length === limit;
+  const totalCount = Number(collectionsMeta?.count || 0);
+  const hasNext = totalCount > 0 ? offset + limit < totalCount : collectionsData.length === limit;
+
+  useEffect(() => {
+    setCollectionsData(collections);
+    setCollectionsMeta(meta);
+    setCollectionsError('');
+    setCollectionsLoading(Boolean(deferred));
+  }, [collections, meta, deferred]);
+
+  useEffect(() => {
+    if (!deferred) return;
+    let cancelled = false;
+    const loadCollectionsClientSide = async () => {
+      setCollectionsLoading(true);
+      try {
+        await ensureHeyApiConfigured();
+        const res = await getFlowV1Nft({ query: { limit, offset }, timeout: 12000 });
+        if (cancelled) return;
+        const payload: any = res.data;
+        setCollectionsData(payload?.data || []);
+        setCollectionsMeta(payload?._meta || null);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Client fallback: failed to load NFT collections', err);
+          setCollectionsError('NFT collection list is temporarily slow. Please retry in a few seconds.');
+        }
+      } finally {
+        if (!cancelled) setCollectionsLoading(false);
+      }
+    };
+    loadCollectionsClientSide();
+    return () => {
+      cancelled = true;
+    };
+  }, [deferred, limit, offset]);
 
   const normalizeHex = (value: any) => {
     if (!value) return '';
@@ -144,7 +187,7 @@ function NFTs() {
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 shadow-sm dark:shadow-none">
           <p className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Total Collections</p>
           <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-            <NumberFlow value={Number(meta?.count || 0)} format={{ useGrouping: true }} />
+            <NumberFlow value={Number(collectionsMeta?.count || 0)} format={{ useGrouping: true }} />
           </p>
         </div>
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 shadow-sm dark:shadow-none">
@@ -152,7 +195,7 @@ function NFTs() {
           <div className="flex items-center gap-2">
             <Database className="w-4 h-4 text-zinc-400" />
             <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
-              <NumberFlow value={Number(meta?.height || 0)} format={{ useGrouping: true }} />
+              <NumberFlow value={Number(collectionsMeta?.height || 0)} format={{ useGrouping: true }} />
             </p>
           </div>
         </div>
@@ -161,7 +204,7 @@ function NFTs() {
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-zinc-400" />
             <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
-              <NumberFlow value={collections.length} format={{ useGrouping: true }} />
+              <NumberFlow value={collectionsData.length} format={{ useGrouping: true }} />
               <span className="text-sm font-normal text-zinc-500 ml-2">of {totalCount.toLocaleString()}</span>
             </p>
           </div>
@@ -171,60 +214,68 @@ function NFTs() {
       <div className="space-y-4">
         {viewMode === 'grid' ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            <AnimatePresence mode="popLayout">
-              {collections.map((c: any, i: number) => {
-                const id = String(c?.id || '');
-                const displayName = c?.display_name || c?.name || c?.contract_name || id;
-                const contractId = id;
-                const count = Number(c?.number_of_tokens || 0);
-                const squareImage = c?.square_image || '';
-                const evmAddress = String(c?.evm_address || '');
-                const isVerified = Boolean(c?.is_verified);
-                const holderCount = Number(c?.holder_count || 0);
+            {collectionsLoading ? (
+              <div className="col-span-full p-8 text-center text-zinc-500 text-sm">Loading NFT collections...</div>
+            ) : collectionsError ? (
+              <div className="col-span-full p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{collectionsError}</div>
+            ) : collectionsData.length === 0 ? (
+              <div className="col-span-full p-8 text-center text-zinc-500 text-sm">No NFT collections found</div>
+            ) : (
+              <AnimatePresence mode="popLayout">
+                {collectionsData.map((c: any, i: number) => {
+                  const id = String(c?.id || '');
+                  const displayName = c?.display_name || c?.name || c?.contract_name || id;
+                  const contractId = id;
+                  const count = Number(c?.number_of_tokens || 0);
+                  const squareImage = c?.square_image || '';
+                  const evmAddress = String(c?.evm_address || '');
+                  const isVerified = Boolean(c?.is_verified);
+                  const holderCount = Number(c?.holder_count || 0);
 
-                return (
-                  <motion.div
-                    layout
-                    key={id || `col-${i}`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.02 }}
-                  >
-                    <Link
-                      to={`/nfts/${encodeURIComponent(id)}` as any}
-                      className="block bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20 transition-all overflow-hidden group"
+                  return (
+                    <motion.div
+                      layout
+                      key={id || `col-${i}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.02 }}
                     >
-                      <div className="overflow-hidden">
-                        <CollectionImage name={displayName} src={squareImage} />
-                      </div>
-                      <div className="p-3 space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <h3 className="font-mono font-bold text-sm text-zinc-900 dark:text-white truncate group-hover:text-nothing-green-dark dark:group-hover:text-nothing-green transition-colors">
-                            {displayName}
-                          </h3>
-                          {isVerified && <VerifiedBadge size={14} />}
-                          {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
+                      <Link
+                        to={`/nfts/${encodeURIComponent(id)}` as any}
+                        className="block bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20 transition-all overflow-hidden group"
+                      >
+                        <div className="overflow-hidden">
+                          <CollectionImage name={displayName} src={squareImage} />
                         </div>
-                        <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate" title={contractId}>
-                          {contractId}
-                        </p>
-                        <div className="pt-1 flex items-center gap-2">
-                          <span className="inline-block font-mono text-[10px] uppercase tracking-widest bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 px-2 py-0.5 rounded-sm">
-                            {Number.isFinite(count) ? count.toLocaleString() : '0'} items
-                          </span>
-                          {holderCount > 0 && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 px-2 py-0.5 rounded-sm">
-                              <Users className="w-3 h-3" />
-                              {holderCount.toLocaleString()}
+                        <div className="p-3 space-y-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="font-mono font-bold text-sm text-zinc-900 dark:text-white truncate group-hover:text-nothing-green-dark dark:group-hover:text-nothing-green transition-colors">
+                              {displayName}
+                            </h3>
+                            {isVerified && <VerifiedBadge size={14} />}
+                            {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
+                          </div>
+                          <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate" title={contractId}>
+                            {contractId}
+                          </p>
+                          <div className="pt-1 flex items-center gap-2">
+                            <span className="inline-block font-mono text-[10px] uppercase tracking-widest bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 px-2 py-0.5 rounded-sm">
+                              {Number.isFinite(count) ? count.toLocaleString() : '0'} items
                             </span>
-                          )}
+                            {holderCount > 0 && (
+                              <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 px-2 py-0.5 rounded-sm">
+                                <Users className="w-3 h-3" />
+                                {holderCount.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </Link>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+                      </Link>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            )}
           </div>
         ) : (
           <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 overflow-hidden shadow-sm dark:shadow-none">
@@ -239,67 +290,75 @@ function NFTs() {
                   </tr>
                 </thead>
                 <tbody>
-                  <AnimatePresence mode="popLayout">
-                    {collections.map((c: any, i: number) => {
-                      const id = String(c?.id || '');
-                      const displayName = c?.display_name || c?.name || c?.contract_name || id;
-                      const addr = normalizeHex(c?.address);
-                      const count = Number(c?.number_of_tokens || 0);
-                      const holderCount = Number(c?.holder_count || 0);
-                      const squareImage = c?.square_image || '';
-                      const evmAddress = String(c?.evm_address || '');
-                      const isVerified = Boolean(c?.is_verified);
+                  {collectionsLoading ? (
+                    <tr><td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">Loading NFT collections...</td></tr>
+                  ) : collectionsError ? (
+                    <tr><td colSpan={4} className="p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{collectionsError}</td></tr>
+                  ) : collectionsData.length === 0 ? (
+                    <tr><td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">No NFT collections found</td></tr>
+                  ) : (
+                    <AnimatePresence mode="popLayout">
+                      {collectionsData.map((c: any, i: number) => {
+                        const id = String(c?.id || '');
+                        const displayName = c?.display_name || c?.name || c?.contract_name || id;
+                        const addr = normalizeHex(c?.address);
+                        const count = Number(c?.number_of_tokens || 0);
+                        const holderCount = Number(c?.holder_count || 0);
+                        const squareImage = c?.square_image || '';
+                        const evmAddress = String(c?.evm_address || '');
+                        const isVerified = Boolean(c?.is_verified);
 
-                      return (
-                        <motion.tr
-                          layout
-                          key={id || `col-${i}`}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
-                        >
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              <CollectionLogo name={displayName} src={squareImage} />
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <Link
-                                    to={`/nfts/${encodeURIComponent(id)}` as any}
-                                    className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline truncate"
-                                    title={id}
-                                  >
-                                    {displayName}
-                                  </Link>
-                                  {isVerified && <VerifiedBadge size={14} />}
-                                  {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
-                                </div>
-                                <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono truncate" title={id}>
-                                  {c?.contract_name || id}
+                        return (
+                          <motion.tr
+                            layout
+                            key={id || `col-${i}`}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
+                          >
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <CollectionLogo name={displayName} src={squareImage} />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <Link
+                                      to={`/nfts/${encodeURIComponent(id)}` as any}
+                                      className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline truncate"
+                                      title={id}
+                                    >
+                                      {displayName}
+                                    </Link>
+                                    {isVerified && <VerifiedBadge size={14} />}
+                                    {evmAddress && <EVMBridgeBadge evmAddress={evmAddress} />}
+                                  </div>
+                                  <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono truncate" title={id}>
+                                    {c?.contract_name || id}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            {addr ? (
-                              <AddressLink address={addr} prefixLen={20} suffixLen={0} />
-                            ) : (
-                              <span className="text-zinc-500 font-mono text-sm">N/A</span>
-                            )}
-                          </td>
-                          <td className="p-4 text-right">
-                            <span className="font-mono text-sm text-zinc-900 dark:text-white">
-                              {count.toLocaleString()}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right">
-                            <span className="font-mono text-sm text-zinc-900 dark:text-white">
-                              {holderCount.toLocaleString()}
-                            </span>
-                          </td>
-                        </motion.tr>
-                      );
-                    })}
-                  </AnimatePresence>
+                            </td>
+                            <td className="p-4">
+                              {addr ? (
+                                <AddressLink address={addr} prefixLen={20} suffixLen={0} />
+                              ) : (
+                                <span className="text-zinc-500 font-mono text-sm">N/A</span>
+                              )}
+                            </td>
+                            <td className="p-4 text-right">
+                              <span className="font-mono text-sm text-zinc-900 dark:text-white">
+                                {count.toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <span className="font-mono text-sm text-zinc-900 dark:text-white">
+                                {holderCount.toLocaleString()}
+                              </span>
+                            </td>
+                          </motion.tr>
+                        );
+                      })}
+                    </AnimatePresence>
+                  )}
                 </tbody>
               </table>
             </div>
