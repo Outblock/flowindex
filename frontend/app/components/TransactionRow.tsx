@@ -120,6 +120,18 @@ const templateCategoryStyles: Record<string, { type: string; label: string; colo
     CONTRACT_DEPLOY:  { type: 'deploy', label: 'Deploy', color: 'text-blue-600 dark:text-blue-400', bgColor: 'border-blue-300 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10' },
     SYSTEM:           { type: 'contract', label: 'System', color: 'text-zinc-600 dark:text-zinc-400', bgColor: 'border-zinc-300 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/10' },
     OTHER:            { type: 'contract', label: 'Contract Call', color: 'text-zinc-600 dark:text-zinc-400', bgColor: 'border-zinc-300 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/10' },
+    // Import-derived categories (from enrichWithScriptImports)
+    token_transfer:   { type: 'ft', label: 'Token Transfer', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' },
+    nft:              { type: 'nft', label: 'NFT', color: 'text-amber-600 dark:text-amber-400', bgColor: 'border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' },
+    marketplace:      { type: 'marketplace', label: 'Marketplace', color: 'text-pink-600 dark:text-pink-400', bgColor: 'border-pink-300 dark:border-pink-500/30 bg-pink-50 dark:bg-pink-500/10' },
+    staking:          { type: 'ft', label: 'Staking', color: 'text-violet-600 dark:text-violet-400', bgColor: 'border-violet-300 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10' },
+    evm:              { type: 'evm', label: 'EVM', color: 'text-purple-600 dark:text-purple-400', bgColor: 'border-purple-300 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-500/10' },
+    defi:             { type: 'swap', label: 'DeFi', color: 'text-teal-600 dark:text-teal-400', bgColor: 'border-teal-300 dark:border-teal-500/30 bg-teal-50 dark:bg-teal-500/10' },
+    account_linking:  { type: 'account', label: 'Account Link', color: 'text-cyan-600 dark:text-cyan-400', bgColor: 'border-cyan-300 dark:border-cyan-500/30 bg-cyan-50 dark:bg-cyan-500/10' },
+    account_creation: { type: 'account', label: 'New Account', color: 'text-cyan-600 dark:text-cyan-400', bgColor: 'border-cyan-300 dark:border-cyan-500/30 bg-cyan-50 dark:bg-cyan-500/10' },
+    contract_call:    { type: 'contract', label: 'Contract Call', color: 'text-zinc-600 dark:text-zinc-400', bgColor: 'border-zinc-300 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/10' },
+    crypto:           { type: 'contract', label: 'Crypto', color: 'text-zinc-600 dark:text-zinc-400', bgColor: 'border-zinc-300 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/10' },
+    system:           { type: 'contract', label: 'System', color: 'text-zinc-600 dark:text-zinc-400', bgColor: 'border-zinc-300 dark:border-zinc-500/30 bg-zinc-50 dark:bg-zinc-500/10' },
 };
 
 function mapTemplateCategoryToActivity(category: string, templateLabel?: string): { type: string; label: string; color: string; bgColor: string } | null {
