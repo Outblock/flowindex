@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate, redirect } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { useState, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
