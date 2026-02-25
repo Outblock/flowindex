@@ -50,7 +50,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if includeRanges {
 		s.statusRangesCache.mu.Lock()
 		s.statusRangesCache.payload = payload
-		s.statusRangesCache.expiresAt = time.Now().Add(10 * time.Second)
+		s.statusRangesCache.expiresAt = time.Now().Add(5 * time.Minute)
 		s.statusRangesCache.mu.Unlock()
 	} else {
 		s.statusCache.mu.Lock()

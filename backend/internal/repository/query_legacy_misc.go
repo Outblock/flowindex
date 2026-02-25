@@ -560,9 +560,16 @@ func (r *Repository) GetIndexedRanges(ctx context.Context) ([]IndexedRange, erro
 		return nil, nil
 	}
 
-	// Sample block counts in fixed-size buckets to find where data exists.
-	// Use ~500 buckets max to keep the query fast on large ranges.
+	// Fast path: if block count covers ≥99% of the span, data is essentially
+	// contiguous and we can skip the expensive per-bucket scan (which would
+	// otherwise read tens of millions of rows).
 	span := maxH - minH + 1
+	if totalBlocks >= int64(float64(span)*0.99) {
+		return []IndexedRange{{From: minH, To: maxH}}, nil
+	}
+
+	// Slow path: sample block counts in fixed-size buckets to find where data exists.
+	// Use ~500 buckets max to keep the query fast on large ranges.
 	bucketSize := span / 500
 	if bucketSize < 1000 {
 		bucketSize = 1000
