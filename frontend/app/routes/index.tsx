@@ -896,7 +896,6 @@ function Home() {
                                 {(transactions || []).map((tx) => {
                                     const _ = highlightNow; // keep in render dependency
                                     const isNew = (newTxExpiryRef.current.get(normalizeTxId(tx.id)) ?? 0) > highlightTick;
-                                    const isSealed = tx.status === 'SEALED';
                                     const isError = Boolean(tx.error_message || tx.errorMessage);
                                     const txTimeSource = tx.timestamp || tx.created_at || tx.block_timestamp;
                                     const txTimeAbsolute = formatAbsoluteTime(txTimeSource);
@@ -933,11 +932,6 @@ function Home() {
                                                         >
                                                             {txIdShort || tx.id}
                                                         </span>
-                                                        <div className="flex items-center space-x-2">
-                                                            <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${activity.bgColor} ${activity.color}`}>
-                                                                {activity.label}
-                                                            </span>
-                                                        </div>
                                                     </div>
                                                     <div className="flex flex-col items-end">
                                                         <span
@@ -946,10 +940,15 @@ function Home() {
                                                         >
                                                             {txTimeText || ''}
                                                         </span>
-                                                        <span className={`mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border ${isError ? 'border-red-500/50 text-red-500 bg-red-500/10' : isSealed ? 'border-nothing-green-dark/50 dark:border-nothing-green/50 text-nothing-green-dark dark:text-nothing-green bg-nothing-green-dark/10 dark:bg-nothing-green/10' : 'border-white/20 text-gray-400 bg-white/5'
-                                                            }`}>
-                                                            {isError ? 'Error' : isSealed ? 'Sealed' : 'Pending'}
-                                                        </span>
+                                                        {isError ? (
+                                                            <span className="mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm border border-red-500/50 text-red-500 bg-red-500/10">
+                                                                Error
+                                                            </span>
+                                                        ) : (
+                                                            <span className={`mt-1 text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${activity.bgColor} ${activity.color}`}>
+                                                                {activity.label}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </Link>
