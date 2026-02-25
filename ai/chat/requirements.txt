@@ -1,5 +1,6 @@
 vanna[anthropic,fastapi]>=2.0,<3.0
 psycopg[binary]
+psycopg2-binary
 python-dotenv
 pandas
 fastmcp
