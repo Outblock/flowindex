@@ -14,6 +14,7 @@ import { IndexingStatus } from '../components/IndexingStatus';
 import { formatAbsoluteTime, formatRelativeTime } from '../lib/time';
 import { useTimeTicker } from '../hooks/useTimeTicker';
 import { formatNumber } from '../lib/format';
+import { deriveActivityType } from '../components/TransactionRow';
 
 export const Route = createFileRoute('/')({
     component: Home,
@@ -905,39 +906,7 @@ function Home() {
                                     const txIdFull = normalizeHex(tx.id || '');
                                     const txIdShort = formatMiddle(txIdFull, 12, 8);
 
-                                    // Helper to determine Transaction Type & Details
-                                    const getTxMetadata = (tx: any) => {
-                                        let type = 'Interaction';
-                                        let transferInfo = null;
-
-                                        // Check Events for type inference
-                                        if (tx.events && Array.isArray(tx.events)) {
-                                            for (const evt of tx.events) {
-                                                if (evt.type.includes('TokensDeposited')) {
-                                                    type = 'Transfer';
-                                                    if (evt.values?.value?.fields) {
-                                                        const amount = evt.values.value.fields.find((f: any) => f.name === 'amount')?.value?.value;
-                                                        if (amount) transferInfo = `${parseFloat(amount).toFixed(2)} FLOW`;
-                                                    }
-                                                } else if (evt.type.includes('AccountCreated')) {
-                                                    type = 'Create Account';
-                                                } else if (evt.type.includes('AccountContractAdded')) {
-                                                    type = 'Deploy Contract';
-                                                } else if (evt.type.includes('Mint')) {
-                                                    type = 'Mint';
-                                                }
-                                            }
-                                        }
-
-                                        // Fallback to script/backend provided type
-                                        if (type === 'Interaction' && tx.type && tx.type !== 'PENDING' && tx.type !== 'TRANSFER') {
-                                            type = tx.type;
-                                        }
-
-                                        return { type, transferInfo };
-                                    };
-
-                                    const { type: txType, transferInfo } = getTxMetadata(tx);
+                                    const activity = deriveActivityType(tx);
 
                                     return (
                                         <motion.div
@@ -965,17 +934,9 @@ function Home() {
                                                             {txIdShort || tx.id}
                                                         </span>
                                                         <div className="flex items-center space-x-2">
-                                                            <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${txType === 'Transfer' ? 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5' :
-                                                                txType === 'Mint' ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5' :
-                                                                    'border-white/20 text-gray-300 bg-white/5'
-                                                                }`}>
-                                                                {txType}
+                                                            <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded-sm tracking-wider ${activity.bgColor} ${activity.color}`}>
+                                                                {activity.label}
                                                             </span>
-                                                            {transferInfo && (
-                                                                <span className="text-[10px] text-white font-mono truncate">
-                                                                    {transferInfo}
-                                                                </span>
-                                                            )}
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-col items-end">

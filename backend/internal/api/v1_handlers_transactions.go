@@ -61,6 +61,12 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 		ts := transferSummaries[t.ID]
 		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta))
 	}
+
+	// Enrich with script template classification (same as detail endpoint)
+	if templates, err := s.repo.GetScriptTemplatesByTxIDs(r.Context(), txIDs); err == nil {
+		enrichWithTemplates(out, templates)
+	}
+
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
 
