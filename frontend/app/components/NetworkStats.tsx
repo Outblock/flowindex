@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Lock, Server } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+const MiniGlobe = lazy(() => import('./MiniGlobe'));
 
 const FALLBACK_TOTAL_SUPPLY = 1_630_000_000;
 
@@ -16,6 +18,22 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
   totalSupply?: number;
   activeNodes?: number;
 }) {
+  const [miniNodes, setMiniNodes] = useState<{ lat: number; lon: number; role: number; tokens_staked: number }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('../api/heyapi').then(({ fetchNodeList }) =>
+      fetchNodeList().then((data) => {
+        if (cancelled) return;
+        setMiniNodes(
+          data
+            .filter((n: any) => typeof n.lat === 'number' && typeof n.lon === 'number')
+            .map((n: any) => ({ lat: n.lat, lon: n.lon, role: n.role ?? 0, tokens_staked: n.tokens_staked ?? 0 })),
+        );
+      }),
+    ).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   if (!totalStaked) {
     return (
       <div className="grid grid-cols-2 gap-4 h-full">
@@ -42,13 +60,19 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
 
       {/* Active Nodes */}
       <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4 flex flex-col justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 hover:shadow-sm dark:hover:border-white/30 transition-all duration-300 relative overflow-hidden group">
-        <div className="absolute top-0 right-0 w-16 h-16 bg-nothing-green/5 dark:bg-white/5 blur-2xl rounded-full group-hover:bg-nothing-green/10 dark:group-hover:bg-white/10 transition-colors" />
-        <div className="flex justify-between items-start mb-2">
+        {miniNodes.length > 0 && (
+          <div className="absolute inset-0 pointer-events-none opacity-60">
+            <Suspense fallback={null}>
+              <MiniGlobe nodes={miniNodes} />
+            </Suspense>
+          </div>
+        )}
+        <div className="relative z-10 flex justify-between items-start mb-2">
           <div className="p-1.5 rounded-sm bg-orange-500/10 border-orange-500/20 border">
             <Server className="w-4 h-4 text-orange-400" />
           </div>
         </div>
-        <div>
+        <div className="relative z-10">
           <p className="text-[10px] text-zinc-500 dark:text-gray-500 uppercase tracking-widest mb-1">Active Nodes</p>
           <p className="text-xl font-mono font-bold text-zinc-900 dark:text-white">{activeNodes}</p>
         </div>
