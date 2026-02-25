@@ -12,13 +12,13 @@ export const Route = createFileRoute('/txs/evm/$txId')({
                 const json = await res.json();
                 const rawTx: any = json?.data?.[0] ?? json;
                 if (rawTx?.id) {
-                    throw redirect({ to: '/txs/$txId', params: { txId: rawTx.id } });
+                    throw redirect({ to: '/txs/$txId', params: { txId: rawTx.id }, search: {} });
                 }
             }
         } catch (e) {
             if ((e as any)?.isRedirect || (e as any)?.to) throw e;
         }
         // If resolution failed, try loading directly with the EVM hash
-        throw redirect({ to: '/txs/$txId', params: { txId: evmHash } });
+        throw redirect({ to: '/txs/$txId', params: { txId: evmHash }, search: {} });
     },
 })
