@@ -11,15 +11,21 @@ import { z } from "zod";
 import { getSystemPrompt } from "@/lib/system-prompt";
 
 const MCP_URL = process.env.MCP_SERVER_URL || "http://localhost:8085/mcp";
+const CADENCE_MCP_URL =
+  process.env.CADENCE_MCP_URL || "https://cadence-mcp.up.railway.app/mcp";
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
-  const mcpClient = await createMCPClient({
-    transport: { type: "http", url: MCP_URL },
-  });
+  const [mcpClient, cadenceMcp] = await Promise.all([
+    createMCPClient({ transport: { type: "http", url: MCP_URL } }),
+    createMCPClient({ transport: { type: "http", url: CADENCE_MCP_URL } }),
+  ]);
 
-  const mcpTools = await mcpClient.tools();
+  const [mcpTools, cadenceTools] = await Promise.all([
+    mcpClient.tools(),
+    cadenceMcp.tools(),
+  ]);
 
   const result = streamText({
     model: anthropic(process.env.LLM_MODEL || "claude-sonnet-4-6"),
@@ -27,6 +33,7 @@ export async function POST(req: Request) {
     messages: await convertToModelMessages(messages),
     tools: {
       ...mcpTools,
+      ...cadenceTools,
       createChart: tool({
         description:
           "Create a chart visualization from data. Use this after running a SQL query to visualize the results. Supports bar, line, pie, doughnut, and horizontal bar charts.",
@@ -54,7 +61,7 @@ export async function POST(req: Request) {
     },
     stopWhen: stepCountIs(5),
     onFinish: async () => {
-      await mcpClient.close();
+      await Promise.all([mcpClient.close(), cadenceMcp.close()]);
     },
   });
 
