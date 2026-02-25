@@ -28,7 +28,7 @@ backend/config.yaml
 backend/indexer
 backend/build_error*.log
 *.log
-output/playwright/
+output/
 
 # Docker
 docker-compose.override.yml
