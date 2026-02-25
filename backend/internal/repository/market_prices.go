@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -80,6 +81,61 @@ func (r *Repository) GetMarketPriceHistory(ctx context.Context, asset, currency 
 		prices = append(prices, p)
 	}
 	return prices, nil
+}
+
+// GetEarliestMarketPrice returns the oldest price record for the given asset/currency pair.
+func (r *Repository) GetEarliestMarketPrice(ctx context.Context, asset, currency string) (*MarketPrice, error) {
+	var p MarketPrice
+	err := r.db.QueryRow(ctx, `
+		SELECT asset, currency, price, price_change_24h, market_cap, source, as_of, created_at
+		FROM app.market_prices
+		WHERE UPPER(asset) = UPPER($1) AND UPPER(currency) = UPPER($2)
+		ORDER BY as_of ASC
+		LIMIT 1
+	`, asset, currency).Scan(
+		&p.Asset, &p.Currency, &p.Price, &p.PriceChange24h, &p.MarketCap, &p.Source, &p.AsOf, &p.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// BulkInsertMarketPrices inserts multiple price records, skipping any that
+// would duplicate an existing record for the same (asset, currency, day).
+// Requires the idx_market_prices_daily_unique index to exist.
+func (r *Repository) BulkInsertMarketPrices(ctx context.Context, prices []MarketPrice) (int64, error) {
+	if len(prices) == 0 {
+		return 0, nil
+	}
+
+	// Ensure the unique index exists (idempotent).
+	_, err := r.db.Exec(ctx, `
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_market_prices_daily_unique
+		    ON app.market_prices (asset, currency, (DATE_TRUNC('day', as_of)));
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("ensure daily unique index: %w", err)
+	}
+
+	var total int64
+	for _, p := range prices {
+		asset := strings.ToUpper(strings.TrimSpace(p.Asset))
+		currency := strings.ToUpper(strings.TrimSpace(p.Currency))
+
+		tag, err := r.db.Exec(ctx, `
+			INSERT INTO app.market_prices (
+				asset, currency, price, price_change_24h, market_cap, source, as_of, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+			ON CONFLICT (asset, currency, (DATE_TRUNC('day', as_of))) DO NOTHING
+		`, asset, currency, p.Price, p.PriceChange24h, p.MarketCap, p.Source, p.AsOf)
+		if err != nil {
+			return total, fmt.Errorf("insert market price at %v: %w", p.AsOf, err)
+		}
+		total += tag.RowsAffected()
+	}
+
+	return total, nil
 }
 
 func IsNoRows(err error) bool {

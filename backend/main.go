@@ -177,6 +177,7 @@ func main() {
 	enableTxMetricsWorker := os.Getenv("ENABLE_TX_METRICS_WORKER") != "false"
 	enableStakingWorker := os.Getenv("ENABLE_STAKING_WORKER") != "false"
 	enableDailyBalanceWorker := os.Getenv("ENABLE_DAILY_BALANCE_WORKER") != "false"
+	enableDailyStatsWorker := os.Getenv("ENABLE_DAILY_STATS_WORKER") != "false"
 	enableDefiWorker := os.Getenv("ENABLE_DEFI_WORKER") != "false"
 	enableNFTItemMetadataWorker := os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false"
 	enableNFTReconciler := os.Getenv("ENABLE_NFT_RECONCILER") != "false"
@@ -194,6 +195,7 @@ func main() {
 		enableTxMetricsWorker = false
 		enableStakingWorker = false
 		enableDailyBalanceWorker = false
+		enableDailyStatsWorker = false
 		enableDefiWorker = false
 		enableNFTItemMetadataWorker = false
 		enableNFTReconciler = false
@@ -242,6 +244,9 @@ func main() {
 		}
 		if enableDefiWorker {
 			processors = append(processors, ingester.NewDefiWorker(repo))
+		}
+		if enableDailyStatsWorker {
+			processors = append(processors, ingester.NewDailyStatsWorker(repo))
 		}
 		// Phase 2 processors (depend on token_worker output):
 		if enableFTHoldingsWorker {
@@ -297,6 +302,7 @@ func main() {
 		{"tx_metrics_worker", enableTxMetricsWorker, func() ingester.Processor { return ingester.NewTxMetricsWorker(repo) }},
 		{"staking_worker", enableStakingWorker, func() ingester.Processor { return ingester.NewStakingWorker(repo) }},
 		{"defi_worker", enableDefiWorker, func() ingester.Processor { return ingester.NewDefiWorker(repo) }},
+		{"daily_stats_worker", enableDailyStatsWorker, func() ingester.Processor { return ingester.NewDailyStatsWorker(repo) }},
 		{"ft_holdings_worker", enableFTHoldingsWorker, func() ingester.Processor { return ingester.NewFTHoldingsWorker(repo) }},
 		{"nft_ownership_worker", enableNFTOwnershipWorker, func() ingester.Processor { return ingester.NewNFTOwnershipWorker(repo) }},
 		{"daily_balance_worker", enableDailyBalanceWorker, func() ingester.Processor { return ingester.NewDailyBalanceWorker(repo) }},
@@ -640,31 +646,17 @@ func main() {
 		log.Println("Live address backfill is DISABLED (ENABLE_LIVE_ADDRESS_BACKFILL=false)")
 	}
 
-	// Start Daily Stats Aggregator (Runs every 5 mins)
+	// One-time Daily Stats full scan on startup (catches any gaps from before
+	// the DailyStatsWorker was deployed). The DailyStatsWorker in live/history
+	// derivers handles incremental updates going forward.
 	enableDailyStats := os.Getenv("ENABLE_DAILY_STATS") != "false"
 	if enableDailyStats {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
-
-			// Run full scan on startup to backfill any historical gaps
 			log.Println("Running initial Daily Stats Aggregation (full scan)...")
 			if err := repo.RefreshDailyStats(ctx, true); err != nil {
 				log.Printf("Failed to refresh daily stats (full): %v", err)
-			}
-
-			ticker := time.NewTicker(5 * time.Minute)
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					if err := repo.RefreshDailyStats(ctx, false); err != nil {
-						log.Printf("Failed to refresh daily stats: %v", err)
-					}
-				}
+			} else {
+				log.Println("Initial Daily Stats Aggregation complete.")
 			}
 		}()
 	} else {
@@ -689,8 +681,46 @@ func main() {
 		}
 	}()
 
-	// Start Market Price Poller (Runs every N mins)
+	// Historical price backfill: fetch up to 365 days of daily FLOW/USD from CoinGecko.
+	// Only runs if existing data is less than 30 days deep.
 	enablePriceFeed := os.Getenv("ENABLE_PRICE_FEED") != "false"
+	if enablePriceFeed {
+		go func() {
+			earliest, err := repo.GetEarliestMarketPrice(ctx, "FLOW", "USD")
+			needsBackfill := err != nil || earliest.AsOf.After(time.Now().AddDate(0, 0, -30))
+			if !needsBackfill {
+				log.Printf("[price_backfill] Skipping: earliest price record at %s (>30 days)", earliest.AsOf.Format("2006-01-02"))
+				return
+			}
+			log.Println("[price_backfill] Fetching 365 days of FLOW/USD history from CoinGecko...")
+			ctxFetch, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			history, err := market.FetchFlowPriceHistory(ctxFetch, 365)
+			if err != nil {
+				log.Printf("[price_backfill] Failed to fetch history: %v", err)
+				return
+			}
+			prices := make([]repository.MarketPrice, len(history))
+			for i, q := range history {
+				prices[i] = repository.MarketPrice{
+					Asset:     q.Asset,
+					Currency:  q.Currency,
+					Price:     q.Price,
+					MarketCap: q.MarketCap,
+					Source:    q.Source,
+					AsOf:      q.AsOf,
+				}
+			}
+			inserted, err := repo.BulkInsertMarketPrices(ctx, prices)
+			if err != nil {
+				log.Printf("[price_backfill] Insert error (inserted %d before failure): %v", inserted, err)
+				return
+			}
+			log.Printf("[price_backfill] Done: %d new daily prices inserted (of %d fetched)", inserted, len(history))
+		}()
+	}
+
+	// Start Market Price Poller (Runs every N mins)
 	if enablePriceFeed {
 		refreshMin := getEnvInt("PRICE_REFRESH_MIN", 10)
 

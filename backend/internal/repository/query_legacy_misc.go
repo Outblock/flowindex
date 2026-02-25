@@ -246,6 +246,40 @@ func (r *Repository) GetContractByAddress(ctx context.Context, address string) (
 	return &c, nil
 }
 
+// RefreshDailyStatsRange re-aggregates daily_stats for all dates that have
+// transactions in the half-open block range [fromHeight, toHeight).
+// Safe for repeated calls on the same range (idempotent full re-aggregate per date).
+func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toHeight uint64) error {
+	_, err := r.db.Exec(ctx, `
+		WITH affected_dates AS (
+			SELECT DISTINCT DATE(timestamp) AS d
+			FROM raw.transactions
+			WHERE block_height >= $1 AND block_height < $2
+			  AND timestamp IS NOT NULL
+		)
+		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, updated_at)
+		SELECT
+			DATE(t.timestamp) AS date,
+			COUNT(*) AS tx_count,
+			COUNT(*) FILTER (WHERE t.is_evm = TRUE) AS evm_tx_count,
+			COALESCE(SUM(t.gas_used), 0) AS total_gas_used,
+			NOW() AS updated_at
+		FROM raw.transactions t
+		WHERE DATE(t.timestamp) IN (SELECT d FROM affected_dates)
+		  AND t.timestamp IS NOT NULL
+		GROUP BY DATE(t.timestamp)
+		ON CONFLICT (date) DO UPDATE SET
+			tx_count = EXCLUDED.tx_count,
+			evm_tx_count = EXCLUDED.evm_tx_count,
+			total_gas_used = EXCLUDED.total_gas_used,
+			updated_at = NOW();
+	`, fromHeight, toHeight)
+	if err != nil {
+		return fmt.Errorf("refresh daily stats range [%d, %d): %w", fromHeight, toHeight, err)
+	}
+	return nil
+}
+
 // RefreshDailyStats aggregates transaction counts by date into daily_stats table.
 // When fullScan is true, it processes ALL transactions (used on startup);
 // otherwise it only refreshes the last 30 days (periodic tick).
