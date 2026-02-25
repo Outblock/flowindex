@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
 import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -378,7 +379,10 @@ export default function AIChatWidget() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { messages, sendMessage, status, stop, setMessages } = useChat({
-    api: `${AI_CHAT_URL}/api/chat`,
+    transport: new DefaultChatTransport({
+      api: `${AI_CHAT_URL}/api/chat`,
+      credentials: 'omit',
+    }),
   });
 
   const isStreaming = status === 'streaming' || status === 'submitted';
