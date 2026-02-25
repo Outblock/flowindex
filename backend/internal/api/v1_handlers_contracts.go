@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -250,17 +252,13 @@ func (s *Server) handleFlowGetContractVersion(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// On-demand backfill: if code is empty, fetch from RPC at that block height
-	if v.Code == "" && s.client != nil && v.BlockHeight > 0 {
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		acc, rpcErr := s.client.GetAccountAtBlockHeight(ctx, flow.HexToAddress(address), v.BlockHeight)
-		cancel()
-		if rpcErr == nil && acc != nil {
-			if b, ok := acc.Contracts[name]; ok && len(b) > 0 {
-				v.Code = string(b)
-				// Persist so future requests are fast
-				_ = s.repo.BackfillContractVersionCode(r.Context(), address, name, v.Version, v.Code)
-			}
+	// On-demand backfill: if code is empty, extract it from the deploy tx arguments.
+	// Contract deploy/update transactions pass code as a hex-encoded String argument
+	// with script like: code.decodeHex()
+	if v.Code == "" && v.TransactionID != "" {
+		if code := s.extractContractCodeFromTx(r.Context(), v.TransactionID, name); code != "" {
+			v.Code = code
+			_ = s.repo.BackfillContractVersionCode(r.Context(), address, name, v.Version, v.Code)
 		}
 	}
 
@@ -306,6 +304,42 @@ func (s *Server) handleContractTransactions(w http.ResponseWriter, r *http.Reque
 		out = append(out, toFlowTransactionOutput(t, nil, contracts[t.ID], tags[t.ID], feesByTx[t.ID]))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+// extractContractCodeFromTx extracts contract code from a deploy/update transaction's arguments.
+// Contract deploy txs pass the code as a hex-encoded String argument (decoded via code.decodeHex()).
+func (s *Server) extractContractCodeFromTx(ctx context.Context, txID, _ string) string {
+	if s.repo == nil {
+		return ""
+	}
+	tx, err := s.repo.GetTransactionByID(ctx, txID)
+	if err != nil || tx == nil || len(tx.Arguments) == 0 {
+		return ""
+	}
+
+	// Parse arguments: [{type: "String", value: "name"}, {type: "String", value: "hexcode"}]
+	var args []struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}
+	if err := json.Unmarshal(tx.Arguments, &args); err != nil || len(args) < 2 {
+		return ""
+	}
+
+	// The code argument is typically a long hex-encoded string (second arg).
+	for i, arg := range args {
+		if arg.Type != "String" || i == 0 {
+			continue
+		}
+		if len(arg.Value) > 100 {
+			decoded, err := hex.DecodeString(arg.Value)
+			if err != nil {
+				continue
+			}
+			return string(decoded)
+		}
+	}
+	return ""
 }
 
 func (s *Server) handleContractVersionList(w http.ResponseWriter, r *http.Request) {
