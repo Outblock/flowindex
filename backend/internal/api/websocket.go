@@ -166,6 +166,7 @@ type WSTransaction struct {
 	IsEVM            bool      `json:"is_evm,omitempty"`
 	ScriptHash       string    `json:"script_hash,omitempty"`
 	TemplateCategory string    `json:"template_category,omitempty"`
+	TemplateLabel    string    `json:"template_label,omitempty"`
 }
 
 func BroadcastNewBlock(block models.Block) {
@@ -230,6 +231,7 @@ func MakeBroadcastNewTransactions(repo *repository.Repository) func([]models.Tra
 
 		// Batch lookup: script_templates (category/label) + script_imports (contract identifiers)
 		categoryByHash := make(map[string]string)
+		labelByHash := make(map[string]string)
 		if len(hashes) > 0 {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
@@ -238,6 +240,9 @@ func MakeBroadcastNewTransactions(repo *repository.Repository) func([]models.Tra
 				for hash, tmpl := range templates {
 					if tmpl.Category != "" {
 						categoryByHash[hash] = tmpl.Category
+					}
+					if tmpl.Label != "" {
+						labelByHash[hash] = tmpl.Label
 					}
 				}
 			}
@@ -279,6 +284,7 @@ func MakeBroadcastNewTransactions(repo *repository.Repository) func([]models.Tra
 				IsEVM:            tx.IsEVM,
 				ScriptHash:       tx.ScriptHash,
 				TemplateCategory: categoryByHash[tx.ScriptHash],
+				TemplateLabel:    labelByHash[tx.ScriptHash],
 			}
 			msg := BroadcastMessage{Type: "new_transaction", Payload: payload}
 			data, _ := json.Marshal(msg)
