@@ -485,18 +485,18 @@ function Home() {
 
             <div className="container mx-auto px-4 py-8 space-y-8">
                 {/* Basic Stats Section */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0.25 }}
                     >
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-nothing-green/50 transition-all duration-300 h-full">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                                <Box className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-3 md:p-6 hover:border-nothing-green/50 transition-all duration-300 h-full">
+                        <div className="flex items-center justify-between mb-2 md:mb-4">
+                            <div className="p-1.5 md:p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
+                                <Box className="h-4 w-4 md:h-5 md:w-5 text-nothing-green-dark dark:text-nothing-green" />
                             </div>
-                            <div className={`flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-emerald-500/10 dark:bg-nothing-green/10 border-emerald-500/30 dark:border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
+                            <div className={`hidden sm:flex items-center space-x-2 px-3 py-1 border rounded-sm ${isConnected ? 'bg-emerald-500/10 dark:bg-nothing-green/10 border-emerald-500/30 dark:border-nothing-green/30' : 'bg-white/5 border-white/10'}`}>
                                 <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-600 dark:bg-nothing-green animate-pulse' : 'bg-gray-500'}`}></div>
                                 <span className={`text-[10px] uppercase tracking-wider ${isConnected ? 'text-nothing-green-dark dark:text-nothing-green' : 'text-gray-500'}`}>
                                     {isConnected ? 'System Online' : 'Offline'}
@@ -504,8 +504,8 @@ function Home() {
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Latest Block</p>
-                            <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white group-hover:text-nothing-green-dark dark:group-hover:text-nothing-green transition-colors">
+                            <p className="text-[10px] md:text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Latest Block</p>
+                            <p className="text-lg md:text-3xl font-bold font-mono text-zinc-900 dark:text-white group-hover:text-nothing-green-dark dark:group-hover:text-nothing-green transition-colors">
                                 <SafeNumberFlow
                                     value={statusRaw?.latest_height || 0}
                                     format={{ useGrouping: true }}
@@ -520,14 +520,14 @@ function Home() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0.3 }}
                     >
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                                <Activity className="h-5 w-5 text-zinc-900 dark:text-white" />
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-3 md:p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
+                        <div className="flex items-center justify-between mb-2 md:mb-4">
+                            <div className="p-1.5 md:p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
+                                <Activity className="h-4 w-4 md:h-5 md:w-5 text-zinc-900 dark:text-white" />
                             </div>
                             {!isHistoryComplete && (
                                 <div
-                                    className="flex items-center space-x-2 px-3 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm cursor-help"
+                                    className="hidden sm:flex items-center space-x-2 px-3 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm cursor-help"
                                     title="Data indexing is in progress. Historical data may be incomplete."
                                 >
                                     <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
@@ -536,8 +536,8 @@ function Home() {
                             )}
                         </div>
                         <div className="space-y-1">
-                            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Total TXs</p>
-                            <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
+                            <p className="text-[10px] md:text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Total TXs</p>
+                            <p className="text-lg md:text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                                 <SafeNumberFlow
                                     value={statusRaw?.total_transactions || 0}
                                     format={{ useGrouping: true }}
@@ -552,21 +552,21 @@ function Home() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0.35 }}
                     >
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                                <TrendingUp className="h-5 w-5 text-zinc-900 dark:text-white" />
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-3 md:p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
+                        <div className="flex items-center justify-between mb-2 md:mb-4">
+                            <div className="p-1.5 md:p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
+                                <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-zinc-900 dark:text-white" />
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Network TPS</p>
-                            <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
+                            <p className="text-[10px] md:text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Network TPS</p>
+                            <p className="text-lg md:text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                                 <SafeNumberFlow
                                     value={tps || 0}
                                     format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                                 />
                             </p>
-                            <p className="text-[10px] text-zinc-400 dark:text-gray-500 uppercase tracking-widest">
+                            <p className="text-[10px] text-zinc-400 dark:text-gray-500 uppercase tracking-widest hidden md:block">
                                 Utilization: {Math.min(100, utilization).toFixed(2)}% (Est. {formatNumber(maxTpsEstimate)} TPS)
                             </p>
                         </div>
@@ -578,18 +578,18 @@ function Home() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0.4 }}
                     >
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                                <Box className="h-5 w-5 text-zinc-900 dark:text-white" />
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-3 md:p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
+                        <div className="flex items-center justify-between mb-2 md:mb-4">
+                            <div className="p-1.5 md:p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
+                                <Box className="h-4 w-4 md:h-5 md:w-5 text-zinc-900 dark:text-white" />
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Average Block Time</p>
-                            <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
+                            <p className="text-[10px] md:text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Block Time</p>
+                            <p className="text-lg md:text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                                 {avgBlockTime > 0 ? `${avgBlockTime.toFixed(2)}s` : 'N/A'}
                             </p>
-                            <p className="text-[10px] text-zinc-400 dark:text-gray-500 uppercase tracking-widest">
+                            <p className="text-[10px] text-zinc-400 dark:text-gray-500 uppercase tracking-widest hidden md:block">
                                 Based on recent blocks
                             </p>
                         </div>
@@ -601,14 +601,14 @@ function Home() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0.45 }}
                     >
-                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
-                                <Activity className="h-5 w-5 text-zinc-900 dark:text-white" />
+                    <div className="group bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-3 md:p-6 hover:border-zinc-300 dark:hover:border-white/30 transition-all duration-300 h-full">
+                        <div className="flex items-center justify-between mb-2 md:mb-4">
+                            <div className="p-1.5 md:p-2 border border-zinc-200 dark:border-white/10 rounded-sm">
+                                <Activity className="h-4 w-4 md:h-5 md:w-5 text-zinc-900 dark:text-white" />
                             </div>
                             {!isHistoryComplete && (
                                 <div
-                                    className="flex items-center space-x-2 px-3 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm cursor-help"
+                                    className="hidden sm:flex items-center space-x-2 px-3 py-1 border border-yellow-500/30 bg-yellow-500/10 rounded-sm cursor-help"
                                     title="Data indexing is in progress. Historical data may be incomplete."
                                 >
                                     <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
@@ -617,8 +617,8 @@ function Home() {
                             )}
                         </div>
                         <div className="space-y-1">
-                            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Total Addresses</p>
-                            <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
+                            <p className="text-[10px] md:text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Addresses</p>
+                            <p className="text-lg md:text-3xl font-bold font-mono text-zinc-900 dark:text-white">
                                 <SafeNumberFlow
                                     value={statusRaw?.total_addresses || 0}
                                     format={{ useGrouping: true }}
