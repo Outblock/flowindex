@@ -141,7 +141,12 @@ export const Route = createFileRoute('/txs/$txId')({
     loader: async ({ params }) => {
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}?lite=true`);
+            let res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}?lite=true`);
+            // If direct lookup fails and ID looks like an EVM hash, try evm_hash query
+            if (!res.ok && /^0x[a-fA-F0-9]{64}$/.test(params.txId)) {
+                const evmRes = await fetch(`${baseUrl}/flow/transaction?evm_hash=${encodeURIComponent(params.txId)}&lite=true&limit=1`);
+                if (evmRes.ok) res = evmRes;
+            }
             if (!res.ok) {
                 if (res.status === 404) {
                     return { transaction: null, error: 'Transaction not found' };
