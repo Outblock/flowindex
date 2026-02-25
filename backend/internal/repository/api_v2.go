@@ -823,10 +823,18 @@ func (r *Repository) GetContractByIdentifier(ctx context.Context, identifier str
 		return nil, nil
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(address, 'hex') AS address, name, COALESCE(code,''), COALESCE(version,1), COALESCE(last_updated_height,0), created_at, updated_at
-		FROM app.smart_contracts
-		WHERE address = $1 AND ($2 = '' OR name = $2)
-		ORDER BY address ASC, name ASC`, hexToBytes(address), name)
+		SELECT encode(sc.address, 'hex') AS address, sc.name, COALESCE(sc.code,''), COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
+		       COALESCE(b.timestamp, sc.created_at) AS created_at,
+		       sc.updated_at
+		FROM app.smart_contracts sc
+		LEFT JOIN LATERAL (
+			SELECT cv.block_height FROM app.contract_versions cv
+			WHERE cv.address = sc.address AND cv.name = sc.name
+			ORDER BY cv.version ASC LIMIT 1
+		) first_ver ON true
+		LEFT JOIN raw.blocks b ON b.height = first_ver.block_height
+		WHERE sc.address = $1 AND ($2 = '' OR sc.name = $2)
+		ORDER BY sc.address ASC, sc.name ASC`, hexToBytes(address), name)
 	if err != nil {
 		return nil, err
 	}
@@ -995,12 +1003,13 @@ func (r *Repository) ListContractVersions(ctx context.Context, address, name str
 		limit = 20
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT encode(address, 'hex') AS address, name, version, block_height,
-		       COALESCE(encode(transaction_id, 'hex'), '') AS transaction_id,
-		       created_at
-		FROM app.contract_versions
-		WHERE address = $1 AND name = $2
-		ORDER BY version DESC
+		SELECT encode(cv.address, 'hex') AS address, cv.name, cv.version, cv.block_height,
+		       COALESCE(encode(cv.transaction_id, 'hex'), '') AS transaction_id,
+		       COALESCE(b.timestamp, cv.created_at) AS created_at
+		FROM app.contract_versions cv
+		LEFT JOIN raw.blocks b ON b.height = cv.block_height
+		WHERE cv.address = $1 AND cv.name = $2
+		ORDER BY cv.version DESC
 		LIMIT $3 OFFSET $4`, hexToBytes(address), name, limit, offset)
 	if err != nil {
 		return nil, err
@@ -1021,11 +1030,12 @@ func (r *Repository) ListContractVersions(ctx context.Context, address, name str
 func (r *Repository) GetContractVersion(ctx context.Context, address, name string, version int) (*models.ContractVersion, error) {
 	var v models.ContractVersion
 	err := r.db.QueryRow(ctx, `
-		SELECT encode(address, 'hex') AS address, name, version, COALESCE(code, '') AS code, block_height,
-		       COALESCE(encode(transaction_id, 'hex'), '') AS transaction_id,
-		       created_at
-		FROM app.contract_versions
-		WHERE address = $1 AND name = $2 AND version = $3`,
+		SELECT encode(cv.address, 'hex') AS address, cv.name, cv.version, COALESCE(cv.code, '') AS code, cv.block_height,
+		       COALESCE(encode(cv.transaction_id, 'hex'), '') AS transaction_id,
+		       COALESCE(b.timestamp, cv.created_at) AS created_at
+		FROM app.contract_versions cv
+		LEFT JOIN raw.blocks b ON b.height = cv.block_height
+		WHERE cv.address = $1 AND cv.name = $2 AND cv.version = $3`,
 		hexToBytes(address), name, version).Scan(
 		&v.Address, &v.Name, &v.Version, &v.Code, &v.BlockHeight, &v.TransactionID, &v.CreatedAt)
 	if err == pgx.ErrNoRows {
