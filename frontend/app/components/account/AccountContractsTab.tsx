@@ -152,10 +152,22 @@ export function AccountContractsTab({ address, contracts }: Props) {
                         <div className="sticky top-24">
                             <GlassCard className="p-0 overflow-hidden min-h-[400px] flex flex-col">
                                 <div className="p-3 bg-zinc-50 dark:bg-white/5 border-b border-zinc-200 dark:border-white/10 flex items-center justify-between">
-                                    <span className="text-xs font-mono text-zinc-500 flex items-center gap-2">
-                                        <Code className="w-3 h-3" />
-                                        {selectedContract ? `${selectedContract}.cdc` : 'Select a contract'}
-                                    </span>
+                                    {selectedContract ? (
+                                        <Link
+                                            to={`/contracts/A.${normalizedAddress.replace(/^0x/, '')}.${selectedContract}` as any}
+                                            className="text-xs font-mono text-zinc-500 hover:text-nothing-green-dark dark:hover:text-nothing-green flex items-center gap-2 transition-colors"
+                                            title="View contract details"
+                                        >
+                                            <Code className="w-3 h-3" />
+                                            {selectedContract}.cdc
+                                            <ExternalLink className="w-3 h-3" />
+                                        </Link>
+                                    ) : (
+                                        <span className="text-xs font-mono text-zinc-500 flex items-center gap-2">
+                                            <Code className="w-3 h-3" />
+                                            Select a contract
+                                        </span>
+                                    )}
                                 </div>
 
                                 <div className="flex-1 bg-[#1e1e1e] overflow-auto max-h-[calc(100vh-200px)]">
