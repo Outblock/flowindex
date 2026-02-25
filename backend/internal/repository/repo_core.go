@@ -57,7 +57,12 @@ func NewRepository(dbURL string) (*Repository, error) {
 		return nil, fmt.Errorf("unable to connect to database: %w", err)
 	}
 
-	return &Repository{db: pool}, nil
+	repo := &Repository{db: pool}
+	if err := repo.ensureScriptTemplatesSchema(context.Background()); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ensure script_templates schema: %w", err)
+	}
+	return repo, nil
 }
 
 func getEnvDefault(key, def string) string {
@@ -83,6 +88,35 @@ func (r *Repository) Migrate(schemaPath string) error {
 
 func (r *Repository) Close() {
 	r.db.Close()
+}
+
+func (r *Repository) ensureScriptTemplatesSchema(ctx context.Context) error {
+	const ddl = `
+		CREATE TABLE IF NOT EXISTS app.script_templates (
+			script_hash     VARCHAR(64) PRIMARY KEY,
+			normalized_hash VARCHAR(64),
+			category        TEXT,
+			label           TEXT,
+			description     TEXT,
+			tx_count        BIGINT NOT NULL DEFAULT 0,
+			created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_script_templates_normalized_hash
+			ON app.script_templates (normalized_hash);
+
+		CREATE INDEX IF NOT EXISTS idx_script_templates_tx_count_desc
+			ON app.script_templates (tx_count DESC);
+
+		CREATE INDEX IF NOT EXISTS idx_script_templates_category
+			ON app.script_templates (category);
+
+		CREATE INDEX IF NOT EXISTS idx_script_templates_group_key
+			ON app.script_templates ((COALESCE(normalized_hash, script_hash)));
+	`
+	_, err := r.db.Exec(ctx, ddl)
+	return err
 }
 
 // GetLastIndexedHeight gets the last sync height from checkpoints

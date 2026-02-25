@@ -43,7 +43,8 @@ type TxScriptTemplate struct {
 // When normalized_hash is available, rows sharing the same normalized_hash are grouped:
 // we pick one representative row per group and SUM their tx_counts.
 func (r *Repository) AdminListScriptTemplates(ctx context.Context, search, category string, labeledOnly, unlabeledOnly bool, limit, offset int) ([]ScriptTemplate, error) {
-	// Use a CTE to aggregate by normalized_hash (falling back to script_hash if null).
+	// The non-search path avoids joining raw.scripts for all grouped rows.
+	// We page grouped rows first, then join scripts only for the current page.
 	query := `
 		WITH grouped AS (
 			SELECT
@@ -59,36 +60,45 @@ func (r *Repository) AdminListScriptTemplates(ctx context.Context, search, categ
 				MAX(st.updated_at)              AS updated_at
 			FROM app.script_templates st
 			GROUP BY COALESCE(st.normalized_hash, st.script_hash)
-		)
-		SELECT g.script_hash, g.normalized_hash, g.category, g.label, g.description,
-		       g.tx_count, g.variant_count,
-		       COALESCE(LEFT(s.script_text, 200), ''),
-		       g.created_at, g.updated_at
-		FROM grouped g
-		LEFT JOIN raw.scripts s ON s.script_hash = g.script_hash
-		WHERE 1=1`
+		),
+		page AS (
+			SELECT
+				g.script_hash, g.normalized_hash, g.category, g.label, g.description,
+				g.tx_count, g.variant_count, g.created_at, g.updated_at
+			FROM grouped g
+			WHERE 1=1`
 	args := []interface{}{}
 	argN := 1
 
 	if search != "" {
-		query += fmt.Sprintf(` AND (g.script_hash ILIKE $%d OR g.label ILIKE $%d OR g.category ILIKE $%d OR s.script_text ILIKE $%d)`, argN, argN, argN, argN)
+		query += fmt.Sprintf(` AND (g.script_hash ILIKE $%d OR g.label ILIKE $%d OR g.category ILIKE $%d OR EXISTS (
+			SELECT 1 FROM raw.scripts s2 WHERE s2.script_hash = g.script_hash AND s2.script_text ILIKE $%d
+		))`, argN, argN, argN, argN)
 		args = append(args, "%"+search+"%")
 		argN++
 	}
 	if category != "" {
-		query += fmt.Sprintf(` AND g.category = $%d`, argN)
+		query += fmt.Sprintf(` AND category = $%d`, argN)
 		args = append(args, category)
 		argN++
 	}
 	if labeledOnly {
-		query += ` AND g.category IS NOT NULL AND g.category != ''`
+		query += ` AND category IS NOT NULL AND category != ''`
 	}
 	if unlabeledOnly {
-		query += ` AND (g.category IS NULL OR g.category = '')`
+		query += ` AND (category IS NULL OR category = '')`
 	}
 
-	query += ` ORDER BY g.tx_count DESC`
-	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argN, argN+1)
+	query += ` ORDER BY tx_count DESC`
+	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d
+		)
+		SELECT p.script_hash, p.normalized_hash, p.category, p.label, p.description,
+		       p.tx_count, p.variant_count,
+		       COALESCE(LEFT(s.script_text, 200), ''),
+		       p.created_at, p.updated_at
+		FROM page p
+		LEFT JOIN raw.scripts s ON s.script_hash = p.script_hash
+		ORDER BY p.tx_count DESC`, argN, argN+1)
 	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
