@@ -18,21 +18,34 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
   totalSupply?: number;
   activeNodes?: number;
 }) {
-  const [miniNodes, setMiniNodes] = useState<{ lat: number; lon: number; role: number; tokens_staked: number }[]>([]);
+  const FALLBACK_NODES = [
+    { lat: 37.7, lon: -122.4, role: 1, tokens_staked: 500000 },
+    { lat: 40.7, lon: -74.0, role: 2, tokens_staked: 800000 },
+    { lat: 51.5, lon: -0.1, role: 3, tokens_staked: 600000 },
+    { lat: 35.7, lon: 139.7, role: 4, tokens_staked: 400000 },
+    { lat: 1.3, lon: 103.8, role: 5, tokens_staked: 300000 },
+    { lat: 48.9, lon: 2.3, role: 2, tokens_staked: 700000 },
+    { lat: -33.9, lon: 151.2, role: 1, tokens_staked: 500000 },
+    { lat: 52.5, lon: 13.4, role: 3, tokens_staked: 550000 },
+    { lat: 43.7, lon: -79.4, role: 4, tokens_staked: 450000 },
+    { lat: 47.6, lon: -122.3, role: 2, tokens_staked: 650000 },
+  ];
+  const [miniNodes, setMiniNodes] = useState(FALLBACK_NODES);
 
   useEffect(() => {
     let cancelled = false;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
     import('../api/heyapi').then(({ fetchNodeList }) =>
       fetchNodeList().then((data) => {
         if (cancelled) return;
-        setMiniNodes(
-          data
-            .filter((n: any) => typeof n.lat === 'number' && typeof n.lon === 'number')
-            .map((n: any) => ({ lat: n.lat, lon: n.lon, role: n.role ?? 0, tokens_staked: n.tokens_staked ?? 0 })),
-        );
+        const filtered = data
+          .filter((n: any) => typeof n.lat === 'number' && typeof n.lon === 'number')
+          .map((n: any) => ({ lat: n.lat, lon: n.lon, role: n.role ?? 0, tokens_staked: n.tokens_staked ?? 0 }));
+        if (filtered.length > 0) setMiniNodes(filtered);
       }),
-    ).catch(() => {});
-    return () => { cancelled = true; };
+    ).catch(() => {}).finally(() => clearTimeout(timer));
+    return () => { cancelled = true; ctrl.abort(); };
   }, []);
   if (!totalStaked) {
     return (
@@ -61,7 +74,7 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
       {/* Active Nodes */}
       <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4 flex flex-col justify-between hover:border-nothing-green-dark/30 dark:hover:border-nothing-green/30 hover:shadow-sm dark:hover:border-white/30 transition-all duration-300 relative overflow-hidden group">
         {miniNodes.length > 0 && (
-          <div className="absolute inset-0 pointer-events-none opacity-60">
+          <div className="absolute inset-0 pointer-events-none opacity-80">
             <Suspense fallback={null}>
               <MiniGlobe nodes={miniNodes} />
             </Suspense>
