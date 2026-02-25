@@ -951,7 +951,7 @@ function Home() {
                                                             {txTimeText || ''}
                                                         </span>
                                                         {tx.template_label && tx.template_label !== activity.label && (
-                                                            <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono truncate max-w-[180px]" title={tx.template_label}>
+                                                            <span className={`text-[10px] font-medium truncate max-w-[180px] ${activity.color}`} title={tx.template_label}>
                                                                 {tx.template_label}
                                                             </span>
                                                         )}
