@@ -94,9 +94,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     };
     const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
     const didFetchRef = useRef(false);
-    const [viewMode, setViewMode] = useState<ViewMode>(() =>
-        typeof window !== 'undefined' && window.innerWidth < 768 ? 'timeline' : 'pages'
-    );
+    const [viewMode, setViewMode] = useState<ViewMode>('timeline');
 
     // Timeline state
     const [timelineTxs, setTimelineTxs] = useState<any[]>([]);
@@ -118,15 +116,27 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
 
     // FT transfers state (lazy-loaded)
     const [ftTransfers, setFtTransfers] = useState<any[]>([]);
-    const [ftCursor, setFtCursor] = useState('');
     const [ftHasMore, setFtHasMore] = useState(false);
     const [ftLoading, setFtLoading] = useState(false);
+    const [ftPage, setFtPage] = useState(1);
+    // FT timeline state
+    const [ftTimelineTxs, setFtTimelineTxs] = useState<any[]>([]);
+    const [ftTimelineOffset, setFtTimelineOffset] = useState(0);
+    const [ftTimelineHasMore, setFtTimelineHasMore] = useState(true);
+    const [ftTimelineLoading, setFtTimelineLoading] = useState(false);
+    const ftSentinelRef = useRef<HTMLDivElement | null>(null);
 
     // NFT transfers state (lazy-loaded)
     const [nftTransfers, setNftTransfers] = useState<any[]>([]);
-    const [nftCursor, setNftCursor] = useState('');
     const [nftHasMore, setNftHasMore] = useState(false);
     const [nftLoading, setNftLoading] = useState(false);
+    const [nftPage, setNftPage] = useState(1);
+    // NFT timeline state
+    const [nftTimelineTxs, setNftTimelineTxs] = useState<any[]>([]);
+    const [nftTimelineOffset, setNftTimelineOffset] = useState(0);
+    const [nftTimelineHasMore, setNftTimelineHasMore] = useState(true);
+    const [nftTimelineLoading, setNftTimelineLoading] = useState(false);
+    const nftSentinelRef = useRef<HTMLDivElement | null>(null);
 
     // Scheduled transactions state (lazy-loaded)
     const [scheduledTxs, setScheduledTxs] = useState<any[]>([]);
@@ -164,11 +174,17 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         // Only reset subtab data when the address actually changes
         if (addressChanged) {
             setFtTransfers([]);
-            setFtCursor('');
             setFtHasMore(false);
+            setFtPage(1);
+            setFtTimelineTxs([]);
+            setFtTimelineOffset(0);
+            setFtTimelineHasMore(true);
             setNftTransfers([]);
-            setNftCursor('');
             setNftHasMore(false);
+            setNftPage(1);
+            setNftTimelineTxs([]);
+            setNftTimelineOffset(0);
+            setNftTimelineHasMore(true);
             setScheduledTxs([]);
             setScheduledCursor('');
             setScheduledHasMore(false);
@@ -176,7 +192,6 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             setTimelineTxs([]);
             setTimelineOffset(0);
             setTimelineHasMore(true);
-            setViewMode('pages');
         }
 
         didFetchRef.current = dedupedTxs.length > 0;
@@ -288,18 +303,16 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     }, [viewMode, timelineHasMore, loadMoreTimeline]);
 
     // --- FT Transfers (lazy) ---
-    const loadFtTransfers = async (cursorValue: string, append: boolean) => {
+    const loadFtTransfers = async (page: number) => {
         setFtLoading(true);
         try {
-            const offset = cursorValue ? parseInt(cursorValue, 10) : 0;
+            const offset = (page - 1) * 20;
             await ensureHeyApiConfigured();
             const res = await getFlowV1AccountByAddressFtTransfer({ path: { address: normalizedAddress }, query: { offset, limit: 20 } });
             const payload: any = res.data;
             const items = payload?.data ?? [];
-            setFtTransfers(append ? prev => [...prev, ...items] : items);
-            const nextOffset = items.length >= 20 ? String(offset + 20) : '';
-            setFtCursor(nextOffset);
-            setFtHasMore(!!nextOffset);
+            setFtTransfers(items);
+            setFtHasMore(items.length >= 20);
         } catch (err) {
             console.error('Failed to load FT transfers', err);
         } finally {
@@ -307,25 +320,67 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         }
     };
 
+    // --- FT Timeline ---
+    const ftTimelineLoadingRef = useRef(false);
+    const loadMoreFtTimeline = useCallback(async () => {
+        if (ftTimelineLoadingRef.current || !ftTimelineHasMore) return;
+        ftTimelineLoadingRef.current = true;
+        setFtTimelineLoading(true);
+        try {
+            await ensureHeyApiConfigured();
+            const res = await getFlowV1AccountByAddressFtTransfer({ path: { address: normalizedAddress }, query: { offset: ftTimelineOffset, limit: 20 } });
+            const payload: any = res.data;
+            const items = payload?.data ?? [];
+            setFtTimelineTxs(prev => [...prev, ...items]);
+            setFtTimelineOffset(prev => prev + items.length);
+            setFtTimelineHasMore(items.length >= 20);
+        } catch (err) {
+            console.error('Failed to load FT timeline', err);
+        } finally {
+            ftTimelineLoadingRef.current = false;
+            setFtTimelineLoading(false);
+        }
+    }, [ftTimelineHasMore, ftTimelineOffset, normalizedAddress]);
+
     // --- NFT Transfers (lazy) ---
-    const loadNftTransfers = async (cursorValue: string, append: boolean) => {
+    const loadNftTransfers = async (page: number) => {
         setNftLoading(true);
         try {
-            const offset = cursorValue ? parseInt(cursorValue, 10) : 0;
+            const offset = (page - 1) * 20;
             await ensureHeyApiConfigured();
             const res = await getFlowV1NftTransfer({ query: { address: normalizedAddress, offset, limit: 20 } });
             const payload: any = res.data;
             const items = payload?.data ?? [];
-            setNftTransfers(append ? prev => [...prev, ...items] : items);
-            const nextOffset = items.length >= 20 ? String(offset + 20) : '';
-            setNftCursor(nextOffset);
-            setNftHasMore(!!nextOffset);
+            setNftTransfers(items);
+            setNftHasMore(items.length >= 20);
         } catch (err) {
             console.error('Failed to load NFT transfers', err);
         } finally {
             setNftLoading(false);
         }
     };
+
+    // --- NFT Timeline ---
+    const nftTimelineLoadingRef = useRef(false);
+    const loadMoreNftTimeline = useCallback(async () => {
+        if (nftTimelineLoadingRef.current || !nftTimelineHasMore) return;
+        nftTimelineLoadingRef.current = true;
+        setNftTimelineLoading(true);
+        try {
+            await ensureHeyApiConfigured();
+            const res = await getFlowV1NftTransfer({ query: { address: normalizedAddress, offset: nftTimelineOffset, limit: 20 } });
+            const payload: any = res.data;
+            const items = payload?.data ?? [];
+            setNftTimelineTxs(prev => [...prev, ...items]);
+            setNftTimelineOffset(prev => prev + items.length);
+            setNftTimelineHasMore(items.length >= 20);
+        } catch (err) {
+            console.error('Failed to load NFT timeline', err);
+        } finally {
+            nftTimelineLoadingRef.current = false;
+            setNftTimelineLoading(false);
+        }
+    }, [nftTimelineHasMore, nftTimelineOffset, normalizedAddress]);
 
     // --- Scheduled Transactions (lazy) ---
     const loadScheduledTransactions = async (cursorValue: string, append: boolean) => {
@@ -355,11 +410,55 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
 
     // Auto-load dedicated transfer lists when filter switches
     useEffect(() => {
-        if (filterMode === 'ft' && ftTransfers.length === 0 && !ftLoading) loadFtTransfers('', false);
-        if (filterMode === 'nft' && nftTransfers.length === 0 && !nftLoading) loadNftTransfers('', false);
+        if (filterMode === 'ft') {
+            if (viewMode === 'timeline' && ftTimelineTxs.length === 0 && !ftTimelineLoading) loadMoreFtTimeline();
+            else if (viewMode === 'pages' && ftTransfers.length === 0 && !ftLoading) loadFtTransfers(1);
+        }
+        if (filterMode === 'nft') {
+            if (viewMode === 'timeline' && nftTimelineTxs.length === 0 && !nftTimelineLoading) loadMoreNftTimeline();
+            else if (viewMode === 'pages' && nftTransfers.length === 0 && !nftLoading) loadNftTransfers(1);
+        }
         if (filterMode === 'scheduled' && scheduledTxs.length === 0 && !scheduledLoading) loadScheduledTransactions('', false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filterMode, address]);
+    }, [filterMode, address, viewMode]);
+
+    // FT page changes
+    useEffect(() => {
+        if (filterMode === 'ft' && ftPage > 1) loadFtTransfers(ftPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ftPage]);
+
+    // NFT page changes
+    useEffect(() => {
+        if (filterMode === 'nft' && nftPage > 1) loadNftTransfers(nftPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [nftPage]);
+
+    // IntersectionObserver for FT timeline
+    useEffect(() => {
+        if (filterMode !== 'ft' || viewMode !== 'timeline' || !ftTimelineHasMore) return;
+        const sentinel = ftSentinelRef.current;
+        if (!sentinel) return;
+        const observer = new IntersectionObserver(
+            (entries) => { if (entries[0]?.isIntersecting) loadMoreFtTimeline(); },
+            { rootMargin: '200px' }
+        );
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [filterMode, viewMode, ftTimelineHasMore, loadMoreFtTimeline]);
+
+    // IntersectionObserver for NFT timeline
+    useEffect(() => {
+        if (filterMode !== 'nft' || viewMode !== 'timeline' || !nftTimelineHasMore) return;
+        const sentinel = nftSentinelRef.current;
+        if (!sentinel) return;
+        const observer = new IntersectionObserver(
+            (entries) => { if (entries[0]?.isIntersecting) loadMoreNftTimeline(); },
+            { rootMargin: '200px' }
+        );
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [filterMode, viewMode, nftTimelineHasMore, loadMoreNftTimeline]);
 
     // Filter the unified feed
     const filteredTransactions = useMemo(() => {
@@ -380,6 +479,105 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     ];
 
     const isLoading = filterMode === 'all' ? txLoading : filterMode === 'ft' ? ftLoading : filterMode === 'nft' ? nftLoading : scheduledLoading;
+
+    const renderFtRow = (tx: any, i: number, addr: string) => {
+        const dir = tx.direction || (tx.from_address?.toLowerCase().includes(addr.replace('0x', '')) ? 'withdraw' : 'deposit');
+        const isOut = dir === 'withdraw' || dir === 'out';
+        const tokenSymbol = tx.token?.symbol || tx.token?.name || formatTokenName(tx.token?.token || '');
+        const tokenLogo = tx.token?.logo;
+        const sender = tx.sender || tx.from_address;
+        const receiver = tx.receiver || tx.to_address;
+        const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
+        return (
+            <div key={i} className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center overflow-hidden">
+                    <TokenIcon logo={tokenLogo} symbol={tokenSymbol} size={28} />
+                    {!extractLogoUrl(tokenLogo) && <ArrowRightLeft className="h-3.5 w-3.5 text-emerald-500" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
+                            {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                            {isOut ? 'Sent' : 'Received'}
+                        </span>
+                        <span className="font-mono text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                            {tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '\u2014'}
+                        </span>
+                        <span className="text-xs text-zinc-500 font-medium">{tokenSymbol}</span>
+                        {tx.token?.token && (
+                            <Link to={`/contracts/${tx.token.token}` as any} className="text-[10px] text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green font-mono ml-1">
+                                {tx.token.token}
+                            </Link>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                        {sender && <span>From <AddressLink address={sender} size={14} /></span>}
+                        {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
+                        {receiver && <span>To <AddressLink address={receiver} size={14} /></span>}
+                        {tx.transaction_hash && (
+                            <>
+                                <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
+                                <Link to={`/txs/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
+                            </>
+                        )}
+                    </div>
+                </div>
+                <div className="flex-shrink-0 text-right">
+                    <div className="text-[10px] text-zinc-400">{timeStr}</div>
+                    {tx.block_height && <div className="text-[10px] text-zinc-400 font-mono">#{tx.block_height}</div>}
+                </div>
+            </div>
+        );
+    };
+
+    const renderNftRow = (tx: any, i: number, addr: string) => {
+        const dir = tx.direction || (tx.from_address?.toLowerCase().includes(addr.replace('0x', '')) ? 'withdraw' : 'deposit');
+        const isOut = dir === 'withdraw' || dir === 'out';
+        const collectionName = tx.collection?.name || formatTokenName(tx.nft_type || '');
+        const collectionImage = tx.collection?.image;
+        const sender = tx.sender || tx.from_address;
+        const receiver = tx.receiver || tx.to_address;
+        const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
+        return (
+            <div key={i} className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center overflow-hidden">
+                    <TokenIcon logo={collectionImage} symbol={collectionName} size={36} />
+                    {!extractLogoUrl(collectionImage) && <Repeat className="h-4 w-4 text-amber-500" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
+                            {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                            {isOut ? 'Sent' : 'Received'}
+                        </span>
+                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{collectionName}</span>
+                        {tx.nft_id && <span className="text-xs text-zinc-500 font-mono">#{tx.nft_id}</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                        {sender && <span>From <AddressLink address={sender} size={14} /></span>}
+                        {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
+                        {receiver && <span>To <AddressLink address={receiver} size={14} /></span>}
+                        {tx.nft_type && (
+                            <>
+                                <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
+                                <Link to={`/contracts/${tx.nft_type}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-[10px]">{tx.nft_type}</Link>
+                            </>
+                        )}
+                        {tx.transaction_hash && (
+                            <>
+                                <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
+                                <Link to={`/txs/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
+                            </>
+                        )}
+                    </div>
+                </div>
+                <div className="flex-shrink-0 text-right">
+                    <div className="text-[10px] text-zinc-400">{timeStr}</div>
+                    {tx.block_height && <div className="text-[10px] text-zinc-400 font-mono">#{tx.block_height}</div>}
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div>
@@ -403,7 +601,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             </div>
 
             {/* View mode toggle + Pagination */}
-            {filterMode === 'all' && (
+            {(filterMode === 'all' || filterMode === 'ft' || filterMode === 'nft') && (
                 <div className="flex items-center justify-between mb-3">
                     {/* View mode toggle */}
                     <div className="flex items-center gap-0.5 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
@@ -421,11 +619,25 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                         </button>
                     </div>
                     {/* Pagination (pages mode only) */}
-                    {viewMode === 'pages' && (
+                    {viewMode === 'pages' && filterMode === 'all' && (
                         <div className="flex items-center gap-2">
                             <button disabled={currentPage <= 1 || txLoading} onClick={() => setCurrentPage(prev => prev - 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Prev</button>
                             <span className="text-[10px] text-zinc-500 tabular-nums min-w-[4rem] text-center">Page {currentPage}</span>
                             <button disabled={!txHasNext || txLoading} onClick={() => setCurrentPage(prev => prev + 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Next</button>
+                        </div>
+                    )}
+                    {viewMode === 'pages' && filterMode === 'ft' && (
+                        <div className="flex items-center gap-2">
+                            <button disabled={ftPage <= 1 || ftLoading} onClick={() => setFtPage(prev => prev - 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Prev</button>
+                            <span className="text-[10px] text-zinc-500 tabular-nums min-w-[4rem] text-center">Page {ftPage}</span>
+                            <button disabled={!ftHasMore || ftLoading} onClick={() => setFtPage(prev => prev + 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Next</button>
+                        </div>
+                    )}
+                    {viewMode === 'pages' && filterMode === 'nft' && (
+                        <div className="flex items-center gap-2">
+                            <button disabled={nftPage <= 1 || nftLoading} onClick={() => setNftPage(prev => prev - 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Prev</button>
+                            <span className="text-[10px] text-zinc-500 tabular-nums min-w-[4rem] text-center">Page {nftPage}</span>
+                            <button disabled={!nftHasMore || nftLoading} onClick={() => setNftPage(prev => prev + 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Next</button>
                         </div>
                     )}
                 </div>
@@ -453,135 +665,90 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                     </div>
                 )}
 
-                {/* Dedicated FT transfer list */}
-                {filterMode === 'ft' && ftTransfers.length > 0 && (
+                {/* Dedicated FT transfer list — Pages mode */}
+                {filterMode === 'ft' && viewMode === 'pages' && ftTransfers.length > 0 && (
                     <div className="space-y-0">
-                        {ftTransfers.map((tx: any, i: number) => {
-                            const dir = tx.direction || (tx.from_address?.toLowerCase().includes(normalizedAddress.replace('0x', '')) ? 'withdraw' : 'deposit');
-                            const isOut = dir === 'withdraw' || dir === 'out';
-                            const tokenSymbol = tx.token?.symbol || tx.token?.name || formatTokenName(tx.token?.token || '');
-                            const tokenLogo = tx.token?.logo;
-                            const sender = tx.sender || tx.from_address;
-                            const receiver = tx.receiver || tx.to_address;
-                            const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
-                            return (
-                                <div key={i} className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                    {/* Token icon */}
-                                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center overflow-hidden">
-                                        <TokenIcon logo={tokenLogo} symbol={tokenSymbol} size={28} />
-                                        {!extractLogoUrl(tokenLogo) && <ArrowRightLeft className="h-3.5 w-3.5 text-emerald-500" />}
-                                    </div>
-                                    {/* Main content */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-0.5">
-                                            <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
-                                                {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
-                                                {isOut ? 'Sent' : 'Received'}
-                                            </span>
-                                            <span className="font-mono text-xs font-medium text-zinc-900 dark:text-zinc-100">
-                                                {tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '\u2014'}
-                                            </span>
-                                            <span className="text-xs text-zinc-500 font-medium">{tokenSymbol}</span>
-                                            {tx.token?.token && (
-                                                <Link to={`/contracts/${tx.token.token}` as any} className="text-[10px] text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green font-mono ml-1">
-                                                    {tx.token.token}
-                                                </Link>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                                            {sender && (
-                                                <span>From <AddressLink address={sender} size={14} /></span>
-                                            )}
-                                            {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
-                                            {receiver && (
-                                                <span>To <AddressLink address={receiver} size={14} /></span>
-                                            )}
-                                            {tx.transaction_hash && (
-                                                <>
-                                                    <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
-                                                    <Link to={`/txs/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {/* Right side */}
-                                    <div className="flex-shrink-0 text-right">
-                                        <div className="text-[10px] text-zinc-400">{timeStr}</div>
-                                        {tx.block_height && <div className="text-[10px] text-zinc-400 font-mono">#{tx.block_height}</div>}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                        {ftHasMore && (
-                            <div className="text-center py-3">
-                                <button onClick={() => loadFtTransfers(ftCursor, true)} disabled={ftLoading} className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50">{ftLoading ? 'Loading...' : 'Load More'}</button>
+                        {ftTransfers.map((tx: any, i: number) => renderFtRow(tx, i, normalizedAddress))}
+                    </div>
+                )}
+                {/* Dedicated FT transfer list — Timeline mode */}
+                {filterMode === 'ft' && viewMode === 'timeline' && (
+                    <div className="space-y-0">
+                        {(() => {
+                            const now = new Date();
+                            let lastSection = '';
+                            return ftTimelineTxs.map((tx, i) => {
+                                const ts = tx.timestamp;
+                                const section = ts ? getTimeSection(ts, now) : 'Unknown';
+                                const showHeader = section !== lastSection;
+                                lastSection = section;
+                                return (
+                                    <Fragment key={`ft-tl-${i}`}>
+                                        {showHeader && (
+                                            <div className="sticky top-0 z-10 bg-zinc-50/90 dark:bg-zinc-900/90 backdrop-blur-sm text-[10px] uppercase tracking-widest text-zinc-500 font-bold px-4 py-2 border-b border-zinc-200 dark:border-white/10">
+                                                {section}
+                                            </div>
+                                        )}
+                                        {renderFtRow(tx, i, normalizedAddress)}
+                                    </Fragment>
+                                );
+                            });
+                        })()}
+                        <div ref={ftSentinelRef} className="h-1" />
+                        {ftTimelineLoading && (
+                            <div className="flex items-center justify-center py-4">
+                                <div className="w-5 h-5 border-2 border-dashed border-zinc-400 dark:border-zinc-500 rounded-full animate-spin" />
                             </div>
+                        )}
+                        {!ftTimelineHasMore && ftTimelineTxs.length > 0 && (
+                            <div className="text-center text-[10px] text-zinc-400 py-4 uppercase tracking-widest">End of FT transfers</div>
+                        )}
+                        {ftTimelineTxs.length === 0 && !ftTimelineLoading && (
+                            <div className="text-center text-zinc-500 italic py-8">No FT transfers found</div>
                         )}
                     </div>
                 )}
 
-                {/* Dedicated NFT transfer list */}
-                {filterMode === 'nft' && nftTransfers.length > 0 && (
+                {/* Dedicated NFT transfer list — Pages mode */}
+                {filterMode === 'nft' && viewMode === 'pages' && nftTransfers.length > 0 && (
                     <div className="space-y-0">
-                        {nftTransfers.map((tx: any, i: number) => {
-                            const dir = tx.direction || (tx.from_address?.toLowerCase().includes(normalizedAddress.replace('0x', '')) ? 'withdraw' : 'deposit');
-                            const isOut = dir === 'withdraw' || dir === 'out';
-                            const collectionName = tx.collection?.name || formatTokenName(tx.nft_type || '');
-                            const collectionImage = tx.collection?.image;
-                            const sender = tx.sender || tx.from_address;
-                            const receiver = tx.receiver || tx.to_address;
-                            const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
-                            return (
-                                <div key={i} className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                    {/* Collection icon */}
-                                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center overflow-hidden">
-                                        <TokenIcon logo={collectionImage} symbol={collectionName} size={36} />
-                                        {!extractLogoUrl(collectionImage) && <Repeat className="h-4 w-4 text-amber-500" />}
-                                    </div>
-                                    {/* Main content */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-0.5">
-                                            <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
-                                                {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
-                                                {isOut ? 'Sent' : 'Received'}
-                                            </span>
-                                            <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{collectionName}</span>
-                                            {tx.nft_id && <span className="text-xs text-zinc-500 font-mono">#{tx.nft_id}</span>}
-                                        </div>
-                                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                                            {sender && (
-                                                <span>From <AddressLink address={sender} size={14} /></span>
-                                            )}
-                                            {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
-                                            {receiver && (
-                                                <span>To <AddressLink address={receiver} size={14} /></span>
-                                            )}
-                                            {tx.nft_type && (
-                                                <>
-                                                    <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
-                                                    <Link to={`/contracts/${tx.nft_type}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-[10px]">{tx.nft_type}</Link>
-                                                </>
-                                            )}
-                                            {tx.transaction_hash && (
-                                                <>
-                                                    <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
-                                                    <Link to={`/txs/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {/* Right side */}
-                                    <div className="flex-shrink-0 text-right">
-                                        <div className="text-[10px] text-zinc-400">{timeStr}</div>
-                                        {tx.block_height && <div className="text-[10px] text-zinc-400 font-mono">#{tx.block_height}</div>}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                        {nftHasMore && (
-                            <div className="text-center py-3">
-                                <button onClick={() => loadNftTransfers(nftCursor, true)} disabled={nftLoading} className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50">{nftLoading ? 'Loading...' : 'Load More'}</button>
+                        {nftTransfers.map((tx: any, i: number) => renderNftRow(tx, i, normalizedAddress))}
+                    </div>
+                )}
+                {/* Dedicated NFT transfer list — Timeline mode */}
+                {filterMode === 'nft' && viewMode === 'timeline' && (
+                    <div className="space-y-0">
+                        {(() => {
+                            const now = new Date();
+                            let lastSection = '';
+                            return nftTimelineTxs.map((tx, i) => {
+                                const ts = tx.timestamp;
+                                const section = ts ? getTimeSection(ts, now) : 'Unknown';
+                                const showHeader = section !== lastSection;
+                                lastSection = section;
+                                return (
+                                    <Fragment key={`nft-tl-${i}`}>
+                                        {showHeader && (
+                                            <div className="sticky top-0 z-10 bg-zinc-50/90 dark:bg-zinc-900/90 backdrop-blur-sm text-[10px] uppercase tracking-widest text-zinc-500 font-bold px-4 py-2 border-b border-zinc-200 dark:border-white/10">
+                                                {section}
+                                            </div>
+                                        )}
+                                        {renderNftRow(tx, i, normalizedAddress)}
+                                    </Fragment>
+                                );
+                            });
+                        })()}
+                        <div ref={nftSentinelRef} className="h-1" />
+                        {nftTimelineLoading && (
+                            <div className="flex items-center justify-center py-4">
+                                <div className="w-5 h-5 border-2 border-dashed border-zinc-400 dark:border-zinc-500 rounded-full animate-spin" />
                             </div>
+                        )}
+                        {!nftTimelineHasMore && nftTimelineTxs.length > 0 && (
+                            <div className="text-center text-[10px] text-zinc-400 py-4 uppercase tracking-widest">End of NFT transfers</div>
+                        )}
+                        {nftTimelineTxs.length === 0 && !nftTimelineLoading && (
+                            <div className="text-center text-zinc-500 italic py-8">No NFT transfers found</div>
                         )}
                     </div>
                 )}
@@ -611,10 +778,10 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                 )}
 
                 {/* Empty states for dedicated views */}
-                {filterMode === 'ft' && ftTransfers.length === 0 && !ftLoading && (
+                {filterMode === 'ft' && viewMode === 'pages' && ftTransfers.length === 0 && !ftLoading && (
                     <div className="text-center text-zinc-500 italic py-8">No FT transfers found</div>
                 )}
-                {filterMode === 'nft' && nftTransfers.length === 0 && !nftLoading && (
+                {filterMode === 'nft' && viewMode === 'pages' && nftTransfers.length === 0 && !nftLoading && (
                     <div className="text-center text-zinc-500 italic py-8">No NFT transfers found</div>
                 )}
                 {filterMode === 'scheduled' && scheduledTxs.length === 0 && !scheduledLoading && (
