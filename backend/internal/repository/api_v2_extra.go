@@ -77,20 +77,19 @@ func (r *Repository) CountFTTokenContracts(ctx context.Context) (int64, error) {
 func (r *Repository) CountNFTCollectionSummaries(ctx context.Context) (int64, error) {
 	var total int64
 	if err := r.db.QueryRow(ctx, `
-		WITH counts AS (
-			SELECT contract_address, contract_name
-			FROM app.nft_ownership
-			GROUP BY contract_address, contract_name
-		),
-		unioned AS (
+		SELECT COUNT(*) FROM (
 			SELECT contract_address, contract_name FROM app.nft_collections
 			UNION
-			SELECT contract_address, contract_name FROM counts
-		)
-		SELECT COUNT(*) FROM unioned`).Scan(&total); err != nil {
+			SELECT contract_address, contract_name FROM app.nft_collection_stats
+		) u`).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil
+}
+
+func (r *Repository) RefreshNFTCollectionStats(ctx context.Context) error {
+	_, err := r.db.Exec(ctx, "REFRESH MATERIALIZED VIEW CONCURRENTLY app.nft_collection_stats")
+	return err
 }
 
 func (r *Repository) HasAnyFTHoldings(ctx context.Context) (bool, error) {
@@ -230,15 +229,9 @@ func (r *Repository) ListNFTCollectionContracts(ctx context.Context, limit, offs
 
 func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offset int) ([]NFTCollectionSummary, error) {
 	rows, err := r.db.Query(ctx, `
-		WITH counts AS (
-			SELECT contract_address, contract_name, COUNT(*) AS cnt, COUNT(DISTINCT owner) AS holder_cnt
-			FROM app.nft_ownership
-			WHERE owner IS NOT NULL
-			GROUP BY contract_address, contract_name
-		)
 		SELECT
-			COALESCE(encode(COALESCE(c.contract_address, counts.contract_address), 'hex'), '') AS contract_address,
-			COALESCE(COALESCE(c.contract_name, counts.contract_name), '') AS contract_name,
+			COALESCE(encode(COALESCE(c.contract_address, s.contract_address), 'hex'), '') AS contract_address,
+			COALESCE(COALESCE(c.contract_name, s.contract_name), '') AS contract_name,
 			COALESCE(c.name, '') AS name,
 			COALESCE(c.symbol, '') AS symbol,
 			COALESCE(c.description, '') AS description,
@@ -246,14 +239,14 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(c.square_image::text, '') AS square_image,
 			COALESCE(c.banner_image::text, '') AS banner_image,
 			COALESCE(c.socials::text, '') AS socials,
-			COALESCE(counts.cnt, 0) AS cnt,
-			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
+			COALESCE(s.nft_count, 0) AS cnt,
+			COALESCE(s.holder_count, 0) AS holder_cnt,
 			COALESCE(c.evm_address, '') AS evm_address,
 			COALESCE(c.is_verified, false) AS is_verified,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
-		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
-		ORDER BY COALESCE(counts.holder_cnt, 0) DESC, contract_address ASC
+		FULL OUTER JOIN app.nft_collection_stats s ON s.contract_address = c.contract_address AND s.contract_name = c.contract_name
+		ORDER BY COALESCE(s.holder_count, 0) DESC, contract_address ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, err
@@ -273,13 +266,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 // ListTrendingNFTCollections returns NFT collections ordered by recent transfer activity.
 func (r *Repository) ListTrendingNFTCollections(ctx context.Context, limit, offset int) ([]NFTCollectionSummary, error) {
 	rows, err := r.db.Query(ctx, `
-		WITH counts AS (
-			SELECT contract_address, contract_name, COUNT(*) AS cnt, COUNT(DISTINCT owner) AS holder_cnt
-			FROM app.nft_ownership
-			WHERE owner IS NOT NULL
-			GROUP BY contract_address, contract_name
-		),
-		max_h AS (
+		WITH max_h AS (
 			SELECT COALESCE(MAX(block_height), 0) AS h FROM app.nft_transfers
 		),
 		recent_activity AS (
@@ -289,8 +276,8 @@ func (r *Repository) ListTrendingNFTCollections(ctx context.Context, limit, offs
 			GROUP BY token_contract_address, contract_name
 		)
 		SELECT
-			COALESCE(encode(COALESCE(c.contract_address, counts.contract_address), 'hex'), '') AS contract_address,
-			COALESCE(COALESCE(c.contract_name, counts.contract_name), '') AS contract_name,
+			COALESCE(encode(COALESCE(c.contract_address, s.contract_address), 'hex'), '') AS contract_address,
+			COALESCE(COALESCE(c.contract_name, s.contract_name), '') AS contract_name,
 			COALESCE(c.name, '') AS name,
 			COALESCE(c.symbol, '') AS symbol,
 			COALESCE(c.description, '') AS description,
@@ -298,15 +285,15 @@ func (r *Repository) ListTrendingNFTCollections(ctx context.Context, limit, offs
 			COALESCE(c.square_image::text, '') AS square_image,
 			COALESCE(c.banner_image::text, '') AS banner_image,
 			COALESCE(c.socials::text, '') AS socials,
-			COALESCE(counts.cnt, 0) AS cnt,
-			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
+			COALESCE(s.nft_count, 0) AS cnt,
+			COALESCE(s.holder_count, 0) AS holder_cnt,
 			COALESCE(ra.tx_count, 0) AS transfer_count,
 			COALESCE(c.evm_address, '') AS evm_address,
 			COALESCE(c.is_verified, false) AS is_verified,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
-		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
-		LEFT JOIN recent_activity ra ON ra.token_contract_address = COALESCE(c.contract_address, counts.contract_address) AND ra.contract_name = COALESCE(c.contract_name, counts.contract_name)
+		FULL OUTER JOIN app.nft_collection_stats s ON s.contract_address = c.contract_address AND s.contract_name = c.contract_name
+		LEFT JOIN recent_activity ra ON ra.token_contract_address = COALESCE(c.contract_address, s.contract_address) AND ra.contract_name = COALESCE(c.contract_name, s.contract_name)
 		ORDER BY COALESCE(ra.tx_count, 0) DESC, contract_address ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
@@ -328,15 +315,9 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 	var row NFTCollectionSummary
 	if contractName == "" {
 		err := r.db.QueryRow(ctx, `
-			WITH counts AS (
-				SELECT contract_address, contract_name, COUNT(*) AS cnt, COUNT(DISTINCT owner) AS holder_cnt
-				FROM app.nft_ownership
-				WHERE contract_address = $1 AND owner IS NOT NULL
-				GROUP BY contract_address, contract_name
-			)
 			SELECT
-				COALESCE(encode(COALESCE(c.contract_address, counts.contract_address), 'hex'), '') AS contract_address,
-				COALESCE(COALESCE(c.contract_name, counts.contract_name), '') AS contract_name,
+				COALESCE(encode(COALESCE(c.contract_address, s.contract_address), 'hex'), '') AS contract_address,
+				COALESCE(COALESCE(c.contract_name, s.contract_name), '') AS contract_name,
 				COALESCE(c.name, '') AS name,
 				COALESCE(c.symbol, '') AS symbol,
 				COALESCE(c.description, '') AS description,
@@ -344,15 +325,15 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 				COALESCE(c.square_image::text, '') AS square_image,
 				COALESCE(c.banner_image::text, '') AS banner_image,
 				COALESCE(c.socials::text, '') AS socials,
-				COALESCE(counts.cnt, 0) AS cnt,
-				COALESCE(counts.holder_cnt, 0) AS holder_cnt,
+				COALESCE(s.nft_count, 0) AS cnt,
+				COALESCE(s.holder_count, 0) AS holder_cnt,
 				COALESCE(c.evm_address, '') AS evm_address,
 				COALESCE(c.is_verified, false) AS is_verified,
 				COALESCE(c.updated_at, NOW()) AS updated_at
 			FROM app.nft_collections c
-			FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
-			WHERE COALESCE(c.contract_address, counts.contract_address) = $1
-			ORDER BY COALESCE(c.contract_name, counts.contract_name) ASC
+			FULL OUTER JOIN app.nft_collection_stats s ON s.contract_address = c.contract_address AND s.contract_name = c.contract_name
+			WHERE COALESCE(c.contract_address, s.contract_address) = $1
+			ORDER BY COALESCE(c.contract_name, s.contract_name) ASC
 			LIMIT 1`, hexToBytes(contract)).
 			Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.IsVerified, &row.UpdatedAt)
 		if err == pgx.ErrNoRows {
@@ -364,15 +345,9 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 		return &row, nil
 	}
 	err := r.db.QueryRow(ctx, `
-		WITH counts AS (
-			SELECT contract_address, contract_name, COUNT(*) AS cnt, COUNT(DISTINCT owner) AS holder_cnt
-			FROM app.nft_ownership
-			WHERE contract_address = $1 AND contract_name = $2 AND owner IS NOT NULL
-			GROUP BY contract_address, contract_name
-		)
 		SELECT
-			COALESCE(encode(COALESCE(c.contract_address, counts.contract_address), 'hex'), '') AS contract_address,
-			COALESCE(COALESCE(c.contract_name, counts.contract_name), '') AS contract_name,
+			COALESCE(encode(COALESCE(c.contract_address, s.contract_address), 'hex'), '') AS contract_address,
+			COALESCE(COALESCE(c.contract_name, s.contract_name), '') AS contract_name,
 			COALESCE(c.name, '') AS name,
 			COALESCE(c.symbol, '') AS symbol,
 			COALESCE(c.description, '') AS description,
@@ -380,14 +355,14 @@ func (r *Repository) GetNFTCollectionSummary(ctx context.Context, contract, cont
 			COALESCE(c.square_image::text, '') AS square_image,
 			COALESCE(c.banner_image::text, '') AS banner_image,
 			COALESCE(c.socials::text, '') AS socials,
-			COALESCE(counts.cnt, 0) AS cnt,
-			COALESCE(counts.holder_cnt, 0) AS holder_cnt,
+			COALESCE(s.nft_count, 0) AS cnt,
+			COALESCE(s.holder_count, 0) AS holder_cnt,
 			COALESCE(c.evm_address, '') AS evm_address,
 			COALESCE(c.is_verified, false) AS is_verified,
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
-		FULL OUTER JOIN counts ON counts.contract_address = c.contract_address AND counts.contract_name = c.contract_name
-		WHERE COALESCE(c.contract_address, counts.contract_address) = $1 AND COALESCE(c.contract_name, counts.contract_name) = $2`,
+		FULL OUTER JOIN app.nft_collection_stats s ON s.contract_address = c.contract_address AND s.contract_name = c.contract_name
+		WHERE COALESCE(c.contract_address, s.contract_address) = $1 AND COALESCE(c.contract_name, s.contract_name) = $2`,
 		hexToBytes(contract), contractName).
 		Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.IsVerified, &row.UpdatedAt)
 	if err == pgx.ErrNoRows {

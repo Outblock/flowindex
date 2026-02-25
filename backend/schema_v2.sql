@@ -748,6 +748,15 @@ ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS balance_path TEXT;
 ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS socials JSONB;
 ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS evm_address TEXT;
 
+-- NFT collection stats (materialized view — refreshed periodically by backend)
+CREATE MATERIALIZED VIEW IF NOT EXISTS app.nft_collection_stats AS
+SELECT contract_address, contract_name, COUNT(*) AS nft_count, COUNT(DISTINCT owner) AS holder_count
+FROM app.nft_ownership
+WHERE owner IS NOT NULL
+GROUP BY contract_address, contract_name;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nft_collection_stats_pk ON app.nft_collection_stats (contract_address, contract_name);
+CREATE INDEX IF NOT EXISTS idx_nft_collection_stats_holders ON app.nft_collection_stats (holder_count DESC, contract_address ASC);
+
 -- Epoch payout columns (EpochTotalRewardsPaid event data)
 ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_total NUMERIC(78,8) DEFAULT 0;
 ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_from_fees NUMERIC(78,8) DEFAULT 0;

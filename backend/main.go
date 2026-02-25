@@ -671,6 +671,24 @@ func main() {
 		log.Println("Daily Stats Aggregator is DISABLED (ENABLE_DAILY_STATS=false)")
 	}
 
+	// Refresh NFT collection stats materialized view periodically
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := repo.RefreshNFTCollectionStats(ctx); err != nil {
+					log.Printf("Failed to refresh nft_collection_stats: %v", err)
+				}
+			}
+		}
+	}()
+
 	// Start Market Price Poller (Runs every N mins)
 	enablePriceFeed := os.Getenv("ENABLE_PRICE_FEED") != "false"
 	if enablePriceFeed {
