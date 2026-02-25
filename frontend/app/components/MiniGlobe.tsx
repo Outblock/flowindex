@@ -15,7 +15,7 @@ const ROLE_COLORS: Record<number, number> = {
   5: 0x22d3ee, // Access — cyan
 };
 
-const GLOBE_RADIUS = 1.6;
+const GLOBE_RADIUS = 1.3;
 const SURFACE_DOT_COUNT = 3000;
 const DOT_BASE = 0.025;
 const DOT_MAX = 0.06;

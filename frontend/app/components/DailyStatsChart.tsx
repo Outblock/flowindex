@@ -16,7 +16,7 @@ function formatTickLabel(dateStr: string, rangeDays: number): string {
 export function DailyStatsChart() {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [rangeDays, setRangeDays] = useState(7);
+    const [rangeDays, setRangeDays] = useState(30);
 
     useEffect(() => {
         const loadStats = async () => {
