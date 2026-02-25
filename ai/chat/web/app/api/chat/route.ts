@@ -8,7 +8,7 @@ import {
   type UIMessage,
 } from "ai";
 import { z } from "zod";
-import { systemPrompt } from "@/lib/system-prompt";
+import { getSystemPrompt } from "@/lib/system-prompt";
 
 const MCP_URL = process.env.MCP_SERVER_URL || "http://localhost:8085/mcp";
 
@@ -22,8 +22,8 @@ export async function POST(req: Request) {
   const mcpTools = await mcpClient.tools();
 
   const result = streamText({
-    model: anthropic("claude-sonnet-4-5-20250929"),
-    system: systemPrompt,
+    model: anthropic(process.env.LLM_MODEL || "claude-sonnet-4-6"),
+    system: getSystemPrompt(),
     messages: await convertToModelMessages(messages),
     tools: {
       ...mcpTools,

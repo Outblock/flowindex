@@ -4,31 +4,29 @@ import examples from "./training-data/examples.json";
 
 const trainingDir = path.resolve(process.cwd(), "..", "training_data");
 
-const flowindexDdl = fs.readFileSync(
-  path.join(trainingDir, "ddl", "flowindex_tables.sql"),
-  "utf-8"
-);
+function readTrainingFile(relativePath: string): string {
+  try {
+    return fs.readFileSync(path.join(trainingDir, relativePath), "utf-8");
+  } catch {
+    return `[File not found: ${relativePath}]`;
+  }
+}
 
-const evmDdl = fs.readFileSync(
-  path.join(trainingDir, "ddl", "core_tables.sql"),
-  "utf-8"
-);
+let _systemPrompt: string | null = null;
 
-const evmDocs = fs.readFileSync(
-  path.join(trainingDir, "docs", "flow_evm_blockscout.md"),
-  "utf-8"
-);
+export function getSystemPrompt(): string {
+  if (_systemPrompt) return _systemPrompt;
 
-const cadenceDocs = fs.readFileSync(
-  path.join(trainingDir, "docs", "flow_cadence.md"),
-  "utf-8"
-);
+  const flowindexDdl = readTrainingFile("ddl/flowindex_tables.sql");
+  const evmDdl = readTrainingFile("ddl/core_tables.sql");
+  const evmDocs = readTrainingFile("docs/flow_evm_blockscout.md");
+  const cadenceDocs = readTrainingFile("docs/flow_cadence.md");
 
-const exampleSection = (examples as { question: string; sql: string }[])
-  .map((e) => `Q: ${e.question}\nSQL: ${e.sql}`)
-  .join("\n\n");
+  const exampleSection = (examples as { question: string; sql: string }[])
+    .map((e) => `Q: ${e.question}\nSQL: ${e.sql}`)
+    .join("\n\n");
 
-export const systemPrompt = `You are Flow AI — an expert assistant for the Flow blockchain.
+  _systemPrompt = `You are Flow AI — an expert assistant for the Flow blockchain.
 You can query on-chain data three ways:
 
 1. **run_flowindex_sql** — Execute read-only SQL against the Flowindex PostgreSQL database (native Flow/Cadence data: blocks, transactions, events, token transfers, accounts, staking)
@@ -95,3 +93,6 @@ ${cadenceDocs}
 ## SQL Example Query Pairs (EVM)
 ${exampleSection}
 `;
+
+  return _systemPrompt;
+}
