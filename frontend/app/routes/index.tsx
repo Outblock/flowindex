@@ -48,8 +48,8 @@ function Home() {
     const [hydrated, setHydrated] = useState(false);
     const [blocks, setBlocks] = useState<any[]>(initialBlocks || []);
     const [transactions, setTransactions] = useState<any[]>([]);
-    const [tokens, setTokens] = useState<any[]>([]);
-    const [nftCollections, setNftCollections] = useState<any[]>([]);
+    const [tokens, setTokens] = useState<any[] | null>(null);
+    const [nftCollections, setNftCollections] = useState<any[] | null>(null);
     const [statusRaw, setStatusRaw] = useState<any>(status);
     const [networkStats, setNetworkStats] = useState<any>(initialNetworkStats);
     const [tps, setTps] = useState(0);
@@ -656,11 +656,24 @@ function Home() {
                             </Link>
                         </div>
                         <div className="p-6 pt-4">
-                            {(tokens || []).length === 0 ? (
+                            {tokens === null ? (
+                                <div className="flex flex-col">
+                                    {[...Array(5)].map((_, i) => (
+                                        <div key={i} className="flex items-center space-x-3 px-3 py-3 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
+                                            <div className="w-6 h-6 rounded-sm bg-zinc-200 dark:bg-white/10 animate-pulse flex-shrink-0" />
+                                            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                                                <div className="h-3 w-24 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                                                <div className="h-2.5 w-40 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                                            </div>
+                                            <div className="h-4 w-14 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse flex-shrink-0" />
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : tokens.length === 0 ? (
                                 <p className="text-xs text-zinc-400 dark:text-gray-500 font-mono">No tokens found.</p>
                             ) : (
                                 <div className="flex flex-col">
-                                    {(tokens || []).slice(0, 5).map((token: any) => (
+                                    {tokens.slice(0, 5).map((token: any) => (
                                         <Link
                                             key={token.id}
                                             to={`/tokens/${token.id}` as any}
@@ -725,11 +738,23 @@ function Home() {
                             </Link>
                         </div>
                         <div className="p-6 pt-4">
-                            {(nftCollections || []).length === 0 ? (
+                            {nftCollections === null ? (
+                                <div className="flex flex-col">
+                                    {[...Array(5)].map((_, i) => (
+                                        <div key={i} className="flex items-center space-x-3 px-3 py-3 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
+                                            <div className="w-6 h-6 rounded-sm bg-zinc-200 dark:bg-white/10 animate-pulse flex-shrink-0" />
+                                            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                                                <div className="h-3 w-28 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                                            </div>
+                                            <div className="h-4 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse flex-shrink-0" />
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : nftCollections.length === 0 ? (
                                 <p className="text-xs text-zinc-400 dark:text-gray-500 font-mono">No collections found.</p>
                             ) : (
                                 <div className="flex flex-col">
-                                    {(nftCollections || []).slice(0, 5).map((nft: any) => (
+                                    {nftCollections.slice(0, 5).map((nft: any) => (
                                         <Link
                                             key={nft.id}
                                             to={`/nfts/${nft.id}` as any}
