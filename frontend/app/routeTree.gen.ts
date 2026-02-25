@@ -10,9 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StatsRouteImport } from './routes/stats'
-import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as NodesRouteImport } from './routes/nodes'
 import { Route as ApiDocsRouteImport } from './routes/api-docs'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
@@ -37,11 +37,6 @@ import { Route as AccountsAddressRouteImport } from './routes/accounts/$address'
 import { Route as TxsEvmTxIdRouteImport } from './routes/txs/evm/$txId'
 import { Route as NftsNftTypeItemIdRouteImport } from './routes/nfts/$nftType/item/$id'
 
-const AnalyticsRoute = AnalyticsRouteImport.update({
-  id: '/analytics',
-  path: '/analytics',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const StatsRoute = StatsRouteImport.update({
   id: '/stats',
   path: '/stats',
@@ -55,6 +50,11 @@ const NodesRoute = NodesRouteImport.update({
 const ApiDocsRoute = ApiDocsRouteImport.update({
   id: '/api-docs',
   path: '/api-docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -173,7 +173,7 @@ const NftsNftTypeItemIdRoute = NftsNftTypeItemIdRouteImport.update({
   getParentRoute: () => NftsNftTypeRoute,
 } as any)
 
-interface FileRoutesByFullPath {
+export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
@@ -202,7 +202,7 @@ interface FileRoutesByFullPath {
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
-interface FileRoutesByTo {
+export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
@@ -231,7 +231,7 @@ interface FileRoutesByTo {
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
-interface FileRoutesById {
+export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
@@ -261,7 +261,7 @@ interface FileRoutesById {
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
-interface FileRouteTypes {
+export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
@@ -351,7 +351,7 @@ interface FileRouteTypes {
     | '/nfts/$nftType/item/$id'
   fileRoutesById: FileRoutesById
 }
-interface RootRouteChildren {
+export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   AdminRoute: typeof AdminRoute

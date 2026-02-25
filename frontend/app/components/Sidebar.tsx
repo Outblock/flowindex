@@ -19,7 +19,6 @@ export default function Sidebar() {
 
     const navItems: Array<{ label: string; path: string; icon: typeof Home; disabled?: boolean }> = [
         { label: 'Home Page', path: '/', icon: Home },
-        { label: 'Analytics', path: '/analytics', icon: BarChart3 },
         { label: 'Transactions', path: '/txs', icon: ArrowRightLeft },
         { label: 'Blocks', path: '/blocks', icon: Box },
         { label: 'Tokens', path: '/tokens', icon: Coins },
@@ -29,6 +28,7 @@ export default function Sidebar() {
         { label: 'Scheduled Txs', path: '/scheduled', icon: Clock },
         { label: 'Nodes', path: '/nodes', icon: Layers },
         { label: 'Indexing Status', path: '/stats', icon: Layers },
+        { label: 'Analytics', path: '/analytics', icon: BarChart3 },
         { label: 'API Docs', path: '/api-docs', icon: FileText },
     ];
 

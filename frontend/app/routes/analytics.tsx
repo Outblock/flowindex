@@ -12,6 +12,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from 'recharts'
 import {
   fetchAnalyticsDaily,
@@ -98,7 +99,7 @@ function fmtPrice(n: number): string {
 function fmtDateTick(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
   if (isNaN(d.getTime())) return dateStr
-  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
 }
 
 function yTickFmt(v: number): string {
@@ -113,32 +114,49 @@ const RANGES: { label: string; value: number }[] = [
   { label: '7D', value: 7 },
   { label: '30D', value: 30 },
   { label: '90D', value: 90 },
-  { label: 'All', value: 9999 },
+  { label: 'ALL', value: 9999 },
 ]
 
-const CARD_CLS =
-  'bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 hover:border-nothing-green/30 transition-all duration-300'
-
-const TOOLTIP_STYLE = {
-  backgroundColor: '#111',
-  borderColor: '#333',
-  color: '#fff',
-  fontSize: '12px',
+/* ── color palette ── */
+const C = {
+  green: '#00ef8b',
+  greenDim: 'rgba(0,239,139,0.15)',
+  blue: '#3b82f6',
+  blueDim: 'rgba(59,130,246,0.15)',
+  amber: '#f59e0b',
+  amberDim: 'rgba(245,158,11,0.15)',
+  red: '#ef4444',
+  redDim: 'rgba(239,68,68,0.15)',
+  purple: '#8b5cf6',
+  purpleDim: 'rgba(139,92,246,0.15)',
+  pink: '#ec4899',
+  pinkDim: 'rgba(236,72,153,0.15)',
+  grid: 'rgba(255,255,255,0.06)',
+  gridLight: 'rgba(0,0,0,0.06)',
+  tick: '#71717a',
 }
 
-const TOOLTIP_ITEM = { color: '#00ef8b', fontFamily: 'monospace' }
+const TOOLTIP_STYLE = {
+  backgroundColor: 'rgba(9,9,11,0.95)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '6px',
+  color: '#fff',
+  fontSize: '12px',
+  fontFamily: 'monospace',
+  padding: '8px 12px',
+}
 
-const TICK_PROPS = { fill: '#666', fontFamily: 'monospace' }
+const TICK_PROPS = { fill: C.tick, fontFamily: 'monospace' }
 
 /* ── reusable chart wrapper ── */
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartCard({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={CARD_CLS}>
-      <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-widest mb-4">
+    <div className={`bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 hover:border-nothing-green/30 transition-colors ${className}`}>
+      <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-4">
         {title}
       </h3>
-      <div className="h-[200px]">
+      <div className="h-[220px]">
         <ResponsiveContainer width="100%" height="100%">
           {children as React.ReactElement}
         </ResponsiveContainer>
@@ -152,28 +170,26 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 function xAxisProps(dataKey = 'date') {
   return {
     dataKey,
-    stroke: '#666',
-    fontSize: 9,
+    stroke: 'transparent',
+    fontSize: 10,
     tickLine: false as const,
     axisLine: false as const,
     tick: TICK_PROPS,
     tickFormatter: fmtDateTick,
-    angle: -45,
-    textAnchor: 'end' as const,
-    height: 50,
-    minTickGap: 20,
+    height: 40,
+    minTickGap: 30,
   }
 }
 
 function yAxisProps(formatter?: (v: number) => string) {
   return {
-    stroke: '#666',
-    fontSize: 9,
+    stroke: 'transparent',
+    fontSize: 10,
     tickLine: false as const,
     axisLine: false as const,
     tick: TICK_PROPS,
     tickFormatter: formatter ?? yTickFmt,
-    width: 45,
+    width: 50,
   }
 }
 
@@ -198,18 +214,18 @@ function KpiCard({
     const positive = invertColor ? delta < 0 : delta > 0
     const negative = invertColor ? delta > 0 : delta < 0
     deltaColor = positive
-      ? 'text-emerald-500'
+      ? 'text-emerald-400'
       : negative
-        ? 'text-red-500'
+        ? 'text-red-400'
         : 'text-zinc-400'
     const sign = delta > 0 ? '+' : ''
     deltaText = deltaLabel ?? `${sign}${fmtNum(delta)}`
   }
   return (
-    <div className={CARD_CLS + ' flex flex-col justify-between min-h-[100px]'}>
-      <span className="text-[10px] uppercase tracking-widest text-zinc-500">{label}</span>
-      <span className="text-2xl font-bold text-zinc-900 dark:text-white font-mono">{value}</span>
-      {deltaText && <span className={`text-xs font-mono ${deltaColor}`}>{deltaText}</span>}
+    <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 flex flex-col justify-between min-h-[100px] hover:border-nothing-green/30 transition-colors">
+      <span className="text-[10px] uppercase tracking-wider text-zinc-500 dark:text-zinc-500 font-medium">{label}</span>
+      <span className="text-xl font-bold text-zinc-900 dark:text-white font-mono mt-2">{value}</span>
+      {deltaText && <span className={`text-xs font-mono mt-1 ${deltaColor}`}>{deltaText}</span>}
     </div>
   )
 }
@@ -219,23 +235,35 @@ function KpiCard({
 function Skeleton({ rows = 6 }: { rows?: number }) {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className={CARD_CLS + ' h-[100px]'}>
-            <div className="h-2 w-16 bg-zinc-200 dark:bg-zinc-800 rounded mb-4" />
-            <div className="h-6 w-24 bg-zinc-200 dark:bg-zinc-800 rounded" />
+          <div key={i} className="bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 h-[100px]">
+            <div className="h-2 w-16 bg-zinc-200 dark:bg-zinc-700 rounded mb-4" />
+            <div className="h-5 w-20 bg-zinc-200 dark:bg-zinc-700 rounded" />
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className={CARD_CLS + ' h-[270px]'}>
-            <div className="h-3 w-32 bg-zinc-200 dark:bg-zinc-800 rounded mb-6" />
-            <div className="h-[200px] bg-zinc-100 dark:bg-zinc-900 rounded" />
+          <div key={i} className="bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 h-[280px]">
+            <div className="h-2.5 w-32 bg-zinc-200 dark:bg-zinc-700 rounded mb-6" />
+            <div className="h-[200px] bg-zinc-100 dark:bg-zinc-800/50 rounded" />
           </div>
         ))}
       </div>
     </div>
+  )
+}
+
+/* ── section header ── */
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-900 dark:text-zinc-300 mt-10 mb-4 flex items-center gap-2">
+      <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+      <span>{title}</span>
+      <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+    </h2>
   )
 }
 
@@ -338,7 +366,6 @@ function AnalyticsPage() {
     return rangeDays >= mapped.length ? mapped : mapped.slice(-rangeDays)
   }, [priceHistory, rangeDays])
 
-  /* evm percentage data */
   const evmPctData = useMemo(
     () =>
       visibleDaily.map((d) => {
@@ -362,25 +389,27 @@ function AnalyticsPage() {
     return cur - prv
   }
 
+  const gridStroke = 'rgba(113,113,122,0.15)'
+
   /* ── render ── */
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-nothing-darker">
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         {/* header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest">
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">
             Analytics
           </h1>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 rounded-lg p-0.5">
             {RANGES.map((r) => (
               <button
                 key={r.value}
                 onClick={() => setRangeDays(r.value)}
-                className={`text-[9px] uppercase tracking-wider px-2 py-1 border rounded-sm transition-colors ${
+                className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
                   rangeDays === r.value
-                    ? 'text-nothing-green-dark dark:text-nothing-green border-nothing-green-dark/40 dark:border-nothing-green/40 bg-nothing-green/10'
-                    : 'text-zinc-500 border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20'
+                    ? 'text-white bg-nothing-green shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
                 }`}
               >
                 {r.label}
@@ -390,11 +419,11 @@ function AnalyticsPage() {
         </div>
 
         {loading ? (
-          <Skeleton rows={12} />
+          <Skeleton rows={8} />
         ) : (
           <>
-            {/* KPI cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {/* KPI cards row */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <KpiCard
                 label="Total Transactions"
                 value={totals ? fmtComma(totals.transaction_count) : '--'}
@@ -439,235 +468,204 @@ function AnalyticsPage() {
               />
             </div>
 
-            {/* ── Network Activity ── */}
-            <h2 className="text-lg font-bold uppercase tracking-widest text-zinc-900 dark:text-white mt-8 mb-4">
-              Network Activity
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 1. Daily Tx Count - stacked */}
-              <ChartCard title="Daily Transaction Count">
-                <AreaChart data={visibleDaily} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            {/* ── Bento Grid ── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+
+              {/* Hero: Daily Tx Count — spans 2 cols */}
+              <ChartCard title="Daily Transaction Count" className="lg:col-span-2">
+                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gCadence" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00ef8b" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#00ef8b" stopOpacity={0} />
+                      <stop offset="0%" stopColor={C.green} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.green} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gEvm" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
                   <XAxis {...xAxisProps()} />
                   <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} />
-                  <Area type="monotone" dataKey="cadence_tx_count" stackId="1" stroke="#00ef8b" strokeWidth={2} fill="url(#gCadence)" name="Cadence" />
-                  <Area type="monotone" dataKey="evm_tx_count" stackId="1" stroke="#3b82f6" strokeWidth={2} fill="url(#gEvm)" name="EVM" />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                  <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
+                  <Area type="monotone" dataKey="cadence_tx_count" stackId="1" stroke={C.green} strokeWidth={1.5} fill="url(#gCadence)" name="Cadence" />
+                  <Area type="monotone" dataKey="evm_tx_count" stackId="1" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvm)" name="EVM" />
                 </AreaChart>
               </ChartCard>
 
-              {/* 2. Active Accounts */}
+              {/* Active Accounts — 1 col */}
               <ChartCard title="Active Accounts">
-                <AreaChart data={visibleDaily} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gAccounts" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00ef8b" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#00ef8b" stopOpacity={0} />
+                      <stop offset="0%" stopColor={C.green} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.green} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
                   <XAxis {...xAxisProps()} />
                   <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} />
-                  <Area type="monotone" dataKey="active_accounts" stroke="#00ef8b" strokeWidth={2} fill="url(#gAccounts)" name="Active Accounts" />
-                </AreaChart>
-              </ChartCard>
-            </div>
-
-            {/* ── Gas & Fees ── */}
-            <h2 className="text-lg font-bold uppercase tracking-widest text-zinc-900 dark:text-white mt-8 mb-4">
-              Gas &amp; Fees
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 3. Gas Burned per Day */}
-              <ChartCard title="Gas Burned per Day">
-                <AreaChart data={visibleDaily} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gGas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: '#f59e0b', fontFamily: 'monospace' }} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} />
-                  <Area type="monotone" dataKey="total_gas_used" stroke="#f59e0b" strokeWidth={2} fill="url(#gGas)" name="Gas Used" />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                  <Area type="monotone" dataKey="active_accounts" stroke={C.green} strokeWidth={1.5} fill="url(#gAccounts)" name="Active Accounts" />
                 </AreaChart>
               </ChartCard>
 
-              {/* 4. Avg Gas per Tx */}
-              <ChartCard title="Avg Gas per Transaction">
-                <AreaChart data={visibleDaily} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gAvgGas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: '#f59e0b', fontFamily: 'monospace' }} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} />
-                  <Area type="monotone" dataKey="avg_gas_per_tx" stroke="#f59e0b" strokeWidth={2} fill="url(#gAvgGas)" name="Avg Gas/Tx" />
-                </AreaChart>
-              </ChartCard>
-            </div>
-
-            {/* ── Transaction Health ── */}
-            <h2 className="text-lg font-bold uppercase tracking-widest text-zinc-900 dark:text-white mt-8 mb-4">
-              Transaction Health
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 5. Error Rate */}
-              <ChartCard title="Error Rate (%)">
-                <AreaChart data={visibleDaily} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gErr" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps((v) => `${v}%`)} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: '#ef4444', fontFamily: 'monospace' }} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} formatter={(v: number) => [`${v.toFixed(2)}%`, 'Error Rate']} />
-                  <Area type="monotone" dataKey="error_rate" stroke="#ef4444" strokeWidth={2} fill="url(#gErr)" name="Error Rate" />
-                </AreaChart>
-              </ChartCard>
-
-              {/* 6. Failed Transactions - bar */}
-              <ChartCard title="Failed Transactions">
-                <BarChart data={visibleDaily} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: '#ef4444', fontFamily: 'monospace' }} cursor={{ fill: 'rgba(239,68,68,0.08)' }} />
-                  <Bar dataKey="failed_tx_count" fill="#ef4444" name="Failed Txs" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ChartCard>
-            </div>
-
-            {/* ── Token Economy ── */}
-            <h2 className="text-lg font-bold uppercase tracking-widest text-zinc-900 dark:text-white mt-8 mb-4">
-              Token Economy
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 7. FT Transfers */}
-              <ChartCard title="FT Transfers per Day">
-                <AreaChart data={visibleTransfers} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gFt" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: '#8b5cf6', fontFamily: 'monospace' }} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} />
-                  <Area type="monotone" dataKey="ft_transfers" stroke="#8b5cf6" strokeWidth={2} fill="url(#gFt)" name="FT Transfers" />
-                </AreaChart>
-              </ChartCard>
-
-              {/* 8. NFT Transfers */}
-              <ChartCard title="NFT Transfers per Day">
-                <AreaChart data={visibleTransfers} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gNft" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#ec4899" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: '#ec4899', fontFamily: 'monospace' }} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} />
-                  <Area type="monotone" dataKey="nft_transfers" stroke="#ec4899" strokeWidth={2} fill="url(#gNft)" name="NFT Transfers" />
-                </AreaChart>
-              </ChartCard>
-
-              {/* 9. FLOW Price History */}
-              <ChartCard title="FLOW Price History">
-                <LineChart data={visiblePrice} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps((v) => `$${v.toFixed(2)}`)} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} formatter={(v: number) => [`$${v.toFixed(4)}`, 'Price']} />
-                  <Line type="monotone" dataKey="price" stroke="#00ef8b" strokeWidth={2} dot={false} name="FLOW" />
-                </LineChart>
-              </ChartCard>
-            </div>
-
-            {/* ── EVM Adoption ── */}
-            <h2 className="text-lg font-bold uppercase tracking-widest text-zinc-900 dark:text-white mt-8 mb-4">
-              EVM Adoption
-            </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 10. EVM vs Cadence % */}
-              <ChartCard title="EVM vs Cadence Transactions (%)">
-                <AreaChart data={evmPctData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              {/* EVM vs Cadence % — 1 col */}
+              <ChartCard title="EVM vs Cadence (%)">
+                <AreaChart data={evmPctData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gCadPct" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00ef8b" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#00ef8b" stopOpacity={0} />
+                      <stop offset="0%" stopColor={C.green} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.green} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gEvmPct" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
                   <XAxis {...xAxisProps()} />
                   <YAxis {...yAxisProps((v) => `${v}%`)} domain={[0, 100]} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} formatter={(v: number) => [`${v.toFixed(1)}%`]} />
-                  <Area type="monotone" dataKey="cadence_pct" stackId="1" stroke="#00ef8b" strokeWidth={2} fill="url(#gCadPct)" name="Cadence %" />
-                  <Area type="monotone" dataKey="evm_pct" stackId="1" stroke="#3b82f6" strokeWidth={2} fill="url(#gEvmPct)" name="EVM %" />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v: number) => [`${v.toFixed(1)}%`]} />
+                  <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
+                  <Area type="monotone" dataKey="cadence_pct" stackId="1" stroke={C.green} strokeWidth={1.5} fill="url(#gCadPct)" name="Cadence" />
+                  <Area type="monotone" dataKey="evm_pct" stackId="1" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvmPct)" name="EVM" />
                 </AreaChart>
               </ChartCard>
-            </div>
 
-            {/* ── Staking & Epochs ── */}
-            {epochData.length > 0 && (
-              <>
-                <h2 className="text-lg font-bold uppercase tracking-widest text-zinc-900 dark:text-white mt-8 mb-4">
-                  Staking &amp; Epochs
-                </h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* 11. Total Staked per Epoch */}
-                  <ChartCard title="Total Staked per Epoch">
-                    <LineChart data={epochData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
-                      <XAxis dataKey="epoch" stroke="#666" fontSize={9} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={20} />
+              {/* FLOW Price — spans 2 cols */}
+              <ChartCard title="FLOW Price History" className="md:col-span-2">
+                <LineChart data={visiblePrice} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps((v) => `$${v.toFixed(2)}`)} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v: number) => [`$${v.toFixed(4)}`, 'Price']} />
+                  <Line type="monotone" dataKey="price" stroke={C.green} strokeWidth={1.5} dot={false} name="FLOW" />
+                </LineChart>
+              </ChartCard>
+
+              {/* Gas Burned — 1 col */}
+              <ChartCard title="Gas Burned per Day">
+                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gGas" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.amber} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.amber} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps()} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                  <Area type="monotone" dataKey="total_gas_used" stroke={C.amber} strokeWidth={1.5} fill="url(#gGas)" name="Gas Used" />
+                </AreaChart>
+              </ChartCard>
+
+              {/* Avg Gas per Tx — 1 col */}
+              <ChartCard title="Avg Gas per Tx">
+                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gAvgGas" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.amber} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.amber} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps()} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                  <Area type="monotone" dataKey="avg_gas_per_tx" stroke={C.amber} strokeWidth={1.5} fill="url(#gAvgGas)" name="Avg Gas/Tx" />
+                </AreaChart>
+              </ChartCard>
+
+              {/* Error Rate — 1 col */}
+              <ChartCard title="Error Rate (%)">
+                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gErr" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.red} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.red} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps((v) => `${v}%`)} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v: number) => [`${v.toFixed(2)}%`, 'Error Rate']} />
+                  <Area type="monotone" dataKey="error_rate" stroke={C.red} strokeWidth={1.5} fill="url(#gErr)" name="Error Rate" />
+                </AreaChart>
+              </ChartCard>
+
+              {/* FT Transfers — 1 col */}
+              <ChartCard title="FT Transfers">
+                <AreaChart data={visibleTransfers} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gFt" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.purple} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.purple} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps()} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.purple }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                  <Area type="monotone" dataKey="ft_transfers" stroke={C.purple} strokeWidth={1.5} fill="url(#gFt)" name="FT Transfers" />
+                </AreaChart>
+              </ChartCard>
+
+              {/* NFT Transfers — 1 col */}
+              <ChartCard title="NFT Transfers">
+                <AreaChart data={visibleTransfers} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gNft" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.pink} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.pink} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps()} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.pink }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                  <Area type="monotone" dataKey="nft_transfers" stroke={C.pink} strokeWidth={1.5} fill="url(#gNft)" name="NFT Transfers" />
+                </AreaChart>
+              </ChartCard>
+
+              {/* Failed Transactions — 1 col */}
+              <ChartCard title="Failed Transactions">
+                <BarChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps()} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ fill: 'rgba(239,68,68,0.06)' }} />
+                  <Bar dataKey="failed_tx_count" fill={C.red} fillOpacity={0.7} name="Failed Txs" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ChartCard>
+
+              {/* Staking — spans 2 cols if data exists */}
+              {epochData.length > 0 && (
+                <>
+                  <ChartCard title="Total Staked per Epoch" className="md:col-span-2">
+                    <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid stroke={gridStroke} vertical={false} />
+                      <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
                       <YAxis {...yAxisProps()} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} formatter={(v: number) => [fmtNum(v), 'Staked']} />
-                      <Line type="monotone" dataKey="total_staked" stroke="#00ef8b" strokeWidth={2} dot={false} name="Total Staked" />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v: number) => [fmtNum(v), 'Staked']} />
+                      <Line type="monotone" dataKey="total_staked" stroke={C.green} strokeWidth={1.5} dot={false} name="Total Staked" />
                     </LineChart>
                   </ChartCard>
 
-                  {/* 12. Node Count per Epoch */}
                   <ChartCard title="Node Count per Epoch">
-                    <LineChart data={epochData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#444" vertical={false} className="stroke-zinc-200 dark:stroke-zinc-800" />
-                      <XAxis dataKey="epoch" stroke="#666" fontSize={9} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={20} />
+                    <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid stroke={gridStroke} vertical={false} />
+                      <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
                       <YAxis {...yAxisProps()} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: '#3b82f6', fontFamily: 'monospace' }} cursor={{ stroke: '#333', strokeDasharray: '5 5' }} />
-                      <Line type="monotone" dataKey="total_nodes" stroke="#3b82f6" strokeWidth={2} dot={false} name="Nodes" />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.blue }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                      <Line type="monotone" dataKey="total_nodes" stroke={C.blue} strokeWidth={1.5} dot={false} name="Nodes" />
                     </LineChart>
                   </ChartCard>
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
           </>
         )}
       </div>
