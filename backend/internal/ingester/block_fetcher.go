@@ -2,6 +2,8 @@ package ingester
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -377,6 +379,13 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 			scriptText := string(tx.Script)
 			isEVM := false
 
+			// Compute script hash early so it's available for WS broadcast enrichment
+			scriptHash := ""
+			if scriptText != "" {
+				sum := sha256.Sum256([]byte(scriptText))
+				scriptHash = hex.EncodeToString(sum[:])
+			}
+
 			dbTx := models.Transaction{
 				ID:                     txID,
 				BlockHeight:            height,
@@ -387,6 +396,7 @@ func (w *Worker) FetchBlockData(ctx context.Context, height uint64) *FetchResult
 				PayerAddress:           tx.Payer.Hex(),
 				Authorizers:            authorizers,
 				Script:                 scriptText,
+				ScriptHash:             scriptHash,
 				Arguments:              argsJSON,
 				Status:                 res.Status.String(),
 				GasLimit:               tx.GasLimit,
