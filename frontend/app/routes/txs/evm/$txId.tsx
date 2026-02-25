@@ -7,7 +7,7 @@ export const Route = createFileRoute('/txs/evm/$txId')({
         const evmHash = params.txId.startsWith('0x') ? params.txId : `0x${params.txId}`;
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(evmHash)}?lite=true`);
+            const res = await fetch(`${baseUrl}/flow/transaction?evm_hash=${encodeURIComponent(evmHash)}&lite=true&limit=1`);
             if (res.ok) {
                 const json = await res.json();
                 const rawTx: any = json?.data?.[0] ?? json;
