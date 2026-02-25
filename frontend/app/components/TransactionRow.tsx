@@ -1086,7 +1086,7 @@ function findNftBannerImage(tx: any, tokenMeta?: Map<string, TokenMetaEntry>): s
 
 export function ActivityRow({ tx, address = '', expanded, onToggle, tokenMeta }: { tx: any; address?: string; expanded: boolean; onToggle: () => void; tokenMeta?: Map<string, TokenMetaEntry> }) {
     const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
-    const tags: string[] = (tx.tags || []).filter((t: string) => t !== 'FEE');
+    const tags: string[] = tx.tags || [];
     const activity = deriveActivityType(tx);
     const hasDetails = true;
     const transferPreview = deriveTransferPreview(tx, tokenMeta);

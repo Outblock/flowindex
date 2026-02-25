@@ -947,7 +947,7 @@ func (r *Repository) GetTxTagsByTransactionIDs(ctx context.Context, txIDs []stri
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(transaction_id, 'hex') AS transaction_id, tag
 		FROM app.tx_tags
-		WHERE transaction_id = ANY($1)`, sliceHexToBytes(txIDs))
+		WHERE transaction_id = ANY($1) AND tag != 'FEE'`, sliceHexToBytes(txIDs))
 	if err != nil {
 		return nil, err
 	}
