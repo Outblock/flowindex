@@ -67,7 +67,25 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 }
 
 func (s *Server) Start() error {
+	// Pre-warm the indexed_ranges cache in the background so the first
+	// request doesn't have to wait for the expensive bucket query.
+	go s.refreshRangesCacheLoop()
 	return s.httpServer.ListenAndServe()
+}
+
+func (s *Server) refreshRangesCacheLoop() {
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		payload, err := s.buildStatusPayload(ctx, true)
+		cancel()
+		if err == nil && len(payload) > 0 {
+			s.statusRangesCache.mu.Lock()
+			s.statusRangesCache.payload = payload
+			s.statusRangesCache.expiresAt = time.Now().Add(5 * time.Minute)
+			s.statusRangesCache.mu.Unlock()
+		}
+		time.Sleep(5 * time.Minute)
+	}
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
