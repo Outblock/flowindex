@@ -59,6 +59,7 @@ function RootDocument({ children }: { children: ReactNode }) {
                 <title>Flowindex</title>
                 {/* Runtime (public) config, populated in Docker/Railway via entrypoint envsubst */}
                 <script src="/env.js"></script>
+                <script defer src="https://analytics.flowindex.io/script.js" data-website-id="f7203f73-ea32-4a1d-a40c-575e559e53fb"></script>
                 {/* Route-scoped CSS + preloads generated from the Start manifest */}
                 <HeadContent />
             </head>
