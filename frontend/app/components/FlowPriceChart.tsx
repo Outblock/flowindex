@@ -14,8 +14,13 @@ async function fetchPriceHistory(): Promise<{ value: number; label: string }[]> 
         if (!Array.isArray(data) || data.length === 0) return [];
         return data.map((d: any) => {
             const date = new Date(d.as_of);
-            const hours = Math.round((Date.now() - date.getTime()) / 3600000);
-            const label = hours <= 0 ? 'Now' : hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+            const totalHours = Math.round((Date.now() - date.getTime()) / 3600000);
+            const days = Math.floor(totalHours / 24);
+            const hours = totalHours % 24;
+            const label = totalHours <= 0 ? 'Now'
+                : days > 0 && hours > 0 ? `${days}d ${hours}h ago`
+                : days > 0 ? `${days}d ago`
+                : `${hours}h ago`;
             return { value: d.price, label };
         });
     } catch {
