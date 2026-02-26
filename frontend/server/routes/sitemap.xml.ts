@@ -11,9 +11,13 @@
 import { defineEventHandler, setResponseHeaders } from 'h3';
 
 const SITE = 'https://flowindex.io';
-const BACKEND =
-  (typeof process !== 'undefined' && process.env?.SSR_API_ORIGIN) ||
-  'http://127.0.0.1:8080';
+// Nitro runs behind nginx on :8080; API routes are at /api/*
+const API_BASE = (() => {
+  const origin =
+    (typeof process !== 'undefined' && process.env?.SSR_API_ORIGIN) ||
+    'http://127.0.0.1:8080';
+  return `${origin.replace(/\/+$/, '')}/api`;
+})();
 
 // Cache the sitemap in memory for 1 hour
 let cached: { xml: string; ts: number } | null = null;
@@ -45,7 +49,7 @@ async function fetchAll<T>(endpoint: string, limit = 500): Promise<T[]> {
   // Safety cap at 10k items
   while (offset < 10000) {
     try {
-      const res = await fetch(`${BACKEND}${endpoint}?limit=${limit}&offset=${offset}`);
+      const res = await fetch(`${API_BASE}${endpoint}?limit=${limit}&offset=${offset}`);
       if (!res.ok) break;
       const json = (await res.json()) as ApiResponse<T>;
       if (!json.data?.length) break;
