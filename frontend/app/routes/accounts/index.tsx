@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Coins, ImageIcon, ArrowUpDown } from 'lucide-react';
+import { Users, Coins, ImageIcon, ArrowUpDown, ChevronsUpDown, Check } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Account, getFlowV1Ft, getFlowV1Nft } from '../../api/gen/find';
@@ -11,6 +11,9 @@ import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { resolveApiBaseUrl } from '../../api';
 import { useState, useEffect, useCallback } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../../components/ui/command';
+import { cn } from '../../lib/utils';
 
 type Tab = 'accounts' | 'ft_holders' | 'nft_collectors';
 
@@ -25,10 +28,11 @@ interface AccountsSearch {
 export const Route = createFileRoute('/accounts/')({
     component: Accounts,
     validateSearch: (search: Record<string, unknown>): AccountsSearch => {
+        const tab = (['accounts', 'ft_holders', 'nft_collectors'].includes(search.tab as string) ? search.tab : 'accounts') as Tab;
         return {
             page: Number(search.page) || 1,
-            tab: (['accounts', 'ft_holders', 'nft_collectors'].includes(search.tab as string) ? search.tab : 'accounts') as Tab,
-            sort_by: (search.sort_by as string) || 'block_height',
+            tab,
+            sort_by: tab === 'accounts' ? ((search.sort_by as string) || 'block_height') : (search.sort_by as string) || '',
             token: (search.token as string) || '',
             collection: (search.collection as string) || '',
         }
@@ -382,6 +386,14 @@ function TopTokenHoldersTab({ token, onTokenChange, page, onPageChange, normaliz
 
     const hasNext = holders.length === limit;
     const symbol = tokenMeta?.symbol || token.split('.').pop() || '';
+    const [ftOpen, setFtOpen] = useState(false);
+
+    // Build enriched token list with stable IDs
+    const ftOptions = ftTokens.map((t: any) => {
+        const id = t.id || `A.${(t.contract_address || '').replace('0x', '')}.${t.contract_name}`;
+        return { id, name: t.name || t.contract_name || id, symbol: t.symbol || '', logo: t.logo || '' };
+    });
+    const selectedFt = ftOptions.find((o: any) => o.id === token);
 
     return (
         <>
@@ -395,18 +407,43 @@ function TopTokenHoldersTab({ token, onTokenChange, page, onPageChange, normaliz
                 <div className="flex items-center gap-2">
                     <Coins className="w-4 h-4 text-zinc-400" />
                     <span className="text-xs text-zinc-500 uppercase tracking-wider">Token:</span>
-                    <select
-                        value={token}
-                        onChange={(e) => onTokenChange(e.target.value)}
-                        className="px-3 py-1.5 text-sm font-mono bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-nothing-green/50"
-                    >
-                        {!ftTokens.length && <option value={token}>{token}</option>}
-                        {ftTokens.map((t: any) => {
-                            const id = t.token || `A.${t.contract_address?.replace('0x', '')}.${t.contract_name}`;
-                            const label = t.name || t.symbol || t.contract_name || id;
-                            return <option key={id} value={id}>{label} ({t.symbol || ''})</option>;
-                        })}
-                    </select>
+                    <Popover open={ftOpen} onOpenChange={setFtOpen}>
+                        <PopoverTrigger asChild>
+                            <button className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm text-zinc-900 dark:text-white hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors min-w-[200px] max-w-[340px]">
+                                {selectedFt?.logo && <img src={selectedFt.logo} alt="" className="w-4 h-4 rounded-full shrink-0" />}
+                                <span className="truncate font-medium">{selectedFt?.name || token.split('.').pop() || 'Select token'}</span>
+                                {selectedFt?.symbol && <span className="text-xs text-zinc-500 font-mono shrink-0">{selectedFt.symbol}</span>}
+                                <ChevronsUpDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[340px] p-0" align="start">
+                            <Command>
+                                <CommandInput placeholder="Search tokens..." />
+                                <CommandList>
+                                    <CommandEmpty>No token found.</CommandEmpty>
+                                    <CommandGroup>
+                                        {ftOptions.map((o: any) => (
+                                            <CommandItem
+                                                key={o.id}
+                                                value={`${o.name} ${o.symbol} ${o.id}`}
+                                                onSelect={() => { onTokenChange(o.id); setFtOpen(false); }}
+                                                className="flex items-center gap-2"
+                                            >
+                                                {o.logo ? (
+                                                    <img src={o.logo} alt="" className="w-5 h-5 rounded-full shrink-0" />
+                                                ) : (
+                                                    <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 shrink-0" />
+                                                )}
+                                                <span className="truncate font-medium">{o.name}</span>
+                                                {o.symbol && <span className="text-xs text-zinc-500 font-mono shrink-0">{o.symbol}</span>}
+                                                <Check className={cn("ml-auto h-4 w-4 shrink-0", token === o.id ? "opacity-100" : "opacity-0")} />
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
                 </div>
                 {tokenMeta && (
                     <div className="flex items-center gap-3 text-xs text-zinc-500">
@@ -499,7 +536,7 @@ function TopNFTCollectorsTab({ collection, onCollectionChange, page, onPageChang
                 // Auto-select first collection if none selected
                 if (!collection && cols.length > 0) {
                     const first = cols[0];
-                    const id = first.collection || `A.${first.contract_address?.replace('0x', '')}.${first.contract_name}`;
+                    const id = first.id || `A.${(first.contract_address || '').replace('0x', '')}.${first.contract_name}`;
                     setSelectedCollection(id);
                     onCollectionChange(id);
                 }
@@ -529,6 +566,14 @@ function TopNFTCollectorsTab({ collection, onCollectionChange, page, onPageChang
 
     const hasNext = owners.length === limit;
     const totalNFTs = ownersMeta?.total_nfts || 0;
+    const [nftOpen, setNftOpen] = useState(false);
+
+    // Build enriched collection list with stable IDs
+    const nftOptions = collections.map((c: any) => {
+        const id = c.id || `A.${(c.contract_address || '').replace('0x', '')}.${c.contract_name}`;
+        return { id, name: c.name || c.contract_name || id, logo: c.logo || '' };
+    });
+    const selectedNft = nftOptions.find((o: any) => o.id === activeCollection);
 
     return (
         <>
@@ -542,18 +587,41 @@ function TopNFTCollectorsTab({ collection, onCollectionChange, page, onPageChang
                 <div className="flex items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-zinc-400" />
                     <span className="text-xs text-zinc-500 uppercase tracking-wider">Collection:</span>
-                    <select
-                        value={activeCollection}
-                        onChange={(e) => onCollectionChange(e.target.value)}
-                        className="px-3 py-1.5 text-sm font-mono bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-nothing-green/50 max-w-sm"
-                    >
-                        {!collections.length && activeCollection && <option value={activeCollection}>{activeCollection}</option>}
-                        {collections.map((c: any) => {
-                            const id = c.collection || `A.${c.contract_address?.replace('0x', '')}.${c.contract_name}`;
-                            const label = c.name || c.contract_name || id;
-                            return <option key={id} value={id}>{label}</option>;
-                        })}
-                    </select>
+                    <Popover open={nftOpen} onOpenChange={setNftOpen}>
+                        <PopoverTrigger asChild>
+                            <button className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm text-zinc-900 dark:text-white hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors min-w-[200px] max-w-[340px]">
+                                {selectedNft?.logo && <img src={selectedNft.logo} alt="" className="w-4 h-4 rounded-full shrink-0" />}
+                                <span className="truncate font-medium">{selectedNft?.name || activeCollection || 'Select collection'}</span>
+                                <ChevronsUpDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[340px] p-0" align="start">
+                            <Command>
+                                <CommandInput placeholder="Search collections..." />
+                                <CommandList>
+                                    <CommandEmpty>No collection found.</CommandEmpty>
+                                    <CommandGroup>
+                                        {nftOptions.map((o: any) => (
+                                            <CommandItem
+                                                key={o.id}
+                                                value={`${o.name} ${o.id}`}
+                                                onSelect={() => { onCollectionChange(o.id); setNftOpen(false); }}
+                                                className="flex items-center gap-2"
+                                            >
+                                                {o.logo ? (
+                                                    <img src={o.logo} alt="" className="w-5 h-5 rounded-full shrink-0" />
+                                                ) : (
+                                                    <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 shrink-0" />
+                                                )}
+                                                <span className="truncate font-medium">{o.name}</span>
+                                                <Check className={cn("ml-auto h-4 w-4 shrink-0", activeCollection === o.id ? "opacity-100" : "opacity-0")} />
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
                 </div>
                 {totalNFTs > 0 && (
                     <span className="text-xs text-zinc-500 font-mono">
