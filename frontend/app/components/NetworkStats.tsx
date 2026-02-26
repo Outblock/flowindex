@@ -19,10 +19,11 @@ function formatCompact(n: number): string {
   return n.toLocaleString();
 }
 
-export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
+export function NetworkStats({ totalStaked, totalSupply, activeNodes, stakingApy }: {
   totalStaked?: number;
   totalSupply?: number;
   activeNodes?: number;
+  stakingApy?: number | null;
 }) {
   const [roleCounts, setRoleCounts] = useState<Record<number, number> | null>(null);
 
@@ -64,7 +65,7 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes }: {
   return (
     <div className="grid grid-cols-2 gap-4 h-full">
       {/* Staked — progress bar from bottom */}
-      <StakeCard staked={totalStaked} supply={supply} pct={pct} />
+      <StakeCard staked={totalStaked} supply={supply} pct={pct} apy={stakingApy} />
 
       {/* Active Nodes with role breakdown */}
       <NodesCard activeNodes={activeNodes} roleCounts={roleCounts} />
@@ -128,7 +129,7 @@ function NodesCard({ activeNodes, roleCounts }: { activeNodes?: number; roleCoun
   );
 }
 
-function StakeCard({ staked, supply, pct }: { staked: number; supply: number; pct: number }) {
+function StakeCard({ staked, supply, pct, apy }: { staked: number; supply: number; pct: number; apy?: number | null }) {
   const [animPct, setAnimPct] = useState(0);
 
   useEffect(() => {
@@ -175,6 +176,11 @@ function StakeCard({ staked, supply, pct }: { staked: number; supply: number; pc
             {formatCompact(staked)}
             <span className="text-xs text-zinc-400 font-normal ml-1.5">/ {formatCompact(supply)} FLOW</span>
           </p>
+          {apy != null && apy > 0 && (
+            <p className="text-[10px] text-zinc-500 dark:text-gray-500 uppercase tracking-widest mt-1">
+              Staking APY <span className="text-nothing-green-dark dark:text-nothing-green font-mono font-semibold">{apy.toFixed(1)}%</span>
+            </p>
+          )}
         </div>
       </div>
     </div>

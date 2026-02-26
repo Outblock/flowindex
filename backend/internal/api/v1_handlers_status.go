@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -87,8 +88,24 @@ func (s *Server) handleStatusTokenomics(w http.ResponseWriter, r *http.Request) 
 		writeAPIResponse(w, []interface{}{}, nil, nil)
 		return
 	}
-	var payload interface{}
+	var payload map[string]interface{}
 	_ = json.Unmarshal(snap.Payload, &payload)
+
+	// Enrich with staking APY from epoch payout data
+	if payouts, err := s.repo.ListEpochPayouts(r.Context(), 1, 0); err == nil && len(payouts) > 0 {
+		payout := payouts[0]
+		payoutTotal := parseFloatOrZero(payout.PayoutTotal)
+		totalStaked := 0.0
+		if ts, ok := payload["total_staked"].(float64); ok && ts > 0 {
+			totalStaked = ts
+		}
+		if payoutTotal > 0 && totalStaked > 0 {
+			// APY = (payout_per_epoch / total_staked) × 52 weeks × 100
+			apy := (payoutTotal / totalStaked) * 52.0 * 100.0
+			payload["staking_apy"] = math.Round(apy*100) / 100 // 2 decimal places
+		}
+	}
+
 	writeAPIResponse(w, []interface{}{payload}, nil, nil)
 }
 

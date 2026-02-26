@@ -262,8 +262,8 @@ function Contracts() {
                                             <td className="p-4 text-right">
                                                 {lastUpdatedHeight > 0 ? (
                                                     <Link
-                                                        to="/blocks/$heightOrId"
-                                                        params={{ heightOrId: String(lastUpdatedHeight) }}
+                                                        to="/blocks/$height"
+                                                        params={{ height: String(lastUpdatedHeight) }}
                                                         className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
                                                     >
                                                         {lastUpdatedHeight.toLocaleString()}

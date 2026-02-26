@@ -102,6 +102,7 @@ export async function fetchNetworkStats(opts?: { timeoutMs?: number }): Promise<
     total_staked: tokenomics?.total_staked ?? 0,
     total_supply: tokenomics?.total_supply ?? 0,
     active_nodes: tokenomics?.validator_count ?? tokenomics?.active_nodes ?? 0,
+    staking_apy: tokenomics?.staking_apy ?? null,
   };
 }
 
