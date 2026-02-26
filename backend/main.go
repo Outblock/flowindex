@@ -259,12 +259,13 @@ func main() {
 		if enableDefiWorker {
 			processors = append(processors, ingester.NewDefiWorker(repo))
 		}
-		if enableDailyStatsWorker {
-			processors = append(processors, ingester.NewDailyStatsWorker(repo))
-		}
-		if enableAnalyticsDeriverWorker {
-			processors = append(processors, ingester.NewAnalyticsDeriverWorker(repo))
-		}
+		// NOTE: daily_stats_worker and analytics_deriver_worker are intentionally
+		// excluded from live_deriver. They call RefreshDailyStatsRange which does a
+		// full table scan on raw.transactions per affected date — far too heavy for
+		// real-time 10-block chunks (120s timeout). Daily stats are maintained by:
+		//   1. Startup full scan (ENABLE_DAILY_STATS=true)
+		//   2. Periodic 30-day refresh (same goroutine)
+		//   3. Standalone daily_stats_worker in history deriver for backfill
 		// Phase 2 processors (depend on token_worker output):
 		if enableFTHoldingsWorker {
 			processors = append(processors, ingester.NewFTHoldingsWorker(repo))

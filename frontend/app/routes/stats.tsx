@@ -326,9 +326,10 @@ function Stats() {
     const historyOnlyWorkers = [
         { key: 'token_metadata_worker', label: 'Token Metadata' },
     ];
-    // Aggregation workers (block-range driven, separate from deriver)
+    // Aggregation workers (stats/analytics, heavy queries — excluded from live deriver)
     const aggregationWorkers = [
         { key: 'daily_stats_worker', label: 'Daily Stats' },
+        { key: 'analytics_deriver_worker', label: 'Analytics Deriver' },
     ];
     // Queue-based workers (not block-range driven)
     const queueWorkers = [
