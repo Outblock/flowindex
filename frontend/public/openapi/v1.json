@@ -10748,10 +10748,10 @@
       "name": "DeFi"
     },
     {
-      "description": "Flow provides endpoints for data on the Flow Blockchain and for flowscan.io.",
+      "description": "Flow provides endpoints for data on the Flow Blockchain and for flowindex.io.",
       "name": "Flow",
       "externalDocs": {
-        "url": "https://flowscan.io/"
+        "url": "https://flowindex.io/"
       }
     },
     {

@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Activity, HardDrive, Server, Layers, Info, Square, AlertTriangle } from 'lucide-react';
+import { Database, Activity, HardDrive, Server, Layers, Info, Square, AlertTriangle, BarChart3 } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured, fetchStatus as fetchStatusApi, fetchGcpVmStatus } from '../api/heyapi';
 
@@ -91,6 +91,7 @@ const WORKER_COLORS: Record<string, string> = {
     history_deriver_down: 'bg-pink-400',
     history_deriver_2: 'bg-cyan-400',
     history_deriver_2_down: 'bg-cyan-400',
+    daily_stats_worker: 'bg-orange-400',
 };
 
 function Stats() {
@@ -324,6 +325,10 @@ function Stats() {
     // History deriver also runs token_metadata_worker (excluded from live)
     const historyOnlyWorkers = [
         { key: 'token_metadata_worker', label: 'Token Metadata' },
+    ];
+    // Aggregation workers (block-range driven, separate from deriver)
+    const aggregationWorkers = [
+        { key: 'daily_stats_worker', label: 'Daily Stats' },
     ];
     // Queue-based workers (not block-range driven)
     const queueWorkers = [
@@ -994,7 +999,52 @@ function Stats() {
                                     );
                                 })()}
 
-                                {/* Section 4: Queue Workers */}
+                                {/* Section 4: Aggregation Workers */}
+                                <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+                                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <BarChart3 className="h-3.5 w-3.5" />
+                                        Aggregation Workers
+                                    </h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {aggregationWorkers.map((w) => {
+                                            const h = checkpoints?.[w.key] || 0;
+                                            const speed = workerSpeeds[w.key] || 0;
+                                            const enabled = workerEnabled?.[w.key];
+                                            const statusLabel = enabled === false ? 'DISABLED' : speed > 0 ? 'ACTIVE' : h > 0 ? 'IDLE' : 'OFFLINE';
+                                            // daily_stats_worker tracks block height — show progress relative to indexed range
+                                            const behind = indexedHeight > h && h > 0 ? indexedHeight - h : 0;
+                                            const aggProgress = indexedHeight > startHeight && h > startHeight ? ((h - startHeight) / (indexedHeight - startHeight)) * 100 : 0;
+                                            return (
+                                                <div key={w.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-xs font-bold text-zinc-900 dark:text-white">{w.label}</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`text-[9px] font-bold uppercase tracking-wider ${statusLabel === 'ACTIVE' ? 'text-orange-500' : statusLabel === 'DISABLED' ? 'text-red-400' : behind === 0 && h > 0 ? 'text-green-500' : 'text-zinc-400'}`}>
+                                                                {statusLabel === 'ACTIVE' ? 'SYNCING' : behind === 0 && h > 0 ? 'CAUGHT UP' : statusLabel}
+                                                            </span>
+                                                            <div className={`h-1.5 w-1.5 rounded-full ${statusLabel === 'ACTIVE' ? 'bg-orange-400 animate-pulse' : statusLabel === 'DISABLED' ? 'bg-red-500' : behind === 0 && h > 0 ? 'bg-green-500' : 'bg-zinc-400'}`} />
+                                                        </div>
+                                                    </div>
+                                                    {/* Progress bar */}
+                                                    {h > 0 && (
+                                                        <div className="h-1.5 bg-zinc-200 dark:bg-white/5 rounded-full mb-2 overflow-hidden">
+                                                            <div className="h-full bg-orange-400 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, aggProgress)}%` }} />
+                                                        </div>
+                                                    )}
+                                                    <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500 font-mono">
+                                                        <span>Checkpoint: <span className="text-zinc-900 dark:text-white">#{h.toLocaleString()}</span></span>
+                                                        <span>Speed: <span className="text-zinc-900 dark:text-white"><NumberFlow value={speed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /> b/s</span></span>
+                                                        {behind > 0 && <span>Behind: <span className="text-orange-400">{behind.toLocaleString()} blocks</span></span>}
+                                                        {speed > 0 && behind > 0 && <span>ETA: <span className="text-zinc-900 dark:text-white">{formatDuration(behind / speed)}</span></span>}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="text-[9px] text-zinc-400 mt-3">Aggregates daily transaction stats from raw data. Gaps in analytics charts indicate this worker hasn't processed those block ranges yet.</p>
+                                </div>
+
+                                {/* Section 5: Queue Workers */}
                                 <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
                                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                                         <Server className="h-3.5 w-3.5" />
