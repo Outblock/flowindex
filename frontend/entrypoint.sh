@@ -1,8 +1,8 @@
 #!/bin/sh
 
 # This container runs:
-# 1) Nitro SSR server on 127.0.0.1:3000 (internal)
-# 2) Nginx on :8080 (public) proxying:
+# 1) Nitro SSR server on 127.0.0.1:SSR_PORT (internal, default 4000)
+# 2) Nginx on :LISTEN_PORT (public, default $PORT or 8080) proxying:
 #    - /api + /ws -> backend
 #    - everything else -> Nitro SSR server
 
@@ -47,29 +47,30 @@ if [ -f /app/.output/public/env.template.js ]; then
     echo "Docs URL:    ${DOCS_URL:-}"
 fi
 
+# Nginx listens on PORT (Railway/GCP sets this); SSR server on a separate internal port.
+export LISTEN_PORT="${PORT:-8080}"
+export SSR_PORT="${SSR_PORT:-4000}"
+
 # SSR server-side API calls need an absolute URL. When VITE_API_URL is relative ("/api"),
 # resolve it against the local Nginx listener so we keep same-origin semantics.
-export SSR_API_ORIGIN="${SSR_API_ORIGIN:-http://127.0.0.1:8080}"
+export SSR_API_ORIGIN="${SSR_API_ORIGIN:-http://127.0.0.1:${LISTEN_PORT}}"
 
 # Render nginx template (envsubst) for backend proxy + SSR upstream.
 mkdir -p /etc/nginx/http.d
-envsubst '$DNS_RESOLVER $BACKEND_API $BACKEND_WS' < /etc/nginx/templates/default.conf.template > /etc/nginx/http.d/default.conf
+envsubst '$DNS_RESOLVER $BACKEND_API $BACKEND_WS $LISTEN_PORT $SSR_PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/http.d/default.conf
 
 # Patch Bun.serve idleTimeout (default 10s is too short for SSR rendering)
 sed -i 's/bun: { websocket: void 0 }/bun: { websocket: void 0, idleTimeout: 255 }/' /app/.output/server/index.mjs
 
-# Start Nitro SSR server on port 3000
-echo "Starting Nitro SSR server on :3000"
-PORT=3000 bun /app/.output/server/index.mjs &
+# Start Nitro SSR server on internal port
+echo "Starting Nitro SSR server on :${SSR_PORT}"
+PORT=${SSR_PORT} bun /app/.output/server/index.mjs &
 SSR_PID=$!
 
-# Validate & start Nginx (public listener on :8080)
-echo "--- Rendered nginx config ---"
-cat /etc/nginx/http.d/default.conf | head -20
-echo "---"
+# Validate & start Nginx (public listener on LISTEN_PORT)
 echo "Testing nginx config..."
 nginx -t 2>&1
-echo "Starting Nginx on :8080"
+echo "Starting Nginx on :${LISTEN_PORT}"
 nginx -g "daemon off;" &
 NGINX_PID=$!
 
