@@ -12,7 +12,7 @@ import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 
@@ -480,10 +480,69 @@ function CadenceToolPart({ part }: { part: any }) {
 
 /* ── Chart Renderer ── */
 
+// High-contrast palette — every color is visually distinct, no near-duplicates
 const CHART_COLORS = [
-  '#00ef8b', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899',
-  '#10b981', '#6366f1', '#f97316', '#14b8a6',
+  '#00ef8b', // Flow Green
+  '#3b82f6', // Blue
+  '#f59e0b', // Amber
+  '#ef4444', // Red
+  '#8b5cf6', // Purple
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#f97316', // Orange
+  '#14b8a6', // Teal
+  '#a78bfa', // Lavender
+  '#fbbf24', // Gold
+  '#f43f5e', // Rose
 ];
+
+// Dim versions for gradient area fills
+const CHART_COLORS_DIM = [
+  'rgba(0,239,139,0.15)',
+  'rgba(59,130,246,0.15)',
+  'rgba(245,158,11,0.15)',
+  'rgba(239,68,68,0.15)',
+  'rgba(139,92,246,0.15)',
+  'rgba(236,72,153,0.15)',
+  'rgba(6,182,212,0.15)',
+  'rgba(249,115,22,0.15)',
+  'rgba(20,184,166,0.15)',
+  'rgba(167,139,250,0.15)',
+  'rgba(251,191,36,0.15)',
+  'rgba(244,63,94,0.15)',
+];
+
+const CHART_TOOLTIP_STYLE: React.CSSProperties = {
+  backgroundColor: 'rgba(9,9,11,0.95)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '6px',
+  color: '#fff',
+  fontSize: '11px',
+  fontFamily: 'monospace',
+  padding: '6px 10px',
+};
+
+const CHART_TICK = { fontSize: 10, fill: '#71717a', fontFamily: 'monospace' };
+
+function chartFmtNum(n: number): string {
+  if (typeof n !== 'number' || isNaN(n)) return '0';
+  if (Math.abs(n) >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n % 1 === 0 ? n.toLocaleString() : n.toFixed(2);
+}
+
+function chartTooltipFmt(value: number): string {
+  if (typeof value !== 'number' || isNaN(value)) return '0';
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+// Pie chart label renderer — show percentage on slices that are big enough
+function renderPieLabel(props: any) {
+  const percent = props.percent as number;
+  if (!percent || percent < 0.04) return null; // skip tiny slices
+  return `${(percent * 100).toFixed(0)}%`;
+}
 
 function ChartToolPart({ part }: { part: any }) {
   const isDone = part.state === 'output-available' || part.state === 'result';
@@ -518,74 +577,134 @@ function ChartToolPart({ part }: { part: any }) {
     return point;
   }) ?? [];
 
+  const dsCount = datasets?.length ?? 0;
+
   return (
-    <div className="my-2 rounded-sm border border-zinc-200 dark:border-white/10 overflow-hidden">
+    <div className="my-2 rounded-md border border-zinc-200 dark:border-white/10 overflow-hidden">
       {title && (
         <div className="px-3 py-2 bg-zinc-50 dark:bg-white/[0.02] border-b border-zinc-200 dark:border-white/10">
           <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">{title}</span>
         </div>
       )}
-      <div className="p-3 bg-white dark:bg-zinc-950" style={{ height: 240 }}>
+      <div className="p-3 bg-white dark:bg-zinc-950" style={{ height: 260 }}>
         <ResponsiveContainer width="100%" height="100%">
           {chartType === 'pie' || chartType === 'doughnut' ? (
             <PieChart>
               <Pie
-                data={chartData.map((d: any, i: number) => ({ name: d.name, value: d[datasets?.[0]?.label] ?? 0, fill: CHART_COLORS[i % CHART_COLORS.length] }))}
+                data={chartData.map((d: any, i: number) => ({
+                  name: d.name,
+                  value: d[datasets?.[0]?.label] ?? 0,
+                  fill: CHART_COLORS[i % CHART_COLORS.length],
+                }))}
                 dataKey="value"
                 nameKey="name"
                 cx="50%"
                 cy="50%"
-                innerRadius={chartType === 'doughnut' ? 50 : 0}
-                outerRadius={80}
-                strokeWidth={1}
-                stroke="transparent"
+                innerRadius={chartType === 'doughnut' ? 55 : 0}
+                outerRadius={85}
+                strokeWidth={2}
+                stroke="rgba(9,9,11,0.6)"
+                label={renderPieLabel}
+                labelLine={false}
+                animationDuration={600}
               >
                 {chartData.map((_: any, i: number) => (
                   <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ fontSize: 11, background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2 }}
-                itemStyle={{ color: '#a1a1aa' }}
+                contentStyle={CHART_TOOLTIP_STYLE}
+                formatter={(value: any, name: any) => [chartTooltipFmt(Number(value ?? 0)), String(name)]}
               />
-              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Legend
+                wrapperStyle={{ fontSize: 10, fontFamily: 'monospace' }}
+                iconType="circle"
+                iconSize={8}
+              />
             </PieChart>
           ) : chartType === 'line' ? (
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#71717a' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
+            <AreaChart data={chartData}>
+              <defs>
+                {datasets?.map((_ds: { label: string }, i: number) => (
+                  <linearGradient key={`grad-${i}`} id={`chatGrad${i}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.06)" />
+              <XAxis dataKey="name" tick={CHART_TICK} minTickGap={20} axisLine={false} tickLine={false} />
+              <YAxis tick={CHART_TICK} tickFormatter={chartFmtNum} width={45} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{ fontSize: 11, background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2 }}
-                itemStyle={{ color: '#a1a1aa' }}
+                contentStyle={CHART_TOOLTIP_STYLE}
+                formatter={(value: any, name: any) => [chartTooltipFmt(Number(value ?? 0)), String(name)]}
               />
               {datasets?.map((ds: { label: string }, i: number) => (
-                <Line key={ds.label} type="monotone" dataKey={ds.label} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} />
+                <Area
+                  key={ds.label}
+                  type="monotone"
+                  dataKey={ds.label}
+                  stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                  strokeWidth={2}
+                  fill={`url(#chatGrad${i})`}
+                  dot={false}
+                  activeDot={{ r: 3, strokeWidth: 0, fill: CHART_COLORS[i % CHART_COLORS.length] }}
+                  animationDuration={600}
+                />
               ))}
-              <Legend wrapperStyle={{ fontSize: 10 }} />
-            </LineChart>
+              {dsCount > 1 && (
+                <Legend
+                  wrapperStyle={{ fontSize: 10, fontFamily: 'monospace' }}
+                  iconType="circle"
+                  iconSize={8}
+                />
+              )}
+            </AreaChart>
           ) : (
-            <BarChart data={chartData} layout={chartType === 'horizontalBar' ? 'vertical' : 'horizontal'}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+            <BarChart
+              data={chartData}
+              layout={chartType === 'horizontalBar' ? 'vertical' : 'horizontal'}
+              barCategoryGap={dsCount > 1 ? '15%' : '20%'}
+              barGap={2}
+            >
+              <CartesianGrid
+                vertical={chartType !== 'horizontalBar'}
+                horizontal={chartType === 'horizontalBar'}
+                stroke="rgba(255,255,255,0.06)"
+              />
               {chartType === 'horizontalBar' ? (
                 <>
-                  <XAxis type="number" tick={{ fontSize: 10, fill: '#71717a' }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#71717a' }} width={80} />
+                  <XAxis type="number" tick={CHART_TICK} tickFormatter={chartFmtNum} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={CHART_TICK} width={80} axisLine={false} tickLine={false} />
                 </>
               ) : (
                 <>
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#71717a' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
+                  <XAxis dataKey="name" tick={CHART_TICK} minTickGap={20} axisLine={false} tickLine={false} />
+                  <YAxis tick={CHART_TICK} tickFormatter={chartFmtNum} width={45} axisLine={false} tickLine={false} />
                 </>
               )}
               <Tooltip
-                contentStyle={{ fontSize: 11, background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2 }}
-                itemStyle={{ color: '#a1a1aa' }}
+                contentStyle={CHART_TOOLTIP_STYLE}
+                formatter={(value: any, name: any) => [chartTooltipFmt(Number(value ?? 0)), String(name)]}
+                cursor={{ fill: 'rgba(255,255,255,0.04)' }}
               />
               {datasets?.map((ds: { label: string }, i: number) => (
-                <Bar key={ds.label} dataKey={ds.label} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[2, 2, 0, 0]} />
+                <Bar
+                  key={ds.label}
+                  dataKey={ds.label}
+                  fill={CHART_COLORS[i % CHART_COLORS.length]}
+                  radius={[3, 3, 0, 0]}
+                  animationDuration={600}
+                  fillOpacity={0.85}
+                />
               ))}
-              <Legend wrapperStyle={{ fontSize: 10 }} />
+              {dsCount > 1 && (
+                <Legend
+                  wrapperStyle={{ fontSize: 10, fontFamily: 'monospace' }}
+                  iconType="circle"
+                  iconSize={8}
+                />
+              )}
             </BarChart>
           )}
         </ResponsiveContainer>
