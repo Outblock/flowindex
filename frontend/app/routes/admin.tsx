@@ -1,11 +1,14 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check, CircleCheck, Tags, Trash2, Plus } from 'lucide-react'
+import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check, CircleCheck, Tags, Trash2, Plus, Fish, ArrowLeftRight, ChartLine, Tag } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { VerifiedBadge } from '../components/ui/VerifiedBadge'
 import { resolveApiBaseUrl } from '../api'
 import toast from 'react-hot-toast'
 import { Pagination } from '../components/Pagination'
+import Avatar from 'boring-avatars'
+import { colorsFromAddress } from '../components/AddressLink'
 
 type AdminTab = 'ft' | 'nft' | 'scripts' | 'import' | 'labels'
 const VALID_TABS: AdminTab[] = ['ft', 'nft', 'scripts', 'import', 'labels']
@@ -1143,6 +1146,15 @@ function ImportTokenPanel({ token }: { token: string }) {
 
 const LABEL_CATEGORIES = ['whale', 'service', 'exchange', 'defi', 'nft', 'custom'] as const
 
+const LABEL_CAT_CONFIG: Record<string, { icon: LucideIcon; className: string }> = {
+  whale:    { icon: Fish,           className: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800" },
+  service:  { icon: Shield,         className: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800" },
+  exchange: { icon: ArrowLeftRight, className: "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800" },
+  defi:     { icon: ChartLine,      className: "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800" },
+  nft:      { icon: Image,          className: "bg-pink-50 dark:bg-pink-950/30 text-pink-700 dark:text-pink-400 border-pink-200 dark:border-pink-800" },
+  custom:   { icon: Tag,            className: "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700" },
+}
+
 function AccountLabelsPanel({ token }: { token: string }) {
   const [search, setSearch] = useState('')
   const [items, setItems] = useState<any[]>([])
@@ -1218,33 +1230,39 @@ function AccountLabelsPanel({ token }: { token: string }) {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={`${item.address}-${item.tag}`} className="border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                  <td className="px-4 py-2.5 text-zinc-900 dark:text-white text-xs">{item.address}</td>
-                  <td className="px-4 py-2.5 text-zinc-700 dark:text-zinc-300">{item.tag}</td>
-                  <td className="px-4 py-2.5 text-zinc-700 dark:text-zinc-300">{item.label}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium border ${
-                      item.category === 'whale' ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800'
-                      : item.category === 'service' ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
-                      : item.category === 'exchange' ? 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800'
-                      : item.category === 'defi' ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800'
-                      : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
-                    }`}>
-                      {item.category}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button
-                      onClick={() => handleDelete(item.address, item.tag)}
-                      className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {items.map((item) => {
+                const catCfg = LABEL_CAT_CONFIG[item.category] || LABEL_CAT_CONFIG.custom
+                const CatIcon = catCfg.icon
+                return (
+                  <tr key={`${item.address}-${item.tag}`} className="border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                    <td className="px-4 py-2.5">
+                      <Link to="/accounts/$address" params={{ address: item.address }} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <div className="shrink-0 w-6 h-6 [&>svg]:w-full [&>svg]:h-full">
+                          <Avatar size={24} name={item.address} variant="beam" colors={colorsFromAddress(item.address)} />
+                        </div>
+                        <span className="text-xs text-zinc-900 dark:text-white font-mono hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors">{item.address}</span>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2.5 text-zinc-700 dark:text-zinc-300">{item.tag}</td>
+                    <td className="px-4 py-2.5 text-zinc-700 dark:text-zinc-300">{item.label}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium border ${catCfg.className}`}>
+                        <CatIcon className="w-3 h-3" />
+                        {item.category}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button
+                        onClick={() => handleDelete(item.address, item.tag)}
+                        className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
