@@ -1009,43 +1009,81 @@ function Stats() {
                                         <BarChart3 className="h-3.5 w-3.5" />
                                         Aggregation Workers
                                     </h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {aggregationWorkers.map((w) => {
-                                            const h = checkpoints?.[w.key] || 0;
-                                            const speed = workerSpeeds[w.key] || 0;
-                                            const enabled = workerEnabled?.[w.key];
-                                            const statusLabel = enabled === false ? 'DISABLED' : speed > 0 ? 'ACTIVE' : h > 0 ? 'IDLE' : 'OFFLINE';
-                                            // daily_stats_worker tracks block height — show progress relative to indexed range
-                                            const behind = indexedHeight > h && h > 0 ? indexedHeight - h : 0;
-                                            const aggProgress = indexedHeight > startHeight && h > startHeight ? ((h - startHeight) / (indexedHeight - startHeight)) * 100 : 0;
-                                            return (
-                                                <div key={w.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <span className="text-xs font-bold text-zinc-900 dark:text-white">{w.label}</span>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className={`text-[9px] font-bold uppercase tracking-wider ${statusLabel === 'ACTIVE' ? 'text-orange-500' : statusLabel === 'DISABLED' ? 'text-red-400' : behind === 0 && h > 0 ? 'text-green-500' : 'text-zinc-400'}`}>
-                                                                {statusLabel === 'ACTIVE' ? 'SYNCING' : behind === 0 && h > 0 ? 'CAUGHT UP' : statusLabel}
-                                                            </span>
-                                                            <div className={`h-1.5 w-1.5 rounded-full ${statusLabel === 'ACTIVE' ? 'bg-orange-400 animate-pulse' : statusLabel === 'DISABLED' ? 'bg-red-500' : behind === 0 && h > 0 ? 'bg-green-500' : 'bg-zinc-400'}`} />
-                                                        </div>
-                                                    </div>
-                                                    {/* Progress bar */}
-                                                    {h > 0 && (
-                                                        <div className="h-1.5 bg-zinc-200 dark:bg-white/5 rounded-full mb-2 overflow-hidden">
-                                                            <div className="h-full bg-orange-400 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, aggProgress)}%` }} />
-                                                        </div>
-                                                    )}
-                                                    <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500 font-mono">
-                                                        <span>Checkpoint: <span className="text-zinc-900 dark:text-white">#{h.toLocaleString()}</span></span>
-                                                        <span>Speed: <span className="text-zinc-900 dark:text-white"><NumberFlow value={speed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /> b/s</span></span>
-                                                        {behind > 0 && <span>Behind: <span className="text-orange-400">{behind.toLocaleString()} blocks</span></span>}
-                                                        {speed > 0 && behind > 0 && <span>ETA: <span className="text-zinc-900 dark:text-white">{formatDuration(behind / speed)}</span></span>}
-                                                    </div>
+                                    {(() => {
+                                        const backfillActive = backfill && backfill.enabled && !backfill.done;
+                                        const backfillDone = backfill && backfill.enabled && backfill.done;
+                                        return (
+                                            <>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {aggregationWorkers.map((w) => {
+                                                        const h = checkpoints?.[w.key] || 0;
+                                                        const speed = workerSpeeds[w.key] || 0;
+                                                        const enabled = workerEnabled?.[w.key];
+                                                        // When forward workers are disabled but backfill is active, show backfill status instead
+                                                        const isBackfilling = enabled === false && backfillActive;
+                                                        const statusLabel = isBackfilling ? 'BACKFILLING' : enabled === false ? 'DISABLED' : speed > 0 ? 'ACTIVE' : h > 0 ? 'IDLE' : 'OFFLINE';
+                                                        const behind = indexedHeight > h && h > 0 ? indexedHeight - h : 0;
+                                                        // When backfilling, show backfill progress instead of forward progress
+                                                        const aggProgress = isBackfilling
+                                                            ? (backfill.progress || 0)
+                                                            : (indexedHeight > startHeight && h > startHeight ? ((h - startHeight) / (indexedHeight - startHeight)) * 100 : 0);
+                                                        const displaySpeed = isBackfilling ? (backfill.speed || 0) : speed;
+                                                        return (
+                                                            <div key={w.key} className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-4 rounded-sm">
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <span className="text-xs font-bold text-zinc-900 dark:text-white">{w.label}</span>
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                                                                            isBackfilling ? 'text-amber-500' :
+                                                                            statusLabel === 'ACTIVE' ? 'text-orange-500' :
+                                                                            statusLabel === 'DISABLED' ? 'text-red-400' :
+                                                                            behind === 0 && h > 0 ? 'text-green-500' : 'text-zinc-400'
+                                                                        }`}>
+                                                                            {isBackfilling ? 'BACKFILLING' : statusLabel === 'ACTIVE' ? 'SYNCING' : behind === 0 && h > 0 ? 'CAUGHT UP' : statusLabel}
+                                                                        </span>
+                                                                        <div className={`h-1.5 w-1.5 rounded-full ${
+                                                                            isBackfilling ? 'bg-amber-400 animate-pulse' :
+                                                                            statusLabel === 'ACTIVE' ? 'bg-orange-400 animate-pulse' :
+                                                                            statusLabel === 'DISABLED' ? 'bg-red-500' :
+                                                                            behind === 0 && h > 0 ? 'bg-green-500' : 'bg-zinc-400'
+                                                                        }`} />
+                                                                    </div>
+                                                                </div>
+                                                                {/* Progress bar */}
+                                                                {(h > 0 || isBackfilling) && (
+                                                                    <div className="h-1.5 bg-zinc-200 dark:bg-white/5 rounded-full mb-2 overflow-hidden">
+                                                                        <div className={`h-full rounded-full transition-all duration-500 ${isBackfilling ? 'bg-amber-400' : 'bg-orange-400'}`} style={{ width: `${Math.min(100, aggProgress)}%` }} />
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500 font-mono">
+                                                                    {isBackfilling ? (
+                                                                        <>
+                                                                            <span>Cursor: <span className="text-zinc-900 dark:text-white">#{(backfill.current_height || 0).toLocaleString()}</span></span>
+                                                                            <span>Speed: <span className="text-zinc-900 dark:text-white"><NumberFlow value={displaySpeed} format={{ minimumFractionDigits: 0, maximumFractionDigits: 0 }} /> b/s</span></span>
+                                                                            <span>Progress: <span className="text-amber-500">{(backfill.progress || 0).toFixed(1)}%</span></span>
+                                                                            {backfill.eta_seconds > 0 && <span>ETA: <span className="text-zinc-900 dark:text-white">{formatDuration(backfill.eta_seconds)}</span></span>}
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span>Checkpoint: <span className="text-zinc-900 dark:text-white">#{h.toLocaleString()}</span></span>
+                                                                            <span>Speed: <span className="text-zinc-900 dark:text-white"><NumberFlow value={speed} format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /> b/s</span></span>
+                                                                            {behind > 0 && <span>Behind: <span className="text-orange-400">{behind.toLocaleString()} blocks</span></span>}
+                                                                            {speed > 0 && behind > 0 && <span>ETA: <span className="text-zinc-900 dark:text-white">{formatDuration(behind / speed)}</span></span>}
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                    <p className="text-[9px] text-zinc-400 mt-3">Standalone analytics workers (not in derivers). Process large block ranges with heavy aggregation queries. Gaps in analytics charts indicate these workers haven't processed those block ranges yet.</p>
+                                                <p className="text-[9px] text-zinc-400 mt-3">
+                                                    {backfillActive
+                                                        ? 'Forward workers paused while backward backfill runs. Processing daily_stats and analytics.daily_metrics from chain tip backward.'
+                                                        : 'Standalone analytics workers (not in derivers). Process large block ranges with heavy aggregation queries. Gaps in analytics charts indicate these workers haven\'t processed those block ranges yet.'}
+                                                </p>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Section 4.5: Analytics Backfill Progress */}
