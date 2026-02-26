@@ -831,7 +831,7 @@ UPDATE app.smart_contracts
 
 -- Ensure ft_tokens entries exist for bridged FT contracts
 INSERT INTO app.ft_tokens (contract_address, contract_name)
-SELECT encode(address, 'hex'), name
+SELECT address, name
   FROM app.smart_contracts
  WHERE name LIKE 'EVMVMBridgedToken_%'
    AND kind = 'FT'
@@ -839,7 +839,7 @@ ON CONFLICT (contract_address, contract_name) DO NOTHING;
 
 -- Ensure nft_collections entries exist for bridged NFT contracts
 INSERT INTO app.nft_collections (contract_address, contract_name)
-SELECT encode(address, 'hex'), name
+SELECT address, name
   FROM app.smart_contracts
  WHERE name LIKE 'EVMVMBridgedNFT_%'
    AND kind = 'NFT'
