@@ -339,6 +339,8 @@ func fetchFTMetadataViaClient(ctx context.Context, client FlowClient, contractAd
 		VaultPath:       adminCadencePathToString(fields["storagePath"]),
 		ReceiverPath:    adminCadencePathToString(fields["receiverPath"]),
 		BalancePath:     adminCadencePathToString(fields["balancePath"]),
+		EVMAddress:      adminCadenceToString(fields["evmAddress"]),
+		TotalSupply:     adminCadenceUFix64ToString(fields["totalSupply"]),
 	}
 
 	token.Logo = adminExtractFirstMediaURL(fields["logos"])
@@ -583,6 +585,17 @@ func adminCadencePathToString(v cadence.Value) string {
 	return adminCadenceToString(v)
 }
 
+func adminCadenceUFix64ToString(v cadence.Value) string {
+	v = adminUnwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	if fix, ok := v.(cadence.UFix64); ok {
+		return fix.String()
+	}
+	return ""
+}
+
 func adminCadenceToInt(v cadence.Value) (int, bool) {
 	v = adminUnwrapOptional(v)
 	switch x := v.(type) {
@@ -649,11 +662,23 @@ func adminFTMetadataViewsAddr() string {
 // Iterates the contract account's storage to find vaults, then calls vault.resolveView().
 // This approach works for all contracts including those in recovered state.
 func adminFTCombinedScript() string {
+	evmBridgeAddr := adminGetEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+
 	return fmt.Sprintf(`
         import ViewResolver from 0x%s
         import FungibleToken from 0x%s
         import FungibleTokenMetadataViews from 0x%s
         import MetadataViews from 0x%s
+        import FlowEVMBridgeConfig from 0x%s
+
+        access(all) fun getEVMAddress(identifier: String): String? {
+            if let type = CompositeType(identifier) {
+                if let address = FlowEVMBridgeConfig.getEVMAddressAssociated(with: type) {
+                    return "0x".concat(address.toString())
+                }
+            }
+            return nil
+        }
 
         access(all) struct FTInfo {
             access(all) let name: String?
@@ -665,13 +690,17 @@ func adminFTCombinedScript() string {
             access(all) let storagePath: StoragePath?
             access(all) let receiverPath: PublicPath?
             access(all) let balancePath: PublicPath?
+            access(all) let evmAddress: String?
+            access(all) let totalSupply: UFix64
 
             init(
                 name: String?, symbol: String?, description: String?,
                 externalURL: String?,
                 logos: MetadataViews.Medias?,
                 socials: {String: MetadataViews.ExternalURL}?,
-                storagePath: StoragePath?, receiverPath: PublicPath?, balancePath: PublicPath?
+                storagePath: StoragePath?, receiverPath: PublicPath?, balancePath: PublicPath?,
+                evmAddress: String?,
+                totalSupply: UFix64
             ) {
                 self.name = name
                 self.symbol = symbol
@@ -682,6 +711,8 @@ func adminFTCombinedScript() string {
                 self.storagePath = storagePath
                 self.receiverPath = receiverPath
                 self.balancePath = balancePath
+                self.evmAddress = evmAddress
+                self.totalSupply = totalSupply
             }
         }
 
@@ -727,6 +758,19 @@ func adminFTCombinedScript() string {
                 extURL = display!.externalURL!.url
             }
 
+            let identifier = "A.".concat(contractAddress.toString().slice(from: 2, upTo: contractAddress.toString().length)).concat(".").concat(contractName).concat(".Vault")
+            let evmAddr = getEVMAddress(identifier: identifier)
+
+            // Read totalSupply via FungibleTokenMetadataViews.TotalSupply view
+            var supply: UFix64 = 0.0
+            let supplyType = Type<FungibleTokenMetadataViews.TotalSupply>()
+            let vrAcct = getAccount(contractAddress)
+            if let vr = vrAcct.contracts.borrow<&{ViewResolver}>(name: contractName) {
+                if let ts = vr.resolveContractView(resourceType: nil, viewType: supplyType) as! FungibleTokenMetadataViews.TotalSupply? {
+                    supply = ts.supply
+                }
+            }
+
             return FTInfo(
                 name: display!.name,
                 symbol: display!.symbol,
@@ -736,10 +780,12 @@ func adminFTCombinedScript() string {
                 socials: display!.socials,
                 storagePath: data?.storagePath,
                 receiverPath: data?.receiverPath,
-                balancePath: data?.metadataPath
+                balancePath: data?.metadataPath,
+                evmAddress: evmAddr,
+                totalSupply: supply
             )
         }
-    `, adminViewResolverAddr(), adminFTAddr(), adminFTMetadataViewsAddr(), adminViewResolverAddr())
+    `, adminViewResolverAddr(), adminFTAddr(), adminFTMetadataViewsAddr(), adminViewResolverAddr(), evmBridgeAddr)
 }
 
 // adminNFTCollectionDisplayWithBridgeScript returns the combined script that fetches
