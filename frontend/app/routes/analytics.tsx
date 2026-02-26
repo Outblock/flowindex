@@ -624,8 +624,8 @@ function AnalyticsPage() {
                   <YAxis {...yAxisProps()} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
                   <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
-                  <Area type="monotone" dataKey="cadence_tx_count" stackId="1" stroke={C.green} strokeWidth={1.5} fill="url(#gCadence)" name="Cadence" />
-                  <Area type="monotone" dataKey="evm_tx_count" stackId="1" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvm)" name="EVM" />
+                  <Area type="monotone" dataKey="cadence_tx_count" stroke={C.green} strokeWidth={1.5} fill="url(#gCadence)" name="Cadence" />
+                  <Area type="monotone" dataKey="evm_tx_count" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvm)" name="EVM" />
                 </AreaChart>
               </ChartCard>
               )}
@@ -686,8 +686,8 @@ function AnalyticsPage() {
                   <YAxis {...yAxisProps((v) => `${v}%`)} domain={[0, 100]} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`${toNum(v).toFixed(1)}%`]} />
                   <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
-                  <Area type="monotone" dataKey="cadence_pct" stackId="1" stroke={C.green} strokeWidth={1.5} fill="url(#gCadPct)" name="Cadence" />
-                  <Area type="monotone" dataKey="evm_pct" stackId="1" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvmPct)" name="EVM" />
+                  <Area type="monotone" dataKey="cadence_pct" stroke={C.green} strokeWidth={1.5} fill="url(#gCadPct)" name="Cadence" />
+                  <Area type="monotone" dataKey="evm_pct" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvmPct)" name="EVM" />
                 </AreaChart>
               </ChartCard>
               )}
