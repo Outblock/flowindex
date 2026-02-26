@@ -144,6 +144,81 @@ func (r *Repository) AdminListNFTCollections(ctx context.Context, search string,
 	return result, rows.Err()
 }
 
+// --- Account Labels ---
+
+// GetLabelsByAddresses returns labels for one or more addresses.
+func (r *Repository) GetLabelsByAddresses(ctx context.Context, addresses []string) (map[string][]models.AccountLabel, error) {
+	if len(addresses) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx,
+		`SELECT address, tag, COALESCE(label, ''), COALESCE(category, 'custom')
+		 FROM app.account_labels WHERE address = ANY($1) ORDER BY address, tag`, addresses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string][]models.AccountLabel)
+	for rows.Next() {
+		var l models.AccountLabel
+		if err := rows.Scan(&l.Address, &l.Tag, &l.Label, &l.Category); err != nil {
+			return nil, err
+		}
+		result[l.Address] = append(result[l.Address], l)
+	}
+	return result, rows.Err()
+}
+
+// AdminListAccountLabels returns all account labels with optional search.
+func (r *Repository) AdminListAccountLabels(ctx context.Context, search string, limit, offset int) ([]models.AccountLabel, error) {
+	query := `SELECT address, tag, COALESCE(label, ''), COALESCE(category, 'custom') FROM app.account_labels`
+	args := []interface{}{}
+	argN := 1
+
+	if search != "" {
+		query += fmt.Sprintf(` WHERE address ILIKE $%d OR tag ILIKE $%d OR label ILIKE $%d`, argN, argN, argN)
+		args = append(args, "%"+search+"%")
+		argN++
+	}
+	query += ` ORDER BY address, tag`
+	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argN, argN+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []models.AccountLabel
+	for rows.Next() {
+		var l models.AccountLabel
+		if err := rows.Scan(&l.Address, &l.Tag, &l.Label, &l.Category); err != nil {
+			return nil, err
+		}
+		result = append(result, l)
+	}
+	return result, rows.Err()
+}
+
+// AdminUpsertAccountLabel inserts or updates an account label.
+func (r *Repository) AdminUpsertAccountLabel(ctx context.Context, label models.AccountLabel) error {
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO app.account_labels (address, tag, label, category)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (address, tag) DO UPDATE SET label = $3, category = $4`,
+		label.Address, label.Tag, label.Label, label.Category)
+	return err
+}
+
+// AdminDeleteAccountLabel removes a label from an account.
+func (r *Repository) AdminDeleteAccountLabel(ctx context.Context, address, tag string) error {
+	_, err := r.db.Exec(ctx,
+		`DELETE FROM app.account_labels WHERE address = $1 AND tag = $2`, address, tag)
+	return err
+}
+
 // AdminUpdateNFTCollection updates specific fields of an NFT collection.
 func (r *Repository) AdminUpdateNFTCollection(ctx context.Context, address, name string, updates map[string]interface{}) error {
 	allowed := map[string]string{

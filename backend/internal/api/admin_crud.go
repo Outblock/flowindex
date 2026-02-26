@@ -185,6 +185,75 @@ func (s *Server) handleAdminUpdateNFTCollection(w http.ResponseWriter, r *http.R
 	writeAPIResponse(w, map[string]interface{}{"updated": true, "identifier": identifier}, nil, nil)
 }
 
+// --- Account Labels CRUD ---
+
+func (s *Server) handleAdminListAccountLabels(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parseLimitOffset(r)
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+
+	labels, err := s.repo.AdminListAccountLabels(r.Context(), search, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(labels))
+	for _, l := range labels {
+		out = append(out, map[string]interface{}{
+			"address":  l.Address,
+			"tag":      l.Tag,
+			"label":    l.Label,
+			"category": l.Category,
+		})
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) handleAdminUpsertAccountLabel(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Address  string `json:"address"`
+		Tag      string `json:"tag"`
+		Label    string `json:"label"`
+		Category string `json:"category"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if body.Address == "" || body.Tag == "" {
+		writeAPIError(w, http.StatusBadRequest, "address and tag are required")
+		return
+	}
+	if body.Category == "" {
+		body.Category = "custom"
+	}
+
+	label := models.AccountLabel{
+		Address:  body.Address,
+		Tag:      body.Tag,
+		Label:    body.Label,
+		Category: body.Category,
+	}
+	if err := s.repo.AdminUpsertAccountLabel(r.Context(), label); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, map[string]interface{}{"upserted": true, "address": body.Address, "tag": body.Tag}, nil, nil)
+}
+
+func (s *Server) handleAdminDeleteAccountLabel(w http.ResponseWriter, r *http.Request) {
+	address := mux.Vars(r)["address"]
+	tag := mux.Vars(r)["tag"]
+	if address == "" || tag == "" {
+		writeAPIError(w, http.StatusBadRequest, "address and tag are required")
+		return
+	}
+	if err := s.repo.AdminDeleteAccountLabel(r.Context(), address, tag); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, map[string]interface{}{"deleted": true, "address": address, "tag": tag}, nil, nil)
+}
+
 // --- output helpers ---
 
 func ftTokenToAdmin(t models.FTToken) map[string]interface{} {

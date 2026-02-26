@@ -329,6 +329,14 @@ type TxTag struct {
 	Tag           string `json:"tag"`
 }
 
+// AccountLabel represents app.account_labels
+type AccountLabel struct {
+	Address  string `json:"address"`
+	Tag      string `json:"tag"`
+	Label    string `json:"label"`
+	Category string `json:"category"`
+}
+
 // StatusSnapshot represents cached status payloads
 type StatusSnapshot struct {
 	Kind    string          `json:"kind"`
