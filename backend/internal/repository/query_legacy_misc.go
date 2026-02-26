@@ -247,18 +247,16 @@ func (r *Repository) GetContractByAddress(ctx context.Context, address string) (
 	return &c, nil
 }
 
-// RefreshDailyStatsRange re-aggregates daily_stats for all dates that have
-// transactions in the half-open block range [fromHeight, toHeight).
-// Safe for repeated calls on the same range (idempotent full re-aggregate per date).
+// RefreshDailyStatsRange incrementally aggregates daily_stats for all dates that
+// have transactions in the half-open block range [fromHeight, toHeight).
+//
+// Uses block_height range for filtering (indexed, fast) instead of DATE(timestamp)
+// which caused full table scans. Accumulates counts additively so sequential
+// non-overlapping ranges produce correct totals. The periodic full scan
+// (ENABLE_DAILY_STATS=true on startup) reconciles any stale values.
 func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toHeight uint64) error {
 	_, err := r.db.Exec(ctx, `
-		WITH affected_dates AS (
-			SELECT DISTINCT DATE(timestamp) AS d
-			FROM raw.transactions
-			WHERE block_height >= $1 AND block_height < $2
-			  AND timestamp IS NOT NULL
-		),
-		tx_agg AS (
+		WITH tx_agg AS (
 			SELECT
 				DATE(t.timestamp) AS date,
 				COUNT(*) AS tx_count,
@@ -267,7 +265,7 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 				COUNT(DISTINCT t.proposer_address) AS active_accounts,
 				COUNT(*) FILTER (WHERE t.error_message IS NOT NULL AND t.error_message != '') AS failed_tx_count
 			FROM raw.transactions t
-			WHERE DATE(t.timestamp) IN (SELECT d FROM affected_dates)
+			WHERE t.block_height >= $1 AND t.block_height < $2
 			  AND t.timestamp IS NOT NULL
 			GROUP BY DATE(t.timestamp)
 		)
@@ -277,11 +275,11 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 			a.failed_tx_count, NOW()
 		FROM tx_agg a
 		ON CONFLICT (date) DO UPDATE SET
-			tx_count = EXCLUDED.tx_count,
-			evm_tx_count = EXCLUDED.evm_tx_count,
-			total_gas_used = EXCLUDED.total_gas_used,
-			active_accounts = EXCLUDED.active_accounts,
-			failed_tx_count = EXCLUDED.failed_tx_count,
+			tx_count = daily_stats.tx_count + EXCLUDED.tx_count,
+			evm_tx_count = daily_stats.evm_tx_count + EXCLUDED.evm_tx_count,
+			total_gas_used = daily_stats.total_gas_used + EXCLUDED.total_gas_used,
+			active_accounts = daily_stats.active_accounts + EXCLUDED.active_accounts,
+			failed_tx_count = daily_stats.failed_tx_count + EXCLUDED.failed_tx_count,
 			updated_at = NOW();
 	`, fromHeight, toHeight)
 	if err != nil {
@@ -376,13 +374,13 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 		LEFT JOIN epoch ep ON ep.d = d.d
 		LEFT JOIN bridge br ON br.d = d.d
 		ON CONFLICT (date) DO UPDATE SET
-			new_accounts = EXCLUDED.new_accounts,
-			coa_new_accounts = EXCLUDED.coa_new_accounts,
-			evm_active_addresses = EXCLUDED.evm_active_addresses,
-			defi_swap_count = EXCLUDED.defi_swap_count,
-			defi_unique_traders = EXCLUDED.defi_unique_traders,
-			epoch_payout_total = EXCLUDED.epoch_payout_total,
-			bridge_to_evm_txs = EXCLUDED.bridge_to_evm_txs,
+			new_accounts = daily_metrics.new_accounts + EXCLUDED.new_accounts,
+			coa_new_accounts = daily_metrics.coa_new_accounts + EXCLUDED.coa_new_accounts,
+			evm_active_addresses = daily_metrics.evm_active_addresses + EXCLUDED.evm_active_addresses,
+			defi_swap_count = daily_metrics.defi_swap_count + EXCLUDED.defi_swap_count,
+			defi_unique_traders = daily_metrics.defi_unique_traders + EXCLUDED.defi_unique_traders,
+			epoch_payout_total = daily_metrics.epoch_payout_total + EXCLUDED.epoch_payout_total,
+			bridge_to_evm_txs = daily_metrics.bridge_to_evm_txs + EXCLUDED.bridge_to_evm_txs,
 			updated_at = NOW();
 	`, fromHeight, toHeight)
 	if err != nil {
@@ -440,26 +438,19 @@ func (r *Repository) RefreshDailyStats(ctx context.Context, fullScan bool) error
 
 func (r *Repository) refreshDailyContractStatsRange(ctx context.Context, fromHeight, toHeight uint64) error {
 	_, err := r.db.Exec(ctx, `
-		WITH affected_dates AS (
-			SELECT DISTINCT DATE(timestamp) AS d
-			FROM raw.transactions
-			WHERE block_height >= $1 AND block_height < $2
-			  AND timestamp IS NOT NULL
-		),
-		contract_agg AS (
+		WITH contract_agg AS (
 			SELECT DATE(b.timestamp) AS date, COUNT(*) AS new_contracts
 			FROM app.smart_contracts sc
 			JOIN raw.blocks b ON b.height = sc.first_seen_height
-			WHERE DATE(b.timestamp) IN (SELECT d FROM affected_dates)
+			WHERE sc.first_seen_height >= $1 AND sc.first_seen_height < $2
 			  AND sc.first_seen_height IS NOT NULL
 			GROUP BY 1
 		)
 		UPDATE app.daily_stats d
-		SET new_contracts = COALESCE(c.new_contracts, 0),
+		SET new_contracts = d.new_contracts + c.new_contracts,
 		    updated_at = NOW()
-		FROM affected_dates ad
-		LEFT JOIN contract_agg c ON c.date = ad.d
-		WHERE d.date = ad.d;
+		FROM contract_agg c
+		WHERE d.date = c.date;
 	`, fromHeight, toHeight)
 	return err
 }
