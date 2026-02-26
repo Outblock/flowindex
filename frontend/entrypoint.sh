@@ -63,7 +63,12 @@ echo "Starting Nitro SSR server on :3000"
 PORT=3000 bun /app/.output/server/index.mjs &
 SSR_PID=$!
 
-# Start Nginx (public listener on :8080)
+# Validate & start Nginx (public listener on :8080)
+echo "--- Rendered nginx config ---"
+cat /etc/nginx/http.d/default.conf | head -20
+echo "---"
+echo "Testing nginx config..."
+nginx -t 2>&1
 echo "Starting Nginx on :8080"
 nginx -g "daemon off;" &
 NGINX_PID=$!
