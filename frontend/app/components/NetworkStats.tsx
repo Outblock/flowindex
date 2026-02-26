@@ -34,6 +34,7 @@ export function NetworkStats({ totalStaked, totalSupply, activeNodes, stakingApy
         if (cancelled) return;
         const counts: Record<number, number> = {};
         for (const n of data) {
+          if ((n.tokens_staked ?? 0) <= 0) continue; // only staked nodes
           const r = n.role ?? 0;
           if (r >= 1 && r <= 5) counts[r] = (counts[r] || 0) + 1;
         }
@@ -85,8 +86,8 @@ function NodesCard({ activeNodes, roleCounts }: { activeNodes?: number; roleCoun
         </div>
       </div>
       <div>
-        <p className="text-[10px] text-zinc-500 dark:text-gray-500 uppercase tracking-widest mb-1">Active Nodes</p>
-        <p className="text-xl font-mono font-bold text-zinc-900 dark:text-white mb-2">{activeNodes}</p>
+        <p className="text-[10px] text-zinc-500 dark:text-gray-500 uppercase tracking-widest mb-1">Staked Nodes</p>
+        <p className="text-xl font-mono font-bold text-zinc-900 dark:text-white mb-2">{roleCounts ? Object.values(roleCounts).reduce((a, b) => a + b, 0) : activeNodes}</p>
 
         {roleCounts && total > 0 && (
           <>

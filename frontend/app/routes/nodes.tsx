@@ -144,7 +144,7 @@ function NodesPage() {
               Network Nodes
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              {nodes.length > 0 ? `Epoch ${nodes[0].epoch} — ${nodes.length} nodes` : 'Loading...'}
+              {nodes.length > 0 ? `Epoch ${nodes[0].epoch} — ${validatorCount} staked nodes` : 'Loading...'}
             </p>
           </div>
         </div>
@@ -157,8 +157,8 @@ function NodesPage() {
         transition={{ delay: 0.1 }}
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
       >
-        <StatCard label="Nodes" value={nodes.length.toLocaleString()} />
-        <StatCard label="Validators" value={validatorCount.toLocaleString()} />
+        <StatCard label="Staked Nodes" value={validatorCount.toLocaleString()} />
+        <StatCard label="Total Nodes" value={nodes.length.toLocaleString()} />
         <StakeBarCard staked={totalStaked} totalSupply={totalSupply} />
         {countryCount > 0 ? (
           <StatCard label="Countries" value={countryCount.toLocaleString()} />
