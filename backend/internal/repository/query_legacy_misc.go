@@ -341,7 +341,7 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 		epoch AS (
 			SELECT DATE(e.payout_time) AS d, COALESCE(SUM(e.payout_total), 0)::numeric(78, 0) AS payout
 			FROM app.epoch_stats e
-			WHERE DATE(e.payout_time) IN (SELECT d FROM affected_dates)
+			WHERE e.payout_height >= $1 AND e.payout_height < $2
 			GROUP BY 1
 		),
 		bridge AS (
@@ -390,7 +390,7 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 			evm_active_addresses = daily_metrics.evm_active_addresses + EXCLUDED.evm_active_addresses,
 			defi_swap_count = daily_metrics.defi_swap_count + EXCLUDED.defi_swap_count,
 			defi_unique_traders = daily_metrics.defi_unique_traders + EXCLUDED.defi_unique_traders,
-			epoch_payout_total = daily_metrics.epoch_payout_total + EXCLUDED.epoch_payout_total,
+			epoch_payout_total = GREATEST(daily_metrics.epoch_payout_total, EXCLUDED.epoch_payout_total),
 			bridge_to_evm_txs = daily_metrics.bridge_to_evm_txs + EXCLUDED.bridge_to_evm_txs,
 			contract_updates = daily_metrics.contract_updates + EXCLUDED.contract_updates,
 			updated_at = NOW();
