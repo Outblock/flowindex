@@ -792,11 +792,11 @@ function Home() {
                                                     className="w-6 h-6 bg-nothing-green/20 text-nothing-green-dark dark:text-nothing-green text-[10px] font-bold font-mono items-center justify-center"
                                                     style={{ display: (nft.square_image || nft.logo) ? 'none' : 'flex' }}
                                                 >
-                                                    {(nft.display_name || nft.name || '?').charAt(0).toUpperCase()}
+                                                    {(nft.display_name || nft.name || nft.contract_name || (nft.id ? nft.id.split('.').pop() : '?')).charAt(0).toUpperCase()}
                                                 </div>
                                             </div>
                                             <div className="flex flex-col min-w-0 flex-1">
-                                                <span className="text-xs font-mono text-zinc-900 dark:text-white truncate">{nft.display_name || nft.name || 'Unknown'}</span>
+                                                <span className="text-xs font-mono text-zinc-900 dark:text-white truncate">{nft.display_name || nft.name || nft.contract_name || (nft.id ? nft.id.split('.').pop() : 'Unknown')}</span>
                                             </div>
                                             {nft.transfer_count > 0 ? (
                                                 <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 px-2 py-0.5 rounded-sm flex-shrink-0">
