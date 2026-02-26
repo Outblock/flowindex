@@ -345,9 +345,12 @@ function TokenDetailInner() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Holders */}
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden shadow-sm dark:shadow-none">
-          <div className="p-4 border-b border-zinc-200 dark:border-white/5 flex items-center gap-2">
-            <Users className="w-4 h-4 text-zinc-500" />
-            <span className="text-xs uppercase tracking-widest font-semibold text-zinc-600 dark:text-zinc-300">Holders</span>
+          <div className="p-4 border-b border-zinc-200 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-zinc-500" />
+              <span className="text-xs uppercase tracking-widest font-semibold text-zinc-600 dark:text-zinc-300">Holders</span>
+            </div>
+            <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Balances are derived from indexed transfer history and may be incomplete.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -355,7 +358,7 @@ function TokenDetailInner() {
                 <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
                   <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider w-12">#</th>
                   <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Address</th>
-                  <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Balance</th>
+                  <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right" title="Estimated from indexed transfers — may differ from on-chain balance">Balance*</th>
                 </tr>
               </thead>
               <tbody>
