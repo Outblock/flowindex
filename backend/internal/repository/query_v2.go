@@ -715,14 +715,18 @@ func (r *Repository) GetScheduledTransactions(ctx context.Context, limit, offset
 		offset = 0
 	}
 	rows, err := r.db.Query(ctx, `
-		WITH page AS (
-			SELECT tc.transaction_id,
-			       COALESCE(tc.block_height, tl.block_height) AS block_height
+		WITH candidates AS (
+			SELECT tc.transaction_id, tc.block_height
 			FROM app.tx_contracts tc
-			LEFT JOIN raw.tx_lookup tl ON tl.id = tc.transaction_id AND tc.block_height IS NULL
 			WHERE tc.contract_identifier LIKE '%FlowTransactionScheduler%'
-			ORDER BY COALESCE(tc.block_height, tl.block_height) DESC NULLS LAST
+			ORDER BY tc.block_height DESC NULLS LAST
 			LIMIT $1 OFFSET $2
+		),
+		page AS (
+			SELECT c.transaction_id,
+			       COALESCE(c.block_height, tl.block_height) AS block_height
+			FROM candidates c
+			LEFT JOIN raw.tx_lookup tl ON tl.id = c.transaction_id AND c.block_height IS NULL
 		)
 		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
 		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
@@ -754,9 +758,9 @@ func (r *Repository) GetScheduledTransactions(ctx context.Context, limit, offset
 }
 
 // GetTransactionsByContract returns transactions that interact with a given contract identifier.
-// Uses a subquery to paginate on tx_contracts first (using the composite index on
-// contract_identifier, block_height DESC), then joins only the page with raw.transactions
-// for full tx details — avoids scanning the entire partitioned table.
+// Uses a two-step approach: first selects matching transaction_ids from tx_contracts using the
+// index on (contract_identifier, block_height), then resolves block_height via tx_lookup for
+// partition-pruned joins with raw.transactions.
 func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIdentifier string, limit, offset int) ([]models.Transaction, error) {
 	if limit <= 0 {
 		limit = 20
@@ -765,14 +769,18 @@ func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIden
 		offset = 0
 	}
 	rows, err := r.db.Query(ctx, `
-		WITH page AS (
-			SELECT tc.transaction_id,
-			       COALESCE(tc.block_height, tl.block_height) AS block_height
+		WITH candidates AS (
+			SELECT tc.transaction_id, tc.block_height
 			FROM app.tx_contracts tc
-			LEFT JOIN raw.tx_lookup tl ON tl.id = tc.transaction_id AND tc.block_height IS NULL
 			WHERE tc.contract_identifier = $1
-			ORDER BY COALESCE(tc.block_height, tl.block_height) DESC NULLS LAST
+			ORDER BY tc.block_height DESC NULLS LAST
 			LIMIT $2 OFFSET $3
+		),
+		page AS (
+			SELECT c.transaction_id,
+			       COALESCE(c.block_height, tl.block_height) AS block_height
+			FROM candidates c
+			LEFT JOIN raw.tx_lookup tl ON tl.id = c.transaction_id AND c.block_height IS NULL
 		)
 		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
 		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
