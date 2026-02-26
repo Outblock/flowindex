@@ -91,7 +91,11 @@ func (s *Server) handleFlowGetFTToken(w http.ResponseWriter, r *http.Request) {
 		writeAPIResponse(w, []interface{}{toFTListOutput(models.FTToken{ContractAddress: tokenAddr, ContractName: tokenName})}, nil, nil)
 		return
 	}
-	writeAPIResponse(w, []interface{}{toFTListOutput(*t)}, nil, nil)
+	out := toFTListOutput(*t)
+	if totalSupply, err := s.repo.SumFTBalanceByToken(r.Context(), tokenAddr, tokenName); err == nil {
+		out["total_supply"] = parseFloatOrZero(totalSupply)
+	}
+	writeAPIResponse(w, []interface{}{out}, nil, nil)
 }
 
 func (s *Server) handleFlowFTHoldingsByToken(w http.ResponseWriter, r *http.Request) {
