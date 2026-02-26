@@ -27,8 +27,10 @@ func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.T
 			(tx_count - COALESCE(evm_tx_count, 0)) AS cadence_tx_count,
 			COALESCE(total_gas_used, 0) AS total_gas_used,
 			COALESCE(active_accounts, 0), COALESCE(new_contracts, 0),
-			0 AS failed_tx_count,
-			0 AS error_rate,
+			COALESCE(failed_tx_count, 0) AS failed_tx_count,
+			CASE WHEN tx_count > 0
+				THEN ROUND(COALESCE(failed_tx_count, 0)::numeric / tx_count * 100, 2)
+				ELSE 0 END AS error_rate,
 			CASE WHEN tx_count > 0 AND COALESCE(total_gas_used, 0) > 0
 				THEN ROUND((COALESCE(total_gas_used, 0)::numeric / tx_count), 2)
 				ELSE 0 END AS avg_gas_per_tx

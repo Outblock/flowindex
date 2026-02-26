@@ -940,6 +940,23 @@ func adminExtractSocials(v cadence.Value) []byte {
 	return b
 }
 
+// handleAdminRefreshDailyStats triggers a full re-aggregation of daily_stats.
+// POST /admin/refresh-daily-stats
+func (s *Server) handleAdminRefreshDailyStats(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[admin] Triggering full daily stats refresh")
+	go func() {
+		ctx := context.Background()
+		if err := s.repo.RefreshDailyStats(ctx, true); err != nil {
+			log.Printf("[admin] daily stats refresh error: %v", err)
+		} else {
+			log.Printf("[admin] daily stats refresh complete")
+		}
+	}()
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Daily stats refresh started in background",
+	})
+}
+
 // handleAdminResetTokenWorker fixes cross-VM FLOW transfer data.
 // It deletes bogus FT transfers with contract_name='EVM' and resets the
 // token_worker to re-process from the earliest affected block height.

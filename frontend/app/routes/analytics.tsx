@@ -148,18 +148,76 @@ const TOOLTIP_STYLE = {
 
 const TICK_PROPS = { fill: C.tick, fontFamily: 'monospace' }
 
+/* ── tab types ── */
+
+type AnalyticsTab = 'all' | 'transactions' | 'tokens' | 'network' | 'price'
+
+const TABS: { label: string; value: AnalyticsTab }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Transactions', value: 'transactions' },
+  { label: 'Tokens', value: 'tokens' },
+  { label: 'Network', value: 'network' },
+  { label: 'Price', value: 'price' },
+]
+
+/* ── chart skeleton ── */
+
+function ChartSkeleton() {
+  return (
+    <div className="h-full w-full flex items-end gap-1 px-4 pb-4 animate-pulse">
+      {Array.from({ length: 20 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex-1 bg-zinc-200 dark:bg-zinc-800 rounded-t"
+          style={{ height: `${30 + Math.sin(i * 0.7) * 25 + Math.random() * 20}%` }}
+        />
+      ))}
+    </div>
+  )
+}
+
+/* ── empty state ── */
+
+function EmptyState({ message = 'No data available' }: { message?: string }) {
+  return (
+    <div className="h-full flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm font-mono">
+      {message}
+    </div>
+  )
+}
+
 /* ── reusable chart wrapper ── */
 
-function ChartCard({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
+function ChartCard({
+  title,
+  children,
+  className = '',
+  loading = false,
+  empty = false,
+  emptyMessage,
+}: {
+  title: string
+  children: React.ReactNode
+  className?: string
+  loading?: boolean
+  empty?: boolean
+  emptyMessage?: string
+}) {
   return (
     <div className={`bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 hover:border-nothing-green/30 transition-colors ${className}`}>
       <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-4">
         {title}
       </h3>
       <div className="h-[220px]">
-        <ResponsiveContainer width="100%" height="100%">
-          {children as React.ReactElement}
-        </ResponsiveContainer>
+        {loading ? (
+          <ChartSkeleton />
+        ) : empty ? (
+          <EmptyState message={emptyMessage} />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            {children as React.ReactElement}
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   )
@@ -271,12 +329,21 @@ function SectionHeader({ title }: { title: string }) {
 
 function AnalyticsPage() {
   const [rangeDays, setRangeDays] = useState(30)
+  const [activeTab, setActiveTab] = useState<AnalyticsTab>('all')
   const [dailyData, setDailyData] = useState<DailyRow[]>([])
   const [transferData, setTransferData] = useState<TransferRow[]>([])
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([])
   const [epochData, setEpochData] = useState<EpochRow[]>([])
   const [netStats, setNetStats] = useState<NetworkStatsData | null>(null)
   const [totals, setTotals] = useState<Totals | null>(null)
+
+  // Per-source loading flags
+  const [dailyLoading, setDailyLoading] = useState(true)
+  const [transferLoading, setTransferLoading] = useState(true)
+  const [priceLoading, setPriceLoading] = useState(true)
+  const [epochLoading, setEpochLoading] = useState(true)
+  const [netStatsLoading, setNetStatsLoading] = useState(true)
+  const [totalsLoading, setTotalsLoading] = useState(true)
 
   // Each data source loads independently so fast ones render immediately
   useEffect(() => {
@@ -290,17 +357,17 @@ function AnalyticsPage() {
       fetchAnalyticsDaily(fromStr).then((data) => {
         if (cancelled || !data) return
         setDailyData((data as DailyRow[]).sort((a, b) => a.date.localeCompare(b.date)))
-      }).catch(() => {})
+      }).catch(() => {}).finally(() => { if (!cancelled) setDailyLoading(false) })
 
       fetchAnalyticsTransfersDaily(fromStr).then((data) => {
         if (cancelled || !data) return
         setTransferData((data as TransferRow[]).sort((a, b) => a.date.localeCompare(b.date)))
-      }).catch(() => {})
+      }).catch(() => {}).finally(() => { if (!cancelled) setTransferLoading(false) })
 
       fetchNetworkStats().then((data) => {
         if (cancelled || !data) return
         setNetStats(data as NetworkStatsData)
-      }).catch(() => {})
+      }).catch(() => {}).finally(() => { if (!cancelled) setNetStatsLoading(false) })
 
       fetch(`${getBaseURL()}/status/price/history?limit=8760`)
         .then((r) => (r.ok ? r.json() : null))
@@ -309,14 +376,14 @@ function AnalyticsPage() {
           setPriceHistory(
             (json.data as PricePoint[]).slice().sort((a, b) => new Date(a.as_of).getTime() - new Date(b.as_of).getTime()),
           )
-        }).catch(() => {})
+        }).catch(() => {}).finally(() => { if (!cancelled) setPriceLoading(false) })
 
       fetch(`${getBaseURL()}/staking/epoch/stats?limit=200`)
         .then((r) => (r.ok ? r.json() : null))
         .then((json) => {
           if (cancelled || !json?.data) return
           setEpochData((json.data as EpochRow[]).slice().sort((a, b) => a.epoch - b.epoch))
-        }).catch(() => {})
+        }).catch(() => {}).finally(() => { if (!cancelled) setEpochLoading(false) })
 
       fetch(`${getBaseURL()}/status/count`)
         .then((r) => (r.ok ? r.json() : null))
@@ -325,7 +392,7 @@ function AnalyticsPage() {
           const d = json.data
           const item = Array.isArray(d) ? d[0] : d
           if (item) setTotals(item as Totals)
-        }).catch(() => {})
+        }).catch(() => {}).finally(() => { if (!cancelled) setTotalsLoading(false) })
     })
     return () => { cancelled = true }
   }, [])
@@ -380,6 +447,10 @@ function AnalyticsPage() {
 
   const gridStroke = 'rgba(113,113,122,0.15)'
 
+  function showChart(...categories: AnalyticsTab[]) {
+    return activeTab === 'all' || categories.includes(activeTab)
+  }
+
   /* ── render ── */
 
   return (
@@ -405,6 +476,23 @@ function AnalyticsPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Category tabs */}
+        <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 rounded-lg p-0.5 w-fit">
+          {TABS.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setActiveTab(t.value)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
+                activeTab === t.value
+                  ? 'text-white bg-zinc-800 dark:bg-zinc-700 shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {/* Content renders progressively as each API responds */}
@@ -459,7 +547,8 @@ function AnalyticsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 
               {/* Hero: Daily Tx Count — spans 2 cols */}
-              <ChartCard title="Daily Transaction Count" className="lg:col-span-2">
+              {showChart('transactions') && (
+              <ChartCard title="Daily Transaction Count" className="lg:col-span-2" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gCadence" x1="0" y1="0" x2="0" y2="1">
@@ -480,9 +569,11 @@ function AnalyticsPage() {
                   <Area type="monotone" dataKey="evm_tx_count" stackId="1" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvm)" name="EVM" />
                 </AreaChart>
               </ChartCard>
+              )}
 
               {/* Active Accounts — 1 col */}
-              <ChartCard title="Active Accounts">
+              {showChart('network') && (
+              <ChartCard title="Active Accounts" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gAccounts" x1="0" y1="0" x2="0" y2="1">
@@ -497,9 +588,11 @@ function AnalyticsPage() {
                   <Area type="monotone" dataKey="active_accounts" stroke={C.green} strokeWidth={1.5} fill="url(#gAccounts)" name="Active Accounts" />
                 </AreaChart>
               </ChartCard>
+              )}
 
               {/* EVM vs Cadence % — 1 col */}
-              <ChartCard title="EVM vs Cadence (%)">
+              {showChart('transactions') && (
+              <ChartCard title="EVM vs Cadence (%)" loading={dailyLoading} empty={evmPctData.length === 0}>
                 <AreaChart data={evmPctData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gCadPct" x1="0" y1="0" x2="0" y2="1">
@@ -520,9 +613,11 @@ function AnalyticsPage() {
                   <Area type="monotone" dataKey="evm_pct" stackId="1" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvmPct)" name="EVM" />
                 </AreaChart>
               </ChartCard>
+              )}
 
               {/* FLOW Price — spans 2 cols */}
-              <ChartCard title="FLOW Price History" className="md:col-span-2">
+              {showChart('price') && (
+              <ChartCard title="FLOW Price History" className="md:col-span-2" loading={priceLoading} empty={visiblePrice.length === 0}>
                 <LineChart data={visiblePrice} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke={gridStroke} vertical={false} />
                   <XAxis {...xAxisProps()} />
@@ -531,9 +626,11 @@ function AnalyticsPage() {
                   <Line type="monotone" dataKey="price" stroke={C.green} strokeWidth={1.5} dot={false} name="FLOW" />
                 </LineChart>
               </ChartCard>
+              )}
 
               {/* Gas Burned — 1 col */}
-              <ChartCard title="Gas Burned per Day">
+              {showChart('transactions') && (
+              <ChartCard title="Gas Burned per Day" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gGas" x1="0" y1="0" x2="0" y2="1">
@@ -548,9 +645,11 @@ function AnalyticsPage() {
                   <Area type="monotone" dataKey="total_gas_used" stroke={C.amber} strokeWidth={1.5} fill="url(#gGas)" name="Gas Used" />
                 </AreaChart>
               </ChartCard>
+              )}
 
               {/* Avg Gas per Tx — 1 col */}
-              <ChartCard title="Avg Gas per Tx">
+              {showChart('transactions') && (
+              <ChartCard title="Avg Gas per Tx" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gAvgGas" x1="0" y1="0" x2="0" y2="1">
@@ -565,9 +664,11 @@ function AnalyticsPage() {
                   <Area type="monotone" dataKey="avg_gas_per_tx" stroke={C.amber} strokeWidth={1.5} fill="url(#gAvgGas)" name="Avg Gas/Tx" />
                 </AreaChart>
               </ChartCard>
+              )}
 
               {/* Error Rate — 1 col */}
-              <ChartCard title="Error Rate (%)">
+              {showChart('transactions') && (
+              <ChartCard title="Error Rate (%)" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gErr" x1="0" y1="0" x2="0" y2="1">
@@ -582,9 +683,11 @@ function AnalyticsPage() {
                   <Area type="monotone" dataKey="error_rate" stroke={C.red} strokeWidth={1.5} fill="url(#gErr)" name="Error Rate" />
                 </AreaChart>
               </ChartCard>
+              )}
 
               {/* FT Transfers — 1 col */}
-              <ChartCard title="FT Transfers">
+              {showChart('tokens') && (
+              <ChartCard title="FT Transfers" loading={transferLoading} empty={visibleTransfers.length === 0}>
                 <AreaChart data={visibleTransfers} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gFt" x1="0" y1="0" x2="0" y2="1">
@@ -599,9 +702,11 @@ function AnalyticsPage() {
                   <Area type="monotone" dataKey="ft_transfers" stroke={C.purple} strokeWidth={1.5} fill="url(#gFt)" name="FT Transfers" />
                 </AreaChart>
               </ChartCard>
+              )}
 
               {/* NFT Transfers — 1 col */}
-              <ChartCard title="NFT Transfers">
+              {showChart('tokens') && (
+              <ChartCard title="NFT Transfers" loading={transferLoading} empty={visibleTransfers.length === 0}>
                 <AreaChart data={visibleTransfers} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gNft" x1="0" y1="0" x2="0" y2="1">
@@ -616,9 +721,11 @@ function AnalyticsPage() {
                   <Area type="monotone" dataKey="nft_transfers" stroke={C.pink} strokeWidth={1.5} fill="url(#gNft)" name="NFT Transfers" />
                 </AreaChart>
               </ChartCard>
+              )}
 
               {/* Failed Transactions — 1 col */}
-              <ChartCard title="Failed Transactions">
+              {showChart('transactions') && (
+              <ChartCard title="Failed Transactions" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <BarChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke={gridStroke} vertical={false} />
                   <XAxis {...xAxisProps()} />
@@ -627,11 +734,12 @@ function AnalyticsPage() {
                   <Bar dataKey="failed_tx_count" fill={C.red} fillOpacity={0.7} name="Failed Txs" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ChartCard>
+              )}
 
               {/* Staking — spans 2 cols if data exists */}
-              {epochData.length > 0 && (
+              {showChart('network') && (
                 <>
-                  <ChartCard title="Total Staked per Epoch" className="md:col-span-2">
+                  <ChartCard title="Total Staked per Epoch" className="md:col-span-2" loading={epochLoading} empty={epochData.length === 0}>
                     <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid stroke={gridStroke} vertical={false} />
                       <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
@@ -641,7 +749,7 @@ function AnalyticsPage() {
                     </LineChart>
                   </ChartCard>
 
-                  <ChartCard title="Node Count per Epoch">
+                  <ChartCard title="Node Count per Epoch" loading={epochLoading} empty={epochData.length === 0}>
                     <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid stroke={gridStroke} vertical={false} />
                       <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />

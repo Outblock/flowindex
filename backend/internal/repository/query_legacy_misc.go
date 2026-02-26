@@ -256,22 +256,41 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 			FROM raw.transactions
 			WHERE block_height >= $1 AND block_height < $2
 			  AND timestamp IS NOT NULL
+		),
+		tx_agg AS (
+			SELECT
+				DATE(t.timestamp) AS date,
+				COUNT(*) AS tx_count,
+				COUNT(*) FILTER (WHERE t.is_evm = TRUE) AS evm_tx_count,
+				COALESCE(SUM(t.gas_used), 0) AS total_gas_used,
+				COUNT(DISTINCT t.proposer_address) AS active_accounts,
+				COUNT(*) FILTER (WHERE t.error_message IS NOT NULL AND t.error_message != '') AS failed_tx_count
+			FROM raw.transactions t
+			WHERE DATE(t.timestamp) IN (SELECT d FROM affected_dates)
+			  AND t.timestamp IS NOT NULL
+			GROUP BY DATE(t.timestamp)
+		),
+		contract_agg AS (
+			SELECT DATE(b.timestamp) AS date, COUNT(*) AS new_contracts
+			FROM app.smart_contracts sc
+			JOIN raw.blocks b ON b.height = sc.first_seen_height
+			WHERE DATE(b.timestamp) IN (SELECT d FROM affected_dates)
+			  AND sc.first_seen_height IS NOT NULL
+			GROUP BY 1
 		)
-		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, updated_at)
+		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, active_accounts, new_contracts, failed_tx_count, updated_at)
 		SELECT
-			DATE(t.timestamp) AS date,
-			COUNT(*) AS tx_count,
-			COUNT(*) FILTER (WHERE t.is_evm = TRUE) AS evm_tx_count,
-			COALESCE(SUM(t.gas_used), 0) AS total_gas_used,
-			NOW() AS updated_at
-		FROM raw.transactions t
-		WHERE DATE(t.timestamp) IN (SELECT d FROM affected_dates)
-		  AND t.timestamp IS NOT NULL
-		GROUP BY DATE(t.timestamp)
+			a.date, a.tx_count, a.evm_tx_count, a.total_gas_used, a.active_accounts,
+			COALESCE(c.new_contracts, 0), a.failed_tx_count, NOW()
+		FROM tx_agg a
+		LEFT JOIN contract_agg c ON c.date = a.date
 		ON CONFLICT (date) DO UPDATE SET
 			tx_count = EXCLUDED.tx_count,
 			evm_tx_count = EXCLUDED.evm_tx_count,
 			total_gas_used = EXCLUDED.total_gas_used,
+			active_accounts = EXCLUDED.active_accounts,
+			new_contracts = EXCLUDED.new_contracts,
+			failed_tx_count = EXCLUDED.failed_tx_count,
 			updated_at = NOW();
 	`, fromHeight, toHeight)
 	if err != nil {
@@ -284,28 +303,49 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 // When fullScan is true, it processes ALL transactions (used on startup);
 // otherwise it only refreshes the last 30 days (periodic tick).
 func (r *Repository) RefreshDailyStats(ctx context.Context, fullScan bool) error {
-	whereClause := "AND timestamp >= NOW() - INTERVAL '30 days'"
+	whereClause := "AND t.timestamp >= NOW() - INTERVAL '30 days'"
+	contractWhereClause := "AND b.timestamp >= NOW() - INTERVAL '30 days'"
 	if fullScan {
-		whereClause = "" // scan everything
+		whereClause = ""
+		contractWhereClause = ""
 	}
 	query := fmt.Sprintf(`
-		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, updated_at)
+		WITH tx_agg AS (
+			SELECT
+				DATE(t.timestamp) AS date,
+				COUNT(*) AS tx_count,
+				COUNT(*) FILTER (WHERE t.is_evm = TRUE) AS evm_tx_count,
+				COALESCE(SUM(t.gas_used), 0) AS total_gas_used,
+				COUNT(DISTINCT t.proposer_address) AS active_accounts,
+				COUNT(*) FILTER (WHERE t.error_message IS NOT NULL AND t.error_message != '') AS failed_tx_count
+			FROM raw.transactions t
+			WHERE t.timestamp IS NOT NULL
+			  %s
+			GROUP BY DATE(t.timestamp)
+		),
+		contract_agg AS (
+			SELECT DATE(b.timestamp) AS date, COUNT(*) AS new_contracts
+			FROM app.smart_contracts sc
+			JOIN raw.blocks b ON b.height = sc.first_seen_height
+			WHERE sc.first_seen_height IS NOT NULL
+			  %s
+			GROUP BY 1
+		)
+		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, active_accounts, new_contracts, failed_tx_count, updated_at)
 		SELECT
-			DATE(timestamp) as date,
-			COUNT(*) as tx_count,
-			COUNT(*) FILTER (WHERE is_evm = TRUE) as evm_tx_count,
-			COALESCE(SUM(gas_used), 0) as total_gas_used,
-			NOW() as updated_at
-		FROM raw.transactions
-		WHERE timestamp IS NOT NULL
-		  %s
-		GROUP BY DATE(timestamp)
+			a.date, a.tx_count, a.evm_tx_count, a.total_gas_used, a.active_accounts,
+			COALESCE(c.new_contracts, 0), a.failed_tx_count, NOW()
+		FROM tx_agg a
+		LEFT JOIN contract_agg c ON c.date = a.date
 		ON CONFLICT (date) DO UPDATE SET
 			tx_count = EXCLUDED.tx_count,
 			evm_tx_count = EXCLUDED.evm_tx_count,
 			total_gas_used = EXCLUDED.total_gas_used,
+			active_accounts = EXCLUDED.active_accounts,
+			new_contracts = EXCLUDED.new_contracts,
+			failed_tx_count = EXCLUDED.failed_tx_count,
 			updated_at = NOW();
-	`, whereClause)
+	`, whereClause, contractWhereClause)
 	_, err := r.db.Exec(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to refresh daily stats: %w", err)
