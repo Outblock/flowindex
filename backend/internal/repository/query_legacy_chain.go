@@ -220,6 +220,7 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 	args := []interface{}{}
 
 	if err == nil {
+		log.Printf("[GetTransactionByID] tx_lookup found blockHeight=%d for id=%q", blockHeight, id)
 		// Found in lookup, efficient query
 		// Note: We need to JOIN for EVM details if applicable.
 		// NOTE: raw.transactions does NOT have EVM logs. app.evm_transactions has them.
@@ -339,6 +340,7 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 			&t.EVMHash, &t.EVMFrom, &t.EVMTo, &t.EVMValue, &t.ScriptHash)
 
 	if err != nil {
+		log.Printf("[GetTransactionByID] final query failed: %v (query had %d args, blockHeight=%d)", err, len(args), blockHeight)
 		return nil, err
 	}
 
