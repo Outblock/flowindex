@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
-import { Coins, Database, Info } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Coins, Database, Info, Search, X } from 'lucide-react';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import NumberFlow from '@number-flow/react';
@@ -12,25 +12,29 @@ import { Pagination } from '../../components/Pagination';
 
 interface TokensSearch {
   page?: number;
+  search?: string;
 }
 
 export const Route = createFileRoute('/tokens/')({
   component: Tokens,
   validateSearch: (search: Record<string, unknown>): TokensSearch => ({
     page: Number(search.page) || 1,
+    search: (search.search as string) || undefined,
   }),
-  loaderDeps: ({ search: { page } }) => ({ page }),
-  loader: async ({ deps: { page } }) => {
+  loaderDeps: ({ search: { page, search } }) => ({ page, search }),
+  loader: async ({ deps: { page, search } }) => {
     const limit = 25;
     const offset = ((page ?? 1) - 1) * limit;
     try {
       await ensureHeyApiConfigured();
-      const res = await getFlowV1Ft({ query: { limit, offset } });
+      const query: any = { limit, offset };
+      if (search) query.search = search;
+      const res = await getFlowV1Ft({ query });
       const payload: any = res.data;
-      return { tokens: payload?.data || [], meta: payload?._meta || null, page };
+      return { tokens: payload?.data || [], meta: payload?._meta || null, page, search: search || '' };
     } catch (e) {
       console.error('Failed to load tokens', e);
-      return { tokens: [], meta: null, page };
+      return { tokens: [], meta: null, page, search: search || '' };
     }
   },
 })
@@ -60,8 +64,42 @@ function TokenLogo({ logo, symbol }: { logo?: string; symbol: string }) {
 }
 
 function Tokens() {
-  const { tokens, meta, page } = Route.useLoaderData();
+  const { tokens, meta, page, search: initialSearch } = Route.useLoaderData();
   const navigate = Route.useNavigate();
+
+  const [searchInput, setSearchInput] = useState(initialSearch || '');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync input when URL search changes (e.g. back/forward navigation)
+  useEffect(() => {
+    setSearchInput(initialSearch || '');
+  }, [initialSearch]);
+
+  const doSearch = useCallback((value: string) => {
+    const trimmed = value.trim();
+    navigate({ search: { page: 1, search: trimmed || undefined } });
+  }, [navigate]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doSearch(value), 300);
+  };
+
+  const handleClear = () => {
+    setSearchInput('');
+    doSearch('');
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      doSearch(searchInput);
+    }
+  };
 
   const limit = 25;
   const offset = ((page ?? 1) - 1) * limit;
@@ -76,7 +114,7 @@ function Tokens() {
   };
 
   const setPage = (newPage: number) => {
-    navigate({ search: { page: newPage } });
+    navigate({ search: { page: newPage, search: initialSearch || undefined } });
   };
 
   return (
@@ -129,6 +167,34 @@ function Tokens() {
         </div>
       </motion.div>
 
+      {/* Search bar */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+      >
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={searchInput}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Search by token name, symbol, or contract name..."
+            className="w-full pl-11 pr-10 py-3 bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green dark:focus:ring-nothing-green/50 transition-shadow"
+          />
+          {searchInput && (
+            <button
+              onClick={handleClear}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </motion.div>
+
       <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden shadow-sm dark:shadow-none">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -149,6 +215,13 @@ function Tokens() {
             </thead>
             <tbody>
               <AnimatePresence mode="popLayout">
+                {tokens.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="p-8 text-center text-sm text-zinc-500 dark:text-zinc-400 font-mono">
+                      {initialSearch ? `No tokens matching "${initialSearch}"` : 'No tokens found'}
+                    </td>
+                  </tr>
+                )}
                 {tokens.map((t: any) => {
                   const id = String(t?.id || t?.token || '');
                   const addr = normalizeHex(t?.address);

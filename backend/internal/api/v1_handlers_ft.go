@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
@@ -40,39 +41,52 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleFlowListFTTokens(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
 	sort := r.URL.Query().Get("sort")
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+
 	var tokens []models.FTToken
+	var total int64
 	var err error
-	if sort == "trending" {
-		tokens, err = s.repo.ListTrendingFTTokens(r.Context(), limit, offset)
-	} else {
-		tokens, err = s.repo.ListFTTokens(r.Context(), limit, offset)
-	}
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
 
-	total, err := s.repo.CountFTTokens(r.Context())
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if len(tokens) == 0 {
-		contracts, err := s.repo.ListFTTokenContracts(r.Context(), limit, offset)
+	if search != "" {
+		tokens, total, err = s.repo.SearchFTTokens(r.Context(), search, limit, offset)
 		if err != nil {
 			writeAPIError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		for _, row := range contracts {
-			tokens = append(tokens, models.FTToken{ContractAddress: row.Address, ContractName: row.Name})
+	} else {
+		if sort == "trending" {
+			tokens, err = s.repo.ListTrendingFTTokens(r.Context(), limit, offset)
+		} else {
+			tokens, err = s.repo.ListFTTokens(r.Context(), limit, offset)
 		}
-		if total == 0 {
-			if n, err := s.repo.CountFTTokenContracts(r.Context()); err == nil {
-				total = n
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		total, err = s.repo.CountFTTokens(r.Context())
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if len(tokens) == 0 {
+			contracts, err := s.repo.ListFTTokenContracts(r.Context(), limit, offset)
+			if err != nil {
+				writeAPIError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			for _, row := range contracts {
+				tokens = append(tokens, models.FTToken{ContractAddress: row.Address, ContractName: row.Name})
+			}
+			if total == 0 {
+				if n, err := s.repo.CountFTTokenContracts(r.Context()); err == nil {
+					total = n
+				}
 			}
 		}
 	}
+
 	out := make([]map[string]interface{}, 0, len(tokens))
 	for _, t := range tokens {
 		out = append(out, toFTListOutput(t))
