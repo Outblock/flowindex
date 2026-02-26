@@ -306,6 +306,7 @@ func (s *Server) handleAdminListContracts(w http.ResponseWriter, r *http.Request
 			"identifier":      formatTokenIdentifier(c.Address, c.Name),
 			"address":         formatAddressV1(c.Address),
 			"name":            c.Name,
+			"kind":            c.Kind,
 			"is_verified":     c.IsVerified,
 			"dependent_count": c.DependentCount,
 			"created_at":      formatTime(c.CreatedAt),
@@ -323,22 +324,39 @@ func (s *Server) handleAdminUpdateContract(w http.ResponseWriter, r *http.Reques
 	}
 
 	var body struct {
-		IsVerified *bool `json:"is_verified"`
+		IsVerified *bool   `json:"is_verified"`
+		Kind       *string `json:"kind"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if body.IsVerified == nil {
-		writeAPIError(w, http.StatusBadRequest, "is_verified field is required")
+	if body.IsVerified == nil && body.Kind == nil {
+		writeAPIError(w, http.StatusBadRequest, "at least one of is_verified or kind is required")
 		return
 	}
 
-	if err := s.repo.SetContractVerified(r.Context(), address, name, *body.IsVerified); err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err.Error())
-		return
+	if body.IsVerified != nil {
+		if err := s.repo.SetContractVerified(r.Context(), address, name, *body.IsVerified); err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
-	writeAPIResponse(w, map[string]interface{}{"ok": true, "identifier": formatTokenIdentifier(address, name), "is_verified": *body.IsVerified}, nil, nil)
+	if body.Kind != nil {
+		if err := s.repo.SetContractKind(r.Context(), address, name, *body.Kind); err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	resp := map[string]interface{}{"ok": true, "identifier": formatTokenIdentifier(address, name)}
+	if body.IsVerified != nil {
+		resp["is_verified"] = *body.IsVerified
+	}
+	if body.Kind != nil {
+		resp["kind"] = *body.Kind
+	}
+	writeAPIResponse(w, resp, nil, nil)
 }
 
 func (s *Server) handleAdminRefreshDependentCounts(w http.ResponseWriter, r *http.Request) {

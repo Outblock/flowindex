@@ -483,6 +483,14 @@ func (r *Repository) SetContractVerified(ctx context.Context, address, name stri
 	return err
 }
 
+// SetContractKind sets the kind field on a smart contract.
+func (r *Repository) SetContractKind(ctx context.Context, address, name, kind string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE app.smart_contracts SET kind = $3, updated_at = now()
+		WHERE address = $1 AND name = $2`, hexToBytes(address), name, kind)
+	return err
+}
+
 // AdminListContracts lists smart contracts for admin panel with optional search and verified filter.
 func (r *Repository) AdminListContracts(ctx context.Context, search string, limit, offset int, verified string) ([]models.SmartContract, error) {
 	clauses := []string{}
@@ -510,6 +518,7 @@ func (r *Repository) AdminListContracts(ctx context.Context, search string, limi
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(sc.address, 'hex') AS address, sc.name, '', COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
 		       COALESCE(sc.is_verified, false),
+		       COALESCE(sc.kind, ''),
 		       COALESCE(sc.dependent_count, 0),
 		       sc.created_at,
 		       sc.updated_at
@@ -524,7 +533,7 @@ func (r *Repository) AdminListContracts(ctx context.Context, search string, limi
 	var out []models.SmartContract
 	for rows.Next() {
 		var c models.SmartContract
-		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.IsVerified, &c.DependentCount, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.IsVerified, &c.Kind, &c.DependentCount, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

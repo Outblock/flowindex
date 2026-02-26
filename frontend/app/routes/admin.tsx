@@ -205,19 +205,6 @@ function ContractsPanel({ token }: { token: string }) {
 
   useEffect(() => { fetchContracts() }, [fetchContracts])
 
-  const toggleVerified = async (identifier: string, current: boolean) => {
-    try {
-      await adminFetch(`admin/contracts/${identifier}`, token, {
-        method: 'PUT',
-        body: JSON.stringify({ is_verified: !current }),
-      })
-      toast.success(`${identifier} ${!current ? 'verified' : 'unverified'}`)
-      setItems(prev => prev.map(c => c.identifier === identifier ? { ...c, is_verified: !current } : c))
-    } catch (e: any) {
-      toast.error(e.message)
-    }
-  }
-
   const refreshCounts = async () => {
     setRefreshing(true)
     try {
@@ -256,54 +243,131 @@ function ContractsPanel({ token }: { token: string }) {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
-              <th className="p-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Identifier</th>
-              <th className="p-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest text-right">Dependents</th>
-              <th className="p-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest text-center">Verified</th>
-              <th className="p-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={4} className="p-8 text-center text-zinc-500 text-sm"><Loader2 className="w-5 h-5 animate-spin inline-block" /></td></tr>
-            ) : items.length === 0 ? (
-              <tr><td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">No contracts found</td></tr>
-            ) : items.map((c: any) => (
-              <tr key={c.identifier} className="border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                <td className="p-3">
-                  <Link to={`/contracts/${c.identifier}` as any} className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline">
-                    {c.identifier}
-                  </Link>
-                </td>
-                <td className="p-3 text-right font-mono text-sm text-zinc-900 dark:text-white">
-                  {Number(c.dependent_count || 0).toLocaleString()}
-                </td>
-                <td className="p-3 text-center">
-                  {c.is_verified ? <VerifiedBadge size={16} /> : <span className="text-zinc-400">—</span>}
-                </td>
-                <td className="p-3 text-right">
-                  <button
-                    onClick={() => toggleVerified(c.identifier, c.is_verified)}
-                    className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-mono transition-colors ${
-                      c.is_verified
-                        ? 'border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10'
-                        : 'border border-nothing-green/50 text-nothing-green-dark dark:text-nothing-green hover:bg-nothing-green/10'
-                    }`}
-                  >
-                    {c.is_verified ? 'Unverify' : 'Verify'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="p-3 border-t border-zinc-200 dark:border-white/5">
-          <Pagination currentPage={page} onPageChange={setPage} hasNext={items.length === limit} />
+      {loading ? (
+        <div className="p-8 text-center text-zinc-500 text-sm"><Loader2 className="w-5 h-5 animate-spin inline-block" /></div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-zinc-500 font-mono text-center py-8">No contracts found.</p>
+      ) : items.map((c: any) => (
+        <ContractRow key={c.identifier} item={c} token={token} onUpdate={(updated) => {
+          setItems(prev => prev.map(x => x.identifier === c.identifier ? { ...x, ...updated } : x))
+        }} />
+      ))}
+      {!loading && items.length > 0 && (
+        <Pagination currentPage={page} onPageChange={setPage} hasNext={items.length === limit} />
+      )}
+    </div>
+  )
+}
+
+function ContractRow({ item, token, onUpdate }: { item: any; token: string; onUpdate: (updated: any) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [isVerified, setIsVerified] = useState(Boolean(item.is_verified))
+  const [kind, setKind] = useState(item.kind || '')
+
+  const toggleVerified = async () => {
+    const next = !isVerified
+    try {
+      await adminFetch(`admin/contracts/${encodeURIComponent(item.identifier)}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ is_verified: next }),
+      })
+      setIsVerified(next)
+      onUpdate({ is_verified: next })
+      toast.success(`${item.identifier} ${next ? 'verified' : 'unverified'}`)
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await adminFetch(`admin/contracts/${encodeURIComponent(item.identifier)}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ kind: kind || '' }),
+      })
+      onUpdate({ kind })
+      toast.success(`Updated ${item.identifier}`)
+      setEditing(false)
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const kindBadge = (k: string) => {
+    if (!k) return null
+    const colors = k === 'FT'
+      ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300'
+      : 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300'
+    return <span className={`px-1.5 py-0.5 text-[10px] uppercase tracking-widest font-mono font-bold ${colors}`}>{k}</span>
+  }
+
+  return (
+    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Avatar size={32} name={item.identifier} variant="marble" colors={colorsFromAddress(item.address)} />
+          <div>
+            <div className="flex items-center gap-1.5">
+              <Link to={`/contracts/${item.identifier}` as any} className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline font-semibold">
+                {item.identifier}
+              </Link>
+              {isVerified && <VerifiedBadge size={14} />}
+              {kindBadge(kind)}
+            </div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+              {Number(item.dependent_count || 0).toLocaleString()} dependents
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={toggleVerified} title={isVerified ? 'Unverify' : 'Verify'}
+            className={`px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-mono font-bold transition-colors ${
+              isVerified
+                ? 'bg-nothing-green/20 text-nothing-green-dark dark:text-nothing-green border border-nothing-green/30'
+                : 'border border-zinc-200 dark:border-white/10 text-zinc-400 hover:text-nothing-green hover:border-nothing-green/30'
+            }`}>
+            <CircleCheck className="w-3.5 h-3.5" />
+          </button>
+          {editing ? (
+            <>
+              <button onClick={handleSave} disabled={saving}
+                className="flex items-center gap-1 px-3 py-1.5 bg-nothing-green text-black text-xs uppercase tracking-widest font-mono font-bold hover:bg-nothing-green/90 transition-colors disabled:opacity-50">
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                Save
+              </button>
+              <button onClick={() => { setEditing(false); setKind(item.kind || '') }}
+                className="flex items-center gap-1 px-3 py-1.5 border border-zinc-200 dark:border-white/10 text-xs uppercase tracking-widest font-mono text-zinc-500 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                <X className="w-3 h-3" /> Cancel
+              </button>
+            </>
+          ) : (
+            <button onClick={() => setEditing(true)}
+              className="px-3 py-1.5 border border-zinc-200 dark:border-white/10 text-xs uppercase tracking-widest font-mono text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+              Edit
+            </button>
+          )}
         </div>
       </div>
+      {editing && (
+        <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-white/5">
+          <div className="max-w-xs">
+            <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Kind</label>
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value)}
+              className="w-full px-3 py-1.5 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-nothing-green"
+            >
+              <option value="">None</option>
+              <option value="FT">FT</option>
+              <option value="NFT">NFT</option>
+            </select>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
