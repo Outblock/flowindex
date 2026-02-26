@@ -493,7 +493,10 @@ func main() {
 	}
 
 	api.BuildCommit = BuildCommit
-	apiServer := api.NewServer(repo, flowClient, apiPort, startBlock)
+	backfillProgress := api.NewBackfillProgress()
+	apiServer := api.NewServer(repo, flowClient, apiPort, startBlock, func(s *api.Server) {
+		s.SetBackfillProgress(backfillProgress)
+	})
 
 	// 4. Run
 	ctx, cancel := context.WithCancel(context.Background())
@@ -771,6 +774,9 @@ func main() {
 			log.Printf("[analytics_backfill] Starting backward from tip=%d to target=%d (months=%d chunk=%d sleep=%dms)",
 				tip, targetHeight, backfillMonths, backfillChunk, backfillSleepMs)
 
+			// Initialize backfill progress for API visibility.
+			backfillProgress.Init(tip, targetHeight)
+
 			// Process backward: from tip down to targetHeight in chunks.
 			processed := uint64(0)
 			startTime := time.Now()
@@ -823,6 +829,7 @@ func main() {
 					chunkFrom, chunkTo, processed, speed, remaining/60, chunkFrom)
 
 				cursor = chunkFrom
+				backfillProgress.Update(cursor, processed, speed)
 
 				// Throttle to avoid overloading the DB.
 				if backfillSleepMs > 0 {
@@ -830,6 +837,7 @@ func main() {
 				}
 			}
 
+			backfillProgress.MarkDone()
 			log.Printf("[analytics_backfill] Complete! Processed %d blocks from %d down to %d in %s",
 				processed, tip, targetHeight, time.Since(startTime).Round(time.Second))
 		}()

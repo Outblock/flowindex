@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Activity, HardDrive, Server, Layers, Info, Square, AlertTriangle, BarChart3 } from 'lucide-react';
+import { Database, Activity, HardDrive, Server, Layers, Info, Square, AlertTriangle, BarChart3, ArrowDown } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured, fetchStatus as fetchStatusApi, fetchGcpVmStatus } from '../api/heyapi';
 
@@ -332,6 +332,8 @@ function Stats() {
         { key: 'daily_stats_worker', label: 'Daily Stats' },
         { key: 'analytics_deriver_worker', label: 'Analytics Deriver' },
     ];
+    // Analytics backfill progress (backward from tip)
+    const backfill = status?.analytics_backfill;
     // Queue-based workers (not block-range driven)
     const queueWorkers = [
         { key: 'nft_item_metadata_worker', label: 'NFT Item Metadata' },
@@ -1045,6 +1047,76 @@ function Stats() {
                                     </div>
                                     <p className="text-[9px] text-zinc-400 mt-3">Standalone analytics workers (not in derivers). Process large block ranges with heavy aggregation queries. Gaps in analytics charts indicate these workers haven't processed those block ranges yet.</p>
                                 </div>
+
+                                {/* Section 4.5: Analytics Backfill Progress */}
+                                {backfill && backfill.enabled && (
+                                    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+                                        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <ArrowDown className="h-3.5 w-3.5" />
+                                            Analytics Backfill
+                                            <span className={`ml-auto text-[9px] font-bold uppercase tracking-wider ${backfill.done ? 'text-green-500' : 'text-orange-500'}`}>
+                                                {backfill.done ? 'COMPLETE' : 'RUNNING'}
+                                            </span>
+                                            <div className={`h-1.5 w-1.5 rounded-full ${backfill.done ? 'bg-green-500' : 'bg-orange-400 animate-pulse'}`} />
+                                        </h2>
+
+                                        {/* Main progress bar */}
+                                        <div className="h-3 bg-zinc-200 dark:bg-white/5 rounded-full mb-3 overflow-hidden relative">
+                                            <div
+                                                className="h-full bg-gradient-to-r from-orange-400 to-amber-400 rounded-full transition-all duration-1000 ease-out"
+                                                style={{ width: `${Math.min(100, backfill.progress || 0)}%` }}
+                                            />
+                                            <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-zinc-700 dark:text-zinc-300">
+                                                {(backfill.progress || 0).toFixed(1)}%
+                                            </span>
+                                        </div>
+
+                                        {/* Height range visualization */}
+                                        <div className="flex items-center gap-2 mb-3 text-[10px] font-mono text-zinc-500">
+                                            <span className="text-zinc-400">Target</span>
+                                            <span className="text-zinc-900 dark:text-white">#{(backfill.target_height || 0).toLocaleString()}</span>
+                                            <div className="flex-1 h-px bg-zinc-200 dark:bg-white/10 relative">
+                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 h-2 w-0.5 bg-orange-400" title="Current cursor" />
+                                            </div>
+                                            <span className="text-orange-500 font-bold">#{(backfill.current_height || 0).toLocaleString()}</span>
+                                            <div className="flex-1 h-px bg-orange-300/30 dark:bg-orange-400/20" />
+                                            <span className="text-zinc-900 dark:text-white">#{(backfill.tip_height || 0).toLocaleString()}</span>
+                                            <span className="text-zinc-400">Tip</span>
+                                        </div>
+
+                                        {/* Stats grid */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-3 rounded-sm">
+                                                <div className="text-[9px] text-zinc-400 uppercase tracking-wider mb-1">Processed</div>
+                                                <div className="text-sm font-bold font-mono text-zinc-900 dark:text-white">
+                                                    <NumberFlow value={backfill.processed || 0} />
+                                                    <span className="text-[9px] text-zinc-400 ml-1">/ {((backfill.total || 0) / 1_000_000).toFixed(1)}M</span>
+                                                </div>
+                                            </div>
+                                            <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-3 rounded-sm">
+                                                <div className="text-[9px] text-zinc-400 uppercase tracking-wider mb-1">Speed</div>
+                                                <div className="text-sm font-bold font-mono text-zinc-900 dark:text-white">
+                                                    <NumberFlow value={backfill.speed || 0} format={{ minimumFractionDigits: 0, maximumFractionDigits: 0 }} />
+                                                    <span className="text-[9px] text-zinc-400 ml-1">b/s</span>
+                                                </div>
+                                            </div>
+                                            <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-3 rounded-sm">
+                                                <div className="text-[9px] text-zinc-400 uppercase tracking-wider mb-1">Remaining</div>
+                                                <div className="text-sm font-bold font-mono text-zinc-900 dark:text-white">
+                                                    {((backfill.remaining || 0) / 1_000_000).toFixed(2)}M
+                                                </div>
+                                            </div>
+                                            <div className="bg-zinc-50 dark:bg-black/30 border border-zinc-200 dark:border-white/10 p-3 rounded-sm">
+                                                <div className="text-[9px] text-zinc-400 uppercase tracking-wider mb-1">ETA</div>
+                                                <div className="text-sm font-bold font-mono text-zinc-900 dark:text-white">
+                                                    {backfill.done ? 'Done' : backfill.eta_seconds > 0 ? formatDuration(backfill.eta_seconds) : 'N/A'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-[9px] text-zinc-400 mt-3">Backward backfill from chain tip to {((backfill.total || 0) / 2_600_000).toFixed(0)} months ago. Processes daily_stats and analytics.daily_metrics in {(backfill.total > 0 ? Math.ceil(backfill.total / 5000) : 0).toLocaleString()} chunks of 5,000 blocks.</p>
+                                    </div>
+                                )}
 
                                 {/* Section 5: Queue Workers */}
                                 <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">

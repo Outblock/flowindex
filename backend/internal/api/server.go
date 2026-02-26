@@ -362,6 +362,7 @@ func (s *Server) buildStatusPayload(ctx context.Context, includeRanges bool) ([]
 		"checkpoint_timestamps":  checkpointTimestamps,
 		"error_summary":          errorSummary,
 		"build_commit":           BuildCommit,
+		"analytics_backfill":     s.backfillProgress.Snapshot(),
 	}
 
 	payload, err := json.Marshal(resp)
