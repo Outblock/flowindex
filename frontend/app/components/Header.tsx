@@ -52,8 +52,9 @@ function Header() {
       } catch {
         navigate({ to: '/accounts/$address', params: { address: query } });
       }
-    } else if (/^0x[a-fA-F0-9]{16}$/.test(query)) {
-      navigate({ to: '/accounts/$address', params: { address: query } });
+    } else if (/^(0x)?[a-fA-F0-9]{16}$/.test(query)) {
+      const address = query.startsWith('0x') ? query : `0x${query}`;
+      navigate({ to: '/accounts/$address', params: { address } });
     } else if (query.startsWith('0x')) {
       navigate({ to: '/accounts/$address', params: { address: query } });
     } else {
