@@ -221,6 +221,9 @@ type SmartContract struct {
 	BlockHeight     uint64    `json:"block_height"`
 	IsVerified      bool      `json:"is_verified"`
 	DependentCount  int       `json:"dependent_count"`
+	TokenLogo       string    `json:"token_logo,omitempty"`
+	TokenName       string    `json:"token_name,omitempty"`
+	TokenSymbol     string    `json:"token_symbol,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }

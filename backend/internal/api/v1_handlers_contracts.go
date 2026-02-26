@@ -63,6 +63,7 @@ func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request)
 	sort := strings.TrimSpace(r.URL.Query().Get("sort"))
 	sortOrder := strings.TrimSpace(r.URL.Query().Get("sort_order"))
 	body := r.URL.Query().Get("body")
+	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
 	tag := strings.TrimSpace(r.URL.Query().Get("tag"))
 	validOnly := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("valid_only"))) == "true"
@@ -96,6 +97,7 @@ func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request)
 		Name:       name,
 		NameSearch: nameSearch,
 		Body:       body,
+		Kind:       kind,
 		ValidFrom:  validFrom,
 		Sort:       sort,
 		SortOrder:  sortOrder,

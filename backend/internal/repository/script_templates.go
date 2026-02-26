@@ -533,17 +533,26 @@ func (r *Repository) AdminListContracts(ctx context.Context, search string, limi
 }
 
 // RefreshContractDependentCounts updates dependent_count on all smart_contracts
-// from app.script_imports. Returns number of rows updated.
+// by counting how many other contracts import each contract (contract-level dependents).
+// Returns number of rows updated.
 func (r *Repository) RefreshContractDependentCounts(ctx context.Context) (int64, error) {
 	tag, err := r.db.Exec(ctx, `
+		WITH imports AS (
+			SELECT sc.address, sc.name,
+			       (regexp_matches(sc.code, 'import\s+(\w+)\s+from\s+0x([0-9a-fA-F]+)', 'g')) AS m
+			FROM app.smart_contracts sc
+			WHERE sc.code IS NOT NULL AND sc.code <> ''
+		),
+		dep_counts AS (
+			SELECT decode(m[2], 'hex') AS dep_addr, m[1] AS dep_name,
+			       COUNT(DISTINCT (address, name))::int AS cnt
+			FROM imports
+			GROUP BY m[2], m[1]
+		)
 		UPDATE app.smart_contracts sc
-		SET dependent_count = COALESCE(dep.cnt, 0)
-		FROM (
-			SELECT contract_identifier, COUNT(DISTINCT script_hash)::int AS cnt
-			FROM app.script_imports
-			GROUP BY contract_identifier
-		) dep
-		WHERE dep.contract_identifier = 'A.' || encode(sc.address, 'hex') || '.' || sc.name`)
+		SET dependent_count = COALESCE(dc.cnt, 0)
+		FROM dep_counts dc
+		WHERE sc.address = dc.dep_addr AND sc.name = dc.dep_name`)
 	if err != nil {
 		return 0, err
 	}

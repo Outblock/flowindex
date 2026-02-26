@@ -476,7 +476,7 @@ func toContractOutput(contract models.SmartContract, dependentCounts ...map[stri
 	if depCount == 0 && len(dependentCounts) > 0 && dependentCounts[0] != nil {
 		depCount = dependentCounts[0][identifier]
 	}
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"id":                 identifier,
 		"identifier":         identifier,
 		"address":            formatAddressV1(contract.Address),
@@ -496,6 +496,19 @@ func toContractOutput(contract models.SmartContract, dependentCounts ...map[stri
 		"parent_contract_id": "",
 		"transaction_hash":   "",
 	}
+	if contract.Kind != "" {
+		out["kind"] = contract.Kind
+	}
+	if contract.TokenLogo != "" {
+		out["token_logo"] = unquoteString(contract.TokenLogo)
+	}
+	if contract.TokenName != "" {
+		out["token_name"] = contract.TokenName
+	}
+	if contract.TokenSymbol != "" {
+		out["token_symbol"] = contract.TokenSymbol
+	}
+	return out
 }
 
 func parseStorageOverview(raw []byte) (used uint64, capacity uint64) {

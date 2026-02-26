@@ -12,10 +12,18 @@ import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 
+const KIND_TABS = [
+    { label: 'All', value: '' },
+    { label: 'FT', value: 'FT' },
+    { label: 'NFT', value: 'NFT' },
+    { label: 'Contract', value: 'CONTRACT' },
+] as const;
+
 // Define the search params validator
 interface ContractsSearch {
     page?: number;
     query?: string;
+    kind?: string;
 }
 
 export const Route = createFileRoute('/contracts/')({
@@ -24,17 +32,20 @@ export const Route = createFileRoute('/contracts/')({
         return {
             page: Number(search.page) || 1,
             query: (search.query as string) || '',
+            kind: (search.kind as string) || '',
         }
     },
-    loaderDeps: ({ search: { page, query } }) => ({ page, query }),
-    loader: async ({ deps: { page, query } }) => {
+    loaderDeps: ({ search: { page, query, kind } }) => ({ page, query, kind }),
+    loader: async ({ deps: { page, query, kind } }) => {
         const isSSR = import.meta.env.SSR;
         const limit = 25;
         const offset = ((page || 1) - 1) * limit;
         try {
             await ensureHeyApiConfigured();
+            const q: Record<string, any> = { limit, offset, identifier: query };
+            if (kind) q.kind = kind;
             const res = await getFlowV1Contract({
-                query: { limit, offset, identifier: query },
+                query: q,
                 timeout: isSSR ? 2500 : 12000,
             });
             const payload: any = res.data;
@@ -43,18 +54,56 @@ export const Route = createFileRoute('/contracts/')({
                 meta: payload?._meta || null,
                 page,
                 query,
+                kind,
                 deferred: false,
             };
         } catch (e) {
             console.error("Failed to load contracts", e);
-            return { contracts: [], meta: null, page, query, deferred: isSSR };
+            return { contracts: [], meta: null, page, query, kind, deferred: isSSR };
         }
     }
 })
 
+function TokenLogo({ src, name, size = 20 }: { src: string; name: string; size?: number }) {
+    const [failed, setFailed] = useState(false);
+    const letter = (name || '?')[0].toUpperCase();
+    if (!src || failed) {
+        return (
+            <div
+                className="flex items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-700 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 shrink-0"
+                style={{ width: size, height: size }}
+            >
+                {letter}
+            </div>
+        );
+    }
+    return (
+        <img
+            src={src}
+            alt={name}
+            className="rounded-full shrink-0"
+            style={{ width: size, height: size }}
+            onError={() => setFailed(true)}
+        />
+    );
+}
+
+function KindBadge({ kind }: { kind: string }) {
+    if (!kind || kind === 'CONTRACT') return null;
+    const colors = kind === 'FT'
+        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+        : 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
+    return (
+        <span className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider border rounded ${colors}`}>
+            {kind}
+        </span>
+    );
+}
+
 function Contracts() {
-    const { contracts, meta, page, query, deferred } = Route.useLoaderData();
+    const { contracts, meta, page, query, kind, deferred } = Route.useLoaderData();
     const navigate = Route.useNavigate();
+    const search = Route.useSearch();
     const [searchQuery, setSearchQuery] = useState(query); // Local state for input
     const [contractsData, setContractsData] = useState<any[]>(contracts);
     const [contractsMeta, setContractsMeta] = useState<any>(meta);
@@ -87,8 +136,10 @@ function Contracts() {
             setContractsLoading(true);
             try {
                 await ensureHeyApiConfigured();
+                const q: Record<string, any> = { limit, offset, identifier: query };
+                if (kind) q.kind = kind;
                 const res = await getFlowV1Contract({
-                    query: { limit, offset, identifier: query },
+                    query: q,
                     timeout: 12000,
                 });
                 if (cancelled) return;
@@ -108,7 +159,7 @@ function Contracts() {
         return () => {
             cancelled = true;
         };
-    }, [deferred, limit, offset, query]);
+    }, [deferred, limit, offset, query, kind]);
 
     const normalizeHex = (value: any) => {
         if (!value) return '';
@@ -119,12 +170,18 @@ function Contracts() {
     const submitQuery = (e: any) => {
         e.preventDefault();
         const next = String(searchQuery || '').trim();
-        navigate({ search: { page: 1, query: next } });
+        navigate({ search: { page: 1, query: next, kind } });
     };
 
     const setPage = (newPage: number) => {
-        navigate({ search: { page: newPage, query } });
+        navigate({ search: { page: newPage, query, kind } });
     };
+
+    const setKind = (newKind: string) => {
+        navigate({ search: { page: 1, query, kind: newKind } });
+    };
+
+    const activeKind = kind || '';
 
     return (
         <div className="container mx-auto px-4 py-8 space-y-8">
@@ -176,6 +233,28 @@ function Contracts() {
                     Apply
                 </button>
             </motion.form>
+
+            {/* Category Tabs */}
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.08 }}
+                className="flex items-center gap-2"
+            >
+                {KIND_TABS.map((tab) => (
+                    <button
+                        key={tab.value}
+                        onClick={() => setKind(tab.value)}
+                        className={`px-4 py-1.5 text-xs uppercase tracking-widest font-semibold border rounded-full transition-colors ${
+                            activeKind === tab.value
+                                ? 'border-nothing-green bg-nothing-green/10 text-nothing-green-dark dark:text-nothing-green'
+                                : 'border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-white/20'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </motion.div>
 
             {/* Stats */}
             <motion.div
@@ -232,6 +311,10 @@ function Contracts() {
                                     const abs = createdAt ? formatAbsoluteTime(createdAt) : '';
                                     const depCount = Number(c?.import_count || c?.imported_count || 0);
                                     const isVerified = Boolean(c?.is_verified);
+                                    const contractKind = String(c?.kind || '');
+                                    const tokenLogo = String(c?.token_logo || '');
+                                    const tokenName = String(c?.token_name || '');
+                                    const contractName = String(c?.name || '');
 
                                     return (
                                         <motion.tr
@@ -242,14 +325,18 @@ function Contracts() {
                                             className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
                                         >
                                             <td className="p-4">
-                                                <div className="flex items-center gap-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    {(tokenLogo || tokenName) && (
+                                                        <TokenLogo src={tokenLogo} name={tokenName || contractName} size={20} />
+                                                    )}
                                                     <Link
                                                         to={`/contracts/${identifier}` as any}
-                                                        className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                                        className="font-mono text-sm text-zinc-900 dark:text-white hover:underline"
                                                         title={identifier}
                                                     >
                                                         {identifier}
                                                     </Link>
+                                                    <KindBadge kind={contractKind} />
                                                     {isVerified && <VerifiedBadge size={14} />}
                                                 </div>
                                             </td>
@@ -262,7 +349,7 @@ function Contracts() {
                                             </td>
                                             <td className="p-4 text-right">
                                                 <span className="font-mono text-sm text-zinc-900 dark:text-white">
-                                                    {depCount > 0 ? depCount.toLocaleString() : '—'}
+                                                    {depCount > 0 ? depCount.toLocaleString() : '\u2014'}
                                                 </span>
                                             </td>
                                             <td className="p-4">
@@ -281,7 +368,7 @@ function Contracts() {
                                                         {lastUpdatedHeight.toLocaleString()}
                                                     </Link>
                                                 ) : (
-                                                    <span className="font-mono text-sm text-zinc-500">—</span>
+                                                    <span className="font-mono text-sm text-zinc-500">{'\u2014'}</span>
                                                 )}
                                             </td>
                                         </motion.tr>

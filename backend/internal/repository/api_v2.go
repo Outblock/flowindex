@@ -713,6 +713,7 @@ type ContractListFilter struct {
 	Name       string
 	NameSearch string // ILIKE keyword search on contract name
 	Body       string
+	Kind       string // FT, NFT, or empty for all
 	ValidFrom  *uint64
 	Sort       string
 	SortOrder  string
@@ -750,6 +751,14 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 		args = append(args, int64(*f.ValidFrom))
 		arg++
 	}
+	switch strings.ToUpper(strings.TrimSpace(f.Kind)) {
+	case "FT":
+		clauses = append(clauses, "sc.kind = 'FT'")
+	case "NFT":
+		clauses = append(clauses, "sc.kind = 'NFT'")
+	case "CONTRACT":
+		clauses = append(clauses, "(sc.kind IS NULL OR sc.kind = '' OR sc.kind NOT IN ('FT','NFT'))")
+	}
 
 	where := ""
 	if len(clauses) > 0 {
@@ -784,9 +793,15 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 		SELECT encode(sc.address, 'hex') AS address, sc.name, COALESCE(sc.code,''), COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
 		       COALESCE(sc.is_verified, false),
 		       COALESCE(sc.dependent_count, 0),
+		       COALESCE(sc.kind, ''),
+		       COALESCE(ft.logo::text, nft.square_image::text, ''),
+		       COALESCE(ft.name, nft.name, ''),
+		       COALESCE(ft.symbol, nft.symbol, ''),
 		       sc.created_at,
 		       sc.updated_at
 		FROM app.smart_contracts sc
+		LEFT JOIN app.ft_tokens ft ON ft.contract_address = sc.address AND ft.contract_name = sc.name
+		LEFT JOIN app.nft_collections nft ON nft.contract_address = sc.address AND nft.contract_name = sc.name
 		`+where+`
 		ORDER BY `+orderBy+`
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
@@ -797,7 +812,7 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 	var out []models.SmartContract
 	for rows.Next() {
 		var c models.SmartContract
-		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.IsVerified, &c.DependentCount, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.IsVerified, &c.DependentCount, &c.Kind, &c.TokenLogo, &c.TokenName, &c.TokenSymbol, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

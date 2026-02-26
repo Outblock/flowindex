@@ -772,15 +772,9 @@ func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIden
 		WITH candidates AS (
 			SELECT tc.transaction_id, tc.block_height
 			FROM app.tx_contracts tc
-			WHERE tc.contract_identifier = $1
-			ORDER BY tc.block_height DESC NULLS LAST
+			WHERE tc.contract_identifier = $1 AND tc.block_height IS NOT NULL
+			ORDER BY tc.block_height DESC
 			LIMIT $2 OFFSET $3
-		),
-		page AS (
-			SELECT c.transaction_id,
-			       COALESCE(c.block_height, tl.block_height) AS block_height
-			FROM candidates c
-			LEFT JOIN raw.tx_lookup tl ON tl.id = c.transaction_id AND c.block_height IS NULL
 		)
 		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
 		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
@@ -791,8 +785,8 @@ func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIden
 		       t.timestamp, t.timestamp AS created_at,
 		       COALESCE(m.event_count, t.event_count) AS event_count,
 		       COALESCE(t.script_hash, '') AS script_hash
-		FROM page p
-		JOIN raw.transactions t ON t.id = p.transaction_id AND t.block_height = p.block_height
+		FROM candidates c
+		JOIN raw.transactions t ON t.id = c.transaction_id AND t.block_height = c.block_height
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
 		ORDER BY t.block_height DESC, t.transaction_index DESC`, contractIdentifier, limit, offset)
 	if err != nil {
