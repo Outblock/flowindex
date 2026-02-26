@@ -9,6 +9,7 @@ import { normalizeAddress } from '../../../../components/account/accountUtils';
 import { NFTImage, NFTMetadata, apiItemToCadenceFormat } from '../../../../components/NFTDetailContent';
 import { NFTTimeline } from '../../../../components/NFTTimeline';
 import { cn } from '../../../../lib/utils';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 
 type ItemTab = 'detail' | 'history';
 
@@ -93,63 +94,89 @@ function NFTItemInner() {
         </button>
       </div>
 
-      {/* NFT Detail Card — Image left, tabbed right panel */}
-      <GlassCard className="overflow-hidden p-0 bg-white dark:bg-zinc-900">
+      {/* Header: Image + Name/ID */}
+      <GlassCard className="overflow-hidden p-0 mb-0 bg-white dark:bg-zinc-900">
         <div className="flex flex-col md:flex-row w-full">
-          {/* Left: Image */}
+          {/* Image */}
           <NFTImage
             nft={nft}
             collectionId={nftType}
-            className="w-full md:w-auto md:h-[min(80vh,700px)] md:aspect-square"
+            className="w-full md:w-64 md:h-64 lg:w-80 lg:h-80"
           />
 
-          {/* Right: Tabbed panel */}
-          <div className="flex-1 min-w-0 flex flex-col max-h-[60vh] md:max-h-[min(80vh,700px)]">
-            {/* Tab bar */}
-            <div className="flex border-b border-zinc-200 dark:border-white/10 bg-zinc-50/50 dark:bg-white/[0.02] flex-shrink-0">
-              {tabs.map(({ id, label, icon: Icon }) => {
-                const isActive = activeTab === id;
-                return (
-                  <button
-                    key={id}
-                    onClick={() => setActiveTab(id)}
-                    className={cn(
-                      "relative flex-1 px-4 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2",
-                      isActive
-                        ? "text-zinc-900 dark:text-white"
-                        : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                    )}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="itemPageTab"
-                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 dark:bg-white"
-                        transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                      />
-                    )}
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </button>
-                );
-              })}
+          {/* Name / ID / Collection */}
+          <div className="flex-1 min-w-0 p-6 flex flex-col justify-center">
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">
+              {nft?.display?.name || `#${nft?.tokenId}`}
+            </h1>
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <span className="bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 px-2 py-1 text-xs font-mono">
+                #{nft?.tokenId}
+              </span>
+              <span className="text-xs text-zinc-500">{collectionName}</span>
             </div>
-
-            {/* Tab content */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {activeTab === 'detail' && (
-                <NFTMetadata nft={nft} collectionName={collectionName} />
-              )}
-
-              {activeTab === 'history' && (
-                <NFTTimeline
-                  transfers={transfers}
-                  currentOwner={owner || undefined}
-                />
-              )}
+            <div className="flex items-center gap-1 text-xs text-zinc-400 font-mono">
+              <span className="truncate">{nftType}</span>
+              <CopyButton
+                content={nftType}
+                variant="ghost"
+                size="xs"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              />
             </div>
           </div>
         </div>
       </GlassCard>
+
+      {/* Tabs */}
+      <div className="mt-6 space-y-6">
+        <div className="sticky top-4 z-50">
+          <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto relative">
+            {tabs.map(({ id, label, icon: Icon }) => {
+              const isActive = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={cn(
+                    "relative px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap z-10",
+                    isActive ? "text-white dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                  )}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="itemPageTab"
+                      className="absolute inset-0 bg-zinc-900 dark:bg-white -z-10 shadow-md"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                    />
+                  )}
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="min-h-[400px]">
+          {/* Detail Tab */}
+          {activeTab === 'detail' && (
+            <GlassCard>
+              <NFTMetadata nft={nft} collectionName={collectionName} />
+            </GlassCard>
+          )}
+
+          {/* History Tab */}
+          {activeTab === 'history' && (
+            <GlassCard>
+              <NFTTimeline
+                transfers={transfers}
+                currentOwner={owner || undefined}
+              />
+            </GlassCard>
+          )}
+        </div>
+      </div>
     </>
   );
 }
