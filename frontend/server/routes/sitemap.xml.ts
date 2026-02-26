@@ -43,7 +43,7 @@ interface ApiResponse<T> {
   data: T[];
 }
 
-async function fetchAll<T>(endpoint: string, limit = 500): Promise<T[]> {
+async function fetchAll<T>(endpoint: string, limit = 100): Promise<T[]> {
   const items: T[] = [];
   let offset = 0;
   // Safety cap at 10k items
@@ -96,7 +96,7 @@ async function buildSitemap(): Promise<string> {
   }
 
   // Contracts (top 1000)
-  const contracts = await fetchAll<{ id: string }>('/flow/contract', 500);
+  const contracts = await fetchAll<{ id: string }>('/flow/contract');
   for (const c of contracts) {
     if (c.id) {
       urls.push(urlEntry(`${SITE}/contracts/${encodeURIComponent(c.id)}`, 'weekly', '0.5'));
