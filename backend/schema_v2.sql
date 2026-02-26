@@ -906,6 +906,24 @@ CREATE TABLE IF NOT EXISTS app.tokenomics_snapshots (
 );
 
 -- ═══════════════════════════════════════════════════════════════════════════════
+-- DAILY BALANCE DELTAS (used by daily_balance_worker for balance history charts)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS app.daily_balance_deltas (
+    address           BYTEA NOT NULL,
+    contract_address  BYTEA NOT NULL,
+    contract_name     TEXT NOT NULL DEFAULT '',
+    date              DATE NOT NULL,
+    delta             NUMERIC(78,8) NOT NULL DEFAULT 0,
+    tx_count          INT NOT NULL DEFAULT 0,
+    last_height       BIGINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (address, contract_address, contract_name, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_balance_deltas_date
+    ON app.daily_balance_deltas (address, contract_address, contract_name, date DESC);
+
+-- ═══════════════════════════════════════════════════════════════════════════════
 -- DEFI TABLES (restored — accidentally removed in 227dbe6)
 -- ═══════════════════════════════════════════════════════════════════════════════
 
