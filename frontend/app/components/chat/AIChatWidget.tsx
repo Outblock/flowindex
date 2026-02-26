@@ -11,6 +11,10 @@ import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import {
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 
 SyntaxHighlighter.registerLanguage('sql', sql);
 SyntaxHighlighter.registerLanguage('swift', swift);
@@ -403,6 +407,122 @@ function CadenceToolPart({ part }: { part: any }) {
   );
 }
 
+/* ── Chart Renderer ── */
+
+const CHART_COLORS = [
+  '#00ef8b', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899',
+  '#10b981', '#6366f1', '#f97316', '#14b8a6',
+];
+
+function ChartToolPart({ part }: { part: any }) {
+  const isDone = part.state === 'output-available' || part.state === 'result';
+  const isError = part.state === 'output-error';
+  const result = isDone ? part.output : null;
+
+  if (!isDone && !isError) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-[10px] text-zinc-400">
+        <Loader2 size={12} className="animate-spin" />
+        <span className="uppercase tracking-widest font-bold">Creating chart...</span>
+      </div>
+    );
+  }
+
+  if (isError || !result) {
+    return (
+      <div className="px-3 py-2 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
+        {isError ? (part.errorText || 'Chart creation failed') : 'No chart data'}
+      </div>
+    );
+  }
+
+  const { chartType, title, labels, datasets } = result;
+
+  // Transform data into recharts format
+  const chartData = labels?.map((label: string, i: number) => {
+    const point: Record<string, unknown> = { name: label };
+    datasets?.forEach((ds: { label: string; data: number[] }) => {
+      point[ds.label] = ds.data[i];
+    });
+    return point;
+  }) ?? [];
+
+  return (
+    <div className="my-2 rounded-sm border border-zinc-200 dark:border-white/10 overflow-hidden">
+      {title && (
+        <div className="px-3 py-2 bg-zinc-50 dark:bg-white/[0.02] border-b border-zinc-200 dark:border-white/10">
+          <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">{title}</span>
+        </div>
+      )}
+      <div className="p-3 bg-white dark:bg-zinc-950" style={{ height: 240 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {chartType === 'pie' || chartType === 'doughnut' ? (
+            <PieChart>
+              <Pie
+                data={chartData.map((d: any, i: number) => ({ name: d.name, value: d[datasets?.[0]?.label] ?? 0, fill: CHART_COLORS[i % CHART_COLORS.length] }))}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={chartType === 'doughnut' ? 50 : 0}
+                outerRadius={80}
+                strokeWidth={1}
+                stroke="transparent"
+              >
+                {chartData.map((_: any, i: number) => (
+                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{ fontSize: 11, background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2 }}
+                itemStyle={{ color: '#a1a1aa' }}
+              />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+            </PieChart>
+          ) : chartType === 'line' ? (
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#71717a' }} />
+              <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
+              <Tooltip
+                contentStyle={{ fontSize: 11, background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2 }}
+                itemStyle={{ color: '#a1a1aa' }}
+              />
+              {datasets?.map((ds: { label: string }, i: number) => (
+                <Line key={ds.label} type="monotone" dataKey={ds.label} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} />
+              ))}
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+            </LineChart>
+          ) : (
+            <BarChart data={chartData} layout={chartType === 'horizontalBar' ? 'vertical' : 'horizontal'}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              {chartType === 'horizontalBar' ? (
+                <>
+                  <XAxis type="number" tick={{ fontSize: 10, fill: '#71717a' }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#71717a' }} width={80} />
+                </>
+              ) : (
+                <>
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#71717a' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
+                </>
+              )}
+              <Tooltip
+                contentStyle={{ fontSize: 11, background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2 }}
+                itemStyle={{ color: '#a1a1aa' }}
+              />
+              {datasets?.map((ds: { label: string }, i: number) => (
+                <Bar key={ds.label} dataKey={ds.label} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[2, 2, 0, 0]} />
+              ))}
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 /* ── Chat Message ── */
 
 function ChatMessage({ message }: { message: UIMessage }) {
@@ -443,10 +563,19 @@ function ChatMessage({ message }: { message: UIMessage }) {
               const name = toolPart.toolName ?? toolPart.type?.split('-').slice(1).join('-') ?? '';
               if (name === 'run_cadence') return <CadenceToolPart key={i} part={toolPart} />;
               if (name === 'run_sql' || name === 'runSQL' || name === 'run_flowindex_sql' || name === 'run_evm_sql') return <SqlToolPart key={i} part={toolPart} />;
+              if (name === 'createChart') return <ChartToolPart key={i} part={toolPart} />;
               // Generic tool fallback
+              const toolDone = toolPart.state === 'output-available' || toolPart.state === 'result';
+              const toolErr = toolPart.state === 'output-error';
               return (
                 <div key={i} className="flex items-center gap-2 py-1 text-[10px] text-zinc-400">
-                  <Loader2 size={10} className={toolPart.state === 'call' ? 'animate-spin' : ''} />
+                  {!toolDone && !toolErr ? (
+                    <Loader2 size={10} className="animate-spin" />
+                  ) : toolErr ? (
+                    <X size={10} className="text-red-400" />
+                  ) : (
+                    <Check size={10} className="text-nothing-green" />
+                  )}
                   <span className="uppercase tracking-widest">{name}</span>
                 </div>
               );
