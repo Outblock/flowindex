@@ -456,6 +456,46 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 	return out, nil
 }
 
+func (r *Repository) SearchFTTokens(ctx context.Context, query string, limit, offset int) ([]models.FTToken, int64, error) {
+	pattern := "%" + query + "%"
+	var total int64
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM app.ft_tokens
+		WHERE COALESCE(name,'') ILIKE $1
+		   OR COALESCE(symbol,'') ILIKE $1
+		   OR COALESCE(contract_name,'') ILIKE $1
+		   OR encode(contract_address, 'hex') ILIKE $1`, pattern).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT `+ftTokenSelectCols+`, COALESCE(h.holder_count, 0)
+		FROM app.ft_tokens ft
+		LEFT JOIN (
+			SELECT contract_address, contract_name, COUNT(*) AS holder_count
+			FROM app.ft_holdings WHERE balance > 0
+			GROUP BY contract_address, contract_name
+		) h ON h.contract_address = ft.contract_address AND h.contract_name = ft.contract_name
+		WHERE COALESCE(ft.name,'') ILIKE $3
+		   OR COALESCE(ft.symbol,'') ILIKE $3
+		   OR COALESCE(ft.contract_name,'') ILIKE $3
+		   OR encode(ft.contract_address, 'hex') ILIKE $3
+		ORDER BY COALESCE(h.holder_count, 0) DESC, ft.contract_address ASC
+		LIMIT $1 OFFSET $2`, limit, offset, pattern)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var out []models.FTToken
+	for rows.Next() {
+		t, err := scanFTTokenWithHolders(rows.Scan)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, t)
+	}
+	return out, total, rows.Err()
+}
+
 const ftTokenSelectCols = `encode(ft.contract_address, 'hex') AS contract_address, COALESCE(ft.contract_name,''), COALESCE(ft.name,''), COALESCE(ft.symbol,''), COALESCE(ft.decimals,0),
 		       COALESCE(ft.description,''), COALESCE(ft.external_url,''), COALESCE(ft.logo::text, ''), COALESCE(ft.vault_path,''), COALESCE(ft.receiver_path,''), COALESCE(ft.balance_path,''), COALESCE(ft.socials::text, ''), COALESCE(ft.evm_address, ''), COALESCE(ft.total_supply,0)::text, COALESCE(ft.is_verified, false), ft.updated_at`
 
