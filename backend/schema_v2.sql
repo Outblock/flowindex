@@ -692,6 +692,8 @@ CREATE TABLE IF NOT EXISTS app.script_imports (
     contract_identifier TEXT NOT NULL,
     PRIMARY KEY (script_hash, contract_identifier)
 );
+CREATE INDEX IF NOT EXISTS idx_script_imports_contract
+  ON app.script_imports (contract_identifier);
 
 CREATE TABLE IF NOT EXISTS app.tx_tags (
     transaction_id BYTEA NOT NULL,

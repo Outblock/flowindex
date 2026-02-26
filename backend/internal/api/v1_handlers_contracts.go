@@ -106,16 +106,10 @@ func (s *Server) handleFlowListContracts(w http.ResponseWriter, r *http.Request)
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// Batch-fetch dependent counts for all contracts in the result
-	identifiers := make([]string, 0, len(contracts))
-	for _, c := range contracts {
-		identifiers = append(identifiers, formatTokenIdentifier(c.Address, c.Name))
-	}
-	depCounts, _ := s.repo.GetContractDependentCounts(r.Context(), identifiers)
-
+	// dependent_count is now pre-computed in smart_contracts, no need to batch-fetch
 	out := make([]map[string]interface{}, 0, len(contracts))
 	for _, c := range contracts {
-		out = append(out, toContractOutput(c, depCounts))
+		out = append(out, toContractOutput(c))
 	}
 	if total, err := s.repo.GetTotalContracts(r.Context()); err == nil && total > 0 {
 		meta["count"] = total
@@ -189,13 +183,6 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Batch-fetch dependent counts
-	cIdentifiers := make([]string, 0, len(contracts))
-	for _, c := range contracts {
-		cIdentifiers = append(cIdentifiers, formatTokenIdentifier(c.Address, c.Name))
-	}
-	cDepCounts, _ := s.repo.GetContractDependentCounts(r.Context(), cIdentifiers)
-
 	out := make([]map[string]interface{}, 0, len(contracts))
 	for _, c := range contracts {
 		// If contract in DB but code is empty, fetch on-demand from RPC
@@ -213,7 +200,7 @@ func (s *Server) handleFlowGetContract(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		out = append(out, toContractOutput(c, cDepCounts))
+		out = append(out, toContractOutput(c))
 	}
 	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}
 	if validFrom != nil {
