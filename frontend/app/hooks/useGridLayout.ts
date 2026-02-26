@@ -2,11 +2,11 @@ import { useState, useCallback, useEffect } from 'react'
 import type { Layout, ResponsiveLayouts } from 'react-grid-layout'
 import { DEFAULT_LAYOUTS } from '../routes/analytics-layout'
 
-const STORAGE_KEY = 'flowscan-analytics-grid-layout'
+const DEFAULT_STORAGE_KEY = 'flowscan-analytics-grid-layout'
 
-function loadLayouts(): ResponsiveLayouts | null {
+function loadLayouts(storageKey: string): ResponsiveLayouts | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     if (!raw) return null
     const parsed = JSON.parse(raw)
     // Basic validation: must be object with at least one breakpoint array
@@ -20,9 +20,12 @@ function loadLayouts(): ResponsiveLayouts | null {
   }
 }
 
-export function useGridLayout() {
+export function useGridLayout(
+  storageKey: string = DEFAULT_STORAGE_KEY,
+  defaultLayouts: ResponsiveLayouts = DEFAULT_LAYOUTS,
+) {
   const [layouts, setLayouts] = useState<ResponsiveLayouts>(() => {
-    return loadLayouts() ?? DEFAULT_LAYOUTS
+    return loadLayouts(storageKey) ?? defaultLayouts
   })
 
   const [isMobile, setIsMobile] = useState(() => {
@@ -40,20 +43,20 @@ export function useGridLayout() {
   const onLayoutChange = useCallback((_layout: Layout, allLayouts: ResponsiveLayouts) => {
     setLayouts(allLayouts)
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(allLayouts))
+      localStorage.setItem(storageKey, JSON.stringify(allLayouts))
     } catch {
       // storage full — silently ignore
     }
-  }, [])
+  }, [storageKey])
 
   const resetLayout = useCallback(() => {
-    setLayouts(DEFAULT_LAYOUTS)
+    setLayouts(defaultLayouts)
     try {
-      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(storageKey)
     } catch {
       // ignore
     }
-  }, [])
+  }, [storageKey, defaultLayouts])
 
   return { layouts, onLayoutChange, resetLayout, isMobile }
 }

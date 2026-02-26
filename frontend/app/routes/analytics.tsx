@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect, useMemo, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
+import type { Layout } from 'react-grid-layout'
 import {
   AreaChart,
   Area,
@@ -27,7 +28,7 @@ import {
   ensureHeyApiConfigured,
   getBaseURL,
 } from '../api/heyapi'
-import { CARD_DEFS } from './analytics-layout'
+import { CARD_DEFS, KPI_DEFS, DEFAULT_KPI_LAYOUTS } from './analytics-layout'
 import { useGridLayout } from '../hooks/useGridLayout'
 
 export const Route = createFileRoute('/analytics')({
@@ -291,7 +292,7 @@ function yAxisProps(formatter?: (v: number) => string) {
   }
 }
 
-/* ── KPI card ── */
+/* ── KPI card (compact + expanded) ── */
 
 function KpiCard({
   label,
@@ -300,6 +301,11 @@ function KpiCard({
   deltaLabel,
   invertColor,
   loading,
+  draggable,
+  expanded,
+  chartNode,
+  chartLoading,
+  chartEmpty,
 }: {
   label: string
   value: string
@@ -307,6 +313,11 @@ function KpiCard({
   deltaLabel?: string
   invertColor?: boolean
   loading?: boolean
+  draggable?: boolean
+  expanded?: boolean
+  chartNode?: ReactNode
+  chartLoading?: boolean
+  chartEmpty?: boolean
 }) {
   let deltaColor = 'text-zinc-400'
   let deltaText = ''
@@ -321,9 +332,41 @@ function KpiCard({
     const sign = delta > 0 ? '+' : ''
     deltaText = deltaLabel ?? `${sign}${fmtNum(delta)}`
   }
+
+  if (expanded && chartNode) {
+    return (
+      <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-4 h-full flex flex-col hover:border-nothing-green/30 transition-colors">
+        <div className="flex items-center gap-2 mb-2">
+          {draggable && (
+            <GripVertical className="drag-handle w-3 h-3 text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 flex-shrink-0" />
+          )}
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">{label}</span>
+          <span className="text-sm font-bold text-zinc-900 dark:text-white font-mono ml-auto">{value}</span>
+          {deltaText && <span className={`text-xs font-mono ${deltaColor}`}>{deltaText}</span>}
+        </div>
+        <div className="flex-1 min-h-0">
+          {chartLoading ? (
+            <ChartSkeleton />
+          ) : chartEmpty ? (
+            <EmptyState />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              {chartNode as React.ReactElement}
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-4 flex flex-col justify-between min-h-[100px] hover:border-nothing-green/30 transition-colors">
-      <span className="text-[10px] uppercase tracking-wider text-zinc-500 dark:text-zinc-500 font-medium">{label}</span>
+    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-4 flex flex-col justify-between h-full hover:border-nothing-green/30 transition-colors">
+      <div className="flex items-center gap-2">
+        {draggable && (
+          <GripVertical className="drag-handle w-3 h-3 text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 flex-shrink-0" />
+        )}
+        <span className="text-[10px] uppercase tracking-wider text-zinc-500 dark:text-zinc-500 font-medium">{label}</span>
+      </div>
       {loading ? (
         <div className="h-5 w-20 bg-zinc-200 dark:bg-white/10 rounded animate-pulse mt-2" />
       ) : (
@@ -562,16 +605,121 @@ function AnalyticsPage() {
   /* ── grid layout ── */
 
   const { layouts, onLayoutChange, resetLayout, isMobile } = useGridLayout()
+  const { layouts: kpiLayouts, onLayoutChange: kpiOnLayoutChangeBase, resetLayout: resetKpiLayout } =
+    useGridLayout('flowscan-analytics-kpi-layout', DEFAULT_KPI_LAYOUTS)
   const { width, containerRef, mounted } = useContainerWidth()
+
+  /* ── KPI size tracking for expand-to-chart ── */
+
+  const [kpiSizes, setKpiSizes] = useState<Map<string, { w: number; h: number }>>(new Map())
+
+  const onKpiLayoutChange = useCallback((layout: Layout, allLayouts: ResponsiveLayouts) => {
+    kpiOnLayoutChangeBase(layout, allLayouts)
+    const sizes = new Map<string, { w: number; h: number }>()
+    for (const item of layout) {
+      sizes.set(item.i, { w: item.w, h: item.h })
+    }
+    setKpiSizes(sizes)
+  }, [kpiOnLayoutChangeBase])
+
+  const resetAllLayouts = useCallback(() => {
+    resetLayout()
+    resetKpiLayout()
+    setKpiSizes(new Map())
+  }, [resetLayout, resetKpiLayout])
 
   /* ── visibility map for conditional cards ── */
 
-  const visibilityMap = useMemo(() => ({
+  const visibilityMap = useMemo<Record<string, boolean>>(() => ({
     showNewAccounts,
     showDefiMetrics,
     showBridgeMetrics,
     showEpochPayout,
-  }), [showNewAccounts, showDefiMetrics, showBridgeMetrics, showEpochPayout])
+    showCOANewAccounts,
+    showEVMActiveAddrs,
+  }), [showNewAccounts, showDefiMetrics, showBridgeMetrics, showEpochPayout, showCOANewAccounts, showEVMActiveAddrs])
+
+  /* ── KPI data map ── */
+
+  const kpiDataMap = useMemo(() => {
+    const m = new Map<string, { value: string; delta?: number | null; deltaLabel?: string; invertColor?: boolean; loading?: boolean }>()
+
+    m.set('kpi-total-tx', {
+      value: totals ? fmtComma(totals.transaction_count) : '--',
+      delta: latest?.tx_count,
+      deltaLabel: latest ? `+${fmtNum(latest.tx_count)} today` : undefined,
+      loading: totalsLoading,
+    })
+    m.set('kpi-active-accounts', {
+      value: latest ? fmtComma(latest.active_accounts) : '--',
+      delta: delta(latest?.active_accounts, prev?.active_accounts),
+    })
+    m.set('kpi-gas-burned', {
+      value: latest ? fmtNum(latest.total_gas_used) : '--',
+      delta: delta(latest?.total_gas_used, prev?.total_gas_used),
+    })
+    m.set('kpi-error-rate', {
+      value: latest ? fmtPct(latest.error_rate) : '--',
+      delta: delta(latest?.error_rate, prev?.error_rate),
+      deltaLabel:
+        latest && prev
+          ? `${latest.error_rate - prev.error_rate > 0 ? '+' : ''}${(latest.error_rate - prev.error_rate).toFixed(2)}pp`
+          : undefined,
+      invertColor: true,
+    })
+    m.set('kpi-flow-price', {
+      value: netStats ? fmtPrice(netStats.price) : '--',
+      delta: netStats?.price_change_24h,
+      deltaLabel: netStats
+        ? `${netStats.price_change_24h > 0 ? '+' : ''}${netStats.price_change_24h.toFixed(2)}%`
+        : undefined,
+      loading: netStatsLoading,
+    })
+    m.set('kpi-contracts', {
+      value: latest ? fmtComma(latest.new_contracts) : '--',
+      delta: delta(latest?.new_contracts, prev?.new_contracts),
+    })
+    m.set('kpi-new-accounts', {
+      value: latest ? fmtComma(latest.new_accounts) : '--',
+      delta: delta(latest?.new_accounts, prev?.new_accounts),
+    })
+    m.set('kpi-coa-new', {
+      value: latest ? fmtComma(latest.coa_new_accounts) : '--',
+      delta: delta(latest?.coa_new_accounts, prev?.coa_new_accounts),
+    })
+    m.set('kpi-evm-active', {
+      value: latest ? fmtComma(latest.evm_active_addresses) : '--',
+      delta: delta(latest?.evm_active_addresses, prev?.evm_active_addresses),
+    })
+    m.set('kpi-defi-swaps', {
+      value: latest ? fmtComma(latest.defi_swap_count) : '--',
+      delta: delta(latest?.defi_swap_count, prev?.defi_swap_count),
+    })
+    m.set('kpi-bridge-evm', {
+      value: latest ? fmtComma(latest.bridge_to_evm_txs) : '--',
+      delta: delta(latest?.bridge_to_evm_txs, prev?.bridge_to_evm_txs),
+    })
+    m.set('kpi-epoch-payout', (() => {
+      const d = latest && prev ? toNum(latest.epoch_payout_total) - toNum(prev.epoch_payout_total) : null
+      const sign = d != null && d > 0 ? '+' : ''
+      return {
+        value: latest ? fmtComma(Math.round(toNum(latest.epoch_payout_total))) : '--',
+        delta: d,
+        deltaLabel: d != null ? `${sign}${fmtComma(Math.round(d))}` : undefined,
+      }
+    })())
+
+    return m
+  }, [totals, latest, prev, netStats, totalsLoading, netStatsLoading])
+
+  /* ── visible KPI cards ── */
+
+  const visibleKpis = useMemo(() => {
+    return KPI_DEFS.filter((kpi) => {
+      if (kpi.visibleKey && !visibilityMap[kpi.visibleKey]) return false
+      return true
+    })
+  }, [visibilityMap])
 
   /* ── chart map — maps card key to chart JSX ── */
 
@@ -889,6 +1037,46 @@ function AnalyticsPage() {
       ),
     })
 
+    m.set('coa-new-accounts', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gCoa" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.purple} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.purple} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.purple }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
+          <Area type="monotone" dataKey="coa_new_accounts" stroke={C.purple} strokeWidth={1.5} fill="url(#gCoa)" name="COA New Accounts" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('evm-active-addresses', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gEvmActive" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.blue }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
+          <Area type="monotone" dataKey="evm_active_addresses" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvmActive)" name="EVM Active Addresses" />
+        </AreaChart>
+      ),
+    })
+
     return m
   }, [visibleDaily, visibleTransfers, visiblePrice, evmPctData, epochData, dailyLoading, transferLoading, priceLoading, epochLoading, gridStroke])
 
@@ -916,7 +1104,7 @@ function AnalyticsPage() {
           </h1>
           <div className="flex items-center gap-2">
             <button
-              onClick={resetLayout}
+              onClick={resetAllLayouts}
               className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-white bg-zinc-100 dark:bg-nothing-dark hover:bg-zinc-200 dark:hover:bg-white/10 transition-all"
               title="Reset layout"
             >
@@ -959,105 +1147,49 @@ function AnalyticsPage() {
         </div>
 
         {/* Content renders progressively as each API responds */}
-          <>
-            {/* KPI cards row */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiCard
-                label="Total Transactions"
-                value={totals ? fmtComma(totals.transaction_count) : '--'}
-                delta={latest?.tx_count}
-                deltaLabel={latest ? `+${fmtNum(latest.tx_count)} today` : undefined}
-                loading={totalsLoading}
-              />
-              <KpiCard
-                label="Active Accounts (24h)"
-                value={latest ? fmtComma(latest.active_accounts) : '--'}
-                delta={delta(latest?.active_accounts, prev?.active_accounts)}
-              />
-              <KpiCard
-                label="Gas Burned (24h)"
-                value={latest ? fmtNum(latest.total_gas_used) : '--'}
-                delta={delta(latest?.total_gas_used, prev?.total_gas_used)}
-              />
-              <KpiCard
-                label="Tx Error Rate (24h)"
-                value={latest ? fmtPct(latest.error_rate) : '--'}
-                delta={delta(latest?.error_rate, prev?.error_rate)}
-                deltaLabel={
-                  latest && prev
-                    ? `${(latest.error_rate - prev.error_rate) > 0 ? '+' : ''}${(latest.error_rate - prev.error_rate).toFixed(2)}pp`
-                    : undefined
-                }
-                invertColor
-              />
-              <KpiCard
-                label="FLOW Price"
-                value={netStats ? fmtPrice(netStats.price) : '--'}
-                delta={netStats?.price_change_24h}
-                deltaLabel={
-                  netStats
-                    ? `${netStats.price_change_24h > 0 ? '+' : ''}${netStats.price_change_24h.toFixed(2)}%`
-                    : undefined
-                }
-                loading={netStatsLoading}
-              />
-              <KpiCard
-                label="Contracts Deployed"
-                value={latest ? fmtComma(latest.new_contracts) : '--'}
-                delta={delta(latest?.new_contracts, prev?.new_contracts)}
-              />
-              {showNewAccounts && (
-                <KpiCard
-                  label="New Accounts (24h)"
-                  value={latest ? fmtComma(latest.new_accounts) : '--'}
-                  delta={delta(latest?.new_accounts, prev?.new_accounts)}
-                />
-              )}
-              {showCOANewAccounts && (
-                <KpiCard
-                  label="COA New (24h)"
-                  value={latest ? fmtComma(latest.coa_new_accounts) : '--'}
-                  delta={delta(latest?.coa_new_accounts, prev?.coa_new_accounts)}
-                />
-              )}
-              {showEVMActiveAddrs && (
-                <KpiCard
-                  label="EVM Active Addr (24h)"
-                  value={latest ? fmtComma(latest.evm_active_addresses) : '--'}
-                  delta={delta(latest?.evm_active_addresses, prev?.evm_active_addresses)}
-                />
-              )}
-              {showDefiMetrics && (
-                <KpiCard
-                  label="DeFi Swaps (24h)"
-                  value={latest ? fmtComma(latest.defi_swap_count) : '--'}
-                  delta={delta(latest?.defi_swap_count, prev?.defi_swap_count)}
-                />
-              )}
-              {showBridgeMetrics && (
-                <KpiCard
-                  label="Bridge->EVM Txs (24h)"
-                  value={latest ? fmtComma(latest.bridge_to_evm_txs) : '--'}
-                  delta={delta(latest?.bridge_to_evm_txs, prev?.bridge_to_evm_txs)}
-                />
-              )}
-              {showEpochPayout && (() => {
-                const d = latest && prev ? toNum(latest.epoch_payout_total) - toNum(prev.epoch_payout_total) : null;
-                const sign = d != null && d > 0 ? '+' : '';
-                return (
-                  <KpiCard
-                    label="Epoch Payout"
-                    value={latest ? fmtComma(Math.round(toNum(latest.epoch_payout_total))) : '--'}
-                    delta={d}
-                    deltaLabel={d != null ? `${sign}${fmtComma(Math.round(d))}` : undefined}
-                  />
-                );
-              })()}
-            </div>
+        <div ref={containerRef}>
+          {mounted && (
+            <>
+              {/* KPI cards grid (draggable + resizable, expand to chart) */}
+              <ResponsiveGridLayout
+                width={width}
+                layouts={kpiLayouts}
+                breakpoints={{ lg: 1024, md: 768, sm: 0 }}
+                cols={{ lg: 6, md: 3, sm: 2 }}
+                rowHeight={100}
+                margin={[10, 10]}
+                onLayoutChange={onKpiLayoutChange}
+                dragConfig={isMobile ? { enabled: false, bounded: false, threshold: 3 } : { enabled: true, bounded: false, handle: '.drag-handle', threshold: 3 }}
+                resizeConfig={isMobile ? { enabled: false, handles: ['se'] } : { enabled: true, handles: ['se'] }}
+                compactor={verticalCompactor}
+              >
+                {visibleKpis.map((kpi) => {
+                  const data = kpiDataMap.get(kpi.key)
+                  const size = kpiSizes.get(kpi.key)
+                  const isExpanded = (size?.h ?? 1) >= 2
+                  const chart = kpi.chartKey ? chartMap.get(kpi.chartKey) : undefined
+                  return (
+                    <div key={kpi.key}>
+                      <KpiCard
+                        label={kpi.label}
+                        value={data?.value ?? '--'}
+                        delta={data?.delta}
+                        deltaLabel={data?.deltaLabel}
+                        invertColor={data?.invertColor}
+                        loading={data?.loading}
+                        draggable={!isMobile}
+                        expanded={isExpanded}
+                        chartNode={chart?.node}
+                        chartLoading={chart?.loading}
+                        chartEmpty={chart?.empty}
+                      />
+                    </div>
+                  )
+                })}
+              </ResponsiveGridLayout>
 
-            {/* ── Bento Grid (draggable + resizable) ── */}
-            <div ref={containerRef}>
-              {mounted && (
+              {/* ── Bento Grid (draggable + resizable) ── */}
+              <div className="mt-4">
                 <ResponsiveGridLayout
                   width={width}
                   layouts={layouts}
@@ -1086,9 +1218,10 @@ function AnalyticsPage() {
                     )
                   })}
                 </ResponsiveGridLayout>
-              )}
-            </div>
-          </>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

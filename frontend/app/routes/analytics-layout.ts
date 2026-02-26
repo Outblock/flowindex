@@ -10,6 +10,30 @@ export interface CardDef {
   visibleKey?: string
 }
 
+export interface KpiDef {
+  key: string
+  label: string
+  /** Key from chartMap to show when expanded */
+  chartKey?: string
+  /** if set, card is only visible when this returns true */
+  visibleKey?: string
+}
+
+export const KPI_DEFS: KpiDef[] = [
+  { key: 'kpi-total-tx', label: 'Total Transactions', chartKey: 'daily-tx-count' },
+  { key: 'kpi-active-accounts', label: 'Active Accounts (24h)', chartKey: 'active-accounts' },
+  { key: 'kpi-gas-burned', label: 'Gas Burned (24h)', chartKey: 'gas-burned' },
+  { key: 'kpi-error-rate', label: 'Tx Error Rate (24h)', chartKey: 'error-rate' },
+  { key: 'kpi-flow-price', label: 'FLOW Price', chartKey: 'flow-price' },
+  { key: 'kpi-contracts', label: 'Contracts Deployed', chartKey: 'contract-activity' },
+  { key: 'kpi-new-accounts', label: 'New Accounts (24h)', chartKey: 'new-accounts', visibleKey: 'showNewAccounts' },
+  { key: 'kpi-coa-new', label: 'COA New (24h)', chartKey: 'coa-new-accounts', visibleKey: 'showCOANewAccounts' },
+  { key: 'kpi-evm-active', label: 'EVM Active Addr (24h)', chartKey: 'evm-active-addresses', visibleKey: 'showEVMActiveAddrs' },
+  { key: 'kpi-defi-swaps', label: 'DeFi Swaps (24h)', chartKey: 'defi-swaps', visibleKey: 'showDefiMetrics' },
+  { key: 'kpi-bridge-evm', label: 'Bridge->EVM Txs (24h)', chartKey: 'bridge-evm', visibleKey: 'showBridgeMetrics' },
+  { key: 'kpi-epoch-payout', label: 'Epoch Payout', chartKey: 'epoch-payout', visibleKey: 'showEpochPayout' },
+]
+
 export const CARD_DEFS: CardDef[] = [
   { key: 'daily-tx-count', title: 'Daily Transaction Count', defaultW: 2, tabs: ['transactions'] },
   { key: 'active-accounts', title: 'Active Accounts', defaultW: 1, tabs: ['network'] },
@@ -69,4 +93,39 @@ export const DEFAULT_LAYOUTS: ResponsiveLayouts = {
   lg: buildLayout(3, false),
   md: buildLayout(2, false),
   sm: buildLayout(1, true),
+}
+
+/** Build KPI layout — starts as single-row cards, resizable to chart height */
+function buildKpiLayout(cols: number, isStatic: boolean): LayoutItem[] {
+  const layout: LayoutItem[] = []
+  let x = 0
+  let y = 0
+
+  for (const kpi of KPI_DEFS) {
+    if (x >= cols) {
+      x = 0
+      y++
+    }
+    layout.push({
+      i: kpi.key,
+      x,
+      y,
+      w: 1,
+      h: 1,
+      minW: 1,
+      maxW: Math.min(3, cols),
+      minH: 1,
+      maxH: 3,
+      static: isStatic,
+    })
+    x++
+  }
+
+  return layout
+}
+
+export const DEFAULT_KPI_LAYOUTS: ResponsiveLayouts = {
+  lg: buildKpiLayout(6, false),
+  md: buildKpiLayout(3, false),
+  sm: buildKpiLayout(2, true),
 }
