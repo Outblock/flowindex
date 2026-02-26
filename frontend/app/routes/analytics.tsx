@@ -49,7 +49,6 @@ interface DailyRow {
   bridge_to_evm_txs: number
 }
 
-type DailyModuleRow = Pick<DailyRow, 'date'> & Partial<Omit<DailyRow, 'date'>>
 
 interface TransferRow {
   date: string
@@ -126,16 +125,6 @@ function yTickFmt(v: number): string {
   if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
   if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)}K`
   return String(v)
-}
-
-function mergeDailyRows(base: DailyRow[], moduleRows: DailyModuleRow[]): DailyRow[] {
-  if (base.length === 0 || moduleRows.length === 0) return base
-  const modByDate = new Map(moduleRows.map((r) => [r.date, r]))
-  return base.map((row) => {
-    const mod = modByDate.get(row.date)
-    if (!mod) return row
-    return { ...row, ...mod }
-  })
 }
 
 /* ── constants ── */
@@ -401,7 +390,44 @@ function AnalyticsPage() {
           fetchAnalyticsDailyModule(module, fromStr)
             .then((rows) => {
               if (cancelled || !rows || rows.length === 0) return
-              setDailyData((prev) => mergeDailyRows(prev, rows as DailyModuleRow[]))
+              const modByDate = new Map((rows as DailyRow[]).map((r) => [r.date, r]))
+              setDailyData((prev) => prev.map((row) => {
+                const mod = modByDate.get(row.date)
+                if (!mod) return row
+                if (module === 'accounts') {
+                  return {
+                    ...row,
+                    new_accounts: mod.new_accounts,
+                    coa_new_accounts: mod.coa_new_accounts,
+                  }
+                }
+                if (module === 'evm') {
+                  return {
+                    ...row,
+                    evm_active_addresses: mod.evm_active_addresses,
+                  }
+                }
+                if (module === 'defi') {
+                  return {
+                    ...row,
+                    defi_swap_count: mod.defi_swap_count,
+                    defi_unique_traders: mod.defi_unique_traders,
+                  }
+                }
+                if (module === 'epoch') {
+                  return {
+                    ...row,
+                    epoch_payout_total: mod.epoch_payout_total,
+                  }
+                }
+                if (module === 'bridge') {
+                  return {
+                    ...row,
+                    bridge_to_evm_txs: mod.bridge_to_evm_txs,
+                  }
+                }
+                return row
+              }))
             })
             .catch(() => {})
         }
