@@ -175,6 +175,12 @@ const TOOLTIP_STYLE = {
 
 const TICK_PROPS = { fill: C.tick, fontFamily: 'monospace' }
 
+/** Default tooltip formatter — adds comma separators to numbers */
+function fmtTooltipValue(v: unknown, name: string): [string, string] {
+  const n = toNum(v)
+  return [n.toLocaleString(), name]
+}
+
 /* ── tab types ── */
 
 type AnalyticsTab = 'all' | 'transactions' | 'tokens' | 'network' | 'price'
@@ -590,7 +596,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
           <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
           <Area type="monotone" dataKey="cadence_tx_count" stroke={C.green} strokeWidth={1.5} fill="url(#gCadence)" name="Cadence" />
           <Area type="monotone" dataKey="evm_tx_count" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvm)" name="EVM" />
@@ -612,7 +618,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
           <Area type="monotone" dataKey="active_accounts" stroke={C.green} strokeWidth={1.5} fill="url(#gAccounts)" name="Active Accounts" />
         </AreaChart>
       ),
@@ -632,7 +638,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
           <Area type="monotone" dataKey="new_accounts" stroke={C.blue} strokeWidth={1.5} fill="url(#gNewAccounts)" name="New Accounts" />
         </AreaChart>
       ),
@@ -686,7 +692,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
           <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
           <Line type="monotone" dataKey="defi_swap_count" stroke={C.purple} strokeWidth={1.5} dot={false} name="Swaps" />
           <Line type="monotone" dataKey="defi_unique_traders" stroke={C.pink} strokeWidth={1.5} dot={false} name="Unique Traders" />
@@ -719,7 +725,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} formatter={fmtTooltipValue} />
           <Bar dataKey="bridge_to_evm_txs" fill={C.blue} fillOpacity={0.7} name="Bridge Txs" radius={[3, 3, 0, 0]} />
         </BarChart>
       ),
@@ -739,7 +745,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
           <Area type="monotone" dataKey="total_gas_used" stroke={C.amber} strokeWidth={1.5} fill="url(#gGas)" name="Gas Used" />
         </AreaChart>
       ),
@@ -759,7 +765,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
           <Area type="monotone" dataKey="avg_gas_per_tx" stroke={C.amber} strokeWidth={1.5} fill="url(#gAvgGas)" name="Avg Gas/Tx" />
         </AreaChart>
       ),
@@ -799,7 +805,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.purple }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.purple }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
           <Area type="monotone" dataKey="ft_transfers" stroke={C.purple} strokeWidth={1.5} fill="url(#gFt)" name="FT Transfers" />
         </AreaChart>
       ),
@@ -819,7 +825,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.pink }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.pink }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
           <Area type="monotone" dataKey="nft_transfers" stroke={C.pink} strokeWidth={1.5} fill="url(#gNft)" name="NFT Transfers" />
         </AreaChart>
       ),
@@ -833,7 +839,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ fill: 'rgba(239,68,68,0.06)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ fill: 'rgba(239,68,68,0.06)' }} formatter={fmtTooltipValue} />
           <Bar dataKey="failed_tx_count" fill={C.red} fillOpacity={0.7} name="Failed Txs" radius={[3, 3, 0, 0]} />
         </BarChart>
       ),
@@ -861,7 +867,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.blue }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.blue }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={fmtTooltipValue} />
           <Line type="monotone" dataKey="total_nodes" stroke={C.blue} strokeWidth={1.5} dot={false} name="Nodes" />
         </LineChart>
       ),
@@ -875,7 +881,7 @@ function AnalyticsPage() {
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis {...xAxisProps()} />
           <YAxis {...yAxisProps()} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(0,239,139,0.06)' }} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(0,239,139,0.06)' }} formatter={fmtTooltipValue} />
           <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
           <Bar dataKey="new_contracts" fill={C.green} fillOpacity={0.7} name="New Contracts" radius={[3, 3, 0, 0]} stackId="contracts" />
           <Bar dataKey="contract_updates" fill={C.blue} fillOpacity={0.7} name="Contract Updates" radius={[3, 3, 0, 0]} stackId="contracts" />
