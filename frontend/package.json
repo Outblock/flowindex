@@ -22,7 +22,7 @@
     "@onflow/fcl": "^1.21.9",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-slot": "^1.2.4",
-    "@resvg/resvg-js": "^2.6.2",
+    "@resvg/resvg-wasm": "^2.6.2",
     "@tanstack/react-router": "^1.159.4",
     "@tanstack/react-start": "^1.159.4",
     "ai": "^6.0.101",

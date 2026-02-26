@@ -30,7 +30,7 @@ export const Route = createRootRoute({
             { name: 'twitter:image', content: 'https://flowindex.io/og/home' },
         ],
         links: [
-            { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+            { rel: 'icon', href: '/favicon.png', type: 'image/png' },
         ],
     }),
     component: RootComponent,
