@@ -1,59 +1,49 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { AddressLink } from '../../../../components/AddressLink';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Package, ArrowRightLeft, Eye, Clock } from 'lucide-react';
-import NumberFlow from '@number-flow/react';
+import { createFileRoute } from '@tanstack/react-router'
+import { motion } from 'framer-motion';
+import { Package, Info, Clock } from 'lucide-react';
 import { ensureHeyApiConfigured } from '../../../../api/heyapi';
 import { getFlowV1NftByNftTypeItemById, getFlowV1NftByNftTypeItemByIdTransfer } from '../../../../api/gen/find';
-import { Pagination } from '../../../../components/Pagination';
 import { RouteErrorBoundary } from '../../../../components/RouteErrorBoundary';
 import { GlassCard } from '../../../../components/ui/GlassCard';
 import { normalizeAddress } from '../../../../components/account/accountUtils';
-import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
-import { NFTDetailContent, apiItemToCadenceFormat } from '../../../../components/NFTDetailContent';
+import { NFTImage, NFTMetadata, apiItemToCadenceFormat } from '../../../../components/NFTDetailContent';
 import { NFTTimeline } from '../../../../components/NFTTimeline';
 import { cn } from '../../../../lib/utils';
 
-type ItemTab = 'overview' | 'history' | 'transfers';
+type ItemTab = 'detail' | 'history';
 
 export const Route = createFileRoute('/nfts/$nftType/item/$id')({
   component: NFTItem,
-  validateSearch: (search: Record<string, unknown>): { page?: number; tab?: ItemTab } => {
-    const page = Number(search.page) || undefined;
+  validateSearch: (search: Record<string, unknown>): { tab?: ItemTab } => {
     const tab = search.tab as string;
-    const validTabs: ItemTab[] = ['overview', 'history', 'transfers'];
+    const validTabs: ItemTab[] = ['detail', 'history'];
     return {
-      page,
       tab: validTabs.includes(tab as ItemTab) ? (tab as ItemTab) : undefined,
     };
   },
-  loader: async ({ params, location }) => {
+  loader: async ({ params }) => {
     const nftType = params.nftType;
     const id = params.id;
-    const sp = new URLSearchParams(location.search);
-    const page = Number(sp.get('page') || '1') || 1;
-    const limit = 25;
-    const offset = (page - 1) * limit;
     try {
       await ensureHeyApiConfigured();
       const [itemRes, transfersRes] = await Promise.all([
         getFlowV1NftByNftTypeItemById({ path: { nft_type: nftType, id } }),
-        getFlowV1NftByNftTypeItemByIdTransfer({ path: { nft_type: nftType, id }, query: { limit, offset } }),
+        getFlowV1NftByNftTypeItemByIdTransfer({ path: { nft_type: nftType, id }, query: { limit: 100, offset: 0 } }),
       ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const itemPayload: any = itemRes?.data;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const transfersPayload: any = transfersRes?.data;
       const row = (itemPayload?.data && itemPayload.data[0]) || null;
       return {
         item: row,
         transfers: transfersPayload?.data || [],
-        transfersMeta: transfersPayload?._meta || null,
         nftType,
         id,
-        page,
       };
     } catch (e) {
       console.error('Failed to load NFT item', e);
-      return { item: null, transfers: [], transfersMeta: null, nftType, id, page };
+      return { item: null, transfers: [], nftType, id };
     }
   },
 })
@@ -71,29 +61,23 @@ function NFTItem() {
 }
 
 function NFTItemInner() {
-  const { item, transfers, transfersMeta, nftType, page } = Route.useLoaderData();
+  const { item, transfers, nftType } = Route.useLoaderData();
   const navigate = Route.useNavigate();
   const { tab: searchTab } = Route.useSearch();
 
-  const activeTab: ItemTab = searchTab || 'overview';
+  const activeTab: ItemTab = searchTab || 'detail';
   const setActiveTab = (tab: ItemTab) => {
-    navigate({ search: (prev: any) => ({ ...prev, tab, page: tab === 'transfers' ? (prev.page || 1) : undefined }), replace: true });
-  };
-  const setPage = (newPage: number) => {
-    navigate({ search: (prev: any) => ({ ...prev, page: newPage }), replace: true });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    navigate({ search: (prev: any) => ({ ...prev, tab }), replace: true });
   };
 
   const owner = normalizeAddress(item?.current_owner || item?.owner || item?.address || '');
   const nft = apiItemToCadenceFormat(item);
-
-  const hasNext = transfersMeta?.has_more === true;
-
   const collectionName = nftType.split('.').pop() || nftType;
 
-  const tabs: { id: ItemTab; label: string; icon: typeof Eye }[] = [
-    { id: 'overview', label: 'Overview', icon: Eye },
+  const tabs: { id: ItemTab; label: string; icon: typeof Info }[] = [
+    { id: 'detail', label: 'Detail', icon: Info },
     { id: 'history', label: 'History', icon: Clock },
-    { id: 'transfers', label: 'Transfers', icon: ArrowRightLeft },
   ];
 
   return (
@@ -109,175 +93,63 @@ function NFTItemInner() {
         </button>
       </div>
 
-      {/* NFT Detail Card */}
-      <GlassCard className="overflow-hidden p-0 mb-8 bg-white dark:bg-zinc-900">
-        <NFTDetailContent nft={nft} collectionId={nftType} collectionName={collectionName} layout="row" />
-      </GlassCard>
+      {/* NFT Detail Card — Image left, tabbed right panel */}
+      <GlassCard className="overflow-hidden p-0 bg-white dark:bg-zinc-900">
+        <div className="flex flex-col md:flex-row w-full">
+          {/* Left: Image */}
+          <NFTImage
+            nft={nft}
+            collectionId={nftType}
+            className="w-full md:w-auto md:h-[min(80vh,700px)] md:aspect-square"
+          />
 
-      {/* Tabs */}
-      <div className="space-y-6">
-        <div className="sticky top-4 z-50">
-          <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto relative">
-            {tabs.map(({ id, label, icon: Icon }) => {
-              const isActive = activeTab === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setActiveTab(id)}
-                  className={cn(
-                    "relative px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap z-10",
-                    isActive ? "text-white dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
-                  )}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="itemPageTab"
-                      className="absolute inset-0 bg-zinc-900 dark:bg-white -z-10 shadow-md"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                  <Icon className="h-3.5 w-3.5" />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="min-h-[400px]">
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <div>
-              {owner && (
-                <GlassCard>
-                  <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Current Owner</p>
-                  <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
-                    <span className="flex items-center gap-1">
-                      <AddressLink address={owner} prefixLen={20} suffixLen={0} />
-                      <CopyButton
-                        content={owner}
-                        variant="ghost"
-                        size="xs"
-                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+          {/* Right: Tabbed panel */}
+          <div className="flex-1 min-w-0 flex flex-col max-h-[60vh] md:max-h-[min(80vh,700px)]">
+            {/* Tab bar */}
+            <div className="flex border-b border-zinc-200 dark:border-white/10 bg-zinc-50/50 dark:bg-white/[0.02] flex-shrink-0">
+              {tabs.map(({ id, label, icon: Icon }) => {
+                const isActive = activeTab === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setActiveTab(id)}
+                    className={cn(
+                      "relative flex-1 px-4 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2",
+                      isActive
+                        ? "text-zinc-900 dark:text-white"
+                        : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                    )}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="itemPageTab"
+                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 dark:bg-white"
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                       />
-                    </span>
-                  </p>
-                </GlassCard>
+                    )}
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tab content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {activeTab === 'detail' && (
+                <NFTMetadata nft={nft} collectionName={collectionName} />
               )}
-              {!owner && (
-                <div className="text-center text-zinc-500 italic py-16 text-sm">No owner information available.</div>
+
+              {activeTab === 'history' && (
+                <NFTTimeline
+                  transfers={transfers}
+                  currentOwner={owner || undefined}
+                />
               )}
             </div>
-          )}
-
-          {/* History Tab */}
-          {activeTab === 'history' && (
-            <GlassCard>
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2 mb-6">
-                <Clock className="w-4 h-4" />
-                Ownership Timeline
-              </h3>
-              <NFTTimeline
-                transfers={transfers}
-                currentOwner={owner || undefined}
-              />
-            </GlassCard>
-          )}
-
-          {/* Transfers Tab */}
-          {activeTab === 'transfers' && (
-            <GlassCard className="p-0 overflow-hidden">
-              <div className="p-6 border-b border-zinc-200 dark:border-white/10 flex items-center justify-between">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-                  <ArrowRightLeft className="w-4 h-4" />
-                  Transfer History
-                  <span className="ml-2 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-white/10 text-xs text-zinc-600 dark:text-zinc-400">
-                    <NumberFlow value={Number.isFinite(Number(transfersMeta?.count)) ? Number(transfersMeta.count) : transfers.length} />
-                  </span>
-                </h3>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-zinc-50/50 dark:bg-white/5">
-                    <tr>
-                      <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">From</th>
-                      <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">To</th>
-                      <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Transaction</th>
-                      <th className="px-6 py-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider text-right">Block</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                    <AnimatePresence mode="popLayout">
-                      {transfers.map((t: any) => {
-                        const tx = String(t?.transaction_hash || '');
-                        const from = normalizeAddress(t?.sender);
-                        const to = normalizeAddress(t?.receiver);
-                        const height = Number(t?.block_height || 0);
-
-                        return (
-                          <motion.tr
-                            key={`${tx}-${from}-${to}-${height}`}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            className="group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
-                          >
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <AddressLink address={from} prefixLen={20} suffixLen={0} className="text-xs" />
-                                <CopyButton
-                                  content={from}
-                                  variant="ghost"
-                                  size="xs"
-                                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                />
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <AddressLink address={to} prefixLen={20} suffixLen={0} className="text-xs" />
-                                <CopyButton
-                                  content={to}
-                                  variant="ghost"
-                                  size="xs"
-                                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                />
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              {tx ? (
-                                <Link to="/txs/$txId" params={{ txId: normalizeAddress(tx) }} search={{ tab: undefined }} className="font-mono text-xs text-nothing-green-dark dark:text-nothing-green hover:underline">
-                                  {normalizeAddress(tx).slice(0, 18)}...
-                                </Link>
-                              ) : <span className="text-zinc-300 dark:text-zinc-700">&mdash;</span>}
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <span className="font-mono text-xs text-zinc-500">
-                                {height.toLocaleString()}
-                              </span>
-                            </td>
-                          </motion.tr>
-                        );
-                      })}
-                    </AnimatePresence>
-                    {transfers.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-zinc-500 italic text-sm">
-                          No transfer history found
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="p-4 border-t border-zinc-200 dark:border-white/10 bg-zinc-50/30 dark:bg-white/5">
-                <Pagination currentPage={page} onPageChange={setPage} hasNext={hasNext} />
-              </div>
-            </GlassCard>
-          )}
+          </div>
         </div>
-      </div>
+      </GlassCard>
     </>
   );
 }
