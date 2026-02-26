@@ -490,17 +490,14 @@ func (r *Repository) refreshDailyContractStats(ctx context.Context, fullScan boo
 }
 
 // ClearDailyStatsForHeightRange deletes daily_stats rows whose dates fall within the
-// block-height range [fromHeight, toHeight). This is necessary before a backward
-// backfill because RefreshDailyStatsRange uses additive ON CONFLICT.
+// block-height range [fromHeight, toHeight). Uses raw.blocks timestamps at the
+// boundaries to determine the date range — O(2) index lookups instead of scanning
+// millions of transaction rows.
 func (r *Repository) ClearDailyStatsForHeightRange(ctx context.Context, fromHeight, toHeight uint64) error {
 	_, err := r.db.Exec(ctx, `
 		DELETE FROM app.daily_stats
-		WHERE date IN (
-			SELECT DISTINCT DATE(t.timestamp)
-			FROM raw.transactions t
-			WHERE t.block_height >= $1 AND t.block_height < $2
-			  AND t.timestamp IS NOT NULL
-		)
+		WHERE date >= (SELECT DATE(timestamp) FROM raw.blocks WHERE height >= $1 ORDER BY height ASC LIMIT 1)
+		  AND date <= (SELECT DATE(timestamp) FROM raw.blocks WHERE height < $2 ORDER BY height DESC LIMIT 1)
 	`, fromHeight, toHeight)
 	return err
 }
@@ -510,12 +507,8 @@ func (r *Repository) ClearDailyStatsForHeightRange(ctx context.Context, fromHeig
 func (r *Repository) ClearAnalyticsDailyMetricsForHeightRange(ctx context.Context, fromHeight, toHeight uint64) error {
 	_, err := r.db.Exec(ctx, `
 		DELETE FROM analytics.daily_metrics
-		WHERE date IN (
-			SELECT DISTINCT DATE(t.timestamp)
-			FROM raw.transactions t
-			WHERE t.block_height >= $1 AND t.block_height < $2
-			  AND t.timestamp IS NOT NULL
-		)
+		WHERE date >= (SELECT DATE(timestamp) FROM raw.blocks WHERE height >= $1 ORDER BY height ASC LIMIT 1)
+		  AND date <= (SELECT DATE(timestamp) FROM raw.blocks WHERE height < $2 ORDER BY height DESC LIMIT 1)
 	`, fromHeight, toHeight)
 	return err
 }
