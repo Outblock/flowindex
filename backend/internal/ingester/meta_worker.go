@@ -61,6 +61,9 @@ func (w *MetaWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint
 		}
 		kind := classifyContractCode(c.Code)
 		if kind == "" {
+			kind = classifyContractByName(c.Name)
+		}
+		if kind == "" {
 			kind = "CONTRACT"
 		}
 		contractRegistry = append(contractRegistry, models.SmartContract{
@@ -490,6 +493,18 @@ func classifyContractCode(code string) string {
 		case "NonFungibleToken":
 			return "NFT"
 		}
+	}
+	return ""
+}
+
+// classifyContractByName returns a kind hint based on well-known naming conventions.
+// Used as a fallback when contract code is unavailable (e.g., deployed before indexing).
+func classifyContractByName(name string) string {
+	if strings.HasPrefix(name, "EVMVMBridgedToken_") {
+		return "FT"
+	}
+	if strings.HasPrefix(name, "EVMVMBridgedNFT_") {
+		return "NFT"
 	}
 	return ""
 }

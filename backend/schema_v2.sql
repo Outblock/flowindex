@@ -817,4 +817,32 @@ ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_fees_burned NUMERIC(
 ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_height BIGINT;
 ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_time TIMESTAMPTZ;
 
+-- Classify EVM-bridged token contracts that were deployed before indexing started.
+-- EVMVMBridgedToken_* all implement FungibleToken; EVMVMBridgedNFT_* implement NonFungibleToken.
+UPDATE app.smart_contracts
+   SET kind = 'FT'
+ WHERE name LIKE 'EVMVMBridgedToken_%'
+   AND (kind IS NULL OR kind = 'CONTRACT');
+
+UPDATE app.smart_contracts
+   SET kind = 'NFT'
+ WHERE name LIKE 'EVMVMBridgedNFT_%'
+   AND (kind IS NULL OR kind = 'CONTRACT');
+
+-- Ensure ft_tokens entries exist for bridged FT contracts
+INSERT INTO app.ft_tokens (contract_address, contract_name)
+SELECT encode(address, 'hex'), name
+  FROM app.smart_contracts
+ WHERE name LIKE 'EVMVMBridgedToken_%'
+   AND kind = 'FT'
+ON CONFLICT (contract_address, contract_name) DO NOTHING;
+
+-- Ensure nft_collections entries exist for bridged NFT contracts
+INSERT INTO app.nft_collections (contract_address, contract_name)
+SELECT encode(address, 'hex'), name
+  FROM app.smart_contracts
+ WHERE name LIKE 'EVMVMBridgedNFT_%'
+   AND kind = 'NFT'
+ON CONFLICT (contract_address, contract_name) DO NOTHING;
+
 COMMIT;
