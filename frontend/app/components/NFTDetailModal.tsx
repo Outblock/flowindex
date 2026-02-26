@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Link } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { motion } from 'framer-motion';
 import { Info, Clock, ExternalLink, X } from 'lucide-react';
 import { GlassCard } from './ui/GlassCard';
@@ -23,6 +23,7 @@ interface NFTDetailModalProps {
 type ModalTab = 'detail' | 'history';
 
 export function NFTDetailModal({ nft, nftType, nftId, collectionId = '', collectionName, onClose }: NFTDetailModalProps) {
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<ModalTab>('detail');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [transfers, setTransfers] = useState<any[]>([]);
@@ -171,15 +172,16 @@ export function NFTDetailModal({ nft, nftType, nftId, collectionId = '', collect
                         {/* View Full Page link */}
                         {canShowTabs && (
                             <div className="px-4 py-2.5 border-t border-zinc-200 dark:border-white/10 flex justify-end flex-shrink-0">
-                                <Link
-                                    to="/nfts/$nftType/item/$id"
-                                    params={{ nftType: nftType!, id: nftId! }}
+                                <button
+                                    onClick={() => {
+                                        onClose();
+                                        navigate({ to: '/nfts/$nftType/item/$id', params: { nftType: nftType!, id: nftId! } });
+                                    }}
                                     className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                    onClick={onClose}
                                 >
                                     View Full Page
                                     <ExternalLink className="w-3 h-3" />
-                                </Link>
+                                </button>
                             </div>
                         )}
                     </div>
