@@ -543,15 +543,30 @@ function AnalyticsPage() {
 
   /* ── derived visible slices ── */
 
+  // Filter by actual calendar date, not record count — sparse data could span months
+  const dateCutoff = useMemo(() => {
+    if (rangeDays >= 9999) return ''
+    const d = new Date()
+    d.setDate(d.getDate() - rangeDays)
+    return d.toISOString().split('T')[0]
+  }, [rangeDays])
+
   const visibleDaily = useMemo(
-    () => (rangeDays >= dailyData.length ? dailyData : dailyData.slice(-rangeDays)),
-    [dailyData, rangeDays],
+    () => {
+      if (!dateCutoff) return dailyData
+      const filtered = dailyData.filter((d) => d.date >= dateCutoff)
+      return filtered.length > 0 ? filtered : dailyData.slice(-rangeDays)
+    },
+    [dailyData, rangeDays, dateCutoff],
   )
 
   const visibleTransfers = useMemo(
-    () =>
-      rangeDays >= transferData.length ? transferData : transferData.slice(-rangeDays),
-    [transferData, rangeDays],
+    () => {
+      if (!dateCutoff) return transferData
+      const filtered = transferData.filter((d) => d.date >= dateCutoff)
+      return filtered.length > 0 ? filtered : transferData.slice(-rangeDays)
+    },
+    [transferData, rangeDays, dateCutoff],
   )
 
   const visiblePrice = useMemo(() => {
@@ -563,8 +578,10 @@ function AnalyticsPage() {
     }
     const daily = Array.from(byDay, ([date, price]) => ({ date, price }))
       .sort((a, b) => a.date.localeCompare(b.date))
-    return rangeDays >= daily.length ? daily : daily.slice(-rangeDays)
-  }, [priceHistory, rangeDays])
+    if (!dateCutoff) return daily
+    const filtered = daily.filter((d) => d.date >= dateCutoff)
+    return filtered.length > 0 ? filtered : daily.slice(-rangeDays)
+  }, [priceHistory, rangeDays, dateCutoff])
 
   const evmPctData = useMemo(
     () =>
