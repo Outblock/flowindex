@@ -10,6 +10,7 @@
  *   GET /og/nft/:type         → NFT collection image
  */
 
+import { defineEventHandler, setResponseHeaders, setResponseStatus } from 'h3';
 import satori from 'satori';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
 import { readFile } from 'node:fs/promises';
