@@ -313,6 +313,7 @@ function Stats() {
         { key: 'tx_metrics_worker', label: 'TX Metrics' },
         { key: 'staking_worker', label: 'Staking' },
         { key: 'defi_worker', label: 'DeFi' },
+        { key: 'analytics_deriver_worker', label: 'Analytics' },
     ];
     // Deriver phase 2: depend on token_worker completing first
     const deriverPhase2 = [
