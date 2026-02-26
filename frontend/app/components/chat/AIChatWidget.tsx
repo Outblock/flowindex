@@ -65,7 +65,7 @@ function SqlResultTable({ result }: { result: SqlResult }) {
     <div className="rounded-sm border border-zinc-200 dark:border-white/10 overflow-hidden my-2">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-zinc-50 dark:bg-white/[0.02] border-b border-zinc-200 dark:border-white/10">
-        <span className="text-[10px] text-zinc-400 font-mono tabular-nums">
+        <span className="text-[11px] text-zinc-400 font-mono tabular-nums">
           {filtered.length} row{filtered.length !== 1 ? 's' : ''}
         </span>
         <div className="flex items-center gap-1.5">
@@ -76,12 +76,12 @@ function SqlResultTable({ result }: { result: SqlResult }) {
               placeholder="Filter..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-24 focus:w-32 pl-6 pr-2 py-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-sm text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-all"
+              className="w-24 focus:w-32 pl-6 pr-2 py-1 text-[11px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-sm text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-all"
             />
           </div>
           <button
             onClick={exportCsv}
-            className="flex items-center gap-1 px-2 py-1 text-[10px] text-zinc-500 hover:text-zinc-900 dark:hover:text-white bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-sm hover:border-zinc-400 dark:hover:border-white/20 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-[11px] text-zinc-500 hover:text-zinc-900 dark:hover:text-white bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-sm hover:border-zinc-400 dark:hover:border-white/20 transition-colors"
           >
             <Download size={10} />
             CSV
@@ -96,7 +96,7 @@ function SqlResultTable({ result }: { result: SqlResult }) {
               {result.columns.map((col) => (
                 <th
                   key={col}
-                  className="px-3 py-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-white/10 whitespace-nowrap sticky top-0 bg-zinc-50 dark:bg-zinc-900 z-10"
+                  className="px-3 py-2 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-white/10 whitespace-nowrap sticky top-0 bg-zinc-50 dark:bg-zinc-900 z-10"
                 >
                   {col}
                 </th>
@@ -112,7 +112,7 @@ function SqlResultTable({ result }: { result: SqlResult }) {
                 {result.columns.map((col) => (
                   <td
                     key={col}
-                    className="px-3 py-1.5 text-[11px] text-zinc-600 dark:text-zinc-400 whitespace-nowrap max-w-[200px] truncate font-mono"
+                    className="px-3 py-1.5 text-[12px] text-zinc-600 dark:text-zinc-400 whitespace-nowrap max-w-[200px] truncate font-mono"
                     title={String(row[col] ?? '')}
                   >
                     {formatCellValue(row[col])}
@@ -124,7 +124,7 @@ function SqlResultTable({ result }: { result: SqlResult }) {
         </table>
       </div>
       {filtered.length === 0 && (
-        <div className="py-4 text-center text-[11px] text-zinc-400">No matching rows</div>
+        <div className="py-4 text-center text-[12px] text-zinc-400">No matching rows</div>
       )}
     </div>
   );
@@ -183,7 +183,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   return (
     <div className="relative rounded-sm border border-zinc-200 dark:border-white/10 overflow-hidden my-2">
       <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-100 dark:bg-white/[0.03] border-b border-zinc-200 dark:border-white/10">
-        <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">{language}</span>
+        <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold">{language}</span>
         <button
           onClick={handleCopy}
           className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-colors"
@@ -195,13 +195,13 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
         <SyntaxHighlighter
           language={language === 'cadence' ? 'swift' : language}
           style={vscDarkPlus}
-          customStyle={{ margin: 0, padding: '12px', fontSize: '11px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
+          customStyle={{ margin: 0, padding: '12px', fontSize: '12px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
           wrapLongLines
         >
           {code}
         </SyntaxHighlighter>
       ) : (
-        <pre className="p-3 text-[11px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
+        <pre className="p-3 text-[12px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
           <code>{code}</code>
         </pre>
       )}
@@ -237,7 +237,7 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
           <ChevronRight size={12} className="text-zinc-400" />
         </motion.div>
         {icon}
-        <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold flex-1">{label}</span>
+        <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold flex-1">{label}</span>
         <button
           onClick={handleCopy}
           className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-colors p-0.5"
@@ -258,13 +258,13 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
               <SyntaxHighlighter
                 language={language === 'cadence' ? 'swift' : language}
                 style={vscDarkPlus}
-                customStyle={{ margin: 0, padding: '12px', fontSize: '11px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
+                customStyle={{ margin: 0, padding: '12px', fontSize: '12px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
                 wrapLongLines
               >
                 {code}
               </SyntaxHighlighter>
             ) : (
-              <pre className="p-3 text-[11px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
+              <pre className="p-3 text-[12px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
                 <code>{code}</code>
               </pre>
             )}
@@ -308,8 +308,8 @@ function linkifyHex(text: string): React.ReactNode {
 const markdownComponents: Components = {
   h1: ({ children }) => <h1 className="text-base font-bold text-zinc-900 dark:text-white mt-3 mb-1">{children}</h1>,
   h2: ({ children }) => <h2 className="text-sm font-bold text-zinc-900 dark:text-white mt-3 mb-1">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-[12px] font-bold text-zinc-900 dark:text-white mt-2 mb-1">{children}</h3>,
-  h4: ({ children }) => <h4 className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 mt-2 mb-0.5">{children}</h4>,
+  h3: ({ children }) => <h3 className="text-[13px] font-bold text-zinc-900 dark:text-white mt-2 mb-1">{children}</h3>,
+  h4: ({ children }) => <h4 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 mt-2 mb-0.5">{children}</h4>,
   p: ({ children }) => <p className="mb-2 last:mb-0"><AutoLinkText>{children}</AutoLinkText></p>,
   strong: ({ children }) => <strong className="font-bold text-zinc-900 dark:text-white">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
@@ -334,12 +334,12 @@ const markdownComponents: Components = {
   hr: () => <hr className="my-3 border-zinc-200 dark:border-white/10" />,
   table: ({ children }) => (
     <div className="overflow-x-auto my-2 rounded-sm border border-zinc-200 dark:border-white/10">
-      <table className="w-full text-left border-collapse text-[11px]">{children}</table>
+      <table className="w-full text-left border-collapse text-[12px]">{children}</table>
     </div>
   ),
   thead: ({ children }) => <thead className="bg-zinc-50 dark:bg-white/[0.03]">{children}</thead>,
   th: ({ children }) => (
-    <th className="px-3 py-1.5 text-[10px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-white/10 whitespace-nowrap">
+    <th className="px-3 py-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-white/10 whitespace-nowrap">
       {children}
     </th>
   ),
@@ -364,7 +364,7 @@ const markdownComponents: Components = {
         const short = codeString.length > 20 ? `${codeString.slice(0, 10)}...${codeString.slice(-8)}` : codeString;
         return (
           <a href={url} target="_blank" rel="noopener noreferrer"
-            className="text-[10px] bg-nothing-green/10 px-1 py-0.5 rounded font-mono text-nothing-green hover:underline"
+            className="text-[11px] bg-nothing-green/10 px-1 py-0.5 rounded font-mono text-nothing-green hover:underline"
             title={codeString}
           >
             {short}
@@ -374,7 +374,7 @@ const markdownComponents: Components = {
     }
 
     return (
-      <code className="text-[10px] bg-zinc-100 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-purple-600 dark:text-purple-400">
+      <code className="text-[11px] bg-zinc-100 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-purple-600 dark:text-purple-400">
         {children}
       </code>
     );
@@ -427,7 +427,7 @@ function SqlToolPart({ part }: { part: any }) {
         </div>
       )}
       {hasError && (
-        <div className="px-3 py-2 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
+        <div className="px-3 py-2 text-[12px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
           {isError ? (part.errorText || 'Query failed') : result?.error}
         </div>
       )}
@@ -465,12 +465,12 @@ function CadenceToolPart({ part }: { part: any }) {
         </div>
       )}
       {hasError && (
-        <div className="px-3 py-2 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
+        <div className="px-3 py-2 text-[12px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
           {isError ? (part.errorText || 'Script failed') : result?.error}
         </div>
       )}
       {isDone && !hasError && result?.result && (
-        <div className="px-3 py-2 text-[11px] text-zinc-300 bg-zinc-900 border border-white/10 rounded-sm font-mono whitespace-pre-wrap">
+        <div className="px-3 py-2 text-[12px] text-zinc-300 bg-zinc-900 border border-white/10 rounded-sm font-mono whitespace-pre-wrap">
           {typeof result.result === 'string' ? result.result : JSON.stringify(result.result, null, 2)}
         </div>
       )}
@@ -517,12 +517,12 @@ const CHART_TOOLTIP_STYLE: React.CSSProperties = {
   border: '1px solid rgba(255,255,255,0.1)',
   borderRadius: '6px',
   color: '#fff',
-  fontSize: '11px',
+  fontSize: '12px',
   fontFamily: 'monospace',
   padding: '6px 10px',
 };
 
-const CHART_TICK = { fontSize: 10, fill: '#71717a', fontFamily: 'monospace' };
+const CHART_TICK = { fontSize: 11, fill: '#71717a', fontFamily: 'monospace' };
 
 function chartFmtNum(n: number): string {
   if (typeof n !== 'number' || isNaN(n)) return '0';
@@ -551,7 +551,7 @@ function ChartToolPart({ part }: { part: any }) {
 
   if (!isDone && !isError) {
     return (
-      <div className="flex items-center gap-2 py-2 text-[10px] text-zinc-400">
+      <div className="flex items-center gap-2 py-2 text-[11px] text-zinc-400">
         <Loader2 size={12} className="animate-spin" />
         <span className="uppercase tracking-widest font-bold">Creating chart...</span>
       </div>
@@ -560,7 +560,7 @@ function ChartToolPart({ part }: { part: any }) {
 
   if (isError || !result) {
     return (
-      <div className="px-3 py-2 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
+      <div className="px-3 py-2 text-[12px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
         {isError ? (part.errorText || 'Chart creation failed') : 'No chart data'}
       </div>
     );
@@ -583,7 +583,7 @@ function ChartToolPart({ part }: { part: any }) {
     <div className="my-2 rounded-md border border-zinc-200 dark:border-white/10 overflow-hidden">
       {title && (
         <div className="px-3 py-2 bg-zinc-50 dark:bg-white/[0.02] border-b border-zinc-200 dark:border-white/10">
-          <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">{title}</span>
+          <span className="text-[12px] font-bold text-zinc-700 dark:text-zinc-200">{title}</span>
         </div>
       )}
       <div className="p-3 bg-white dark:bg-zinc-950" style={{ height: 260 }}>
@@ -617,7 +617,7 @@ function ChartToolPart({ part }: { part: any }) {
                 formatter={(value: any, name: any) => [chartTooltipFmt(Number(value ?? 0)), String(name)]}
               />
               <Legend
-                wrapperStyle={{ fontSize: 10, fontFamily: 'monospace' }}
+                wrapperStyle={{ fontSize: 11, fontFamily: 'monospace' }}
                 iconType="circle"
                 iconSize={8}
               />
@@ -654,7 +654,7 @@ function ChartToolPart({ part }: { part: any }) {
               ))}
               {dsCount > 1 && (
                 <Legend
-                  wrapperStyle={{ fontSize: 10, fontFamily: 'monospace' }}
+                  wrapperStyle={{ fontSize: 11, fontFamily: 'monospace' }}
                   iconType="circle"
                   iconSize={8}
                 />
@@ -700,7 +700,7 @@ function ChartToolPart({ part }: { part: any }) {
               ))}
               {dsCount > 1 && (
                 <Legend
-                  wrapperStyle={{ fontSize: 10, fontFamily: 'monospace' }}
+                  wrapperStyle={{ fontSize: 11, fontFamily: 'monospace' }}
                   iconType="circle"
                   iconSize={8}
                 />
@@ -720,7 +720,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
     return (
       <div className="flex justify-end mb-4">
         <div className="max-w-[85%] bg-nothing-green/10 border border-nothing-green/20 rounded-sm px-3 py-2">
-          <p className="text-[12px] text-zinc-700 dark:text-zinc-200 leading-relaxed">
+          <p className="text-[13px] text-zinc-700 dark:text-zinc-200 leading-relaxed">
             {message.parts
               .filter((p) => p.type === 'text')
               .map((p) => (p as any).text)
@@ -742,7 +742,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
             if (part.type === 'text') {
               if (!(part as any).text?.trim()) return null;
               return (
-                <div key={i} className="text-[12px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                <div key={i} className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
                   <MarkdownContent text={(part as any).text} />
                 </div>
               );
@@ -758,7 +758,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
               const toolDone = toolPart.state === 'output-available' || toolPart.state === 'result';
               const toolErr = toolPart.state === 'output-error';
               return (
-                <div key={i} className="flex items-center gap-2 py-1 text-[10px] text-zinc-400">
+                <div key={i} className="flex items-center gap-2 py-1 text-[11px] text-zinc-400">
                   {!toolDone && !toolErr ? (
                     <Loader2 size={10} className="animate-spin" />
                   ) : toolErr ? (
@@ -792,9 +792,9 @@ const SUGGESTIONS = [
 
 /* ── Main Widget ── */
 
-const MIN_WIDTH = 360;
-const MAX_WIDTH = 900;
-const DEFAULT_WIDTH = 420;
+const MIN_WIDTH = 380;
+const MAX_WIDTH = 1100;
+const DEFAULT_WIDTH = 480;
 
 export default function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -931,10 +931,10 @@ export default function AIChatWidget() {
                     <Sparkles size={13} className="text-nothing-green" />
                   </div>
                   <div>
-                    <h3 className="text-[11px] font-bold text-zinc-900 dark:text-white uppercase tracking-widest">
+                    <h3 className="text-[12px] font-bold text-zinc-900 dark:text-white uppercase tracking-widest">
                       Flow AI
                     </h3>
-                    <p className="text-[9px] text-zinc-400 uppercase tracking-widest">
+                    <p className="text-[10px] text-zinc-400 uppercase tracking-widest">
                       Ask anything about Flow
                     </p>
                   </div>
@@ -970,7 +970,7 @@ export default function AIChatWidget() {
                       </div>
                     </div>
                     <h2 className="text-sm font-bold text-zinc-900 dark:text-white mb-1">Ask Flow AI</h2>
-                    <p className="text-[11px] text-zinc-400 mb-6 text-center max-w-[260px]">
+                    <p className="text-[12px] text-zinc-400 mb-6 text-center max-w-[260px]">
                       Query the Flow blockchain with natural language - SQL and Cadence
                     </p>
                     <div className="grid grid-cols-2 gap-2 w-full max-w-[320px]">
@@ -978,7 +978,7 @@ export default function AIChatWidget() {
                         <button
                           key={s}
                           onClick={() => handleSend(s)}
-                          className="text-left px-3 py-2.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 rounded-sm hover:border-nothing-green/30 hover:text-zinc-900 dark:hover:text-white hover:bg-nothing-green/5 transition-all"
+                          className="text-left px-3 py-2.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 rounded-sm hover:border-nothing-green/30 hover:text-zinc-900 dark:hover:text-white hover:bg-nothing-green/5 transition-all"
                         >
                           {s}
                         </button>
@@ -1013,7 +1013,7 @@ export default function AIChatWidget() {
                     onKeyDown={handleKeyDown}
                     placeholder="Ask a question..."
                     rows={1}
-                    className="w-full resize-none text-[12px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-11 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
+                    className="w-full resize-none text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-11 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
                     style={{ maxHeight: '80px' }}
                   />
                   {isStreaming ? (
