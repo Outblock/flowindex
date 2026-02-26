@@ -712,15 +712,6 @@ function AnalyticsPage() {
     return m
   }, [totals, latest, prev, netStats, totalsLoading, netStatsLoading])
 
-  /* ── visible KPI cards ── */
-
-  const visibleKpis = useMemo(() => {
-    return KPI_DEFS.filter((kpi) => {
-      if (kpi.visibleKey && !visibilityMap[kpi.visibleKey]) return false
-      return true
-    })
-  }, [visibilityMap])
-
   /* ── chart map — maps card key to chart JSX ── */
 
   const chartMap = useMemo(() => {
@@ -1163,7 +1154,7 @@ function AnalyticsPage() {
                 resizeConfig={isMobile ? { enabled: false, handles: ['se'] } : { enabled: true, handles: ['se'] }}
                 compactor={verticalCompactor}
               >
-                {visibleKpis.map((kpi) => {
+                {KPI_DEFS.map((kpi) => {
                   const data = kpiDataMap.get(kpi.key)
                   const size = kpiSizes.get(kpi.key)
                   const isExpanded = (size?.h ?? 1) >= 2
