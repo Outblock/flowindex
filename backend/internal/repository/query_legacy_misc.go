@@ -351,10 +351,19 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 			WHERE t.tag = 'EVM_BRIDGE'
 			  AND l.block_height >= $1 AND l.block_height < $2
 			GROUP BY 1
+		),
+		contract_upd AS (
+			SELECT DATE(b.timestamp) AS d, COUNT(*)::bigint AS cnt
+			FROM app.contract_versions cv
+			JOIN raw.blocks b ON b.height = cv.block_height
+			WHERE cv.version > 1
+			  AND cv.block_height >= $1 AND cv.block_height < $2
+			GROUP BY 1
 		)
 		INSERT INTO analytics.daily_metrics (
 			date, new_accounts, coa_new_accounts, evm_active_addresses,
-			defi_swap_count, defi_unique_traders, epoch_payout_total, bridge_to_evm_txs, updated_at
+			defi_swap_count, defi_unique_traders, epoch_payout_total, bridge_to_evm_txs,
+			contract_updates, updated_at
 		)
 		SELECT
 			d.d,
@@ -365,6 +374,7 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 			COALESCE(df.traders, 0),
 			COALESCE(ep.payout, 0),
 			COALESCE(br.cnt, 0),
+			COALESCE(cu.cnt, 0),
 			NOW()
 		FROM affected_dates d
 		LEFT JOIN new_accounts na ON na.d = d.d
@@ -373,6 +383,7 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 		LEFT JOIN defi df ON df.d = d.d
 		LEFT JOIN epoch ep ON ep.d = d.d
 		LEFT JOIN bridge br ON br.d = d.d
+		LEFT JOIN contract_upd cu ON cu.d = d.d
 		ON CONFLICT (date) DO UPDATE SET
 			new_accounts = daily_metrics.new_accounts + EXCLUDED.new_accounts,
 			coa_new_accounts = daily_metrics.coa_new_accounts + EXCLUDED.coa_new_accounts,
@@ -381,6 +392,7 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 			defi_unique_traders = daily_metrics.defi_unique_traders + EXCLUDED.defi_unique_traders,
 			epoch_payout_total = daily_metrics.epoch_payout_total + EXCLUDED.epoch_payout_total,
 			bridge_to_evm_txs = daily_metrics.bridge_to_evm_txs + EXCLUDED.bridge_to_evm_txs,
+			contract_updates = daily_metrics.contract_updates + EXCLUDED.contract_updates,
 			updated_at = NOW();
 	`, fromHeight, toHeight)
 	if err != nil {

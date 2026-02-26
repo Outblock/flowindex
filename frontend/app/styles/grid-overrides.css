@@ -1,0 +1,45 @@
+/* react-grid-layout theme overrides — Nothing Phone aesthetic */
+
+/* Placeholder shown while dragging */
+.react-grid-placeholder {
+  background: rgba(0, 239, 139, 0.08) !important;
+  border: 1.5px dashed rgba(0, 239, 139, 0.4) !important;
+  border-radius: 0.5rem !important;
+  opacity: 1 !important;
+}
+
+/* Item being dragged */
+.react-grid-item.react-draggable-dragging {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3) !important;
+  opacity: 0.92 !important;
+  z-index: 100 !important;
+  transition: none !important;
+}
+
+/* Resize handle — bottom-right corner */
+.react-grid-item > .react-resizable-handle::after {
+  border-color: rgba(0, 239, 139, 0.4) !important;
+}
+
+.react-grid-item > .react-resizable-handle {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* Drag handle cursor */
+.drag-handle {
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Smooth transitions during reflow (not during drag) */
+.react-grid-item {
+  transition: transform 200ms ease, width 200ms ease, height 200ms ease;
+}
+.react-grid-item.react-draggable-dragging,
+.react-grid-item.resizing {
+  transition: none;
+}

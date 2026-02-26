@@ -13,6 +13,7 @@ type AnalyticsDailyRow struct {
 	TotalGasUsed       int64   `json:"total_gas_used"`
 	ActiveAccounts     int64   `json:"active_accounts"`
 	NewContracts       int     `json:"new_contracts"`
+	ContractUpdates    int64   `json:"contract_updates"`
 	FailedTxCount      int64   `json:"failed_tx_count"`
 	ErrorRate          float64 `json:"error_rate"`
 	AvgGasPerTx        float64 `json:"avg_gas_per_tx"`
@@ -160,6 +161,32 @@ func (r *Repository) GetAnalyticsDailyBridgeModule(ctx context.Context, from, to
 	for rows.Next() {
 		var row AnalyticsDailyRow
 		if err := rows.Scan(&row.Date, &row.BridgeToEVMTxs); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+// GetAnalyticsDailyContractsModule returns daily contract update counts (version > 1).
+func (r *Repository) GetAnalyticsDailyContractsModule(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
+	query := `
+		WITH dates AS (
+			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
+		)
+		SELECT d.date::text, COALESCE(m.contract_updates, 0)::bigint
+		FROM dates d
+		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
+		ORDER BY d.date ASC`
+	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]AnalyticsDailyRow, 0)
+	for rows.Next() {
+		var row AnalyticsDailyRow
+		if err := rows.Scan(&row.Date, &row.ContractUpdates); err != nil {
 			return nil, err
 		}
 		out = append(out, row)

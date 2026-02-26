@@ -532,6 +532,8 @@ CREATE TABLE IF NOT EXISTS analytics.daily_metrics (
     bridge_to_evm_txs    BIGINT DEFAULT 0,
     updated_at           TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE IF EXISTS analytics.daily_metrics
+  ADD COLUMN IF NOT EXISTS contract_updates BIGINT DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_analytics_daily_metrics_updated_at
   ON analytics.daily_metrics (updated_at DESC);
 
