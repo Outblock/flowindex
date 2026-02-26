@@ -28,10 +28,6 @@ RUN apk add --no-cache nginx gettext
 # SSR build output produced by Nitro
 COPY --from=builder /app/.output /app/.output
 
-# @resvg/resvg-js is externalized from the Nitro bundle (native .node addon)
-# so we need the node_modules available at runtime for the OG image route.
-COPY --from=builder /app/node_modules/@resvg /app/node_modules/@resvg
-
 # Nginx config template + entrypoint
 COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
 COPY frontend/entrypoint.sh /entrypoint.sh

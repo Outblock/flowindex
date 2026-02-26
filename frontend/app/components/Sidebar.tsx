@@ -3,7 +3,7 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import { Home, Box, ArrowRightLeft, Users, FileText, Layers, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, BarChart3 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useMobileMenu } from '../contexts/MobileMenuContext';
-
+import { FlowIndexLogo } from './FlowIndexLogo';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Sidebar() {
@@ -55,7 +55,7 @@ export default function Sidebar() {
                         >
                             {/* Logo */}
                             <div className="p-6 flex items-center space-x-3 h-[64px]">
-                                <Box className="h-7 w-7 text-nothing-green rotate-12 shrink-0" />
+                                <FlowIndexLogo size={22} className="text-nothing-green shrink-0" />
                                 <span className="text-xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic leading-none">
                                     flow<span className="text-nothing-green">index</span>
                                 </span>
@@ -104,7 +104,7 @@ export default function Sidebar() {
                 {/* Logo Section */}
                 <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} mb-6 h-[88px]`}>
                     <Link to="/" className="flex items-center space-x-3">
-                        <Box className="h-8 w-8 text-nothing-green rotate-12 shrink-0" />
+                        <FlowIndexLogo size={26} className="text-nothing-green shrink-0" />
                         <AnimatePresence>
                             {!isCollapsed && (
                                 <motion.div
