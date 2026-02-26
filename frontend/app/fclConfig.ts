@@ -12,9 +12,10 @@ import * as fcl from '@onflow/fcl';
 import addresses from '../cadence/addresses.json';
 import { CadenceService } from '../cadence/cadence.gen';
 
-// Determine network: runtime env > Vite env > default to mainnet
+// Determine network: runtime env (browser) > process.env (SSR) > Vite env > default to mainnet
 const network: string =
     (typeof window !== 'undefined' && (window as any).__FLOWSCAN_ENV__?.FLOW_NETWORK) ||
+    (typeof process !== 'undefined' && process.env?.FLOW_NETWORK) ||
     import.meta.env.VITE_FLOW_NETWORK ||
     'mainnet';
 
