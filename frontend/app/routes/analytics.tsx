@@ -663,17 +663,18 @@ function AnalyticsPage() {
                   delta={delta(latest?.bridge_to_evm_txs, prev?.bridge_to_evm_txs)}
                 />
               )}
-              {showEpochPayout && (
-                <KpiCard
-                  label="Epoch Payout (day)"
-                  value={latest ? fmtNum(toNum(latest.epoch_payout_total)) : '--'}
-                  delta={
-                    latest && prev
-                      ? toNum(latest.epoch_payout_total) - toNum(prev.epoch_payout_total)
-                      : null
-                  }
-                />
-              )}
+              {showEpochPayout && (() => {
+                const d = latest && prev ? toNum(latest.epoch_payout_total) - toNum(prev.epoch_payout_total) : null;
+                const sign = d != null && d > 0 ? '+' : '';
+                return (
+                  <KpiCard
+                    label="Epoch Payout"
+                    value={latest ? fmtComma(Math.round(toNum(latest.epoch_payout_total))) : '--'}
+                    delta={d}
+                    deltaLabel={d != null ? `${sign}${fmtComma(Math.round(d))}` : undefined}
+                  />
+                );
+              })()}
             </div>
 
             {/* ── Bento Grid ── */}
@@ -794,15 +795,15 @@ function AnalyticsPage() {
               )}
 
               {showChart('network') && showEpochPayout && (
-              <ChartCard title="Epoch Payout (Daily)" loading={dailyLoading} empty={visibleDaily.length === 0}>
+              <ChartCard title="Epoch Payout" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <BarChart
                   data={visibleDaily.map((d) => ({ ...d, epoch_payout_total_num: toNum(d.epoch_payout_total) }))}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
                 >
                   <CartesianGrid stroke={gridStroke} vertical={false} />
                   <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} />
+                  <YAxis {...yAxisProps()} tickFormatter={(v) => fmtNum(v)} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} formatter={(v) => [fmtComma(Math.round(toNum(v))), 'Epoch Payout']} />
                   <Bar dataKey="epoch_payout_total_num" fill={C.blue} fillOpacity={0.7} name="Epoch Payout" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ChartCard>
