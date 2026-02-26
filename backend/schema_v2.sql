@@ -346,11 +346,13 @@ BEGIN
   END LOOP;
 END $$;
 
-DELETE FROM app.evm_transactions WHERE evm_hash IS NULL;
-ALTER TABLE IF EXISTS app.evm_transactions
-  DROP CONSTRAINT IF EXISTS evm_transactions_pkey;
-ALTER TABLE IF EXISTS app.evm_transactions
-  ADD CONSTRAINT evm_transactions_pkey PRIMARY KEY (block_height, transaction_id, event_index, evm_hash);
+DO $$ BEGIN
+  IF to_regclass('app.evm_transactions') IS NOT NULL THEN
+    DELETE FROM app.evm_transactions WHERE evm_hash IS NULL;
+    ALTER TABLE app.evm_transactions DROP CONSTRAINT IF EXISTS evm_transactions_pkey;
+    ALTER TABLE app.evm_transactions ADD CONSTRAINT evm_transactions_pkey PRIMARY KEY (block_height, transaction_id, event_index, evm_hash);
+  END IF;
+END $$;
 
 -- 4.2 EVM transactions/logs (10M partitions)
 CREATE TABLE IF NOT EXISTS app.evm_transactions (
@@ -810,6 +812,120 @@ CREATE TABLE IF NOT EXISTS app.account_labels (
     PRIMARY KEY (address, tag)
 );
 CREATE INDEX IF NOT EXISTS idx_account_labels_tag ON app.account_labels (tag);
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- STAKING TABLES (restored — accidentally removed in 227dbe6)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS app.staking_nodes (
+    node_id           TEXT NOT NULL,
+    epoch             BIGINT NOT NULL,
+    address           BYTEA,
+    role              SMALLINT NOT NULL DEFAULT 0,
+    networking_address TEXT,
+    tokens_staked     NUMERIC(78,8) DEFAULT 0,
+    tokens_committed  NUMERIC(78,8) DEFAULT 0,
+    tokens_unstaking  NUMERIC(78,8) DEFAULT 0,
+    tokens_unstaked   NUMERIC(78,8) DEFAULT 0,
+    tokens_rewarded   NUMERIC(78,8) DEFAULT 0,
+    delegator_count   INT DEFAULT 0,
+    first_seen_height BIGINT,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (node_id, epoch)
+);
+
+CREATE INDEX IF NOT EXISTS idx_staking_nodes_epoch ON app.staking_nodes(epoch);
+CREATE INDEX IF NOT EXISTS idx_staking_nodes_address ON app.staking_nodes(address);
+
+CREATE TABLE IF NOT EXISTS app.staking_delegators (
+    delegator_id      INT NOT NULL,
+    node_id           TEXT NOT NULL,
+    address           BYTEA,
+    tokens_committed  NUMERIC(78,8) DEFAULT 0,
+    tokens_staked     NUMERIC(78,8) DEFAULT 0,
+    tokens_unstaking  NUMERIC(78,8) DEFAULT 0,
+    tokens_rewarded   NUMERIC(78,8) DEFAULT 0,
+    tokens_unstaked   NUMERIC(78,8) DEFAULT 0,
+    block_height      BIGINT,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (delegator_id, node_id)
+);
+
+CREATE TABLE IF NOT EXISTS app.staking_events (
+    block_height      BIGINT NOT NULL,
+    transaction_id    BYTEA NOT NULL,
+    event_index       INT NOT NULL,
+    event_type        TEXT NOT NULL,
+    node_id           TEXT,
+    delegator_id      INT,
+    amount            NUMERIC(78,8),
+    timestamp         TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (block_height, transaction_id, event_index)
+) PARTITION BY RANGE (block_height);
+
+CREATE INDEX IF NOT EXISTS idx_staking_events_node ON app.staking_events(node_id);
+CREATE INDEX IF NOT EXISTS idx_staking_events_type ON app.staking_events(event_type, block_height DESC);
+
+CREATE TABLE IF NOT EXISTS app.epoch_stats (
+    epoch              BIGINT PRIMARY KEY,
+    start_height       BIGINT,
+    end_height         BIGINT,
+    start_time         TIMESTAMPTZ,
+    end_time           TIMESTAMPTZ,
+    total_nodes        INT DEFAULT 0,
+    total_staked       NUMERIC(78,8) DEFAULT 0,
+    total_rewarded     NUMERIC(78,8) DEFAULT 0,
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS app.tokenomics_snapshots (
+    id                  BIGSERIAL PRIMARY KEY,
+    total_supply        NUMERIC(78,8),
+    circulating_supply  NUMERIC(78,8),
+    total_staked        NUMERIC(78,8),
+    staking_apy         NUMERIC(10,6),
+    validator_count     INT,
+    delegator_count     INT,
+    as_of               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- DEFI TABLES (restored — accidentally removed in 227dbe6)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS app.defi_pairs (
+    id                TEXT PRIMARY KEY,
+    dex_key           TEXT NOT NULL,
+    asset0_id         TEXT NOT NULL,
+    asset1_id         TEXT NOT NULL,
+    asset0_symbol     TEXT,
+    asset1_symbol     TEXT,
+    fee_bps           INT,
+    reserves_asset0   NUMERIC(78,18) DEFAULT 0,
+    reserves_asset1   NUMERIC(78,18) DEFAULT 0,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS app.defi_events (
+    block_height      BIGINT NOT NULL,
+    transaction_id    BYTEA NOT NULL,
+    event_index       INT NOT NULL,
+    pair_id           TEXT NOT NULL,
+    event_type        TEXT NOT NULL,
+    maker             BYTEA,
+    asset0_in         NUMERIC(78,18) DEFAULT 0,
+    asset0_out        NUMERIC(78,18) DEFAULT 0,
+    asset1_in         NUMERIC(78,18) DEFAULT 0,
+    asset1_out        NUMERIC(78,18) DEFAULT 0,
+    price_native      NUMERIC,
+    timestamp         TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (block_height, transaction_id, event_index)
+) PARTITION BY RANGE (block_height);
+CREATE INDEX IF NOT EXISTS idx_defi_events_pair ON app.defi_events(pair_id, block_height DESC);
+CREATE INDEX IF NOT EXISTS idx_defi_events_type ON app.defi_events(event_type, block_height DESC);
+
+SELECT raw.create_partitions('app.staking_events', 0, 20000000, 10000000);
+SELECT raw.create_partitions('app.defi_events', 0, 20000000, 10000000);
 
 -- Epoch payout columns (EpochTotalRewardsPaid event data)
 ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_total NUMERIC(78,8) DEFAULT 0;
