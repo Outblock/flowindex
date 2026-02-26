@@ -187,12 +187,12 @@ func (s *Server) buildStatusPayload(ctx context.Context, includeRanges bool) ([]
 			"range":       getEnvUint("TX_METRICS_WORKER_RANGE", 1000),
 		},
 		"daily_stats_worker": {
-			"concurrency": getEnvInt("DAILY_STATS_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("DAILY_STATS_WORKER_RANGE", 1000),
+			"concurrency": getEnvInt("ANALYTICS_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("ANALYTICS_WORKER_RANGE", 5000),
 		},
 		"analytics_deriver_worker": {
-			"concurrency": getEnvInt("ANALYTICS_DERIVER_WORKER_CONCURRENCY", 1),
-			"range":       getEnvUint("ANALYTICS_DERIVER_WORKER_RANGE", 1000),
+			"concurrency": getEnvInt("ANALYTICS_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("ANALYTICS_WORKER_RANGE", 5000),
 		},
 		"staking_worker": {
 			"concurrency": getEnvInt("STAKING_WORKER_CONCURRENCY", 1),

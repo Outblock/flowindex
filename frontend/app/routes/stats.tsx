@@ -92,6 +92,7 @@ const WORKER_COLORS: Record<string, string> = {
     history_deriver_2: 'bg-cyan-400',
     history_deriver_2_down: 'bg-cyan-400',
     daily_stats_worker: 'bg-orange-400',
+    analytics_deriver_worker: 'bg-amber-400',
 };
 
 function Stats() {
@@ -1042,7 +1043,7 @@ function Stats() {
                                             );
                                         })}
                                     </div>
-                                    <p className="text-[9px] text-zinc-400 mt-3">Aggregates daily transaction stats from raw data. Gaps in analytics charts indicate this worker hasn't processed those block ranges yet.</p>
+                                    <p className="text-[9px] text-zinc-400 mt-3">Standalone analytics workers (not in derivers). Process large block ranges with heavy aggregation queries. Gaps in analytics charts indicate these workers haven't processed those block ranges yet.</p>
                                 </div>
 
                                 {/* Section 5: Queue Workers */}

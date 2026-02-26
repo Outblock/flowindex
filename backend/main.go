@@ -159,6 +159,9 @@ func main() {
 	nftReconcilerRange := getEnvUint("NFT_RECONCILER_RANGE", 1000)
 	nftItemMetadataWorkerConcurrency := getEnvInt("NFT_ITEM_METADATA_WORKER_CONCURRENCY", 1)
 	nftReconcilerConcurrency := getEnvInt("NFT_RECONCILER_CONCURRENCY", 1)
+	// Analytics async worker configs (heavy aggregation — run standalone, NOT in derivers)
+	analyticsWorkerRange := getEnvUint("ANALYTICS_WORKER_RANGE", 5000)
+	analyticsWorkerConcurrency := getEnvInt("ANALYTICS_WORKER_CONCURRENCY", 1)
 
 	if strings.ToLower(os.Getenv("RUN_TX_METRICS_BACKFILL")) == "true" {
 		cfg := repository.TxMetricsBackfillConfig{
@@ -320,8 +323,9 @@ func main() {
 		{"tx_metrics_worker", enableTxMetricsWorker, func() ingester.Processor { return ingester.NewTxMetricsWorker(repo) }},
 		{"staking_worker", enableStakingWorker, func() ingester.Processor { return ingester.NewStakingWorker(repo) }},
 		{"defi_worker", enableDefiWorker, func() ingester.Processor { return ingester.NewDefiWorker(repo) }},
-		{"daily_stats_worker", enableDailyStatsWorker, func() ingester.Processor { return ingester.NewDailyStatsWorker(repo) }},
-		{"analytics_deriver_worker", enableAnalyticsDeriverWorker, func() ingester.Processor { return ingester.NewAnalyticsDeriverWorker(repo) }},
+		// NOTE: daily_stats_worker and analytics_deriver_worker are NOT in the deriver.
+		// They do full table scans on raw.transactions per affected date — too heavy for
+		// deriver pipelines. They run as standalone async workers instead.
 		{"ft_holdings_worker", enableFTHoldingsWorker, func() ingester.Processor { return ingester.NewFTHoldingsWorker(repo) }},
 		{"nft_ownership_worker", enableNFTOwnershipWorker, func() ingester.Processor { return ingester.NewNFTOwnershipWorker(repo) }},
 		{"daily_balance_worker", enableDailyBalanceWorker, func() ingester.Processor { return ingester.NewDailyBalanceWorker(repo) }},
@@ -449,6 +453,38 @@ func main() {
 		workerTypes = append(workerTypes, nftReconcilerProcessor.Name())
 	} else {
 		log.Println("NFT Ownership Reconciler is DISABLED (ENABLE_NFT_RECONCILER=false)")
+	}
+
+	// Analytics async workers — heavy aggregation queries, run standalone with large ranges.
+	var analyticsWorkers []*ingester.AsyncWorker
+	if enableDailyStatsWorker {
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < analyticsWorkerConcurrency; i++ {
+			analyticsWorkers = append(analyticsWorkers, ingester.NewAsyncWorker(
+				ingester.NewDailyStatsWorker(repo), repo, ingester.WorkerConfig{
+					RangeSize: analyticsWorkerRange,
+					WorkerID:  fmt.Sprintf("%s-%d-daily-stats-%d", hostname, pid, i),
+				}))
+		}
+		workerTypes = append(workerTypes, "daily_stats_worker")
+	} else {
+		log.Println("Daily Stats Worker is DISABLED (ENABLE_DAILY_STATS_WORKER=false)")
+	}
+
+	if enableAnalyticsDeriverWorker {
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		for i := 0; i < analyticsWorkerConcurrency; i++ {
+			analyticsWorkers = append(analyticsWorkers, ingester.NewAsyncWorker(
+				ingester.NewAnalyticsDeriverWorker(repo), repo, ingester.WorkerConfig{
+					RangeSize: analyticsWorkerRange,
+					WorkerID:  fmt.Sprintf("%s-%d-analytics-deriver-%d", hostname, pid, i),
+				}))
+		}
+		workerTypes = append(workerTypes, "analytics_deriver_worker")
+	} else {
+		log.Println("Analytics Deriver Worker is DISABLED (ENABLE_ANALYTICS_DERIVER_WORKER=false)")
 	}
 
 	var committer *ingester.CheckpointCommitter
@@ -590,6 +626,15 @@ func main() {
 				w.Start(ctx)
 			}(worker)
 		}
+	}
+
+	// Start Analytics Workers (standalone — not in derivers)
+	for _, worker := range analyticsWorkers {
+		wg.Add(1)
+		go func(w *ingester.AsyncWorker) {
+			defer wg.Done()
+			w.Start(ctx)
+		}(worker)
 	}
 
 	// Start Committer
