@@ -667,7 +667,7 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                 <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20">
                     <Zap className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />
                     <a
-                        href={`https://evm.flowindex.dev/tx/0x${evmHash.replace(/^0x/i, '')}`}
+                        href={`https://evm.flowindex.io/tx/0x${evmHash.replace(/^0x/i, '')}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono text-xs text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
@@ -848,7 +848,7 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                             <div key={i} className="flex flex-col gap-1 px-2.5 py-1.5 rounded-md bg-purple-50/50 dark:bg-purple-500/5 border border-purple-100 dark:border-purple-500/10">
                                 {exec.hash && (
                                     <a
-                                        href={`https://evm.flowindex.dev/tx/0x${exec.hash.replace(/^0x/i, '')}`}
+                                        href={`https://evm.flowindex.io/tx/0x${exec.hash.replace(/^0x/i, '')}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="font-mono text-xs text-purple-600 dark:text-purple-400 hover:underline inline-flex items-center gap-1 w-fit"

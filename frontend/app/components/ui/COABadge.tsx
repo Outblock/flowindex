@@ -13,7 +13,7 @@ export function COABadge({ evmAddress, className = '' }: COABadgeProps) {
   if (!evmAddress) return null;
 
   const normalized = evmAddress.startsWith('0x') ? evmAddress : `0x${evmAddress}`;
-  const href = `https://evm.flowindex.dev/address/${normalized}`;
+  const href = `https://evm.flowindex.io/address/${normalized}`;
 
   return (
     <a

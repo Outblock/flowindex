@@ -181,6 +181,41 @@ func (s *Server) queryFTHoldingsOnChain(ctx context.Context, address string) ([]
 	return results, nil
 }
 
+// cadenceFTTotalSupplyScript returns a Cadence script that queries the totalSupply
+// of a FungibleToken contract by borrowing the contract reference.
+func cadenceFTTotalSupplyScript() string {
+	ftAddr := envOrDefault("FLOW_FUNGIBLE_TOKEN_ADDRESS", "f233dcee88fe0abe")
+	return fmt.Sprintf(`
+    import FungibleToken from 0x%s
+
+    access(all) fun main(contractAddress: Address, contractName: String): UFix64 {
+        let acct = getAccount(contractAddress)
+        let ref = acct.contracts.borrow<&{FungibleToken}>(name: contractName)
+        if ref != nil {
+            return ref!.totalSupply
+        }
+        return 0.0
+    }
+    `, ftAddr)
+}
+
+// queryFTTotalSupplyOnChain executes a Cadence script to get the totalSupply of a FT contract.
+func (s *Server) queryFTTotalSupplyOnChain(ctx context.Context, contractAddr, contractName string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	addr := flowsdk.HexToAddress(contractAddr)
+	nameVal, _ := cadence.NewString(contractName)
+	val, err := s.client.ExecuteScriptAtLatestBlock(ctx, []byte(cadenceFTTotalSupplyScript()), []cadence.Value{
+		cadence.NewAddress(addr),
+		nameVal,
+	})
+	if err != nil {
+		return "", fmt.Errorf("totalSupply script failed: %w", err)
+	}
+	return cadenceFixedPointToString(val), nil
+}
+
 // cadenceFixedPointToString converts a Cadence UFix64 to a decimal string.
 func cadenceFixedPointToString(v cadence.Value) string {
 	v = apiUnwrapOptional(v)

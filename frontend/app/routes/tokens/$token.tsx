@@ -251,7 +251,9 @@ function TokenDetailInner() {
             {token?.evm_address && (<>
               <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">EVM Address</div>
               <div className="px-4 py-3 font-mono text-zinc-900 dark:text-white break-all border-b border-zinc-100 dark:border-white/5 flex items-center gap-1">
-                {String(token.evm_address).slice(0, 10)}...{String(token.evm_address).slice(-8)}
+                <a href={`https://evm.flowindex.io/address/${String(token.evm_address)}`} target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 hover:underline">
+                  {String(token.evm_address).slice(0, 10)}...{String(token.evm_address).slice(-8)}
+                </a>
                 <CopyButton content={String(token.evm_address)} variant="ghost" size="xs" className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />
               </div>
             </>)}

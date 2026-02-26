@@ -13,7 +13,7 @@ interface EVMBridgeBadgeProps {
 export function EVMBridgeBadge({ evmAddress, className = '' }: EVMBridgeBadgeProps) {
   if (!evmAddress) return null;
 
-  const href = `https://evm.flowindex.dev/address/${evmAddress}`;
+  const href = `https://evm.flowindex.io/address/${evmAddress}`;
 
   return (
     <a

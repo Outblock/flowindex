@@ -139,7 +139,7 @@ function classifyHex(val: string): { type: 'cadence-addr' | 'evm-addr' | 'cadenc
     return { type: 'cadence-addr', url: `https://flowindex.io/account/${val}` };
   // EVM address: 0x + 40 hex chars
   if (/^0x[0-9a-f]{40}$/.test(hex))
-    return { type: 'evm-addr', url: `https://evm.flowindex.dev/address/${val}` };
+    return { type: 'evm-addr', url: `https://evm.flowindex.io/address/${val}` };
   // Tx hash: 0x + 64 hex chars — could be Cadence or EVM
   if (/^0x[0-9a-f]{64}$/.test(hex))
     return { type: 'cadence-tx', url: `https://flowindex.io/tx/${val}` };

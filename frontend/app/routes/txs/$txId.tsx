@@ -404,7 +404,7 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
                         {hashes.map((hash, idx) => (
                             <div key={idx} className="flex items-center gap-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 p-3 rounded-sm">
                                 <code className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">0x{hash.replace(/^0x/, '')}</code>
-                                <a href={`https://evm.flowindex.dev/tx/0x${hash.replace(/^0x/, '')}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0">
+                                <a href={`https://evm.flowindex.io/tx/0x${hash.replace(/^0x/, '')}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0">
                                     <ExternalLink className="h-3.5 w-3.5" />
                                 </a>
                             </div>
@@ -1298,7 +1298,7 @@ function TransactionDetail() {
                                                             0x{exec.hash?.replace(/^0x/i, '')}
                                                         </code>
                                                         <a
-                                                            href={`https://evm.flowindex.dev/tx/0x${exec.hash?.replace(/^0x/i, '')}`}
+                                                            href={`https://evm.flowindex.io/tx/0x${exec.hash?.replace(/^0x/i, '')}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0"
@@ -1319,7 +1319,7 @@ function TransactionDetail() {
                                                             </code>
                                                             {exec.from && (
                                                                 <a
-                                                                    href={`https://evm.flowindex.dev/address/0x${exec.from?.replace(/^0x/i, '')}`}
+                                                                    href={`https://evm.flowindex.io/address/0x${exec.from?.replace(/^0x/i, '')}`}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
                                                                     className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0"
@@ -1337,7 +1337,7 @@ function TransactionDetail() {
                                                             </code>
                                                             {exec.to && (
                                                                 <a
-                                                                    href={`https://evm.flowindex.dev/address/0x${exec.to?.replace(/^0x/i, '')}`}
+                                                                    href={`https://evm.flowindex.io/address/0x${exec.to?.replace(/^0x/i, '')}`}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
                                                                     className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0"
@@ -1465,7 +1465,7 @@ function TransactionDetail() {
                                             <div className="flex items-center gap-2">
                                                 <p className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">{fullTx.evm_hash}</p>
                                                 {fullTx.evm_hash && (
-                                                    <a href={`https://evm.flowindex.dev/tx/${fullTx.evm_hash}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 flex-shrink-0">
+                                                    <a href={`https://evm.flowindex.io/tx/${fullTx.evm_hash}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 flex-shrink-0">
                                                         <ExternalLink className="h-3.5 w-3.5" />
                                                     </a>
                                                 )}
