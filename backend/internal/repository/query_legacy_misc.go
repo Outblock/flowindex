@@ -489,6 +489,37 @@ func (r *Repository) refreshDailyContractStats(ctx context.Context, fullScan boo
 	return err
 }
 
+// ClearDailyStatsForHeightRange deletes daily_stats rows whose dates fall within the
+// block-height range [fromHeight, toHeight). This is necessary before a backward
+// backfill because RefreshDailyStatsRange uses additive ON CONFLICT.
+func (r *Repository) ClearDailyStatsForHeightRange(ctx context.Context, fromHeight, toHeight uint64) error {
+	_, err := r.db.Exec(ctx, `
+		DELETE FROM app.daily_stats
+		WHERE date IN (
+			SELECT DISTINCT DATE(t.timestamp)
+			FROM raw.transactions t
+			WHERE t.block_height >= $1 AND t.block_height < $2
+			  AND t.timestamp IS NOT NULL
+		)
+	`, fromHeight, toHeight)
+	return err
+}
+
+// ClearAnalyticsDailyMetricsForHeightRange deletes analytics.daily_metrics rows whose
+// dates fall within the block-height range [fromHeight, toHeight).
+func (r *Repository) ClearAnalyticsDailyMetricsForHeightRange(ctx context.Context, fromHeight, toHeight uint64) error {
+	_, err := r.db.Exec(ctx, `
+		DELETE FROM analytics.daily_metrics
+		WHERE date IN (
+			SELECT DISTINCT DATE(t.timestamp)
+			FROM raw.transactions t
+			WHERE t.block_height >= $1 AND t.block_height < $2
+			  AND t.timestamp IS NOT NULL
+		)
+	`, fromHeight, toHeight)
+	return err
+}
+
 // GetDailyStats retrieves all available daily stats
 func (r *Repository) GetDailyStats(ctx context.Context) ([]models.DailyStat, error) {
 	rows, err := r.db.Query(ctx, `
