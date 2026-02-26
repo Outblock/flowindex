@@ -259,12 +259,14 @@ function KpiCard({
   delta,
   deltaLabel,
   invertColor,
+  loading,
 }: {
   label: string
   value: string
   delta?: number | null
   deltaLabel?: string
   invertColor?: boolean
+  loading?: boolean
 }) {
   let deltaColor = 'text-zinc-400'
   let deltaText = ''
@@ -282,8 +284,12 @@ function KpiCard({
   return (
     <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 flex flex-col justify-between min-h-[100px] hover:border-nothing-green/30 transition-colors">
       <span className="text-[10px] uppercase tracking-wider text-zinc-500 dark:text-zinc-500 font-medium">{label}</span>
-      <span className="text-xl font-bold text-zinc-900 dark:text-white font-mono mt-2">{value}</span>
-      {deltaText && <span className={`text-xs font-mono mt-1 ${deltaColor}`}>{deltaText}</span>}
+      {loading ? (
+        <div className="h-5 w-20 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse mt-2" />
+      ) : (
+        <span className="text-xl font-bold text-zinc-900 dark:text-white font-mono mt-2">{value}</span>
+      )}
+      {deltaText && !loading && <span className={`text-xs font-mono mt-1 ${deltaColor}`}>{deltaText}</span>}
     </div>
   )
 }
@@ -504,6 +510,7 @@ function AnalyticsPage() {
                 value={totals ? fmtComma(totals.transaction_count) : '--'}
                 delta={latest?.tx_count}
                 deltaLabel={latest ? `+${fmtNum(latest.tx_count)} today` : undefined}
+                loading={totalsLoading}
               />
               <KpiCard
                 label="Active Accounts (24h)"
@@ -535,6 +542,7 @@ function AnalyticsPage() {
                     ? `${netStats.price_change_24h > 0 ? '+' : ''}${netStats.price_change_24h.toFixed(2)}%`
                     : undefined
                 }
+                loading={netStatsLoading}
               />
               <KpiCard
                 label="Contracts Deployed"
