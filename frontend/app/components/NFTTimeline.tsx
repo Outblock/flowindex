@@ -2,8 +2,16 @@ import { Link } from '@tanstack/react-router';
 import { MapPin, ArrowRightLeft, Sparkles, Flame } from 'lucide-react';
 import { AddressLink } from './AddressLink';
 import { normalizeAddress } from './account/accountUtils';
+import {
+  Timeline,
+  TimelineItem,
+  TimelineConnector,
+  TimelineDot,
+  TimelineContent,
+} from './ui/Timeline';
 
 interface NFTTimelineProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transfers: any[];
   currentOwner?: string;
   loading?: boolean;
@@ -31,6 +39,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(months / 12)}y ago`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getEventType(t: any): 'mint' | 'burn' | 'transfer' {
   if (isNullAddress(t?.sender)) return 'mint';
   if (isNullAddress(t?.receiver)) return 'burn';
@@ -38,9 +47,9 @@ function getEventType(t: any): 'mint' | 'burn' | 'transfer' {
 }
 
 const EVENT_CONFIG = {
-  mint: { label: 'Minted', icon: Sparkles, color: 'text-emerald-500', bg: 'bg-emerald-500/10', dot: 'bg-emerald-500' },
-  burn: { label: 'Burned', icon: Flame, color: 'text-red-500', bg: 'bg-red-500/10', dot: 'bg-red-500' },
-  transfer: { label: 'Transferred', icon: ArrowRightLeft, color: 'text-blue-500', bg: 'bg-blue-500/10', dot: 'bg-blue-500' },
+  mint: { label: 'Minted', icon: Sparkles, variant: 'success' as const },
+  burn: { label: 'Burned', icon: Flame, variant: 'destructive' as const },
+  transfer: { label: 'Transferred', icon: ArrowRightLeft, variant: 'info' as const },
 };
 
 export function NFTTimeline({ transfers, currentOwner, loading }: NFTTimelineProps) {
@@ -63,26 +72,25 @@ export function NFTTimeline({ transfers, currentOwner, loading }: NFTTimelinePro
   const owner = currentOwner ? normalizeAddress(currentOwner) : null;
 
   return (
-    <div className="relative pl-8">
-      {/* Vertical line */}
-      <div className="absolute left-[11px] top-0 bottom-0 w-px bg-zinc-200 dark:bg-white/10" />
-
-      {/* Current Owner marker */}
+    <Timeline>
+      {/* Current Owner — always at top */}
       {owner && (
-        <div className="relative flex items-start gap-4 pb-6">
-          <div className="absolute left-[-21px] top-1 w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center ring-2 ring-white dark:ring-zinc-900">
-            <MapPin className="w-3.5 h-3.5 text-emerald-500" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold mb-0.5">
+        <TimelineItem>
+          <TimelineConnector />
+          <TimelineDot variant="success">
+            <MapPin className="w-3 h-3" />
+          </TimelineDot>
+          <TimelineContent>
+            <p className="text-[10px] uppercase tracking-wider font-bold text-emerald-600 dark:text-emerald-400 mb-0.5">
               Current Owner
-            </div>
+            </p>
             <AddressLink address={owner} prefixLen={20} suffixLen={0} className="text-sm" />
-          </div>
-        </div>
+          </TimelineContent>
+        </TimelineItem>
       )}
 
-      {/* Transfer events (already newest-first from API) */}
+      {/* Transfer events (newest first from API) */}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       {transfers.map((t: any, i: number) => {
         const eventType = getEventType(t);
         const config = EVENT_CONFIG[eventType];
@@ -92,18 +100,21 @@ export function NFTTimeline({ transfers, currentOwner, loading }: NFTTimelinePro
         const to = t?.receiver ? normalizeAddress(t.receiver) : '';
         const timestamp = t?.timestamp || t?.block_timestamp || '';
         const height = Number(t?.block_height || 0);
+        const isLast = i === transfers.length - 1;
 
         return (
-          <div key={`${tx}-${from}-${to}-${i}`} className="relative flex items-start gap-4 pb-6 last:pb-0">
-            {/* Dot */}
-            <div className={`absolute left-[-21px] top-1 w-6 h-6 rounded-full ${config.bg} flex items-center justify-center ring-2 ring-white dark:ring-zinc-900`}>
-              <Icon className={`w-3 h-3 ${config.color}`} />
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 min-w-0">
+          <TimelineItem key={`${tx}-${from}-${to}-${i}`}>
+            {!isLast && <TimelineConnector />}
+            <TimelineDot variant={config.variant}>
+              <Icon className="w-3 h-3" />
+            </TimelineDot>
+            <TimelineContent>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-xs font-bold uppercase tracking-wider ${config.color}`}>
+                <span className={`text-xs font-bold uppercase tracking-wider ${
+                  config.variant === 'success' ? 'text-emerald-600 dark:text-emerald-400' :
+                  config.variant === 'destructive' ? 'text-red-600 dark:text-red-400' :
+                  'text-blue-600 dark:text-blue-400'
+                }`}>
                   {config.label}
                 </span>
                 {timestamp && (
@@ -111,21 +122,21 @@ export function NFTTimeline({ transfers, currentOwner, loading }: NFTTimelinePro
                 )}
               </div>
 
-              <div className="mt-1 text-sm space-y-0.5">
+              <div className="mt-1 text-sm">
                 {eventType === 'mint' ? (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-zinc-500">to</span>
+                    <span className="text-zinc-500 text-xs">to</span>
                     <AddressLink address={to} className="text-xs" />
                   </div>
                 ) : eventType === 'burn' ? (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-zinc-500">from</span>
+                    <span className="text-zinc-500 text-xs">from</span>
                     <AddressLink address={from} className="text-xs" />
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <AddressLink address={from} className="text-xs" />
-                    <span className="text-zinc-400">&rarr;</span>
+                    <span className="text-zinc-400 text-xs">&rarr;</span>
                     <AddressLink address={to} className="text-xs" />
                   </div>
                 )}
@@ -147,10 +158,10 @@ export function NFTTimeline({ transfers, currentOwner, loading }: NFTTimelinePro
                   <span className="font-mono">Block {height.toLocaleString()}</span>
                 )}
               </div>
-            </div>
-          </div>
+            </TimelineContent>
+          </TimelineItem>
         );
       })}
-    </div>
+    </Timeline>
   );
 }
