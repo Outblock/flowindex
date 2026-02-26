@@ -90,6 +90,22 @@ func (r *Repository) Close() {
 	r.db.Close()
 }
 
+// TerminateIdleConnections kills non-active connections from previous backend instances
+// that may hold locks and block DDL in migrations. Returns the number terminated.
+func (r *Repository) TerminateIdleConnections(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT count(*) FROM (
+			SELECT pg_terminate_backend(pid)
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+			  AND pid <> pg_backend_pid()
+			  AND state != 'active'
+		) t
+	`).Scan(&count)
+	return count, err
+}
+
 func (r *Repository) ensureScriptTemplatesSchema(ctx context.Context) error {
 	const ddl = `
 		CREATE TABLE IF NOT EXISTS app.script_templates (

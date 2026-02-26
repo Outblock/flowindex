@@ -110,6 +110,18 @@ jobs:
             .
           docker push ${{ env.REGISTRY }}/backend --all-tags
 
+      - name: Kill old DB connections before deploy
+        run: |
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+            docker exec postgres psql -U flowscan -d flowscan -c "
+              SELECT pg_terminate_backend(pid)
+              FROM pg_stat_activity
+              WHERE datname = current_database()
+                AND pid <> pg_backend_pid()
+                AND state != '\''active'\'';
+            " 2>/dev/null || true
+          '
+
       - name: Deploy backend (pull & restart on GCE)
         run: |
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
