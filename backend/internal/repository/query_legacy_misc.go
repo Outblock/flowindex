@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -270,31 +271,26 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 			  AND t.timestamp IS NOT NULL
 			GROUP BY DATE(t.timestamp)
 		),
-		contract_agg AS (
-			SELECT DATE(b.timestamp) AS date, COUNT(*) AS new_contracts
-			FROM app.smart_contracts sc
-			JOIN raw.blocks b ON b.height = sc.first_seen_height
-			WHERE DATE(b.timestamp) IN (SELECT d FROM affected_dates)
-			  AND sc.first_seen_height IS NOT NULL
-			GROUP BY 1
-		)
-		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, active_accounts, new_contracts, failed_tx_count, updated_at)
+		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, active_accounts, failed_tx_count, updated_at)
 		SELECT
 			a.date, a.tx_count, a.evm_tx_count, a.total_gas_used, a.active_accounts,
-			COALESCE(c.new_contracts, 0), a.failed_tx_count, NOW()
+			a.failed_tx_count, NOW()
 		FROM tx_agg a
-		LEFT JOIN contract_agg c ON c.date = a.date
 		ON CONFLICT (date) DO UPDATE SET
 			tx_count = EXCLUDED.tx_count,
 			evm_tx_count = EXCLUDED.evm_tx_count,
 			total_gas_used = EXCLUDED.total_gas_used,
 			active_accounts = EXCLUDED.active_accounts,
-			new_contracts = EXCLUDED.new_contracts,
 			failed_tx_count = EXCLUDED.failed_tx_count,
 			updated_at = NOW();
 	`, fromHeight, toHeight)
 	if err != nil {
 		return fmt.Errorf("refresh daily stats range [%d, %d): %w", fromHeight, toHeight, err)
+	}
+
+	// Best effort: contract stats should not block core daily tx stats.
+	if err := r.refreshDailyContractStatsRange(ctx, fromHeight, toHeight); err != nil {
+		log.Printf("[daily_stats] contract stats refresh skipped for range [%d,%d): %v", fromHeight, toHeight, err)
 	}
 	return nil
 }
@@ -304,10 +300,8 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 // otherwise it only refreshes the last 30 days (periodic tick).
 func (r *Repository) RefreshDailyStats(ctx context.Context, fullScan bool) error {
 	whereClause := "AND t.timestamp >= NOW() - INTERVAL '30 days'"
-	contractWhereClause := "AND b.timestamp >= NOW() - INTERVAL '30 days'"
 	if fullScan {
 		whereClause = ""
-		contractWhereClause = ""
 	}
 	query := fmt.Sprintf(`
 		WITH tx_agg AS (
@@ -322,6 +316,72 @@ func (r *Repository) RefreshDailyStats(ctx context.Context, fullScan bool) error
 			WHERE t.timestamp IS NOT NULL
 			  %s
 			GROUP BY DATE(t.timestamp)
+		)
+		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, active_accounts, failed_tx_count, updated_at)
+		SELECT
+			a.date, a.tx_count, a.evm_tx_count, a.total_gas_used, a.active_accounts,
+			a.failed_tx_count, NOW()
+		FROM tx_agg a
+		ON CONFLICT (date) DO UPDATE SET
+			tx_count = EXCLUDED.tx_count,
+			evm_tx_count = EXCLUDED.evm_tx_count,
+			total_gas_used = EXCLUDED.total_gas_used,
+			active_accounts = EXCLUDED.active_accounts,
+			failed_tx_count = EXCLUDED.failed_tx_count,
+			updated_at = NOW();
+	`, whereClause)
+	_, err := r.db.Exec(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to refresh daily stats: %w", err)
+	}
+
+	// Best effort: contract stats should not block core daily tx stats.
+	if err := r.refreshDailyContractStats(ctx, fullScan); err != nil {
+		log.Printf("[daily_stats] contract stats refresh skipped (fullScan=%v): %v", fullScan, err)
+	}
+	return nil
+}
+
+func (r *Repository) refreshDailyContractStatsRange(ctx context.Context, fromHeight, toHeight uint64) error {
+	_, err := r.db.Exec(ctx, `
+		WITH affected_dates AS (
+			SELECT DISTINCT DATE(timestamp) AS d
+			FROM raw.transactions
+			WHERE block_height >= $1 AND block_height < $2
+			  AND timestamp IS NOT NULL
+		),
+		contract_agg AS (
+			SELECT DATE(b.timestamp) AS date, COUNT(*) AS new_contracts
+			FROM app.smart_contracts sc
+			JOIN raw.blocks b ON b.height = sc.first_seen_height
+			WHERE DATE(b.timestamp) IN (SELECT d FROM affected_dates)
+			  AND sc.first_seen_height IS NOT NULL
+			GROUP BY 1
+		)
+		UPDATE app.daily_stats d
+		SET new_contracts = COALESCE(c.new_contracts, 0),
+		    updated_at = NOW()
+		FROM affected_dates ad
+		LEFT JOIN contract_agg c ON c.date = ad.d
+		WHERE d.date = ad.d;
+	`, fromHeight, toHeight)
+	return err
+}
+
+func (r *Repository) refreshDailyContractStats(ctx context.Context, fullScan bool) error {
+	dateWhere := "AND t.timestamp >= NOW() - INTERVAL '30 days'"
+	contractWhere := "AND b.timestamp >= NOW() - INTERVAL '30 days'"
+	if fullScan {
+		dateWhere = ""
+		contractWhere = ""
+	}
+
+	query := fmt.Sprintf(`
+		WITH target_dates AS (
+			SELECT DISTINCT DATE(t.timestamp) AS d
+			FROM raw.transactions t
+			WHERE t.timestamp IS NOT NULL
+			  %s
 		),
 		contract_agg AS (
 			SELECT DATE(b.timestamp) AS date, COUNT(*) AS new_contracts
@@ -331,26 +391,15 @@ func (r *Repository) RefreshDailyStats(ctx context.Context, fullScan bool) error
 			  %s
 			GROUP BY 1
 		)
-		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, active_accounts, new_contracts, failed_tx_count, updated_at)
-		SELECT
-			a.date, a.tx_count, a.evm_tx_count, a.total_gas_used, a.active_accounts,
-			COALESCE(c.new_contracts, 0), a.failed_tx_count, NOW()
-		FROM tx_agg a
-		LEFT JOIN contract_agg c ON c.date = a.date
-		ON CONFLICT (date) DO UPDATE SET
-			tx_count = EXCLUDED.tx_count,
-			evm_tx_count = EXCLUDED.evm_tx_count,
-			total_gas_used = EXCLUDED.total_gas_used,
-			active_accounts = EXCLUDED.active_accounts,
-			new_contracts = EXCLUDED.new_contracts,
-			failed_tx_count = EXCLUDED.failed_tx_count,
-			updated_at = NOW();
-	`, whereClause, contractWhereClause)
+		UPDATE app.daily_stats ds
+		SET new_contracts = COALESCE(c.new_contracts, 0),
+		    updated_at = NOW()
+		FROM target_dates td
+		LEFT JOIN contract_agg c ON c.date = td.d
+		WHERE ds.date = td.d;
+	`, dateWhere, contractWhere)
 	_, err := r.db.Exec(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to refresh daily stats: %w", err)
-	}
-	return nil
+	return err
 }
 
 // GetDailyStats retrieves all available daily stats

@@ -39,6 +39,13 @@ interface DailyRow {
   failed_tx_count: number
   error_rate: number
   avg_gas_per_tx: number
+  new_accounts: number
+  coa_new_accounts: number
+  evm_active_addresses: number
+  defi_swap_count: number
+  defi_unique_traders: number
+  epoch_payout_total: string
+  bridge_to_evm_txs: number
 }
 
 interface TransferRow {
@@ -94,6 +101,16 @@ function fmtPct(n: number): string {
 
 function fmtPrice(n: number): string {
   return `$${n.toFixed(2)}`
+}
+
+function toNum(v: unknown): number {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+  if (typeof v === 'string') {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
+  if (Array.isArray(v) && v.length > 0) return toNum(v[0])
+  return 0
 }
 
 function fmtDateTick(dateStr: string): string {
@@ -549,6 +566,40 @@ function AnalyticsPage() {
                 value={latest ? fmtComma(latest.new_contracts) : '--'}
                 delta={delta(latest?.new_contracts, prev?.new_contracts)}
               />
+              <KpiCard
+                label="New Accounts (24h)"
+                value={latest ? fmtComma(latest.new_accounts) : '--'}
+                delta={delta(latest?.new_accounts, prev?.new_accounts)}
+              />
+              <KpiCard
+                label="COA New (24h)"
+                value={latest ? fmtComma(latest.coa_new_accounts) : '--'}
+                delta={delta(latest?.coa_new_accounts, prev?.coa_new_accounts)}
+              />
+              <KpiCard
+                label="EVM Active Addr (24h)"
+                value={latest ? fmtComma(latest.evm_active_addresses) : '--'}
+                delta={delta(latest?.evm_active_addresses, prev?.evm_active_addresses)}
+              />
+              <KpiCard
+                label="DeFi Swaps (24h)"
+                value={latest ? fmtComma(latest.defi_swap_count) : '--'}
+                delta={delta(latest?.defi_swap_count, prev?.defi_swap_count)}
+              />
+              <KpiCard
+                label="Bridge->EVM Txs (24h)"
+                value={latest ? fmtComma(latest.bridge_to_evm_txs) : '--'}
+                delta={delta(latest?.bridge_to_evm_txs, prev?.bridge_to_evm_txs)}
+              />
+              <KpiCard
+                label="Epoch Payout (day)"
+                value={latest ? fmtNum(toNum(latest.epoch_payout_total)) : '--'}
+                delta={
+                  latest && prev
+                    ? toNum(latest.epoch_payout_total) - toNum(prev.epoch_payout_total)
+                    : null
+                }
+              />
             </div>
 
             {/* ── Bento Grid ── */}
@@ -598,6 +649,24 @@ function AnalyticsPage() {
               </ChartCard>
               )}
 
+              {showChart('network') && (
+              <ChartCard title="New Accounts" loading={dailyLoading} empty={visibleDaily.length === 0}>
+                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gNewAccounts" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps()} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                  <Area type="monotone" dataKey="new_accounts" stroke={C.blue} strokeWidth={1.5} fill="url(#gNewAccounts)" name="New Accounts" />
+                </AreaChart>
+              </ChartCard>
+              )}
+
               {/* EVM vs Cadence % — 1 col */}
               {showChart('transactions') && (
               <ChartCard title="EVM vs Cadence (%)" loading={dailyLoading} empty={evmPctData.length === 0}>
@@ -615,7 +684,7 @@ function AnalyticsPage() {
                   <CartesianGrid stroke={gridStroke} vertical={false} />
                   <XAxis {...xAxisProps()} />
                   <YAxis {...yAxisProps((v) => `${v}%`)} domain={[0, 100]} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v: number) => [`${v.toFixed(1)}%`]} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`${toNum(v).toFixed(1)}%`]} />
                   <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
                   <Area type="monotone" dataKey="cadence_pct" stackId="1" stroke={C.green} strokeWidth={1.5} fill="url(#gCadPct)" name="Cadence" />
                   <Area type="monotone" dataKey="evm_pct" stackId="1" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvmPct)" name="EVM" />
@@ -630,9 +699,50 @@ function AnalyticsPage() {
                   <CartesianGrid stroke={gridStroke} vertical={false} />
                   <XAxis {...xAxisProps()} />
                   <YAxis {...yAxisProps((v) => `$${v.toFixed(2)}`)} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v: number) => [`$${v.toFixed(4)}`, 'Price']} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`$${toNum(v).toFixed(4)}`, 'Price']} />
                   <Line type="monotone" dataKey="price" stroke={C.green} strokeWidth={1.5} dot={false} name="FLOW" />
                 </LineChart>
+              </ChartCard>
+              )}
+
+              {showChart('tokens') && (
+              <ChartCard title="DeFi Swaps & Traders" className="md:col-span-2" loading={dailyLoading} empty={visibleDaily.length === 0}>
+                <LineChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps()} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                  <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
+                  <Line type="monotone" dataKey="defi_swap_count" stroke={C.purple} strokeWidth={1.5} dot={false} name="Swaps" />
+                  <Line type="monotone" dataKey="defi_unique_traders" stroke={C.pink} strokeWidth={1.5} dot={false} name="Unique Traders" />
+                </LineChart>
+              </ChartCard>
+              )}
+
+              {showChart('network') && (
+              <ChartCard title="Epoch Payout (Daily)" loading={dailyLoading} empty={visibleDaily.length === 0}>
+                <BarChart
+                  data={visibleDaily.map((d) => ({ ...d, epoch_payout_total_num: toNum(d.epoch_payout_total) }))}
+                  margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps()} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} />
+                  <Bar dataKey="epoch_payout_total_num" fill={C.blue} fillOpacity={0.7} name="Epoch Payout" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ChartCard>
+              )}
+
+              {showChart('transactions') && (
+              <ChartCard title="Bridge -> EVM Txs (Proxy)" loading={dailyLoading} empty={visibleDaily.length === 0}>
+                <BarChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis {...xAxisProps()} />
+                  <YAxis {...yAxisProps()} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} />
+                  <Bar dataKey="bridge_to_evm_txs" fill={C.blue} fillOpacity={0.7} name="Bridge Txs" radius={[3, 3, 0, 0]} />
+                </BarChart>
               </ChartCard>
               )}
 
@@ -687,7 +797,7 @@ function AnalyticsPage() {
                   <CartesianGrid stroke={gridStroke} vertical={false} />
                   <XAxis {...xAxisProps()} />
                   <YAxis {...yAxisProps((v) => `${v}%`)} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v: number) => [`${v.toFixed(2)}%`, 'Error Rate']} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`${toNum(v).toFixed(2)}%`, 'Error Rate']} />
                   <Area type="monotone" dataKey="error_rate" stroke={C.red} strokeWidth={1.5} fill="url(#gErr)" name="Error Rate" />
                 </AreaChart>
               </ChartCard>
@@ -752,7 +862,7 @@ function AnalyticsPage() {
                       <CartesianGrid stroke={gridStroke} vertical={false} />
                       <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
                       <YAxis {...yAxisProps()} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v: number) => [fmtNum(v), 'Staked']} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [fmtNum(toNum(v)), 'Staked']} />
                       <Line type="monotone" dataKey="total_staked" stroke={C.green} strokeWidth={1.5} dot={false} name="Total Staked" />
                     </LineChart>
                   </ChartCard>

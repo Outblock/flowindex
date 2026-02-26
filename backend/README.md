@@ -117,3 +117,17 @@ cd backend
 export DB_URL="postgres://..."
 go run ./cmd/tools/backfill_account_keys --start <min_height> --end <max_height>
 ```
+
+### Backfill Daily Stats (analytics recovery)
+Use this when `/analytics/daily` is stale or key fields are zero for long periods.
+
+```bash
+cd backend
+export DATABASE_URL="postgres://..." # or DB_URL
+
+# Full re-aggregation (recommended for recovery)
+go run ./cmd/tools/backfill_daily_stats --full-scan
+
+# Or only a specific block range [from, to)
+go run ./cmd/tools/backfill_daily_stats --from-height 85000000 --to-height 143500000
+```
