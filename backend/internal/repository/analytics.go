@@ -38,29 +38,12 @@ func (r *Repository) GetAnalyticsDailyAccountsModule(ctx context.Context, from, 
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
-		),
-		new_accounts AS (
-			SELECT DATE(b.timestamp)::date AS date, COUNT(*)::bigint AS cnt
-			FROM app.accounts a
-			JOIN raw.blocks b ON b.height = a.first_seen_height
-			WHERE b.timestamp >= $1::timestamptz
-			  AND b.timestamp < ($2::date + interval '1 day')
-			GROUP BY 1
-		),
-		coa_new AS (
-			SELECT DATE(b.timestamp)::date AS date, COUNT(*)::bigint AS cnt
-			FROM app.coa_accounts c
-			JOIN raw.blocks b ON b.height = c.block_height
-			WHERE b.timestamp >= $1::timestamptz
-			  AND b.timestamp < ($2::date + interval '1 day')
-			GROUP BY 1
 		)
 		SELECT d.date::text,
-			COALESCE(a.cnt, 0)::bigint,
-			COALESCE(c.cnt, 0)::bigint
+			COALESCE(m.new_accounts, 0)::bigint,
+			COALESCE(m.coa_new_accounts, 0)::bigint
 		FROM dates d
-		LEFT JOIN new_accounts a ON a.date = d.date
-		LEFT JOIN coa_new c ON c.date = d.date
+		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
@@ -83,27 +66,10 @@ func (r *Repository) GetAnalyticsDailyEVMModule(ctx context.Context, from, to ti
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
-		),
-		evm_active AS (
-			SELECT d::date AS date, COUNT(DISTINCT addr)::bigint AS cnt
-			FROM (
-				SELECT DATE(timestamp) AS d, from_address AS addr
-				FROM app.evm_transactions
-				WHERE timestamp >= $1::timestamptz
-				  AND timestamp < ($2::date + interval '1 day')
-				  AND from_address IS NOT NULL
-				UNION ALL
-				SELECT DATE(timestamp) AS d, to_address AS addr
-				FROM app.evm_transactions
-				WHERE timestamp >= $1::timestamptz
-				  AND timestamp < ($2::date + interval '1 day')
-				  AND to_address IS NOT NULL
-			) x
-			GROUP BY 1
 		)
-		SELECT d.date::text, COALESCE(e.cnt, 0)::bigint
+		SELECT d.date::text, COALESCE(m.evm_active_addresses, 0)::bigint
 		FROM dates d
-		LEFT JOIN evm_active e ON e.date = d.date
+		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
@@ -126,21 +92,12 @@ func (r *Repository) GetAnalyticsDailyDefiModule(ctx context.Context, from, to t
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
-		),
-		defi AS (
-			SELECT DATE(timestamp)::date AS date,
-				COUNT(*) FILTER (WHERE event_type = 'Swap')::bigint AS swap_count,
-				COUNT(DISTINCT maker) FILTER (WHERE event_type = 'Swap' AND maker IS NOT NULL)::bigint AS traders
-			FROM app.defi_events
-			WHERE timestamp >= $1::timestamptz
-			  AND timestamp < ($2::date + interval '1 day')
-			GROUP BY 1
 		)
 		SELECT d.date::text,
-			COALESCE(f.swap_count, 0)::bigint,
-			COALESCE(f.traders, 0)::bigint
+			COALESCE(m.defi_swap_count, 0)::bigint,
+			COALESCE(m.defi_unique_traders, 0)::bigint
 		FROM dates d
-		LEFT JOIN defi f ON f.date = d.date
+		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
@@ -163,17 +120,10 @@ func (r *Repository) GetAnalyticsDailyEpochModule(ctx context.Context, from, to 
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
-		),
-		payouts AS (
-			SELECT DATE(payout_time)::date AS date, COALESCE(SUM(payout_total), 0)::text AS total
-			FROM app.epoch_stats
-			WHERE payout_time >= $1::timestamptz
-			  AND payout_time < ($2::date + interval '1 day')
-			GROUP BY 1
 		)
-		SELECT d.date::text, COALESCE(p.total, '0')
+		SELECT d.date::text, COALESCE(m.epoch_payout_total, 0)::text
 		FROM dates d
-		LEFT JOIN payouts p ON p.date = d.date
+		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
@@ -196,19 +146,10 @@ func (r *Repository) GetAnalyticsDailyBridgeModule(ctx context.Context, from, to
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
-		),
-		bridge AS (
-			SELECT DATE(l.timestamp)::date AS date, COUNT(*)::bigint AS cnt
-			FROM app.tx_tags t
-			JOIN raw.tx_lookup l ON l.id = t.transaction_id
-			WHERE t.tag = 'EVM_BRIDGE'
-			  AND l.timestamp >= $1::timestamptz
-			  AND l.timestamp < ($2::date + interval '1 day')
-			GROUP BY 1
 		)
-		SELECT d.date::text, COALESCE(b.cnt, 0)::bigint
+		SELECT d.date::text, COALESCE(m.bridge_to_evm_txs, 0)::bigint
 		FROM dates d
-		LEFT JOIN bridge b ON b.date = d.date
+		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {

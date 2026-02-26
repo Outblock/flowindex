@@ -181,6 +181,7 @@ func main() {
 	enableStakingWorker := os.Getenv("ENABLE_STAKING_WORKER") != "false"
 	enableDailyBalanceWorker := os.Getenv("ENABLE_DAILY_BALANCE_WORKER") != "false"
 	enableDailyStatsWorker := os.Getenv("ENABLE_DAILY_STATS_WORKER") != "false"
+	enableAnalyticsDeriverWorker := os.Getenv("ENABLE_ANALYTICS_DERIVER_WORKER") != "false"
 	enableDefiWorker := os.Getenv("ENABLE_DEFI_WORKER") != "false"
 	enableNFTItemMetadataWorker := os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false"
 	enableNFTReconciler := os.Getenv("ENABLE_NFT_RECONCILER") != "false"
@@ -199,6 +200,7 @@ func main() {
 		enableStakingWorker = false
 		enableDailyBalanceWorker = false
 		enableDailyStatsWorker = false
+		enableAnalyticsDeriverWorker = false
 		enableDefiWorker = false
 		enableNFTItemMetadataWorker = false
 		enableNFTReconciler = false
@@ -250,6 +252,9 @@ func main() {
 		}
 		if enableDailyStatsWorker {
 			processors = append(processors, ingester.NewDailyStatsWorker(repo))
+		}
+		if enableAnalyticsDeriverWorker {
+			processors = append(processors, ingester.NewAnalyticsDeriverWorker(repo))
 		}
 		// Phase 2 processors (depend on token_worker output):
 		if enableFTHoldingsWorker {
@@ -306,6 +311,7 @@ func main() {
 		{"staking_worker", enableStakingWorker, func() ingester.Processor { return ingester.NewStakingWorker(repo) }},
 		{"defi_worker", enableDefiWorker, func() ingester.Processor { return ingester.NewDefiWorker(repo) }},
 		{"daily_stats_worker", enableDailyStatsWorker, func() ingester.Processor { return ingester.NewDailyStatsWorker(repo) }},
+		{"analytics_deriver_worker", enableAnalyticsDeriverWorker, func() ingester.Processor { return ingester.NewAnalyticsDeriverWorker(repo) }},
 		{"ft_holdings_worker", enableFTHoldingsWorker, func() ingester.Processor { return ingester.NewFTHoldingsWorker(repo) }},
 		{"nft_ownership_worker", enableNFTOwnershipWorker, func() ingester.Processor { return ingester.NewNFTOwnershipWorker(repo) }},
 		{"daily_balance_worker", enableDailyBalanceWorker, func() ingester.Processor { return ingester.NewDailyBalanceWorker(repo) }},
@@ -362,12 +368,12 @@ func main() {
 	}
 
 	forwardIngester := ingester.NewService(flowClient, repo, ingester.Config{
-		ServiceName:      forwardServiceName,
-		BatchSize:        latestBatch,
-		WorkerCount:      latestWorkers,
-		StartBlock:       startBlock,
-		Mode:             "forward",
-		MaxReorgDepth:    maxReorgDepth,
+		ServiceName:       forwardServiceName,
+		BatchSize:         latestBatch,
+		WorkerCount:       latestWorkers,
+		StartBlock:        startBlock,
+		Mode:              "forward",
+		MaxReorgDepth:     maxReorgDepth,
 		OnNewBlock:        api.BroadcastNewBlock,
 		OnNewTransactions: api.MakeBroadcastNewTransactions(repo),
 		OnIndexedRange:    onIndexedRange,
@@ -505,13 +511,13 @@ func main() {
 		}
 
 		hd2 := ingester.NewHistoryDeriver(repo, hd2Processors, ingester.HistoryDeriverConfig{
-			ChunkSize:      hd2Chunk,
-			SleepMs:        hd2Sleep,
-			Concurrency:    hd2Concurrency,
+			ChunkSize:        hd2Chunk,
+			SleepMs:          hd2Sleep,
+			Concurrency:      hd2Concurrency,
 			CheckpointPrefix: hd2Prefix,
-			DisableUp:      os.Getenv("HISTORY_DERIVER2_DISABLE_UP") == "true",
-			DisableDown:    os.Getenv("HISTORY_DERIVER2_DISABLE_DOWN") == "true",
-			CeilingHeight:  hd2Ceiling,
+			DisableUp:        os.Getenv("HISTORY_DERIVER2_DISABLE_UP") == "true",
+			DisableDown:      os.Getenv("HISTORY_DERIVER2_DISABLE_DOWN") == "true",
+			CeilingHeight:    hd2Ceiling,
 		})
 		hd2.Start(ctx)
 		log.Printf("History Deriver 2 started (prefix=%s chunk=%d concurrency=%d ceiling=%d)", hd2Prefix, hd2Chunk, hd2Concurrency, hd2Ceiling)

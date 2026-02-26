@@ -35,6 +35,7 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin.HandleFunc("/script-templates/{hash}", s.handleAdminUpdateScriptTemplate).Methods("PUT", "PATCH", "OPTIONS")
 	admin.HandleFunc("/script-templates/{hash}/script", s.handleAdminGetScriptText).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/refresh-daily-stats", s.handleAdminRefreshDailyStats).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/backfill-analytics", s.handleAdminBackfillAnalytics).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/reset-token-worker", s.handleAdminResetTokenWorker).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/reset-history-deriver", s.handleAdminResetHistoryDeriver).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/redirect-history-ingester", s.handleAdminRedirectHistoryIngester).Methods("POST", "OPTIONS")

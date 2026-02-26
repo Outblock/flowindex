@@ -17,6 +17,7 @@ BEGIN;
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE SCHEMA IF NOT EXISTS raw;
 CREATE SCHEMA IF NOT EXISTS app;
+CREATE SCHEMA IF NOT EXISTS analytics;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 1) Resumability / Ops Tables
@@ -519,6 +520,20 @@ ALTER TABLE IF EXISTS app.daily_stats
   ADD COLUMN IF NOT EXISTS total_gas_used BIGINT DEFAULT 0;
 ALTER TABLE IF EXISTS app.daily_stats
   ADD COLUMN IF NOT EXISTS failed_tx_count BIGINT DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS analytics.daily_metrics (
+    date                 DATE PRIMARY KEY,
+    new_accounts         BIGINT DEFAULT 0,
+    coa_new_accounts     BIGINT DEFAULT 0,
+    evm_active_addresses BIGINT DEFAULT 0,
+    defi_swap_count      BIGINT DEFAULT 0,
+    defi_unique_traders  BIGINT DEFAULT 0,
+    epoch_payout_total   NUMERIC(78, 0) DEFAULT 0,
+    bridge_to_evm_txs    BIGINT DEFAULT 0,
+    updated_at           TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_daily_metrics_updated_at
+  ON analytics.daily_metrics (updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS app.market_prices (
     id BIGSERIAL PRIMARY KEY,

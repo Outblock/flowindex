@@ -957,6 +957,40 @@ func (s *Server) handleAdminRefreshDailyStats(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// handleAdminBackfillAnalytics triggers analytics deriver backfill for a block range.
+// POST /admin/backfill-analytics  {"from_height":123,"to_height":456}
+func (s *Server) handleAdminBackfillAnalytics(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		FromHeight uint64 `json:"from_height"`
+		ToHeight   uint64 `json:"to_height"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.FromHeight == 0 || req.ToHeight == 0 || req.ToHeight <= req.FromHeight {
+		writeAPIError(w, http.StatusBadRequest, "invalid range: require from_height > 0 and to_height > from_height")
+		return
+	}
+
+	log.Printf("[admin] Triggering analytics backfill range [%d, %d)", req.FromHeight, req.ToHeight)
+	go func() {
+		ctx := context.Background()
+		worker := ingester.NewAnalyticsDeriverWorker(s.repo)
+		if err := worker.ProcessRange(ctx, req.FromHeight, req.ToHeight); err != nil {
+			log.Printf("[admin] analytics backfill error [%d,%d): %v", req.FromHeight, req.ToHeight, err)
+			return
+		}
+		log.Printf("[admin] analytics backfill complete [%d, %d)", req.FromHeight, req.ToHeight)
+	}()
+
+	writeAPIResponse(w, map[string]interface{}{
+		"message":     "Analytics backfill started in background",
+		"from_height": req.FromHeight,
+		"to_height":   req.ToHeight,
+	}, nil, nil)
+}
+
 // handleAdminResetTokenWorker fixes cross-VM FLOW transfer data.
 // It deletes bogus FT transfers with contract_name='EVM' and resets the
 // token_worker to re-process from the earliest affected block height.

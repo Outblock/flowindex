@@ -295,6 +295,102 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 	return nil
 }
 
+// RefreshAnalyticsDailyMetricsRange re-aggregates analytics.daily_metrics for dates
+// touched by transactions in the half-open block range [fromHeight, toHeight).
+func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, fromHeight, toHeight uint64) error {
+	_, err := r.db.Exec(ctx, `
+		WITH affected_dates AS (
+			SELECT DISTINCT DATE(t.timestamp) AS d
+			FROM raw.transactions t
+			WHERE t.block_height >= $1 AND t.block_height < $2
+			  AND t.timestamp IS NOT NULL
+		),
+		new_accounts AS (
+			SELECT DATE(b.timestamp) AS d, COUNT(*)::bigint AS cnt
+			FROM app.accounts a
+			JOIN raw.blocks b ON b.height = a.first_seen_height
+			WHERE a.first_seen_height >= $1 AND a.first_seen_height < $2
+			GROUP BY 1
+		),
+		coa_new AS (
+			SELECT DATE(b.timestamp) AS d, COUNT(*)::bigint AS cnt
+			FROM app.coa_accounts c
+			JOIN raw.blocks b ON b.height = c.block_height
+			WHERE c.block_height >= $1 AND c.block_height < $2
+			GROUP BY 1
+		),
+		evm_active AS (
+			SELECT d, COUNT(DISTINCT addr)::bigint AS cnt
+			FROM (
+				SELECT DATE(e.timestamp) AS d, e.from_address AS addr
+				FROM app.evm_transactions e
+				WHERE e.block_height >= $1 AND e.block_height < $2 AND e.from_address IS NOT NULL
+				UNION ALL
+				SELECT DATE(e.timestamp) AS d, e.to_address AS addr
+				FROM app.evm_transactions e
+				WHERE e.block_height >= $1 AND e.block_height < $2 AND e.to_address IS NOT NULL
+			) x
+			GROUP BY 1
+		),
+		defi AS (
+			SELECT DATE(d.timestamp) AS d,
+				COUNT(*) FILTER (WHERE d.event_type = 'Swap')::bigint AS swap_count,
+				COUNT(DISTINCT d.maker) FILTER (WHERE d.event_type = 'Swap' AND d.maker IS NOT NULL)::bigint AS traders
+			FROM app.defi_events d
+			WHERE d.block_height >= $1 AND d.block_height < $2
+			GROUP BY 1
+		),
+		epoch AS (
+			SELECT DATE(e.payout_time) AS d, COALESCE(SUM(e.payout_total), 0)::numeric(78, 0) AS payout
+			FROM app.epoch_stats e
+			WHERE DATE(e.payout_time) IN (SELECT d FROM affected_dates)
+			GROUP BY 1
+		),
+		bridge AS (
+			SELECT DATE(l.timestamp) AS d, COUNT(*)::bigint AS cnt
+			FROM app.tx_tags t
+			JOIN raw.tx_lookup l ON l.id = t.transaction_id
+			WHERE t.tag = 'EVM_BRIDGE'
+			  AND l.block_height >= $1 AND l.block_height < $2
+			GROUP BY 1
+		)
+		INSERT INTO analytics.daily_metrics (
+			date, new_accounts, coa_new_accounts, evm_active_addresses,
+			defi_swap_count, defi_unique_traders, epoch_payout_total, bridge_to_evm_txs, updated_at
+		)
+		SELECT
+			d.d,
+			COALESCE(na.cnt, 0),
+			COALESCE(cn.cnt, 0),
+			COALESCE(ea.cnt, 0),
+			COALESCE(df.swap_count, 0),
+			COALESCE(df.traders, 0),
+			COALESCE(ep.payout, 0),
+			COALESCE(br.cnt, 0),
+			NOW()
+		FROM affected_dates d
+		LEFT JOIN new_accounts na ON na.d = d.d
+		LEFT JOIN coa_new cn ON cn.d = d.d
+		LEFT JOIN evm_active ea ON ea.d = d.d
+		LEFT JOIN defi df ON df.d = d.d
+		LEFT JOIN epoch ep ON ep.d = d.d
+		LEFT JOIN bridge br ON br.d = d.d
+		ON CONFLICT (date) DO UPDATE SET
+			new_accounts = EXCLUDED.new_accounts,
+			coa_new_accounts = EXCLUDED.coa_new_accounts,
+			evm_active_addresses = EXCLUDED.evm_active_addresses,
+			defi_swap_count = EXCLUDED.defi_swap_count,
+			defi_unique_traders = EXCLUDED.defi_unique_traders,
+			epoch_payout_total = EXCLUDED.epoch_payout_total,
+			bridge_to_evm_txs = EXCLUDED.bridge_to_evm_txs,
+			updated_at = NOW();
+	`, fromHeight, toHeight)
+	if err != nil {
+		return fmt.Errorf("refresh analytics daily metrics range [%d, %d): %w", fromHeight, toHeight, err)
+	}
+	return nil
+}
+
 // RefreshDailyStats aggregates transaction counts by date into daily_stats table.
 // When fullScan is true, it processes ALL transactions (used on startup);
 // otherwise it only refreshes the last 30 days (periodic tick).

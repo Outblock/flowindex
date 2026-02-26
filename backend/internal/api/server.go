@@ -133,6 +133,7 @@ func (s *Server) buildStatusPayload(ctx context.Context, includeRanges bool) ([]
 		"tx_contracts_worker":      os.Getenv("ENABLE_TX_CONTRACTS_WORKER") != "false",
 		"tx_metrics_worker":        os.Getenv("ENABLE_TX_METRICS_WORKER") != "false",
 		"daily_stats_worker":       os.Getenv("ENABLE_DAILY_STATS_WORKER") != "false",
+		"analytics_deriver_worker": os.Getenv("ENABLE_ANALYTICS_DERIVER_WORKER") != "false",
 		"staking_worker":           os.Getenv("ENABLE_STAKING_WORKER") != "false",
 		"defi_worker":              os.Getenv("ENABLE_DEFI_WORKER") != "false",
 		"daily_balance_worker":     os.Getenv("ENABLE_DAILY_BALANCE_WORKER") != "false",
@@ -188,6 +189,10 @@ func (s *Server) buildStatusPayload(ctx context.Context, includeRanges bool) ([]
 		"daily_stats_worker": {
 			"concurrency": getEnvInt("DAILY_STATS_WORKER_CONCURRENCY", 1),
 			"range":       getEnvUint("DAILY_STATS_WORKER_RANGE", 1000),
+		},
+		"analytics_deriver_worker": {
+			"concurrency": getEnvInt("ANALYTICS_DERIVER_WORKER_CONCURRENCY", 1),
+			"range":       getEnvUint("ANALYTICS_DERIVER_WORKER_RANGE", 1000),
 		},
 		"staking_worker": {
 			"concurrency": getEnvInt("STAKING_WORKER_CONCURRENCY", 1),
