@@ -240,63 +240,33 @@ function TokenDetailInner() {
         transition={{ delay: 0.1 }}
         className="space-y-6"
       >
-        {/* Info cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Contract Address</p>
-            <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
-              {addr ? (
-                <AddressLink address={addr} prefixLen={20} suffixLen={0} />
-              ) : (
-                'N/A'
-              )}
-              {addr && (
-                <CopyButton
-                  content={addr}
-                  variant="ghost"
-                  size="xs"
-                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1"
-                />
-              )}
-            </p>
-          </div>
-          <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Holders</p>
-            <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-              <SafeNumberFlow value={Number.isFinite(holdersCount) ? holdersCount : 0} format={{ useGrouping: true }} />
-            </p>
-            <p className="mt-2 text-[10px] text-amber-500 dark:text-amber-400">
-              May be inaccurate during indexing
-            </p>
-          </div>
-          {token?.total_supply != null && (
-            <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-              <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Total Supply</p>
-              <p className="text-sm font-bold font-mono text-zinc-900 dark:text-white">
-                {formatBalance(token.total_supply)}
-              </p>
+        {/* Info table */}
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm shadow-sm dark:shadow-none overflow-hidden">
+          <div className="grid grid-cols-[auto_1fr] text-sm">
+            <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">Contract</div>
+            <div className="px-4 py-3 font-mono text-zinc-900 dark:text-white break-all border-b border-zinc-100 dark:border-white/5 flex items-center gap-1">
+              {addr ? <AddressLink address={addr} prefixLen={20} suffixLen={0} /> : 'N/A'}
+              {addr && <CopyButton content={addr} variant="ghost" size="xs" className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />}
             </div>
-          )}
-          <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Decimals</p>
-            <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-              {decimals}
-            </p>
-          </div>
-          {token?.evm_address && (
-            <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-              <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">EVM Address</p>
-              <p className="text-sm font-mono text-zinc-900 dark:text-white break-all">
+            {token?.evm_address && (<>
+              <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">EVM Address</div>
+              <div className="px-4 py-3 font-mono text-zinc-900 dark:text-white break-all border-b border-zinc-100 dark:border-white/5 flex items-center gap-1">
                 {String(token.evm_address).slice(0, 10)}...{String(token.evm_address).slice(-8)}
-                <CopyButton
-                  content={String(token.evm_address)}
-                  variant="ghost"
-                  size="xs"
-                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 ml-1"
-                />
-              </p>
+                <CopyButton content={String(token.evm_address)} variant="ghost" size="xs" className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />
+              </div>
+            </>)}
+            <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">Holders</div>
+            <div className="px-4 py-3 font-mono font-bold text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-white/5">
+              <SafeNumberFlow value={Number.isFinite(holdersCount) ? holdersCount : 0} format={{ useGrouping: true }} />
+              <span className="ml-2 text-[10px] font-normal text-amber-500 dark:text-amber-400">May be inaccurate during indexing</span>
             </div>
-          )}
+            {token?.total_supply != null && (<>
+              <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">Total Supply</div>
+              <div className="px-4 py-3 font-mono font-bold text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-white/5">{formatBalance(token.total_supply)}</div>
+            </>)}
+            <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Decimals</div>
+            <div className="px-4 py-3 font-mono font-bold text-zinc-900 dark:text-white">{decimals}</div>
+          </div>
         </div>
 
         {/* Description + External URL + Socials */}
@@ -388,7 +358,7 @@ function TokenDetailInner() {
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {holdersState.map((h: any, idx: number) => {
+                  {[...holdersState].sort((a: any, b: any) => Number(b?.balance || 0) - Number(a?.balance || 0)).map((h: any, idx: number) => {
                     const a = normalizeHex(h?.address);
                     const bal = Math.max(Number(h?.balance || 0), 0);
                     const rank = holdersOffset + idx + 1;
