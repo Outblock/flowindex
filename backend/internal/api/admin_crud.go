@@ -287,3 +287,65 @@ func nftCollectionToAdmin(c models.NFTCollection) map[string]interface{} {
 		"updated_at":       formatTime(c.UpdatedAt),
 	}
 }
+
+// --- Contract Verified Status ---
+
+func (s *Server) handleAdminListContracts(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parseLimitOffset(r)
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	verified := strings.TrimSpace(r.URL.Query().Get("verified"))
+
+	contracts, err := s.repo.AdminListContracts(r.Context(), search, limit, offset, verified)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(contracts))
+	for _, c := range contracts {
+		out = append(out, map[string]interface{}{
+			"identifier":      formatTokenIdentifier(c.Address, c.Name),
+			"address":         formatAddressV1(c.Address),
+			"name":            c.Name,
+			"is_verified":     c.IsVerified,
+			"dependent_count": c.DependentCount,
+			"created_at":      formatTime(c.CreatedAt),
+		})
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) handleAdminUpdateContract(w http.ResponseWriter, r *http.Request) {
+	identifier := mux.Vars(r)["identifier"]
+	address, name, _ := splitContractIdentifier(identifier)
+	if address == "" || name == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid contract identifier")
+		return
+	}
+
+	var body struct {
+		IsVerified *bool `json:"is_verified"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if body.IsVerified == nil {
+		writeAPIError(w, http.StatusBadRequest, "is_verified field is required")
+		return
+	}
+
+	if err := s.repo.SetContractVerified(r.Context(), address, name, *body.IsVerified); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, map[string]interface{}{"ok": true, "identifier": formatTokenIdentifier(address, name), "is_verified": *body.IsVerified}, nil, nil)
+}
+
+func (s *Server) handleAdminRefreshDependentCounts(w http.ResponseWriter, r *http.Request) {
+	updated, err := s.repo.RefreshContractDependentCounts(r.Context())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, map[string]interface{}{"ok": true, "updated": updated}, nil, nil)
+}

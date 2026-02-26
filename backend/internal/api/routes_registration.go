@@ -43,6 +43,9 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin.HandleFunc("/account-labels", s.handleAdminListAccountLabels).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/account-labels", s.handleAdminUpsertAccountLabel).Methods("POST", "PUT", "OPTIONS")
 	admin.HandleFunc("/account-labels/{address}/{tag}", s.handleAdminDeleteAccountLabel).Methods("DELETE", "OPTIONS")
+	admin.HandleFunc("/contracts", s.handleAdminListContracts).Methods("GET", "OPTIONS")
+	admin.HandleFunc("/contracts/refresh-dependent-counts", s.handleAdminRefreshDependentCounts).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/contracts/{identifier}", s.handleAdminUpdateContract).Methods("PUT", "PATCH", "OPTIONS")
 }
 
 func registerAPIRoutes(r *mux.Router, s *Server) {

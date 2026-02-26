@@ -219,6 +219,8 @@ type SmartContract struct {
 	FirstSeenHeight uint64    `json:"first_seen_height,omitempty"`
 	LastSeenHeight  uint64    `json:"last_seen_height,omitempty"`
 	BlockHeight     uint64    `json:"block_height"`
+	IsVerified      bool      `json:"is_verified"`
+	DependentCount  int       `json:"dependent_count"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }

@@ -10,8 +10,8 @@ import { Pagination } from '../components/Pagination'
 import Avatar from 'boring-avatars'
 import { colorsFromAddress } from '../components/AddressLink'
 
-type AdminTab = 'ft' | 'nft' | 'scripts' | 'import' | 'labels'
-const VALID_TABS: AdminTab[] = ['ft', 'nft', 'scripts', 'import', 'labels']
+type AdminTab = 'ft' | 'nft' | 'contracts' | 'scripts' | 'import' | 'labels'
+const VALID_TABS: AdminTab[] = ['ft', 'nft', 'contracts', 'scripts', 'import', 'labels']
 
 export const Route = createFileRoute('/admin')({
   component: AdminPage,
@@ -131,12 +131,13 @@ function AdminPage() {
       <div className="flex gap-1 border-b border-zinc-200 dark:border-white/10">
         <TabButton active={tab === 'ft'} onClick={() => setTab('ft')} icon={<Coins className="w-4 h-4" />} label="FT Tokens" />
         <TabButton active={tab === 'nft'} onClick={() => setTab('nft')} icon={<Image className="w-4 h-4" />} label="NFT Collections" />
+        <TabButton active={tab === 'contracts'} onClick={() => setTab('contracts')} icon={<FileCode className="w-4 h-4" />} label="Contracts" />
         <TabButton active={tab === 'scripts'} onClick={() => setTab('scripts')} icon={<FileCode className="w-4 h-4" />} label="Script Templates" />
         <TabButton active={tab === 'import'} onClick={() => setTab('import')} icon={<Download className="w-4 h-4" />} label="Import Token" />
         <TabButton active={tab === 'labels'} onClick={() => setTab('labels')} icon={<Tags className="w-4 h-4" />} label="Account Labels" />
       </div>
 
-      {tab === 'ft' ? <FTPanel token={token} /> : tab === 'nft' ? <NFTPanel token={token} /> : tab === 'scripts' ? <ScriptTemplatesPanel token={token} /> : tab === 'labels' ? <AccountLabelsPanel token={token} /> : <ImportTokenPanel token={token} />}
+      {tab === 'ft' ? <FTPanel token={token} /> : tab === 'nft' ? <NFTPanel token={token} /> : tab === 'contracts' ? <ContractsPanel token={token} /> : tab === 'scripts' ? <ScriptTemplatesPanel token={token} /> : tab === 'labels' ? <AccountLabelsPanel token={token} /> : <ImportTokenPanel token={token} />}
     </div>
   )
 }
@@ -172,6 +173,137 @@ function VerifiedFilter({ value, onChange }: { value: string; onChange: (v: stri
           {opt.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+// ── Contracts Panel ──────────────────────────────────────────────────
+
+function ContractsPanel({ token }: { token: string }) {
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [verified, setVerified] = useState('')
+  const [page, setPage] = useState(1)
+  const [refreshing, setRefreshing] = useState(false)
+  const limit = 25
+
+  const fetchContracts = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({ limit: String(limit), offset: String((page - 1) * limit) })
+      if (search) params.set('search', search)
+      if (verified) params.set('verified', verified)
+      const res = await adminFetch(`admin/contracts?${params}`, token)
+      setItems(res.data || [])
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [token, page, search, verified])
+
+  useEffect(() => { fetchContracts() }, [fetchContracts])
+
+  const toggleVerified = async (identifier: string, current: boolean) => {
+    try {
+      await adminFetch(`admin/contracts/${identifier}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ is_verified: !current }),
+      })
+      toast.success(`${identifier} ${!current ? 'verified' : 'unverified'}`)
+      setItems(prev => prev.map(c => c.identifier === identifier ? { ...c, is_verified: !current } : c))
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  const refreshCounts = async () => {
+    setRefreshing(true)
+    try {
+      const res = await adminFetch('admin/contracts/refresh-dependent-counts', token, { method: 'POST' })
+      toast.success(`Refreshed dependent counts (${res.data?.updated || 0} updated)`)
+      fetchContracts()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex-1 min-w-[200px]">
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-zinc-400" />
+            <input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              placeholder="Search by name or address..."
+              className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-nothing-green"
+            />
+          </div>
+        </div>
+        <VerifiedFilter value={verified} onChange={(v) => { setVerified(v); setPage(1) }} />
+        <button
+          onClick={refreshCounts}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 px-3 py-2 border border-zinc-200 dark:border-white/10 text-xs uppercase tracking-widest font-mono text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50 transition-colors"
+        >
+          {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          Refresh Counts
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
+              <th className="p-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Identifier</th>
+              <th className="p-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest text-right">Dependents</th>
+              <th className="p-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest text-center">Verified</th>
+              <th className="p-3 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={4} className="p-8 text-center text-zinc-500 text-sm"><Loader2 className="w-5 h-5 animate-spin inline-block" /></td></tr>
+            ) : items.length === 0 ? (
+              <tr><td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">No contracts found</td></tr>
+            ) : items.map((c: any) => (
+              <tr key={c.identifier} className="border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                <td className="p-3">
+                  <Link to={`/contracts/${c.identifier}` as any} className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline">
+                    {c.identifier}
+                  </Link>
+                </td>
+                <td className="p-3 text-right font-mono text-sm text-zinc-900 dark:text-white">
+                  {Number(c.dependent_count || 0).toLocaleString()}
+                </td>
+                <td className="p-3 text-center">
+                  {c.is_verified ? <VerifiedBadge size={16} /> : <span className="text-zinc-400">—</span>}
+                </td>
+                <td className="p-3 text-right">
+                  <button
+                    onClick={() => toggleVerified(c.identifier, c.is_verified)}
+                    className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-mono transition-colors ${
+                      c.is_verified
+                        ? 'border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10'
+                        : 'border border-nothing-green/50 text-nothing-green-dark dark:text-nothing-green hover:bg-nothing-green/10'
+                    }`}
+                  >
+                    {c.is_verified ? 'Unverify' : 'Verify'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="p-3 border-t border-zinc-200 dark:border-white/5">
+          <Pagination currentPage={page} onPageChange={setPage} hasNext={items.length === limit} />
+        </div>
+      </div>
     </div>
   )
 }

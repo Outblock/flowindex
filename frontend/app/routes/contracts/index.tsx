@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Search } from 'lucide-react';
+import { FileText, Search, Shield } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Contract } from '../../api/gen/find';
@@ -10,6 +10,7 @@ import { useWebSocketStatus } from '../../hooks/useWebSocket';
 import { Pagination } from '../../components/Pagination';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
+import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 
 // Define the search params validator
 interface ContractsSearch {
@@ -202,6 +203,7 @@ function Contracts() {
                             <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
                                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Identifier</th>
                                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Address</th>
+                                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Dependents</th>
                                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider">Deployed</th>
                                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider text-right">Last Updated</th>
                             </tr>
@@ -209,15 +211,15 @@ function Contracts() {
                         <tbody>
                             {contractsLoading ? (
                                 <tr>
-                                    <td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">Loading contract list...</td>
+                                    <td colSpan={5} className="p-8 text-center text-zinc-500 text-sm">Loading contract list...</td>
                                 </tr>
                             ) : contractsError ? (
                                 <tr>
-                                    <td colSpan={4} className="p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{contractsError}</td>
+                                    <td colSpan={5} className="p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{contractsError}</td>
                                 </tr>
                             ) : contractsData.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">No contracts found</td>
+                                    <td colSpan={5} className="p-8 text-center text-zinc-500 text-sm">No contracts found</td>
                                 </tr>
                             ) : (
                             <AnimatePresence mode="popLayout">
@@ -228,6 +230,8 @@ function Contracts() {
                                     const createdAt = c?.created_at || '';
                                     const rel = createdAt ? formatRelativeTime(createdAt, nowTick) : '';
                                     const abs = createdAt ? formatAbsoluteTime(createdAt) : '';
+                                    const depCount = Number(c?.import_count || c?.imported_count || 0);
+                                    const isVerified = Boolean(c?.is_verified);
 
                                     return (
                                         <motion.tr
@@ -238,13 +242,16 @@ function Contracts() {
                                             className="border-b border-zinc-100 dark:border-white/5 group hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
                                         >
                                             <td className="p-4">
-                                                <Link
-                                                    to={`/contracts/${identifier}` as any}
-                                                    className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                                    title={identifier}
-                                                >
-                                                    {identifier}
-                                                </Link>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Link
+                                                        to={`/contracts/${identifier}` as any}
+                                                        className="font-mono text-sm text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                                        title={identifier}
+                                                    >
+                                                        {identifier}
+                                                    </Link>
+                                                    {isVerified && <VerifiedBadge size={14} />}
+                                                </div>
                                             </td>
                                             <td className="p-4">
                                                 {addr ? (
@@ -252,6 +259,11 @@ function Contracts() {
                                                 ) : (
                                                     <span className="text-zinc-500">N/A</span>
                                                 )}
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <span className="font-mono text-sm text-zinc-900 dark:text-white">
+                                                    {depCount > 0 ? depCount.toLocaleString() : '—'}
+                                                </span>
                                             </td>
                                             <td className="p-4">
                                                 <div className="flex flex-col">

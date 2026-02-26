@@ -472,8 +472,8 @@ func toCombinedNFTDetails(ownership models.NFTOwnership) map[string]interface{} 
 
 func toContractOutput(contract models.SmartContract, dependentCounts ...map[string]int64) map[string]interface{} {
 	identifier := formatTokenIdentifier(contract.Address, contract.Name)
-	var depCount int64
-	if len(dependentCounts) > 0 && dependentCounts[0] != nil {
+	depCount := int64(contract.DependentCount)
+	if depCount == 0 && len(dependentCounts) > 0 && dependentCounts[0] != nil {
 		depCount = dependentCounts[0][identifier]
 	}
 	return map[string]interface{}{
@@ -486,6 +486,7 @@ func toContractOutput(contract models.SmartContract, dependentCounts ...map[stri
 		"valid_from":         contract.BlockHeight,
 		"valid_to":           0,
 		"status":             "",
+		"is_verified":        contract.IsVerified,
 		"tags":               []string{},
 		"deployments":        0,
 		"diff":               "",

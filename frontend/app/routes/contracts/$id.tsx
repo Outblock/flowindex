@@ -8,6 +8,7 @@ import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ArrowLeft, Box, Code, FileText, Layers, Activity, GitCompare, ChevronDown, ChevronRight, Clock, Hash } from 'lucide-react';
+import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -262,8 +263,9 @@ function ContractDetail() {
                             )}
                         </div>
 
-                        <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white mb-2 break-all font-mono">
+                        <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white mb-2 break-all font-mono flex items-center gap-2">
                             {contract.name || contract.identifier}
+                            {contract.is_verified && <VerifiedBadge size={24} />}
                         </h1>
                         <p className="text-zinc-500 text-xs uppercase tracking-widest">
                             {contract.identifier}

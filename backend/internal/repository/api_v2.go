@@ -763,9 +763,9 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 		dir = "ASC"
 	}
 
-	orderBy := "COALESCE(sc.last_updated_height,0) DESC, sc.address ASC, sc.name ASC"
+	orderBy := "sc.dependent_count DESC, sc.address ASC, sc.name ASC"
 	switch sort {
-	case "", "valid_from", "activity":
+	case "valid_from", "activity":
 		orderBy = "COALESCE(sc.last_updated_height,0) " + dir + ", sc.address ASC, sc.name ASC"
 	case "created_at":
 		orderBy = "sc.created_at " + dir + ", sc.address ASC, sc.name ASC"
@@ -775,14 +775,15 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 		orderBy = "sc.address " + dir + ", sc.name ASC"
 	case "name":
 		orderBy = "sc.name " + dir + ", sc.address ASC"
-	case "usage", "import":
-		// Not modeled yet; approximate with activity.
-		orderBy = "COALESCE(sc.last_updated_height,0) " + dir + ", sc.address ASC, sc.name ASC"
+	case "", "usage", "import":
+		orderBy = "sc.dependent_count " + dir + ", sc.address ASC, sc.name ASC"
 	}
 
 	args = append(args, f.Limit, f.Offset)
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(sc.address, 'hex') AS address, sc.name, COALESCE(sc.code,''), COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
+		       COALESCE(sc.is_verified, false),
+		       COALESCE(sc.dependent_count, 0),
 		       sc.created_at,
 		       sc.updated_at
 		FROM app.smart_contracts sc
@@ -796,7 +797,7 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 	var out []models.SmartContract
 	for rows.Next() {
 		var c models.SmartContract
-		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.IsVerified, &c.DependentCount, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -832,15 +833,11 @@ func (r *Repository) GetContractByIdentifier(ctx context.Context, identifier str
 	}
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(sc.address, 'hex') AS address, sc.name, COALESCE(sc.code,''), COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
-		       COALESCE(b.timestamp, sc.created_at) AS created_at,
+		       COALESCE(sc.is_verified, false),
+		       COALESCE(sc.dependent_count, 0),
+		       sc.created_at,
 		       sc.updated_at
 		FROM app.smart_contracts sc
-		LEFT JOIN LATERAL (
-			SELECT cv.block_height FROM app.contract_versions cv
-			WHERE cv.address = sc.address AND cv.name = sc.name
-			ORDER BY cv.version ASC LIMIT 1
-		) first_ver ON true
-		LEFT JOIN raw.blocks b ON b.height = first_ver.block_height
 		WHERE sc.address = $1 AND ($2 = '' OR sc.name = $2)
 		ORDER BY sc.address ASC, sc.name ASC`, hexToBytes(address), name)
 	if err != nil {
@@ -850,7 +847,7 @@ func (r *Repository) GetContractByIdentifier(ctx context.Context, identifier str
 	var out []models.SmartContract
 	for rows.Next() {
 		var c models.SmartContract
-		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.IsVerified, &c.DependentCount, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

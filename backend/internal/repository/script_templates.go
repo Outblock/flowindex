@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"flowscan-clone/internal/models"
 )
 
 // ScriptTemplate represents a row in app.script_templates.
@@ -471,4 +473,79 @@ func nilIfEmpty(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+// SetContractVerified sets the is_verified flag on a smart contract.
+func (r *Repository) SetContractVerified(ctx context.Context, address, name string, verified bool) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE app.smart_contracts SET is_verified = $3, updated_at = now()
+		WHERE address = $1 AND name = $2`, hexToBytes(address), name, verified)
+	return err
+}
+
+// AdminListContracts lists smart contracts for admin panel with optional search and verified filter.
+func (r *Repository) AdminListContracts(ctx context.Context, search string, limit, offset int, verified string) ([]models.SmartContract, error) {
+	clauses := []string{}
+	args := []interface{}{}
+	arg := 1
+
+	if search != "" {
+		clauses = append(clauses, fmt.Sprintf("(sc.name ILIKE $%d OR encode(sc.address,'hex') ILIKE $%d)", arg, arg))
+		args = append(args, "%"+search+"%")
+		arg++
+	}
+	switch strings.ToLower(verified) {
+	case "true", "1", "yes":
+		clauses = append(clauses, "sc.is_verified = true")
+	case "false", "0", "no":
+		clauses = append(clauses, "sc.is_verified = false")
+	}
+
+	where := ""
+	if len(clauses) > 0 {
+		where = "WHERE " + strings.Join(clauses, " AND ")
+	}
+
+	args = append(args, limit, offset)
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(sc.address, 'hex') AS address, sc.name, '', COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
+		       COALESCE(sc.is_verified, false),
+		       COALESCE(sc.dependent_count, 0),
+		       sc.created_at,
+		       sc.updated_at
+		FROM app.smart_contracts sc
+		`+where+`
+		ORDER BY sc.dependent_count DESC, sc.address ASC, sc.name ASC
+		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.SmartContract
+	for rows.Next() {
+		var c models.SmartContract
+		if err := rows.Scan(&c.Address, &c.Name, &c.Code, &c.Version, &c.BlockHeight, &c.IsVerified, &c.DependentCount, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// RefreshContractDependentCounts updates dependent_count on all smart_contracts
+// from app.script_imports. Returns number of rows updated.
+func (r *Repository) RefreshContractDependentCounts(ctx context.Context) (int64, error) {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE app.smart_contracts sc
+		SET dependent_count = COALESCE(dep.cnt, 0)
+		FROM (
+			SELECT contract_identifier, COUNT(DISTINCT script_hash)::int AS cnt
+			FROM app.script_imports
+			GROUP BY contract_identifier
+		) dep
+		WHERE dep.contract_identifier = 'A.' || encode(sc.address, 'hex') || '.' || sc.name`)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }

@@ -440,9 +440,14 @@ CREATE TABLE IF NOT EXISTS app.smart_contracts (
     PRIMARY KEY (address, name)
 );
 
+ALTER TABLE app.smart_contracts ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE app.smart_contracts ADD COLUMN IF NOT EXISTS dependent_count INT NOT NULL DEFAULT 0;
+
 CREATE INDEX IF NOT EXISTS idx_smart_contracts_kind_first_seen
   ON app.smart_contracts (kind, first_seen_height)
   WHERE kind IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_smart_contracts_dep_count
+  ON app.smart_contracts (dependent_count DESC, address ASC, name ASC);
 
 -- 5.2b Contract Versions
 CREATE TABLE IF NOT EXISTS app.contract_versions (
