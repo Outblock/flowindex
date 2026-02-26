@@ -90,9 +90,10 @@ func (r *Repository) Close() {
 	r.db.Close()
 }
 
-// TerminateIdleConnections kills non-active connections from previous backend instances
-// that may hold locks and block DDL in migrations. Returns the number terminated.
-func (r *Repository) TerminateIdleConnections(ctx context.Context) (int, error) {
+// TerminateOtherConnections kills ALL connections from previous backend instances
+// (including active queries stuck on IO) that may hold locks and block DDL in
+// migrations. Returns the number terminated.
+func (r *Repository) TerminateOtherConnections(ctx context.Context) (int, error) {
 	var count int
 	err := r.db.QueryRow(ctx, `
 		SELECT count(*) FROM (
@@ -100,7 +101,7 @@ func (r *Repository) TerminateIdleConnections(ctx context.Context) (int, error) 
 			FROM pg_stat_activity
 			WHERE datname = current_database()
 			  AND pid <> pg_backend_pid()
-			  AND state != 'active'
+			  AND leader_pid IS DISTINCT FROM pg_backend_pid()
 		) t
 	`).Scan(&count)
 	return count, err

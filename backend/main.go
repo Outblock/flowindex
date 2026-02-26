@@ -64,13 +64,13 @@ func main() {
 	if os.Getenv("SKIP_MIGRATION") == "true" {
 		log.Println("Database Migration SKIPPED (SKIP_MIGRATION=true)")
 	} else {
-		// Terminate idle connections from previous backend instances that may hold locks
-		// and block DDL statements in the migration.
-		terminated, termErr := repo.TerminateIdleConnections(context.Background())
+		// Terminate ALL other connections (including active queries stuck on IO)
+		// from previous backend instances that may hold locks and block DDL.
+		terminated, termErr := repo.TerminateOtherConnections(context.Background())
 		if termErr != nil {
-			log.Printf("Warning: failed to terminate idle connections: %v", termErr)
+			log.Printf("Warning: failed to terminate other connections: %v", termErr)
 		} else if terminated > 0 {
-			log.Printf("Terminated %d idle connection(s) before migration", terminated)
+			log.Printf("Terminated %d connection(s) before migration", terminated)
 		}
 
 		log.Println("Running Database Migration...")
