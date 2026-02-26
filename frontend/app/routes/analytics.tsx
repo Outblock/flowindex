@@ -20,6 +20,7 @@ import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import '../styles/grid-overrides.css'
 import { GripVertical, RotateCcw, CalendarIcon } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover'
 import { Calendar } from '../components/ui/calendar'
 import {
@@ -1147,29 +1148,46 @@ function AnalyticsPage() {
               <RotateCcw className="w-3 h-3" />
               Reset
             </button>
-            <div className="flex items-center gap-1 bg-zinc-100 dark:bg-nothing-dark rounded-lg p-0.5">
-              {RANGES.map((r) => (
-                <button
-                  key={r.value}
-                  onClick={() => selectPreset(r.value)}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
-                    rangeDays === r.value && !customRange
-                      ? 'text-white bg-nothing-green shadow-sm'
-                      : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
-              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                <PopoverTrigger asChild>
+            <div className="flex items-center gap-0.5 bg-zinc-100 dark:bg-nothing-dark rounded-lg p-0.5">
+              {RANGES.map((r) => {
+                const isActive = rangeDays === r.value && !customRange
+                return (
                   <button
-                    className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
-                      customRange
-                        ? 'text-white bg-nothing-green shadow-sm'
+                    key={r.value}
+                    onClick={() => selectPreset(r.value)}
+                    className={`relative text-xs font-medium px-3 py-1.5 rounded-md transition-colors z-10 ${
+                      isActive
+                        ? 'text-white dark:text-zinc-900'
                         : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
                     }`}
                   >
+                    {isActive && (
+                      <motion.div
+                        layoutId="analyticsRange"
+                        className="absolute inset-0 bg-zinc-900 dark:bg-white rounded-md -z-10 shadow-sm"
+                        transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                      />
+                    )}
+                    {r.label}
+                  </button>
+                )
+              })}
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    className={`relative text-xs font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 z-10 ${
+                      customRange
+                        ? 'text-white dark:text-zinc-900'
+                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {customRange && (
+                      <motion.div
+                        layoutId="analyticsRange"
+                        className="absolute inset-0 bg-zinc-900 dark:bg-white rounded-md -z-10 shadow-sm"
+                        transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                      />
+                    )}
                     <CalendarIcon className="w-3 h-3" />
                     {customRange
                       ? `${formatDisplayDate(customRange.from)} – ${formatDisplayDate(customRange.to)}`
@@ -1207,20 +1225,30 @@ function AnalyticsPage() {
         </div>
 
         {/* Category tabs */}
-        <div className="flex items-center gap-1 bg-zinc-100 dark:bg-nothing-dark rounded-lg p-0.5 w-fit">
-          {TABS.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => setActiveTab(t.value)}
-              className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
-                activeTab === t.value
-                  ? 'text-white bg-zinc-800 dark:bg-white/10 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-0.5 bg-zinc-100 dark:bg-nothing-dark rounded-lg p-0.5 w-fit">
+          {TABS.map((t) => {
+            const isActive = activeTab === t.value
+            return (
+              <button
+                key={t.value}
+                onClick={() => setActiveTab(t.value)}
+                className={`relative text-xs font-medium px-3 py-1.5 rounded-md transition-colors z-10 ${
+                  isActive
+                    ? 'text-white dark:text-zinc-900'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="analyticsTab"
+                    className="absolute inset-0 bg-zinc-900 dark:bg-white rounded-md -z-10 shadow-sm"
+                    transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                  />
+                )}
+                {t.label}
+              </button>
+            )
+          })}
         </div>
 
         {/* Content renders progressively as each API responds */}
