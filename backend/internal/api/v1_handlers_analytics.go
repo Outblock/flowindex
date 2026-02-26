@@ -52,6 +52,8 @@ func (s *Server) handleAnalyticsDailyModule(w http.ResponseWriter, r *http.Reque
 		stats, err = s.repo.GetAnalyticsDailyEpochModule(r.Context(), from, to)
 	case "bridge":
 		stats, err = s.repo.GetAnalyticsDailyBridgeModule(r.Context(), from, to)
+	case "contracts":
+		stats, err = s.repo.GetAnalyticsDailyContractsModule(r.Context(), from, to)
 	default:
 		writeAPIError(w, http.StatusBadRequest, "unsupported module")
 		return

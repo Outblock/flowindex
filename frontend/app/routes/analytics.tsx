@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import {
   AreaChart,
   Area,
@@ -14,6 +14,11 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
+import { ResponsiveGridLayout, useContainerWidth, verticalCompactor } from 'react-grid-layout'
+import 'react-grid-layout/css/styles.css'
+import 'react-resizable/css/styles.css'
+import '../styles/grid-overrides.css'
+import { GripVertical, RotateCcw } from 'lucide-react'
 import {
   fetchAnalyticsDaily,
   fetchAnalyticsDailyModule,
@@ -22,6 +27,8 @@ import {
   ensureHeyApiConfigured,
   getBaseURL,
 } from '../api/heyapi'
+import { CARD_DEFS } from './analytics-layout'
+import { useGridLayout } from '../hooks/useGridLayout'
 
 export const Route = createFileRoute('/analytics')({
   component: AnalyticsPage,
@@ -37,6 +44,7 @@ interface DailyRow {
   total_gas_used: number
   active_accounts: number
   new_contracts: number
+  contract_updates: number
   failed_tx_count: number
   error_rate: number
   avg_gas_per_tx: number
@@ -188,7 +196,7 @@ function ChartSkeleton() {
         <div
           key={i}
           className="flex-1 bg-zinc-200 dark:bg-white/10 rounded-t"
-          style={{ height: `${30 + Math.sin(i * 0.7) * 25 + Math.random() * 20}%` }}
+          style={{ height: `${30 + Math.sin(i * 0.7) * 25 + ((i * 7 + 3) % 20)}%` }}
         />
       ))}
     </div>
@@ -214,6 +222,7 @@ function ChartCard({
   loading = false,
   empty = false,
   emptyMessage,
+  draggable = false,
 }: {
   title: string
   children: React.ReactNode
@@ -221,13 +230,19 @@ function ChartCard({
   loading?: boolean
   empty?: boolean
   emptyMessage?: string
+  draggable?: boolean
 }) {
   return (
-    <div className={`bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-5 hover:border-nothing-green/30 transition-colors ${className}`}>
-      <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-4">
-        {title}
-      </h3>
-      <div className="h-[220px]">
+    <div className={`bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-5 hover:border-nothing-green/30 transition-colors h-full flex flex-col ${className}`}>
+      <div className="flex items-center gap-2 mb-4">
+        {draggable && (
+          <GripVertical className="drag-handle w-3.5 h-3.5 text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 flex-shrink-0" />
+        )}
+        <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+          {title}
+        </h3>
+      </div>
+      <div className="flex-1 min-h-0">
         {loading ? (
           <ChartSkeleton />
         ) : empty ? (
@@ -385,7 +400,7 @@ function AnalyticsPage() {
         setDailyData(sortedBase)
         setDailyLoading(false)
 
-        const modules = ['accounts', 'evm', 'defi', 'epoch', 'bridge'] as const
+        const modules = ['accounts', 'evm', 'defi', 'epoch', 'bridge', 'contracts'] as const
         for (const module of modules) {
           fetchAnalyticsDailyModule(module, fromStr)
             .then((rows) => {
@@ -424,6 +439,12 @@ function AnalyticsPage() {
                   return {
                     ...row,
                     bridge_to_evm_txs: mod.bridge_to_evm_txs,
+                  }
+                }
+                if (module === 'contracts') {
+                  return {
+                    ...row,
+                    contract_updates: mod.contract_updates,
                   }
                 }
                 return row
@@ -532,9 +553,350 @@ function AnalyticsPage() {
 
   const gridStroke = 'rgba(113,113,122,0.15)'
 
-  function showChart(...categories: AnalyticsTab[]) {
-    return activeTab === 'all' || categories.includes(activeTab)
-  }
+  /* ── grid layout ── */
+
+  const { layouts, onLayoutChange, resetLayout, isMobile } = useGridLayout()
+  const { width, containerRef, mounted } = useContainerWidth()
+
+  /* ── visibility map for conditional cards ── */
+
+  const visibilityMap = useMemo(() => ({
+    showNewAccounts,
+    showDefiMetrics,
+    showBridgeMetrics,
+    showEpochPayout,
+  }), [showNewAccounts, showDefiMetrics, showBridgeMetrics, showEpochPayout])
+
+  /* ── chart map — maps card key to chart JSX ── */
+
+  const chartMap = useMemo(() => {
+    const m = new Map<string, { node: ReactNode; loading: boolean; empty: boolean }>()
+
+    m.set('daily-tx-count', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gCadence" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.green} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.green} stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="gEvm" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
+          <Area type="monotone" dataKey="cadence_tx_count" stroke={C.green} strokeWidth={1.5} fill="url(#gCadence)" name="Cadence" />
+          <Area type="monotone" dataKey="evm_tx_count" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvm)" name="EVM" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('active-accounts', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gAccounts" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.green} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.green} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Area type="monotone" dataKey="active_accounts" stroke={C.green} strokeWidth={1.5} fill="url(#gAccounts)" name="Active Accounts" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('new-accounts', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gNewAccounts" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Area type="monotone" dataKey="new_accounts" stroke={C.blue} strokeWidth={1.5} fill="url(#gNewAccounts)" name="New Accounts" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('evm-vs-cadence', {
+      loading: dailyLoading,
+      empty: evmPctData.length === 0,
+      node: (
+        <AreaChart data={evmPctData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gCadPct" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.green} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.green} stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="gEvmPct" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps((v) => `${v}%`)} domain={[0, 100]} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`${toNum(v).toFixed(1)}%`]} />
+          <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
+          <Area type="monotone" dataKey="cadence_pct" stroke={C.green} strokeWidth={1.5} fill="url(#gCadPct)" name="Cadence" />
+          <Area type="monotone" dataKey="evm_pct" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvmPct)" name="EVM" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('flow-price', {
+      loading: priceLoading,
+      empty: visiblePrice.length === 0,
+      node: (
+        <LineChart data={visiblePrice} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps((v) => `$${v.toFixed(2)}`)} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`$${toNum(v).toFixed(4)}`, 'Price']} />
+          <Line type="monotone" dataKey="price" stroke={C.green} strokeWidth={1.5} dot={false} name="FLOW" />
+        </LineChart>
+      ),
+    })
+
+    m.set('defi-swaps', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <LineChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
+          <Line type="monotone" dataKey="defi_swap_count" stroke={C.purple} strokeWidth={1.5} dot={false} name="Swaps" />
+          <Line type="monotone" dataKey="defi_unique_traders" stroke={C.pink} strokeWidth={1.5} dot={false} name="Unique Traders" />
+        </LineChart>
+      ),
+    })
+
+    m.set('epoch-payout', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <BarChart
+          data={visibleDaily.map((d) => ({ ...d, epoch_payout_total_num: toNum(d.epoch_payout_total) }))}
+          margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+        >
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} tickFormatter={(v) => fmtNum(v)} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} formatter={(v) => [fmtComma(Math.round(toNum(v))), 'Epoch Payout']} />
+          <Bar dataKey="epoch_payout_total_num" fill={C.blue} fillOpacity={0.7} name="Epoch Payout" radius={[3, 3, 0, 0]} />
+        </BarChart>
+      ),
+    })
+
+    m.set('bridge-evm', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <BarChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} />
+          <Bar dataKey="bridge_to_evm_txs" fill={C.blue} fillOpacity={0.7} name="Bridge Txs" radius={[3, 3, 0, 0]} />
+        </BarChart>
+      ),
+    })
+
+    m.set('gas-burned', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gGas" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.amber} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.amber} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Area type="monotone" dataKey="total_gas_used" stroke={C.amber} strokeWidth={1.5} fill="url(#gGas)" name="Gas Used" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('avg-gas-tx', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gAvgGas" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.amber} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.amber} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Area type="monotone" dataKey="avg_gas_per_tx" stroke={C.amber} strokeWidth={1.5} fill="url(#gAvgGas)" name="Avg Gas/Tx" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('error-rate', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gErr" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.red} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.red} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps((v) => `${v}%`)} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`${toNum(v).toFixed(2)}%`, 'Error Rate']} />
+          <Area type="monotone" dataKey="error_rate" stroke={C.red} strokeWidth={1.5} fill="url(#gErr)" name="Error Rate" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('ft-transfers', {
+      loading: transferLoading,
+      empty: visibleTransfers.length === 0,
+      node: (
+        <AreaChart data={visibleTransfers} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gFt" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.purple} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.purple} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.purple }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Area type="monotone" dataKey="ft_transfers" stroke={C.purple} strokeWidth={1.5} fill="url(#gFt)" name="FT Transfers" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('nft-transfers', {
+      loading: transferLoading,
+      empty: visibleTransfers.length === 0,
+      node: (
+        <AreaChart data={visibleTransfers} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gNft" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.pink} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={C.pink} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.pink }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Area type="monotone" dataKey="nft_transfers" stroke={C.pink} strokeWidth={1.5} fill="url(#gNft)" name="NFT Transfers" />
+        </AreaChart>
+      ),
+    })
+
+    m.set('failed-txs', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <BarChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ fill: 'rgba(239,68,68,0.06)' }} />
+          <Bar dataKey="failed_tx_count" fill={C.red} fillOpacity={0.7} name="Failed Txs" radius={[3, 3, 0, 0]} />
+        </BarChart>
+      ),
+    })
+
+    m.set('total-staked', {
+      loading: epochLoading,
+      empty: epochData.length === 0,
+      node: (
+        <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [fmtNum(toNum(v)), 'Staked']} />
+          <Line type="monotone" dataKey="total_staked" stroke={C.green} strokeWidth={1.5} dot={false} name="Total Staked" />
+        </LineChart>
+      ),
+    })
+
+    m.set('node-count', {
+      loading: epochLoading,
+      empty: epochData.length === 0,
+      node: (
+        <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.blue }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
+          <Line type="monotone" dataKey="total_nodes" stroke={C.blue} strokeWidth={1.5} dot={false} name="Nodes" />
+        </LineChart>
+      ),
+    })
+
+    m.set('contract-activity', {
+      loading: dailyLoading,
+      empty: visibleDaily.length === 0,
+      node: (
+        <BarChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={gridStroke} vertical={false} />
+          <XAxis {...xAxisProps()} />
+          <YAxis {...yAxisProps()} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(0,239,139,0.06)' }} />
+          <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
+          <Bar dataKey="new_contracts" fill={C.green} fillOpacity={0.7} name="New Contracts" radius={[3, 3, 0, 0]} stackId="contracts" />
+          <Bar dataKey="contract_updates" fill={C.blue} fillOpacity={0.7} name="Contract Updates" radius={[3, 3, 0, 0]} stackId="contracts" />
+        </BarChart>
+      ),
+    })
+
+    return m
+  }, [visibleDaily, visibleTransfers, visiblePrice, evmPctData, epochData, dailyLoading, transferLoading, priceLoading, epochLoading, gridStroke])
+
+  /* ── filter visible cards by tab + conditional visibility ── */
+
+  const visibleCards = useMemo(() => {
+    return CARD_DEFS.filter((card) => {
+      // Tab filter
+      if (activeTab !== 'all' && !card.tabs.includes(activeTab)) return false
+      // Conditional visibility
+      if (card.visibleKey && !visibilityMap[card.visibleKey]) return false
+      return true
+    })
+  }, [activeTab, visibilityMap])
 
   /* ── render ── */
 
@@ -546,20 +908,30 @@ function AnalyticsPage() {
           <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">
             Analytics
           </h1>
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-nothing-dark rounded-lg p-0.5">
-            {RANGES.map((r) => (
-              <button
-                key={r.value}
-                onClick={() => setRangeDays(r.value)}
-                className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
-                  rangeDays === r.value
-                    ? 'text-white bg-nothing-green shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={resetLayout}
+              className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-white bg-zinc-100 dark:bg-nothing-dark hover:bg-zinc-200 dark:hover:bg-white/10 transition-all"
+              title="Reset layout"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset
+            </button>
+            <div className="flex items-center gap-1 bg-zinc-100 dark:bg-nothing-dark rounded-lg p-0.5">
+              {RANGES.map((r) => (
+                <button
+                  key={r.value}
+                  onClick={() => setRangeDays(r.value)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
+                    rangeDays === r.value
+                      ? 'text-white bg-nothing-green shadow-sm'
+                      : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -677,281 +1049,37 @@ function AnalyticsPage() {
               })()}
             </div>
 
-            {/* ── Bento Grid ── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-
-              {/* Hero: Daily Tx Count — spans 2 cols */}
-              {showChart('transactions') && (
-              <ChartCard title="Daily Transaction Count" className="lg:col-span-2" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gCadence" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.green} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.green} stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gEvm" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
-                  <Area type="monotone" dataKey="cadence_tx_count" stroke={C.green} strokeWidth={1.5} fill="url(#gCadence)" name="Cadence" />
-                  <Area type="monotone" dataKey="evm_tx_count" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvm)" name="EVM" />
-                </AreaChart>
-              </ChartCard>
-              )}
-
-              {/* Active Accounts — 1 col */}
-              {showChart('network') && (
-              <ChartCard title="Active Accounts" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gAccounts" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.green} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.green} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <Area type="monotone" dataKey="active_accounts" stroke={C.green} strokeWidth={1.5} fill="url(#gAccounts)" name="Active Accounts" />
-                </AreaChart>
-              </ChartCard>
-              )}
-
-              {showChart('network') && showNewAccounts && (
-              <ChartCard title="New Accounts" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gNewAccounts" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <Area type="monotone" dataKey="new_accounts" stroke={C.blue} strokeWidth={1.5} fill="url(#gNewAccounts)" name="New Accounts" />
-                </AreaChart>
-              </ChartCard>
-              )}
-
-              {/* EVM vs Cadence % — 1 col */}
-              {showChart('transactions') && (
-              <ChartCard title="EVM vs Cadence (%)" loading={dailyLoading} empty={evmPctData.length === 0}>
-                <AreaChart data={evmPctData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gCadPct" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.green} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.green} stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gEvmPct" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.blue} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.blue} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps((v) => `${v}%`)} domain={[0, 100]} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`${toNum(v).toFixed(1)}%`]} />
-                  <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
-                  <Area type="monotone" dataKey="cadence_pct" stroke={C.green} strokeWidth={1.5} fill="url(#gCadPct)" name="Cadence" />
-                  <Area type="monotone" dataKey="evm_pct" stroke={C.blue} strokeWidth={1.5} fill="url(#gEvmPct)" name="EVM" />
-                </AreaChart>
-              </ChartCard>
-              )}
-
-              {/* FLOW Price — spans 2 cols */}
-              {showChart('price') && (
-              <ChartCard title="FLOW Price History" className="md:col-span-2" loading={priceLoading} empty={visiblePrice.length === 0}>
-                <LineChart data={visiblePrice} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps((v) => `$${v.toFixed(2)}`)} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`$${toNum(v).toFixed(4)}`, 'Price']} />
-                  <Line type="monotone" dataKey="price" stroke={C.green} strokeWidth={1.5} dot={false} name="FLOW" />
-                </LineChart>
-              </ChartCard>
-              )}
-
-              {showChart('tokens') && showDefiMetrics && (
-              <ChartCard title="DeFi Swaps & Traders" className="md:col-span-2" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <LineChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <Legend wrapperStyle={{ fontSize: '11px', fontFamily: 'monospace' }} />
-                  <Line type="monotone" dataKey="defi_swap_count" stroke={C.purple} strokeWidth={1.5} dot={false} name="Swaps" />
-                  <Line type="monotone" dataKey="defi_unique_traders" stroke={C.pink} strokeWidth={1.5} dot={false} name="Unique Traders" />
-                </LineChart>
-              </ChartCard>
-              )}
-
-              {showChart('network') && showEpochPayout && (
-              <ChartCard title="Epoch Payout" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <BarChart
-                  data={visibleDaily.map((d) => ({ ...d, epoch_payout_total_num: toNum(d.epoch_payout_total) }))}
-                  margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+            {/* ── Bento Grid (draggable + resizable) ── */}
+            <div ref={containerRef}>
+              {mounted && (
+                <ResponsiveGridLayout
+                  width={width}
+                  layouts={layouts}
+                  breakpoints={{ lg: 1024, md: 768, sm: 0 }}
+                  cols={{ lg: 3, md: 2, sm: 1 }}
+                  rowHeight={280}
+                  margin={[12, 12]}
+                  onLayoutChange={onLayoutChange}
+                  dragConfig={isMobile ? { enabled: false, bounded: false, threshold: 3 } : { enabled: true, bounded: false, handle: '.drag-handle', threshold: 3 }}
+                  resizeConfig={isMobile ? { enabled: false, handles: ['se'] } : { enabled: true, handles: ['se'] }}
+                  compactor={verticalCompactor}
                 >
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} tickFormatter={(v) => fmtNum(v)} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} formatter={(v) => [fmtComma(Math.round(toNum(v))), 'Epoch Payout']} />
-                  <Bar dataKey="epoch_payout_total_num" fill={C.blue} fillOpacity={0.7} name="Epoch Payout" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ChartCard>
-              )}
-
-              {showChart('transactions') && showBridgeMetrics && (
-              <ChartCard title="Bridge -> EVM Txs (Proxy)" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <BarChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} />
-                  <Bar dataKey="bridge_to_evm_txs" fill={C.blue} fillOpacity={0.7} name="Bridge Txs" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ChartCard>
-              )}
-
-              {/* Gas Burned — 1 col */}
-              {showChart('transactions') && (
-              <ChartCard title="Gas Burned per Day" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gGas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.amber} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.amber} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <Area type="monotone" dataKey="total_gas_used" stroke={C.amber} strokeWidth={1.5} fill="url(#gGas)" name="Gas Used" />
-                </AreaChart>
-              </ChartCard>
-              )}
-
-              {/* Avg Gas per Tx — 1 col */}
-              {showChart('transactions') && (
-              <ChartCard title="Avg Gas per Tx" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gAvgGas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.amber} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.amber} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.amber }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <Area type="monotone" dataKey="avg_gas_per_tx" stroke={C.amber} strokeWidth={1.5} fill="url(#gAvgGas)" name="Avg Gas/Tx" />
-                </AreaChart>
-              </ChartCard>
-              )}
-
-              {/* Error Rate — 1 col */}
-              {showChart('transactions') && (
-              <ChartCard title="Error Rate (%)" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gErr" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.red} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.red} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps((v) => `${v}%`)} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [`${toNum(v).toFixed(2)}%`, 'Error Rate']} />
-                  <Area type="monotone" dataKey="error_rate" stroke={C.red} strokeWidth={1.5} fill="url(#gErr)" name="Error Rate" />
-                </AreaChart>
-              </ChartCard>
-              )}
-
-              {/* FT Transfers — 1 col */}
-              {showChart('tokens') && (
-              <ChartCard title="FT Transfers" loading={transferLoading} empty={visibleTransfers.length === 0}>
-                <AreaChart data={visibleTransfers} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gFt" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.purple} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.purple} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.purple }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <Area type="monotone" dataKey="ft_transfers" stroke={C.purple} strokeWidth={1.5} fill="url(#gFt)" name="FT Transfers" />
-                </AreaChart>
-              </ChartCard>
-              )}
-
-              {/* NFT Transfers — 1 col */}
-              {showChart('tokens') && (
-              <ChartCard title="NFT Transfers" loading={transferLoading} empty={visibleTransfers.length === 0}>
-                <AreaChart data={visibleTransfers} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gNft" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.pink} stopOpacity={0.25} />
-                      <stop offset="100%" stopColor={C.pink} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.pink }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <Area type="monotone" dataKey="nft_transfers" stroke={C.pink} strokeWidth={1.5} fill="url(#gNft)" name="NFT Transfers" />
-                </AreaChart>
-              </ChartCard>
-              )}
-
-              {/* Failed Transactions — 1 col */}
-              {showChart('transactions') && (
-              <ChartCard title="Failed Transactions" loading={dailyLoading} empty={visibleDaily.length === 0}>
-                <BarChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke={gridStroke} vertical={false} />
-                  <XAxis {...xAxisProps()} />
-                  <YAxis {...yAxisProps()} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.red }} cursor={{ fill: 'rgba(239,68,68,0.06)' }} />
-                  <Bar dataKey="failed_tx_count" fill={C.red} fillOpacity={0.7} name="Failed Txs" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ChartCard>
-              )}
-
-              {/* Staking — spans 2 cols if data exists */}
-              {showChart('network') && (
-                <>
-                  <ChartCard title="Total Staked per Epoch" className="md:col-span-2" loading={epochLoading} empty={epochData.length === 0}>
-                    <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid stroke={gridStroke} vertical={false} />
-                      <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
-                      <YAxis {...yAxisProps()} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.green }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} formatter={(v) => [fmtNum(toNum(v)), 'Staked']} />
-                      <Line type="monotone" dataKey="total_staked" stroke={C.green} strokeWidth={1.5} dot={false} name="Total Staked" />
-                    </LineChart>
-                  </ChartCard>
-
-                  <ChartCard title="Node Count per Epoch" loading={epochLoading} empty={epochData.length === 0}>
-                    <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid stroke={gridStroke} vertical={false} />
-                      <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
-                      <YAxis {...yAxisProps()} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: C.blue }} cursor={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                      <Line type="monotone" dataKey="total_nodes" stroke={C.blue} strokeWidth={1.5} dot={false} name="Nodes" />
-                    </LineChart>
-                  </ChartCard>
-                </>
+                  {visibleCards.map((card) => {
+                    const chart = chartMap.get(card.key)
+                    return (
+                      <div key={card.key}>
+                        <ChartCard
+                          title={card.title}
+                          draggable={!isMobile}
+                          loading={chart?.loading ?? false}
+                          empty={chart?.empty ?? true}
+                        >
+                          {chart?.node}
+                        </ChartCard>
+                      </div>
+                    )
+                  })}
+                </ResponsiveGridLayout>
               )}
             </div>
           </>
