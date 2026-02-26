@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"flowscan-clone/internal/config"
 	flowclient "flowscan-clone/internal/flow"
 	"flowscan-clone/internal/repository"
 
@@ -226,7 +227,7 @@ func (w *NFTOwnershipReconciler) getChainNFTIDs(ctx context.Context, owner, publ
 	ctxExec, cancel := context.WithTimeout(ctx, w.scriptTimeout)
 	defer cancel()
 
-	nftAddr := getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")
+	nftAddr := getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().NonFungibleToken)
 	script := fmt.Sprintf(`
 		import NonFungibleToken from 0x%s
 
@@ -285,7 +286,7 @@ func (w *NFTOwnershipReconciler) verifyNFTIDsOnChain(ctx context.Context, owner,
 	ctxExec, cancel := context.WithTimeout(ctx, w.scriptTimeout)
 	defer cancel()
 
-	nftAddr := getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")
+	nftAddr := getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().NonFungibleToken)
 	script := fmt.Sprintf(`
 		import NonFungibleToken from 0x%s
 

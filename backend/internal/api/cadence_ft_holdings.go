@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"flowscan-clone/internal/config"
+
 	"github.com/onflow/cadence"
 	flowsdk "github.com/onflow/flow-go-sdk"
 )
@@ -23,11 +25,11 @@ func envOrDefault(key, def string) string {
 // for a given address, returning real on-chain balances plus token metadata.
 // Ported from frontend/cadence/Token/get_token.cdc.
 func cadenceFTHoldingsScript() string {
-	ftAddr := envOrDefault("FLOW_FUNGIBLE_TOKEN_ADDRESS", "f233dcee88fe0abe")
+	ftAddr := envOrDefault("FLOW_FUNGIBLE_TOKEN_ADDRESS", config.Addr().FungibleToken)
 	ftmdAddr := envOrDefault("FLOW_FUNGIBLE_TOKEN_METADATA_VIEWS_ADDRESS", ftAddr)
 	mvAddr := envOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-		envOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448"))
-	evmBridgeAddr := envOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+		envOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().MetadataViews))
+	evmBridgeAddr := envOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", config.Addr().FlowEVMBridgeConfig)
 
 	return fmt.Sprintf(`
     import FungibleToken from 0x%s

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"flowscan-clone/internal/config"
 	"flowscan-clone/internal/models"
 )
 
@@ -44,12 +45,12 @@ func (r *Repository) ListTokenTransfersWithContractFiltered(ctx context.Context,
 	if isNFT {
 		wrapperAddrHex = os.Getenv("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS")
 		if wrapperAddrHex == "" {
-			wrapperAddrHex = "1d7e57aa55817448"
+			wrapperAddrHex = config.Addr().NonFungibleToken
 		}
 	} else {
 		wrapperAddrHex = os.Getenv("FLOW_FUNGIBLE_TOKEN_ADDRESS")
 		if wrapperAddrHex == "" {
-			wrapperAddrHex = "f233dcee88fe0abe"
+			wrapperAddrHex = config.Addr().FungibleToken
 		}
 	}
 	if b := hexToBytes(wrapperAddrHex); len(b) > 0 {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"flowscan-clone/internal/config"
 	flowclient "flowscan-clone/internal/flow"
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
@@ -338,9 +339,9 @@ func cadenceToUint(v cadence.Value) (uint64, bool) {
 func cadenceResolvePublicPathScript() string {
 	viewResolverAddr := getEnvOrDefault("FLOW_VIEW_RESOLVER_ADDRESS",
 		getEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-			getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")))
+			getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().MetadataViews)))
 	metadataViewsAddr := getEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-		getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448"))
+		getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().MetadataViews))
 
 	return fmt.Sprintf(`
 		import ViewResolver from 0x%s
@@ -361,9 +362,9 @@ func cadenceResolvePublicPathScript() string {
 }
 
 func cadenceBatchNFTMetadataScript() string {
-	nftAddr := getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")
+	nftAddr := getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().NonFungibleToken)
 	metadataViewsAddr := getEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-		getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448"))
+		getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().MetadataViews))
 
 	return fmt.Sprintf(`
 		import NonFungibleToken from 0x%s

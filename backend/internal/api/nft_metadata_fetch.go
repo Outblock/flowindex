@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"flowscan-clone/internal/config"
 	"flowscan-clone/internal/models"
 
 	"github.com/onflow/cadence"
@@ -334,9 +335,9 @@ func apiGetEnvOrDefault(key, def string) string {
 func apiCadenceResolvePublicPathScript() string {
 	viewResolverAddr := apiGetEnvOrDefault("FLOW_VIEW_RESOLVER_ADDRESS",
 		apiGetEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-			apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")))
+			apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().MetadataViews)))
 	metadataViewsAddr := apiGetEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-		apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448"))
+		apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().MetadataViews))
 
 	return fmt.Sprintf(`
 		import ViewResolver from 0x%s
@@ -357,9 +358,9 @@ func apiCadenceResolvePublicPathScript() string {
 }
 
 func apiCadenceBatchNFTMetadataScript() string {
-	nftAddr := apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")
+	nftAddr := apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().NonFungibleToken)
 	metadataViewsAddr := apiGetEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-		apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448"))
+		apiGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().MetadataViews))
 
 	return fmt.Sprintf(`
 		import NonFungibleToken from 0x%s

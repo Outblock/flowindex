@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"flowscan-clone/internal/config"
 	flowclient "flowscan-clone/internal/flow"
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
@@ -512,13 +513,13 @@ func getEnvIntDefault(key string, def int) int {
 func cadenceFTCombinedScript() string {
 	viewResolverAddr := getEnvOrDefault("FLOW_VIEW_RESOLVER_ADDRESS",
 		getEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS",
-			getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")))
+			getEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().MetadataViews)))
 
-	ftAddr := getEnvOrDefault("FLOW_FUNGIBLE_TOKEN_ADDRESS", "f233dcee88fe0abe")
+	ftAddr := getEnvOrDefault("FLOW_FUNGIBLE_TOKEN_ADDRESS", config.Addr().FungibleToken)
 
 	ftmdAddr := getEnvOrDefault("FLOW_FUNGIBLE_TOKEN_METADATA_VIEWS_ADDRESS", ftAddr)
 
-	evmBridgeAddr := getEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+	evmBridgeAddr := getEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", config.Addr().FlowEVMBridgeConfig)
 
 	return fmt.Sprintf(`
         import ViewResolver from 0x%s
@@ -662,7 +663,7 @@ func cadenceNFTCollectionDisplayScript() string {
 		viewResolverAddr = strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS")), "0x")
 	}
 	if viewResolverAddr == "" {
-		viewResolverAddr = "1d7e57aa55817448"
+		viewResolverAddr = config.Addr().MetadataViews
 	}
 
 	metadataViewsAddr := strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_METADATA_VIEWS_ADDRESS")), "0x")
@@ -670,10 +671,10 @@ func cadenceNFTCollectionDisplayScript() string {
 		metadataViewsAddr = strings.TrimPrefix(strings.TrimSpace(os.Getenv("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS")), "0x")
 	}
 	if metadataViewsAddr == "" {
-		metadataViewsAddr = "1d7e57aa55817448"
+		metadataViewsAddr = config.Addr().MetadataViews
 	}
 
-	evmBridgeAddr := getEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+	evmBridgeAddr := getEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", config.Addr().FlowEVMBridgeConfig)
 
 	return fmt.Sprintf(`
         import ViewResolver from 0x%s
@@ -737,7 +738,7 @@ func cadenceNFTCollectionDisplayScript() string {
 // cadenceBridgeOnlyScript returns a lightweight Cadence script that only queries
 // FlowEVMBridgeConfig for a given type identifier. Much faster than the full metadata script.
 func cadenceBridgeOnlyScript() string {
-	evmBridgeAddr := getEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+	evmBridgeAddr := getEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", config.Addr().FlowEVMBridgeConfig)
 	return fmt.Sprintf(`
 		import FlowEVMBridgeConfig from 0x%s
 

@@ -16,6 +16,7 @@ import (
 
 	"github.com/onflow/cadence"
 
+	"flowscan-clone/internal/config"
 	flowclient "flowscan-clone/internal/flow"
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
@@ -92,9 +93,10 @@ func (p *NetworkPoller) poll(ctx context.Context) {
 	}
 }
 
-// Cadence script to get epoch info
-const epochScript = `
-import FlowEpoch from 0x8624b52f9ddcd04a
+// Cadence scripts use address from config.Addr() (supports testnet/mainnet).
+func epochScript() string {
+	return fmt.Sprintf(`
+import FlowEpoch from 0x%s
 
 access(all) fun main(): [AnyStruct] {
     let counter = FlowEpoch.currentEpochCounter
@@ -103,23 +105,26 @@ access(all) fun main(): [AnyStruct] {
     let currentView = getCurrentBlock().view
     return [counter, phase, metadata?.startView, metadata?.endView, currentView]
 }
-`
+`, config.Addr().FlowEpoch)
+}
 
-// Cadence script to get staking/tokenomics
-const stakingScript = `
-import FlowIDTableStaking from 0x8624b52f9ddcd04a
+func stakingScript() string {
+	return fmt.Sprintf(`
+import FlowIDTableStaking from 0x%s
 
 access(all) fun main(): [AnyStruct] {
     let staked = FlowIDTableStaking.getTotalStaked()
     let nodeIDs = FlowIDTableStaking.getNodeIDs()
     return [staked, UInt64(nodeIDs.length)]
 }
-`
+`, config.Addr().FlowIDTableStaking)
+}
 
 // Cadence script to get full node info for ALL proposed nodes (not just staked).
 // getNodeIDs() returns the full set visible to the staking table — matching FlowScan's count.
-const nodeListScript = `
-import FlowIDTableStaking from 0x8624b52f9ddcd04a
+func nodeListScript() string {
+	return fmt.Sprintf(`
+import FlowIDTableStaking from 0x%s
 
 access(all) fun main(): [AnyStruct] {
     let ids = FlowIDTableStaking.getNodeIDs()
@@ -141,10 +146,11 @@ access(all) fun main(): [AnyStruct] {
     }
     return nodes
 }
-`
+`, config.Addr().FlowIDTableStaking)
+}
 
 func (p *NetworkPoller) fetchEpochStatus(ctx context.Context) (uint64, error) {
-	result, err := p.flowClient.ExecuteScriptAtLatestBlock(ctx, []byte(epochScript), nil)
+	result, err := p.flowClient.ExecuteScriptAtLatestBlock(ctx, []byte(epochScript()), nil)
 	if err != nil {
 		return 0, fmt.Errorf("execute epoch script: %w", err)
 	}
@@ -187,7 +193,7 @@ func (p *NetworkPoller) fetchEpochStatus(ctx context.Context) (uint64, error) {
 }
 
 func (p *NetworkPoller) fetchTokenomics(ctx context.Context) error {
-	result, err := p.flowClient.ExecuteScriptAtLatestBlock(ctx, []byte(stakingScript), nil)
+	result, err := p.flowClient.ExecuteScriptAtLatestBlock(ctx, []byte(stakingScript()), nil)
 	if err != nil {
 		return fmt.Errorf("execute staking script: %w", err)
 	}
@@ -216,7 +222,7 @@ func (p *NetworkPoller) fetchTokenomics(ctx context.Context) error {
 }
 
 func (p *NetworkPoller) fetchAndUpsertNodes(ctx context.Context, epoch uint64) error {
-	result, err := p.flowClient.ExecuteScriptAtLatestBlock(ctx, []byte(nodeListScript), nil)
+	result, err := p.flowClient.ExecuteScriptAtLatestBlock(ctx, []byte(nodeListScript()), nil)
 	if err != nil {
 		return fmt.Errorf("execute node list script: %w", err)
 	}
