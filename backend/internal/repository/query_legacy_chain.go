@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -205,7 +206,12 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 
 	// 1. Try resolving ID via raw.tx_lookup
 	var blockHeight uint64
-	err := r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", hexToBytes(id)).Scan(&blockHeight)
+	idBytes := hexToBytes(id)
+	log.Printf("[GetTransactionByID] id=%q normalizedID=%q idBytes=%d has0x=%v", id, normalizedID, len(idBytes), has0x)
+	err := r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", idBytes).Scan(&blockHeight)
+	if err != nil {
+		log.Printf("[GetTransactionByID] tx_lookup lookup failed: %v", err)
+	}
 	if err != nil && has0x {
 		err = r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", hexToBytes(normalizedID)).Scan(&blockHeight)
 	}
