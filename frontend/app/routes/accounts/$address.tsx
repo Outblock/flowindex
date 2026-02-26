@@ -5,8 +5,10 @@ import { getFlowV1AccountByAddress } from '../../api/gen/find';
 import { resolveApiBaseUrl } from '../../api';
 import {
     ArrowLeft, User, Activity, Key, Coins, Image as ImageIcon,
-    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark, AlertTriangle, QrCode
+    FileText, HardDrive, Link2, Lock, Database, Check, TrendingUp, Landmark, AlertTriangle, QrCode,
+    Fish, Shield, ArrowLeftRight, ChartLine, Tag,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
 import Avatar from 'boring-avatars';
@@ -29,6 +31,15 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { COABadge } from '../../components/ui/COABadge';
 import { cn } from '../../lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
+
+const LABEL_CATEGORY_CONFIG: Record<string, { icon: LucideIcon; className: string }> = {
+    whale:    { icon: Fish,             className: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800" },
+    service:  { icon: Shield,           className: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800" },
+    exchange: { icon: ArrowLeftRight,    className: "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800" },
+    defi:     { icon: ChartLine,        className: "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800" },
+    nft:      { icon: ImageIcon,        className: "bg-pink-50 dark:bg-pink-950/30 text-pink-700 dark:text-pink-400 border-pink-200 dark:border-pink-800" },
+    custom:   { icon: Tag,              className: "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700" },
+};
 
 const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'staking', 'keys', 'contracts', 'storage', 'linked'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
@@ -309,21 +320,22 @@ function AccountDetail() {
                     <div className="text-left md:text-right">
                         {account.labels && account.labels.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mb-2 justify-start md:justify-end">
-                                {account.labels.map((l: { tag: string; label: string; category: string }) => (
-                                    <span
-                                        key={l.tag}
-                                        className={cn(
-                                            "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium border",
-                                            l.category === 'whale' && "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800",
-                                            l.category === 'service' && "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800",
-                                            l.category === 'exchange' && "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800",
-                                            l.category === 'defi' && "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800",
-                                            !['whale', 'service', 'exchange', 'defi'].includes(l.category) && "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700",
-                                        )}
-                                    >
-                                        {l.label || l.tag}
-                                    </span>
-                                ))}
+                                {account.labels.map((l: { tag: string; label: string; category: string }) => {
+                                    const cfg = LABEL_CATEGORY_CONFIG[l.category] || LABEL_CATEGORY_CONFIG.custom;
+                                    const Icon = cfg.icon;
+                                    return (
+                                        <span
+                                            key={l.tag}
+                                            className={cn(
+                                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium border",
+                                                cfg.className,
+                                            )}
+                                        >
+                                            <Icon className="w-3 h-3" />
+                                            {l.label || l.tag}
+                                        </span>
+                                    );
+                                })}
                             </div>
                         )}
                         <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Total Balance</div>
