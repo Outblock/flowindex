@@ -22,6 +22,7 @@ interface MetaInput {
 export function buildMeta({ title, description, ogImagePath }: MetaInput) {
   const fullTitle = `${title} | ${SITE_NAME}`;
   const imageUrl = ogImageUrl(ogImagePath);
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://flowindex.io';
   return [
     { title: fullTitle },
     { name: 'description', content: description },
@@ -30,6 +31,8 @@ export function buildMeta({ title, description, ogImagePath }: MetaInput) {
     { property: 'og:image', content: imageUrl },
     { property: 'og:image:width', content: '1200' },
     { property: 'og:image:height', content: '630' },
+    { property: 'og:url', content: base },
+    { property: 'og:logo', content: `${base}/logo.png` },
     { property: 'og:type', content: 'website' },
     { property: 'og:site_name', content: SITE_NAME },
     { name: 'twitter:card', content: 'summary_large_image' },

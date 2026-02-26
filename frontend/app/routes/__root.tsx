@@ -22,6 +22,8 @@ export const Route = createRootRoute({
             { property: 'og:image', content: 'https://flowindex.io/og/home' },
             { property: 'og:image:width', content: '1200' },
             { property: 'og:image:height', content: '630' },
+            { property: 'og:url', content: 'https://flowindex.io' },
+            { property: 'og:logo', content: 'https://flowindex.io/logo.png' },
             { property: 'og:type', content: 'website' },
             { property: 'og:site_name', content: 'FlowIndex' },
             { name: 'twitter:card', content: 'summary_large_image' },
