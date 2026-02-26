@@ -732,9 +732,11 @@ func main() {
 		log.Println("Daily Stats Aggregator is DISABLED (ENABLE_DAILY_STATS=false)")
 	}
 
-	// Analytics backward backfill: process from the current tip backward to fill
-	// the last N months of daily_stats and analytics.daily_metrics.
-	// This is a one-shot job that runs on startup and exits when done.
+	// Analytics incremental backfill: uses two checkpoints to track progress:
+	//   analytics_backfill_top  = highest height already aggregated (grows toward tip)
+	//   analytics_backfill_low  = lowest height already aggregated (grows toward target)
+	// On restart, only processes the gap: [tip → top] (new blocks) and [low → target] (history).
+	// Never clears existing data — each block range is aggregated exactly once.
 	// Controlled by ENABLE_ANALYTICS_BACKFILL=true (default: false).
 	enableAnalyticsBackfill := os.Getenv("ENABLE_ANALYTICS_BACKFILL") == "true"
 	if enableAnalyticsBackfill {
@@ -762,8 +764,7 @@ func main() {
 				return
 			}
 
-			// Calculate target: N months ago from now, mapped to a block height.
-			// Rough estimate: ~1 block/sec on Flow mainnet → ~2.6M blocks/month.
+			// Calculate target: N months ago from now.
 			targetHeight := uint64(0)
 			blocksPerMonth := uint64(2_600_000)
 			monthsBack := uint64(backfillMonths)
@@ -771,80 +772,128 @@ func main() {
 				targetHeight = tip - blocksPerMonth*monthsBack
 			}
 
-			log.Printf("[analytics_backfill] Starting backward from tip=%d to target=%d (months=%d chunk=%d sleep=%dms)",
-				tip, targetHeight, backfillMonths, backfillChunk, backfillSleepMs)
+			// Read existing checkpoints to resume from where we left off.
+			savedTop, _ := repo.GetLastIndexedHeight(ctx, "analytics_backfill_top")
+			savedLow, _ := repo.GetLastIndexedHeight(ctx, "analytics_backfill_low")
 
-			// Initialize backfill progress for API visibility.
+			// Determine ranges that still need processing:
+			//   Forward gap: (savedTop, tip] — new blocks since last run
+			//   Backward gap: [targetHeight, savedLow) — history not yet reached
+			// If no checkpoints exist (fresh start), process everything: tip → targetHeight.
+			forwardFrom := savedTop  // exclusive lower bound
+			forwardTo := tip         // inclusive upper bound
+			backwardFrom := savedLow // exclusive upper bound (cursor starts here)
+			backwardTo := targetHeight
+
+			if savedTop == 0 && savedLow == 0 {
+				// Fresh start: process tip → targetHeight in one backward pass.
+				forwardFrom = 0
+				forwardTo = 0
+				backwardFrom = tip
+				backwardTo = targetHeight
+				log.Printf("[analytics_backfill] Fresh start: will process %d → %d", tip, targetHeight)
+			} else {
+				if forwardFrom >= forwardTo {
+					forwardFrom = 0
+					forwardTo = 0
+				}
+				if backwardFrom <= backwardTo {
+					backwardFrom = 0
+					backwardTo = 0
+				}
+				log.Printf("[analytics_backfill] Incremental: forward gap (%d, %d], backward gap [%d, %d)",
+					forwardFrom, forwardTo, backwardTo, backwardFrom)
+			}
+
 			backfillProgress.Init(tip, targetHeight)
 
-			// Clear ALL existing data for the entire backfill range ONCE up front.
-			// This is critical: per-chunk clearing deletes an entire day's data but
-			// the chunk only re-aggregates a small slice, causing cliff drops in charts.
-			// By clearing once, additive ON CONFLICT builds up correctly chunk by chunk.
-			log.Printf("[analytics_backfill] Clearing daily_stats and daily_metrics for height range [%d, %d)...", targetHeight, tip)
-			if err := repo.ClearDailyStatsForHeightRange(ctx, targetHeight, tip); err != nil {
-				log.Printf("[analytics_backfill] Warning: clear daily_stats failed: %v", err)
+			// Helper to aggregate a chunk and save checkpoint.
+			processChunk := func(from, to uint64) error {
+				if err := repo.RefreshDailyStatsRange(ctx, from, to); err != nil {
+					return fmt.Errorf("daily_stats [%d, %d): %w", from, to, err)
+				}
+				if err := repo.RefreshAnalyticsDailyMetricsRange(ctx, from, to); err != nil {
+					return fmt.Errorf("daily_metrics [%d, %d): %w", from, to, err)
+				}
+				return nil
 			}
-			if err := repo.ClearAnalyticsDailyMetricsForHeightRange(ctx, targetHeight, tip); err != nil {
-				log.Printf("[analytics_backfill] Warning: clear daily_metrics failed: %v", err)
-			}
-			log.Println("[analytics_backfill] Clear complete, starting chunk processing...")
 
-			// Process backward: from tip down to targetHeight in chunks.
 			processed := uint64(0)
 			startTime := time.Now()
-			cursor := tip
 
-			for cursor > targetHeight {
-				if ctx.Err() != nil {
-					log.Printf("[analytics_backfill] Cancelled at height %d", cursor)
-					return
+			// Phase 1: Forward gap — aggregate new blocks since last run.
+			if forwardTo > forwardFrom {
+				log.Printf("[analytics_backfill] Phase 1: forward fill (%d, %d]", forwardFrom, forwardTo)
+				cursor := forwardFrom
+				for cursor < forwardTo {
+					if ctx.Err() != nil {
+						return
+					}
+					chunkTo := cursor + backfillChunk
+					if chunkTo > forwardTo {
+						chunkTo = forwardTo
+					}
+					if err := processChunk(cursor, chunkTo); err != nil {
+						log.Printf("[analytics_backfill] %v — retrying", err)
+						time.Sleep(5 * time.Second)
+						continue
+					}
+					processed += chunkTo - cursor
+					cursor = chunkTo
+					_ = repo.UpdateCheckpoint(ctx, "analytics_backfill_top", cursor)
+					if backfillSleepMs > 0 {
+						time.Sleep(time.Duration(backfillSleepMs) * time.Millisecond)
+					}
 				}
+				log.Printf("[analytics_backfill] Phase 1 complete: processed %d blocks forward", processed)
+			}
 
-				chunkFrom := cursor - backfillChunk
-				if chunkFrom < targetHeight {
-					chunkFrom = targetHeight
-				}
-				// Underflow guard
-				if chunkFrom > cursor {
-					chunkFrom = 0
-				}
-				chunkTo := cursor
+			// Phase 2: Backward gap — continue history backfill.
+			if backwardFrom > backwardTo {
+				log.Printf("[analytics_backfill] Phase 2: backward fill [%d, %d)", backwardTo, backwardFrom)
+				cursor := backwardFrom
+				for cursor > backwardTo {
+					if ctx.Err() != nil {
+						log.Printf("[analytics_backfill] Cancelled at height %d", cursor)
+						return
+					}
+					chunkFrom := cursor - backfillChunk
+					if chunkFrom < backwardTo {
+						chunkFrom = backwardTo
+					}
+					if chunkFrom > cursor {
+						chunkFrom = 0
+					}
 
-				// Aggregate daily_stats
-				if err := repo.RefreshDailyStatsRange(ctx, chunkFrom, chunkTo); err != nil {
-					log.Printf("[analytics_backfill] daily_stats [%d, %d) failed: %v", chunkFrom, chunkTo, err)
-					// Sleep and retry later rather than giving up.
-					time.Sleep(5 * time.Second)
-					continue
-				}
+					if err := processChunk(chunkFrom, cursor); err != nil {
+						log.Printf("[analytics_backfill] %v — retrying", err)
+						time.Sleep(5 * time.Second)
+						continue
+					}
 
-				// Aggregate analytics.daily_metrics
-				if err := repo.RefreshAnalyticsDailyMetricsRange(ctx, chunkFrom, chunkTo); err != nil {
-					log.Printf("[analytics_backfill] daily_metrics [%d, %d) failed: %v", chunkFrom, chunkTo, err)
-					time.Sleep(5 * time.Second)
-					continue
-				}
+					processed += cursor - chunkFrom
+					cursor = chunkFrom
+					_ = repo.UpdateCheckpointDown(ctx, "analytics_backfill_low", cursor)
 
-				processed += chunkTo - chunkFrom
-				elapsed := time.Since(startTime)
-				speed := float64(processed) / elapsed.Seconds()
-				remaining := float64(cursor-targetHeight) / speed
-				log.Printf("[analytics_backfill] Done [%d, %d) — processed=%d speed=%.0f b/s ETA=%.0fm cursor=%d",
-					chunkFrom, chunkTo, processed, speed, remaining/60, chunkFrom)
+					elapsed := time.Since(startTime)
+					speed := float64(processed) / elapsed.Seconds()
+					remaining := float64(cursor-backwardTo) / speed
+					log.Printf("[analytics_backfill] Done [%d, %d) — processed=%d speed=%.0f b/s ETA=%.0fm",
+						chunkFrom, chunkFrom+backfillChunk, processed, speed, remaining/60)
+					backfillProgress.Update(cursor, processed, speed)
 
-				cursor = chunkFrom
-				backfillProgress.Update(cursor, processed, speed)
-
-				// Throttle to avoid overloading the DB.
-				if backfillSleepMs > 0 {
-					time.Sleep(time.Duration(backfillSleepMs) * time.Millisecond)
+					if backfillSleepMs > 0 {
+						time.Sleep(time.Duration(backfillSleepMs) * time.Millisecond)
+					}
 				}
 			}
 
+			// Set top checkpoint to tip so next restart only fills the forward gap.
+			_ = repo.UpdateCheckpoint(ctx, "analytics_backfill_top", tip)
+
 			backfillProgress.MarkDone()
-			log.Printf("[analytics_backfill] Complete! Processed %d blocks from %d down to %d in %s",
-				processed, tip, targetHeight, time.Since(startTime).Round(time.Second))
+			log.Printf("[analytics_backfill] Complete! Processed %d blocks in %s",
+				processed, time.Since(startTime).Round(time.Second))
 		}()
 	}
 
