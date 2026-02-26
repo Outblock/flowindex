@@ -130,13 +130,40 @@ function SqlResultTable({ result }: { result: SqlResult }) {
   );
 }
 
+/* ── Auto-linking helpers ── */
+
+function classifyHex(val: string): { type: 'cadence-addr' | 'evm-addr' | 'cadence-tx' | 'evm-tx' | 'hex'; url: string | null } {
+  const hex = val.toLowerCase();
+  // Cadence address: 0x + 16 hex chars
+  if (/^0x[0-9a-f]{16}$/.test(hex))
+    return { type: 'cadence-addr', url: `https://flowindex.io/account/${val}` };
+  // EVM address: 0x + 40 hex chars
+  if (/^0x[0-9a-f]{40}$/.test(hex))
+    return { type: 'evm-addr', url: `https://evm.flowindex.dev/address/${val}` };
+  // Tx hash: 0x + 64 hex chars — could be Cadence or EVM
+  if (/^0x[0-9a-f]{64}$/.test(hex))
+    return { type: 'cadence-tx', url: `https://flowindex.io/tx/${val}` };
+  return { type: 'hex', url: null };
+}
+
+function LinkedHex({ val }: { val: string }) {
+  const { url } = classifyHex(val);
+  if (!url) return <span className="text-nothing-green/70">{val}</span>;
+  const short = val.length > 20 ? `${val.slice(0, 10)}...${val.slice(-8)}` : val;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="text-nothing-green/90 hover:text-nothing-green hover:underline" title={val}>
+      {short}
+    </a>
+  );
+}
+
 function formatCellValue(val: unknown): React.ReactNode {
   if (val === null || val === undefined)
     return <span className="text-zinc-300 dark:text-zinc-600 italic">null</span>;
   if (typeof val === 'number') return val.toLocaleString();
   if (typeof val === 'boolean') return val ? 'true' : 'false';
   if (typeof val === 'string' && val.startsWith('0x'))
-    return <span className="text-nothing-green/70">{val}</span>;
+    return <LinkedHex val={val} />;
   return String(val);
 }
 
@@ -248,6 +275,34 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
   );
 }
 
+/* ── Auto-link hex values in text ── */
+
+const HEX_RE = /\b(0x[0-9a-fA-F]{16,64})\b/g;
+
+function AutoLinkText({ children }: { children: React.ReactNode }): React.ReactNode {
+  return processChildren(children);
+}
+
+function processChildren(children: React.ReactNode): React.ReactNode {
+  if (typeof children === 'string') return linkifyHex(children);
+  if (Array.isArray(children)) return children.map((c, i) => <span key={i}>{processChildren(c)}</span>);
+  return children;
+}
+
+function linkifyHex(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  HEX_RE.lastIndex = 0;
+  while ((m = HEX_RE.exec(text)) !== null) {
+    if (m.index > lastIdx) parts.push(text.slice(lastIdx, m.index));
+    parts.push(<LinkedHex key={m.index} val={m[1]} />);
+    lastIdx = m.index + m[0].length;
+  }
+  if (lastIdx < text.length) parts.push(text.slice(lastIdx));
+  return parts.length === 1 ? parts[0] : <>{parts}</>;
+}
+
 /* ── Markdown Renderer ── */
 
 const markdownComponents: Components = {
@@ -255,7 +310,7 @@ const markdownComponents: Components = {
   h2: ({ children }) => <h2 className="text-sm font-bold text-zinc-900 dark:text-white mt-3 mb-1">{children}</h2>,
   h3: ({ children }) => <h3 className="text-[12px] font-bold text-zinc-900 dark:text-white mt-2 mb-1">{children}</h3>,
   h4: ({ children }) => <h4 className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 mt-2 mb-0.5">{children}</h4>,
-  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  p: ({ children }) => <p className="mb-2 last:mb-0"><AutoLinkText>{children}</AutoLinkText></p>,
   strong: ({ children }) => <strong className="font-bold text-zinc-900 dark:text-white">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
   a: ({ href, children }) => (
@@ -268,7 +323,7 @@ const markdownComponents: Components = {
   li: ({ children }) => (
     <li className="flex gap-1.5">
       <span className="text-nothing-green shrink-0 mt-[1px]">-</span>
-      <span className="flex-1">{children}</span>
+      <span className="flex-1"><AutoLinkText>{children}</AutoLinkText></span>
     </li>
   ),
   blockquote: ({ children }) => (
@@ -290,7 +345,7 @@ const markdownComponents: Components = {
   ),
   td: ({ children }) => (
     <td className="px-3 py-1.5 text-zinc-600 dark:text-zinc-400 border-b border-zinc-100 dark:border-white/5 font-mono">
-      {children}
+      <AutoLinkText>{children}</AutoLinkText>
     </td>
   ),
   code: ({ className, children }) => {
@@ -300,6 +355,22 @@ const markdownComponents: Components = {
 
     if (lang || codeString.includes('\n')) {
       return <CodeBlock code={codeString} language={lang || 'text'} />;
+    }
+
+    // Auto-link hex values in inline code
+    if (/^0x[0-9a-fA-F]{16,64}$/.test(codeString)) {
+      const { url } = classifyHex(codeString);
+      if (url) {
+        const short = codeString.length > 20 ? `${codeString.slice(0, 10)}...${codeString.slice(-8)}` : codeString;
+        return (
+          <a href={url} target="_blank" rel="noopener noreferrer"
+            className="text-[10px] bg-nothing-green/10 px-1 py-0.5 rounded font-mono text-nothing-green hover:underline"
+            title={codeString}
+          >
+            {short}
+          </a>
+        );
+      }
     }
 
     return (
