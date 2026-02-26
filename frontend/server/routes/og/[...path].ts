@@ -47,7 +47,7 @@ async function ensureInit() {
   ];
   let wasmBinary: Buffer | null = null;
   for (const p of candidates) {
-    try { wasmBinary = await readFile(p); break; } catch {}
+    try { wasmBinary = await readFile(p); break; } catch { /* ignore missing paths */ }
   }
   if (!wasmBinary) throw new Error('resvg.wasm not found in any candidate path');
   await initWasm(wasmBinary);
