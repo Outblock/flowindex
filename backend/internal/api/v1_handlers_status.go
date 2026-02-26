@@ -130,7 +130,7 @@ func (s *Server) handleStatusPrice(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStatusPriceHistory(w http.ResponseWriter, r *http.Request) {
 	limit := 168 // default: 7 days of hourly data
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 720 {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 8760 {
 			limit = n
 		}
 	}

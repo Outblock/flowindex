@@ -292,7 +292,7 @@ function AnalyticsPage() {
           fetchAnalyticsDaily(fromStr),
           fetchAnalyticsTransfersDaily(fromStr),
           fetchNetworkStats(),
-          fetch(`${getBaseURL()}/status/price/history?limit=720`)
+          fetch(`${getBaseURL()}/status/price/history?limit=8760`)
             .then((r) => (r.ok ? r.json() : null))
             .catch(() => null),
           fetch(`${getBaseURL()}/staking/epoch/stats?limit=200`)
@@ -359,11 +359,15 @@ function AnalyticsPage() {
   )
 
   const visiblePrice = useMemo(() => {
-    const mapped = priceHistory.map((p) => ({
-      date: p.as_of.split('T')[0],
-      price: p.price,
-    }))
-    return rangeDays >= mapped.length ? mapped : mapped.slice(-rangeDays)
+    // Aggregate hourly data to daily (use last price of each day)
+    const byDay = new Map<string, number>()
+    for (const p of priceHistory) {
+      const day = p.as_of.split('T')[0]
+      byDay.set(day, p.price)
+    }
+    const daily = Array.from(byDay, ([date, price]) => ({ date, price }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+    return rangeDays >= daily.length ? daily : daily.slice(-rangeDays)
   }, [priceHistory, rangeDays])
 
   const evmPctData = useMemo(

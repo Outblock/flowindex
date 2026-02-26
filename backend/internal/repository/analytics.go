@@ -31,7 +31,7 @@ func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.T
 		),
 		errors AS (
 			SELECT date_trunc('day', l.timestamp)::date AS date,
-				COUNT(*) FILTER (WHERE m.execution_status != 0) AS failed_count
+				COUNT(*) FILTER (WHERE m.execution_status IS NOT NULL AND m.execution_status <> '0' AND m.execution_status <> '') AS failed_count
 			FROM app.tx_metrics m
 			JOIN raw.tx_lookup l ON l.id = m.transaction_id AND l.block_height = m.block_height
 			WHERE l.timestamp >= $1::timestamptz AND l.timestamp < ($2::date + interval '1 day')
