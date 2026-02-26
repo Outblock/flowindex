@@ -458,6 +458,17 @@ function AnalyticsPage() {
     [visibleDaily],
   )
 
+  function hasMetricData(key: keyof DailyRow): boolean {
+    return visibleDaily.some((d) => toNum(d[key]) > 0)
+  }
+
+  const showNewAccounts = hasMetricData('new_accounts')
+  const showCOANewAccounts = hasMetricData('coa_new_accounts')
+  const showEVMActiveAddrs = hasMetricData('evm_active_addresses')
+  const showDefiMetrics = hasMetricData('defi_swap_count') || hasMetricData('defi_unique_traders')
+  const showBridgeMetrics = hasMetricData('bridge_to_evm_txs')
+  const showEpochPayout = hasMetricData('epoch_payout_total')
+
   /* ── KPI helpers ── */
 
   const latest = dailyData.length > 0 ? dailyData[dailyData.length - 1] : null
@@ -566,40 +577,52 @@ function AnalyticsPage() {
                 value={latest ? fmtComma(latest.new_contracts) : '--'}
                 delta={delta(latest?.new_contracts, prev?.new_contracts)}
               />
-              <KpiCard
-                label="New Accounts (24h)"
-                value={latest ? fmtComma(latest.new_accounts) : '--'}
-                delta={delta(latest?.new_accounts, prev?.new_accounts)}
-              />
-              <KpiCard
-                label="COA New (24h)"
-                value={latest ? fmtComma(latest.coa_new_accounts) : '--'}
-                delta={delta(latest?.coa_new_accounts, prev?.coa_new_accounts)}
-              />
-              <KpiCard
-                label="EVM Active Addr (24h)"
-                value={latest ? fmtComma(latest.evm_active_addresses) : '--'}
-                delta={delta(latest?.evm_active_addresses, prev?.evm_active_addresses)}
-              />
-              <KpiCard
-                label="DeFi Swaps (24h)"
-                value={latest ? fmtComma(latest.defi_swap_count) : '--'}
-                delta={delta(latest?.defi_swap_count, prev?.defi_swap_count)}
-              />
-              <KpiCard
-                label="Bridge->EVM Txs (24h)"
-                value={latest ? fmtComma(latest.bridge_to_evm_txs) : '--'}
-                delta={delta(latest?.bridge_to_evm_txs, prev?.bridge_to_evm_txs)}
-              />
-              <KpiCard
-                label="Epoch Payout (day)"
-                value={latest ? fmtNum(toNum(latest.epoch_payout_total)) : '--'}
-                delta={
-                  latest && prev
-                    ? toNum(latest.epoch_payout_total) - toNum(prev.epoch_payout_total)
-                    : null
-                }
-              />
+              {showNewAccounts && (
+                <KpiCard
+                  label="New Accounts (24h)"
+                  value={latest ? fmtComma(latest.new_accounts) : '--'}
+                  delta={delta(latest?.new_accounts, prev?.new_accounts)}
+                />
+              )}
+              {showCOANewAccounts && (
+                <KpiCard
+                  label="COA New (24h)"
+                  value={latest ? fmtComma(latest.coa_new_accounts) : '--'}
+                  delta={delta(latest?.coa_new_accounts, prev?.coa_new_accounts)}
+                />
+              )}
+              {showEVMActiveAddrs && (
+                <KpiCard
+                  label="EVM Active Addr (24h)"
+                  value={latest ? fmtComma(latest.evm_active_addresses) : '--'}
+                  delta={delta(latest?.evm_active_addresses, prev?.evm_active_addresses)}
+                />
+              )}
+              {showDefiMetrics && (
+                <KpiCard
+                  label="DeFi Swaps (24h)"
+                  value={latest ? fmtComma(latest.defi_swap_count) : '--'}
+                  delta={delta(latest?.defi_swap_count, prev?.defi_swap_count)}
+                />
+              )}
+              {showBridgeMetrics && (
+                <KpiCard
+                  label="Bridge->EVM Txs (24h)"
+                  value={latest ? fmtComma(latest.bridge_to_evm_txs) : '--'}
+                  delta={delta(latest?.bridge_to_evm_txs, prev?.bridge_to_evm_txs)}
+                />
+              )}
+              {showEpochPayout && (
+                <KpiCard
+                  label="Epoch Payout (day)"
+                  value={latest ? fmtNum(toNum(latest.epoch_payout_total)) : '--'}
+                  delta={
+                    latest && prev
+                      ? toNum(latest.epoch_payout_total) - toNum(prev.epoch_payout_total)
+                      : null
+                  }
+                />
+              )}
             </div>
 
             {/* ── Bento Grid ── */}
@@ -649,7 +672,7 @@ function AnalyticsPage() {
               </ChartCard>
               )}
 
-              {showChart('network') && (
+              {showChart('network') && showNewAccounts && (
               <ChartCard title="New Accounts" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <AreaChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <defs>
@@ -705,7 +728,7 @@ function AnalyticsPage() {
               </ChartCard>
               )}
 
-              {showChart('tokens') && (
+              {showChart('tokens') && showDefiMetrics && (
               <ChartCard title="DeFi Swaps & Traders" className="md:col-span-2" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <LineChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke={gridStroke} vertical={false} />
@@ -719,7 +742,7 @@ function AnalyticsPage() {
               </ChartCard>
               )}
 
-              {showChart('network') && (
+              {showChart('network') && showEpochPayout && (
               <ChartCard title="Epoch Payout (Daily)" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <BarChart
                   data={visibleDaily.map((d) => ({ ...d, epoch_payout_total_num: toNum(d.epoch_payout_total) }))}
@@ -734,7 +757,7 @@ function AnalyticsPage() {
               </ChartCard>
               )}
 
-              {showChart('transactions') && (
+              {showChart('transactions') && showBridgeMetrics && (
               <ChartCard title="Bridge -> EVM Txs (Proxy)" loading={dailyLoading} empty={visibleDaily.length === 0}>
                 <BarChart data={visibleDaily} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke={gridStroke} vertical={false} />

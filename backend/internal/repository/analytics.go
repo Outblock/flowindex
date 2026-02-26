@@ -25,147 +25,179 @@ type AnalyticsDailyRow struct {
 	BridgeToEVMTxs     int64   `json:"bridge_to_evm_txs"`
 }
 
-// GetAnalyticsDailyStats returns daily analytics from app.daily_stats enriched with
-// account growth, DeFi activity, EVM active addresses, epoch payouts, and bridge proxy counts.
-func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
-	query := `
-		WITH bounds AS (
-			SELECT $1::date AS from_date, $2::date AS to_date
-		),
-		height_bounds AS (
-			SELECT MIN(bl.height) AS min_h, MAX(bl.height) AS max_h
-			FROM raw.blocks bl
-			JOIN bounds b ON bl.timestamp >= b.from_date::timestamptz
-				AND bl.timestamp < (b.to_date::date + INTERVAL '1 day')
-		),
-		base AS (
-			SELECT
-				date,
-				tx_count,
-				COALESCE(evm_tx_count, 0) AS evm_tx_count,
-				(tx_count - COALESCE(evm_tx_count, 0)) AS cadence_tx_count,
-				COALESCE(total_gas_used, 0) AS total_gas_used,
-				COALESCE(active_accounts, 0) AS active_accounts,
-				COALESCE(new_contracts, 0) AS new_contracts,
-				COALESCE(failed_tx_count, 0) AS failed_tx_count
-			FROM app.daily_stats d
-			JOIN bounds b ON d.date >= b.from_date AND d.date <= b.to_date
-		),
-		new_accounts AS (
-			SELECT DATE(bl.timestamp) AS date, COUNT(*)::BIGINT AS new_accounts
-			FROM app.accounts a
-			JOIN raw.blocks bl ON bl.height = a.first_seen_height
-			JOIN height_bounds hb ON hb.min_h IS NOT NULL
-				AND a.first_seen_height BETWEEN hb.min_h AND hb.max_h
-			GROUP BY 1
-		),
-		coa_new_accounts AS (
-			SELECT DATE(bl.timestamp) AS date, COUNT(*)::BIGINT AS coa_new_accounts
-			FROM app.coa_accounts c
-			JOIN raw.blocks bl ON bl.height = c.block_height
-			JOIN height_bounds hb ON hb.min_h IS NOT NULL
-				AND c.block_height BETWEEN hb.min_h AND hb.max_h
-			GROUP BY 1
-		),
-		evm_active AS (
-			SELECT date, COUNT(DISTINCT addr)::BIGINT AS evm_active_addresses
-			FROM (
-				SELECT DATE(timestamp) AS date, from_address AS addr
-				FROM app.evm_transactions e
-				JOIN height_bounds hb ON hb.min_h IS NOT NULL
-					AND e.block_height BETWEEN hb.min_h AND hb.max_h
-				WHERE from_address IS NOT NULL
-				UNION ALL
-				SELECT DATE(timestamp) AS date, to_address AS addr
-				FROM app.evm_transactions e
-				JOIN height_bounds hb ON hb.min_h IS NOT NULL
-					AND e.block_height BETWEEN hb.min_h AND hb.max_h
-				WHERE to_address IS NOT NULL
-			) x
-			GROUP BY date
-		),
-		defi_daily AS (
-			SELECT
-				DATE(timestamp) AS date,
-				COUNT(*) FILTER (WHERE event_type = 'Swap')::BIGINT AS defi_swap_count,
-				COUNT(DISTINCT maker) FILTER (WHERE event_type = 'Swap' AND maker IS NOT NULL)::BIGINT AS defi_unique_traders
-			FROM app.defi_events e
-			JOIN height_bounds hb ON hb.min_h IS NOT NULL
-				AND e.block_height BETWEEN hb.min_h AND hb.max_h
-			GROUP BY 1
-		),
-		epoch_payout AS (
-			SELECT
-				DATE(payout_time) AS date,
-				COALESCE(SUM(payout_total), 0)::TEXT AS epoch_payout_total
-			FROM app.epoch_stats s
-			JOIN bounds b ON s.payout_time >= b.from_date::timestamptz
-				AND s.payout_time < (b.to_date::date + INTERVAL '1 day')
-			WHERE payout_time IS NOT NULL
-			GROUP BY 1
-		),
-		bridge_proxy AS (
-			SELECT DATE(l.timestamp) AS date, COUNT(*)::BIGINT AS bridge_to_evm_txs
-			FROM app.tx_tags t
-			JOIN raw.tx_lookup l ON l.id = t.transaction_id
-			JOIN height_bounds hb ON hb.min_h IS NOT NULL
-				AND l.block_height BETWEEN hb.min_h AND hb.max_h
-			WHERE t.tag = 'EVM_BRIDGE'
-			GROUP BY 1
-		)
-		SELECT
-			base.date::text,
-			base.tx_count,
-			base.evm_tx_count,
-			base.cadence_tx_count,
-			base.total_gas_used,
-			base.active_accounts,
-			base.new_contracts,
-			base.failed_tx_count,
-			CASE WHEN base.tx_count > 0
-				THEN ROUND(base.failed_tx_count::numeric / base.tx_count * 100, 2)
-				ELSE 0 END AS error_rate,
-			CASE WHEN base.tx_count > 0 AND base.total_gas_used > 0
-				THEN ROUND((base.total_gas_used::numeric / base.tx_count), 2)
-				ELSE 0 END AS avg_gas_per_tx,
-			COALESCE(na.new_accounts, 0) AS new_accounts,
-			COALESCE(cna.coa_new_accounts, 0) AS coa_new_accounts,
-			COALESCE(ea.evm_active_addresses, 0) AS evm_active_addresses,
-			COALESCE(dd.defi_swap_count, 0) AS defi_swap_count,
-			COALESCE(dd.defi_unique_traders, 0) AS defi_unique_traders,
-			COALESCE(ep.epoch_payout_total, '0') AS epoch_payout_total,
-			COALESCE(bp.bridge_to_evm_txs, 0) AS bridge_to_evm_txs
-		FROM base
-		LEFT JOIN new_accounts na ON na.date = base.date
-		LEFT JOIN coa_new_accounts cna ON cna.date = base.date
-		LEFT JOIN evm_active ea ON ea.date = base.date
-		LEFT JOIN defi_daily dd ON dd.date = base.date
-		LEFT JOIN epoch_payout ep ON ep.date = base.date
-		LEFT JOIN bridge_proxy bp ON bp.date = base.date
-		ORDER BY base.date ASC`
+type analyticsDailyExtra struct {
+	newAccounts        int64
+	coaNewAccounts     int64
+	evmActiveAddresses int64
+	defiSwapCount      int64
+	defiUniqueTraders  int64
+	epochPayoutTotal   string
+	bridgeToEVMTxs     int64
+}
 
-	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
+// GetAnalyticsDailyStats returns daily analytics from app.daily_stats and enriches
+// module metrics with independent queries so one slow module does not block all data.
+func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
+	out, err := r.GetAnalyticsDailyBaseStats(ctx, from, to)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var out []AnalyticsDailyRow
-	for rows.Next() {
-		var row AnalyticsDailyRow
-		if err := rows.Scan(
-			&row.Date, &row.TxCount, &row.EVMTxCount, &row.CadenceTxCount,
-			&row.TotalGasUsed, &row.ActiveAccounts, &row.NewContracts,
-			&row.FailedTxCount, &row.ErrorRate, &row.AvgGasPerTx,
-			&row.NewAccounts, &row.COANewAccounts, &row.EVMActiveAddresses,
-			&row.DefiSwapCount, &row.DefiUniqueTraders, &row.EpochPayoutTotal,
-			&row.BridgeToEVMTxs,
-		); err != nil {
-			return nil, err
-		}
-		out = append(out, row)
+	extras, err := r.getAnalyticsDailyExtras(ctx, from, to)
+	if err != nil {
+		// Keep page usable even if enrichment fails.
+		return out, nil
 	}
-	return out, rows.Err()
+	for i := range out {
+		if ex, ok := extras[out[i].Date]; ok {
+			out[i].NewAccounts = ex.newAccounts
+			out[i].COANewAccounts = ex.coaNewAccounts
+			out[i].EVMActiveAddresses = ex.evmActiveAddresses
+			out[i].DefiSwapCount = ex.defiSwapCount
+			out[i].DefiUniqueTraders = ex.defiUniqueTraders
+			out[i].EpochPayoutTotal = ex.epochPayoutTotal
+			out[i].BridgeToEVMTxs = ex.bridgeToEVMTxs
+		}
+	}
+	return out, nil
+}
+
+func (r *Repository) getAnalyticsDailyExtras(ctx context.Context, from, to time.Time) (map[string]analyticsDailyExtra, error) {
+	out := make(map[string]analyticsDailyExtra)
+	type setter func(*analyticsDailyExtra, int64, string)
+
+	mergeCount := func(rows pgxRows, set setter) error {
+		defer rows.Close()
+		for rows.Next() {
+			var d string
+			var v int64
+			if err := rows.Scan(&d, &v); err != nil {
+				return err
+			}
+			ex := out[d]
+			set(&ex, v, "")
+			out[d] = ex
+		}
+		return rows.Err()
+	}
+
+	// Query 1: new accounts
+	rows, err := r.db.Query(ctx, `
+		SELECT DATE(b.timestamp)::text, COUNT(*)::bigint
+		FROM app.accounts a
+		JOIN raw.blocks b ON b.height = a.first_seen_height
+		WHERE b.timestamp >= $1::timestamptz
+		  AND b.timestamp < ($2::date + interval '1 day')
+		GROUP BY 1
+	`, from.UTC(), to.UTC())
+	if err == nil {
+		_ = mergeCount(rows, func(ex *analyticsDailyExtra, v int64, _ string) { ex.newAccounts = v })
+	}
+
+	// Query 2: COA new accounts
+	rows, err = r.db.Query(ctx, `
+		SELECT DATE(b.timestamp)::text, COUNT(*)::bigint
+		FROM app.coa_accounts c
+		JOIN raw.blocks b ON b.height = c.block_height
+		WHERE b.timestamp >= $1::timestamptz
+		  AND b.timestamp < ($2::date + interval '1 day')
+		GROUP BY 1
+	`, from.UTC(), to.UTC())
+	if err == nil {
+		_ = mergeCount(rows, func(ex *analyticsDailyExtra, v int64, _ string) { ex.coaNewAccounts = v })
+	}
+
+	// Query 3: EVM active addresses
+	rows, err = r.db.Query(ctx, `
+		SELECT d::text, COUNT(DISTINCT addr)::bigint
+		FROM (
+			SELECT DATE(timestamp) AS d, from_address AS addr
+			FROM app.evm_transactions
+			WHERE timestamp >= $1::timestamptz
+			  AND timestamp < ($2::date + interval '1 day')
+			  AND from_address IS NOT NULL
+			UNION ALL
+			SELECT DATE(timestamp) AS d, to_address AS addr
+			FROM app.evm_transactions
+			WHERE timestamp >= $1::timestamptz
+			  AND timestamp < ($2::date + interval '1 day')
+			  AND to_address IS NOT NULL
+		) x
+		GROUP BY 1
+	`, from.UTC(), to.UTC())
+	if err == nil {
+		_ = mergeCount(rows, func(ex *analyticsDailyExtra, v int64, _ string) { ex.evmActiveAddresses = v })
+	}
+
+	// Query 4: DeFi swaps/traders
+	rows2, err := r.db.Query(ctx, `
+		SELECT DATE(timestamp)::text,
+			COUNT(*) FILTER (WHERE event_type='Swap')::bigint,
+			COUNT(DISTINCT maker) FILTER (WHERE event_type='Swap' AND maker IS NOT NULL)::bigint
+		FROM app.defi_events
+		WHERE timestamp >= $1::timestamptz
+		  AND timestamp < ($2::date + interval '1 day')
+		GROUP BY 1
+	`, from.UTC(), to.UTC())
+	if err == nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var d string
+			var c, u int64
+			if scanErr := rows2.Scan(&d, &c, &u); scanErr != nil {
+				break
+			}
+			ex := out[d]
+			ex.defiSwapCount = c
+			ex.defiUniqueTraders = u
+			out[d] = ex
+		}
+	}
+
+	// Query 5: Epoch payout
+	rows3, err := r.db.Query(ctx, `
+		SELECT DATE(payout_time)::text, COALESCE(SUM(payout_total),0)::text
+		FROM app.epoch_stats
+		WHERE payout_time >= $1::timestamptz
+		  AND payout_time < ($2::date + interval '1 day')
+		GROUP BY 1
+	`, from.UTC(), to.UTC())
+	if err == nil {
+		defer rows3.Close()
+		for rows3.Next() {
+			var d, v string
+			if scanErr := rows3.Scan(&d, &v); scanErr != nil {
+				break
+			}
+			ex := out[d]
+			ex.epochPayoutTotal = v
+			out[d] = ex
+		}
+	}
+
+	// Query 6: bridge proxy count (may be zero on most deployments)
+	rows, err = r.db.Query(ctx, `
+		SELECT DATE(l.timestamp)::text, COUNT(*)::bigint
+		FROM app.tx_tags t
+		JOIN raw.tx_lookup l ON l.id = t.transaction_id
+		WHERE t.tag='EVM_BRIDGE'
+		  AND l.timestamp >= $1::timestamptz
+		  AND l.timestamp < ($2::date + interval '1 day')
+		GROUP BY 1
+	`, from.UTC(), to.UTC())
+	if err == nil {
+		_ = mergeCount(rows, func(ex *analyticsDailyExtra, v int64, _ string) { ex.bridgeToEVMTxs = v })
+	}
+
+	return out, nil
+}
+
+// pgxRows keeps this file decoupled from pgx concrete row type.
+type pgxRows interface {
+	Close()
+	Next() bool
+	Scan(dest ...interface{}) error
+	Err() error
 }
 
 // GetAnalyticsDailyBaseStats returns fast daily metrics from app.daily_stats only.
