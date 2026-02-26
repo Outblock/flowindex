@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -206,12 +205,7 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 
 	// 1. Try resolving ID via raw.tx_lookup
 	var blockHeight uint64
-	idBytes := hexToBytes(id)
-	log.Printf("[GetTransactionByID] id=%q normalizedID=%q idBytes=%d has0x=%v", id, normalizedID, len(idBytes), has0x)
-	err := r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", idBytes).Scan(&blockHeight)
-	if err != nil {
-		log.Printf("[GetTransactionByID] tx_lookup lookup failed: %v", err)
-	}
+	err := r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", hexToBytes(id)).Scan(&blockHeight)
 	if err != nil && has0x {
 		err = r.db.QueryRow(ctx, "SELECT block_height FROM raw.tx_lookup WHERE id = $1", hexToBytes(normalizedID)).Scan(&blockHeight)
 	}
@@ -220,7 +214,6 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 	args := []interface{}{}
 
 	if err == nil {
-		log.Printf("[GetTransactionByID] tx_lookup found blockHeight=%d for id=%q", blockHeight, id)
 		// Found in lookup, efficient query
 		// Note: We need to JOIN for EVM details if applicable.
 		// NOTE: raw.transactions does NOT have EVM logs. app.evm_transactions has them.
@@ -340,7 +333,6 @@ func (r *Repository) GetTransactionByID(ctx context.Context, id string) (*models
 			&t.EVMHash, &t.EVMFrom, &t.EVMTo, &t.EVMValue, &t.ScriptHash)
 
 	if err != nil {
-		log.Printf("[GetTransactionByID] final query failed: %v (query had %d args, blockHeight=%d)", err, len(args), blockHeight)
 		return nil, err
 	}
 
