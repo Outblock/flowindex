@@ -716,10 +716,12 @@ func (r *Repository) GetScheduledTransactions(ctx context.Context, limit, offset
 	}
 	rows, err := r.db.Query(ctx, `
 		WITH page AS (
-			SELECT tc.transaction_id, tc.block_height
+			SELECT tc.transaction_id,
+			       COALESCE(tc.block_height, tl.block_height) AS block_height
 			FROM app.tx_contracts tc
+			LEFT JOIN raw.tx_lookup tl ON tl.id = tc.transaction_id AND tc.block_height IS NULL
 			WHERE tc.contract_identifier LIKE '%FlowTransactionScheduler%'
-			ORDER BY tc.block_height DESC NULLS LAST
+			ORDER BY COALESCE(tc.block_height, tl.block_height) DESC NULLS LAST
 			LIMIT $1 OFFSET $2
 		)
 		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
@@ -764,10 +766,12 @@ func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIden
 	}
 	rows, err := r.db.Query(ctx, `
 		WITH page AS (
-			SELECT tc.transaction_id, tc.block_height
+			SELECT tc.transaction_id,
+			       COALESCE(tc.block_height, tl.block_height) AS block_height
 			FROM app.tx_contracts tc
+			LEFT JOIN raw.tx_lookup tl ON tl.id = tc.transaction_id AND tc.block_height IS NULL
 			WHERE tc.contract_identifier = $1
-			ORDER BY tc.block_height DESC NULLS LAST
+			ORDER BY COALESCE(tc.block_height, tl.block_height) DESC NULLS LAST
 			LIMIT $2 OFFSET $3
 		)
 		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
