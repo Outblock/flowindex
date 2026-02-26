@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"flowscan-clone/internal/config"
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 
@@ -542,7 +543,7 @@ func (s *Server) handleFlowAccountFTVaults(w http.ResponseWriter, r *http.Reques
 				"address":  formatAddressV1(address),
 				"balance":  bal,
 				"path":     "/storage/flowTokenVault",
-				"token":    formatTokenVaultIdentifier("1654653399040a61", "FlowToken"),
+				"token":    formatTokenVaultIdentifier(config.Addr().FlowToken, "FlowToken"),
 				"vault_id": 0,
 			})
 		}

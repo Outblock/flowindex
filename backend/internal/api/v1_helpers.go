@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"flowscan-clone/internal/config"
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 
@@ -640,7 +641,7 @@ func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string,
 	} else if contractName == "FlowToken" {
 		tokenName = "Flow"
 		tokenSymbol = "FLOW"
-		tokenLogo = "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A.1654653399040a61.FlowToken/logo.svg"
+		tokenLogo = "https://cdn.jsdelivr.net/gh/FlowFans/flow-token-list@main/token-registry/A." + config.Addr().FlowToken + ".FlowToken/logo.svg"
 	} else if contractName != "" {
 		tokenName = contractName
 	}

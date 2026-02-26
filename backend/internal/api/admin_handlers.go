@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"flowscan-clone/internal/config"
 	"flowscan-clone/internal/ingester"
 	"flowscan-clone/internal/models"
 
@@ -288,7 +289,7 @@ func adminQueryBridgeAddress(ctx context.Context, client FlowClient, script stri
 }
 
 func adminBridgeOnlyScript() string {
-	evmBridgeAddr := adminGetEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+	evmBridgeAddr := adminGetEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", config.Addr().FlowEVMBridgeConfig)
 	return fmt.Sprintf(`
 		import FlowEVMBridgeConfig from 0x%s
 
@@ -644,11 +645,11 @@ func adminViewResolverAddr() string {
 	if v := adminGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", ""); v != "" {
 		return v
 	}
-	return "1d7e57aa55817448"
+	return config.Addr().MetadataViews
 }
 
 func adminFTAddr() string {
-	return adminGetEnvOrDefault("FLOW_FUNGIBLE_TOKEN_ADDRESS", "f233dcee88fe0abe")
+	return adminGetEnvOrDefault("FLOW_FUNGIBLE_TOKEN_ADDRESS", config.Addr().FungibleToken)
 }
 
 func adminFTMetadataViewsAddr() string {
@@ -662,7 +663,7 @@ func adminFTMetadataViewsAddr() string {
 // Iterates the contract account's storage to find vaults, then calls vault.resolveView().
 // This approach works for all contracts including those in recovered state.
 func adminFTCombinedScript() string {
-	evmBridgeAddr := adminGetEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+	evmBridgeAddr := adminGetEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", config.Addr().FlowEVMBridgeConfig)
 
 	return fmt.Sprintf(`
         import ViewResolver from 0x%s
@@ -793,9 +794,9 @@ func adminFTCombinedScript() string {
 func adminNFTCollectionDisplayWithBridgeScript() string {
 	metadataViewsAddr := adminGetEnvOrDefault("FLOW_METADATA_VIEWS_ADDRESS", "")
 	if metadataViewsAddr == "" {
-		metadataViewsAddr = adminGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", "1d7e57aa55817448")
+		metadataViewsAddr = adminGetEnvOrDefault("FLOW_NON_FUNGIBLE_TOKEN_ADDRESS", config.Addr().MetadataViews)
 	}
-	evmBridgeAddr := adminGetEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", "1e4aa0b87d10b141")
+	evmBridgeAddr := adminGetEnvOrDefault("FLOW_EVM_BRIDGE_CONFIG_ADDRESS", config.Addr().FlowEVMBridgeConfig)
 
 	return fmt.Sprintf(`
         import ViewResolver from 0x%s

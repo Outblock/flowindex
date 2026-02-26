@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"flowscan-clone/internal/config"
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 )
@@ -21,7 +22,7 @@ type StakingWorker struct {
 func NewStakingWorker(repo *repository.Repository) *StakingWorker {
 	addr := strings.TrimSpace(os.Getenv("FLOW_STAKING_ADDRESS"))
 	if addr == "" {
-		addr = "8624b52f9ddcd04a"
+		addr = config.Addr().FlowIDTableStaking
 	}
 	addr = strings.TrimPrefix(strings.ToLower(addr), "0x")
 	return &StakingWorker{repo: repo, stakingAddress: addr}
