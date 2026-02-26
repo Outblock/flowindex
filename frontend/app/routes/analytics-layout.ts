@@ -15,8 +15,6 @@ export interface KpiDef {
   label: string
   /** Key from chartMap to show when expanded */
   chartKey?: string
-  /** if set, card is only visible when this returns true */
-  visibleKey?: string
 }
 
 export const KPI_DEFS: KpiDef[] = [
@@ -26,12 +24,12 @@ export const KPI_DEFS: KpiDef[] = [
   { key: 'kpi-error-rate', label: 'Tx Error Rate (24h)', chartKey: 'error-rate' },
   { key: 'kpi-flow-price', label: 'FLOW Price', chartKey: 'flow-price' },
   { key: 'kpi-contracts', label: 'Contracts Deployed', chartKey: 'contract-activity' },
-  { key: 'kpi-new-accounts', label: 'New Accounts (24h)', chartKey: 'new-accounts', visibleKey: 'showNewAccounts' },
-  { key: 'kpi-coa-new', label: 'COA New (24h)', chartKey: 'coa-new-accounts', visibleKey: 'showCOANewAccounts' },
-  { key: 'kpi-evm-active', label: 'EVM Active Addr (24h)', chartKey: 'evm-active-addresses', visibleKey: 'showEVMActiveAddrs' },
-  { key: 'kpi-defi-swaps', label: 'DeFi Swaps (24h)', chartKey: 'defi-swaps', visibleKey: 'showDefiMetrics' },
-  { key: 'kpi-bridge-evm', label: 'Bridge->EVM Txs (24h)', chartKey: 'bridge-evm', visibleKey: 'showBridgeMetrics' },
-  { key: 'kpi-epoch-payout', label: 'Epoch Payout', chartKey: 'epoch-payout', visibleKey: 'showEpochPayout' },
+  { key: 'kpi-new-accounts', label: 'New Accounts (24h)', chartKey: 'new-accounts' },
+  { key: 'kpi-coa-new', label: 'COA New (24h)', chartKey: 'coa-new-accounts' },
+  { key: 'kpi-evm-active', label: 'EVM Active Addr (24h)', chartKey: 'evm-active-addresses' },
+  { key: 'kpi-defi-swaps', label: 'DeFi Swaps (24h)', chartKey: 'defi-swaps' },
+  { key: 'kpi-bridge-evm', label: 'Bridge->EVM Txs (24h)', chartKey: 'bridge-evm' },
+  { key: 'kpi-epoch-payout', label: 'Epoch Payout', chartKey: 'epoch-payout' },
 ]
 
 export const CARD_DEFS: CardDef[] = [
