@@ -225,6 +225,8 @@ function NFTCollectionDetailInner() {
   const [searchActive, setSearchActive] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedNft, setSelectedNft] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [selectedNftRaw, setSelectedNftRaw] = useState<any>(null);
 
   // --- Owners state (lazy) ---
   const [owners, setOwners] = useState<any[]>([]);
@@ -493,7 +495,7 @@ function NFTCollectionDetailInner() {
                           key={item.nft_id || item.id || ''}
                           item={item}
                           collectionVideoSupported={collectionVideoSupported}
-                          onClick={() => setSelectedNft(apiItemToCadenceFormat(item))}
+                          onClick={() => { setSelectedNftRaw(item); setSelectedNft(apiItemToCadenceFormat(item)); }}
                         />
                       ))}
                     </AnimatePresence>
@@ -660,9 +662,11 @@ function NFTCollectionDetailInner() {
       {selectedNft && (
         <NFTDetailModal
           nft={selectedNft}
+          nftType={nftType}
+          nftId={selectedNftRaw?.nft_id || selectedNftRaw?.id}
           collectionId={id}
           collectionName={displayName}
-          onClose={() => setSelectedNft(null)}
+          onClose={() => { setSelectedNft(null); setSelectedNftRaw(null); }}
         />
       )}
     </div>
