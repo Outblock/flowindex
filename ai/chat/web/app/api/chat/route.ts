@@ -59,7 +59,7 @@ export async function POST(req: Request) {
         },
       }),
     },
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(15),
     onFinish: async () => {
       await Promise.all([mcpClient.close(), cadenceMcp.close()]);
     },

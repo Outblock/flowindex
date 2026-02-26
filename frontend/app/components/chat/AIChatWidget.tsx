@@ -2,11 +2,19 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
+import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+SyntaxHighlighter.registerLanguage('sql', sql);
+SyntaxHighlighter.registerLanguage('swift', swift);
+SyntaxHighlighter.registerLanguage('cadence', swift);
 
 const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io';
 
@@ -128,7 +136,7 @@ function formatCellValue(val: unknown): React.ReactNode {
   return String(val);
 }
 
-/* ── Code Block with copy ── */
+/* ── Code Block with syntax highlighting and copy ── */
 
 function CodeBlock({ code, language }: { code: string; language: string }) {
   const [copied, setCopied] = useState(false);
@@ -137,6 +145,9 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const supportedLangs = ['sql', 'swift', 'cadence'];
+  const useSyntax = supportedLangs.includes(language);
 
   return (
     <div className="relative rounded-sm border border-zinc-200 dark:border-white/10 overflow-hidden my-2">
@@ -149,9 +160,86 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
           {copied ? <Check size={12} className="text-nothing-green" /> : <Copy size={12} />}
         </button>
       </div>
-      <pre className="p-3 text-[11px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
-        <code>{code}</code>
-      </pre>
+      {useSyntax ? (
+        <SyntaxHighlighter
+          language={language === 'cadence' ? 'swift' : language}
+          style={vscDarkPlus}
+          customStyle={{ margin: 0, padding: '12px', fontSize: '11px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
+          wrapLongLines
+        >
+          {code}
+        </SyntaxHighlighter>
+      ) : (
+        <pre className="p-3 text-[11px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
+          <code>{code}</code>
+        </pre>
+      )}
+    </div>
+  );
+}
+
+/* ── Collapsible Code Block for tool outputs ── */
+
+function CollapsibleCode({ code, language, label, icon }: { code: string; language: string; label: string; icon: React.ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const supportedLangs = ['sql', 'swift', 'cadence'];
+  const useSyntax = supportedLangs.includes(language);
+
+  return (
+    <div className="rounded-sm border border-zinc-200 dark:border-white/10 overflow-hidden my-1.5">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-zinc-50 dark:bg-white/[0.02] hover:bg-zinc-100 dark:hover:bg-white/[0.04] transition-colors text-left"
+      >
+        <motion.div
+          animate={{ rotate: isOpen ? 90 : 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          <ChevronRight size={12} className="text-zinc-400" />
+        </motion.div>
+        {icon}
+        <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold flex-1">{label}</span>
+        <button
+          onClick={handleCopy}
+          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-colors p-0.5"
+        >
+          {copied ? <Check size={10} className="text-nothing-green" /> : <Copy size={10} />}
+        </button>
+      </button>
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            {useSyntax ? (
+              <SyntaxHighlighter
+                language={language === 'cadence' ? 'swift' : language}
+                style={vscDarkPlus}
+                customStyle={{ margin: 0, padding: '12px', fontSize: '11px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
+                wrapLongLines
+              >
+                {code}
+              </SyntaxHighlighter>
+            ) : (
+              <pre className="p-3 text-[11px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
+                <code>{code}</code>
+              </pre>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -240,17 +328,29 @@ function SqlToolPart({ part }: { part: any }) {
   const hasError = isError || result?.error;
   const hasData = result?.rows && result?.columns;
   const sqlCode: string | undefined = part.input?.sql ?? part.args?.sql;
+  const isEvm = toolName === 'run_evm_sql';
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-2 py-1">
-        <Database size={12} className="text-nothing-green" />
-        <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">SQL Query</span>
-        {!isDone && !isError && (
+      {sqlCode && (
+        <CollapsibleCode
+          code={sqlCode}
+          language="sql"
+          label={isEvm ? 'EVM SQL Query' : 'SQL Query'}
+          icon={
+            <>
+              <Database size={11} className="text-nothing-green" />
+              {!isDone && !isError && <Loader2 size={10} className="animate-spin text-zinc-400" />}
+            </>
+          }
+        />
+      )}
+      {!sqlCode && !isDone && !isError && (
+        <div className="flex items-center gap-2 py-1">
+          <Database size={12} className="text-nothing-green" />
           <Loader2 size={12} className="animate-spin text-zinc-400" />
-        )}
-      </div>
-      {sqlCode && <CodeBlock code={sqlCode} language="sql" />}
+        </div>
+      )}
       {hasError && (
         <div className="px-3 py-2 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
           {isError ? (part.errorText || 'Query failed') : result?.error}
@@ -270,14 +370,25 @@ function CadenceToolPart({ part }: { part: any }) {
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-2 py-1">
-        <Sparkles size={12} className="text-purple-400" />
-        <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">Cadence Script</span>
-        {!isDone && !isError && (
+      {script && (
+        <CollapsibleCode
+          code={script}
+          language="cadence"
+          label="Cadence Script"
+          icon={
+            <>
+              <Sparkles size={11} className="text-purple-400" />
+              {!isDone && !isError && <Loader2 size={10} className="animate-spin text-zinc-400" />}
+            </>
+          }
+        />
+      )}
+      {!script && !isDone && !isError && (
+        <div className="flex items-center gap-2 py-1">
+          <Sparkles size={12} className="text-purple-400" />
           <Loader2 size={12} className="animate-spin text-zinc-400" />
-        )}
-      </div>
-      {script && <CodeBlock code={script} language="swift" />}
+        </div>
+      )}
       {hasError && (
         <div className="px-3 py-2 text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
           {isError ? (part.errorText || 'Script failed') : result?.error}
