@@ -7,6 +7,7 @@ import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
+import { buildMeta } from '../../lib/og/meta';
 
 export const Route = createFileRoute('/blocks/$height')({
     component: BlockDetail,
@@ -36,7 +37,14 @@ export const Route = createFileRoute('/blocks/$height')({
             console.error("Failed to load block data", e);
             return { block: null };
         }
-    }
+    },
+    head: ({ params }) => ({
+        meta: buildMeta({
+            title: `Block #${Number(params.height).toLocaleString()}`,
+            description: `Flow block at height ${Number(params.height).toLocaleString()}`,
+            ogImagePath: `block/${params.height}`,
+        }),
+    }),
 })
 
 

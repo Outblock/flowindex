@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useRouterState } from '@tanstack/react-router'
+import { buildMeta } from '../../lib/og/meta';
 import { AddressLink } from '../../components/AddressLink';
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -64,6 +65,13 @@ export const Route = createFileRoute('/tokens/$token')({
       };
     }
   },
+  head: ({ params }) => ({
+    meta: buildMeta({
+      title: decodeURIComponent(params.token),
+      description: `Fungible token ${decodeURIComponent(params.token)} on the Flow blockchain`,
+      ogImagePath: `token/${params.token}`,
+    }),
+  }),
 })
 
 function TokenDetail() {

@@ -32,6 +32,12 @@ export default defineConfig({
       renderer: {
         handler: resolve(runtimeDir, 'internal/vite/ssr-renderer'),
       },
+      // Include custom server routes (e.g. /og/* for dynamic OG image generation)
+      scanDirs: ['server'],
+      // @resvg/resvg-js uses native .node binaries that can't be bundled by Rollup
+      rollupConfig: {
+        external: ['@resvg/resvg-js'],
+      },
     }),
   ],
 

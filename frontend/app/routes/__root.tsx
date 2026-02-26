@@ -13,6 +13,26 @@ const AIChatWidget = lazy(() => import('../components/chat/AIChatWidget'));
 import '../index.css';
 
 export const Route = createRootRoute({
+    head: () => ({
+        meta: [
+            { title: 'FlowIndex' },
+            { name: 'description', content: 'High-performance blockchain explorer for the Flow Network' },
+            { property: 'og:title', content: 'FlowIndex' },
+            { property: 'og:description', content: 'High-performance blockchain explorer for the Flow Network' },
+            { property: 'og:image', content: 'https://flowindex.io/og/home' },
+            { property: 'og:image:width', content: '1200' },
+            { property: 'og:image:height', content: '630' },
+            { property: 'og:type', content: 'website' },
+            { property: 'og:site_name', content: 'FlowIndex' },
+            { name: 'twitter:card', content: 'summary_large_image' },
+            { name: 'twitter:title', content: 'FlowIndex' },
+            { name: 'twitter:description', content: 'High-performance blockchain explorer for the Flow Network' },
+            { name: 'twitter:image', content: 'https://flowindex.io/og/home' },
+        ],
+        links: [
+            { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+        ],
+    }),
     component: RootComponent,
 })
 
@@ -56,7 +76,7 @@ function RootDocument({ children }: { children: ReactNode }) {
                 <meta charSet="UTF-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                 <meta name="color-scheme" content="dark" />
-                <title>Flowindex</title>
+                {/* Title is set via route head() options + HeadContent */}
                 {/* Runtime (public) config, populated in Docker/Railway via entrypoint envsubst */}
                 <script src="/env.js"></script>
                 <script defer src="https://analytics.flowindex.io/script.js" data-website-id="f7203f73-ea32-4a1d-a40c-575e559e53fb"></script>
