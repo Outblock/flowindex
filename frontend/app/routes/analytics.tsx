@@ -16,6 +16,7 @@ import {
 } from 'recharts'
 import {
   fetchAnalyticsDaily,
+  fetchAnalyticsDailyModule,
   fetchAnalyticsTransfersDaily,
   fetchNetworkStats,
   ensureHeyApiConfigured,
@@ -47,6 +48,8 @@ interface DailyRow {
   epoch_payout_total: string
   bridge_to_evm_txs: number
 }
+
+type DailyModuleRow = Pick<DailyRow, 'date'> & Partial<Omit<DailyRow, 'date'>>
 
 interface TransferRow {
   date: string
@@ -123,6 +126,16 @@ function yTickFmt(v: number): string {
   if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
   if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)}K`
   return String(v)
+}
+
+function mergeDailyRows(base: DailyRow[], moduleRows: DailyModuleRow[]): DailyRow[] {
+  if (base.length === 0 || moduleRows.length === 0) return base
+  const modByDate = new Map(moduleRows.map((r) => [r.date, r]))
+  return base.map((row) => {
+    const mod = modByDate.get(row.date)
+    if (!mod) return row
+    return { ...row, ...mod }
+  })
 }
 
 /* ── constants ── */
@@ -379,8 +392,20 @@ function AnalyticsPage() {
 
       fetchAnalyticsDaily(fromStr).then((data) => {
         if (cancelled || !data) return
-        setDailyData((data as DailyRow[]).sort((a, b) => a.date.localeCompare(b.date)))
-      }).catch(() => {}).finally(() => { if (!cancelled) setDailyLoading(false) })
+        const sortedBase = (data as DailyRow[]).slice().sort((a, b) => a.date.localeCompare(b.date))
+        setDailyData(sortedBase)
+        setDailyLoading(false)
+
+        const modules = ['accounts', 'evm', 'defi', 'epoch', 'bridge'] as const
+        for (const module of modules) {
+          fetchAnalyticsDailyModule(module, fromStr)
+            .then((rows) => {
+              if (cancelled || !rows || rows.length === 0) return
+              setDailyData((prev) => mergeDailyRows(prev, rows as DailyModuleRow[]))
+            })
+            .catch(() => {})
+        }
+      }).catch(() => { if (!cancelled) setDailyLoading(false) })
 
       fetchAnalyticsTransfersDaily(fromStr).then((data) => {
         if (cancelled || !data) return

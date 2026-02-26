@@ -155,6 +155,7 @@ func registerStatusRoutes(r *mux.Router, s *Server) {
 
 	// Analytics endpoints (cached — slow queries, data changes infrequently)
 	r.HandleFunc("/analytics/daily", cachedHandler(5*time.Minute, s.handleAnalyticsDaily)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/analytics/daily/module/{module}", cachedHandler(2*time.Minute, s.handleAnalyticsDailyModule)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/analytics/transfers/daily", cachedHandler(5*time.Minute, s.handleAnalyticsTransfersDaily)).Methods("GET", "OPTIONS")
 }
 

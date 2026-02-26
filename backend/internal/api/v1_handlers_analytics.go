@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 func (s *Server) handleAnalyticsDaily(w http.ResponseWriter, r *http.Request) {
@@ -28,6 +30,37 @@ func (s *Server) handleAnalyticsTransfersDaily(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeAPIResponse(w, stats, map[string]interface{}{"count": len(stats)}, nil)
+}
+
+func (s *Server) handleAnalyticsDailyModule(w http.ResponseWriter, r *http.Request) {
+	from, to := parseAnalyticsDateRange(r)
+	module := mux.Vars(r)["module"]
+
+	var (
+		stats interface{}
+		err   error
+	)
+
+	switch module {
+	case "accounts":
+		stats, err = s.repo.GetAnalyticsDailyAccountsModule(r.Context(), from, to)
+	case "evm":
+		stats, err = s.repo.GetAnalyticsDailyEVMModule(r.Context(), from, to)
+	case "defi":
+		stats, err = s.repo.GetAnalyticsDailyDefiModule(r.Context(), from, to)
+	case "epoch":
+		stats, err = s.repo.GetAnalyticsDailyEpochModule(r.Context(), from, to)
+	case "bridge":
+		stats, err = s.repo.GetAnalyticsDailyBridgeModule(r.Context(), from, to)
+	default:
+		writeAPIError(w, http.StatusBadRequest, "unsupported module")
+		return
+	}
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, stats, nil, nil)
 }
 
 // parseAnalyticsDateRange extracts ?from=YYYY-MM-DD&to=YYYY-MM-DD, defaulting to last 90 days.

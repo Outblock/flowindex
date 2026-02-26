@@ -158,6 +158,19 @@ export async function fetchAnalyticsDaily(from?: string, to?: string): Promise<a
   return json?.data ?? [];
 }
 
+/** Fetch one analytics daily module: accounts|evm|defi|epoch|bridge */
+export async function fetchAnalyticsDailyModule(module: string, from?: string, to?: string): Promise<any[]> {
+  await ensureHeyApiConfigured();
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`${_baseURL}/analytics/daily/module/${encodeURIComponent(module)}${qs}`);
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json?.data ?? [];
+}
+
 /** Fetch daily FT/NFT transfer counts */
 export async function fetchAnalyticsTransfersDaily(from?: string, to?: string): Promise<any[]> {
   await ensureHeyApiConfigured();
