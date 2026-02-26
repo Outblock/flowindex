@@ -886,18 +886,18 @@ function AnalyticsPage() {
     })
 
     m.set('epoch-payout', {
-      loading: dailyLoading,
-      empty: visibleDaily.length === 0,
+      loading: epochLoading,
+      empty: epochData.length === 0,
       node: (
         <BarChart
-          data={visibleDaily.map((d) => ({ ...d, epoch_payout_total_num: toNum(d.epoch_payout_total) }))}
+          data={epochData}
           margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
         >
           <CartesianGrid stroke={gridStroke} vertical={false} />
-          <XAxis {...xAxisProps()} />
+          <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
           <YAxis {...yAxisProps()} tickFormatter={(v) => fmtNum(v)} />
           <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} formatter={(v) => [fmtComma(Math.round(toNum(v))), 'Epoch Payout']} />
-          <Bar dataKey="epoch_payout_total_num" fill={C.blue} fillOpacity={0.7} name="Epoch Payout" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="payout_total" fill={C.blue} fillOpacity={0.7} name="Epoch Payout" radius={[3, 3, 0, 0]} />
         </BarChart>
       ),
     })
