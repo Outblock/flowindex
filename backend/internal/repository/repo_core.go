@@ -109,6 +109,7 @@ func (r *Repository) TerminateOtherConnections(ctx context.Context) (int, error)
 
 func (r *Repository) ensureScriptTemplatesSchema(ctx context.Context) error {
 	const ddl = `
+		CREATE SCHEMA IF NOT EXISTS app;
 		CREATE TABLE IF NOT EXISTS app.script_templates (
 			script_hash     VARCHAR(64) PRIMARY KEY,
 			normalized_hash VARCHAR(64),
