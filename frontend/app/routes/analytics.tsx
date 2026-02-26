@@ -19,7 +19,9 @@ import { ResponsiveGridLayout, useContainerWidth, verticalCompactor } from 'reac
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import '../styles/grid-overrides.css'
-import { GripVertical, RotateCcw } from 'lucide-react'
+import { GripVertical, RotateCcw, CalendarIcon } from 'lucide-react'
+import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover'
+import { Calendar } from '../components/ui/calendar'
 import {
   fetchAnalyticsDaily,
   fetchAnalyticsDailyModule,
@@ -144,6 +146,14 @@ const RANGES: { label: string; value: number }[] = [
   { label: '90D', value: 90 },
   { label: 'ALL', value: 9999 },
 ]
+
+function formatShortDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function formatDisplayDate(d: Date): string {
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`
+}
 
 /* ── color palette ── */
 const C = {
@@ -418,7 +428,16 @@ function SectionHeader({ title }: { title: string }) {
 
 function AnalyticsPage() {
   const [rangeDays, setRangeDays] = useState(30)
+  const [customRange, setCustomRange] = useState<{ from: Date; to: Date } | null>(null)
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [pendingRange, setPendingRange] = useState<{ from?: Date; to?: Date } | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('all')
+
+  const selectPreset = (days: number) => {
+    setRangeDays(days)
+    setCustomRange(null)
+    setPendingRange(undefined)
+  }
   const [dailyData, setDailyData] = useState<DailyRow[]>([])
   const [transferData, setTransferData] = useState<TransferRow[]>([])
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([])
@@ -551,22 +570,26 @@ function AnalyticsPage() {
     return d.toISOString().split('T')[0]
   }, [rangeDays])
 
+  // Helper: filter array of {date: string} by custom range or date cutoff
+  const filterByRange = useCallback(<T extends { date: string }>(data: T[]): T[] => {
+    if (customRange) {
+      const fromStr = formatShortDate(customRange.from)
+      const toStr = formatShortDate(customRange.to)
+      return data.filter((d) => d.date >= fromStr && d.date <= toStr)
+    }
+    if (!dateCutoff) return data
+    const filtered = data.filter((d) => d.date >= dateCutoff)
+    return filtered.length > 0 ? filtered : data.slice(-rangeDays)
+  }, [customRange, rangeDays, dateCutoff])
+
   const visibleDaily = useMemo(
-    () => {
-      if (!dateCutoff) return dailyData
-      const filtered = dailyData.filter((d) => d.date >= dateCutoff)
-      return filtered.length > 0 ? filtered : dailyData.slice(-rangeDays)
-    },
-    [dailyData, rangeDays, dateCutoff],
+    () => filterByRange(dailyData),
+    [dailyData, filterByRange],
   )
 
   const visibleTransfers = useMemo(
-    () => {
-      if (!dateCutoff) return transferData
-      const filtered = transferData.filter((d) => d.date >= dateCutoff)
-      return filtered.length > 0 ? filtered : transferData.slice(-rangeDays)
-    },
-    [transferData, rangeDays, dateCutoff],
+    () => filterByRange(transferData),
+    [transferData, filterByRange],
   )
 
   const visiblePrice = useMemo(() => {
@@ -578,10 +601,15 @@ function AnalyticsPage() {
     }
     const daily = Array.from(byDay, ([date, price]) => ({ date, price }))
       .sort((a, b) => a.date.localeCompare(b.date))
+    if (customRange) {
+      const fromStr = formatShortDate(customRange.from)
+      const toStr = formatShortDate(customRange.to)
+      return daily.filter((d) => d.date >= fromStr && d.date <= toStr)
+    }
     if (!dateCutoff) return daily
     const filtered = daily.filter((d) => d.date >= dateCutoff)
     return filtered.length > 0 ? filtered : daily.slice(-rangeDays)
-  }, [priceHistory, rangeDays, dateCutoff])
+  }, [priceHistory, rangeDays, dateCutoff, customRange])
 
   const evmPctData = useMemo(
     () =>
@@ -1123,9 +1151,9 @@ function AnalyticsPage() {
               {RANGES.map((r) => (
                 <button
                   key={r.value}
-                  onClick={() => setRangeDays(r.value)}
+                  onClick={() => selectPreset(r.value)}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
-                    rangeDays === r.value
+                    rangeDays === r.value && !customRange
                       ? 'text-white bg-nothing-green shadow-sm'
                       : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
                   }`}
@@ -1133,6 +1161,47 @@ function AnalyticsPage() {
                   {r.label}
                 </button>
               ))}
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+                      customRange
+                        ? 'text-white bg-nothing-green shadow-sm'
+                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <CalendarIcon className="w-3 h-3" />
+                    {customRange
+                      ? `${formatDisplayDate(customRange.from)} – ${formatDisplayDate(customRange.to)}`
+                      : 'Custom'}
+                  </button>
+                </PopoverTrigger>
+                {/* @ts-expect-error - shadcn popover JSX component */}
+                <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-700" align="end" sideOffset={8}>
+                  <div className="p-3 space-y-3">
+                    {/* @ts-expect-error - shadcn calendar JSX component */}
+                    <Calendar
+                      mode="range"
+                      selected={pendingRange}
+                      onSelect={(range: { from?: Date; to?: Date } | undefined) => {
+                        setPendingRange(range ?? undefined)
+                        if (range?.from && range?.to) {
+                          setCustomRange({ from: range.from, to: range.to })
+                          setRangeDays(-1)
+                          setCalendarOpen(false)
+                        }
+                      }}
+                      numberOfMonths={2}
+                      disabled={{ after: new Date() }}
+                      defaultMonth={new Date(new Date().getFullYear(), new Date().getMonth() - 1)}
+                      className="[--cell-size:2rem]"
+                    />
+                    {pendingRange?.from && !pendingRange?.to && (
+                      <p className="text-[10px] text-zinc-400 text-center">Select an end date</p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </div>
