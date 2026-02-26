@@ -1129,6 +1129,30 @@ function AnalyticsPage() {
     })
   }, [activeTab, visibilityMap])
 
+  /* ── filtered layouts: reflow visible cards to fill grid properly ── */
+
+  const filteredLayouts = useMemo(() => {
+    const visibleKeys = new Set(visibleCards.map((c) => c.key))
+    const result: Record<string, Layout[]> = {}
+    for (const [bp, items] of Object.entries(layouts)) {
+      const cols = bp === 'lg' ? 3 : bp === 'md' ? 2 : 1
+      // Keep only visible items, then re-pack positions
+      const visible = (items as Layout[]).filter((item) => visibleKeys.has(item.i))
+      let x = 0
+      let y = 0
+      const packed: Layout[] = visible.map((item) => {
+        const w = Math.min(item.w, cols)
+        if (x + w > cols) { x = 0; y++ }
+        const placed = { ...item, x, y, w }
+        x += w
+        if (x >= cols) { x = 0; y++ }
+        return placed
+      })
+      result[bp] = packed
+    }
+    return result as unknown as typeof layouts
+  }, [layouts, visibleCards])
+
   /* ── render ── */
 
   return (
@@ -1297,7 +1321,7 @@ function AnalyticsPage() {
               <div className="mt-4">
                 <ResponsiveGridLayout
                   width={width}
-                  layouts={layouts}
+                  layouts={filteredLayouts}
                   breakpoints={{ lg: 1024, md: 768, sm: 0 }}
                   cols={{ lg: 3, md: 2, sm: 1 }}
                   rowHeight={280}
