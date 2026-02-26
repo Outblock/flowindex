@@ -842,10 +842,10 @@ func main() {
 				_ = repo.SetCheckpoint(ctx, "analytics_backfill_top", tip)
 				_ = repo.SetCheckpoint(ctx, "analytics_backfill_low", targetHeight)
 			} else {
-				// Phase 1: New blocks gap — tip → savedTop (backward, newest first).
+				// Phase 1: New blocks gap — skipped; live deriver handles new blocks.
+				// Just update the top checkpoint so the gap doesn't grow.
 				if tip > savedTop {
-					p := backwardFill(tip, savedTop, "Phase1-new")
-					processed += p
+					log.Printf("[analytics_backfill] Phase1 skipped (live deriver covers new blocks): top %d → %d", savedTop, tip)
 					_ = repo.SetCheckpoint(ctx, "analytics_backfill_top", tip)
 				}
 
