@@ -454,7 +454,7 @@ function TopTokenHoldersTab({ token, onTokenChange, page, onPageChange, normaliz
                                                 </td>
                                                 <td className="p-4 text-right">
                                                     <span className="font-mono text-sm text-zinc-700 dark:text-zinc-300">
-                                                        {formatBalance(balance, tokenMeta?.decimals)}
+                                                        {formatBalance(balance)}
                                                     </span>
                                                 </td>
                                                 <td className="p-4 text-right">
@@ -625,11 +625,10 @@ function TopNFTCollectorsTab({ collection, onCollectionChange, page, onPageChang
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-function formatBalance(raw: string, decimals?: number): string {
+function formatBalance(raw: string): string {
     if (!raw || raw === '0') return '0';
-    const dec = decimals || 8;
     try {
-        const num = parseFloat(raw) / Math.pow(10, dec);
+        const num = parseFloat(raw);
         if (num > 1_000_000) return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
         if (num > 1) return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
         return num.toLocaleString(undefined, { maximumFractionDigits: 6 });
