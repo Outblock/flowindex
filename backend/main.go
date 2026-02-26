@@ -732,10 +732,13 @@ func main() {
 		log.Println("Daily Stats Aggregator is DISABLED (ENABLE_DAILY_STATS=false)")
 	}
 
-	// Analytics incremental backfill: uses two checkpoints to track progress:
-	//   analytics_backfill_top  = highest height already aggregated (grows toward tip)
-	//   analytics_backfill_low  = lowest height already aggregated (grows toward target)
-	// On restart, only processes the gap: [tip → top] (new blocks) and [low → target] (history).
+	// Analytics incremental backfill: always processes newest blocks first.
+	// Uses two checkpoints:
+	//   analytics_backfill_top  = highest height already aggregated
+	//   analytics_backfill_low  = lowest height already aggregated
+	// On restart, processes TWO gaps in backward (newest-first) order:
+	//   Phase 1: tip → savedTop  (new blocks since last run, backward)
+	//   Phase 2: savedLow → target (continue history backfill, backward)
 	// Never clears existing data — each block range is aggregated exactly once.
 	// Controlled by ENABLE_ANALYTICS_BACKFILL=true (default: false).
 	enableAnalyticsBackfill := os.Getenv("ENABLE_ANALYTICS_BACKFILL") == "true"
@@ -751,7 +754,6 @@ func main() {
 		go func() {
 			defer wg.Done()
 
-			// Give the DB a moment to warm up.
 			select {
 			case <-ctx.Done():
 				return
@@ -764,7 +766,6 @@ func main() {
 				return
 			}
 
-			// Calculate target: N months ago from now.
 			targetHeight := uint64(0)
 			blocksPerMonth := uint64(2_600_000)
 			monthsBack := uint64(backfillMonths)
@@ -772,42 +773,11 @@ func main() {
 				targetHeight = tip - blocksPerMonth*monthsBack
 			}
 
-			// Read existing checkpoints to resume from where we left off.
 			savedTop, _ := repo.GetLastIndexedHeight(ctx, "analytics_backfill_top")
 			savedLow, _ := repo.GetLastIndexedHeight(ctx, "analytics_backfill_low")
 
-			// Determine ranges that still need processing:
-			//   Forward gap: (savedTop, tip] — new blocks since last run
-			//   Backward gap: [targetHeight, savedLow) — history not yet reached
-			// If no checkpoints exist (fresh start), process everything: tip → targetHeight.
-			forwardFrom := savedTop  // exclusive lower bound
-			forwardTo := tip         // inclusive upper bound
-			backwardFrom := savedLow // exclusive upper bound (cursor starts here)
-			backwardTo := targetHeight
-
-			if savedTop == 0 && savedLow == 0 {
-				// Fresh start: process tip → targetHeight in one backward pass.
-				forwardFrom = 0
-				forwardTo = 0
-				backwardFrom = tip
-				backwardTo = targetHeight
-				log.Printf("[analytics_backfill] Fresh start: will process %d → %d", tip, targetHeight)
-			} else {
-				if forwardFrom >= forwardTo {
-					forwardFrom = 0
-					forwardTo = 0
-				}
-				if backwardFrom <= backwardTo {
-					backwardFrom = 0
-					backwardTo = 0
-				}
-				log.Printf("[analytics_backfill] Incremental: forward gap (%d, %d], backward gap [%d, %d)",
-					forwardFrom, forwardTo, backwardTo, backwardFrom)
-			}
-
 			backfillProgress.Init(tip, targetHeight)
 
-			// Helper to aggregate a chunk and save checkpoint.
 			processChunk := func(from, to uint64) error {
 				if err := repo.RefreshDailyStatsRange(ctx, from, to); err != nil {
 					return fmt.Errorf("daily_stats [%d, %d): %w", from, to, err)
@@ -818,78 +788,74 @@ func main() {
 				return nil
 			}
 
-			processed := uint64(0)
-			startTime := time.Now()
-
-			// Phase 1: Forward gap — aggregate new blocks since last run.
-			if forwardTo > forwardFrom {
-				log.Printf("[analytics_backfill] Phase 1: forward fill (%d, %d]", forwardFrom, forwardTo)
-				cursor := forwardFrom
-				for cursor < forwardTo {
-					if ctx.Err() != nil {
-						return
-					}
-					chunkTo := cursor + backfillChunk
-					if chunkTo > forwardTo {
-						chunkTo = forwardTo
-					}
-					if err := processChunk(cursor, chunkTo); err != nil {
-						log.Printf("[analytics_backfill] %v — retrying", err)
-						time.Sleep(5 * time.Second)
-						continue
-					}
-					processed += chunkTo - cursor
-					cursor = chunkTo
-					_ = repo.UpdateCheckpoint(ctx, "analytics_backfill_top", cursor)
-					if backfillSleepMs > 0 {
-						time.Sleep(time.Duration(backfillSleepMs) * time.Millisecond)
-					}
+			// backwardFill processes blocks from `from` down to `to` in chunks,
+			// always newest first. Returns number of blocks processed.
+			backwardFill := func(from, to uint64, label string) uint64 {
+				if from <= to {
+					return 0
 				}
-				log.Printf("[analytics_backfill] Phase 1 complete: processed %d blocks forward", processed)
-			}
-
-			// Phase 2: Backward gap — continue history backfill.
-			if backwardFrom > backwardTo {
-				log.Printf("[analytics_backfill] Phase 2: backward fill [%d, %d)", backwardTo, backwardFrom)
-				cursor := backwardFrom
-				for cursor > backwardTo {
+				log.Printf("[analytics_backfill] %s: %d → %d (%d blocks)", label, from, to, from-to)
+				cursor := from
+				var done uint64
+				start := time.Now()
+				for cursor > to {
 					if ctx.Err() != nil {
 						log.Printf("[analytics_backfill] Cancelled at height %d", cursor)
-						return
+						return done
 					}
 					chunkFrom := cursor - backfillChunk
-					if chunkFrom < backwardTo {
-						chunkFrom = backwardTo
+					if chunkFrom < to {
+						chunkFrom = to
 					}
-					if chunkFrom > cursor {
+					if chunkFrom > cursor { // underflow guard
 						chunkFrom = 0
 					}
-
 					if err := processChunk(chunkFrom, cursor); err != nil {
 						log.Printf("[analytics_backfill] %v — retrying", err)
 						time.Sleep(5 * time.Second)
 						continue
 					}
-
-					processed += cursor - chunkFrom
+					done += cursor - chunkFrom
 					cursor = chunkFrom
-					_ = repo.UpdateCheckpointDown(ctx, "analytics_backfill_low", cursor)
 
-					elapsed := time.Since(startTime)
-					speed := float64(processed) / elapsed.Seconds()
-					remaining := float64(cursor-backwardTo) / speed
-					log.Printf("[analytics_backfill] Done [%d, %d) — processed=%d speed=%.0f b/s ETA=%.0fm",
-						chunkFrom, chunkFrom+backfillChunk, processed, speed, remaining/60)
-					backfillProgress.Update(cursor, processed, speed)
+					elapsed := time.Since(start)
+					speed := float64(done) / elapsed.Seconds()
+					remaining := float64(cursor-to) / speed
+					log.Printf("[analytics_backfill] %s [%d, %d) — done=%d speed=%.0f b/s ETA=%.0fm",
+						label, chunkFrom, chunkFrom+backfillChunk, done, speed, remaining/60)
+					backfillProgress.Update(cursor, done, speed)
 
 					if backfillSleepMs > 0 {
 						time.Sleep(time.Duration(backfillSleepMs) * time.Millisecond)
 					}
 				}
+				return done
 			}
 
-			// Set top checkpoint to tip so next restart only fills the forward gap.
-			_ = repo.UpdateCheckpoint(ctx, "analytics_backfill_top", tip)
+			processed := uint64(0)
+			startTime := time.Now()
+
+			if savedTop == 0 && savedLow == 0 {
+				// Fresh start: single backward pass from tip to target.
+				log.Printf("[analytics_backfill] Fresh start: %d → %d", tip, targetHeight)
+				processed += backwardFill(tip, targetHeight, "backfill")
+				_ = repo.SetCheckpoint(ctx, "analytics_backfill_top", tip)
+				_ = repo.SetCheckpoint(ctx, "analytics_backfill_low", targetHeight)
+			} else {
+				// Phase 1: New blocks gap — tip → savedTop (backward, newest first).
+				if tip > savedTop {
+					p := backwardFill(tip, savedTop, "Phase1-new")
+					processed += p
+					_ = repo.SetCheckpoint(ctx, "analytics_backfill_top", tip)
+				}
+
+				// Phase 2: History gap — savedLow → target (backward, newest first).
+				if savedLow > targetHeight {
+					p := backwardFill(savedLow, targetHeight, "Phase2-history")
+					processed += p
+					_ = repo.SetCheckpoint(ctx, "analytics_backfill_low", targetHeight)
+				}
+			}
 
 			backfillProgress.MarkDone()
 			log.Printf("[analytics_backfill] Complete! Processed %d blocks in %s",
