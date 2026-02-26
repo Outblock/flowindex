@@ -449,7 +449,7 @@ function Home() {
                             <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic">
                                 Flow<span className="text-nothing-green-dark dark:text-nothing-green">Index</span>
                             </h1>
-                            <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em]">Decentralized Intelligence Protocol</p>
+                            <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em]">Next-Gen Flow Blockchain Indexer</p>
                         </motion.div>
                     </div>
 
