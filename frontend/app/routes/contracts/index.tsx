@@ -103,7 +103,7 @@ function KindBadge({ kind }: { kind: string }) {
 function Contracts() {
     const { contracts, meta, page, query, kind, deferred } = Route.useLoaderData();
     const navigate = Route.useNavigate();
-    const search = Route.useSearch();
+    const _search = Route.useSearch();
     const [searchQuery, setSearchQuery] = useState(query); // Local state for input
     const [contractsData, setContractsData] = useState<any[]>(contracts);
     const [contractsMeta, setContractsMeta] = useState<any>(meta);
