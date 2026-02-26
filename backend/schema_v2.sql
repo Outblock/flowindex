@@ -768,6 +768,17 @@ GROUP BY contract_address, contract_name;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_nft_collection_stats_pk ON app.nft_collection_stats (contract_address, contract_name);
 CREATE INDEX IF NOT EXISTS idx_nft_collection_stats_holders ON app.nft_collection_stats (holder_count DESC, contract_address ASC);
 
+-- Account labels/tags (whale, service account, etc.)
+CREATE TABLE IF NOT EXISTS app.account_labels (
+    address    TEXT NOT NULL,
+    tag        TEXT NOT NULL,
+    label      TEXT NOT NULL DEFAULT '',
+    category   TEXT NOT NULL DEFAULT 'custom',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (address, tag)
+);
+CREATE INDEX IF NOT EXISTS idx_account_labels_tag ON app.account_labels (tag);
+
 -- Epoch payout columns (EpochTotalRewardsPaid event data)
 ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_total NUMERIC(78,8) DEFAULT 0;
 ALTER TABLE app.epoch_stats ADD COLUMN IF NOT EXISTS payout_from_fees NUMERIC(78,8) DEFAULT 0;

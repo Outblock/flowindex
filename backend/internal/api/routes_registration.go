@@ -36,6 +36,9 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin.HandleFunc("/resolve-errors", s.handleAdminResolveErrors).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/skipped-ranges", s.handleAdminListSkippedRanges).Methods("GET", "OPTIONS")
 	admin.HandleFunc("/backfill-staking", s.handleAdminBackfillStakingBlocks).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/account-labels", s.handleAdminListAccountLabels).Methods("GET", "OPTIONS")
+	admin.HandleFunc("/account-labels", s.handleAdminUpsertAccountLabel).Methods("POST", "PUT", "OPTIONS")
+	admin.HandleFunc("/account-labels/{address}/{tag}", s.handleAdminDeleteAccountLabel).Methods("DELETE", "OPTIONS")
 }
 
 func registerAPIRoutes(r *mux.Router, s *Server) {
@@ -108,6 +111,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/account/{address}/tax-report", s.handleTaxReport).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/key/{publicKey}", s.handleFlowSearchByPublicKey).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/coa/{address}", s.handleGetCOAMapping).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/account/{address}/labels", s.handleFlowAccountLabels).Methods("GET", "OPTIONS")
 }
 
 func registerAccountingRoutes(r *mux.Router, s *Server) {

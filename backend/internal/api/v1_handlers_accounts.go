@@ -176,6 +176,20 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 	storageUsedMB := float64(storageUsed) / bytesPerMB
 	storageAvailableMB := float64(storageAvailable) / bytesPerMB
 
+	// Fetch account labels
+	var accountLabels []map[string]interface{}
+	if s.repo != nil {
+		if labelsMap, err := s.repo.GetLabelsByAddresses(r.Context(), []string{addressNorm}); err == nil {
+			for _, l := range labelsMap[addressNorm] {
+				accountLabels = append(accountLabels, map[string]interface{}{
+					"tag":      l.Tag,
+					"label":    l.Label,
+					"category": l.Category,
+				})
+			}
+		}
+	}
+
 	data := map[string]interface{}{
 		"address":          formatAddressV1(acc.Address.Hex()),
 		"flowBalance":      float64(acc.Balance) / 1e8,
@@ -184,6 +198,7 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 		"flowStorage":      storageCapacityMB,
 		"storageUsed":      storageUsedMB,
 		"storageAvailable": storageAvailableMB,
+		"labels":           accountLabels,
 	}
 	writeAPIResponse(w, []interface{}{data}, nil, nil)
 }
@@ -243,6 +258,29 @@ func (s *Server) buildAccountFallback(ctx context.Context, addr flowsdk.Address)
 		"storageAvailable": float64(storageAvailable) / bytesPerMB,
 		"_rpcUnavailable":  true,
 	}
+}
+
+func (s *Server) handleFlowAccountLabels(w http.ResponseWriter, r *http.Request) {
+	addr := normalizeAddr(mux.Vars(r)["address"])
+	if s.repo == nil {
+		writeAPIResponse(w, []interface{}{}, nil, nil)
+		return
+	}
+	labelsMap, err := s.repo.GetLabelsByAddresses(r.Context(), []string{addr})
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	labels := labelsMap[addr]
+	out := make([]map[string]interface{}, 0, len(labels))
+	for _, l := range labels {
+		out = append(out, map[string]interface{}{
+			"tag":      l.Tag,
+			"label":    l.Label,
+			"category": l.Category,
+		})
+	}
+	writeAPIResponse(w, out, nil, nil)
 }
 
 func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Request) {

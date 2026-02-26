@@ -91,6 +91,7 @@ export const Route = createFileRoute('/accounts/$address')({
                 createdAt: null,
                 contracts: accountPayload?.contracts || [],
                 keys: normalizedKeys,
+                labels: accountPayload?.labels || [],
                 _rpcUnavailable: accountPayload?._rpcUnavailable || false,
             };
 
@@ -207,7 +208,7 @@ function AccountDetail() {
                     revoked: Boolean(key.revoked),
                 }));
                 if (cancelled) return;
-                setAccount({ address: normalizedAddress, balance: payload?.flowBalance ?? payload?.balance, createdAt: null, contracts: payload?.contracts || [], keys, _rpcUnavailable: payload?._rpcUnavailable || false });
+                setAccount({ address: normalizedAddress, balance: payload?.flowBalance ?? payload?.balance, createdAt: null, contracts: payload?.contracts || [], keys, labels: payload?.labels || [], _rpcUnavailable: payload?._rpcUnavailable || false });
                 setError(null);
             } catch (e) {
                 if (cancelled) return;
@@ -306,6 +307,25 @@ function AccountDetail() {
                     }
                 >
                     <div className="text-left md:text-right">
+                        {account.labels && account.labels.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2 justify-start md:justify-end">
+                                {account.labels.map((l: { tag: string; label: string; category: string }) => (
+                                    <span
+                                        key={l.tag}
+                                        className={cn(
+                                            "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium border",
+                                            l.category === 'whale' && "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+                                            l.category === 'service' && "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+                                            l.category === 'exchange' && "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800",
+                                            l.category === 'defi' && "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800",
+                                            !['whale', 'service', 'exchange', 'defi'].includes(l.category) && "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700",
+                                        )}
+                                    >
+                                        {l.label || l.tag}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                         <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Total Balance</div>
                         <div className="text-xl md:text-3xl font-bold">
                             <SafeNumberFlow value={balanceValue + stakedValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
