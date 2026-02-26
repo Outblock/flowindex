@@ -617,11 +617,15 @@ func cadenceFTCombinedScript() string {
             let identifier = "A.".concat(contractAddress.toString().slice(from: 2, upTo: contractAddress.toString().length)).concat(".").concat(contractName).concat(".Vault")
             let evmAddr = getEVMAddress(identifier: identifier)
 
-            // Read totalSupply from the FungibleToken contract
+            // Read totalSupply via FungibleTokenMetadataViews.TotalSupply view
             var supply: UFix64 = 0.0
-            let acctPublic = getAccount(contractAddress)
-            if let ftRef = acctPublic.contracts.borrow<&{FungibleToken}>(name: contractName) {
-                supply = ftRef.totalSupply
+            let supplyType = Type<FungibleTokenMetadataViews.TotalSupply>()
+            // Try from ViewResolver first (works for contracts that implement ViewResolver)
+            let vrAcct = getAccount(contractAddress)
+            if let vr = vrAcct.contracts.borrow<&{ViewResolver}>(name: contractName) {
+                if let ts = vr.resolveContractView(resourceType: nil, viewType: supplyType) as! FungibleTokenMetadataViews.TotalSupply? {
+                    supply = ts.supply
+                }
             }
 
             return FTInfo(
