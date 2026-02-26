@@ -3,5 +3,6 @@
 window.__FLOWSCAN_ENV__ = {
   DOCS_URL: "${DOCS_URL}",
   FLOW_NETWORK: "${FLOW_NETWORK}",
+  UMAMI_WEBSITE_ID: "${UMAMI_WEBSITE_ID}",
 };
 

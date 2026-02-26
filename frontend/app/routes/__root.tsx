@@ -81,7 +81,13 @@ function RootDocument({ children }: { children: ReactNode }) {
                 {/* Title is set via route head() options + HeadContent */}
                 {/* Runtime (public) config, populated in Docker/Railway via entrypoint envsubst */}
                 <script src="/env.js"></script>
-                <script defer src="https://analytics.flowindex.io/script.js" data-website-id="f7203f73-ea32-4a1d-a40c-575e559e53fb"></script>
+                <script defer src="https://analytics.flowindex.io/script.js" data-website-id="f7203f73-ea32-4a1d-a40c-575e559e53fb" id="umami-script"></script>
+                <script dangerouslySetInnerHTML={{ __html: `
+                  (function(){
+                    var id = window.__FLOWSCAN_ENV__ && window.__FLOWSCAN_ENV__.UMAMI_WEBSITE_ID;
+                    if (id) document.getElementById('umami-script').setAttribute('data-website-id', id);
+                  })();
+                `}} />
                 {/* Route-scoped CSS + preloads generated from the Start manifest */}
                 <HeadContent />
             </head>
