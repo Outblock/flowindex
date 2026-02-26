@@ -747,6 +747,9 @@ CREATE TABLE IF NOT EXISTS app.status_snapshots (
     PRIMARY KEY (kind)
 );
 
+-- On-chain total supply (updated by token_metadata_worker)
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS total_supply NUMERIC(78, 18);
+
 -- Verified badges for curated tokens / collections
 ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE app.nft_collections ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;

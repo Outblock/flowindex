@@ -384,6 +384,9 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 	if len(token.Socials) > 0 && string(token.Socials) != "null" {
 		out["socials"] = json.RawMessage(token.Socials)
 	}
+	if token.TotalSupply != "" && token.TotalSupply != "0" {
+		out["total_supply"] = parseFloatOrZero(token.TotalSupply)
+	}
 	return out
 }
 

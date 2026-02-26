@@ -167,9 +167,9 @@ func (r *Repository) UpsertFTTokens(ctx context.Context, tokens []models.FTToken
 	for _, t := range tokens {
 		batch.Queue(`
 			INSERT INTO app.ft_tokens (contract_address, contract_name, name, symbol, decimals,
-				description, external_url, logo, vault_path, receiver_path, balance_path, socials, evm_address, updated_at)
+				description, external_url, logo, vault_path, receiver_path, balance_path, socials, evm_address, total_supply, updated_at)
 			VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,0),
-				NULLIF($6,''), NULLIF($7,''), $8, NULLIF($9,''), NULLIF($10,''), NULLIF($11,''), $12, NULLIF($13,''), NOW())
+				NULLIF($6,''), NULLIF($7,''), $8, NULLIF($9,''), NULLIF($10,''), NULLIF($11,''), $12, NULLIF($13,''), NULLIF($14,'')::numeric, NOW())
 			ON CONFLICT (contract_address, contract_name) DO UPDATE SET
 				name = COALESCE(app.ft_tokens.name, EXCLUDED.name),
 				symbol = COALESCE(app.ft_tokens.symbol, EXCLUDED.symbol),
@@ -182,9 +182,10 @@ func (r *Repository) UpsertFTTokens(ctx context.Context, tokens []models.FTToken
 				balance_path = COALESCE(app.ft_tokens.balance_path, EXCLUDED.balance_path),
 				socials = COALESCE(app.ft_tokens.socials, EXCLUDED.socials),
 				evm_address = COALESCE(app.ft_tokens.evm_address, EXCLUDED.evm_address),
+				total_supply = COALESCE(EXCLUDED.total_supply, app.ft_tokens.total_supply),
 				updated_at = NOW()`,
 			hexToBytes(t.ContractAddress), t.ContractName, t.Name, t.Symbol, t.Decimals,
-			t.Description, t.ExternalURL, nullIfEmpty(t.Logo), t.VaultPath, t.ReceiverPath, t.BalancePath, nullIfEmptyJSON(t.Socials), t.EVMAddress)
+			t.Description, t.ExternalURL, nullIfEmpty(t.Logo), t.VaultPath, t.ReceiverPath, t.BalancePath, nullIfEmptyJSON(t.Socials), t.EVMAddress, t.TotalSupply)
 	}
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()
@@ -456,26 +457,26 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 }
 
 const ftTokenSelectCols = `encode(ft.contract_address, 'hex') AS contract_address, COALESCE(ft.contract_name,''), COALESCE(ft.name,''), COALESCE(ft.symbol,''), COALESCE(ft.decimals,0),
-		       COALESCE(ft.description,''), COALESCE(ft.external_url,''), COALESCE(ft.logo::text, ''), COALESCE(ft.vault_path,''), COALESCE(ft.receiver_path,''), COALESCE(ft.balance_path,''), COALESCE(ft.socials::text, ''), COALESCE(ft.evm_address, ''), COALESCE(ft.is_verified, false), ft.updated_at`
+		       COALESCE(ft.description,''), COALESCE(ft.external_url,''), COALESCE(ft.logo::text, ''), COALESCE(ft.vault_path,''), COALESCE(ft.receiver_path,''), COALESCE(ft.balance_path,''), COALESCE(ft.socials::text, ''), COALESCE(ft.evm_address, ''), COALESCE(ft.total_supply,0)::text, COALESCE(ft.is_verified, false), ft.updated_at`
 
 func scanFTToken(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.IsVerified, &t.UpdatedAt)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.UpdatedAt)
 	return t, err
 }
 
 func scanFTTokenWithHolders(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.IsVerified, &t.UpdatedAt, &t.HolderCount)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.UpdatedAt, &t.HolderCount)
 	return t, err
 }
 
 func scanFTTokenTrending(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.IsVerified, &t.UpdatedAt, &t.HolderCount, &t.TransferCount)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.UpdatedAt, &t.HolderCount, &t.TransferCount)
 	return t, err
 }
 

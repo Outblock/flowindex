@@ -272,6 +272,7 @@ type FTToken struct {
 	BalancePath     string    `json:"balance_path,omitempty"`
 	Socials         []byte    `json:"socials,omitempty"`
 	EVMAddress      string    `json:"evm_address,omitempty"`
+	TotalSupply     string    `json:"total_supply,omitempty"`
 	HolderCount     int64     `json:"holder_count,omitempty"`
 	TransferCount   int64     `json:"transfer_count,omitempty"`
 	IsVerified      bool      `json:"is_verified"`

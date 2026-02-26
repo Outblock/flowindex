@@ -177,6 +177,7 @@ func (w *TokenMetadataWorker) fetchFTMetadata(ctx context.Context, contractAddr,
 	token.Logo = extractFirstMediaURL(fields["logos"])
 	token.Socials = extractSocials(fields["socials"])
 	token.EVMAddress = cadenceToString(fields["evmAddress"])
+	token.TotalSupply = cadenceUFix64ToString(fields["totalSupply"])
 
 	if token.Name == "" && token.Symbol == "" {
 		return models.FTToken{}, false
@@ -277,6 +278,17 @@ func cadenceToString(v cadence.Value) string {
 	}
 	if s, ok := v.(cadence.String); ok {
 		return string(s)
+	}
+	return ""
+}
+
+func cadenceUFix64ToString(v cadence.Value) string {
+	v = unwrapOptional(v)
+	if v == nil {
+		return ""
+	}
+	if fix, ok := v.(cadence.UFix64); ok {
+		return fix.String()
 	}
 	return ""
 }
@@ -535,6 +547,7 @@ func cadenceFTCombinedScript() string {
             access(all) let receiverPath: PublicPath?
             access(all) let balancePath: PublicPath?
             access(all) let evmAddress: String?
+            access(all) let totalSupply: UFix64
 
             init(
                 name: String?, symbol: String?, description: String?,
@@ -542,7 +555,8 @@ func cadenceFTCombinedScript() string {
                 logos: MetadataViews.Medias?,
                 socials: {String: MetadataViews.ExternalURL}?,
                 storagePath: StoragePath?, receiverPath: PublicPath?, balancePath: PublicPath?,
-                evmAddress: String?
+                evmAddress: String?,
+                totalSupply: UFix64
             ) {
                 self.name = name
                 self.symbol = symbol
@@ -554,6 +568,7 @@ func cadenceFTCombinedScript() string {
                 self.receiverPath = receiverPath
                 self.balancePath = balancePath
                 self.evmAddress = evmAddress
+                self.totalSupply = totalSupply
             }
         }
 
@@ -602,6 +617,13 @@ func cadenceFTCombinedScript() string {
             let identifier = "A.".concat(contractAddress.toString().slice(from: 2, upTo: contractAddress.toString().length)).concat(".").concat(contractName).concat(".Vault")
             let evmAddr = getEVMAddress(identifier: identifier)
 
+            // Read totalSupply from the FungibleToken contract
+            var supply: UFix64 = 0.0
+            let acctPublic = getAccount(contractAddress)
+            if let ftRef = acctPublic.contracts.borrow<&{FungibleToken}>(name: contractName) {
+                supply = ftRef.totalSupply
+            }
+
             return FTInfo(
                 name: display!.name,
                 symbol: display!.symbol,
@@ -612,7 +634,8 @@ func cadenceFTCombinedScript() string {
                 storagePath: data?.storagePath,
                 receiverPath: data?.receiverPath,
                 balancePath: data?.metadataPath,
-                evmAddress: evmAddr
+                evmAddress: evmAddr,
+                totalSupply: supply
             )
         }
     `, viewResolverAddr, ftAddr, ftmdAddr, viewResolverAddr, evmBridgeAddr)

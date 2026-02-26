@@ -92,12 +92,6 @@ func (s *Server) handleFlowGetFTToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := toFTListOutput(*t)
-	if totalSupply, err := s.queryFTTotalSupplyOnChain(r.Context(), tokenAddr, tokenName); err == nil && totalSupply != "0" && totalSupply != "0.00000000" {
-		out["total_supply"] = parseFloatOrZero(totalSupply)
-	} else if totalSupply, err := s.repo.SumFTBalanceByToken(r.Context(), tokenAddr, tokenName); err == nil {
-		// Fallback to sum of holdings if on-chain query fails
-		out["total_supply"] = parseFloatOrZero(totalSupply)
-	}
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
 }
 
