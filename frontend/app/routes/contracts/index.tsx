@@ -326,9 +326,7 @@ function Contracts() {
                                         >
                                             <td className="p-4">
                                                 <div className="flex items-center gap-2">
-                                                    {(tokenLogo || tokenName) && (
-                                                        <TokenLogo src={tokenLogo} name={tokenName || contractName} size={20} />
-                                                    )}
+                                                    <TokenLogo src={tokenLogo} name={tokenName || contractName} size={20} />
                                                     <Link
                                                         to={`/contracts/${identifier}` as any}
                                                         className="font-mono text-sm text-zinc-900 dark:text-white hover:underline"
