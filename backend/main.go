@@ -729,6 +729,112 @@ func main() {
 		log.Println("Daily Stats Aggregator is DISABLED (ENABLE_DAILY_STATS=false)")
 	}
 
+	// Analytics backward backfill: process from the current tip backward to fill
+	// the last N months of daily_stats and analytics.daily_metrics.
+	// This is a one-shot job that runs on startup and exits when done.
+	// Controlled by ENABLE_ANALYTICS_BACKFILL=true (default: false).
+	enableAnalyticsBackfill := os.Getenv("ENABLE_ANALYTICS_BACKFILL") == "true"
+	if enableAnalyticsBackfill {
+		backfillMonths := getEnvInt("ANALYTICS_BACKFILL_MONTHS", 6)
+		backfillChunk := getEnvUint("ANALYTICS_BACKFILL_CHUNK", 5000)
+		if backfillChunk < 100 {
+			backfillChunk = 100
+		}
+		backfillSleepMs := getEnvInt("ANALYTICS_BACKFILL_SLEEP_MS", 500)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Give the DB a moment to warm up.
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(10 * time.Second):
+			}
+
+			tip, err := repo.GetLastIndexedHeight(ctx, "main_ingester")
+			if err != nil || tip == 0 {
+				log.Printf("[analytics_backfill] Skip: cannot read main_ingester tip: %v", err)
+				return
+			}
+
+			// Calculate target: N months ago from now, mapped to a block height.
+			// Rough estimate: ~1 block/sec on Flow mainnet → ~2.6M blocks/month.
+			targetHeight := uint64(0)
+			blocksPerMonth := uint64(2_600_000)
+			monthsBack := uint64(backfillMonths)
+			if tip > blocksPerMonth*monthsBack {
+				targetHeight = tip - blocksPerMonth*monthsBack
+			}
+
+			log.Printf("[analytics_backfill] Starting backward from tip=%d to target=%d (months=%d chunk=%d sleep=%dms)",
+				tip, targetHeight, backfillMonths, backfillChunk, backfillSleepMs)
+
+			// Process backward: from tip down to targetHeight in chunks.
+			processed := uint64(0)
+			startTime := time.Now()
+			cursor := tip
+
+			for cursor > targetHeight {
+				if ctx.Err() != nil {
+					log.Printf("[analytics_backfill] Cancelled at height %d", cursor)
+					return
+				}
+
+				chunkFrom := cursor - backfillChunk
+				if chunkFrom < targetHeight {
+					chunkFrom = targetHeight
+				}
+				// Underflow guard
+				if chunkFrom > cursor {
+					chunkFrom = 0
+				}
+				chunkTo := cursor
+
+				// Clear existing data for this chunk's date range first (additive ON CONFLICT).
+				if err := repo.ClearDailyStatsForHeightRange(ctx, chunkFrom, chunkTo); err != nil {
+					log.Printf("[analytics_backfill] Warning: clear daily_stats [%d, %d) failed: %v", chunkFrom, chunkTo, err)
+				}
+				if err := repo.ClearAnalyticsDailyMetricsForHeightRange(ctx, chunkFrom, chunkTo); err != nil {
+					log.Printf("[analytics_backfill] Warning: clear daily_metrics [%d, %d) failed: %v", chunkFrom, chunkTo, err)
+				}
+
+				// Aggregate daily_stats
+				if err := repo.RefreshDailyStatsRange(ctx, chunkFrom, chunkTo); err != nil {
+					log.Printf("[analytics_backfill] daily_stats [%d, %d) failed: %v", chunkFrom, chunkTo, err)
+					// Sleep and retry later rather than giving up.
+					time.Sleep(5 * time.Second)
+					continue
+				}
+
+				// Aggregate analytics.daily_metrics
+				if err := repo.RefreshAnalyticsDailyMetricsRange(ctx, chunkFrom, chunkTo); err != nil {
+					log.Printf("[analytics_backfill] daily_metrics [%d, %d) failed: %v", chunkFrom, chunkTo, err)
+					time.Sleep(5 * time.Second)
+					continue
+				}
+
+				processed += chunkTo - chunkFrom
+				elapsed := time.Since(startTime)
+				speed := float64(processed) / elapsed.Seconds()
+				remaining := float64(cursor-targetHeight) / speed
+				log.Printf("[analytics_backfill] Done [%d, %d) — processed=%d speed=%.0f b/s ETA=%.0fm cursor=%d",
+					chunkFrom, chunkTo, processed, speed, remaining/60, chunkFrom)
+
+				cursor = chunkFrom
+
+				// Throttle to avoid overloading the DB.
+				if backfillSleepMs > 0 {
+					time.Sleep(time.Duration(backfillSleepMs) * time.Millisecond)
+				}
+			}
+
+			log.Printf("[analytics_backfill] Complete! Processed %d blocks from %d down to %d in %s",
+				processed, tip, targetHeight, time.Since(startTime).Round(time.Second))
+		}()
+	}
+
 	// Refresh NFT collection stats materialized view periodically
 	wg.Add(1)
 	go func() {
