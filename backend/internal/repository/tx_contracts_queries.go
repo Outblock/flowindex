@@ -196,29 +196,35 @@ func (r *Repository) BulkUpsertTxContracts(ctx context.Context, rows []models.Tx
 		CREATE TEMP TABLE tmp_tx_contracts (
 			transaction_id BYTEA,
 			contract_identifier TEXT,
-			source TEXT
+			source TEXT,
+			block_height BIGINT
 		) ON COMMIT DROP`); err != nil {
 		return fmt.Errorf("upsert tx contracts: %w", err)
 	}
 
 	copyRows := make([][]interface{}, len(rows))
 	for i, r := range rows {
-		copyRows[i] = []interface{}{hexToBytes(r.TransactionID), r.ContractIdentifier, r.Source}
+		var bh interface{} = nil
+		if r.BlockHeight > 0 {
+			bh = r.BlockHeight
+		}
+		copyRows[i] = []interface{}{hexToBytes(r.TransactionID), r.ContractIdentifier, r.Source, bh}
 	}
 	if _, err := tx.CopyFrom(ctx,
 		pgx.Identifier{"tmp_tx_contracts"},
-		[]string{"transaction_id", "contract_identifier", "source"},
+		[]string{"transaction_id", "contract_identifier", "source", "block_height"},
 		pgx.CopyFromRows(copyRows),
 	); err != nil {
 		return fmt.Errorf("upsert tx contracts: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO app.tx_contracts (transaction_id, contract_identifier, source)
-		SELECT DISTINCT ON (transaction_id, contract_identifier) transaction_id, contract_identifier, source
+		INSERT INTO app.tx_contracts (transaction_id, contract_identifier, source, block_height)
+		SELECT DISTINCT ON (transaction_id, contract_identifier) transaction_id, contract_identifier, source, block_height
 		FROM tmp_tx_contracts
 		ON CONFLICT (transaction_id, contract_identifier) DO UPDATE SET
-			source = EXCLUDED.source`); err != nil {
+			source = EXCLUDED.source,
+			block_height = COALESCE(EXCLUDED.block_height, app.tx_contracts.block_height)`); err != nil {
 		return fmt.Errorf("upsert tx contracts: %w", err)
 	}
 

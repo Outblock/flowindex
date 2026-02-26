@@ -314,6 +314,7 @@ type TxContract struct {
 	TransactionID      string `json:"transaction_id"`
 	ContractIdentifier string `json:"contract_identifier"`
 	Source             string `json:"source"`
+	BlockHeight        int64  `json:"block_height,omitempty"`
 }
 
 // ScriptImport represents app.script_imports — one row per unique (script_hash, contract_identifier).

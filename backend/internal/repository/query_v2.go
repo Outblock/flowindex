@@ -715,6 +715,13 @@ func (r *Repository) GetScheduledTransactions(ctx context.Context, limit, offset
 		offset = 0
 	}
 	rows, err := r.db.Query(ctx, `
+		WITH page AS (
+			SELECT tc.transaction_id, tc.block_height
+			FROM app.tx_contracts tc
+			WHERE tc.contract_identifier LIKE '%FlowTransactionScheduler%'
+			ORDER BY tc.block_height DESC NULLS LAST
+			LIMIT $1 OFFSET $2
+		)
 		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
 		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
 		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
@@ -724,12 +731,10 @@ func (r *Repository) GetScheduledTransactions(ctx context.Context, limit, offset
 		       t.timestamp, t.timestamp AS created_at,
 		       COALESCE(m.event_count, t.event_count) AS event_count,
 		       COALESCE(t.script_hash, '') AS script_hash
-		FROM app.tx_contracts tc
-		JOIN raw.transactions t ON t.id = tc.transaction_id
+		FROM page p
+		JOIN raw.transactions t ON t.id = p.transaction_id AND t.block_height = p.block_height
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
-		WHERE tc.contract_identifier LIKE '%FlowTransactionScheduler%'
-		ORDER BY t.block_height DESC, t.transaction_index DESC
-		LIMIT $1 OFFSET $2`, limit, offset)
+		ORDER BY t.block_height DESC, t.transaction_index DESC`, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -747,6 +752,9 @@ func (r *Repository) GetScheduledTransactions(ctx context.Context, limit, offset
 }
 
 // GetTransactionsByContract returns transactions that interact with a given contract identifier.
+// Uses a subquery to paginate on tx_contracts first (using the composite index on
+// contract_identifier, block_height DESC), then joins only the page with raw.transactions
+// for full tx details — avoids scanning the entire partitioned table.
 func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIdentifier string, limit, offset int) ([]models.Transaction, error) {
 	if limit <= 0 {
 		limit = 20
@@ -755,6 +763,13 @@ func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIden
 		offset = 0
 	}
 	rows, err := r.db.Query(ctx, `
+		WITH page AS (
+			SELECT tc.transaction_id, tc.block_height
+			FROM app.tx_contracts tc
+			WHERE tc.contract_identifier = $1
+			ORDER BY tc.block_height DESC NULLS LAST
+			LIMIT $2 OFFSET $3
+		)
 		SELECT encode(t.id, 'hex') AS id, t.block_height, t.transaction_index,
 		       COALESCE(encode(t.proposer_address, 'hex'), '') AS proposer_address,
 		       COALESCE(encode(t.payer_address, 'hex'), '') AS payer_address,
@@ -764,12 +779,10 @@ func (r *Repository) GetTransactionsByContract(ctx context.Context, contractIden
 		       t.timestamp, t.timestamp AS created_at,
 		       COALESCE(m.event_count, t.event_count) AS event_count,
 		       COALESCE(t.script_hash, '') AS script_hash
-		FROM app.tx_contracts tc
-		JOIN raw.transactions t ON t.id = tc.transaction_id
+		FROM page p
+		JOIN raw.transactions t ON t.id = p.transaction_id AND t.block_height = p.block_height
 		LEFT JOIN app.tx_metrics m ON m.transaction_id = t.id AND m.block_height = t.block_height
-		WHERE tc.contract_identifier = $1
-		ORDER BY t.block_height DESC, t.transaction_index DESC
-		LIMIT $2 OFFSET $3`, contractIdentifier, limit, offset)
+		ORDER BY t.block_height DESC, t.transaction_index DESC`, contractIdentifier, limit, offset)
 	if err != nil {
 		return nil, err
 	}

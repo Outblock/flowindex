@@ -898,12 +898,17 @@ func (r *Repository) UpsertTxContracts(ctx context.Context, rows []models.TxCont
 	}
 	batch := &pgx.Batch{}
 	for _, row := range rows {
+		var bh interface{} = nil
+		if row.BlockHeight > 0 {
+			bh = row.BlockHeight
+		}
 		batch.Queue(`
-			INSERT INTO app.tx_contracts (transaction_id, contract_identifier, source)
-			VALUES ($1, $2, $3)
+			INSERT INTO app.tx_contracts (transaction_id, contract_identifier, source, block_height)
+			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (transaction_id, contract_identifier) DO UPDATE SET
-				source = EXCLUDED.source`,
-			hexToBytes(row.TransactionID), row.ContractIdentifier, row.Source)
+				source = EXCLUDED.source,
+				block_height = COALESCE(EXCLUDED.block_height, app.tx_contracts.block_height)`,
+			hexToBytes(row.TransactionID), row.ContractIdentifier, row.Source, bh)
 	}
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()

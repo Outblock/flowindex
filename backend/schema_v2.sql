@@ -673,9 +673,12 @@ CREATE TABLE IF NOT EXISTS app.tx_contracts (
     transaction_id      BYTEA NOT NULL,
     contract_identifier TEXT NOT NULL,
     source              TEXT,
+    block_height        BIGINT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (transaction_id, contract_identifier)
 );
+ALTER TABLE app.tx_contracts ADD COLUMN IF NOT EXISTS block_height BIGINT;
+CREATE INDEX IF NOT EXISTS idx_tx_contracts_ident_height ON app.tx_contracts (contract_identifier, block_height DESC);
 
 CREATE TABLE IF NOT EXISTS app.script_imports (
     script_hash         VARCHAR(64) NOT NULL,
