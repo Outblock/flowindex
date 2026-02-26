@@ -176,11 +176,12 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 	storageUsedMB := float64(storageUsed) / bytesPerMB
 	storageAvailableMB := float64(storageAvailable) / bytesPerMB
 
-	// Fetch account labels
+	// Fetch account labels (DB stores with 0x prefix)
 	var accountLabels []map[string]interface{}
+	addrWithPrefix := "0x" + addressNorm
 	if s.repo != nil {
-		if labelsMap, err := s.repo.GetLabelsByAddresses(r.Context(), []string{addressNorm}); err == nil {
-			for _, l := range labelsMap[addressNorm] {
+		if labelsMap, err := s.repo.GetLabelsByAddresses(r.Context(), []string{addrWithPrefix}); err == nil {
+			for _, l := range labelsMap[addrWithPrefix] {
 				accountLabels = append(accountLabels, map[string]interface{}{
 					"tag":      l.Tag,
 					"label":    l.Label,
@@ -261,7 +262,7 @@ func (s *Server) buildAccountFallback(ctx context.Context, addr flowsdk.Address)
 }
 
 func (s *Server) handleFlowAccountLabels(w http.ResponseWriter, r *http.Request) {
-	addr := normalizeAddr(mux.Vars(r)["address"])
+	addr := "0x" + normalizeAddr(mux.Vars(r)["address"])
 	if s.repo == nil {
 		writeAPIResponse(w, []interface{}{}, nil, nil)
 		return
