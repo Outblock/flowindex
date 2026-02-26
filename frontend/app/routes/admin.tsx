@@ -511,6 +511,11 @@ function FTRow({ item, token }: { item: any; token: string }) {
               {isVerified && <VerifiedBadge size={14} />}
             </div>
             <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{form.name} ({form.symbol})</div>
+            <div className="flex items-center gap-3 mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
+              {item.total_supply ? <span>Supply: {Number(item.total_supply).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span> : null}
+              {item.holder_count ? <span>Holders: {Number(item.holder_count).toLocaleString()}</span> : null}
+              {item.evm_address ? <a href={`https://evm.flowindex.io/address/${item.evm_address}`} target="_blank" rel="noopener noreferrer" className="text-violet-500 hover:underline">{item.evm_address.slice(0, 10)}...</a> : null}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">

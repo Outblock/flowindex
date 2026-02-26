@@ -268,6 +268,9 @@ func ftTokenToAdmin(t models.FTToken) map[string]interface{} {
 		"external_url":     t.ExternalURL,
 		"logo":             t.Logo,
 		"is_verified":      t.IsVerified,
+		"total_supply":     t.TotalSupply,
+		"evm_address":      t.EVMAddress,
+		"holder_count":     t.HolderCount,
 		"updated_at":       formatTime(t.UpdatedAt),
 	}
 }
