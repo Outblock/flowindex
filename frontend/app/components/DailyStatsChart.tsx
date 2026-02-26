@@ -69,8 +69,15 @@ export function DailyStatsChart() {
         );
     }
 
-    // "All" uses a sentinel of 9999
-    const visibleData = rangeDays >= data.length ? data : data.slice(-rangeDays);
+    // Filter by actual date range, not just last N records
+    const visibleData = (() => {
+        if (rangeDays >= 9999 || rangeDays >= data.length) return data;
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - rangeDays);
+        const cutoffStr = cutoff.toISOString().split('T')[0];
+        const filtered = data.filter((d) => d.name >= cutoffStr);
+        return filtered.length > 0 ? filtered : data.slice(-rangeDays);
+    })();
     return (
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 group hover:border-nothing-green/30 transition-all duration-300">
             <div className="flex items-center justify-between mb-6">
