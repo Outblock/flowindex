@@ -1,14 +1,14 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check, CircleCheck } from 'lucide-react'
+import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check, CircleCheck, Tags, Trash2, Plus } from 'lucide-react'
 import { VerifiedBadge } from '../components/ui/VerifiedBadge'
 import { resolveApiBaseUrl } from '../api'
 import toast from 'react-hot-toast'
 import { Pagination } from '../components/Pagination'
 
-type AdminTab = 'ft' | 'nft' | 'scripts' | 'import'
-const VALID_TABS: AdminTab[] = ['ft', 'nft', 'scripts', 'import']
+type AdminTab = 'ft' | 'nft' | 'scripts' | 'import' | 'labels'
+const VALID_TABS: AdminTab[] = ['ft', 'nft', 'scripts', 'import', 'labels']
 
 export const Route = createFileRoute('/admin')({
   component: AdminPage,
@@ -130,9 +130,10 @@ function AdminPage() {
         <TabButton active={tab === 'nft'} onClick={() => setTab('nft')} icon={<Image className="w-4 h-4" />} label="NFT Collections" />
         <TabButton active={tab === 'scripts'} onClick={() => setTab('scripts')} icon={<FileCode className="w-4 h-4" />} label="Script Templates" />
         <TabButton active={tab === 'import'} onClick={() => setTab('import')} icon={<Download className="w-4 h-4" />} label="Import Token" />
+        <TabButton active={tab === 'labels'} onClick={() => setTab('labels')} icon={<Tags className="w-4 h-4" />} label="Account Labels" />
       </div>
 
-      {tab === 'ft' ? <FTPanel token={token} /> : tab === 'nft' ? <NFTPanel token={token} /> : tab === 'scripts' ? <ScriptTemplatesPanel token={token} /> : <ImportTokenPanel token={token} />}
+      {tab === 'ft' ? <FTPanel token={token} /> : tab === 'nft' ? <NFTPanel token={token} /> : tab === 'scripts' ? <ScriptTemplatesPanel token={token} /> : tab === 'labels' ? <AccountLabelsPanel token={token} /> : <ImportTokenPanel token={token} />}
     </div>
   )
 }
@@ -1134,6 +1135,201 @@ function ImportTokenPanel({ token }: { token: string }) {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Account Labels Panel ─────────────────────────────────────────────
+
+const LABEL_CATEGORIES = ['whale', 'service', 'exchange', 'defi', 'nft', 'custom'] as const
+
+function AccountLabelsPanel({ token }: { token: string }) {
+  const [search, setSearch] = useState('')
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasNext, setHasNext] = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
+
+  const doSearch = useCallback(async (p = page) => {
+    setLoading(true)
+    try {
+      const offset = (p - 1) * 50
+      const url = `admin/account-labels?limit=50&offset=${offset}&search=${encodeURIComponent(search)}`
+      const data = await adminFetch(url, token)
+      const rows = data?.data || []
+      setItems(rows)
+      setHasNext(rows.length >= 50)
+      setLoaded(true)
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [search, token, page])
+
+  const handleSearch = () => { setPage(1); doSearch(1) }
+  const handlePageChange = (p: number) => { setPage(p); doSearch(p) }
+
+  const handleDelete = async (address: string, tag: string) => {
+    try {
+      await adminFetch(`admin/account-labels/${encodeURIComponent(address)}/${encodeURIComponent(tag)}`, token, { method: 'DELETE' })
+      toast.success(`Deleted ${tag} from ${address}`)
+      doSearch(page)
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  useEffect(() => { doSearch(1) }, [token])
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="flex-1"><SearchBar value={search} onChange={setSearch} onSearch={handleSearch} loading={loading} /></div>
+        <button
+          onClick={() => setShowAdd(!showAdd)}
+          className="flex items-center gap-2 px-4 py-2 bg-nothing-green text-black text-xs uppercase tracking-widest font-mono font-bold hover:bg-nothing-green/90 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Add Label
+        </button>
+      </div>
+
+      {showAdd && (
+        <AddLabelForm token={token} onSaved={() => { setShowAdd(false); doSearch(page) }} onCancel={() => setShowAdd(false)} />
+      )}
+
+      {loaded && items.length === 0 && (
+        <p className="text-sm text-zinc-500 font-mono text-center py-8">No account labels found.</p>
+      )}
+
+      {items.length > 0 && (
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
+          <table className="w-full text-sm font-mono">
+            <thead>
+              <tr className="border-b border-zinc-200 dark:border-white/10 text-[10px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+                <th className="text-left px-4 py-2">Address</th>
+                <th className="text-left px-4 py-2">Tag</th>
+                <th className="text-left px-4 py-2">Label</th>
+                <th className="text-left px-4 py-2">Category</th>
+                <th className="text-right px-4 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={`${item.address}-${item.tag}`} className="border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                  <td className="px-4 py-2.5 text-zinc-900 dark:text-white text-xs">{item.address}</td>
+                  <td className="px-4 py-2.5 text-zinc-700 dark:text-zinc-300">{item.tag}</td>
+                  <td className="px-4 py-2.5 text-zinc-700 dark:text-zinc-300">{item.label}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium border ${
+                      item.category === 'whale' ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+                      : item.category === 'service' ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                      : item.category === 'exchange' ? 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                      : item.category === 'defi' ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800'
+                      : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                    }`}>
+                      {item.category}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button
+                      onClick={() => handleDelete(item.address, item.tag)}
+                      className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {loaded && items.length > 0 && (
+        <Pagination currentPage={page} onPageChange={handlePageChange} hasNext={hasNext} />
+      )}
+    </div>
+  )
+}
+
+function AddLabelForm({ token, onSaved, onCancel }: { token: string; onSaved: () => void; onCancel: () => void }) {
+  const [address, setAddress] = useState('')
+  const [tag, setTag] = useState('')
+  const [label, setLabel] = useState('')
+  const [category, setCategory] = useState<string>('custom')
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    if (!address.trim() || !tag.trim()) {
+      toast.error('Address and tag are required')
+      return
+    }
+    setSaving(true)
+    try {
+      await adminFetch('admin/account-labels', token, {
+        method: 'POST',
+        body: JSON.stringify({ address: address.trim(), tag: tag.trim(), label: label.trim(), category }),
+      })
+      toast.success(`Added ${tag} to ${address}`)
+      onSaved()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm p-4 space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Address</label>
+          <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="0x1654653399040a61"
+            className="w-full px-3 py-1.5 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-nothing-green placeholder:text-zinc-400" />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Tag (unique key)</label>
+          <input type="text" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. dapper-wallet"
+            className="w-full px-3 py-1.5 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-nothing-green placeholder:text-zinc-400" />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Display Label</label>
+          <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Dapper Wallet"
+            className="w-full px-3 py-1.5 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-nothing-green placeholder:text-zinc-400" />
+        </div>
+        <div>
+          <label className="block text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest font-mono mb-1">Category</label>
+          <div className="flex flex-wrap gap-1.5">
+            {LABEL_CATEGORIES.map((cat) => (
+              <button key={cat} onClick={() => setCategory(cat)}
+                className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-mono transition-colors rounded-full ${
+                  category === cat
+                    ? 'bg-nothing-green text-black font-bold'
+                    : 'border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
+                }`}>
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 pt-1">
+        <button onClick={handleSave} disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-nothing-green text-black text-xs uppercase tracking-widest font-mono font-bold hover:bg-nothing-green/90 transition-colors disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          Save
+        </button>
+        <button onClick={onCancel}
+          className="flex items-center gap-2 px-4 py-2 border border-zinc-200 dark:border-white/10 text-xs uppercase tracking-widest font-mono text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+          <X className="w-4 h-4" />
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }
