@@ -650,7 +650,7 @@ function TopNFTCollectorsTab({ collection, onCollectionChange, page, onPageChang
                             ) : (
                                 <AnimatePresence mode="popLayout">
                                     {owners.map((o: any, i: number) => {
-                                        const addr = normalizeHex(o.address);
+                                        const addr = normalizeHex(o.owner || o.address);
                                         const count = Number(o.count || o.nft_count || 0);
                                         const pct = Number(o.percentage || 0);
                                         const rank = offset + i + 1;
