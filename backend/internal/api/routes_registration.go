@@ -1,6 +1,10 @@
 package api
 
-import "github.com/gorilla/mux"
+import (
+	"time"
+
+	"github.com/gorilla/mux"
+)
 
 func registerBaseRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/health", s.handleHealth).Methods("GET", "OPTIONS")
@@ -128,15 +132,15 @@ func registerAccountingRoutes(r *mux.Router, s *Server) {
 
 func registerStatusRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/status/count", s.handleStatusCount).Methods("GET", "OPTIONS")
-	r.HandleFunc("/status/stat", s.handleStatusStat).Methods("GET", "OPTIONS")
-	r.HandleFunc("/status/stat/{timescale}/trend", s.handleStatusStatTrend).Methods("GET", "OPTIONS")
-	r.HandleFunc("/status/flow/stat", s.handleStatusFlowStat).Methods("GET", "OPTIONS")
-	r.HandleFunc("/status/epoch/status", s.handleStatusEpochStatus).Methods("GET", "OPTIONS")
-	r.HandleFunc("/status/epoch/stat", s.handleStatusEpochStat).Methods("GET", "OPTIONS")
-	r.HandleFunc("/status/tokenomics", s.handleStatusTokenomics).Methods("GET", "OPTIONS")
-	r.HandleFunc("/status/price", s.handleStatusPrice).Methods("GET", "OPTIONS")
-	r.HandleFunc("/status/price/history", s.handleStatusPriceHistory).Methods("GET", "OPTIONS")
-	r.HandleFunc("/status/nodes", s.handleStatusNodes).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/stat", cachedHandler(5*time.Minute, s.handleStatusStat)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/stat/{timescale}/trend", cachedHandler(5*time.Minute, s.handleStatusStatTrend)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/flow/stat", cachedHandler(30*time.Second, s.handleStatusFlowStat)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/epoch/status", cachedHandler(60*time.Second, s.handleStatusEpochStatus)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/epoch/stat", cachedHandler(60*time.Second, s.handleStatusEpochStat)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/tokenomics", cachedHandler(60*time.Second, s.handleStatusTokenomics)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/price", cachedHandler(60*time.Second, s.handleStatusPrice)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/price/history", cachedHandler(5*time.Minute, s.handleStatusPriceHistory)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/status/nodes", cachedHandler(60*time.Second, s.handleStatusNodes)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/status/gcp-vms", s.handleStatusGCPVMs).Methods("GET", "OPTIONS")
 
 	// Compatibility endpoints (find.xyz style)
@@ -145,9 +149,9 @@ func registerStatusRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/public/v1/totalSupplyWithDecimal", s.handleCompatTotalSupplyWithDecimal).Methods("GET", "OPTIONS")
 	r.HandleFunc("/public/v1/epoch/payout", s.handlePublicEpochPayout).Methods("GET", "OPTIONS")
 
-	// Analytics endpoints
-	r.HandleFunc("/analytics/daily", s.handleAnalyticsDaily).Methods("GET", "OPTIONS")
-	r.HandleFunc("/analytics/transfers/daily", s.handleAnalyticsTransfersDaily).Methods("GET", "OPTIONS")
+	// Analytics endpoints (cached — slow queries, data changes infrequently)
+	r.HandleFunc("/analytics/daily", cachedHandler(5*time.Minute, s.handleAnalyticsDaily)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/analytics/transfers/daily", cachedHandler(5*time.Minute, s.handleAnalyticsTransfersDaily)).Methods("GET", "OPTIONS")
 }
 
 func registerDeferredRoutes(r *mux.Router, s *Server) {
@@ -161,7 +165,7 @@ func registerDeferredRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/staking/delegator", s.handleStakingDelegators).Methods("GET", "OPTIONS")
 	r.HandleFunc("/staking/account/{address}/ft/transfer", s.handleStakingAccountFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/staking/account/{address}/transaction", s.handleStakingAccountTransactions).Methods("GET", "OPTIONS")
-	r.HandleFunc("/staking/epoch/stats", s.handleGetEpochStats).Methods("GET", "OPTIONS")
+	r.HandleFunc("/staking/epoch/stats", cachedHandler(5*time.Minute, s.handleGetEpochStats)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/staking/epoch/{epoch}/nodes", s.handleListEpochNodes).Methods("GET", "OPTIONS")
 	r.HandleFunc("/staking/epoch/{epoch}/role/{role}/nodes/aggregate", s.handleNotImplemented).Methods("GET", "OPTIONS")
 	r.HandleFunc("/staking/epoch/{epoch}/role/{role}/nodes/count", s.handleNotImplemented).Methods("GET", "OPTIONS")
