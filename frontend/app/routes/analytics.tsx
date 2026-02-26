@@ -277,72 +277,57 @@ function AnalyticsPage() {
   const [epochData, setEpochData] = useState<EpochRow[]>([])
   const [netStats, setNetStats] = useState<NetworkStatsData | null>(null)
   const [totals, setTotals] = useState<Totals | null>(null)
-  const [loading, setLoading] = useState(true)
 
+  // Each data source loads independently so fast ones render immediately
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      await ensureHeyApiConfigured()
+    ensureHeyApiConfigured().then(() => {
+      if (cancelled) return
       const fromDate = new Date()
       fromDate.setFullYear(fromDate.getFullYear() - 1)
       const fromStr = fromDate.toISOString().split('T')[0]
 
-      const [dailyRes, transferRes, netRes, priceRes, epochRes, totalsRes] =
-        await Promise.allSettled([
-          fetchAnalyticsDaily(fromStr),
-          fetchAnalyticsTransfersDaily(fromStr),
-          fetchNetworkStats(),
-          fetch(`${getBaseURL()}/status/price/history?limit=8760`)
-            .then((r) => (r.ok ? r.json() : null))
-            .catch(() => null),
-          fetch(`${getBaseURL()}/staking/epoch/stats?limit=200`)
-            .then((r) => (r.ok ? r.json() : null))
-            .catch(() => null),
-          fetch(`${getBaseURL()}/status/count`)
-            .then((r) => (r.ok ? r.json() : null))
-            .catch(() => null),
-        ])
+      fetchAnalyticsDaily(fromStr).then((data) => {
+        if (cancelled || !data) return
+        setDailyData((data as DailyRow[]).sort((a, b) => a.date.localeCompare(b.date)))
+      }).catch(() => {})
 
-      if (cancelled) return
+      fetchAnalyticsTransfersDaily(fromStr).then((data) => {
+        if (cancelled || !data) return
+        setTransferData((data as TransferRow[]).sort((a, b) => a.date.localeCompare(b.date)))
+      }).catch(() => {})
 
-      if (dailyRes.status === 'fulfilled' && dailyRes.value) {
-        const sorted = (dailyRes.value as DailyRow[]).sort(
-          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-        )
-        setDailyData(sorted)
-      }
-      if (transferRes.status === 'fulfilled' && transferRes.value) {
-        const sorted = (transferRes.value as TransferRow[]).sort(
-          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-        )
-        setTransferData(sorted)
-      }
-      if (netRes.status === 'fulfilled' && netRes.value) {
-        setNetStats(netRes.value as NetworkStatsData)
-      }
-      if (priceRes.status === 'fulfilled' && priceRes.value?.data) {
-        const pts = (priceRes.value.data as PricePoint[])
-          .slice()
-          .sort((a, b) => new Date(a.as_of).getTime() - new Date(b.as_of).getTime())
-        setPriceHistory(pts)
-      }
-      if (epochRes.status === 'fulfilled' && epochRes.value?.data) {
-        const rows = (epochRes.value.data as EpochRow[])
-          .slice()
-          .sort((a, b) => a.epoch - b.epoch)
-        setEpochData(rows)
-      }
-      if (totalsRes.status === 'fulfilled' && totalsRes.value?.data) {
-        const d = totalsRes.value.data
-        const item = Array.isArray(d) ? d[0] : d
-        if (item) setTotals(item as Totals)
-      }
+      fetchNetworkStats().then((data) => {
+        if (cancelled || !data) return
+        setNetStats(data as NetworkStatsData)
+      }).catch(() => {})
 
-      setLoading(false)
-    })()
-    return () => {
-      cancelled = true
-    }
+      fetch(`${getBaseURL()}/status/price/history?limit=8760`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (cancelled || !json?.data) return
+          setPriceHistory(
+            (json.data as PricePoint[]).slice().sort((a, b) => new Date(a.as_of).getTime() - new Date(b.as_of).getTime()),
+          )
+        }).catch(() => {})
+
+      fetch(`${getBaseURL()}/staking/epoch/stats?limit=200`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (cancelled || !json?.data) return
+          setEpochData((json.data as EpochRow[]).slice().sort((a, b) => a.epoch - b.epoch))
+        }).catch(() => {})
+
+      fetch(`${getBaseURL()}/status/count`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (cancelled || !json?.data) return
+          const d = json.data
+          const item = Array.isArray(d) ? d[0] : d
+          if (item) setTotals(item as Totals)
+        }).catch(() => {})
+    })
+    return () => { cancelled = true }
   }, [])
 
   /* ── derived visible slices ── */
@@ -422,9 +407,7 @@ function AnalyticsPage() {
           </div>
         </div>
 
-        {loading ? (
-          <Skeleton rows={8} />
-        ) : (
+        {/* Content renders progressively as each API responds */}
           <>
             {/* KPI cards row */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -671,7 +654,6 @@ function AnalyticsPage() {
               )}
             </div>
           </>
-        )}
       </div>
     </div>
   )
