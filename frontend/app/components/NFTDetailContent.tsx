@@ -1,6 +1,7 @@
 import { Package, ExternalLink } from 'lucide-react';
 import { ImageWithFallback } from './ui/ImageWithFallback';
-import { getNFTMedia } from './account/accountUtils';
+import { getNFTMedia, normalizeAddress } from './account/accountUtils';
+import { AddressLink } from './AddressLink';
 
 interface NFTDetailContentProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -199,6 +200,14 @@ export function NFTDetailContent({ nft, collectionId = '', collectionName, layou
                     }
                     return null;
                 })()}
+
+                {/* Current Owner */}
+                {nft?.owner && (
+                    <div className="mt-5 p-2.5 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
+                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5">Current Owner</div>
+                        <AddressLink address={normalizeAddress(nft.owner)} className="text-sm" />
+                    </div>
+                )}
             </div>
         </div>
     );
