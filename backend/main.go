@@ -777,6 +777,19 @@ func main() {
 			// Initialize backfill progress for API visibility.
 			backfillProgress.Init(tip, targetHeight)
 
+			// Clear ALL existing data for the entire backfill range ONCE up front.
+			// This is critical: per-chunk clearing deletes an entire day's data but
+			// the chunk only re-aggregates a small slice, causing cliff drops in charts.
+			// By clearing once, additive ON CONFLICT builds up correctly chunk by chunk.
+			log.Printf("[analytics_backfill] Clearing daily_stats and daily_metrics for height range [%d, %d)...", targetHeight, tip)
+			if err := repo.ClearDailyStatsForHeightRange(ctx, targetHeight, tip); err != nil {
+				log.Printf("[analytics_backfill] Warning: clear daily_stats failed: %v", err)
+			}
+			if err := repo.ClearAnalyticsDailyMetricsForHeightRange(ctx, targetHeight, tip); err != nil {
+				log.Printf("[analytics_backfill] Warning: clear daily_metrics failed: %v", err)
+			}
+			log.Println("[analytics_backfill] Clear complete, starting chunk processing...")
+
 			// Process backward: from tip down to targetHeight in chunks.
 			processed := uint64(0)
 			startTime := time.Now()
@@ -797,14 +810,6 @@ func main() {
 					chunkFrom = 0
 				}
 				chunkTo := cursor
-
-				// Clear existing data for this chunk's date range first (additive ON CONFLICT).
-				if err := repo.ClearDailyStatsForHeightRange(ctx, chunkFrom, chunkTo); err != nil {
-					log.Printf("[analytics_backfill] Warning: clear daily_stats [%d, %d) failed: %v", chunkFrom, chunkTo, err)
-				}
-				if err := repo.ClearAnalyticsDailyMetricsForHeightRange(ctx, chunkFrom, chunkTo); err != nil {
-					log.Printf("[analytics_backfill] Warning: clear daily_metrics [%d, %d) failed: %v", chunkFrom, chunkTo, err)
-				}
 
 				// Aggregate daily_stats
 				if err := repo.RefreshDailyStatsRange(ctx, chunkFrom, chunkTo); err != nil {
