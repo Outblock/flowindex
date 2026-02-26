@@ -106,8 +106,7 @@ function TokenDetailInner() {
     const num = Number(raw);
     if (!Number.isFinite(num) || num < 0) return '0';
     if (decimals <= 0) return num.toLocaleString();
-    const shifted = num / Math.pow(10, decimals);
-    return shifted.toLocaleString(undefined, { minimumFractionDigits: Math.min(decimals, 4), maximumFractionDigits: Math.min(decimals, 8) });
+    return num.toLocaleString(undefined, { minimumFractionDigits: Math.min(decimals, 4), maximumFractionDigits: Math.min(decimals, 8) });
   };
 
   const parseSocials = (): Record<string, string> => {
@@ -270,6 +269,14 @@ function TokenDetailInner() {
               May be inaccurate during indexing
             </p>
           </div>
+          {token?.total_supply != null && (
+            <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
+              <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Total Supply</p>
+              <p className="text-sm font-bold font-mono text-zinc-900 dark:text-white">
+                {formatBalance(token.total_supply)}
+              </p>
+            </div>
+          )}
           <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
             <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Decimals</p>
             <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">

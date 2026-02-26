@@ -46,6 +46,22 @@ func (r *Repository) CountFTHoldingsByToken(ctx context.Context, contract, contr
 	return total, nil
 }
 
+func (r *Repository) SumFTBalanceByToken(ctx context.Context, contract, contractName string) (string, error) {
+	var total *string
+	if err := r.db.QueryRow(ctx, `
+		SELECT SUM(balance)::text
+		FROM app.ft_holdings
+		WHERE contract_address = $1
+		  AND ($2 = '' OR contract_name = $2)
+		  AND balance > 0`, hexToBytes(contract), contractName).Scan(&total); err != nil {
+		return "0", err
+	}
+	if total == nil {
+		return "0", nil
+	}
+	return *total, nil
+}
+
 func (r *Repository) CountFTHoldingsByAddress(ctx context.Context, address string) (int64, error) {
 	var total int64
 	if err := r.db.QueryRow(ctx, `
