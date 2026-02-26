@@ -783,15 +783,9 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 	args = append(args, f.Limit, f.Offset)
 	rows, err := r.db.Query(ctx, `
 		SELECT encode(sc.address, 'hex') AS address, sc.name, COALESCE(sc.code,''), COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
-		       COALESCE(b.timestamp, sc.created_at) AS created_at,
+		       sc.created_at,
 		       sc.updated_at
 		FROM app.smart_contracts sc
-		LEFT JOIN LATERAL (
-			SELECT cv.block_height FROM app.contract_versions cv
-			WHERE cv.address = sc.address AND cv.name = sc.name
-			ORDER BY cv.version ASC LIMIT 1
-		) first_ver ON true
-		LEFT JOIN raw.blocks b ON b.height = first_ver.block_height
 		`+where+`
 		ORDER BY `+orderBy+`
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)

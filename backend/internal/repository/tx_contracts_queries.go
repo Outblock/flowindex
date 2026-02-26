@@ -14,6 +14,7 @@ type TxScriptHash struct {
 	ID           string
 	ScriptHash   string // SHA-256 hash; empty if no script
 	InlineScript string // only populated for legacy rows with no script_hash
+	BlockHeight  int64  // block height for partition-pruned joins
 }
 
 // EventTypeRow is a lightweight struct with only TransactionID and Type (no payload).
@@ -31,7 +32,8 @@ func (r *Repository) GetTxScriptHashesInRange(ctx context.Context, fromHeight, t
 		SELECT
 			encode(id, 'hex') AS id,
 			COALESCE(script_hash, '') AS script_hash,
-			CASE WHEN script_hash IS NULL AND script IS NOT NULL THEN script ELSE '' END AS inline_script
+			CASE WHEN script_hash IS NULL AND script IS NOT NULL THEN script ELSE '' END AS inline_script,
+			block_height
 		FROM raw.transactions
 		WHERE block_height >= $1 AND block_height < $2`,
 		fromHeight, toHeight)
@@ -43,7 +45,7 @@ func (r *Repository) GetTxScriptHashesInRange(ctx context.Context, fromHeight, t
 	var out []TxScriptHash
 	for rows.Next() {
 		var t TxScriptHash
-		if err := rows.Scan(&t.ID, &t.ScriptHash, &t.InlineScript); err != nil {
+		if err := rows.Scan(&t.ID, &t.ScriptHash, &t.InlineScript, &t.BlockHeight); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

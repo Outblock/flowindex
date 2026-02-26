@@ -99,9 +99,11 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 		}
 	}
 
-	// Step 4: Build script_imports (deduplicated by hash) and tags from cached imports.
+	// Step 4: Build script_imports, tx_contracts, and tags from cached imports.
 	seenImport := make(map[string]bool)
 	scriptImports := make([]models.ScriptImport, 0)
+	txContracts := make([]models.TxContract, 0)
+	seenContract := make(map[string]bool)
 	tags := make([]models.TxTag, 0)
 	seenTag := make(map[string]bool)
 	addTag := func(txID, tag string) {
@@ -133,6 +135,17 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 				scriptImports = append(scriptImports, models.ScriptImport{
 					ScriptHash:         tx.ScriptHash,
 					ContractIdentifier: imp.Identifier,
+				})
+			}
+			// Build tx_contracts row (one per unique tx+contract).
+			cKey := tx.ID + "|" + imp.Identifier
+			if !seenContract[cKey] {
+				seenContract[cKey] = true
+				txContracts = append(txContracts, models.TxContract{
+					TransactionID:      tx.ID,
+					ContractIdentifier: imp.Identifier,
+					Source:             "import",
+					BlockHeight:        tx.BlockHeight,
 				})
 			}
 			if imp.IsScheduled {
@@ -245,6 +258,9 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 		}
 	}
 
+	if err := w.repo.BulkUpsertTxContracts(ctx, txContracts); err != nil {
+		return err
+	}
 	if err := w.repo.BulkUpsertScriptImports(ctx, scriptImports); err != nil {
 		return err
 	}
