@@ -290,7 +290,7 @@ function Stats() {
             clearInterval(gcpInterval);
             if (ws) ws.close();
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [processStatus, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Derived values for System Stats
@@ -1011,7 +1011,7 @@ function Stats() {
                                     </h2>
                                     {(() => {
                                         const backfillActive = backfill && backfill.enabled && !backfill.done;
-                                        const backfillDone = backfill && backfill.enabled && backfill.done;
+                                        const _backfillDone = backfill && backfill.enabled && backfill.done;
                                         return (
                                             <>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
