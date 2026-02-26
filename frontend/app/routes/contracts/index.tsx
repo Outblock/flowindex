@@ -8,7 +8,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Contract } from '../../api/gen/find';
 import { useWebSocketStatus } from '../../hooks/useWebSocket';
 import { Pagination } from '../../components/Pagination';
-import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
+import { formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 
@@ -308,7 +308,7 @@ function Contracts() {
                                     const lastUpdatedHeight = Number(c?.valid_from || 0);
                                     const createdAt = c?.created_at || '';
                                     const rel = createdAt ? formatRelativeTime(createdAt, nowTick) : '';
-                                    const abs = createdAt ? formatAbsoluteTime(createdAt) : '';
+                                    const abs = createdAt ? new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(createdAt)) : '';
                                     const depCount = Number(c?.import_count || c?.imported_count || 0);
                                     const isVerified = Boolean(c?.is_verified);
                                     const contractKind = String(c?.kind || '');
@@ -340,7 +340,7 @@ function Contracts() {
                                             </td>
                                             <td className="p-4">
                                                 {addr ? (
-                                                    <AddressLink address={addr} prefixLen={20} suffixLen={0} />
+                                                    <AddressLink address={addr} prefixLen={20} suffixLen={0} className="!text-zinc-900 dark:!text-white" />
                                                 ) : (
                                                     <span className="text-zinc-500">N/A</span>
                                                 )}
