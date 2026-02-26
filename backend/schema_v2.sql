@@ -878,6 +878,22 @@ CREATE TABLE IF NOT EXISTS app.epoch_stats (
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS app.node_metadata (
+    node_id       TEXT PRIMARY KEY,
+    ip_address    TEXT,
+    hostname      TEXT,
+    country       TEXT,
+    country_code  TEXT,
+    region        TEXT,
+    city          TEXT,
+    latitude      DOUBLE PRECISION,
+    longitude     DOUBLE PRECISION,
+    isp           TEXT,
+    org           TEXT,
+    as_number     TEXT,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS app.tokenomics_snapshots (
     id                  BIGSERIAL PRIMARY KEY,
     total_supply        NUMERIC(78,8),
