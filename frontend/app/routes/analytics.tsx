@@ -187,7 +187,7 @@ function ChartSkeleton() {
       {Array.from({ length: 20 }).map((_, i) => (
         <div
           key={i}
-          className="flex-1 bg-zinc-200 dark:bg-zinc-800 rounded-t"
+          className="flex-1 bg-zinc-200 dark:bg-white/10 rounded-t"
           style={{ height: `${30 + Math.sin(i * 0.7) * 25 + Math.random() * 20}%` }}
         />
       ))}
@@ -223,7 +223,7 @@ function ChartCard({
   emptyMessage?: string
 }) {
   return (
-    <div className={`bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 hover:border-nothing-green/30 transition-colors ${className}`}>
+    <div className={`bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-5 hover:border-nothing-green/30 transition-colors ${className}`}>
       <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-4">
         {title}
       </h3>
@@ -301,10 +301,10 @@ function KpiCard({
     deltaText = deltaLabel ?? `${sign}${fmtNum(delta)}`
   }
   return (
-    <div className="bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 flex flex-col justify-between min-h-[100px] hover:border-nothing-green/30 transition-colors">
+    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-4 flex flex-col justify-between min-h-[100px] hover:border-nothing-green/30 transition-colors">
       <span className="text-[10px] uppercase tracking-wider text-zinc-500 dark:text-zinc-500 font-medium">{label}</span>
       {loading ? (
-        <div className="h-5 w-20 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse mt-2" />
+        <div className="h-5 w-20 bg-zinc-200 dark:bg-white/10 rounded animate-pulse mt-2" />
       ) : (
         <span className="text-xl font-bold text-zinc-900 dark:text-white font-mono mt-2">{value}</span>
       )}
@@ -320,17 +320,17 @@ function Skeleton({ rows = 6 }: { rows?: number }) {
     <div className="space-y-6 animate-pulse">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 h-[100px]">
-            <div className="h-2 w-16 bg-zinc-200 dark:bg-zinc-700 rounded mb-4" />
-            <div className="h-5 w-20 bg-zinc-200 dark:bg-zinc-700 rounded" />
+          <div key={i} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-4 h-[100px]">
+            <div className="h-2 w-16 bg-zinc-200 dark:bg-white/10 rounded mb-4" />
+            <div className="h-5 w-20 bg-zinc-200 dark:bg-white/10 rounded" />
           </div>
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 h-[280px]">
-            <div className="h-2.5 w-32 bg-zinc-200 dark:bg-zinc-700 rounded mb-6" />
-            <div className="h-[200px] bg-zinc-100 dark:bg-zinc-800/50 rounded" />
+          <div key={i} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-5 h-[280px]">
+            <div className="h-2.5 w-32 bg-zinc-200 dark:bg-white/10 rounded mb-6" />
+            <div className="h-[200px] bg-zinc-100 dark:bg-white/5 rounded" />
           </div>
         ))}
       </div>
@@ -343,9 +343,9 @@ function Skeleton({ rows = 6 }: { rows?: number }) {
 function SectionHeader({ title }: { title: string }) {
   return (
     <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-900 dark:text-zinc-300 mt-10 mb-4 flex items-center gap-2">
-      <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+      <span className="h-px flex-1 bg-zinc-200 dark:bg-white/10" />
       <span>{title}</span>
-      <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+      <span className="h-px flex-1 bg-zinc-200 dark:bg-white/10" />
     </h2>
   )
 }
@@ -539,14 +539,14 @@ function AnalyticsPage() {
   /* ── render ── */
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-nothing-black">
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         {/* header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">
             Analytics
           </h1>
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 rounded-lg p-0.5">
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-nothing-dark rounded-lg p-0.5">
             {RANGES.map((r) => (
               <button
                 key={r.value}
@@ -564,14 +564,14 @@ function AnalyticsPage() {
         </div>
 
         {/* Category tabs */}
-        <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 rounded-lg p-0.5 w-fit">
+        <div className="flex items-center gap-1 bg-zinc-100 dark:bg-nothing-dark rounded-lg p-0.5 w-fit">
           {TABS.map((t) => (
             <button
               key={t.value}
               onClick={() => setActiveTab(t.value)}
               className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
                 activeTab === t.value
-                  ? 'text-white bg-zinc-800 dark:bg-zinc-700 shadow-sm'
+                  ? 'text-white bg-zinc-800 dark:bg-white/10 shadow-sm'
                   : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
               }`}
             >

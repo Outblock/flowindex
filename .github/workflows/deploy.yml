@@ -12,10 +12,6 @@ on:
         default: "all"
         type: string
 
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   PROJECT_ID: flowindex-mainnet
   REGION: us-central1
@@ -84,6 +80,9 @@ jobs:
   build-backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
+    concurrency:
+      group: deploy-backend-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -140,6 +139,9 @@ jobs:
       always() &&
       needs.changes.outputs.frontend == 'true' &&
       (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped')
+    concurrency:
+      group: deploy-frontend-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -184,6 +186,9 @@ jobs:
   build-docs:
     needs: changes
     if: needs.changes.outputs.docs == 'true'
+    concurrency:
+      group: deploy-docs-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -219,6 +224,9 @@ jobs:
   build-ai-chat:
     needs: changes
     if: needs.changes.outputs.ai-chat == 'true'
+    concurrency:
+      group: deploy-ai-chat-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
