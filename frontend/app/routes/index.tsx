@@ -18,6 +18,21 @@ import { deriveActivityType } from '../components/TransactionRow';
 
 export const Route = createFileRoute('/')({
     component: Home,
+    head: () => ({
+        meta: [
+            { title: 'FlowIndex — Flow Blockchain Explorer' },
+            { name: 'description', content: 'Real-time blocks, transactions, accounts, tokens, and NFTs on the Flow network' },
+            { property: 'og:title', content: 'FlowIndex — Flow Blockchain Explorer' },
+            { property: 'og:description', content: 'Real-time blocks, transactions, accounts, tokens, and NFTs on the Flow network' },
+            { property: 'og:image', content: 'https://flowindex.io/og/home' },
+            { property: 'og:image:width', content: '1200' },
+            { property: 'og:image:height', content: '630' },
+            { name: 'twitter:card', content: 'summary_large_image' },
+            { name: 'twitter:title', content: 'FlowIndex — Flow Blockchain Explorer' },
+            { name: 'twitter:description', content: 'Real-time blocks, transactions, accounts, tokens, and NFTs on the Flow network' },
+            { name: 'twitter:image', content: 'https://flowindex.io/og/home' },
+        ],
+    }),
     loader: async () => {
         const ssrFastTimeoutMs = import.meta.env.SSR ? 2200 : 10000;
         // Only fetch fast, critical data in the SSR loader.

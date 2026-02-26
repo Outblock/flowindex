@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { buildMeta } from '../../lib/og/meta';
 import { AddressLink } from '../../components/AddressLink';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -58,6 +59,13 @@ export const Route = createFileRoute('/nfts/$nftType')({
       return { collection: null, initialItems: [], initialItemsMeta: null, nftType };
     }
   },
+  head: ({ params }) => ({
+    meta: buildMeta({
+      title: decodeURIComponent(params.nftType),
+      description: `NFT collection ${decodeURIComponent(params.nftType)} on the Flow blockchain`,
+      ogImagePath: `nft/${params.nftType}`,
+    }),
+  }),
 })
 
 function NFTCollectionDetail() {

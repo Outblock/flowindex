@@ -22,6 +22,7 @@
     "@onflow/fcl": "^1.21.9",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-slot": "^1.2.4",
+    "@resvg/resvg-js": "^2.6.2",
     "@tanstack/react-router": "^1.159.4",
     "@tanstack/react-start": "^1.159.4",
     "ai": "^6.0.101",
@@ -45,6 +46,7 @@
     "reactflow": "^11.11.4",
     "recharts": "^3.7.0",
     "remark-gfm": "^4.0.1",
+    "satori": "^0.19.2",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.167.1"

@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { useState, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
+import { buildMeta } from '../../lib/og/meta';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -174,7 +175,18 @@ export const Route = createFileRoute('/txs/$txId')({
             console.error('Failed to load transaction data', { message });
             return { transaction: null, error: 'Failed to load transaction details' };
         }
-    }
+    },
+    head: ({ params }) => {
+        const id = params.txId;
+        const shortId = id.length > 16 ? `${id.slice(0, 10)}...${id.slice(-8)}` : id;
+        return {
+            meta: buildMeta({
+                title: `Tx ${shortId}`,
+                description: `Flow transaction ${id}`,
+                ogImagePath: `tx/${id}`,
+            }),
+        };
+    },
 })
 
 function TokenBubble({ logo, symbol, size = 32 }: { logo?: string; symbol?: string; size?: number }) {

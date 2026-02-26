@@ -1,4 +1,5 @@
 import { createFileRoute, Link, redirect, isRedirect } from '@tanstack/react-router'
+import { buildMeta } from '../../lib/og/meta';
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddress } from '../../api/gen/find';
@@ -115,7 +116,14 @@ export const Route = createFileRoute('/accounts/$address')({
             console.error("Failed to load account data", e);
             return { account: null, initialTransactions: [], initialNextCursor: '', isCOA: false };
         }
-    }
+    },
+    head: ({ params }) => ({
+        meta: buildMeta({
+            title: `Account ${params.address}`,
+            description: `Flow account ${params.address} — activity, tokens, NFTs, and keys`,
+            ogImagePath: `account/${params.address}`,
+        }),
+    }),
 })
 
 function AccountDetailPending() {
