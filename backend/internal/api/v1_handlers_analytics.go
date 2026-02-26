@@ -1,16 +1,27 @@
 package api
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"time"
 )
 
 func (s *Server) handleAnalyticsDaily(w http.ResponseWriter, r *http.Request) {
 	from, to := parseAnalyticsDateRange(r)
-	stats, err := s.repo.GetAnalyticsDailyStats(r.Context(), from, to)
+	// Keep page responsive: try enriched analytics with short timeout,
+	// then gracefully fall back to base daily stats if enrichment is slow.
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	stats, err := s.repo.GetAnalyticsDailyStats(ctx, from, to)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err.Error())
-		return
+		log.Printf("[analytics] enriched daily query failed, fallback to base stats: %v", err)
+		stats, err = s.repo.GetAnalyticsDailyBaseStats(r.Context(), from, to)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	writeAPIResponse(w, stats, map[string]interface{}{"count": len(stats)}, nil)
 }

@@ -32,6 +32,12 @@ func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.T
 		WITH bounds AS (
 			SELECT $1::date AS from_date, $2::date AS to_date
 		),
+		height_bounds AS (
+			SELECT MIN(bl.height) AS min_h, MAX(bl.height) AS max_h
+			FROM raw.blocks bl
+			JOIN bounds b ON bl.timestamp >= b.from_date::timestamptz
+				AND bl.timestamp < (b.to_date::date + INTERVAL '1 day')
+		),
 		base AS (
 			SELECT
 				date,
@@ -49,16 +55,16 @@ func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.T
 			SELECT DATE(bl.timestamp) AS date, COUNT(*)::BIGINT AS new_accounts
 			FROM app.accounts a
 			JOIN raw.blocks bl ON bl.height = a.first_seen_height
-			JOIN bounds b ON bl.timestamp >= b.from_date::timestamptz
-				AND bl.timestamp < (b.to_date::date + INTERVAL '1 day')
+			JOIN height_bounds hb ON hb.min_h IS NOT NULL
+				AND a.first_seen_height BETWEEN hb.min_h AND hb.max_h
 			GROUP BY 1
 		),
 		coa_new_accounts AS (
 			SELECT DATE(bl.timestamp) AS date, COUNT(*)::BIGINT AS coa_new_accounts
 			FROM app.coa_accounts c
 			JOIN raw.blocks bl ON bl.height = c.block_height
-			JOIN bounds b ON bl.timestamp >= b.from_date::timestamptz
-				AND bl.timestamp < (b.to_date::date + INTERVAL '1 day')
+			JOIN height_bounds hb ON hb.min_h IS NOT NULL
+				AND c.block_height BETWEEN hb.min_h AND hb.max_h
 			GROUP BY 1
 		),
 		evm_active AS (
@@ -66,14 +72,14 @@ func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.T
 			FROM (
 				SELECT DATE(timestamp) AS date, from_address AS addr
 				FROM app.evm_transactions e
-				JOIN bounds b ON e.timestamp >= b.from_date::timestamptz
-					AND e.timestamp < (b.to_date::date + INTERVAL '1 day')
+				JOIN height_bounds hb ON hb.min_h IS NOT NULL
+					AND e.block_height BETWEEN hb.min_h AND hb.max_h
 				WHERE from_address IS NOT NULL
 				UNION ALL
 				SELECT DATE(timestamp) AS date, to_address AS addr
 				FROM app.evm_transactions e
-				JOIN bounds b ON e.timestamp >= b.from_date::timestamptz
-					AND e.timestamp < (b.to_date::date + INTERVAL '1 day')
+				JOIN height_bounds hb ON hb.min_h IS NOT NULL
+					AND e.block_height BETWEEN hb.min_h AND hb.max_h
 				WHERE to_address IS NOT NULL
 			) x
 			GROUP BY date
@@ -84,8 +90,8 @@ func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.T
 				COUNT(*) FILTER (WHERE event_type = 'Swap')::BIGINT AS defi_swap_count,
 				COUNT(DISTINCT maker) FILTER (WHERE event_type = 'Swap' AND maker IS NOT NULL)::BIGINT AS defi_unique_traders
 			FROM app.defi_events e
-			JOIN bounds b ON e.timestamp >= b.from_date::timestamptz
-				AND e.timestamp < (b.to_date::date + INTERVAL '1 day')
+			JOIN height_bounds hb ON hb.min_h IS NOT NULL
+				AND e.block_height BETWEEN hb.min_h AND hb.max_h
 			GROUP BY 1
 		),
 		epoch_payout AS (
@@ -102,8 +108,8 @@ func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.T
 			SELECT DATE(l.timestamp) AS date, COUNT(*)::BIGINT AS bridge_to_evm_txs
 			FROM app.tx_tags t
 			JOIN raw.tx_lookup l ON l.id = t.transaction_id
-			JOIN bounds b ON l.timestamp >= b.from_date::timestamptz
-				AND l.timestamp < (b.to_date::date + INTERVAL '1 day')
+			JOIN height_bounds hb ON hb.min_h IS NOT NULL
+				AND l.block_height BETWEEN hb.min_h AND hb.max_h
 			WHERE t.tag = 'EVM_BRIDGE'
 			GROUP BY 1
 		)
@@ -154,6 +160,46 @@ func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.T
 			&row.NewAccounts, &row.COANewAccounts, &row.EVMActiveAddresses,
 			&row.DefiSwapCount, &row.DefiUniqueTraders, &row.EpochPayoutTotal,
 			&row.BridgeToEVMTxs,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+// GetAnalyticsDailyBaseStats returns fast daily metrics from app.daily_stats only.
+// This is used as a graceful fallback when enrichment queries are slow/unavailable.
+func (r *Repository) GetAnalyticsDailyBaseStats(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
+	query := `
+		SELECT date::text, tx_count, COALESCE(evm_tx_count, 0) AS evm_tx_count,
+			(tx_count - COALESCE(evm_tx_count, 0)) AS cadence_tx_count,
+			COALESCE(total_gas_used, 0) AS total_gas_used,
+			COALESCE(active_accounts, 0), COALESCE(new_contracts, 0),
+			COALESCE(failed_tx_count, 0) AS failed_tx_count,
+			CASE WHEN tx_count > 0
+				THEN ROUND(COALESCE(failed_tx_count, 0)::numeric / tx_count * 100, 2)
+				ELSE 0 END AS error_rate,
+			CASE WHEN tx_count > 0 AND COALESCE(total_gas_used, 0) > 0
+				THEN ROUND((COALESCE(total_gas_used, 0)::numeric / tx_count), 2)
+				ELSE 0 END AS avg_gas_per_tx
+		FROM app.daily_stats
+		WHERE date >= $1::date AND date <= $2::date
+		ORDER BY date ASC`
+
+	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []AnalyticsDailyRow
+	for rows.Next() {
+		var row AnalyticsDailyRow
+		if err := rows.Scan(
+			&row.Date, &row.TxCount, &row.EVMTxCount, &row.CadenceTxCount,
+			&row.TotalGasUsed, &row.ActiveAccounts, &row.NewContracts,
+			&row.FailedTxCount, &row.ErrorRate, &row.AvgGasPerTx,
 		); err != nil {
 			return nil, err
 		}

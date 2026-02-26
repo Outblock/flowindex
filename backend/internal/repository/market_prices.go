@@ -52,20 +52,24 @@ func (r *Repository) GetLatestMarketPrice(ctx context.Context, asset, currency s
 // GetMarketPriceHistory returns up to `limit` recent price records, sampled
 // to roughly one per hour when data is dense (10-min polling).
 func (r *Repository) GetMarketPriceHistory(ctx context.Context, asset, currency string, limit int) ([]MarketPrice, error) {
-	if limit <= 0 || limit > 720 {
+	if limit <= 0 || limit > 8760 {
 		limit = 168 // 7 days of hourly data
 	}
 	rows, err := r.db.Query(ctx, `
 		SELECT asset, currency, price, price_change_24h, market_cap, source, as_of, created_at
 		FROM (
-			SELECT asset, currency, price, price_change_24h, market_cap, source, as_of, created_at,
-				ROW_NUMBER() OVER (PARTITION BY DATE_TRUNC('hour', as_of) ORDER BY as_of DESC) AS rn
-			FROM app.market_prices
-			WHERE UPPER(asset) = UPPER($1) AND UPPER(currency) = UPPER($2)
-		) sub
-		WHERE rn = 1
+			SELECT *
+			FROM (
+				SELECT asset, currency, price, price_change_24h, market_cap, source, as_of, created_at,
+					ROW_NUMBER() OVER (PARTITION BY DATE_TRUNC('hour', as_of) ORDER BY as_of DESC) AS rn
+				FROM app.market_prices
+				WHERE UPPER(asset) = UPPER($1) AND UPPER(currency) = UPPER($2)
+			) sampled
+			WHERE rn = 1
+			ORDER BY as_of DESC
+			LIMIT $3
+		) latest
 		ORDER BY as_of ASC
-		LIMIT $3
 	`, asset, currency, limit)
 	if err != nil {
 		return nil, err
