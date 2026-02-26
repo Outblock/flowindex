@@ -43,8 +43,9 @@ echo "Backend WS:  $BACKEND_WS"
 # Generate runtime config for the app (safe, public values only).
 # This lets us set DOCS_URL without rebuilding the frontend image.
 if [ -f /app/.output/public/env.template.js ]; then
-    envsubst '$DOCS_URL' < /app/.output/public/env.template.js > /app/.output/public/env.js
+    envsubst '$DOCS_URL $FLOW_NETWORK' < /app/.output/public/env.template.js > /app/.output/public/env.js
     echo "Docs URL:    ${DOCS_URL:-}"
+    echo "Network:     ${FLOW_NETWORK:-mainnet}"
 fi
 
 # Nginx listens on PORT (Railway/GCP sets this); SSR server on a separate internal port.

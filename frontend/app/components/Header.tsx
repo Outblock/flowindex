@@ -4,6 +4,7 @@ import { Search, Menu, X } from 'lucide-react';
 import { useWebSocketStatus } from '../hooks/useWebSocket';
 import { useMobileMenu } from '../contexts/MobileMenuContext';
 import { resolveApiBaseUrl } from '../api';
+import { network } from '../fclConfig';
 
 function Header() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -120,7 +121,7 @@ function Header() {
           <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest text-zinc-500">
             <div className="flex items-center gap-2">
               <span>Network</span>
-              <span className="text-zinc-900 dark:text-white">Mainnet</span>
+              <span className="text-zinc-900 dark:text-white capitalize">{network}</span>
             </div>
             <div className={`flex items-center gap-2 px-3 py-1.5 border rounded-sm ${isConnected ? 'bg-nothing-green/10 border-nothing-green/30' : 'bg-zinc-200 dark:bg-white/5 border-zinc-300 dark:border-white/10'}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-nothing-green animate-pulse' : 'bg-gray-500'}`} />

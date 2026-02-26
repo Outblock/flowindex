@@ -2,5 +2,6 @@
 // Do not put secrets here; it is publicly served.
 window.__FLOWSCAN_ENV__ = {
   DOCS_URL: "${DOCS_URL}",
+  FLOW_NETWORK: "${FLOW_NETWORK}",
 };
 
