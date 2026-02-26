@@ -270,7 +270,7 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 			WHERE DATE(t.timestamp) IN (SELECT d FROM affected_dates)
 			  AND t.timestamp IS NOT NULL
 			GROUP BY DATE(t.timestamp)
-		),
+		)
 		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, active_accounts, failed_tx_count, updated_at)
 		SELECT
 			a.date, a.tx_count, a.evm_tx_count, a.total_gas_used, a.active_accounts,
