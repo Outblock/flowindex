@@ -18,38 +18,23 @@ type AnalyticsDailyRow struct {
 	AvgGasPerTx    float64 `json:"avg_gas_per_tx"`
 }
 
-// GetAnalyticsDailyStats returns enriched daily stats with error rates and computed fields.
+// GetAnalyticsDailyStats returns daily stats from the pre-computed daily_stats table.
+// Error rate fields (failed_tx_count, error_rate) return 0 for now — to be added
+// as pre-computed columns in daily_stats by the DailyStatsWorker later.
 func (r *Repository) GetAnalyticsDailyStats(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
 	query := `
-		WITH ds AS (
-			SELECT date, tx_count, COALESCE(evm_tx_count, 0) AS evm_tx_count,
-				COALESCE(total_gas_used, 0) AS total_gas_used,
-				active_accounts, new_contracts
-			FROM app.daily_stats
-			WHERE date >= $1::date AND date <= $2::date
-			ORDER BY date ASC
-		),
-		errors AS (
-			SELECT date_trunc('day', l.timestamp)::date AS date,
-				COUNT(*) FILTER (WHERE m.execution_status IS NOT NULL AND m.execution_status <> '0' AND m.execution_status <> '') AS failed_count
-			FROM app.tx_metrics m
-			JOIN raw.tx_lookup l ON l.id = m.transaction_id AND l.block_height = m.block_height
-			WHERE l.timestamp >= $1::timestamptz AND l.timestamp < ($2::date + interval '1 day')
-			GROUP BY 1
-		)
-		SELECT ds.date::text, ds.tx_count, ds.evm_tx_count,
-			(ds.tx_count - ds.evm_tx_count) AS cadence_tx_count,
-			ds.total_gas_used, ds.active_accounts, ds.new_contracts,
-			COALESCE(e.failed_count, 0) AS failed_tx_count,
-			CASE WHEN ds.tx_count > 0
-				THEN ROUND((COALESCE(e.failed_count, 0)::numeric / ds.tx_count * 100), 2)
-				ELSE 0 END AS error_rate,
-			CASE WHEN ds.tx_count > 0
-				THEN ROUND((ds.total_gas_used::numeric / ds.tx_count), 2)
+		SELECT date::text, tx_count, COALESCE(evm_tx_count, 0) AS evm_tx_count,
+			(tx_count - COALESCE(evm_tx_count, 0)) AS cadence_tx_count,
+			COALESCE(total_gas_used, 0) AS total_gas_used,
+			COALESCE(active_accounts, 0), COALESCE(new_contracts, 0),
+			0 AS failed_tx_count,
+			0 AS error_rate,
+			CASE WHEN tx_count > 0 AND COALESCE(total_gas_used, 0) > 0
+				THEN ROUND((COALESCE(total_gas_used, 0)::numeric / tx_count), 2)
 				ELSE 0 END AS avg_gas_per_tx
-		FROM ds
-		LEFT JOIN errors e ON e.date = ds.date
-		ORDER BY ds.date ASC`
+		FROM app.daily_stats
+		WHERE date >= $1::date AND date <= $2::date
+		ORDER BY date ASC`
 
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
