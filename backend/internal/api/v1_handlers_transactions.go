@@ -59,7 +59,8 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
 		ts := transferSummaries[t.ID]
-		o := toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta)
+		ftPrices := s.buildFTPrices(ftMeta, t.Timestamp)
+		o := toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta, ftPrices)
 		if fee := feesByTx[t.ID]; fee > 0 {
 			if p, ok := s.priceCache.GetPriceAt("FLOW", t.Timestamp); ok {
 				o["fee_usd"] = fee * p

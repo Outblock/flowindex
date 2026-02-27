@@ -563,9 +563,9 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                     // Enrich derived ft_transfers with logo/symbol/name from transfer_summary
                     const summaryFT: any[] = tx.transfer_summary?.ft || [];
                     if (summaryFT.length > 0 && derived.ft_transfers.length > 0) {
-                        const metaByToken = new Map<string, { logo?: string; symbol?: string; name?: string }>();
+                        const metaByToken = new Map<string, { logo?: string; symbol?: string; name?: string; usd_price?: number }>();
                         for (const sf of summaryFT) {
-                            if (sf.token) metaByToken.set(sf.token, { logo: sf.logo, symbol: sf.symbol, name: sf.name });
+                            if (sf.token) metaByToken.set(sf.token, { logo: sf.logo, symbol: sf.symbol, name: sf.name, usd_price: sf.usd_price });
                         }
                         for (const ft of derived.ft_transfers) {
                             const meta = metaByToken.get(ft.token);
@@ -573,6 +573,7 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                                 if (meta.logo && !ft.token_logo) ft.token_logo = meta.logo;
                                 if (meta.symbol && !ft.token_symbol) ft.token_symbol = meta.symbol;
                                 if (meta.name && !ft.token_name) ft.token_name = meta.name;
+                                if (meta.usd_price && !ft.usd_value) ft.usd_value = Number(ft.amount) * meta.usd_price;
                             }
                         }
                     }

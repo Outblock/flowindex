@@ -1225,10 +1225,10 @@ function TransactionDetail() {
                                                             <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">
                                                                 {ft.amount != null ? Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
                                                             </span>
-                                                            {ft.usd_value > 0 && <UsdValue value={ft.usd_value} className="text-[10px]" />}
                                                             <span className="text-[10px] text-zinc-500 font-medium uppercase">
                                                                 {ft.token_symbol || ft.token?.split('.').pop() || ''}
                                                             </span>
+                                                            {ft.usd_value > 0 && <UsdValue value={ft.usd_value} className="text-[10px]" />}
                                                             {ft.transfer_type === 'mint' && (
                                                                 <span className="text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
                                                                     Mint

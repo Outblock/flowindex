@@ -22,6 +22,11 @@ export interface FTTransfer {
   evm_to_address?: string;
   /** Actual EVM source when the Cadence-level `from` is a COA bridge */
   evm_from_address?: string;
+  /** Display fields enriched from transfer_summary metadata */
+  token_logo?: string;
+  token_symbol?: string;
+  token_name?: string;
+  usd_value?: number;
 }
 
 export interface NFTTransfer {
