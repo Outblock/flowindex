@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
@@ -185,6 +186,13 @@ type decodedEVMTx struct {
 }
 
 func decodeEVMTransactionPayload(payload []byte) (decodedEVMTx, bool) {
+	// Flow "direct call" transactions start with 0xff prefix and use a custom RLP format:
+	//   0xff || RLP([nonce, subType, from, to, data, value, gasLimit, ...])
+	// go-ethereum cannot decode these, so we handle them separately.
+	if len(payload) > 1 && payload[0] == 0xff {
+		return decodeFlowDirectCall(payload[1:])
+	}
+
 	var tx types.Transaction
 	if err := tx.UnmarshalBinary(payload); err != nil {
 		if err := rlp.DecodeBytes(payload, &tx); err != nil {
@@ -227,5 +235,76 @@ func decodeEVMTransactionPayload(payload []byte) (decodedEVMTx, bool) {
 	if chainID := tx.ChainId(); chainID != nil {
 		decoded.ChainID = chainID.String()
 	}
+	return decoded, true
+}
+
+// decodeFlowDirectCall decodes a Flow EVM "direct call" payload (after 0xff prefix stripped).
+// Format: RLP([nonce, subType, from(20B), to(20B), data, value, gasLimit, accessList])
+func decodeFlowDirectCall(data []byte) (decodedEVMTx, bool) {
+	// Use rlp.Stream to handle variable number of fields gracefully.
+	s := rlp.NewStream(bytes.NewReader(data), 0)
+	_, err := s.List()
+	if err != nil {
+		return decodedEVMTx{}, false
+	}
+
+	var decoded decodedEVMTx
+
+	// Field 1: nonce (uint64)
+	if nonce, err := s.Uint64(); err == nil {
+		decoded.Nonce = nonce
+	} else {
+		return decodedEVMTx{}, false
+	}
+
+	// Field 2: subType (uint8) — skip
+	if _, err := s.Uint64(); err != nil {
+		return decodedEVMTx{}, false
+	}
+
+	// Field 3: from address (20 bytes)
+	var fromAddr [20]byte
+	if fromBytes, err := s.Bytes(); err == nil && len(fromBytes) == 20 {
+		copy(fromAddr[:], fromBytes)
+		decoded.From = hex.EncodeToString(fromAddr[:])
+	} else {
+		return decodedEVMTx{}, false
+	}
+
+	// Field 4: to address (20 bytes)
+	if toBytes, err := s.Bytes(); err == nil && len(toBytes) == 20 {
+		isZero := true
+		for _, b := range toBytes {
+			if b != 0 {
+				isZero = false
+				break
+			}
+		}
+		if !isZero {
+			decoded.To = hex.EncodeToString(toBytes)
+		}
+	} else {
+		return decodedEVMTx{}, false
+	}
+
+	// Field 5: data (bytes)
+	if dataBytes, err := s.Bytes(); err == nil && len(dataBytes) > 0 {
+		decoded.Data = hex.EncodeToString(dataBytes)
+	}
+
+	// Field 6: value (big.Int encoded as bytes)
+	if valBytes, err := s.Bytes(); err == nil && len(valBytes) > 0 {
+		decoded.Value = new(big.Int).SetBytes(valBytes).String()
+	}
+
+	// Field 7: gasLimit (uint64 or bytes)
+	if gasBytes, err := s.Bytes(); err == nil && len(gasBytes) > 0 {
+		decoded.GasLimit = new(big.Int).SetBytes(gasBytes).Uint64()
+	} else {
+		// Try as uint
+		// Already consumed, skip
+	}
+
+	// Remaining fields are ignored (accessList, etc.)
 	return decoded, true
 }

@@ -24,6 +24,81 @@ import { UsdValue } from '../../components/UsdValue';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
+/** Decode a Flow EVM "direct call" raw_tx_payload (0xff-prefixed RLP).
+ *  Returns decoded fields or null if not a direct call or decode fails.
+ *  Format: 0xff || RLP([nonce, subType, from(20B), to(20B), data, value, gasLimit, ...])
+ */
+function decodeFlowDirectCallPayload(hexPayload: string): {
+    nonce: number; subType: number; from: string; to: string;
+    data: string; value: string; gasLimit: string;
+} | null {
+    try {
+        let hex = hexPayload.replace(/^0x/, '').toLowerCase();
+        if (!hex.startsWith('ff') || hex.length < 10) return null;
+        hex = hex.slice(2); // strip 0xff prefix
+        const bytes = new Uint8Array(hex.match(/.{2}/g)!.map(b => parseInt(b, 16)));
+
+        let pos = 0;
+        // Decode RLP list header
+        if (bytes[pos] >= 0xf8) {
+            const lenBytes = bytes[pos] - 0xf7;
+            pos += 1 + lenBytes;
+        } else if (bytes[pos] >= 0xc0) {
+            pos += 1;
+        } else {
+            return null;
+        }
+
+        function readItem(): Uint8Array {
+            if (pos >= bytes.length) return new Uint8Array(0);
+            const b = bytes[pos];
+            if (b <= 0x7f) { pos++; return new Uint8Array([b]); }
+            if (b <= 0xb7) { const len = b - 0x80; pos++; const out = bytes.slice(pos, pos + len); pos += len; return out; }
+            if (b <= 0xbf) { const lenLen = b - 0xb7; pos++; let len = 0; for (let i = 0; i < lenLen; i++) len = (len << 8) | bytes[pos + i]; pos += lenLen; const out = bytes.slice(pos, pos + len); pos += len; return out; }
+            return new Uint8Array(0);
+        }
+        function bytesToHex(b: Uint8Array): string { return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(''); }
+        function bytesToBigInt(b: Uint8Array): string {
+            if (b.length === 0) return '0';
+            let n = BigInt(0);
+            for (const byte of b) n = (n << BigInt(8)) | BigInt(byte);
+            return n.toString();
+        }
+
+        const nonceBytes = readItem(); // field 1: nonce
+        const subTypeBytes = readItem(); // field 2: subType
+        const fromBytes = readItem(); // field 3: from (20 bytes)
+        const toBytes = readItem(); // field 4: to (20 bytes)
+        const dataBytes = readItem(); // field 5: data
+        const valueBytes = readItem(); // field 6: value
+        const gasLimitBytes = readItem(); // field 7: gasLimit
+
+        const nonce = nonceBytes.length > 0 ? Number(bytesToBigInt(nonceBytes)) : 0;
+        const subType = subTypeBytes.length > 0 ? subTypeBytes[0] : 0;
+        const from = fromBytes.length === 20 ? '0x' + bytesToHex(fromBytes) : '';
+        const toHex = bytesToHex(toBytes);
+        const to = toBytes.length === 20 && !/^0{40}$/.test(toHex) ? '0x' + toHex : '';
+        const data = dataBytes.length > 0 ? '0x' + bytesToHex(dataBytes) : '';
+
+        // Convert value from attoFLOW (10^18) to FLOW
+        const valueBig = bytesToBigInt(valueBytes);
+        let valueFlow: string;
+        if (valueBig === '0') {
+            valueFlow = '0';
+        } else {
+            const str = valueBig.padStart(19, '0');
+            const intPart = str.slice(0, str.length - 18) || '0';
+            const fracPart = str.slice(str.length - 18).replace(/0+$/, '');
+            valueFlow = fracPart ? `${intPart}.${fracPart}` : intPart;
+        }
+
+        const gasLimit = bytesToBigInt(gasLimitBytes);
+        return { nonce, subType, from, to, data, value: valueFlow, gasLimit };
+    } catch {
+        return null;
+    }
+}
+
 /** Strip surrounding quotes and whitespace from URLs (backend sometimes stores `"https://..."`) */
 function cleanUrl(url: string | undefined | null): string {
     if (!url) return '';
@@ -531,18 +606,76 @@ function TransactionDetail() {
             });
         }
 
-        // For ft_transfers: prefer API enrichment (has usd_value), fall back to derived, then SSR
-        const ftTransfers = apiEnrichment?.ft_transfers?.length > 0
+        // For ft_transfers: prefer API enrichment (has usd_value), fall back to derived, then SSR.
+        // Merge transfer_type + evm_to/from_address from derived enrichments into API data.
+        const derivedFt = enrichments?.ft_transfers;
+        let ftTransfers = apiEnrichment?.ft_transfers?.length > 0
             ? apiEnrichment.ft_transfers
-            : (enrichments?.ft_transfers?.length > 0 ? enrichments.ft_transfers : transaction?.ft_transfers);
+            : ((derivedFt && derivedFt.length > 0) ? derivedFt : transaction?.ft_transfers);
+        if (ftTransfers && enrichments?.ft_transfers && enrichments.ft_transfers.length > 0 && ftTransfers !== enrichments.ft_transfers) {
+            // API data lacks transfer_type and evm addresses — merge from derived enrichments
+            const derivedByKey = new Map<string, any>();
+            for (const ft of enrichments!.ft_transfers) {
+                derivedByKey.set(`${ft.token}:${ft.event_index}`, ft);
+            }
+            ftTransfers = ftTransfers.map((ft: any) => {
+                const derived = derivedByKey.get(`${ft.token}:${ft.event_index}`);
+                if (!derived) return ft;
+                return {
+                    ...ft,
+                    transfer_type: ft.transfer_type || derived.transfer_type,
+                    evm_to_address: ft.evm_to_address || derived.evm_to_address,
+                    evm_from_address: ft.evm_from_address || derived.evm_from_address,
+                };
+            });
+        }
+
+        // Prefer API evm_executions (backend decodes RLP payload → proper from/to),
+        // fall back to derived (Cadence event fields may have null from/to).
+        const evmExecs = (apiEnrichment?.evm_executions?.length > 0 ? apiEnrichment.evm_executions : enrichments?.evm_executions) || transaction?.evm_executions || [];
+
+        // Enrich cross-VM FT transfers with actual EVM destination from decoded EVM executions.
+        // When FLOW goes to a COA (bridge), the EVM execution reveals the real EVM recipient.
+        if (evmExecs.length > 0 && ftTransfers?.length > 0) {
+            const isCOA = (addr: string) => {
+                const hex = addr?.replace(/^0x/, '').toLowerCase() || '';
+                return hex.length > 16 && /^0{10,}/.test(hex);
+            };
+            ftTransfers = ftTransfers.map((ft: any) => {
+                if (!ft.token?.includes?.('FlowToken')) return ft;
+                const toHex = ft.to_address?.replace(/^0x/, '').toLowerCase() || '';
+                const fromHex = ft.from_address?.replace(/^0x/, '').toLowerCase() || '';
+                let evmTo = ft.evm_to_address;
+                let evmFrom = ft.evm_from_address;
+                if (!evmTo && isCOA(ft.to_address)) {
+                    // Find EVM execution where COA sends value to the actual recipient
+                    const exec = evmExecs.find((e: any) =>
+                        e.from?.replace(/^0x/, '').toLowerCase() === toHex &&
+                        e.to && parseFloat(e.value) > 0
+                    );
+                    if (exec) evmTo = exec.to;
+                }
+                if (!evmFrom && isCOA(ft.from_address)) {
+                    const exec = evmExecs.find((e: any) =>
+                        e.to?.replace(/^0x/, '').toLowerCase() === fromHex &&
+                        e.from && parseFloat(e.value) > 0
+                    );
+                    if (exec) evmFrom = exec.from;
+                }
+                if (evmTo || evmFrom) {
+                    return { ...ft, evm_to_address: evmTo || ft.evm_to_address, evm_from_address: evmFrom || ft.evm_from_address };
+                }
+                return ft;
+            });
+        }
 
         return {
             ...transaction,
             ft_transfers: ftTransfers,
             nft_transfers: mergedNfts.length > 0 ? mergedNfts : apiNfts,
             defi_events: apiEnrichment?.defi_events?.length > 0 ? apiEnrichment.defi_events : transaction?.defi_events,
-            evm_executions: (enrichments?.evm_executions?.length > 0 ? enrichments.evm_executions : apiEnrichment?.evm_executions) || transaction?.evm_executions,
-            contract_imports: (enrichments?.contract_imports?.length > 0 ? enrichments.contract_imports : apiEnrichment?.contract_imports) || transaction?.contract_imports,
+            evm_executions: evmExecs,
+            contract_imports: (enrichments?.contract_imports && enrichments.contract_imports.length > 0 ? enrichments.contract_imports : apiEnrichment?.contract_imports) || transaction?.contract_imports,
             fee: enrichments?.fee || apiEnrichment?.fee || transaction?.fee,
             fee_usd: apiEnrichment?.fee_usd || transaction?.fee_usd,
         };
@@ -1062,23 +1195,41 @@ function TransactionDetail() {
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5">
-                                                            {ft.from_address && (
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5 flex-wrap">
+                                                            {(ft.evm_from_address || ft.from_address) && (
                                                                 <span className="inline-flex items-center gap-1">
                                                                     From{' '}
-                                                                    <AddressLink address={ft.from_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
-                                                                    {ft.from_coa_flow_address && (
-                                                                        <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={ft.from_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
+                                                                    {ft.evm_from_address ? (
+                                                                        <>
+                                                                            <AddressLink address={ft.evm_from_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />
+                                                                            <span className="text-purple-400 text-[9px]">(EVM)</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <AddressLink address={ft.from_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
+                                                                            {ft.from_coa_flow_address && (
+                                                                                <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={ft.from_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
+                                                                            )}
+                                                                        </>
                                                                     )}
                                                                 </span>
                                                             )}
-                                                            {ft.from_address && ft.to_address && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
-                                                            {ft.to_address && (
+                                                            {(ft.evm_from_address || ft.from_address) && (ft.evm_to_address || ft.to_address) && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
+                                                            {(ft.evm_to_address || ft.to_address) && (
                                                                 <span className="inline-flex items-center gap-1">
                                                                     To{' '}
-                                                                    <AddressLink address={ft.to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
-                                                                    {ft.to_coa_flow_address && (
-                                                                        <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={ft.to_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
+                                                                    {ft.evm_to_address ? (
+                                                                        <>
+                                                                            <AddressLink address={ft.evm_to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />
+                                                                            <span className="text-purple-400 text-[9px]">(EVM)</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <AddressLink address={ft.to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
+                                                                            {ft.to_coa_flow_address && (
+                                                                                <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={ft.to_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
+                                                                            )}
+                                                                        </>
                                                                     )}
                                                                 </span>
                                                             )}
@@ -1469,7 +1620,7 @@ function TransactionDetail() {
                                                     </div>
                                                 </div>
 
-                                                {/* Collapsible Decoded EVM Payload */}
+                                                {/* Decoded EVM Payload + Raw TX Payload tabs */}
                                                 {(() => {
                                                     // Build decoded EVM payload from execution data
                                                     const decodedPayload: Record<string, any> = {
@@ -1493,16 +1644,25 @@ function TransactionDetail() {
                                                         (e: any) => e.event_index === exec.event_index
                                                     );
                                                     const eventPayload = matchedEvent?.values || matchedEvent?.payload || matchedEvent?.data;
+                                                    let rawTxPayloadHex: string | null = null;
                                                     if (eventPayload) {
                                                         const formatted = formatEventPayload(eventPayload);
-                                                        if (formatted.payload) decodedPayload.raw_tx_payload = formatted.payload;
+                                                        if (formatted.payload) {
+                                                            rawTxPayloadHex = formatted.payload;
+                                                            decodedPayload.raw_tx_payload = formatted.payload;
+                                                        }
                                                         if (formatted.logs) decodedPayload.logs = formatted.logs;
                                                         if (formatted.returnedData) decodedPayload.returned_data = formatted.returnedData;
                                                         if (formatted.errorMessage) decodedPayload.error_message = formatted.errorMessage;
                                                         if (formatted.errorCode && formatted.errorCode !== '0') decodedPayload.error_code = formatted.errorCode;
                                                         if (formatted.contractAddress) decodedPayload.contract_address = formatted.contractAddress;
                                                     }
+                                                    // Try to decode the raw_tx_payload (Flow direct call 0xff format)
+                                                    const decodedRawTx = rawTxPayloadHex ? decodeFlowDirectCallPayload(rawTxPayloadHex) : null;
+
                                                     const isExpanded = expandedPayloads[idx] ?? false;
+                                                    const payloadTabKey = `evm_payload_tab_${idx}`;
+                                                    const activePayloadTab = (expandedPayloads as any)[payloadTabKey] || 'evm';
                                                     return (
                                                         <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
                                                             <button
@@ -1511,7 +1671,7 @@ function TransactionDetail() {
                                                             >
                                                                 <span className="text-[10px] text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                                                                     <Database className="h-3 w-3" />
-                                                                    Decoded EVM Payload
+                                                                    Decoded Payload
                                                                 </span>
                                                                 <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                                                             </button>
@@ -1520,10 +1680,43 @@ function TransactionDetail() {
                                                                 style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
                                                             >
                                                                 <div className="overflow-hidden">
+                                                                    {/* Sub-tabs: EVM Payload | Raw TX Payload */}
+                                                                    {decodedRawTx && (
+                                                                        <div className="flex border-b border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-black/30">
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); setExpandedPayloads(prev => ({ ...prev, [payloadTabKey]: 'evm' })); }}
+                                                                                className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors ${activePayloadTab === 'evm' ? 'text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
+                                                                            >
+                                                                                EVM Payload
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); setExpandedPayloads(prev => ({ ...prev, [payloadTabKey]: 'raw' })); }}
+                                                                                className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors ${activePayloadTab === 'raw' ? 'text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
+                                                                            >
+                                                                                Raw TX Payload
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
                                                                     <div className="p-4 bg-zinc-50 dark:bg-black/40 border-t border-zinc-200 dark:border-white/5 max-h-[400px] overflow-y-auto">
-                                                                        <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
-                                                                            {JSON.stringify(decodedPayload, null, 2)}
-                                                                        </pre>
+                                                                        {activePayloadTab === 'raw' && decodedRawTx ? (
+                                                                            <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+                                                                                {JSON.stringify({
+                                                                                    type: 'Flow Direct Call (0xff)',
+                                                                                    nonce: decodedRawTx.nonce,
+                                                                                    sub_type: decodedRawTx.subType,
+                                                                                    from: decodedRawTx.from || null,
+                                                                                    to: decodedRawTx.to || 'Contract Creation',
+                                                                                    data: decodedRawTx.data || null,
+                                                                                    value: `${decodedRawTx.value} FLOW`,
+                                                                                    gas_limit: decodedRawTx.gasLimit,
+                                                                                    raw: rawTxPayloadHex,
+                                                                                }, null, 2)}
+                                                                            </pre>
+                                                                        ) : (
+                                                                            <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
+                                                                                {JSON.stringify(decodedPayload, null, 2)}
+                                                                            </pre>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>

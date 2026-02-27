@@ -18,6 +18,10 @@ export interface FTTransfer {
   amount: string;
   event_index: number;
   transfer_type: TransferType;
+  /** Actual EVM destination when the Cadence-level `to` is a COA bridge */
+  evm_to_address?: string;
+  /** Actual EVM source when the Cadence-level `from` is a COA bridge */
+  evm_from_address?: string;
 }
 
 export interface NFTTransfer {
@@ -155,9 +159,20 @@ function formatAddr(addr: string): string {
 const WRAPPER_CONTRACTS = new Set(['FungibleToken', 'NonFungibleToken']);
 const FEE_VAULT_ADDRESS = 'f919ee77447b7497';
 
+const STAKING_CONTRACTS = new Set([
+  'FlowIDTableStaking', 'FlowStakingCollection', 'LockedTokens', 'FlowEpoch',
+  'FlowDKG', 'FlowClusterQC',
+]);
+
 function classifyTokenEvent(eventType: string): { isToken: boolean; isNFT: boolean } {
+  const contractName = parseContractName(eventType);
   // EVM bridge events (EVM.FLOWTokensWithdrawn/Deposited) are NOT standard FT events
-  if (parseContractName(eventType) === 'EVM') {
+  if (contractName === 'EVM') {
+    return { isToken: false, isNFT: false };
+  }
+  // Staking/epoch contract events (e.g. FlowIDTableStaking.TokensWithdrawn) are NOT
+  // token transfer events — they track staking state changes, not FT movements.
+  if (STAKING_CONTRACTS.has(contractName)) {
     return { isToken: false, isNFT: false };
   }
   if (eventType.includes('NonFungibleToken.') &&
@@ -669,6 +684,40 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
         event_index: t.eventIndex,
         transfer_type: transferType,
       });
+    }
+  }
+
+  // Enrich cross-VM FlowToken transfers with actual EVM destination/source
+  // from EVM.TransactionExecuted events. The Cadence-level transfer only sees the
+  // COA bridge address, but the EVM execution reveals the true recipient/sender.
+  if (evmExecutions.length > 0 && ftTransfers.length > 0) {
+    for (const ft of ftTransfers) {
+      if (!ft.token.includes('FlowToken')) continue;
+      const toNorm = normalizeFlowAddress(ft.to_address);
+      const fromNorm = normalizeFlowAddress(ft.from_address);
+      // COA addresses: 40 hex chars with 10+ leading zeros
+      const isToCOA = toNorm.length > 16 && /^0{10,}/.test(toNorm);
+      const isFromCOA = fromNorm.length > 16 && /^0{10,}/.test(fromNorm);
+      if (isToCOA) {
+        // FLOW going Cadence → EVM: find EVM execution from the COA with value > 0
+        const exec = evmExecutions.find(e => {
+          const execFrom = normalizeFlowAddress(e.from);
+          return execFrom === toNorm && e.to && parseFloat(e.value) > 0;
+        });
+        if (exec) {
+          ft.evm_to_address = exec.to;
+        }
+      }
+      if (isFromCOA) {
+        // FLOW going EVM → Cadence: find EVM execution to the COA with value > 0
+        const exec = evmExecutions.find(e => {
+          const execTo = normalizeFlowAddress(e.to);
+          return execTo === fromNorm && e.from && parseFloat(e.value) > 0;
+        });
+        if (exec) {
+          ft.evm_from_address = exec.from;
+        }
+      }
     }
   }
 
