@@ -33,6 +33,7 @@ import { Route as TokensTokenRouteImport } from './routes/tokens/$token'
 import { Route as NftsNftTypeRouteImport } from './routes/nfts/$nftType'
 import { Route as KeyPublicKeyRouteImport } from './routes/key/$publicKey'
 import { Route as DeveloperLoginRouteImport } from './routes/developer/login'
+import { Route as DeveloperKeysRouteImport } from './routes/developer/keys'
 import { Route as DeveloperCallbackRouteImport } from './routes/developer/callback'
 import { Route as ContractsIdRouteImport } from './routes/contracts/$id'
 import { Route as BlocksHeightRouteImport } from './routes/blocks/$height'
@@ -161,6 +162,11 @@ const DeveloperLoginRoute = DeveloperLoginRouteImport.update({
   path: '/developer/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DeveloperKeysRoute = DeveloperKeysRouteImport.update({
+  id: '/developer/keys',
+  path: '/developer/keys',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DeveloperCallbackRoute = DeveloperCallbackRouteImport.update({
   id: '/developer/callback',
   path: '/developer/callback',
@@ -209,6 +215,7 @@ export interface FileRoutesByFullPath {
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
   '/developer/callback': typeof DeveloperCallbackRoute
+  '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
@@ -242,6 +249,7 @@ export interface FileRoutesByTo {
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
   '/developer/callback': typeof DeveloperCallbackRoute
+  '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/tokens/$token': typeof TokensTokenRoute
@@ -275,6 +283,7 @@ export interface FileRoutesById {
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
   '/developer/callback': typeof DeveloperCallbackRoute
+  '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
@@ -310,6 +319,7 @@ export interface FileRouteTypes {
     | '/blocks/$height'
     | '/contracts/$id'
     | '/developer/callback'
+    | '/developer/keys'
     | '/developer/login'
     | '/key/$publicKey'
     | '/nfts/$nftType'
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
     | '/blocks/$height'
     | '/contracts/$id'
     | '/developer/callback'
+    | '/developer/keys'
     | '/developer/login'
     | '/key/$publicKey'
     | '/tokens/$token'
@@ -375,6 +386,7 @@ export interface FileRouteTypes {
     | '/blocks/$height'
     | '/contracts/$id'
     | '/developer/callback'
+    | '/developer/keys'
     | '/developer/login'
     | '/key/$publicKey'
     | '/nfts/$nftType'
@@ -409,6 +421,7 @@ export interface RootRouteChildren {
   BlocksHeightRoute: typeof BlocksHeightRoute
   ContractsIdRoute: typeof ContractsIdRoute
   DeveloperCallbackRoute: typeof DeveloperCallbackRoute
+  DeveloperKeysRoute: typeof DeveloperKeysRoute
   DeveloperLoginRoute: typeof DeveloperLoginRoute
   KeyPublicKeyRoute: typeof KeyPublicKeyRoute
   NftsNftTypeRoute: typeof NftsNftTypeRouteWithChildren
@@ -599,6 +612,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DeveloperLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/developer/keys': {
+      id: '/developer/keys'
+      path: '/developer/keys'
+      fullPath: '/developer/keys'
+      preLoaderRoute: typeof DeveloperKeysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/developer/callback': {
       id: '/developer/callback'
       path: '/developer/callback'
@@ -677,6 +697,7 @@ const rootRouteChildren: RootRouteChildren = {
   BlocksHeightRoute: BlocksHeightRoute,
   ContractsIdRoute: ContractsIdRoute,
   DeveloperCallbackRoute: DeveloperCallbackRoute,
+  DeveloperKeysRoute: DeveloperKeysRoute,
   DeveloperLoginRoute: DeveloperLoginRoute,
   KeyPublicKeyRoute: KeyPublicKeyRoute,
   NftsNftTypeRoute: NftsNftTypeRouteWithChildren,
