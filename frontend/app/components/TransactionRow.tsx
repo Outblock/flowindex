@@ -10,6 +10,7 @@ import { resolveApiBaseUrl } from '../api';
 import { deriveEnrichments } from '../lib/deriveFromEvents';
 import { cadenceService } from '../fclConfig';
 import { NFTDetailModal } from './NFTDetailModal';
+import { UsdValue } from './UsdValue';
 
 // --- Interfaces ---
 
@@ -703,6 +704,7 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                                         {Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })}
                                     </span>
                                     <span className="text-zinc-500">{displayName}</span>
+                                    {ft.usd_value > 0 && <UsdValue value={ft.usd_value} className="text-[10px]" />}
                                     {isMint && <span className="text-[9px] px-1 py-0.5 rounded border border-lime-300 dark:border-lime-500/30 text-lime-600 dark:text-lime-400 bg-lime-50 dark:bg-lime-500/10 font-semibold">MINT</span>}
                                     {isBurn && <span className="text-[9px] px-1 py-0.5 rounded border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 font-semibold">BURN</span>}
                                     {ft.from_address && ft.to_address && (
