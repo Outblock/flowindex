@@ -1,28 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Fish, ArrowRight, ArrowDown, ArrowUp, Repeat, Zap } from 'lucide-react';
+import Avatar from 'boring-avatars';
+import { Fish, ArrowRight } from 'lucide-react';
 import { fetchBigTransfers, type BigTransfer } from '../api/heyapi';
-
-const TYPE_CONFIG: Record<string, { label: string; icon: typeof Fish; color: string }> = {
-  mint: { label: 'Mint', icon: ArrowDown, color: 'text-green-500' },
-  burn: { label: 'Burn', icon: ArrowUp, color: 'text-red-500' },
-  transfer: { label: 'Transfer', icon: ArrowRight, color: 'text-blue-500' },
-  swap: { label: 'Swap', icon: Repeat, color: 'text-purple-500' },
-  bridge: { label: 'Bridge', icon: Zap, color: 'text-orange-500' },
-};
+import { colorsFromAddress } from './AddressLink';
 
 function formatUSD(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
+  return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatAmount(amount: string): string {
   const num = parseFloat(amount);
   if (isNaN(num)) return amount;
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(2)}K`;
-  return num.toFixed(2);
+  return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 function timeAgo(timestamp: string): string {
@@ -35,41 +25,85 @@ function timeAgo(timestamp: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function formatAddr(addr: string, len = 6): string {
-  if (!addr) return '—';
+function formatAddr(addr: string): string {
+  if (!addr) return '';
   const hex = addr.startsWith('0x') ? addr : `0x${addr}`;
-  if (hex.length <= len * 2 + 4) return hex;
-  return `${hex.slice(0, len + 2)}…${hex.slice(-len)}`;
+  if (hex.length <= 16) return hex;
+  return `${hex.slice(0, 8)}...${hex.slice(-4)}`;
+}
+
+function avatarVariant(addr: string): 'beam' | 'bauhaus' | 'pixel' {
+  const hex = addr.replace(/^0x/, '');
+  if (hex.length <= 16) return 'beam';
+  if (/^0{10,}/.test(hex)) return 'bauhaus';
+  return 'pixel';
+}
+
+function TokenIcon({ logo, symbol, size = 24 }: { logo?: string; symbol: string; size?: number }) {
+  if (logo) {
+    return (
+      <img
+        src={logo}
+        alt={symbol}
+        className="rounded-full object-cover"
+        style={{ width: size, height: size }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full bg-nothing-green/20 text-nothing-green-dark dark:text-nothing-green text-[10px] font-bold font-mono flex items-center justify-center"
+      style={{ width: size, height: size }}
+    >
+      {(symbol || '?').charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+function AddressWithAvatar({ address }: { address: string }) {
+  if (!address) return <span className="text-zinc-400 dark:text-gray-500">—</span>;
+  const normalized = address.startsWith('0x') ? address : `0x${address}`;
+  const colors = colorsFromAddress(normalized);
+  return (
+    <Link
+      to={`/accounts/${address}` as any}
+      className="inline-flex items-center gap-1 hover:underline"
+      onClick={(e: React.MouseEvent) => e.stopPropagation()}
+    >
+      <Avatar size={14} name={normalized} variant={avatarVariant(normalized)} colors={colors} />
+      <span>{formatAddr(address)}</span>
+    </Link>
+  );
 }
 
 function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boolean }) {
-  const cfg = TYPE_CONFIG[tx.type] || TYPE_CONFIG.transfer;
-  const Icon = cfg.icon;
   return (
     <Link
       to={`/tx/0x${tx.tx_id}` as any}
-      className="flex items-center gap-3 px-3 py-3 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors border-b border-zinc-100 dark:border-white/5 last:border-b-0"
+      className="flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors border-b border-zinc-100 dark:border-white/5 last:border-b-0"
     >
-      <div className={`p-1.5 border border-zinc-200 dark:border-white/10 rounded-sm ${cfg.color}`}>
-        <Icon className="h-3.5 w-3.5" />
-      </div>
+      <TokenIcon logo={tx.token_logo} symbol={tx.token_symbol} size={compact ? 20 : 24} />
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-mono font-bold uppercase ${cfg.color}`}>{cfg.label}</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-mono text-zinc-900 dark:text-white font-bold">
-            {formatAmount(tx.amount)} {tx.token_symbol}
+            {formatAmount(tx.amount)}
           </span>
+          <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500">≈</span>
           <span className="text-xs font-mono font-bold text-nothing-green-dark dark:text-nothing-green">
             {formatUSD(tx.usd_value)}
           </span>
+          <span className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase">
+            {tx.token_symbol}
+          </span>
         </div>
-        {!compact && (
-          <div className="flex items-center gap-1 mt-0.5 text-[10px] font-mono text-zinc-400 dark:text-gray-500">
-            <span>{formatAddr(tx.from_address)}</span>
-            <ArrowRight className="h-2.5 w-2.5" />
-            <span>{formatAddr(tx.to_address)}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1 mt-0.5 text-[10px] font-mono text-zinc-400 dark:text-gray-500">
+          <span>From</span>
+          <AddressWithAvatar address={tx.from_address} />
+          <ArrowRight className="h-2.5 w-2.5 mx-0.5" />
+          <span>To</span>
+          <AddressWithAvatar address={tx.to_address} />
+        </div>
       </div>
       <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500 flex-shrink-0">
         {timeAgo(tx.timestamp)}
@@ -78,6 +112,9 @@ function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boole
   );
 }
 
+// ============================================
+// Compact variant for Home page (last 5 items)
+// ============================================
 export function BigTransfersCompact() {
   const [transfers, setTransfers] = useState<BigTransfer[] | null>(null);
 
@@ -90,7 +127,7 @@ export function BigTransfersCompact() {
   }, []);
 
   return (
-    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10">
+    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 h-full">
       <div className="flex items-center justify-between p-6 pb-0">
         <div className="flex items-center space-x-3">
           <Fish className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
@@ -104,8 +141,8 @@ export function BigTransfersCompact() {
         {transfers === null ? (
           <div className="flex flex-col">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-3 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
-                <div className="w-7 h-7 bg-zinc-200 dark:bg-white/10 animate-pulse rounded-sm" />
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
+                <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-white/10 animate-pulse flex-shrink-0" />
                 <div className="flex-1 space-y-1.5">
                   <div className="h-3 w-32 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
                   <div className="h-2.5 w-48 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
@@ -128,6 +165,9 @@ export function BigTransfersCompact() {
   );
 }
 
+// ============================================
+// Full variant for Analytics page (paginated, filterable)
+// ============================================
 const TYPE_FILTERS = [
   { label: 'All', value: '' },
   { label: 'Mint', value: 'mint' },
@@ -176,8 +216,8 @@ export function BigTransfersFull() {
         {transfers === null ? (
           <div className="p-6">
             {[...Array(10)].map((_, i) => (
-              <div key={i} className="flex items-center gap-3 py-3 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
-                <div className="w-7 h-7 bg-zinc-200 dark:bg-white/10 animate-pulse rounded-sm" />
+              <div key={i} className="flex items-center gap-3 py-2.5 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
+                <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-white/10 animate-pulse" />
                 <div className="flex-1 space-y-1.5">
                   <div className="h-3 w-40 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
                   <div className="h-2.5 w-56 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />

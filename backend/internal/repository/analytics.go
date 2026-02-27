@@ -298,6 +298,7 @@ type BigTransfer struct {
 	TokenSymbol          string  `json:"token_symbol"`
 	TokenContractAddress string  `json:"token_contract_address"`
 	ContractName         string  `json:"contract_name"`
+	TokenLogo            string  `json:"token_logo,omitempty"`
 	Amount               string  `json:"amount"`
 	UsdValue             float64 `json:"usd_value"`
 	FromAddress          string  `json:"from_address"`
@@ -345,7 +346,7 @@ func (r *Repository) GetBigTransfers(ctx context.Context, priceMap map[string]fl
 	query := fmt.Sprintf(`
 WITH %s
 SELECT tx_id, block_height, timestamp, type, token_symbol,
-       token_contract_address, contract_name, amount, usd_value,
+       token_contract_address, contract_name, token_logo, amount, usd_value,
        from_address, to_address
 FROM (
   -- FT transfers
@@ -361,6 +362,7 @@ FROM (
     COALESCE(tk.symbol, tk.contract_name, '') AS token_symbol,
     COALESCE(encode(ft.token_contract_address, 'hex'), '') AS token_contract_address,
     COALESCE(ft.contract_name, '') AS contract_name,
+    COALESCE(tk.logo::text, '') AS token_logo,
     ft.amount::text AS amount,
     (ft.amount * p.usd_price)::float8 AS usd_value,
     COALESCE(encode(ft.from_address, 'hex'), '') AS from_address,
@@ -384,6 +386,7 @@ FROM (
     COALESCE(dp.asset0_symbol, '') || '/' || COALESCE(dp.asset1_symbol, '') AS token_symbol,
     '' AS token_contract_address,
     dp.dex_key AS contract_name,
+    '' AS token_logo,
     GREATEST(de.asset0_in, de.asset0_out)::text AS amount,
     (GREATEST(de.asset0_in, de.asset0_out) * p.usd_price)::float8 AS usd_value,
     COALESCE(encode(de.maker, 'hex'), '') AS from_address,
@@ -419,7 +422,7 @@ LIMIT $%d OFFSET $%d`,
 		if err := rows.Scan(
 			&bt.TxID, &bt.BlockHeight, &ts, &bt.Type,
 			&bt.TokenSymbol, &bt.TokenContractAddress, &bt.ContractName,
-			&bt.Amount, &bt.UsdValue, &bt.FromAddress, &bt.ToAddress,
+			&bt.TokenLogo, &bt.Amount, &bt.UsdValue, &bt.FromAddress, &bt.ToAddress,
 		); err != nil {
 			return nil, err
 		}

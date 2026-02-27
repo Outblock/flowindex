@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useSearch, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
 import type { Layout } from 'react-grid-layout'
 import {
@@ -38,6 +38,9 @@ import { SafeNumberFlow } from '../components/SafeNumberFlow'
 
 export const Route = createFileRoute('/analytics')({
   component: AnalyticsPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as string) || undefined,
+  }),
 })
 
 /* ── types ── */
@@ -463,11 +466,19 @@ function SectionHeader({ title }: { title: string }) {
 /* ── main page ── */
 
 function AnalyticsPage() {
+  const { tab: urlTab } = useSearch({ from: '/analytics' })
+  const navigate = useNavigate()
+  const VALID_TABS: AnalyticsTab[] = ['all', 'transactions', 'tokens', 'network', 'price', 'whales']
+  const initialTab = VALID_TABS.includes(urlTab as AnalyticsTab) ? (urlTab as AnalyticsTab) : 'all'
   const [rangeDays, setRangeDays] = useState(30)
   const [customRange, setCustomRange] = useState<{ from: Date; to: Date } | null>(null)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [pendingRange, setPendingRange] = useState<{ from?: Date; to?: Date } | undefined>(undefined)
-  const [activeTab, setActiveTab] = useState<AnalyticsTab>('all')
+  const [activeTab, setActiveTabState] = useState<AnalyticsTab>(initialTab)
+  const setActiveTab = (tab: AnalyticsTab) => {
+    setActiveTabState(tab)
+    navigate({ search: tab === 'all' ? {} : { tab }, replace: true } as any)
+  }
 
   const selectPreset = (days: number) => {
     setRangeDays(days)

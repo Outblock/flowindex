@@ -194,6 +194,7 @@ export interface BigTransfer {
   token_symbol: string;
   token_contract_address: string;
   contract_name: string;
+  token_logo?: string;
   amount: string;
   usd_value: number;
   from_address: string;
