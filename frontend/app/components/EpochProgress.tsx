@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { SafeNumberFlow } from './SafeNumberFlow';
 
 interface EpochProgressProps {
     epoch: number | null;
@@ -11,18 +12,12 @@ interface EpochProgressProps {
     phase?: number | null;
 }
 
-function formatCountdown(totalSeconds: number): string {
-    if (totalSeconds <= 0) return '0s';
+function splitCountdown(totalSeconds: number) {
     const d = Math.floor(totalSeconds / 86400);
     const h = Math.floor((totalSeconds % 86400) / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = Math.floor(totalSeconds % 60);
-    const parts: string[] = [];
-    if (d > 0) parts.push(`${d}d`);
-    if (h > 0) parts.push(`${h}h`);
-    if (m > 0) parts.push(`${m}m`);
-    parts.push(`${s}s`);
-    return parts.join(' ');
+    return { d, h, m, s };
 }
 
 const PHASE_LABELS: Record<number, string> = {
@@ -30,6 +25,20 @@ const PHASE_LABELS: Record<number, string> = {
     1: 'Epoch Setup',
     2: 'Epoch Committed',
 };
+
+const NO_GROUPING = { useGrouping: false };
+
+function CountdownSegments({ seconds }: { seconds: number }) {
+    const { d, h, m, s } = splitCountdown(seconds);
+    return (
+        <>
+            {d > 0 && <><SafeNumberFlow value={d} format={NO_GROUPING} /><span className="text-zinc-400 dark:text-zinc-500 text-xs">d</span><span className="w-1" /></>}
+            {h > 0 && <><SafeNumberFlow value={h} format={NO_GROUPING} /><span className="text-zinc-400 dark:text-zinc-500 text-xs">h</span><span className="w-1" /></>}
+            {m > 0 && <><SafeNumberFlow value={m} format={NO_GROUPING} /><span className="text-zinc-400 dark:text-zinc-500 text-xs">m</span><span className="w-1" /></>}
+            <SafeNumberFlow value={s} format={NO_GROUPING} /><span className="text-zinc-400 dark:text-zinc-500 text-xs">s</span>
+        </>
+    );
+}
 
 export function EpochProgress({ epoch, progress, endView, currentView, phase }: EpochProgressProps) {
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
@@ -82,9 +91,9 @@ export function EpochProgress({ epoch, progress, endView, currentView, phase }: 
                 <div className="mt-2 text-[10px] uppercase tracking-wider text-nothing-green animate-pulse">
                     {(100 - progress).toFixed(1)}% Remaining
                 </div>
-                {remainingSeconds != null && (
-                    <div className="mt-1 text-sm font-mono font-semibold text-zinc-700 dark:text-zinc-200 tabular-nums">
-                        {formatCountdown(remainingSeconds)}
+                {remainingSeconds != null && remainingSeconds > 0 && (
+                    <div className="mt-1 text-sm font-mono font-semibold text-zinc-700 dark:text-zinc-200 flex items-baseline gap-0.5">
+                        <CountdownSegments seconds={remainingSeconds} />
                     </div>
                 )}
                 {phaseLabel && (
