@@ -91,3 +91,16 @@ func (c *PriceCache) GetLatestPrice(asset string) (float64, bool) {
 	}
 	return ps[len(ps)-1].Price, true
 }
+
+// GetAllLatestPrices returns the most recent price for every asset in the cache.
+func (c *PriceCache) GetAllLatestPrices() map[string]float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make(map[string]float64, len(c.prices))
+	for asset, ps := range c.prices {
+		if len(ps) > 0 {
+			out[asset] = ps[len(ps)-1].Price
+		}
+	}
+	return out
+}

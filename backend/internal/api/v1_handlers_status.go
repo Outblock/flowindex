@@ -308,6 +308,16 @@ func (s *Server) handleStatusPriceAt(w http.ResponseWriter, r *http.Request) {
 	}, nil, nil)
 }
 
+// handleStatusPrices returns current prices for all tokens that have price data,
+// plus a contract_name → market_symbol mapping so the frontend can match.
+func (s *Server) handleStatusPrices(w http.ResponseWriter, r *http.Request) {
+	prices := s.priceCache.GetAllLatestPrices()
+	tokenMap, _ := s.repo.GetContractNameToMarketSymbolMap(r.Context())
+	writeAPIResponse(w, []map[string]interface{}{
+		{"prices": prices, "token_map": tokenMap},
+	}, nil, nil)
+}
+
 func (s *Server) handleNotImplemented(w http.ResponseWriter, r *http.Request) {
 	writeAPIError(w, http.StatusNotImplemented, "endpoint not implemented yet; see /docs/api for status")
 }

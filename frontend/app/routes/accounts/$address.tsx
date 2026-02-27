@@ -358,10 +358,12 @@ function AccountDetail() {
                         <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Total Balance</div>
                         <div className="text-xl md:text-3xl font-bold">
                             <SafeNumberFlow value={balanceValue + stakedValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
-                            {(balanceValue + stakedValue) > 0 && flowPrice > 0 && (
-                                <UsdValue amount={balanceValue + stakedValue} price={flowPrice} className="text-sm ml-2 font-normal" />
-                            )}
                         </div>
+                        {(balanceValue + stakedValue) > 0 && flowPrice > 0 && (
+                            <div className="mt-1">
+                                <UsdValue amount={balanceValue + stakedValue} price={flowPrice} className="text-sm" />
+                            </div>
+                        )}
                         {stakedValue > 0 && (
                             <div className="flex flex-col sm:flex-row gap-x-4 gap-y-0.5 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                                 <span>Available: <span className="text-zinc-700 dark:text-zinc-300 font-medium"><SafeNumberFlow value={balanceValue} /></span></span>
