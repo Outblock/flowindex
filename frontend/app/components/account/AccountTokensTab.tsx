@@ -182,6 +182,12 @@ export function AccountTokensTab({ address }: Props) {
                                                         {t.contractName}
                                                     </Link>
                                                     {meta?.is_verified && <VerifiedBadge size={13} />}
+                                                    {(() => {
+                                                        const p = getTokenPrice(t.contractName);
+                                                        if (!p) return null;
+                                                        const fmt = p >= 1 ? `$${p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : p >= 0.01 ? `$${p.toFixed(4)}` : `$${p.toFixed(6)}`;
+                                                        return <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">@ {fmt}</span>;
+                                                    })()}
                                                 </div>
                                             </div>
                                         </div>
