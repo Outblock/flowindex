@@ -611,8 +611,24 @@ function TransactionDetail() {
         return data;
     };
 
+    // Simple JSON syntax highlighter — colorizes keys, strings, numbers, booleans, and null
+    const highlightJSON = (json: string): string => {
+        const escaped = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return escaped.replace(
+            /("(?:\\.|[^"\\])*")\s*:|("(?:\\.|[^"\\])*")|((?:-?\d+\.?\d*(?:[eE][+-]?\d+)?)(?=[,\s\]}]))|(\btrue\b|\bfalse\b)|(\bnull\b)/g,
+            (match, key, str, num, bool, nul) => {
+                if (key) return `<span class="text-purple-600 dark:text-purple-400">${key}</span>:`;
+                if (str) return `<span class="text-emerald-600 dark:text-emerald-400">${str}</span>`;
+                if (num) return `<span class="text-amber-600 dark:text-amber-400">${num}</span>`;
+                if (bool) return `<span class="text-blue-600 dark:text-blue-400">${bool}</span>`;
+                if (nul) return `<span class="text-zinc-400 dark:text-zinc-600">${nul}</span>`;
+                return match;
+            }
+        );
+    };
+
     const formatAddress = (addr: any) => {
-        if (!addr) return 'Unknown';
+        if (!addr || addr === '0000000000000000') return '';
         let formatted = addr.toLowerCase();
         if (!formatted.startsWith('0x')) {
             formatted = '0x' + formatted;
@@ -1271,7 +1287,7 @@ function TransactionDetail() {
 
                                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
                                                 <div className="flex flex-col">
-                                                    <p className="text-xs font-bold text-nothing-green-dark dark:text-nothing-green mb-1 uppercase tracking-wider">
+                                                    <p className="text-xs font-bold text-nothing-green-dark dark:text-nothing-green mb-1 tracking-wider">
                                                         {event.event_name || event.type?.split('.').pop() || 'Unknown'}
                                                     </p>
                                                     <div className="flex items-center gap-2">
@@ -1292,9 +1308,7 @@ function TransactionDetail() {
                                             </div>
 
                                             <div className="bg-zinc-50 dark:bg-black/40 rounded-sm border border-zinc-200 dark:border-white/5 p-4 group-hover/event:bg-zinc-100 dark:group-hover/event:bg-black/60 transition-colors max-h-[400px] overflow-y-auto">
-                                                <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
-                                                    {JSON.stringify(formatEventPayload(event.values || event.payload || event.data), null, 2)}
-                                                </pre>
+                                                <pre className="text-[11px] font-mono leading-relaxed whitespace-pre-wrap break-all" dangerouslySetInnerHTML={{ __html: highlightJSON(JSON.stringify(formatEventPayload(event.values || event.payload || event.data), null, 2)) }} />
                                             </div>
                                         </div>
                                     ))
