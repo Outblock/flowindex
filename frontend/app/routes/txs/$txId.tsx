@@ -1291,14 +1291,14 @@ function TransactionDetail() {
                                                         {event.event_name || event.type?.split('.').pop() || 'Unknown'}
                                                     </p>
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase">Contract</span>
-                                                        {formatAddress(event.contract_address) ? (
-                                                            <span className="inline-flex items-center gap-1">
-                                                                <AddressLink address={formatAddress(event.contract_address)} size={12} className="text-[10px]" />
-                                                                {event.contract_name ? <span className="text-[10px] text-zinc-400">({event.contract_name})</span> : ''}
-                                                            </span>
+                                                        {formatAddress(event.contract_address) && event.contract_name ? (
+                                                            <Link to={`/contracts/A.${formatAddress(event.contract_address).replace(/^0x/, '')}.${event.contract_name}` as any} className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors">
+                                                                A.{formatAddress(event.contract_address).replace(/^0x/, '').slice(0, 8)}...{formatAddress(event.contract_address).replace(/^0x/, '').slice(-4)}.{event.contract_name}
+                                                            </Link>
+                                                        ) : formatAddress(event.contract_address) ? (
+                                                            <AddressLink address={formatAddress(event.contract_address)} size={12} className="text-[10px]" />
                                                         ) : (
-                                                            <span className="text-[10px] text-zinc-500">System {event.contract_name ? `(${event.contract_name})` : ''}</span>
+                                                            <span className="text-[10px] text-zinc-500 font-mono">{event.contract_name ? `flow.${event.contract_name}` : 'System'}</span>
                                                         )}
                                                     </div>
                                                 </div>

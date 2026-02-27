@@ -24,6 +24,7 @@ export interface Flow {
     toLabel: string;
     token: string;
     amount: string;
+    usdValue?: number;
 }
 
 /* ── Build token icon map from transaction data ── */
@@ -121,11 +122,12 @@ export function layoutGraph(flows: Flow[], isDark: boolean, _tokenIcons: Map<str
 
     const edges: Edge[] = flows.map((f, i) => {
         const amountStr = Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 });
+        const usdStr = f.usdValue && f.usdValue > 0 ? ` (\u2248$${f.usdValue >= 1 ? f.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : f.usdValue.toFixed(4)})` : '';
         return {
             id: `e-${i}`,
             source: f.from,
             target: f.to,
-            label: `${amountStr} ${f.token}`,
+            label: `${amountStr} ${f.token}${usdStr}`,
             labelStyle: { fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, fill: accentColor },
             labelBgStyle: { fill: isDark ? '#18181b' : '#ffffff', fillOpacity: 0.95, rx: 4, ry: 4 },
             labelBgPadding: [8, 4] as [number, number],
@@ -190,7 +192,7 @@ function transfersToFlows(detail: any): Flow[] {
     const defiEvents: any[] = detail?.defi_events || [];
 
     // Aggregate FT transfers by (from, to, symbol)
-    const ftAgg = new Map<string, { from: string; to: string; amount: number; symbol: string }>();
+    const ftAgg = new Map<string, { from: string; to: string; amount: number; symbol: string; usdValue: number }>();
     for (const ft of ftTransfers) {
         const from = ft.from_address;
         const to = ft.to_address;
@@ -200,8 +202,9 @@ function transfersToFlows(detail: any): Flow[] {
         const existing = ftAgg.get(key);
         if (existing) {
             existing.amount += parseFloat(ft.amount) || 0;
+            existing.usdValue += parseFloat(ft.usd_value) || 0;
         } else {
-            ftAgg.set(key, { from, to, amount: parseFloat(ft.amount) || 0, symbol: sym });
+            ftAgg.set(key, { from, to, amount: parseFloat(ft.amount) || 0, symbol: sym, usdValue: parseFloat(ft.usd_value) || 0 });
         }
     }
     for (const agg of ftAgg.values()) {
@@ -212,6 +215,7 @@ function transfersToFlows(detail: any): Flow[] {
             toLabel: formatShort(agg.to, 8, 4),
             token: agg.symbol,
             amount: agg.amount.toString(),
+            usdValue: agg.usdValue,
         });
     }
 
