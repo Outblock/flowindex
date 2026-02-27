@@ -111,9 +111,20 @@ function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boole
           <AddressWithAvatar address={tx.to_address} />
         </div>
       </div>
-      <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500 flex-shrink-0">
-        {timeAgo(tx.timestamp)}
-      </span>
+      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+        <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-sm ${
+          tx.type === 'mint' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+          tx.type === 'burn' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+          tx.type === 'swap' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+          tx.type === 'stake' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+          'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-gray-400'
+        }`}>
+          {tx.type}
+        </span>
+        <span className="text-[9px] font-mono text-zinc-400 dark:text-gray-500">
+          {timeAgo(tx.timestamp)}
+        </span>
+      </div>
     </Link>
   );
 }
