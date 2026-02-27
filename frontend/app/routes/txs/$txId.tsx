@@ -20,6 +20,7 @@ import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import { deriveEnrichments } from '../../lib/deriveFromEvents';
 import { NFTDetailModal } from '../../components/NFTDetailModal';
+import { UsdValue } from '../../components/UsdValue';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -200,8 +201,9 @@ function TokenBubble({ logo, symbol, size = 32 }: { logo?: string; symbol?: stri
     );
 }
 
-function FlowRow({ from, to, amount, symbol, logo, badge, formatAddr: _formatAddr }: {
+function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, formatAddr: _formatAddr }: {
     from?: string; to?: string; amount?: string | number; symbol?: string; logo?: string; badge?: React.ReactNode;
+    usdPrice?: number;
     formatAddr: (a: string) => string;
 }) {
     const formattedAmount = amount != null ? Number(amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—';
@@ -221,6 +223,9 @@ function FlowRow({ from, to, amount, symbol, logo, badge, formatAddr: _formatAdd
                 <TokenBubble logo={logo} symbol={symbol} size={24} />
                 <span className="text-sm font-mono font-semibold text-zinc-900 dark:text-white whitespace-nowrap">{formattedAmount}</span>
                 <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">{symbol}</span>
+                {formattedAmount !== '—' && usdPrice != null && usdPrice > 0 && (
+                    <UsdValue amount={Number(amount)} price={usdPrice} className="text-[10px]" />
+                )}
                 {badge}
                 <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 flex-shrink-0" />
             </div>
@@ -290,7 +295,7 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
 
             {/* FT transfer flow rows — aggregated by (from, to, token) */}
             {hasFT && (() => {
-                const agg = new Map<string, { from: string; to: string; symbol: string; logo: string; total: number; count: number; hasCrossVm: boolean }>();
+                const agg = new Map<string, { from: string; to: string; symbol: string; logo: string; total: number; count: number; hasCrossVm: boolean; usdPrice: number }>();
                 for (const ft of transaction.ft_transfers) {
                     const sym = ft.token_symbol || ft.token?.split('.').pop() || '';
                     const key = `${ft.from_address}|${ft.to_address}|${sym}`;
@@ -299,8 +304,9 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
                         existing.total += parseFloat(ft.amount) || 0;
                         existing.count += 1;
                         if (ft.is_cross_vm) existing.hasCrossVm = true;
+                        if (!existing.usdPrice && ft.approx_usd_price > 0) existing.usdPrice = ft.approx_usd_price;
                     } else {
-                        agg.set(key, { from: ft.from_address, to: ft.to_address, symbol: sym, logo: ft.token_logo, total: parseFloat(ft.amount) || 0, count: 1, hasCrossVm: !!ft.is_cross_vm });
+                        agg.set(key, { from: ft.from_address, to: ft.to_address, symbol: sym, logo: ft.token_logo, total: parseFloat(ft.amount) || 0, count: 1, hasCrossVm: !!ft.is_cross_vm, usdPrice: ft.approx_usd_price || 0 });
                     }
                 }
                 const rows = Array.from(agg.values());
@@ -318,6 +324,7 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
                                 amount={r.total}
                                 symbol={r.symbol}
                                 logo={r.logo}
+                                usdPrice={r.usdPrice}
                                 formatAddr={fmtAddr}
                                 badge={<>
                                     {r.count > 1 && (
@@ -720,6 +727,19 @@ function TransactionDetail() {
                                 </div>
                             </div>
 
+                            {/* Row 1.5: Fee */}
+                            {(fullTx?.fee > 0 || transaction?.fee > 0) && (
+                                <div className="mb-5">
+                                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Execution Fee</p>
+                                    <span className="text-sm text-zinc-600 dark:text-zinc-300 font-mono">
+                                        {Number(fullTx?.fee || transaction?.fee).toLocaleString(undefined, { maximumFractionDigits: 8 })} FLOW
+                                    </span>
+                                    {(fullTx?.fee_usd > 0 || transaction?.fee_usd > 0) && (
+                                        <UsdValue value={fullTx?.fee_usd || transaction?.fee_usd} className="ml-2 text-xs" />
+                                    )}
+                                </div>
+                            )}
+
                             {/* Row 2: Payer, Proposer, Authorizers */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 {/* Payer */}
@@ -976,6 +996,7 @@ function TransactionDetail() {
                                                             <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">
                                                                 {ft.amount != null ? Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
                                                             </span>
+                                                            {ft.usd_value > 0 && <UsdValue value={ft.usd_value} className="text-[10px]" />}
                                                             <span className="text-[10px] text-zinc-500 font-medium uppercase">
                                                                 {ft.token_symbol || ft.token?.split('.').pop() || ''}
                                                             </span>

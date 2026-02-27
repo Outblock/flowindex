@@ -4,6 +4,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddressFtTransfer } from '../../api/gen/find';
 import { normalizeAddress } from './accountUtils';
 import { AddressLink } from '../AddressLink';
+import { UsdValue } from '../UsdValue';
 
 interface Props {
     address: string;
@@ -70,7 +71,12 @@ export function AccountFTTransfersTab({ address }: Props) {
                             {transfers.map((tx: any, i: number) => (
                                 <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
                                     <td className="p-4 font-mono">{tx.token_id || tx.type_id || '—'}</td>
-                                    <td className="p-4 font-mono">{tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}</td>
+                                    <td className="p-4 font-mono">
+                                        {tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
+                                        {tx.usd_value > 0 && (
+                                            <UsdValue value={tx.usd_value} className="ml-2 text-[10px]" />
+                                        )}
+                                    </td>
                                     <td className="p-4">
                                         {tx.from_address ? <AddressLink address={tx.from_address} /> : '—'}
                                     </td>

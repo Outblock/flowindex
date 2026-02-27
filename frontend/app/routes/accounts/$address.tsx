@@ -32,6 +32,8 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { COABadge } from '../../components/ui/COABadge';
 import { cn } from '../../lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
+import { UsdValue } from '../../components/UsdValue';
+import { fetchNetworkStats } from '../../api/heyapi';
 
 const LABEL_CATEGORY_CONFIG: Record<string, { icon: LucideIcon; className: string }> = {
     whale:    { icon: Fish,             className: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800" },
@@ -171,7 +173,14 @@ function AccountDetail() {
         balance?: number; storage?: StorageInfo; staking?: StakingInfo; coaAddress?: string;
     } | null>(null);
 
+    const [flowPrice, setFlowPrice] = useState(0);
 
+    // Fetch FLOW price once
+    useEffect(() => {
+        fetchNetworkStats({ timeoutMs: 4000 }).then((stats) => {
+            if (stats?.price > 0) setFlowPrice(stats.price);
+        }).catch(() => {});
+    }, []);
 
     // Client-side on-chain data (balance, staking, storage, COA)
     useEffect(() => {
@@ -349,6 +358,9 @@ function AccountDetail() {
                         <div className="text-xs uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">Total Balance</div>
                         <div className="text-xl md:text-3xl font-bold">
                             <SafeNumberFlow value={balanceValue + stakedValue} /> <span className="text-sm text-zinc-500 font-normal">FLOW</span>
+                            {(balanceValue + stakedValue) > 0 && flowPrice > 0 && (
+                                <UsdValue amount={balanceValue + stakedValue} price={flowPrice} className="text-sm ml-2 font-normal" />
+                            )}
                         </div>
                         {stakedValue > 0 && (
                             <div className="flex flex-col sm:flex-row gap-x-4 gap-y-0.5 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
