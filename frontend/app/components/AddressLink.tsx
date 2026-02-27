@@ -29,6 +29,7 @@ interface Props {
     size?: number;
     className?: string;
     showAvatar?: boolean;
+    neutral?: boolean;
     onClick?: (e: React.MouseEvent) => void;
 }
 
@@ -47,14 +48,18 @@ export function AddressLink({
     size = 16,
     className = '',
     showAvatar = true,
+    neutral = false,
     onClick,
 }: Props) {
     const normalized = normalizeAddress(address);
     const colors = colorsFromAddress(normalized);
+    const colorCls = neutral
+        ? 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+        : 'text-nothing-green-dark dark:text-nothing-green';
     return (
         <Link
             to={`/accounts/${normalized}` as any}
-            className={`inline-flex items-center gap-1 font-mono text-nothing-green-dark dark:text-nothing-green hover:underline ${className}`}
+            className={`inline-flex items-center gap-1 font-mono ${colorCls} hover:underline ${className}`}
             onClick={onClick}
         >
             {showAvatar && (

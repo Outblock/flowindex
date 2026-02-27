@@ -510,9 +510,9 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                         <span className="text-xs text-zinc-500 font-medium">{tokenSymbol}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                        {sender && <span className="inline-flex items-center gap-1">From <AddressLink address={sender} size={14} /></span>}
+                        {sender && <span className="inline-flex items-center gap-1">From <AddressLink address={sender} size={12} neutral /></span>}
                         {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
-                        {receiver && <span className="inline-flex items-center gap-1">To <AddressLink address={receiver} size={14} /></span>}
+                        {receiver && <span className="inline-flex items-center gap-1">To <AddressLink address={receiver} size={12} neutral /></span>}
                         {tx.transaction_hash && (
                             <>
                                 <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
@@ -557,9 +557,9 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                         {tx.nft_id && <span className="text-xs text-zinc-500 font-mono">#{tx.nft_id}</span>}
                     </div>
                     <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                        {sender && <span className="inline-flex items-center gap-1">From <AddressLink address={sender} size={14} /></span>}
+                        {sender && <span className="inline-flex items-center gap-1">From <AddressLink address={sender} size={12} neutral /></span>}
                         {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
-                        {receiver && <span className="inline-flex items-center gap-1">To <AddressLink address={receiver} size={14} /></span>}
+                        {receiver && <span className="inline-flex items-center gap-1">To <AddressLink address={receiver} size={12} neutral /></span>}
                         {tx.transaction_hash && (
                             <>
                                 <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>

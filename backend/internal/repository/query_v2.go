@@ -589,6 +589,7 @@ type TokenMetadataInfo struct {
 }
 
 // GetFTTokenMetadataByIdentifiers returns display metadata for a set of token identifiers (e.g. "A.1654653399040a61.FlowToken").
+// Also accepts vault identifiers like "A.1654653399040a61.FlowToken.Vault" — the .Vault suffix is stripped.
 func (r *Repository) GetFTTokenMetadataByIdentifiers(ctx context.Context, identifiers []string) (map[string]TokenMetadataInfo, error) {
 	out := make(map[string]TokenMetadataInfo, len(identifiers))
 	if len(identifiers) == 0 {
@@ -598,12 +599,12 @@ func (r *Repository) GetFTTokenMetadataByIdentifiers(ctx context.Context, identi
 	type key struct{ addr, name string }
 	seen := make(map[key][]string) // key -> original identifiers
 	for _, id := range identifiers {
-		parts := strings.SplitN(id, ".", 3) // A.hex.Name
+		parts := strings.SplitN(id, ".", 3) // A.hex.Name or A.hex.Name.Vault
 		if len(parts) < 3 {
 			continue
 		}
 		addr := strings.TrimPrefix(parts[1], "0x")
-		name := parts[2]
+		name := strings.TrimSuffix(parts[2], ".Vault")
 		k := key{addr, name}
 		seen[k] = append(seen[k], id)
 	}
