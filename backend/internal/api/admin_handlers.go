@@ -1320,8 +1320,14 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 		proc = ingester.NewTokenWorker(s.repo)
 	case "evm_worker":
 		proc = ingester.NewEVMWorker(s.repo)
+	case "proposer_key_backfill":
+		if s.client == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "no Flow client configured")
+			return
+		}
+		proc = ingester.NewProposerKeyBackfillWorker(s.repo, s.client)
 	default:
-		writeAPIError(w, http.StatusBadRequest, fmt.Sprintf("unsupported worker: %s (supported: token_worker, evm_worker)", req.Worker))
+		writeAPIError(w, http.StatusBadRequest, fmt.Sprintf("unsupported worker: %s (supported: token_worker, evm_worker, proposer_key_backfill)", req.Worker))
 		return
 	}
 
