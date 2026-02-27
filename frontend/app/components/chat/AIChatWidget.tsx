@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
@@ -867,11 +867,36 @@ export default function AIChatWidget() {
     };
   }, [isOpen]);
 
-  const { messages, sendMessage, status, stop, setMessages } = useChat({
-    transport: new DefaultChatTransport({
+  const [chatError, setChatError] = useState<string | null>(null);
+
+  // Custom fetch that strips the 'user-agent' header added by ai-sdk.
+  // Safari/WebKit blocks cross-origin requests with custom User-Agent headers
+  // when the server doesn't include 'User-Agent' in Access-Control-Allow-Headers.
+  // See: https://github.com/vercel/ai/issues/9256
+  const safeFetch = useCallback(async (url: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.headers) {
+      const headers = new Headers(init.headers);
+      headers.delete('user-agent');
+      init = { ...init, headers };
+    }
+    return globalThis.fetch(url, init);
+  }, []);
+
+  const transport = useMemo(
+    () => new DefaultChatTransport({
       api: `${AI_CHAT_URL}/api/chat`,
       credentials: 'omit',
+      fetch: safeFetch as any,
     }),
+    [safeFetch],
+  );
+
+  const { messages, sendMessage, status, stop, setMessages } = useChat({
+    transport,
+    onError: (error) => {
+      console.error('[AIChatWidget] streaming error:', error);
+      setChatError(error?.message || 'Failed to get response. Please try again.');
+    },
   });
 
   const isStreaming = status === 'streaming' || status === 'submitted';
@@ -890,6 +915,7 @@ export default function AIChatWidget() {
 
   const handleSend = useCallback((text: string) => {
     if (!text.trim() || isStreaming) return;
+    setChatError(null);
     sendMessage({ text });
     setInput('');
   }, [sendMessage, isStreaming]);
@@ -1033,6 +1059,12 @@ export default function AIChatWidget() {
                           <Bot size={11} className="text-nothing-green" />
                         </div>
                         <Loader2 size={14} className="animate-spin text-zinc-400" />
+                      </div>
+                    )}
+                    {chatError && (
+                      <div className="mb-4 px-3 py-2 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                        {chatError}
+                        <button onClick={() => setChatError(null)} className="ml-2 underline">Dismiss</button>
                       </div>
                     )}
                     <div ref={messagesEndRef} />
