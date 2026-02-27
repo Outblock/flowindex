@@ -31,6 +31,7 @@ import {
   ensureHeyApiConfigured,
   getBaseURL,
 } from '../api/heyapi'
+import { BigTransfersFull } from '../components/BigTransfersCard'
 import { CARD_DEFS, KPI_DEFS, DEFAULT_KPI_LAYOUTS } from './analytics-layout'
 import { useGridLayout } from '../hooks/useGridLayout'
 
@@ -196,7 +197,7 @@ function fmtTooltipValue(v: unknown, name: string): [string, string] {
 
 /* ── tab types ── */
 
-type AnalyticsTab = 'all' | 'transactions' | 'tokens' | 'network' | 'price'
+type AnalyticsTab = 'all' | 'transactions' | 'tokens' | 'network' | 'price' | 'whales'
 
 const TABS: { label: string; value: AnalyticsTab }[] = [
   { label: 'All', value: 'all' },
@@ -204,6 +205,7 @@ const TABS: { label: string; value: AnalyticsTab }[] = [
   { label: 'Tokens', value: 'tokens' },
   { label: 'Network', value: 'network' },
   { label: 'Price', value: 'price' },
+  { label: 'Whales', value: 'whales' },
 ]
 
 /* ── chart skeleton ── */
@@ -1283,6 +1285,9 @@ function AnalyticsPage() {
         </div>
 
         {/* Content renders progressively as each API responds */}
+        {activeTab === 'whales' ? (
+          <BigTransfersFull />
+        ) : (
         <div ref={containerRef}>
           {mounted && (
             <>
@@ -1358,6 +1363,7 @@ function AnalyticsPage() {
             </>
           )}
         </div>
+        )}
       </div>
     </div>
   )
