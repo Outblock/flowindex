@@ -25,13 +25,14 @@ var SupportedEventTypes = []string{
 
 // Handlers provides HTTP handlers for the webhook API.
 type Handlers struct {
-	store *Store
-	auth  *AuthMiddleware
+	store       *Store
+	auth        *AuthMiddleware
+	rateLimiter *RateLimiter
 }
 
 // NewHandlers creates a new Handlers instance.
-func NewHandlers(store *Store, auth *AuthMiddleware) *Handlers {
-	return &Handlers{store: store, auth: auth}
+func NewHandlers(store *Store, auth *AuthMiddleware, rateLimiter *RateLimiter) *Handlers {
+	return &Handlers{store: store, auth: auth, rateLimiter: rateLimiter}
 }
 
 // RegisterRoutes registers all webhook routes under /api/v1 on the given router.
@@ -110,6 +111,14 @@ func (h *Handlers) handleCreateSubscription(w http.ResponseWriter, r *http.Reque
 	if userID == "" {
 		writeError(w, http.StatusUnauthorized, "missing user identity")
 		return
+	}
+
+	// Check subscription limit
+	if h.rateLimiter != nil {
+		if err := h.rateLimiter.CheckSubscriptionLimit(r.Context(), userID); err != nil {
+			writeError(w, http.StatusTooManyRequests, err.Error())
+			return
+		}
 	}
 
 	var body struct {
@@ -250,6 +259,14 @@ func (h *Handlers) handleCreateEndpoint(w http.ResponseWriter, r *http.Request) 
 	if userID == "" {
 		writeError(w, http.StatusUnauthorized, "missing user identity")
 		return
+	}
+
+	// Check endpoint limit
+	if h.rateLimiter != nil {
+		if err := h.rateLimiter.CheckEndpointLimit(r.Context(), userID); err != nil {
+			writeError(w, http.StatusTooManyRequests, err.Error())
+			return
+		}
 	}
 
 	var body struct {
