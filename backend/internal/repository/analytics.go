@@ -355,6 +355,7 @@ FROM (
     ft.block_height,
     ft.timestamp,
     CASE
+      WHEN (ft.from_address IS NULL OR ft.to_address IS NULL) AND tk.evm_address IS NOT NULL THEN 'bridge'
       WHEN ft.from_address IS NULL THEN 'mint'
       WHEN ft.to_address IS NULL THEN 'burn'
       ELSE 'transfer'
