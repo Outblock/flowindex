@@ -1015,4 +1015,22 @@ UPDATE app.ft_tokens SET market_symbol = 'FUSD',    coingecko_id = NULL         
 UPDATE app.ft_tokens SET market_symbol = 'stFLOW',  coingecko_id = 'liquid-staked-flow'  WHERE contract_name = 'stFlowToken' AND (market_symbol IS NULL OR market_symbol = '');
 UPDATE app.ft_tokens SET market_symbol = 'TSHOT',   coingecko_id = 'tshot-token'         WHERE contract_name = 'TopShotToken' AND (market_symbol IS NULL OR market_symbol = '');
 
+-- New tokens with DeFi Llama / CoinGecko price data
+UPDATE app.ft_tokens SET market_symbol = 'DUST',   coingecko_id = 'dust-protocol'       WHERE contract_name = 'FlovatarDustToken' AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'FROTH',  coingecko_id = 'froth'               WHERE contract_name = 'FROTH'        AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'WFLOW',  coingecko_id = 'wrapped-flow'        WHERE symbol = 'WFLOW'               AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'PYUSD',  coingecko_id = 'paypal-usd'          WHERE symbol IN ('PYUSD', 'PYUSD0')  AND (market_symbol IS NULL OR market_symbol = '');
+
+-- Celer bridged tokens: use underlying asset's CoinGecko ID
+UPDATE app.ft_tokens SET market_symbol = 'ETH',    coingecko_id = 'weth'                WHERE contract_name = 'ceWETH'       AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'BTC',    coingecko_id = 'wrapped-bitcoin'     WHERE contract_name = 'ceWBTC'       AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'BNB',    coingecko_id = 'binancecoin'         WHERE contract_name = 'ceBNB'        AND (market_symbol IS NULL OR market_symbol = '');
+
+-- Stablecoins (no external fetch needed, hardcoded at $1)
+UPDATE app.ft_tokens SET market_symbol = 'USDF',   coingecko_id = NULL                  WHERE symbol = 'USDF'                AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'stgUSDC', coingecko_id = NULL                 WHERE symbol = 'stgUSDC'             AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'ceDAI',  coingecko_id = NULL                  WHERE contract_name = 'ceDAI'        AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'ceUSDT', coingecko_id = NULL                  WHERE contract_name = 'ceUSDT'       AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'ceBUSD', coingecko_id = NULL                  WHERE contract_name = 'ceBUSD'       AND (market_symbol IS NULL OR market_symbol = '');
+
 COMMIT;
