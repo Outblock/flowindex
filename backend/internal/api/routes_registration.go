@@ -56,6 +56,13 @@ func registerAPIRoutes(r *mux.Router, s *Server) {
 	registerStatusRoutes(r, s)
 	registerDeferredRoutes(r, s)
 	registerAIRoutes(r, s)
+	registerWebhookRoutes(r, s)
+}
+
+func registerWebhookRoutes(r *mux.Router, s *Server) {
+	if s.webhookHandlers != nil {
+		s.webhookHandlers.RegisterRoutes(r)
+	}
 }
 
 func registerAIRoutes(r *mux.Router, s *Server) {
