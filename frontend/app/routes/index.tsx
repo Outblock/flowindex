@@ -6,6 +6,7 @@ import { SafeNumberFlow } from '../components/SafeNumberFlow';
 import { ensureHeyApiConfigured, fetchStatus, fetchNetworkStats } from '../api/heyapi';
 import { getFlowV1Block, getFlowV1Transaction, getFlowV1Ft, getFlowV1Nft } from '../api/gen/find';
 import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
+import { BigTransfersCompact } from '../components/BigTransfersCard';
 import { FlowPriceChart } from '../components/FlowPriceChart';
 import { EpochProgress } from '../components/EpochProgress';
 import { NetworkStats } from '../components/NetworkStats';
@@ -814,6 +815,15 @@ function Home() {
                         </div>
                     </motion.div>
                 </div>
+
+                {/* Whale Alert */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.7 }}
+                >
+                    <BigTransfersCompact />
+                </motion.div>
 
                 {/* Blocks & Transactions Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
