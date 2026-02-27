@@ -172,6 +172,11 @@ func registerStatusRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/public/v1/epoch/payout", s.handlePublicEpochPayout).Methods("GET", "OPTIONS")
 
 	// Analytics endpoints (cached — slow queries, data changes infrequently)
+	r.HandleFunc("/insights/daily", cachedHandler(5*time.Minute, s.handleAnalyticsDaily)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/insights/daily/module/{module}", cachedHandler(2*time.Minute, s.handleAnalyticsDailyModule)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/insights/transfers/daily", cachedHandler(5*time.Minute, s.handleAnalyticsTransfersDaily)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/insights/big-transfers", cachedHandler(2*time.Minute, s.handleBigTransfers)).Methods("GET", "OPTIONS")
+	// Backwards-compat aliases (content blockers block "analytics" keyword)
 	r.HandleFunc("/analytics/daily", cachedHandler(5*time.Minute, s.handleAnalyticsDaily)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/analytics/daily/module/{module}", cachedHandler(2*time.Minute, s.handleAnalyticsDailyModule)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/analytics/transfers/daily", cachedHandler(5*time.Minute, s.handleAnalyticsTransfersDaily)).Methods("GET", "OPTIONS")

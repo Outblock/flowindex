@@ -156,7 +156,7 @@ export async function fetchAnalyticsDaily(from?: string, to?: string): Promise<a
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${_baseURL}/analytics/daily${qs}`);
+  const res = await fetch(`${_baseURL}/insights/daily${qs}`);
   if (!res.ok) return [];
   const json = await res.json();
   return json?.data ?? [];
@@ -170,7 +170,7 @@ export async function fetchAnalyticsDailyModule(module: string, from?: string, t
   if (to) params.set('to', to);
   const qs = params.toString() ? `?${params.toString()}` : '';
   try {
-    const json = await fetchJsonWithTimeout(`${_baseURL}/analytics/daily/module/${encodeURIComponent(module)}${qs}`, timeoutMs);
+    const json = await fetchJsonWithTimeout(`${_baseURL}/insights/daily/module/${encodeURIComponent(module)}${qs}`, timeoutMs);
     return json?.data ?? [];
   } catch {
     return [];
@@ -184,7 +184,7 @@ export async function fetchAnalyticsTransfersDaily(from?: string, to?: string): 
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${_baseURL}/analytics/transfers/daily${qs}`);
+  const res = await fetch(`${_baseURL}/insights/transfers/daily${qs}`);
   if (!res.ok) return [];
   const json = await res.json();
   return json?.data ?? [];
@@ -216,7 +216,7 @@ export async function fetchBigTransfers(
   if (opts.type) params.set('type', opts.type);
   const qs = params.toString() ? `?${params.toString()}` : '';
   try {
-    const json = await fetchJsonWithTimeout(`${_baseURL}/analytics/big-transfers${qs}`, opts.timeoutMs ?? 10000);
+    const json = await fetchJsonWithTimeout(`${_baseURL}/insights/big-transfers${qs}`, opts.timeoutMs ?? 10000);
     return json?.data ?? [];
   } catch {
     return [];
