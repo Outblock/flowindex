@@ -487,6 +487,10 @@ function Home() {
                                 epoch={networkStats?.epoch}
                                 progress={networkStats?.epoch_progress}
                                 updatedAt={networkStats?.updated_at}
+                                startView={networkStats?.start_view}
+                                endView={networkStats?.end_view}
+                                currentView={networkStats?.current_view}
+                                phase={networkStats?.phase}
                             />
                         </motion.div>
 
