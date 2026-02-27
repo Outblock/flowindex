@@ -67,6 +67,15 @@ function TokenIcon({ logo, symbol, size = 24 }: { logo?: string; symbol: string;
   );
 }
 
+const TYPE_TAG_CLASSES: Record<string, string> = {
+  mint: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  burn: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  swap: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  bridge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  stake: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  transfer: 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-gray-400',
+};
+
 function AddressWithAvatar({ address }: { address: string }) {
   if (!address) return <span className="text-zinc-400 dark:text-gray-500">—</span>;
   const normalized = address.startsWith('0x') ? address : `0x${address}`;
@@ -110,14 +119,7 @@ function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boole
         </div>
       </div>
       <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-        <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-sm ${
-          tx.type === 'mint' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
-          tx.type === 'burn' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-          tx.type === 'swap' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-          tx.type === 'bridge' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-          tx.type === 'stake' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
-          'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-gray-400'
-        }`}>
+        <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-sm ${TYPE_TAG_CLASSES[tx.type] || TYPE_TAG_CLASSES.transfer}`}>
           {tx.type}
         </span>
         <span className="text-[9px] font-mono text-zinc-400 dark:text-gray-500">
