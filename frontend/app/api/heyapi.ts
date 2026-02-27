@@ -202,7 +202,7 @@ export interface BigTransfer {
 }
 
 export async function fetchBigTransfers(
-  opts: { limit?: number; offset?: number; minUsd?: number; type?: string } = {}
+  opts: { limit?: number; offset?: number; minUsd?: number; type?: string; timeoutMs?: number } = {}
 ): Promise<BigTransfer[]> {
   await ensureHeyApiConfigured();
   const params = new URLSearchParams();
@@ -212,7 +212,7 @@ export async function fetchBigTransfers(
   if (opts.type) params.set('type', opts.type);
   const qs = params.toString() ? `?${params.toString()}` : '';
   try {
-    const json = await fetchJsonWithTimeout(`${_baseURL}/analytics/big-transfers${qs}`, 10000);
+    const json = await fetchJsonWithTimeout(`${_baseURL}/analytics/big-transfers${qs}`, opts.timeoutMs ?? 10000);
     return json?.data ?? [];
   } catch {
     return [];

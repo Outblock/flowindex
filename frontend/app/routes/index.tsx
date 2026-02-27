@@ -44,7 +44,7 @@ export const Route = createFileRoute('/')({
                 getFlowV1Block({ query: { limit: 50, offset: 0 }, timeout: ssrFastTimeoutMs }),
                 getFlowV1Ft({ query: { limit: 5, offset: 0, sort: 'trending' } as any, timeout: ssrFastTimeoutMs }),
                 getFlowV1Nft({ query: { limit: 5, offset: 0, sort: 'trending' } as any, timeout: ssrFastTimeoutMs }),
-                fetchBigTransfers({ limit: 5 }),
+                fetchBigTransfers({ limit: 5, timeoutMs: ssrFastTimeoutMs }),
             ]);
             return {
                 status: statusRes.status === 'fulfilled' ? statusRes.value : null,
