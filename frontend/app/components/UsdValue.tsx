@@ -17,7 +17,7 @@ export function UsdValue({ value, price, amount, className }: Props) {
 
     return (
         <span className={`text-zinc-400 dark:text-zinc-500 ${className ?? ''}`}>
-            {formatted}
+            ≈ {formatted}
         </span>
     );
 }
