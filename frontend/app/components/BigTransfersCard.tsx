@@ -115,11 +115,13 @@ function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boole
 // ============================================
 // Compact variant for Home page (last 5 items)
 // ============================================
-export function BigTransfersCompact() {
-  const [transfers, setTransfers] = useState<BigTransfer[] | null>(null);
+export function BigTransfersCompact({ initialData }: { initialData?: BigTransfer[] | null } = {}) {
+  const [transfers, setTransfers] = useState<BigTransfer[] | null>(initialData ?? null);
 
   useEffect(() => {
-    fetchBigTransfers({ limit: 5 }).then(setTransfers).catch(() => setTransfers([]));
+    if (!initialData?.length) {
+      fetchBigTransfers({ limit: 5 }).then(setTransfers).catch(() => setTransfers([]));
+    }
     const interval = setInterval(() => {
       fetchBigTransfers({ limit: 5 }).then(setTransfers);
     }, 120_000);

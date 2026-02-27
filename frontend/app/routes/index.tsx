@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Activity, TrendingUp, Coins, Image } from 'lucide-react';
 import { SafeNumberFlow } from '../components/SafeNumberFlow';
-import { ensureHeyApiConfigured, fetchStatus, fetchNetworkStats } from '../api/heyapi';
+import { ensureHeyApiConfigured, fetchStatus, fetchNetworkStats, fetchBigTransfers } from '../api/heyapi';
 import { getFlowV1Block, getFlowV1Transaction, getFlowV1Ft, getFlowV1Nft } from '../api/gen/find';
 import { useWebSocketMessages, useWebSocketStatus } from '../hooks/useWebSocket';
 import { BigTransfersCompact } from '../components/BigTransfersCard';
@@ -36,37 +36,40 @@ export const Route = createFileRoute('/')({
     }),
     loader: async () => {
         const ssrFastTimeoutMs = import.meta.env.SSR ? 2200 : 10000;
-        // Only fetch fast, critical data in the SSR loader.
-        // Slower endpoints (transactions, tokens, nfts) load client-side
-        // so the page renders immediately.
         try {
             await ensureHeyApiConfigured();
-            const [statusRes, networkStatsRes, blocksRes] = await Promise.allSettled([
+            const [statusRes, networkStatsRes, blocksRes, tokensRes, nftsRes, whalesRes] = await Promise.allSettled([
                 fetchStatus({ timeoutMs: ssrFastTimeoutMs }),
                 fetchNetworkStats({ timeoutMs: ssrFastTimeoutMs }),
                 getFlowV1Block({ query: { limit: 50, offset: 0 }, timeout: ssrFastTimeoutMs }),
+                getFlowV1Ft({ query: { limit: 5, offset: 0, sort: 'trending' } as any, timeout: ssrFastTimeoutMs }),
+                getFlowV1Nft({ query: { limit: 5, offset: 0, sort: 'trending' } as any, timeout: ssrFastTimeoutMs }),
+                fetchBigTransfers({ limit: 5 }),
             ]);
             return {
                 status: statusRes.status === 'fulfilled' ? statusRes.value : null,
                 networkStats: networkStatsRes.status === 'fulfilled' ? networkStatsRes.value : null,
                 blocks: blocksRes.status === 'fulfilled' ? (blocksRes.value.data?.data ?? []) : [],
+                tokens: tokensRes.status === 'fulfilled' ? (tokensRes.value.data?.data ?? []) : null,
+                nfts: nftsRes.status === 'fulfilled' ? (nftsRes.value.data?.data ?? []) : null,
+                whales: whalesRes.status === 'fulfilled' ? whalesRes.value : null,
             };
         } catch (e) {
             console.error("Failed to load initial data", e);
-            return { status: null, networkStats: null, blocks: [] };
+            return { status: null, networkStats: null, blocks: [], tokens: null, nfts: null, whales: null };
         }
     }
 })
 
 function Home() {
-    const { status, networkStats: initialNetworkStats, blocks: initialBlocks } = Route.useLoaderData();
+    const { status, networkStats: initialNetworkStats, blocks: initialBlocks, tokens: initialTokens, nfts: initialNfts, whales: initialWhales } = Route.useLoaderData();
 
     // Prevent SSR hydration mismatch for Date.now()-based UI (relative timestamps, etc).
     const [hydrated, setHydrated] = useState(false);
     const [blocks, setBlocks] = useState<any[]>(initialBlocks || []);
     const [transactions, setTransactions] = useState<any[]>([]);
-    const [tokens, setTokens] = useState<any[] | null>(null);
-    const [nftCollections, setNftCollections] = useState<any[] | null>(null);
+    const [tokens, setTokens] = useState<any[] | null>(initialTokens ?? null);
+    const [nftCollections, setNftCollections] = useState<any[] | null>(initialNfts ?? null);
     const [statusRaw, setStatusRaw] = useState<any>(status);
     const [networkStats, setNetworkStats] = useState<any>(initialNetworkStats);
     const [tps, setTps] = useState(0);
@@ -407,8 +410,8 @@ function Home() {
         if (!networkStats) refreshNetworkStats();
         if (!initialBlocks?.length) loadBlocks();
         loadTransactions();
-        loadTokens();
-        loadNftCollections();
+        if (!initialTokens?.length) loadTokens();
+        if (!initialNfts?.length) loadNftCollections();
 
         const statusTimer = setInterval(refreshStatus, 20000);
         const networkStatsTimer = setInterval(refreshNetworkStats, 60000);
@@ -822,7 +825,7 @@ function Home() {
                         transition={{ duration: 0.5, delay: 0.7 }}
                         className="h-full"
                     >
-                        <BigTransfersCompact />
+                        <BigTransfersCompact initialData={initialWhales} />
                     </motion.div>
                 </div>
 
