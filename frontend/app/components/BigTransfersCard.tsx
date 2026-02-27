@@ -104,10 +104,8 @@ function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boole
           </span>
         </div>
         <div className="flex items-center gap-1 mt-0.5 text-[10px] font-mono text-zinc-400 dark:text-gray-500">
-          <span>From</span>
           <AddressWithAvatar address={tx.from_address} />
           <ArrowRight className="h-2.5 w-2.5 mx-0.5" />
-          <span>To</span>
           <AddressWithAvatar address={tx.to_address} />
         </div>
       </div>
