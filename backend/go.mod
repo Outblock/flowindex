@@ -31,6 +31,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.1-0.20251019205732-39888e6be013 // indirect
 	github.com/fxamacker/circlehash v0.3.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
@@ -51,6 +52,7 @@ require (
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/supranational/blst v0.3.16-0.20250831170142-f48500c1fdbe // indirect
+	github.com/svix/svix-webhooks v1.86.0 // indirect
 	github.com/texttheater/golang-levenshtein/levenshtein v0.0.0-20200805054039-cae8b0eaed6c // indirect
 	github.com/turbolent/prettier v0.0.0-20220320183459-661cc755135d // indirect
 	github.com/x448/float16 v0.8.4 // indirect
