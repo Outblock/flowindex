@@ -5,7 +5,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Ft } from '../../api/gen/find';
 import { normalizeAddress, getTokenLogoURL } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
-import { TrendingUp, TrendingDown, Minus, ChevronDown, Coins, Award, Clock, Wallet, Download } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ChevronDown, Coins, Award, Clock, Wallet, Download, Calendar } from 'lucide-react';
 import type { FTVaultInfo, StakingInfo } from '../../../cadence/cadence.gen';
 
 interface Props {
@@ -74,6 +74,9 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
     const normalizedAddress = normalizeAddress(address);
     const [selectedToken, setSelectedToken] = useState(FLOW_TOKEN_IDENTIFIER);
     const [days, setDays] = useState(30);
+    const [customRange, setCustomRange] = useState(false);
+    const [customFrom, setCustomFrom] = useState('');
+    const [customTo, setCustomTo] = useState('');
     const [data, setData] = useState<BalancePoint[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -134,7 +137,7 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
                     name: t.name || meta?.name || t.contractName,
                     symbol: t.symbol || meta?.symbol || t.contractName,
                     balance: parseFloat(t.balance) || 0,
-                    logo: getTokenLogoURL(t) || meta?.logo || '',
+                    logo: meta?.logo || getTokenLogoURL(t) || '',
                     contractName: t.contractName,
                 };
             })
@@ -182,8 +185,15 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
     }, [normalizedAddress]);
 
     useEffect(() => {
-        fetchHistory(selectedToken, days);
-    }, [selectedToken, days, fetchHistory]);
+        if (customRange && customFrom && customTo) {
+            const from = new Date(customFrom);
+            const to = new Date(customTo);
+            const diffDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)));
+            fetchHistory(selectedToken, diffDays);
+        } else if (!customRange) {
+            fetchHistory(selectedToken, days);
+        }
+    }, [selectedToken, days, customRange, customFrom, customTo, fetchHistory]);
 
     // Lazy-load sparklines for top tokens in overview list
     useEffect(() => {
@@ -314,14 +324,14 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
                     )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     {/* Range Buttons */}
                     <div className="flex items-center gap-1">
                         {RANGES.map((range) => (
                             <button
                                 key={range.days}
-                                onClick={() => setDays(range.days)}
-                                className={`text-[9px] uppercase tracking-wider px-2 py-1 border rounded-sm transition-colors ${days === range.days
+                                onClick={() => { setDays(range.days); setCustomRange(false); }}
+                                className={`text-[9px] uppercase tracking-wider px-2 py-1 border rounded-sm transition-colors ${!customRange && days === range.days
                                     ? 'text-nothing-green-dark dark:text-nothing-green border-nothing-green-dark/40 dark:border-nothing-green/40 bg-nothing-green/10'
                                     : 'text-zinc-500 border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20'
                                     }`}
@@ -329,7 +339,44 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
                                 {range.label}
                             </button>
                         ))}
+                        <button
+                            onClick={() => {
+                                setCustomRange(true);
+                                if (!customTo) setCustomTo(new Date().toISOString().slice(0, 10));
+                                if (!customFrom) {
+                                    const d = new Date();
+                                    d.setFullYear(d.getFullYear() - 1);
+                                    setCustomFrom(d.toISOString().slice(0, 10));
+                                }
+                            }}
+                            className={`text-[9px] uppercase tracking-wider px-2 py-1 border rounded-sm transition-colors flex items-center gap-1 ${customRange
+                                ? 'text-nothing-green-dark dark:text-nothing-green border-nothing-green-dark/40 dark:border-nothing-green/40 bg-nothing-green/10'
+                                : 'text-zinc-500 border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20'
+                                }`}
+                        >
+                            <Calendar size={9} />
+                            Custom
+                        </button>
                     </div>
+
+                    {/* Custom Date Inputs */}
+                    {customRange && (
+                        <div className="flex items-center gap-1.5">
+                            <input
+                                type="date"
+                                value={customFrom}
+                                onChange={(e) => setCustomFrom(e.target.value)}
+                                className="text-[10px] px-2 py-1 border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-sm focus:outline-none focus:border-nothing-green/40"
+                            />
+                            <span className="text-[10px] text-zinc-400">—</span>
+                            <input
+                                type="date"
+                                value={customTo}
+                                onChange={(e) => setCustomTo(e.target.value)}
+                                className="text-[10px] px-2 py-1 border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-sm focus:outline-none focus:border-nothing-green/40"
+                            />
+                        </div>
+                    )}
 
                     {/* Export Dropdown */}
                     <div className="relative" ref={exportRef}>
@@ -506,7 +553,7 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
                         </div>
                     </GlassCard>
                     <GlassCard className="p-5">
-                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">% Change ({days}d)</p>
+                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">% Change ({customRange ? 'Custom' : `${days}d`})</p>
                         <p className={`text-xl font-bold ${periodChangePct > 0 ? 'text-nothing-green' : periodChangePct < 0 ? 'text-red-500' : ''}`}>
                             {periodChangePct >= 0 ? '+' : ''}{periodChangePct.toFixed(2)}%
                         </p>
