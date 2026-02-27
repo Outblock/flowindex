@@ -23,6 +23,22 @@ function timeAgo(ts: string): string {
     return `${d}d ago`;
 }
 
+function formatDateTime(ts: string): string {
+    const d = new Date(ts);
+    const mon = d.toLocaleString('en-US', { month: 'short' });
+    const day = d.getDate();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${mon} ${day} ${hh}:${mm}`;
+}
+
+function formatTxHash(hash: string): string {
+    if (!hash) return '';
+    const h = hash.startsWith('0x') ? hash : `0x${hash}`;
+    if (h.length <= 18) return h;
+    return `${h.slice(0, 10)}...${h.slice(-6)}`;
+}
+
 export function AccountFTTransfersTab({ address }: Props) {
     const normalizedAddress = normalizeAddress(address);
 
@@ -113,14 +129,31 @@ export function AccountFTTransfersTab({ address }: Props) {
                                                 <UsdValue value={tx.usd_value} className="text-[10px]" />
                                             </div>
                                         </td>
-                                        <td className="p-4">
-                                            {tx.sender ? <AddressLink address={tx.sender} /> : '—'}
+                                        <td className="p-4 align-middle">
+                                            <div className="flex items-center">
+                                                {tx.sender ? <AddressLink address={tx.sender} /> : '—'}
+                                            </div>
                                         </td>
-                                        <td className="p-4">
-                                            {tx.receiver ? <AddressLink address={tx.receiver} /> : '—'}
+                                        <td className="p-4 align-middle">
+                                            <div className="flex items-center">
+                                                {tx.receiver ? <AddressLink address={tx.receiver} /> : '—'}
+                                            </div>
                                         </td>
-                                        <td className="p-4 text-right text-zinc-500" title={tx.timestamp ? new Date(tx.timestamp).toLocaleString() : ''}>
-                                            {tx.timestamp ? timeAgo(tx.timestamp) : (tx.block_height ?? '—')}
+                                        <td className="p-4 text-right align-middle">
+                                            <div className="flex flex-col items-end gap-0.5">
+                                                {tx.timestamp ? (
+                                                    <span className="text-zinc-700 dark:text-zinc-300">
+                                                        {formatDateTime(tx.timestamp)}{' '}
+                                                        <span className="text-zinc-400">| {timeAgo(tx.timestamp)}</span>
+                                                    </span>
+                                                ) : null}
+                                                <span className="text-zinc-400 text-[10px]">
+                                                    #{tx.block_height ?? '—'}
+                                                    {tx.transaction_hash ? (
+                                                        <>{' | '}<Link to={`/transactions/${tx.transaction_hash}` as any} className="hover:underline text-nothing-green-dark dark:text-nothing-green">tx:{formatTxHash(tx.transaction_hash)}</Link></>
+                                                    ) : null}
+                                                </span>
+                                            </div>
                                         </td>
                                     </tr>
                                 );
