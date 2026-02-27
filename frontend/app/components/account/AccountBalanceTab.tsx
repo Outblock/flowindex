@@ -34,7 +34,7 @@ export function AccountBalanceTab({ address }: Props) {
         setError(null);
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/v1/flow/account/${normalizedAddress}/balance/history?days=${numDays}`);
+            const res = await fetch(`${baseUrl}/flow/v1/account/${normalizedAddress}/balance/history?days=${numDays}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const json = await res.json();
             const points: BalancePoint[] = (json.data || []).map((p: { date: string; balance: string }) => ({
