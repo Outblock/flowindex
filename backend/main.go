@@ -1128,7 +1128,7 @@ func loadPriceCacheFromDB(ctx context.Context, repo *repository.Repository, cach
 		log.Printf("[price_cache] Loaded %d prices for %s", len(daily), asset)
 	}
 	// Stablecoins always $1
-	for _, stable := range []string{"USDC", "USDT", "FUSD"} {
+	for _, stable := range []string{"USDC", "USDT", "FUSD", "USDF", "PYUSD", "stgUSDC", "ceDAI", "ceUSDT", "ceBUSD"} {
 		if _, ok := cache.GetLatestPrice(stable); !ok {
 			today := time.Now().UTC().Truncate(24 * time.Hour)
 			cache.Load(stable, []market.DailyPrice{{Date: today, Price: 1.0}})
