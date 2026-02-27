@@ -5,7 +5,7 @@ import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Ft } from '../../api/gen/find';
 import { normalizeAddress, getTokenLogoURL } from './accountUtils';
 import { GlassCard } from '../ui/GlassCard';
-import { TrendingUp, TrendingDown, Minus, ChevronDown, Coins, Award, Clock, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ChevronDown, Coins, Award, Clock, Wallet, Download } from 'lucide-react';
 import type { FTVaultInfo, StakingInfo } from '../../../cadence/cadence.gen';
 
 interface Props {
@@ -54,6 +54,23 @@ const formatBalance = (value: number) => {
     return value.toFixed(2);
 };
 
+function downloadCsv(filename: string, headers: string[], rows: string[][]) {
+    const csv = [
+        headers.join(','),
+        ...rows.map(r => r.map(cell => {
+            const s = String(cell ?? '');
+            return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+        }).join(','))
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 export function AccountBalanceTab({ address, staking, tokens }: Props) {
     const normalizedAddress = normalizeAddress(address);
     const [selectedToken, setSelectedToken] = useState(FLOW_TOKEN_IDENTIFIER);
@@ -66,12 +83,26 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
     const [sparklines, setSparklines] = useState<Map<string, BalancePoint[]>>(new Map());
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const [exportOpen, setExportOpen] = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const exportRef = useRef<HTMLDivElement>(null);
 
     // Close dropdown on outside click
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
                 setDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    // Close export dropdown on outside click
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+                setExportOpen(false);
             }
         };
         document.addEventListener('mousedown', handler);
@@ -208,6 +239,55 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
     const selectedTokenInfo = tokenList.find((t) => t.identifier === selectedToken);
     const selectedLabel = selectedTokenInfo?.symbol || (isFlowToken(selectedToken) ? 'FLOW' : selectedToken.split('.').pop() || selectedToken);
 
+    const exportDailyBalances = () => {
+        if (data.length === 0) return;
+        downloadCsv(
+            `${normalizedAddress}-${selectedLabel}-daily-balances.csv`,
+            ['date', 'token', 'balance'],
+            data.map(p => [p.date, selectedLabel, p.balance.toString()])
+        );
+    };
+
+    const exportTransfers = async () => {
+        setExporting(true);
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const allTransfers: any[] = [];
+            let offset = 0;
+            const limit = 200;
+            let hasMore = true;
+            while (hasMore) {
+                const res = await fetch(
+                    `${baseUrl}/flow/v1/account/${normalizedAddress}/ft/transfer?limit=${limit}&offset=${offset}`
+                );
+                if (!res.ok) break;
+                const json = await res.json();
+                const items = json.data || [];
+                allTransfers.push(...items);
+                hasMore = (json._meta?.has_more === true || json._meta?.has_more === 1) && items.length === limit;
+                offset += limit;
+                if (offset > 50000) break; // safety limit
+            }
+            downloadCsv(
+                `${normalizedAddress}-transfers.csv`,
+                ['date', 'tx_id', 'block_height', 'token', 'from', 'to', 'amount'],
+                allTransfers.map((t: any) => [
+                    t.timestamp || t.block_time || '',
+                    t.transaction_id || t.tx_id || '',
+                    String(t.block_height || ''),
+                    t.contract_name || '',
+                    t.from_address || '',
+                    t.to_address || '',
+                    t.amount || '0',
+                ])
+            );
+        } catch (err) {
+            console.error('Export transfers failed', err);
+        } finally {
+            setExporting(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header: Token Selector + Range Buttons */}
@@ -245,20 +325,59 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
                     )}
                 </div>
 
-                {/* Range Buttons */}
-                <div className="flex items-center gap-1">
-                    {RANGES.map((range) => (
+                <div className="flex items-center gap-2">
+                    {/* Range Buttons */}
+                    <div className="flex items-center gap-1">
+                        {RANGES.map((range) => (
+                            <button
+                                key={range.days}
+                                onClick={() => setDays(range.days)}
+                                className={`text-[9px] uppercase tracking-wider px-2 py-1 border rounded-sm transition-colors ${days === range.days
+                                    ? 'text-nothing-green-dark dark:text-nothing-green border-nothing-green-dark/40 dark:border-nothing-green/40 bg-nothing-green/10'
+                                    : 'text-zinc-500 border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20'
+                                    }`}
+                            >
+                                {range.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Export Dropdown */}
+                    <div className="relative" ref={exportRef}>
                         <button
-                            key={range.days}
-                            onClick={() => setDays(range.days)}
-                            className={`text-[9px] uppercase tracking-wider px-2 py-1 border rounded-sm transition-colors ${days === range.days
-                                ? 'text-nothing-green-dark dark:text-nothing-green border-nothing-green-dark/40 dark:border-nothing-green/40 bg-nothing-green/10'
-                                : 'text-zinc-500 border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20'
-                                }`}
+                            onClick={() => setExportOpen(!exportOpen)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 text-[9px] uppercase tracking-wider border border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20 rounded-sm transition-colors"
                         >
-                            {range.label}
+                            <Download size={10} />
+                            Export
+                            <ChevronDown size={8} />
                         </button>
-                    ))}
+                        {exportOpen && (
+                            <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 shadow-xl rounded-sm overflow-hidden">
+                                <button
+                                    onClick={() => { exportDailyBalances(); setExportOpen(false); }}
+                                    disabled={data.length === 0}
+                                    className="w-full text-left px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30"
+                                >
+                                    Daily Balances (CSV)
+                                </button>
+                                <button
+                                    onClick={() => { exportTransfers(); setExportOpen(false); }}
+                                    disabled={exporting}
+                                    className="w-full text-left px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-30 flex items-center gap-2"
+                                >
+                                    {exporting ? (
+                                        <>
+                                            <span className="inline-block w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
+                                            Exporting...
+                                        </>
+                                    ) : (
+                                        'Transfer History (CSV)'
+                                    )}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
