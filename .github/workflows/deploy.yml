@@ -21,13 +21,11 @@ on:
         type: string
 
 env:
-  # TODO: Replace with your GCP project and Artifact Registry path
-  PROJECT_ID: your-gcp-project
+  PROJECT_ID: flowindex-mainnet
   REGION: us-central1
-  REGISTRY: us-central1-docker.pkg.dev/your-gcp-project/your-registry
-  # TODO: Replace with your GCE instance names
-  BACKEND_VM: your-backend-vm
-  FRONTEND_VM: your-frontend-vm
+  REGISTRY: us-central1-docker.pkg.dev/flowindex-mainnet/flowindex
+  BACKEND_VM: flowindex-backend
+  FRONTEND_VM: flowindex-frontend
   GCE_ZONE: us-central1-a
 
 jobs:
