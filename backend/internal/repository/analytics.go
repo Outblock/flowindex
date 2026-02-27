@@ -355,7 +355,12 @@ FROM (
     ft.block_height,
     ft.timestamp,
     CASE
-      WHEN (ft.from_address IS NULL OR ft.to_address IS NULL) AND COALESCE(tx.is_evm, false) THEN 'bridge'
+      WHEN (ft.from_address IS NULL OR ft.to_address IS NULL)
+           AND EXISTS (SELECT 1 FROM raw.transactions rtx
+                       WHERE rtx.id = ft.transaction_id
+                         AND rtx.block_height = ft.block_height
+                         AND rtx.is_evm = true)
+        THEN 'bridge'
       WHEN ft.from_address IS NULL THEN 'mint'
       WHEN ft.to_address IS NULL THEN 'burn'
       ELSE 'transfer'
@@ -373,9 +378,6 @@ FROM (
     ON tk.contract_address = ft.token_contract_address
    AND tk.contract_name = ft.contract_name
   JOIN prices p ON p.symbol = tk.market_symbol
-  LEFT JOIN raw.transactions tx
-    ON tx.transaction_id = ft.transaction_id
-   AND tx.block_height = ft.block_height
   WHERE ft.timestamp > NOW() - INTERVAL '7 days'
     AND ft.amount * p.usd_price >= $%d
 
