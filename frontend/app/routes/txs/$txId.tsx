@@ -1293,7 +1293,7 @@ function TransactionDetail() {
                                                     <div className="flex items-center gap-2">
                                                         {formatAddress(event.contract_address) && event.contract_name ? (
                                                             <Link to={`/contracts/A.${formatAddress(event.contract_address).replace(/^0x/, '')}.${event.contract_name}` as any} className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors">
-                                                                A.{formatAddress(event.contract_address).replace(/^0x/, '').slice(0, 8)}...{formatAddress(event.contract_address).replace(/^0x/, '').slice(-4)}.{event.contract_name}
+                                                                A.{formatAddress(event.contract_address).replace(/^0x/, '')}.{event.contract_name}
                                                             </Link>
                                                         ) : formatAddress(event.contract_address) ? (
                                                             <AddressLink address={formatAddress(event.contract_address)} size={12} className="text-[10px]" />

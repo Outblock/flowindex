@@ -178,22 +178,23 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 				"amount":       ft.Amount,
 				"event_index":  ft.EventIndex,
 			}
+			var usdPrice float64
 			if meta, ok := ftMeta[ft.Token]; ok {
 				item["token_name"] = meta.Name
 				item["token_symbol"] = meta.Symbol
 				item["token_logo"] = meta.Logo
 				item["token_decimals"] = meta.Decimals
-				// USD value at transaction time
-				var usdPrice float64
 				if meta.MarketSymbol != "" {
 					usdPrice, _ = s.priceCache.GetPriceAt(meta.MarketSymbol, tx.Timestamp)
-				} else if ft.ContractName == "FlowToken" {
-					usdPrice, _ = s.priceCache.GetPriceAt("FLOW", tx.Timestamp)
 				}
-				if usdPrice > 0 {
-					item["usd_value"] = parseFloatOrZero(ft.Amount) * usdPrice
-					item["approx_usd_price"] = usdPrice
-				}
+			}
+			// Fallback: FlowToken always has a price even without metadata
+			if usdPrice == 0 && ft.ContractName == "FlowToken" {
+				usdPrice, _ = s.priceCache.GetPriceAt("FLOW", tx.Timestamp)
+			}
+			if usdPrice > 0 {
+				item["usd_value"] = parseFloatOrZero(ft.Amount) * usdPrice
+				item["approx_usd_price"] = usdPrice
 			}
 			fromIsCOA := false
 			toIsCOA := false
