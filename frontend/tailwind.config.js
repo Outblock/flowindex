@@ -42,8 +42,8 @@ export default {
         // ... (keep rest default)
       },
       fontFamily: {
-        mono: ["JetBrains Mono", "monospace"],
-        sans: ["IBM Plex Sans", ...fontFamily.sans],
+        mono: ["Inconsolata", "Space Mono", "monospace"],
+        sans: ["Inconsolata", "Space Mono", ...fontFamily.sans],
         'geist': ["Geist Sans", "sans-serif"],
         'geist-mono': ["Geist Mono", "monospace"],
       },
