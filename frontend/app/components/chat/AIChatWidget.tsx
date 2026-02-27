@@ -976,7 +976,7 @@ export default function AIChatWidget() {
                 width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined,
                 height: mobileHeight != null ? `${mobileHeight}px` : undefined,
               }}
-              className="fixed top-0 right-0 z-[71] w-full md:w-auto bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-white/10 flex flex-col shadow-2xl h-[100dvh] md:h-full"
+              className="ai-chat-panel fixed top-0 right-0 z-[71] w-full md:w-auto bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-white/10 flex flex-col shadow-2xl h-[100dvh] md:h-full font-geist"
             >
               {/* Resize handle */}
               <div
