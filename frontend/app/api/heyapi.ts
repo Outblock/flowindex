@@ -185,3 +185,35 @@ export async function fetchAnalyticsTransfersDaily(from?: string, to?: string): 
   const json = await res.json();
   return json?.data ?? [];
 }
+
+export interface BigTransfer {
+  tx_id: string;
+  block_height: number;
+  timestamp: string;
+  type: 'mint' | 'burn' | 'transfer' | 'swap' | 'bridge';
+  token_symbol: string;
+  token_contract_address: string;
+  contract_name: string;
+  amount: string;
+  usd_value: number;
+  from_address: string;
+  to_address: string;
+}
+
+export async function fetchBigTransfers(
+  opts: { limit?: number; offset?: number; minUsd?: number; type?: string } = {}
+): Promise<BigTransfer[]> {
+  await ensureHeyApiConfigured();
+  const params = new URLSearchParams();
+  if (opts.limit) params.set('limit', String(opts.limit));
+  if (opts.offset) params.set('offset', String(opts.offset));
+  if (opts.minUsd) params.set('min_usd', String(opts.minUsd));
+  if (opts.type) params.set('type', opts.type);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  try {
+    const json = await fetchJsonWithTimeout(`${_baseURL}/analytics/big-transfers${qs}`, 10000);
+    return json?.data ?? [];
+  } catch {
+    return [];
+  }
+}
