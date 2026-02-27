@@ -59,6 +59,7 @@ services:
       - BACKEND_API=http://backend:8080
       - BACKEND_WS=http://backend:8080
       - DOCS_URL=http://localhost:3001
+      - VITE_GOTRUE_URL=http://localhost:9999
     ports:
       - "5173:8080" # Nginx listens on 8080 inside the container
     depends_on:
@@ -96,7 +97,14 @@ services:
       GOTRUE_JWT_EXP: 3600
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
-      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      GOTRUE_SMTP_HOST: ${GOTRUE_SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${GOTRUE_SMTP_PORT:-465}
+      GOTRUE_SMTP_USER: ${GOTRUE_SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${GOTRUE_SMTP_PASS:-}
+      GOTRUE_SMTP_SENDER_NAME: ${GOTRUE_SMTP_SENDER_NAME:-FlowIndex}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL:-noreply@flowindex.io}
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /developer/callback
     ports:
       - "9999:9999"
 
