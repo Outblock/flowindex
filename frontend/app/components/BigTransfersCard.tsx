@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Whale, ArrowRight, ArrowDown, ArrowUp, Repeat, Zap } from 'lucide-react';
+import { Fish, ArrowRight, ArrowDown, ArrowUp, Repeat, Zap } from 'lucide-react';
 import { fetchBigTransfers, type BigTransfer } from '../api/heyapi';
 
-const TYPE_CONFIG: Record<string, { label: string; icon: typeof Whale; color: string }> = {
+const TYPE_CONFIG: Record<string, { label: string; icon: typeof Fish; color: string }> = {
   mint: { label: 'Mint', icon: ArrowDown, color: 'text-green-500' },
   burn: { label: 'Burn', icon: ArrowUp, color: 'text-red-500' },
   transfer: { label: 'Transfer', icon: ArrowRight, color: 'text-blue-500' },
@@ -93,7 +93,7 @@ export function BigTransfersCompact() {
     <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10">
       <div className="flex items-center justify-between p-6 pb-0">
         <div className="flex items-center space-x-3">
-          <Whale className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
+          <Fish className="h-5 w-5 text-nothing-green-dark dark:text-nothing-green" />
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Whale Alert</h2>
         </div>
         <Link to="/analytics" search={{ tab: 'whales' } as any} className="text-xs text-nothing-green-dark dark:text-nothing-green uppercase tracking-widest hover:underline font-mono">
