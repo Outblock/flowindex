@@ -12,7 +12,7 @@ set -euo pipefail
 #
 # Prerequisites:
 #   - gcloud CLI authenticated (gcloud auth login)
-#   - IAP access to flow-evm-blockscout-mainnet
+#   - IAP access to your GCP project
 #   - Python 3.11+
 #   - ANTHROPIC_API_KEY set in env or .env file
 #
@@ -22,10 +22,10 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT="flow-evm-blockscout-mainnet"
-ZONE="us-west1-a"
-BACKEND_VM="backend"
-DB_VM="db"
+PROJECT="${GCP_PROJECT:-your-gcp-project}"
+ZONE="${GCP_ZONE:-us-west1-a}"
+BACKEND_VM="${BACKEND_VM:-backend}"
+DB_VM="${DB_VM:-db}"
 LOCAL_PORT="${LOCAL_PORT:-15432}"
 SERVER_PORT="${SERVER_PORT:-8084}"
 TUNNEL_PID=""

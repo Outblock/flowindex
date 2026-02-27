@@ -9,16 +9,16 @@ set -euo pipefail
 #   - Docker installed locally
 #   - ANTHROPIC_API_KEY set in environment (or passed via .env)
 
-PROJECT="flow-evm-blockscout-mainnet"
-ZONE="us-west1-a"
-REGION="us-west1"
-VM_NAME="vanna-sql"
+PROJECT="${GCP_PROJECT:-your-gcp-project}"
+ZONE="${GCP_ZONE:-us-west1-a}"
+REGION="${GCP_REGION:-us-west1}"
+VM_NAME="${VM_NAME:-vanna-sql}"
 IMAGE_NAME="vanna-sql"
 IMAGE_TAG="latest"
 IMAGE_FILE="/tmp/${IMAGE_NAME}.tar.gz"
 
-# Database connection (internal VPC address)
-DB_URL="postgresql://postgres:postgres@10.10.0.2:5432/blockscout"
+# Database connection (set via environment or .env file)
+DB_URL="${DATABASE_URL:?DATABASE_URL must be set (e.g. postgresql://user:pass@host:5432/dbname)}"
 
 # --- Helpers ---
 log() { echo "==> $*"; }

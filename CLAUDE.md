@@ -4,26 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FlowScan Clone is a high-performance blockchain explorer for the Flow Blockchain with Flow-EVM support. It features a Go backend with concurrent block ingestion and a React frontend with "Nothing Phone" inspired aesthetics.
+FlowIndex is a high-performance blockchain explorer and indexer for the Flow blockchain with Flow-EVM support. It features a Go backend with concurrent block ingestion and a React frontend.
 
 **Key Technologies:**
 - Backend: Go 1.24+, PostgreSQL (pgx driver), Flow SDK, Gorilla WebSocket/Mux
 - Frontend: React 19, Vite, TailwindCSS, Shadcn/UI, React Router, Recharts
-- Deployment: Docker, Docker Compose, Railway
+- Deployment: Docker, Docker Compose, GCP (or any Docker-capable platform)
 
 ## Development Commands
 
 ### Local Development (Docker Compose)
 ```bash
 # Start all services (PostgreSQL, backend, frontend)
-docker-compose up -d --build
+docker compose up -d --build
 
 # View logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker compose logs -f backend
+docker compose logs -f frontend
 
 # Stop services
-docker-compose down
+docker compose down
 
 # Access points:
 # - Frontend: http://localhost:5173
@@ -46,7 +46,6 @@ CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o indexer main.go
 DB_URL=postgres://flowscan:secretpassword@localhost:5432/flowscan \
 FLOW_ACCESS_NODE=access-001.mainnet28.nodes.onflow.org:9000 \
 PORT=8080 \
-START_BLOCK=140900000 \
 ./indexer
 
 # Run tests
@@ -57,25 +56,22 @@ go test ./...
 ```bash
 cd frontend
 
-# Install dependencies
-npm ci
+# Install dependencies (prefer bun)
+bun install
 
 # Development server
-npm run dev
+bun run dev
 
 # Build for production
-npm run build
+bun run build
 
 # Lint
-npm run lint
-
-# Preview production build
-npm run preview
+bun run lint
 ```
 
 ### Database Management
 ```bash
-# Connect to PostgreSQL
+# Connect to local PostgreSQL
 psql postgres://flowscan:secretpassword@localhost:5432/flowscan
 
 # Run schema manually
@@ -161,7 +157,7 @@ The backend follows a concurrent pipeline architecture inspired by Blockscout:
 
 4. **API Client** (`frontend/src/api.js`):
    - Axios-based wrapper for backend API
-   - Uses `VITE_API_URL` environment variable (Railway deployment)
+   - Uses `VITE_API_URL` environment variable
 
 5. **WebSocket Integration** (`frontend/src/hooks/useWebSocket.js`):
    - Live block and transaction updates from backend
@@ -175,24 +171,17 @@ The backend follows a concurrent pipeline architecture inspired by Blockscout:
 - `FLOW_HISTORIC_ACCESS_NODES`: Optional node pool for history ingestion across sporks
 - `PORT`: API server port (default: 8080)
 - `START_BLOCK`: Starting block height for ingestion
-- `LATEST_WORKER_COUNT`: Forward ingester workers (Railway: 50, local: 2)
-- `LATEST_BATCH_SIZE`: Forward ingester batch size (Railway: 10, local: 1)
-- `HISTORY_WORKER_COUNT`: Backward ingester workers (Railway: 100, local: 10)
-- `HISTORY_BATCH_SIZE`: Backward ingester batch size (Railway: 500, local: 20)
+- `LATEST_WORKER_COUNT`: Forward ingester workers (default: 2)
+- `LATEST_BATCH_SIZE`: Forward ingester batch size (default: 1)
+- `HISTORY_WORKER_COUNT`: Backward ingester workers (default: 5)
+- `HISTORY_BATCH_SIZE`: Backward ingester batch size (default: 20)
 - `ENABLE_HISTORY_INGESTER`: Enable history backfill (default: true)
-- `DB_MAX_OPEN_CONNS`: Database connection pool size (Railway: 200)
-- `DB_MAX_IDLE_CONNS`: Idle connection limit (Railway: 50)
+- `DB_MAX_OPEN_CONNS`: Database connection pool size
+- `DB_MAX_IDLE_CONNS`: Idle connection limit
 - `TX_SCRIPT_INLINE_MAX_BYTES`: If >0, store small scripts inline; otherwise use `raw.scripts`
 
 ### Frontend Environment Variables
-- `VITE_API_URL`: Backend API base URL (Railway: dynamic, local: http://localhost:8080)
-
-### Railway Deployment (`railway.toml`)
-- Two services: `backend` and `frontend`
-- Root build context strategy (Dockerfiles in subdirectories)
-- Backend uses `RAILWAY_DOCKERFILE_PATH=backend/Dockerfile`
-- Frontend uses `RAILWAY_DOCKERFILE_PATH=frontend/Dockerfile`
-- Database URL templated with Railway Postgres variables
+- `VITE_API_URL`: Backend API base URL (default: http://localhost:8080)
 
 ## Key Implementation Details
 
@@ -209,12 +198,11 @@ Flow-EVM transactions are detected by scanning transaction scripts for `import E
 - Additional EVM-specific data is stored in `evm_transactions` table
 - Event parsing extracts EVM hash, from/to addresses, value, gas used
 
-### Exhaustive Data Redundancy
-Per commit history, the schema captures maximum redundancy:
-- Full signature arrays (proposal_key, payload_signatures, envelope_signatures)
-- Complete block metadata (collection_guarantees, block_seals)
-- Event transaction_index and position tracking
-- ProposerKeyIndex stored as INT (aligned with Flow spec)
+### Spork-Aware History Backfill
+Flow access nodes only serve blocks for the current spork. For full history:
+- Configure `FLOW_HISTORIC_ACCESS_NODES` with nodes for each spork
+- The ingester pins all RPC calls for a height to a single node for consistency
+- Supports both batch API (spork 18+) and per-tx fallback (spork 1-17)
 
 ### Atomic Batch Processing
 Workers fetch complete block data independently, then `SaveBlockData()` inserts all related records in a single transaction. This ensures:
@@ -231,7 +219,7 @@ Workers fetch complete block data independently, then `SaveBlockData()` inserts 
 4. Update frontend `src/api.js` with new API call
 
 ### Adding New Database Tables
-1. Add CREATE TABLE to `backend/schema.sql`
+1. Add CREATE TABLE to `backend/schema_v2.sql`
 2. Define Go struct in `internal/models/models.go`
 3. Add repository methods in `internal/repository/postgres.go`
 4. Update `SaveBlockData()` if part of block ingestion pipeline
@@ -240,30 +228,24 @@ Workers fetch complete block data independently, then `SaveBlockData()` inserts 
 1. Worker logic: `internal/ingester/worker.go` (`FetchBlockData` method)
 2. Service orchestration: `internal/ingester/service.go`
 3. Configuration: `backend/main.go` (ingester initialization)
-4. Schema changes: `backend/schema.sql` + models
+4. Schema changes: `backend/schema_v2.sql` + models
 
 ### Frontend Component Development
 1. Use Shadcn/UI components from `src/components/ui/`
-2. Follow "Nothing Phone" aesthetic (minimal, monochrome, geometric)
+2. Follow minimal, monochrome aesthetic
 3. Tailwind utility classes for styling
 4. Framer Motion for animations
 5. Lucide React for icons
 
-## Testing
-
-### Manual Testing Scripts (Root Directory)
-- `test-homepage.js`: Verify dashboard rendering
-- `test-block-page.js`: Test block detail page
-- `test-tx-page.js`: Test transaction detail page
-- `test-account-page.js`: Test account detail page
-- `test-page.js`: Generic page tester
-
-Run with Node.js (these appear to be simple frontend smoke tests).
+## Workers (12 types)
+`main_ingester`, `token_worker`, `evm_worker`, `meta_worker`, `accounts_worker`, `ft_holdings_worker`, `nft_ownership_worker`, `token_metadata_worker`, `tx_contracts_worker`, `tx_metrics_worker`, `staking_worker`, `defi_worker`
 
 ## Notes
 
 - The codebase prioritizes data completeness over storage optimization (exhaustive redundancy principle)
-- Worker concurrency is tuned differently for production (Railway) vs local development
-- Database migrations run automatically on backend startup via `repo.Migrate("schema.sql")`
+- Worker concurrency should be tuned for your infrastructure (local: low, production: high)
+- Database migrations run automatically on backend startup via `repo.Migrate("schema_v2.sql")`
 - Frontend expects backend API at `VITE_API_URL` or falls back to relative paths
 - All timestamps use PostgreSQL `TIMESTAMPTZ` for timezone awareness
+- Addresses in DB are stored normalized as lowercase hex without `0x` prefix
+- EVM hashes are stored lowercase without `0x` in `raw.tx_lookup.evm_hash`

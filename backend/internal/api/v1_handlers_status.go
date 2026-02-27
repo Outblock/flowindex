@@ -203,7 +203,7 @@ func (s *Server) handleStatusNodes(w http.ResponseWriter, r *http.Request) {
 
 // handleStatusGCPVMs proxies the /status endpoint from the GCP VM API-only container.
 // This avoids HTTPS→HTTP mixed content issues since the frontend calls same-origin.
-// Configure with GCP_STATUS_URL env var (default: http://34.30.229.27:8081/status).
+// Configure with GCP_STATUS_URL env var (default: http://localhost:8081/status).
 var gcpVMsCache struct {
 	mu        sync.Mutex
 	payload   []byte
@@ -214,7 +214,7 @@ var gcpVMsCache struct {
 func (s *Server) handleStatusGCPVMs(w http.ResponseWriter, r *http.Request) {
 	gcpURL := os.Getenv("GCP_STATUS_URL")
 	if gcpURL == "" {
-		gcpURL = "http://34.30.229.27:8081/status"
+		gcpURL = "http://localhost:8081/status"
 	}
 
 	now := time.Now()
