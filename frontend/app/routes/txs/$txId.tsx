@@ -630,9 +630,25 @@ function TransactionDetail() {
             });
         }
 
-        // Prefer API evm_executions (backend decodes RLP payload → proper from/to),
-        // fall back to derived (Cadence event fields may have null from/to).
-        const evmExecs = (apiEnrichment?.evm_executions?.length > 0 ? apiEnrichment.evm_executions : enrichments?.evm_executions) || transaction?.evm_executions || [];
+        // Merge evm_executions: API data has extra fields (gas_price etc.) but may have
+        // null from/to for old records. Derived data now decodes 0xff payloads properly.
+        // Use API as base, fill in from/to from derived when missing.
+        let evmExecs = (apiEnrichment?.evm_executions?.length > 0 ? apiEnrichment.evm_executions : enrichments?.evm_executions) || transaction?.evm_executions || [];
+        const derivedEvmExecs = enrichments?.evm_executions;
+        if (apiEnrichment?.evm_executions?.length > 0 && derivedEvmExecs && derivedEvmExecs.length > 0) {
+            const derivedByIdx = new Map<number, any>();
+            for (const e of derivedEvmExecs) derivedByIdx.set(e.event_index, e);
+            evmExecs = apiEnrichment.evm_executions.map((e: any) => {
+                const d = derivedByIdx.get(e.event_index);
+                if (!d) return e;
+                return {
+                    ...e,
+                    from: e.from || d.from,
+                    to: e.to || d.to,
+                    value: (e.value && e.value !== '0') ? e.value : d.value,
+                };
+            });
+        }
 
         // Enrich cross-VM FT transfers with actual EVM destination from decoded EVM executions.
         // When FLOW goes to a COA (bridge), the EVM execution reveals the real EVM recipient.
@@ -1662,7 +1678,7 @@ function TransactionDetail() {
 
                                                     const isExpanded = expandedPayloads[idx] ?? false;
                                                     const payloadTabKey = `evm_payload_tab_${idx}`;
-                                                    const activePayloadTab = (expandedPayloads as any)[payloadTabKey] || 'evm';
+                                                    const activePayloadTab = (expandedPayloads as any)[payloadTabKey] || (decodedRawTx ? 'raw' : 'evm');
                                                     return (
                                                         <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
                                                             <button
@@ -1680,20 +1696,20 @@ function TransactionDetail() {
                                                                 style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
                                                             >
                                                                 <div className="overflow-hidden">
-                                                                    {/* Sub-tabs: EVM Payload | Raw TX Payload */}
+                                                                    {/* Sub-tabs: Raw TX Payload (default) | EVM Payload */}
                                                                     {decodedRawTx && (
                                                                         <div className="flex border-b border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-black/30">
-                                                                            <button
-                                                                                onClick={(e) => { e.stopPropagation(); setExpandedPayloads(prev => ({ ...prev, [payloadTabKey]: 'evm' })); }}
-                                                                                className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors ${activePayloadTab === 'evm' ? 'text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
-                                                                            >
-                                                                                EVM Payload
-                                                                            </button>
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); setExpandedPayloads(prev => ({ ...prev, [payloadTabKey]: 'raw' })); }}
                                                                                 className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors ${activePayloadTab === 'raw' ? 'text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
                                                                             >
                                                                                 Raw TX Payload
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); setExpandedPayloads(prev => ({ ...prev, [payloadTabKey]: 'evm' })); }}
+                                                                                className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors ${activePayloadTab === 'evm' ? 'text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
+                                                                            >
+                                                                                EVM Payload
                                                                             </button>
                                                                         </div>
                                                                     )}
