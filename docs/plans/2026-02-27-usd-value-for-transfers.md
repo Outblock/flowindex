@@ -30,13 +30,21 @@ Immediately after the ALTER:
 
 ```sql
 -- Seed known market symbols (idempotent)
-UPDATE app.ft_tokens SET market_symbol = 'FLOW' WHERE contract_name = 'FlowToken' AND (market_symbol IS NULL OR market_symbol = '');
-UPDATE app.ft_tokens SET market_symbol = 'USDC' WHERE symbol IN ('USDC.e', 'USDC') AND (market_symbol IS NULL OR market_symbol = '');
-UPDATE app.ft_tokens SET market_symbol = 'USDT' WHERE symbol IN ('tUSDT', 'USDT') AND (market_symbol IS NULL OR market_symbol = '');
-UPDATE app.ft_tokens SET market_symbol = 'BLT'  WHERE contract_name = 'BloctoToken' AND (market_symbol IS NULL OR market_symbol = '');
-UPDATE app.ft_tokens SET market_symbol = 'REVV' WHERE contract_name = 'REVV' AND (market_symbol IS NULL OR market_symbol = '');
-UPDATE app.ft_tokens SET market_symbol = 'FUSD' WHERE contract_name = 'FUSD' AND (market_symbol IS NULL OR market_symbol = '');
-UPDATE app.ft_tokens SET market_symbol = 'stFLOW' WHERE contract_name = 'stFlowToken' AND (market_symbol IS NULL OR market_symbol = '');
+-- market_symbol: used by CryptoCompare (e.g. 'FLOW')
+-- coingecko_id: used by DeFi Llama (e.g. 'flow', 'liquid-staked-flow')
+UPDATE app.ft_tokens SET market_symbol = 'FLOW',    coingecko_id = 'flow'                WHERE contract_name = 'FlowToken'   AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'USDC',    coingecko_id = 'usd-coin'            WHERE symbol IN ('USDC.e', 'USDC')  AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'USDT',    coingecko_id = 'tether'              WHERE symbol IN ('tUSDT', 'USDT')   AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'BLT',     coingecko_id = NULL                  WHERE contract_name = 'BloctoToken' AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'REVV',    coingecko_id = 'revv'                WHERE contract_name = 'REVV'        AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'FUSD',    coingecko_id = NULL                  WHERE contract_name = 'FUSD'        AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'stFLOW',  coingecko_id = 'liquid-staked-flow'  WHERE contract_name = 'stFlowToken' AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'TSHOT',   coingecko_id = 'tshot-token'         WHERE contract_name = 'TopShotToken' AND (market_symbol IS NULL OR market_symbol = '');
+```
+
+Schema also needs:
+```sql
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS coingecko_id TEXT;
 ```
 
 **Step 3: Commit**
@@ -47,12 +55,21 @@ feat: add market_symbol column to ft_tokens for USD pricing
 
 ---
 
-## Task 2: CryptoCompare price fetcher
+## Task 2: CryptoCompare + DeFi Llama price fetchers
 
 **Files:**
 - Create: `backend/internal/market/cryptocompare.go`
+- Create: `backend/internal/market/defillama.go`
 
-**Step 1: Implement the CryptoCompare daily history fetcher**
+**Step 1: Implement the CryptoCompare daily history fetcher** (for FLOW, BLT, REVV, USDC, USDT)
+
+**Step 1b: Implement the DeFi Llama fetcher** (for stFlow, TSHOT, and anything with a CoinGecko ID)
+
+DeFi Llama endpoint: `GET https://coins.llama.fi/chart/coingecko:{id}?start={unix}&span=500&period=1d&searchWidth=600`
+- Max 500 points per request, paginate with different `start` values
+- Supports `coingecko:flow`, `coingecko:liquid-staked-flow`, `coingecko:tshot-token`
+
+**Step 1 original: Implement the CryptoCompare daily history fetcher**
 
 ```go
 package market
