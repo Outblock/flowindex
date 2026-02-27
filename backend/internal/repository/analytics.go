@@ -23,6 +23,7 @@ type AnalyticsDailyRow struct {
 	DefiSwapCount      int64   `json:"defi_swap_count"`
 	DefiUniqueTraders  int64   `json:"defi_unique_traders"`
 	EpochPayoutTotal   string  `json:"epoch_payout_total"`
+	Epoch              *int    `json:"epoch,omitempty"`
 	BridgeToEVMTxs     int64   `json:"bridge_to_evm_txs"`
 }
 
@@ -116,15 +117,20 @@ func (r *Repository) GetAnalyticsDailyDefiModule(ctx context.Context, from, to t
 	return out, rows.Err()
 }
 
-// GetAnalyticsDailyEpochModule returns daily epoch payout metric only.
+// GetAnalyticsDailyEpochModule returns daily epoch payout metric only,
+// enriched with epoch number from epoch_stats.
 func (r *Repository) GetAnalyticsDailyEpochModule(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
 		)
-		SELECT d.date::text, COALESCE(m.epoch_payout_total, 0)::text
+		SELECT d.date::text,
+		       COALESCE(m.epoch_payout_total, 0)::text,
+		       e.epoch
 		FROM dates d
 		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
+		LEFT JOIN app.epoch_stats e ON e.payout_time::date = d.date
+		    AND e.payout_time > '0001-01-01'
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
@@ -134,7 +140,7 @@ func (r *Repository) GetAnalyticsDailyEpochModule(ctx context.Context, from, to 
 	out := make([]AnalyticsDailyRow, 0)
 	for rows.Next() {
 		var row AnalyticsDailyRow
-		if err := rows.Scan(&row.Date, &row.EpochPayoutTotal); err != nil {
+		if err := rows.Scan(&row.Date, &row.EpochPayoutTotal, &row.Epoch); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
