@@ -197,6 +197,7 @@ func main() {
 	enableDefiWorker := os.Getenv("ENABLE_DEFI_WORKER") != "false"
 	enableNFTItemMetadataWorker := os.Getenv("ENABLE_NFT_ITEM_METADATA_WORKER") != "false"
 	enableNFTReconciler := os.Getenv("ENABLE_NFT_RECONCILER") != "false"
+	enableProposerKeyBackfill := os.Getenv("ENABLE_PROPOSER_KEY_BACKFILL") == "true" // opt-in
 
 	// RAW_ONLY mode: disable all workers, derivers, and pollers — only run ingesters.
 	if os.Getenv("RAW_ONLY") == "true" {
@@ -487,6 +488,26 @@ func main() {
 		log.Println("Analytics Deriver Worker is DISABLED (ENABLE_ANALYTICS_DERIVER_WORKER=false)")
 	}
 
+	// Proposer key backfill — one-time worker to fill NULL proposer_key_index/proposer_sequence_number.
+	var proposerKeyBackfillWorkers []*ingester.AsyncWorker
+	if enableProposerKeyBackfill {
+		proposerKeyBackfillRange := getEnvUint("PROPOSER_KEY_BACKFILL_RANGE", 5000)
+		proposerKeyBackfillConcurrency := getEnvInt("PROPOSER_KEY_BACKFILL_CONCURRENCY", 1)
+		hostname, _ := os.Hostname()
+		pid := os.Getpid()
+		processor := ingester.NewProposerKeyBackfillWorker(repo, flowClient)
+		for i := 0; i < proposerKeyBackfillConcurrency; i++ {
+			proposerKeyBackfillWorkers = append(proposerKeyBackfillWorkers, ingester.NewAsyncWorker(
+				processor, repo, ingester.WorkerConfig{
+					RangeSize: proposerKeyBackfillRange,
+					WorkerID:  fmt.Sprintf("%s-%d-proposer-key-backfill-%d", hostname, pid, i),
+				}))
+		}
+		workerTypes = append(workerTypes, processor.Name())
+	} else {
+		log.Println("Proposer Key Backfill Worker is DISABLED (ENABLE_PROPOSER_KEY_BACKFILL=false, opt-in)")
+	}
+
 	var committer *ingester.CheckpointCommitter
 	if len(workerTypes) > 0 {
 		committer = ingester.NewCheckpointCommitter(repo, workerTypes)
@@ -633,6 +654,15 @@ func main() {
 
 	// Start Analytics Workers (standalone — not in derivers)
 	for _, worker := range analyticsWorkers {
+		wg.Add(1)
+		go func(w *ingester.AsyncWorker) {
+			defer wg.Done()
+			w.Start(ctx)
+		}(worker)
+	}
+
+	// Start Proposer Key Backfill Workers
+	for _, worker := range proposerKeyBackfillWorkers {
 		wg.Add(1)
 		go func(w *ingester.AsyncWorker) {
 			defer wg.Done()
