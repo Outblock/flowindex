@@ -276,18 +276,21 @@ function TokenBubble({ logo, symbol, size = 32 }: { logo?: string; symbol?: stri
     );
 }
 
-function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, formatAddr: _formatAddr }: {
+function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, fromTag, toTag, formatAddr: _formatAddr }: {
     from?: string; to?: string; amount?: string | number; symbol?: string; logo?: string; badge?: React.ReactNode;
-    usdPrice?: number;
+    usdPrice?: number; fromTag?: string; toTag?: string;
     formatAddr: (a: string) => string;
 }) {
     const formattedAmount = amount != null ? Number(amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—';
     return (
         <div className="flex items-center gap-0 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
             {/* FROM */}
-            <div className="flex items-center gap-2 px-3 py-2.5 min-w-0 flex-shrink-0">
+            <div className="flex items-center gap-1.5 px-3 py-2.5 min-w-0 flex-shrink-0">
                 {from ? (
-                    <AddressLink address={from} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" />
+                    <>
+                        <AddressLink address={from} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" />
+                        {fromTag && <span className="text-[8px] text-purple-400 uppercase">{fromTag}</span>}
+                    </>
                 ) : (
                     <span className="text-[11px] text-zinc-400 italic">Mint</span>
                 )}
@@ -305,9 +308,12 @@ function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, formatAddr: 
                 <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 flex-shrink-0" />
             </div>
             {/* TO */}
-            <div className="flex items-center gap-2 px-3 py-2.5 min-w-0 flex-shrink-0">
+            <div className="flex items-center gap-1.5 px-3 py-2.5 min-w-0 flex-shrink-0">
                 {to ? (
-                    <AddressLink address={to} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" />
+                    <>
+                        <AddressLink address={to} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" />
+                        {toTag && <span className="text-[8px] text-purple-400 uppercase">{toTag}</span>}
+                    </>
                 ) : (
                     <span className="text-[11px] text-zinc-400 italic">Burn</span>
                 )}
@@ -370,53 +376,82 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
 
             {/* FT transfer flow rows — aggregated by (from, to, token) */}
             {hasFT && (() => {
-                const agg = new Map<string, { from: string; to: string; symbol: string; logo: string; total: number; count: number; hasCrossVm: boolean; usdPrice: number }>();
+                // Build display rows: for cross-VM transfers with evm_to/from, split into
+                // two rows (Cadence leg + EVM leg) so the full path is visible.
+                type FlowRowData = { from: string; to: string; symbol: string; logo: string; total: number; count: number; usdPrice: number; fromTag?: string; toTag?: string; badge?: React.ReactNode };
+                const displayRows: FlowRowData[] = [];
+                const agg = new Map<string, FlowRowData>();
                 for (const ft of transaction.ft_transfers) {
                     const sym = ft.token_symbol || ft.token?.split('.').pop() || '';
+                    const amount = parseFloat(ft.amount) || 0;
+                    const evmTo = ft.evm_to_address;
+                    const evmFrom = ft.evm_from_address;
+                    // Cross-VM with EVM destination: split into Cadence + EVM legs
+                    if (evmTo || evmFrom) {
+                        // Leg 1: Cadence transfer (from → COA)
+                        displayRows.push({
+                            from: ft.from_address, to: ft.to_address, symbol: sym, logo: ft.token_logo,
+                            total: amount, count: 1, usdPrice: ft.approx_usd_price || 0,
+                            toTag: evmTo ? 'COA' : undefined, fromTag: evmFrom ? 'COA' : undefined,
+                        });
+                        // Leg 2: EVM execution (COA → EVM dest)
+                        if (evmTo) {
+                            displayRows.push({
+                                from: ft.to_address, to: evmTo, symbol: sym, logo: ft.token_logo,
+                                total: amount, count: 1, usdPrice: ft.approx_usd_price || 0,
+                                fromTag: 'COA', toTag: 'EVM',
+                                badge: <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" /> EVM</span>,
+                            });
+                        }
+                        if (evmFrom) {
+                            displayRows.push({
+                                from: evmFrom, to: ft.from_address, symbol: sym, logo: ft.token_logo,
+                                total: amount, count: 1, usdPrice: ft.approx_usd_price || 0,
+                                fromTag: 'EVM', toTag: 'COA',
+                                badge: <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" /> EVM</span>,
+                            });
+                        }
+                        continue;
+                    }
+                    // Normal transfer: aggregate
                     const key = `${ft.from_address}|${ft.to_address}|${sym}`;
                     const existing = agg.get(key);
                     if (existing) {
-                        existing.total += parseFloat(ft.amount) || 0;
+                        existing.total += amount;
                         existing.count += 1;
-                        if (ft.is_cross_vm) existing.hasCrossVm = true;
                         if (!existing.usdPrice && ft.approx_usd_price > 0) existing.usdPrice = ft.approx_usd_price;
                     } else {
-                        agg.set(key, { from: ft.from_address, to: ft.to_address, symbol: sym, logo: ft.token_logo, total: parseFloat(ft.amount) || 0, count: 1, hasCrossVm: !!ft.is_cross_vm, usdPrice: ft.approx_usd_price || 0 });
+                        agg.set(key, { from: ft.from_address, to: ft.to_address, symbol: sym, logo: ft.token_logo, total: amount, count: 1, usdPrice: ft.approx_usd_price || 0 });
                     }
                 }
-                const rows = Array.from(agg.values());
+                const rows = [...displayRows, ...Array.from(agg.values())];
                 return (
                     <div className="space-y-2 mb-4">
                         <div className="flex items-center gap-2 mb-1">
                             <p className="text-[10px] text-zinc-400 uppercase tracking-widest">Token Transfers</p>
                             <span className="text-[9px] text-zinc-400 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">{transaction.ft_transfers.length}</span>
                         </div>
-                        {rows.slice(0, 8).map((r, idx) => (
+                        {rows.slice(0, 10).map((r, idx) => (
                             <FlowRow
                                 key={idx}
                                 from={r.from}
                                 to={r.to}
+                                fromTag={r.fromTag}
+                                toTag={r.toTag}
                                 amount={r.total}
                                 symbol={r.symbol}
                                 logo={r.logo}
                                 usdPrice={r.usdPrice}
                                 formatAddr={fmtAddr}
-                                badge={<>
-                                    {r.count > 1 && (
-                                        <span className="text-[9px] text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded">
-                                            ×{r.count}
-                                        </span>
-                                    )}
-                                    {r.hasCrossVm && (
-                                        <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                            <Globe className="w-2.5 h-2.5" /> Cross-VM
-                                        </span>
-                                    )}
-                                </>}
+                                badge={r.badge || (r.count > 1 ? (
+                                    <span className="text-[9px] text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded">
+                                        ×{r.count}
+                                    </span>
+                                ) : undefined)}
                             />
                         ))}
-                        {rows.length > 8 && (
-                            <p className="text-[10px] text-zinc-400 uppercase tracking-wider pl-1">+{rows.length - 8} more groups</p>
+                        {rows.length > 10 && (
+                            <p className="text-[10px] text-zinc-400 uppercase tracking-wider pl-1">+{rows.length - 10} more</p>
                         )}
                     </div>
                 );

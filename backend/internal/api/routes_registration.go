@@ -43,6 +43,7 @@ func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin.HandleFunc("/refresh-daily-stats", s.handleAdminRefreshDailyStats).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/backfill-analytics", s.handleAdminBackfillAnalytics).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/reset-token-worker", s.handleAdminResetTokenWorker).Methods("POST", "OPTIONS")
+	admin.HandleFunc("/reprocess-worker", s.handleAdminReprocessWorker).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/reset-history-deriver", s.handleAdminResetHistoryDeriver).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/redirect-history-ingester", s.handleAdminRedirectHistoryIngester).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/resolve-errors", s.handleAdminResolveErrors).Methods("POST", "OPTIONS")
