@@ -143,7 +143,7 @@ export const Route = createFileRoute('/txs/$txId')({
     loader: async ({ params }) => {
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}?lite=true`);
+            const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}`);
             if (res.ok) {
                 const json = await res.json();
                 const rawTx: any = json?.data?.[0] ?? json;
