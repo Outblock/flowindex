@@ -3,7 +3,11 @@ package api
 import (
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
+
+	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
 )
@@ -82,4 +86,51 @@ func parseAnalyticsDateRange(r *http.Request) (time.Time, time.Time) {
 		}
 	}
 	return from, to
+}
+
+func (s *Server) handleBigTransfers(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	limit := 50
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			limit = n
+		}
+	}
+	offset := 0
+	if v := q.Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			offset = n
+		}
+	}
+	minUSD := 10000.0
+	if v := q.Get("min_usd"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			minUSD = f
+		}
+	}
+
+	var transferTypes []string
+	if v := q.Get("type"); v != "" {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				transferTypes = append(transferTypes, t)
+			}
+		}
+	}
+
+	priceMap := s.priceCache.GetAllLatestPrices()
+	if len(priceMap) == 0 {
+		writeAPIResponse(w, []repository.BigTransfer{}, map[string]interface{}{"count": 0}, nil)
+		return
+	}
+
+	results, err := s.repo.GetBigTransfers(r.Context(), priceMap, minUSD, limit, offset, transferTypes)
+	if err != nil {
+		log.Printf("[big-transfers] query error: %v", err)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, results, map[string]interface{}{"count": len(results)}, nil)
 }
