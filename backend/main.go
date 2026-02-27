@@ -16,10 +16,13 @@ import (
 	"time"
 
 	"flowscan-clone/internal/api"
+	"flowscan-clone/internal/eventbus"
 	"flowscan-clone/internal/flow"
 	"flowscan-clone/internal/ingester"
 	"flowscan-clone/internal/market"
 	"flowscan-clone/internal/repository"
+	"flowscan-clone/internal/webhooks"
+	"flowscan-clone/internal/webhooks/matcher"
 )
 
 // BuildCommit is set at build time via -ldflags.
@@ -513,15 +516,82 @@ func main() {
 		committer = ingester.NewCheckpointCommitter(repo, workerTypes)
 	}
 
+	// --- Webhook Notification System ---
+	var webhookHandlersOpt func(*api.Server)            // option for server
+	var webhookAdminHandlersOpt func(*api.Server)       // option for admin routes
+	var webhookOrchestrator *webhooks.Orchestrator       // started after ctx is created
+
+	if supabaseDBURL := os.Getenv("SUPABASE_DB_URL"); supabaseDBURL != "" {
+		jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
+		svixToken := os.Getenv("SVIX_AUTH_TOKEN")
+		svixURL := os.Getenv("SVIX_SERVER_URL")
+
+		// Connect to Supabase DB
+		whDB, whDBErr := webhooks.NewWebhookDB(supabaseDBURL)
+		if whDBErr != nil {
+			log.Printf("[webhooks] DB connection failed: %v (webhooks disabled)", whDBErr)
+		} else {
+			whStore := webhooks.NewStore(whDB.Pool)
+			whAuth := webhooks.NewAuthMiddleware(jwtSecret, whStore.LookupAPIKey)
+
+			// Svix delivery (or NoopDelivery if not configured)
+			var delivery webhooks.WebhookDelivery
+			if svixToken != "" {
+				svixClient, svixErr := webhooks.NewSvixClient(svixToken, svixURL)
+				if svixErr != nil {
+					log.Printf("[webhooks] Svix error: %v (using noop delivery)", svixErr)
+					delivery = &webhooks.NoopDelivery{}
+				} else {
+					delivery = svixClient
+				}
+			} else {
+				delivery = &webhooks.NoopDelivery{}
+			}
+
+			// EventBus + Matchers + Orchestrator
+			bus := eventbus.New()
+			matcherRegistry := matcher.NewRegistry()
+			matcher.RegisterAll(matcherRegistry)
+			subCache := webhooks.NewSubscriptionCache(whStore, 30*time.Second)
+			webhookOrchestrator = webhooks.NewOrchestrator(bus, subCache, matcherRegistry, delivery, whStore)
+
+			// Rate limiter + API handlers
+			rateLimiter := webhooks.NewRateLimiter(whStore)
+			whHandlers := webhooks.NewHandlers(whStore, whAuth, rateLimiter)
+			webhookHandlersOpt = api.WithWebhookHandlers(whHandlers)
+
+			// Admin handlers
+			whAdminHandlers := webhooks.NewAdminHandlers(whStore)
+			webhookAdminHandlersOpt = api.WithWebhookAdminHandlers(whAdminHandlers)
+
+			log.Println("[webhooks] notification system initialized")
+		}
+	}
+
 	api.BuildCommit = BuildCommit
 	backfillProgress := api.NewBackfillProgress()
-	apiServer := api.NewServer(repo, flowClient, apiPort, startBlock, func(s *api.Server) {
-		s.SetBackfillProgress(backfillProgress)
-	})
+
+	serverOpts := []func(*api.Server){
+		func(s *api.Server) {
+			s.SetBackfillProgress(backfillProgress)
+		},
+	}
+	if webhookHandlersOpt != nil {
+		serverOpts = append(serverOpts, webhookHandlersOpt)
+	}
+	if webhookAdminHandlersOpt != nil {
+		serverOpts = append(serverOpts, webhookAdminHandlersOpt)
+	}
+	apiServer := api.NewServer(repo, flowClient, apiPort, startBlock, serverOpts...)
 
 	// 4. Run
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Start webhook orchestrator if configured.
+	if webhookOrchestrator != nil {
+		go webhookOrchestrator.Run(ctx)
+	}
 
 	// Start live/head derivers (Blockscout-style) if enabled.
 	if liveDeriver != nil {

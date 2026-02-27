@@ -97,14 +97,28 @@ func (bp *BackfillProgress) Snapshot() map[string]interface{} {
 	}
 }
 
+// WebhookRouteRegistrar is implemented by the webhook Handlers to register
+// routes without importing the webhooks package directly.
+type WebhookRouteRegistrar interface {
+	RegisterRoutes(r *mux.Router)
+}
+
+// WebhookAdminRegistrar is implemented by the webhook AdminHandlers to register
+// admin routes on the existing admin subrouter (which already has adminAuthMiddleware).
+type WebhookAdminRegistrar interface {
+	RegisterRoutes(r *mux.Router)
+}
+
 type Server struct {
-	repo             *repository.Repository
-	client           FlowClient
-	httpServer       *http.Server
-	startBlock       uint64
-	blockscoutURL    string // e.g. "https://evm.flowindex.dev"
-	backfillProgress *BackfillProgress
-	priceCache       *market.PriceCache
+	repo               *repository.Repository
+	client             FlowClient
+	httpServer         *http.Server
+	startBlock         uint64
+	blockscoutURL      string // e.g. "https://evm.flowindex.dev"
+	backfillProgress   *BackfillProgress
+	priceCache         *market.PriceCache
+	webhookHandlers      WebhookRouteRegistrar
+	webhookAdminHandlers WebhookAdminRegistrar
 	statusCache      struct {
 		mu        sync.Mutex
 		payload   []byte
@@ -161,6 +175,20 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 
 func (s *Server) SetBackfillProgress(bp *BackfillProgress) {
 	s.backfillProgress = bp
+}
+
+// WithWebhookHandlers returns a Server option that attaches webhook API handlers.
+func WithWebhookHandlers(wh WebhookRouteRegistrar) func(*Server) {
+	return func(s *Server) {
+		s.webhookHandlers = wh
+	}
+}
+
+// WithWebhookAdminHandlers returns a Server option that attaches webhook admin handlers.
+func WithWebhookAdminHandlers(wh WebhookAdminRegistrar) func(*Server) {
+	return func(s *Server) {
+		s.webhookAdminHandlers = wh
+	}
 }
 
 func (s *Server) PriceCache() *market.PriceCache {
