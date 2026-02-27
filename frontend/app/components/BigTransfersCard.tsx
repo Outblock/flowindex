@@ -5,14 +5,20 @@ import { Fish, ArrowRight } from 'lucide-react';
 import { fetchBigTransfers, type BigTransfer } from '../api/heyapi';
 import { colorsFromAddress } from './AddressLink';
 
+function formatCompact(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toFixed(2);
+}
+
 function formatUSD(value: number): string {
-  return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return '$' + formatCompact(value);
 }
 
 function formatAmount(amount: string): string {
   const num = parseFloat(amount);
   if (isNaN(num)) return amount;
-  return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return formatCompact(num);
 }
 
 function timeAgo(timestamp: string): string {
@@ -71,7 +77,7 @@ function AddressWithAvatar({ address }: { address: string }) {
       className="inline-flex items-center gap-1 hover:underline"
       onClick={(e: React.MouseEvent) => e.stopPropagation()}
     >
-      <Avatar size={14} name={normalized} variant={avatarVariant(normalized)} colors={colors} />
+      <Avatar size={10} name={normalized} variant={avatarVariant(normalized)} colors={colors} />
       <span>{formatAddr(address)}</span>
     </Link>
   );
