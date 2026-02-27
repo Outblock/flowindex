@@ -747,14 +747,24 @@ func (s *Server) handleFlowAccountBalanceHistory(w http.ResponseWriter, r *http.
 	toDate := time.Now().UTC().Format("2006-01-02")
 	fromDate := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
 
-	holding, err := s.repo.GetFTHolding(r.Context(), address, tokenAddr, tokenName)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+	// For FlowToken, use on-chain balance (includes staking rewards etc.)
+	// rather than ft_holdings which only tracks transfer events.
 	currentBalance := "0"
-	if holding != nil {
-		currentBalance = holding.Balance
+	if tokenName == "FlowToken" {
+		acc, err := s.client.GetAccount(r.Context(), flowsdk.HexToAddress(address))
+		if err == nil && acc != nil {
+			currentBalance = strconv.FormatFloat(float64(acc.Balance)/1e8, 'f', -1, 64)
+		}
+	}
+	if currentBalance == "0" {
+		holding, err := s.repo.GetFTHolding(r.Context(), address, tokenAddr, tokenName)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if holding != nil {
+			currentBalance = holding.Balance
+		}
 	}
 
 	points, err := s.repo.GetBalanceHistory(r.Context(), address, tokenAddr, tokenName, currentBalance, fromDate, toDate)
