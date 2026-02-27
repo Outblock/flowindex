@@ -5,6 +5,7 @@ import Footer from '../components/Footer';
 import Sidebar from '../components/Sidebar';
 import { WebSocketProvider } from '../components/WebSocketProvider';
 import { ThemeProvider } from '../contexts/ThemeContext';
+import { AuthProvider } from '../contexts/AuthContext';
 import { MobileMenuProvider } from '../contexts/MobileMenuContext';
 import { Toaster } from 'react-hot-toast';
 import { lazy, Suspense } from 'react';
@@ -42,6 +43,7 @@ function RootComponent() {
     return (
         <RootDocument>
             <ThemeProvider>
+              <AuthProvider>
                 <WebSocketProvider>
                     <MobileMenuProvider>
                     <div className="bg-gray-50 dark:bg-black min-h-screen text-zinc-700 dark:text-zinc-300 font-mono antialiased selection:bg-nothing-green selection:text-black flex transition-colors duration-300">
@@ -63,6 +65,7 @@ function RootComponent() {
                     <Toaster position="bottom-right" />
                     </MobileMenuProvider>
                 </WebSocketProvider>
+              </AuthProvider>
             </ThemeProvider>
             <ScrollRestoration />
         </RootDocument>

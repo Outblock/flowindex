@@ -22,6 +22,7 @@ import { Route as TransactionsIndexRouteImport } from './routes/transactions/ind
 import { Route as TokensIndexRouteImport } from './routes/tokens/index'
 import { Route as ScheduledIndexRouteImport } from './routes/scheduled/index'
 import { Route as NftsIndexRouteImport } from './routes/nfts/index'
+import { Route as DeveloperIndexRouteImport } from './routes/developer/index'
 import { Route as ContractsIndexRouteImport } from './routes/contracts/index'
 import { Route as BlocksIndexRouteImport } from './routes/blocks/index'
 import { Route as AccountsIndexRouteImport } from './routes/accounts/index'
@@ -31,6 +32,8 @@ import { Route as TransactionsTxIdRouteImport } from './routes/transactions/$txI
 import { Route as TokensTokenRouteImport } from './routes/tokens/$token'
 import { Route as NftsNftTypeRouteImport } from './routes/nfts/$nftType'
 import { Route as KeyPublicKeyRouteImport } from './routes/key/$publicKey'
+import { Route as DeveloperLoginRouteImport } from './routes/developer/login'
+import { Route as DeveloperCallbackRouteImport } from './routes/developer/callback'
 import { Route as ContractsIdRouteImport } from './routes/contracts/$id'
 import { Route as BlocksHeightRouteImport } from './routes/blocks/$height'
 import { Route as AccountsAddressRouteImport } from './routes/accounts/$address'
@@ -103,6 +106,11 @@ const NftsIndexRoute = NftsIndexRouteImport.update({
   path: '/nfts/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DeveloperIndexRoute = DeveloperIndexRouteImport.update({
+  id: '/developer/',
+  path: '/developer/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContractsIndexRoute = ContractsIndexRouteImport.update({
   id: '/contracts/',
   path: '/contracts/',
@@ -148,6 +156,16 @@ const KeyPublicKeyRoute = KeyPublicKeyRouteImport.update({
   path: '/key/$publicKey',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DeveloperLoginRoute = DeveloperLoginRouteImport.update({
+  id: '/developer/login',
+  path: '/developer/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeveloperCallbackRoute = DeveloperCallbackRouteImport.update({
+  id: '/developer/callback',
+  path: '/developer/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContractsIdRoute = ContractsIdRouteImport.update({
   id: '/contracts/$id',
   path: '/contracts/$id',
@@ -190,6 +208,8 @@ export interface FileRoutesByFullPath {
   '/accounts/$address': typeof AccountsAddressRoute
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
+  '/developer/callback': typeof DeveloperCallbackRoute
+  '/developer/login': typeof DeveloperLoginRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
@@ -199,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/accounts/': typeof AccountsIndexRoute
   '/blocks/': typeof BlocksIndexRoute
   '/contracts/': typeof ContractsIndexRoute
+  '/developer/': typeof DeveloperIndexRoute
   '/nfts/': typeof NftsIndexRoute
   '/scheduled/': typeof ScheduledIndexRoute
   '/tokens/': typeof TokensIndexRoute
@@ -220,6 +241,8 @@ export interface FileRoutesByTo {
   '/accounts/$address': typeof AccountsAddressRoute
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
+  '/developer/callback': typeof DeveloperCallbackRoute
+  '/developer/login': typeof DeveloperLoginRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
@@ -228,6 +251,7 @@ export interface FileRoutesByTo {
   '/accounts': typeof AccountsIndexRoute
   '/blocks': typeof BlocksIndexRoute
   '/contracts': typeof ContractsIndexRoute
+  '/developer': typeof DeveloperIndexRoute
   '/nfts': typeof NftsIndexRoute
   '/scheduled': typeof ScheduledIndexRoute
   '/tokens': typeof TokensIndexRoute
@@ -250,6 +274,8 @@ export interface FileRoutesById {
   '/accounts/$address': typeof AccountsAddressRoute
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
+  '/developer/callback': typeof DeveloperCallbackRoute
+  '/developer/login': typeof DeveloperLoginRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
@@ -259,6 +285,7 @@ export interface FileRoutesById {
   '/accounts/': typeof AccountsIndexRoute
   '/blocks/': typeof BlocksIndexRoute
   '/contracts/': typeof ContractsIndexRoute
+  '/developer/': typeof DeveloperIndexRoute
   '/nfts/': typeof NftsIndexRoute
   '/scheduled/': typeof ScheduledIndexRoute
   '/tokens/': typeof TokensIndexRoute
@@ -282,6 +309,8 @@ export interface FileRouteTypes {
     | '/accounts/$address'
     | '/blocks/$height'
     | '/contracts/$id'
+    | '/developer/callback'
+    | '/developer/login'
     | '/key/$publicKey'
     | '/nfts/$nftType'
     | '/tokens/$token'
@@ -291,6 +320,7 @@ export interface FileRouteTypes {
     | '/accounts/'
     | '/blocks/'
     | '/contracts/'
+    | '/developer/'
     | '/nfts/'
     | '/scheduled/'
     | '/tokens/'
@@ -312,6 +342,8 @@ export interface FileRouteTypes {
     | '/accounts/$address'
     | '/blocks/$height'
     | '/contracts/$id'
+    | '/developer/callback'
+    | '/developer/login'
     | '/key/$publicKey'
     | '/tokens/$token'
     | '/transactions/$txId'
@@ -320,6 +352,7 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/blocks'
     | '/contracts'
+    | '/developer'
     | '/nfts'
     | '/scheduled'
     | '/tokens'
@@ -341,6 +374,8 @@ export interface FileRouteTypes {
     | '/accounts/$address'
     | '/blocks/$height'
     | '/contracts/$id'
+    | '/developer/callback'
+    | '/developer/login'
     | '/key/$publicKey'
     | '/nfts/$nftType'
     | '/tokens/$token'
@@ -350,6 +385,7 @@ export interface FileRouteTypes {
     | '/accounts/'
     | '/blocks/'
     | '/contracts/'
+    | '/developer/'
     | '/nfts/'
     | '/scheduled/'
     | '/tokens/'
@@ -372,6 +408,8 @@ export interface RootRouteChildren {
   AccountsAddressRoute: typeof AccountsAddressRoute
   BlocksHeightRoute: typeof BlocksHeightRoute
   ContractsIdRoute: typeof ContractsIdRoute
+  DeveloperCallbackRoute: typeof DeveloperCallbackRoute
+  DeveloperLoginRoute: typeof DeveloperLoginRoute
   KeyPublicKeyRoute: typeof KeyPublicKeyRoute
   NftsNftTypeRoute: typeof NftsNftTypeRouteWithChildren
   TokensTokenRoute: typeof TokensTokenRoute
@@ -381,6 +419,7 @@ export interface RootRouteChildren {
   AccountsIndexRoute: typeof AccountsIndexRoute
   BlocksIndexRoute: typeof BlocksIndexRoute
   ContractsIndexRoute: typeof ContractsIndexRoute
+  DeveloperIndexRoute: typeof DeveloperIndexRoute
   NftsIndexRoute: typeof NftsIndexRoute
   ScheduledIndexRoute: typeof ScheduledIndexRoute
   TokensIndexRoute: typeof TokensIndexRoute
@@ -483,6 +522,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NftsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/developer/': {
+      id: '/developer/'
+      path: '/developer'
+      fullPath: '/developer/'
+      preLoaderRoute: typeof DeveloperIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/contracts/': {
       id: '/contracts/'
       path: '/contracts'
@@ -544,6 +590,20 @@ declare module '@tanstack/react-router' {
       path: '/key/$publicKey'
       fullPath: '/key/$publicKey'
       preLoaderRoute: typeof KeyPublicKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developer/login': {
+      id: '/developer/login'
+      path: '/developer/login'
+      fullPath: '/developer/login'
+      preLoaderRoute: typeof DeveloperLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developer/callback': {
+      id: '/developer/callback'
+      path: '/developer/callback'
+      fullPath: '/developer/callback'
+      preLoaderRoute: typeof DeveloperCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contracts/$id': {
@@ -616,6 +676,8 @@ const rootRouteChildren: RootRouteChildren = {
   AccountsAddressRoute: AccountsAddressRoute,
   BlocksHeightRoute: BlocksHeightRoute,
   ContractsIdRoute: ContractsIdRoute,
+  DeveloperCallbackRoute: DeveloperCallbackRoute,
+  DeveloperLoginRoute: DeveloperLoginRoute,
   KeyPublicKeyRoute: KeyPublicKeyRoute,
   NftsNftTypeRoute: NftsNftTypeRouteWithChildren,
   TokensTokenRoute: TokensTokenRoute,
@@ -625,6 +687,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountsIndexRoute: AccountsIndexRoute,
   BlocksIndexRoute: BlocksIndexRoute,
   ContractsIndexRoute: ContractsIndexRoute,
+  DeveloperIndexRoute: DeveloperIndexRoute,
   NftsIndexRoute: NftsIndexRoute,
   ScheduledIndexRoute: ScheduledIndexRoute,
   TokensIndexRoute: TokensIndexRoute,
