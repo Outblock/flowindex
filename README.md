@@ -37,6 +37,12 @@
     <td><img src="docs/assets/screenshots/transaction.png" alt="Transaction" width="480" /></td>
     <td><img src="docs/assets/screenshots/account.png" alt="Account" width="480" /></td>
   </tr>
+  <tr>
+    <td colspan="2"><b>AI Chat — Natural Language Blockchain Queries</b></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/assets/screenshots/ai-chat.png" alt="AI Chat" width="720" /></td>
+  </tr>
 </table>
 
 ## Features
@@ -49,6 +55,7 @@
 - **Script de-duplication** — transaction scripts stored via `sha256` hash to reduce long-term storage growth
 - **REST + WebSocket API** — cursor-paginated endpoints with live block/transaction streaming
 - **OpenAPI spec** — full API documentation with Scalar UI via the developer portal
+- **AI-powered queries** — ask questions in natural language via [Vanna AI](https://vanna.ai/), connected to both Flow and Flow-EVM data for SQL and Cadence queries
 - **React frontend** — responsive UI built with React 19, TailwindCSS, Shadcn/UI, and Recharts
 
 ## Architecture
