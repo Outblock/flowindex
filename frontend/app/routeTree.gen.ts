@@ -34,6 +34,7 @@ import { Route as KeyPublicKeyRouteImport } from './routes/key/$publicKey'
 import { Route as ContractsIdRouteImport } from './routes/contracts/$id'
 import { Route as BlocksHeightRouteImport } from './routes/blocks/$height'
 import { Route as AccountsAddressRouteImport } from './routes/accounts/$address'
+import { Route as NftsNftTypeIndexRouteImport } from './routes/nfts/$nftType/index'
 import { Route as TxsEvmTxIdRouteImport } from './routes/txs/evm/$txId'
 import { Route as NftsNftTypeItemIdRouteImport } from './routes/nfts/$nftType/item/$id'
 
@@ -162,6 +163,11 @@ const AccountsAddressRoute = AccountsAddressRouteImport.update({
   path: '/accounts/$address',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NftsNftTypeIndexRoute = NftsNftTypeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => NftsNftTypeRoute,
+} as any)
 const TxsEvmTxIdRoute = TxsEvmTxIdRouteImport.update({
   id: '/txs/evm/$txId',
   path: '/txs/evm/$txId',
@@ -200,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/tx/': typeof TxIndexRoute
   '/txs/': typeof TxsIndexRoute
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
+  '/nfts/$nftType/': typeof NftsNftTypeIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
 export interface FileRoutesByTo {
@@ -214,7 +221,6 @@ export interface FileRoutesByTo {
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
-  '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
   '/tx/$txId': typeof TxTxIdRoute
@@ -229,6 +235,7 @@ export interface FileRoutesByTo {
   '/tx': typeof TxIndexRoute
   '/txs': typeof TxsIndexRoute
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
+  '/nfts/$nftType': typeof NftsNftTypeIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
 export interface FileRoutesById {
@@ -259,6 +266,7 @@ export interface FileRoutesById {
   '/tx/': typeof TxIndexRoute
   '/txs/': typeof TxsIndexRoute
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
+  '/nfts/$nftType/': typeof NftsNftTypeIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
 export interface FileRouteTypes {
@@ -290,6 +298,7 @@ export interface FileRouteTypes {
     | '/tx/'
     | '/txs/'
     | '/txs/evm/$txId'
+    | '/nfts/$nftType/'
     | '/nfts/$nftType/item/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -304,7 +313,6 @@ export interface FileRouteTypes {
     | '/blocks/$height'
     | '/contracts/$id'
     | '/key/$publicKey'
-    | '/nfts/$nftType'
     | '/tokens/$token'
     | '/transactions/$txId'
     | '/tx/$txId'
@@ -319,6 +327,7 @@ export interface FileRouteTypes {
     | '/tx'
     | '/txs'
     | '/txs/evm/$txId'
+    | '/nfts/$nftType'
     | '/nfts/$nftType/item/$id'
   id:
     | '__root__'
@@ -348,6 +357,7 @@ export interface FileRouteTypes {
     | '/tx/'
     | '/txs/'
     | '/txs/evm/$txId'
+    | '/nfts/$nftType/'
     | '/nfts/$nftType/item/$id'
   fileRoutesById: FileRoutesById
 }
@@ -557,6 +567,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountsAddressRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/nfts/$nftType/': {
+      id: '/nfts/$nftType/'
+      path: '/'
+      fullPath: '/nfts/$nftType/'
+      preLoaderRoute: typeof NftsNftTypeIndexRouteImport
+      parentRoute: typeof NftsNftTypeRoute
+    }
     '/txs/evm/$txId': {
       id: '/txs/evm/$txId'
       path: '/txs/evm/$txId'
@@ -575,10 +592,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface NftsNftTypeRouteChildren {
+  NftsNftTypeIndexRoute: typeof NftsNftTypeIndexRoute
   NftsNftTypeItemIdRoute: typeof NftsNftTypeItemIdRoute
 }
 
 const NftsNftTypeRouteChildren: NftsNftTypeRouteChildren = {
+  NftsNftTypeIndexRoute: NftsNftTypeIndexRoute,
   NftsNftTypeItemIdRoute: NftsNftTypeItemIdRoute,
 }
 

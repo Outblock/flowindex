@@ -105,23 +105,27 @@ export function NFTImage({ nft, collectionId = '', className = '' }: { nft: any;
 
 /** Just the metadata portion (name, description, serial, edition, rarity, traits, owner) */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function NFTMetadata({ nft, collectionName }: { nft: any; collectionName?: string }) {
+export function NFTMetadata({ nft, collectionName, hideHeader = false }: { nft: any; collectionName?: string; hideHeader?: boolean }) {
     if (!nft) return null;
     return (
         <div>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
-                {nft?.display?.name || `#${nft?.tokenId}`}
-            </h2>
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
-                <span className="bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 px-2 py-1 text-xs font-mono">
-                    #{nft?.tokenId}
-                </span>
-                {collectionName && (
-                    <span className="text-xs text-zinc-500">
-                        {collectionName}
-                    </span>
-                )}
-            </div>
+            {!hideHeader && (
+                <>
+                    <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
+                        {nft?.display?.name || `#${nft?.tokenId}`}
+                    </h2>
+                    <div className="flex items-center gap-2 mb-4 flex-wrap">
+                        <span className="bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 px-2 py-1 text-xs font-mono">
+                            #{nft?.tokenId}
+                        </span>
+                        {collectionName && (
+                            <span className="text-xs text-zinc-500">
+                                {collectionName}
+                            </span>
+                        )}
+                    </div>
+                </>
+            )}
 
             {nft?.display?.description && (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-5 leading-relaxed">

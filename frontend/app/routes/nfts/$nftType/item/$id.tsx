@@ -1,6 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { motion } from 'framer-motion';
-import { Package, Info, Clock } from 'lucide-react';
+import { Package, Info, Clock, ArrowLeft } from 'lucide-react';
 import { ensureHeyApiConfigured } from '../../../../api/heyapi';
 import { getFlowV1NftByNftTypeItemById, getFlowV1NftByNftTypeItemByIdTransfer } from '../../../../api/gen/find';
 import { RouteErrorBoundary } from '../../../../components/RouteErrorBoundary';
@@ -31,9 +31,7 @@ export const Route = createFileRoute('/nfts/$nftType/item/$id')({
         getFlowV1NftByNftTypeItemById({ path: { nft_type: nftType, id } }),
         getFlowV1NftByNftTypeItemByIdTransfer({ path: { nft_type: nftType, id }, query: { limit: 100, offset: 0 } }),
       ]);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const itemPayload: any = itemRes?.data;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const transfersPayload: any = transfersRes?.data;
       const row = (itemPayload?.data && itemPayload.data[0]) || null;
       return {
@@ -68,7 +66,6 @@ function NFTItemInner() {
 
   const activeTab: ItemTab = searchTab || 'detail';
   const setActiveTab = (tab: ItemTab) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     navigate({ search: (prev: any) => ({ ...prev, tab }), replace: true });
   };
 
@@ -89,7 +86,7 @@ function NFTItemInner() {
           onClick={() => window.history.back()}
           className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors group"
         >
-          <Package className="h-4 w-4 transform group-hover:-translate-x-1 transition-transform" />
+          <ArrowLeft className="h-4 w-4 transform group-hover:-translate-x-1 transition-transform" />
           <span className="text-xs uppercase tracking-widest">Back</span>
         </button>
       </div>
@@ -101,36 +98,49 @@ function NFTItemInner() {
           <NFTImage
             nft={nft}
             collectionId={nftType}
-            className="w-full md:w-64 md:h-64 lg:w-80 lg:h-80"
+            className="w-full md:w-72 md:h-72 lg:w-96 lg:h-96"
           />
 
           {/* Name / ID / Collection */}
-          <div className="flex-1 min-w-0 p-6 flex flex-col justify-center">
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">
+          <div className="flex-1 min-w-0 p-6 md:p-8 flex flex-col justify-center">
+            <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white mb-3 break-words">
               {nft?.display?.name || `#${nft?.tokenId}`}
             </h1>
-            <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
               <span className="bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 px-2 py-1 text-xs font-mono">
                 #{nft?.tokenId}
               </span>
-              <span className="text-xs text-zinc-500">{collectionName}</span>
+              <Link
+                to={`/nfts/${encodeURIComponent(nftType)}` as any}
+                className="text-xs text-nothing-green-dark dark:text-nothing-green hover:underline"
+              >
+                {collectionName}
+              </Link>
             </div>
             <div className="flex items-center gap-1 text-xs text-zinc-400 font-mono">
-              <span className="truncate">{nftType}</span>
+              <span className="break-all">{nftType}</span>
               <CopyButton
                 content={nftType}
                 variant="ghost"
                 size="xs"
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex-shrink-0"
               />
             </div>
+            {owner && (
+              <div className="mt-4 text-xs text-zinc-500">
+                <span className="uppercase tracking-wider">Owner: </span>
+                <Link to={`/accounts/${owner}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">
+                  {owner}
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </GlassCard>
 
-      {/* Tabs */}
+      {/* Tabs — scrolls with page, not sticky */}
       <div className="mt-6 space-y-6">
-        <div className="sticky top-4 z-50">
+        <div>
           <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto relative">
             {tabs.map(({ id, label, icon: Icon }) => {
               const isActive = activeTab === id;
@@ -162,7 +172,7 @@ function NFTItemInner() {
           {/* Detail Tab */}
           {activeTab === 'detail' && (
             <GlassCard>
-              <NFTMetadata nft={nft} collectionName={collectionName} />
+              <NFTMetadata nft={nft} collectionName={collectionName} hideHeader />
             </GlassCard>
           )}
 
