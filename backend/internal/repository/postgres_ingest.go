@@ -300,6 +300,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					"status", "error_message", "is_evm",
 					"gas_limit", "gas_used", "event_count",
 					"timestamp",
+					"proposer_key_index", "proposer_sequence_number",
 				},
 				pgx.CopyFromSlice(len(txs), func(i int) ([]any, error) {
 					t := txs[i]
@@ -356,6 +357,8 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 						t.GasUsed,
 						eventCount,
 						txTimestamp,
+						int32(t.ProposerKeyIndex),
+						int64(t.ProposerSequenceNumber),
 					}, nil
 				}),
 			)
@@ -461,9 +464,10 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					script_hash, script, arguments,
 					status, error_message, is_evm,
 					gas_limit, gas_used, event_count,
-					timestamp
+					timestamp,
+					proposer_key_index, proposer_sequence_number
 				)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 				ON CONFLICT (block_height, id) DO UPDATE SET
 					transaction_index = EXCLUDED.transaction_index,
 					status = EXCLUDED.status,
@@ -471,7 +475,9 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 					gas_used = EXCLUDED.gas_used,
 					event_count = EXCLUDED.event_count,
 					is_evm = EXCLUDED.is_evm,
-					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash)`,
+					script_hash = COALESCE(EXCLUDED.script_hash, raw.transactions.script_hash),
+					proposer_key_index = EXCLUDED.proposer_key_index,
+					proposer_sequence_number = EXCLUDED.proposer_sequence_number`,
 				t.BlockHeight, hexToBytes(t.ID), t.TransactionIndex,
 				hexToBytes(t.ProposerAddress), hexToBytes(t.PayerAddress), sliceHexToBytes(t.Authorizers),
 				scriptHash, func() any {
@@ -488,6 +494,7 @@ func (r *Repository) SaveBatch(ctx context.Context, blocks []*models.Block, txs 
 				}(), t.IsEVM,
 				t.GasLimit, t.GasUsed, eventCount,
 				txTimestamp,
+				int32(t.ProposerKeyIndex), int64(t.ProposerSequenceNumber),
 			)
 			if err != nil {
 				// Rollback to savepoint, log the error, and continue with remaining txs.
