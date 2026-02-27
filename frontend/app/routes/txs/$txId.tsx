@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
-import { useState, useMemo, useCallback, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
 import { buildMeta } from '../../lib/og/meta';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
@@ -143,7 +143,7 @@ export const Route = createFileRoute('/txs/$txId')({
     loader: async ({ params }) => {
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}`);
+            const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}?lite=true`);
             if (res.ok) {
                 const json = await res.json();
                 const rawTx: any = json?.data?.[0] ?? json;
@@ -485,14 +485,33 @@ function TransactionDetail() {
         return deriveEnrichments(transaction.events, transaction.script);
     }, [transaction?.events, transaction?.script]);
 
-    // Merge derived enrichments into the transaction object
+    // Client-side full fetch to get enriched data (ft_transfers with USD, nft_transfers, defi_events)
+    const [apiEnrichment, setApiEnrichment] = useState<any>(null);
+    const fullFetchDone = useRef(false);
+    useEffect(() => {
+        if (!transaction?.id || fullFetchDone.current) return;
+        fullFetchDone.current = true;
+        resolveApiBaseUrl().then(base =>
+            fetch(`${base}/flow/transaction/${encodeURIComponent(transaction.id)}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(json => {
+                    const tx = json?.data?.[0];
+                    if (tx) setApiEnrichment(tx);
+                })
+        ).catch(() => {});
+    }, [transaction?.id]);
+
+    // Merge derived enrichments + API enrichment into the transaction object
+    // Priority: apiEnrichment (has USD values) > derived enrichments > SSR loader data
     const fullTx = useMemo(() => {
-        if (!enrichments) return transaction;
-        // Enrich derived NFT transfers with API metadata (collection_name, collection_logo, nft_thumbnail, etc.)
-        let mergedNfts = enrichments.nft_transfers;
-        if (mergedNfts.length > 0 && transaction?.nft_transfers?.length > 0) {
+        if (!enrichments && !apiEnrichment) return transaction;
+
+        // Enrich derived NFT transfers with API metadata
+        let mergedNfts = enrichments?.nft_transfers || [];
+        const apiNfts = apiEnrichment?.nft_transfers || transaction?.nft_transfers || [];
+        if (mergedNfts.length > 0 && apiNfts.length > 0) {
             const apiByKey = new Map<string, any>();
-            for (const nt of transaction.nft_transfers) {
+            for (const nt of apiNfts) {
                 apiByKey.set(`${nt.token}:${nt.token_id}`, nt);
             }
             mergedNfts = mergedNfts.map((nt: any) => {
@@ -511,15 +530,23 @@ function TransactionDetail() {
                 };
             });
         }
+
+        // For ft_transfers: prefer API enrichment (has usd_value), fall back to derived, then SSR
+        const ftTransfers = apiEnrichment?.ft_transfers?.length > 0
+            ? apiEnrichment.ft_transfers
+            : (enrichments?.ft_transfers?.length > 0 ? enrichments.ft_transfers : transaction?.ft_transfers);
+
         return {
             ...transaction,
-            ft_transfers: enrichments.ft_transfers.length > 0 ? enrichments.ft_transfers : transaction?.ft_transfers,
-            nft_transfers: mergedNfts.length > 0 ? mergedNfts : transaction?.nft_transfers,
-            evm_executions: enrichments.evm_executions.length > 0 ? enrichments.evm_executions : transaction?.evm_executions,
-            contract_imports: enrichments.contract_imports.length > 0 ? enrichments.contract_imports : transaction?.contract_imports,
-            fee: enrichments.fee || transaction?.fee,
+            ft_transfers: ftTransfers,
+            nft_transfers: mergedNfts.length > 0 ? mergedNfts : apiNfts,
+            defi_events: apiEnrichment?.defi_events?.length > 0 ? apiEnrichment.defi_events : transaction?.defi_events,
+            evm_executions: (enrichments?.evm_executions?.length > 0 ? enrichments.evm_executions : apiEnrichment?.evm_executions) || transaction?.evm_executions,
+            contract_imports: (enrichments?.contract_imports?.length > 0 ? enrichments.contract_imports : apiEnrichment?.contract_imports) || transaction?.contract_imports,
+            fee: enrichments?.fee || apiEnrichment?.fee || transaction?.fee,
+            fee_usd: apiEnrichment?.fee_usd || transaction?.fee_usd,
         };
-    }, [enrichments, transaction]);
+    }, [enrichments, apiEnrichment, transaction]);
 
     const hasTransfers = fullTx?.ft_transfers?.length > 0 || fullTx?.nft_transfers?.length > 0 || fullTx?.defi_events?.length > 0;
     const showTransfersTab = hasTransfers;
