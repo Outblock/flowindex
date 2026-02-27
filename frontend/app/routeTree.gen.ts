@@ -34,6 +34,7 @@ import { Route as NftsNftTypeRouteImport } from './routes/nfts/$nftType'
 import { Route as KeyPublicKeyRouteImport } from './routes/key/$publicKey'
 import { Route as DeveloperLoginRouteImport } from './routes/developer/login'
 import { Route as DeveloperKeysRouteImport } from './routes/developer/keys'
+import { Route as DeveloperEndpointsRouteImport } from './routes/developer/endpoints'
 import { Route as DeveloperCallbackRouteImport } from './routes/developer/callback'
 import { Route as ContractsIdRouteImport } from './routes/contracts/$id'
 import { Route as BlocksHeightRouteImport } from './routes/blocks/$height'
@@ -167,6 +168,11 @@ const DeveloperKeysRoute = DeveloperKeysRouteImport.update({
   path: '/developer/keys',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DeveloperEndpointsRoute = DeveloperEndpointsRouteImport.update({
+  id: '/developer/endpoints',
+  path: '/developer/endpoints',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DeveloperCallbackRoute = DeveloperCallbackRouteImport.update({
   id: '/developer/callback',
   path: '/developer/callback',
@@ -215,6 +221,7 @@ export interface FileRoutesByFullPath {
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
   '/developer/callback': typeof DeveloperCallbackRoute
+  '/developer/endpoints': typeof DeveloperEndpointsRoute
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
@@ -249,6 +256,7 @@ export interface FileRoutesByTo {
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
   '/developer/callback': typeof DeveloperCallbackRoute
+  '/developer/endpoints': typeof DeveloperEndpointsRoute
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
@@ -283,6 +291,7 @@ export interface FileRoutesById {
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
   '/developer/callback': typeof DeveloperCallbackRoute
+  '/developer/endpoints': typeof DeveloperEndpointsRoute
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
@@ -319,6 +328,7 @@ export interface FileRouteTypes {
     | '/blocks/$height'
     | '/contracts/$id'
     | '/developer/callback'
+    | '/developer/endpoints'
     | '/developer/keys'
     | '/developer/login'
     | '/key/$publicKey'
@@ -353,6 +363,7 @@ export interface FileRouteTypes {
     | '/blocks/$height'
     | '/contracts/$id'
     | '/developer/callback'
+    | '/developer/endpoints'
     | '/developer/keys'
     | '/developer/login'
     | '/key/$publicKey'
@@ -386,6 +397,7 @@ export interface FileRouteTypes {
     | '/blocks/$height'
     | '/contracts/$id'
     | '/developer/callback'
+    | '/developer/endpoints'
     | '/developer/keys'
     | '/developer/login'
     | '/key/$publicKey'
@@ -421,6 +433,7 @@ export interface RootRouteChildren {
   BlocksHeightRoute: typeof BlocksHeightRoute
   ContractsIdRoute: typeof ContractsIdRoute
   DeveloperCallbackRoute: typeof DeveloperCallbackRoute
+  DeveloperEndpointsRoute: typeof DeveloperEndpointsRoute
   DeveloperKeysRoute: typeof DeveloperKeysRoute
   DeveloperLoginRoute: typeof DeveloperLoginRoute
   KeyPublicKeyRoute: typeof KeyPublicKeyRoute
@@ -619,6 +632,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DeveloperKeysRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/developer/endpoints': {
+      id: '/developer/endpoints'
+      path: '/developer/endpoints'
+      fullPath: '/developer/endpoints'
+      preLoaderRoute: typeof DeveloperEndpointsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/developer/callback': {
       id: '/developer/callback'
       path: '/developer/callback'
@@ -697,6 +717,7 @@ const rootRouteChildren: RootRouteChildren = {
   BlocksHeightRoute: BlocksHeightRoute,
   ContractsIdRoute: ContractsIdRoute,
   DeveloperCallbackRoute: DeveloperCallbackRoute,
+  DeveloperEndpointsRoute: DeveloperEndpointsRoute,
   DeveloperKeysRoute: DeveloperKeysRoute,
   DeveloperLoginRoute: DeveloperLoginRoute,
   KeyPublicKeyRoute: KeyPublicKeyRoute,
