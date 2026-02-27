@@ -32,6 +32,7 @@ import { Route as TransactionsTxIdRouteImport } from './routes/transactions/$txI
 import { Route as TokensTokenRouteImport } from './routes/tokens/$token'
 import { Route as NftsNftTypeRouteImport } from './routes/nfts/$nftType'
 import { Route as KeyPublicKeyRouteImport } from './routes/key/$publicKey'
+import { Route as DeveloperSubscriptionsRouteImport } from './routes/developer/subscriptions'
 import { Route as DeveloperLoginRouteImport } from './routes/developer/login'
 import { Route as DeveloperKeysRouteImport } from './routes/developer/keys'
 import { Route as DeveloperEndpointsRouteImport } from './routes/developer/endpoints'
@@ -158,6 +159,11 @@ const KeyPublicKeyRoute = KeyPublicKeyRouteImport.update({
   path: '/key/$publicKey',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DeveloperSubscriptionsRoute = DeveloperSubscriptionsRouteImport.update({
+  id: '/developer/subscriptions',
+  path: '/developer/subscriptions',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DeveloperLoginRoute = DeveloperLoginRouteImport.update({
   id: '/developer/login',
   path: '/developer/login',
@@ -224,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/developer/endpoints': typeof DeveloperEndpointsRoute
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
+  '/developer/subscriptions': typeof DeveloperSubscriptionsRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
@@ -259,6 +266,7 @@ export interface FileRoutesByTo {
   '/developer/endpoints': typeof DeveloperEndpointsRoute
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
+  '/developer/subscriptions': typeof DeveloperSubscriptionsRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
@@ -294,6 +302,7 @@ export interface FileRoutesById {
   '/developer/endpoints': typeof DeveloperEndpointsRoute
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
+  '/developer/subscriptions': typeof DeveloperSubscriptionsRoute
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
@@ -331,6 +340,7 @@ export interface FileRouteTypes {
     | '/developer/endpoints'
     | '/developer/keys'
     | '/developer/login'
+    | '/developer/subscriptions'
     | '/key/$publicKey'
     | '/nfts/$nftType'
     | '/tokens/$token'
@@ -366,6 +376,7 @@ export interface FileRouteTypes {
     | '/developer/endpoints'
     | '/developer/keys'
     | '/developer/login'
+    | '/developer/subscriptions'
     | '/key/$publicKey'
     | '/tokens/$token'
     | '/transactions/$txId'
@@ -400,6 +411,7 @@ export interface FileRouteTypes {
     | '/developer/endpoints'
     | '/developer/keys'
     | '/developer/login'
+    | '/developer/subscriptions'
     | '/key/$publicKey'
     | '/nfts/$nftType'
     | '/tokens/$token'
@@ -436,6 +448,7 @@ export interface RootRouteChildren {
   DeveloperEndpointsRoute: typeof DeveloperEndpointsRoute
   DeveloperKeysRoute: typeof DeveloperKeysRoute
   DeveloperLoginRoute: typeof DeveloperLoginRoute
+  DeveloperSubscriptionsRoute: typeof DeveloperSubscriptionsRoute
   KeyPublicKeyRoute: typeof KeyPublicKeyRoute
   NftsNftTypeRoute: typeof NftsNftTypeRouteWithChildren
   TokensTokenRoute: typeof TokensTokenRoute
@@ -618,6 +631,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KeyPublicKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/developer/subscriptions': {
+      id: '/developer/subscriptions'
+      path: '/developer/subscriptions'
+      fullPath: '/developer/subscriptions'
+      preLoaderRoute: typeof DeveloperSubscriptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/developer/login': {
       id: '/developer/login'
       path: '/developer/login'
@@ -720,6 +740,7 @@ const rootRouteChildren: RootRouteChildren = {
   DeveloperEndpointsRoute: DeveloperEndpointsRoute,
   DeveloperKeysRoute: DeveloperKeysRoute,
   DeveloperLoginRoute: DeveloperLoginRoute,
+  DeveloperSubscriptionsRoute: DeveloperSubscriptionsRoute,
   KeyPublicKeyRoute: KeyPublicKeyRoute,
   NftsNftTypeRoute: NftsNftTypeRouteWithChildren,
   TokensTokenRoute: TokensTokenRoute,
