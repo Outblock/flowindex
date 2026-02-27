@@ -1001,4 +1001,18 @@ SELECT address, name
    AND kind = 'NFT'
 ON CONFLICT (contract_address, contract_name) DO NOTHING;
 
+-- USD price support: link FT tokens to external price data
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS market_symbol TEXT;
+ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS coingecko_id TEXT;
+
+-- Seed known market symbols (idempotent)
+UPDATE app.ft_tokens SET market_symbol = 'FLOW',    coingecko_id = 'flow'                WHERE contract_name = 'FlowToken'   AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'USDC',    coingecko_id = 'usd-coin'            WHERE symbol IN ('USDC.e', 'USDC')  AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'USDT',    coingecko_id = 'tether'              WHERE symbol IN ('tUSDT', 'USDT')   AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'BLT',     coingecko_id = NULL                  WHERE contract_name = 'BloctoToken' AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'REVV',    coingecko_id = 'revv'                WHERE contract_name = 'REVV'        AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'FUSD',    coingecko_id = NULL                  WHERE contract_name = 'FUSD'        AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'stFLOW',  coingecko_id = 'liquid-staked-flow'  WHERE contract_name = 'stFlowToken' AND (market_symbol IS NULL OR market_symbol = '');
+UPDATE app.ft_tokens SET market_symbol = 'TSHOT',   coingecko_id = 'tshot-token'         WHERE contract_name = 'TopShotToken' AND (market_symbol IS NULL OR market_symbol = '');
+
 COMMIT;
