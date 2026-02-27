@@ -38,10 +38,12 @@
     <td><img src="docs/assets/screenshots/account.png" alt="Account" width="480" /></td>
   </tr>
   <tr>
-    <td colspan="2"><b>AI Chat — Natural Language Blockchain Queries</b></td>
+    <td><b>NFT Collections</b></td>
+    <td><b>AI Chat</b></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><img src="docs/assets/screenshots/ai-chat.png" alt="AI Chat" width="720" /></td>
+    <td><img src="docs/assets/screenshots/nfts.png" alt="NFT Collections" width="480" /></td>
+    <td><img src="docs/assets/screenshots/ai-chat.png" alt="AI Chat" width="480" /></td>
   </tr>
 </table>
 
