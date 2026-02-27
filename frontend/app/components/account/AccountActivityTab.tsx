@@ -485,14 +485,18 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         const isOut = dir === 'withdraw' || dir === 'out';
         const tokenSymbol = tx.token?.symbol || tx.token?.name || formatTokenName(tx.token?.token || '');
         const tokenLogo = tx.token?.logo;
+        const hasLogo = !!extractLogoUrl(tokenLogo);
         const sender = tx.sender || tx.from_address;
         const receiver = tx.receiver || tx.to_address;
         const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
         return (
             <div key={i} className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center overflow-hidden">
-                    <TokenIcon logo={tokenLogo} symbol={tokenSymbol} size={28} />
-                    {!extractLogoUrl(tokenLogo) && <ArrowRightLeft className="h-3.5 w-3.5 text-emerald-500" />}
+                    {hasLogo ? (
+                        <TokenIcon logo={tokenLogo} symbol={tokenSymbol} size={28} />
+                    ) : (
+                        <ArrowRightLeft className="h-3.5 w-3.5 text-emerald-500" />
+                    )}
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
@@ -504,19 +508,15 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                             {tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '\u2014'}
                         </span>
                         <span className="text-xs text-zinc-500 font-medium">{tokenSymbol}</span>
-                        {tx.token?.token && (
-                            <Link to={`/contracts/${tx.token.token}` as any} className="text-[10px] text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green font-mono ml-1">
-                                {tx.token.token}
-                            </Link>
-                        )}
                     </div>
                     <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                        {sender && <span>From <AddressLink address={sender} size={14} /></span>}
+                        {sender && <span className="inline-flex items-center gap-1">From <AddressLink address={sender} size={14} /></span>}
                         {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
-                        {receiver && <span>To <AddressLink address={receiver} size={14} /></span>}
+                        {receiver && <span className="inline-flex items-center gap-1">To <AddressLink address={receiver} size={14} /></span>}
                         {tx.transaction_hash && (
                             <>
                                 <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
+                                <span className="text-zinc-400">tx:</span>
                                 <Link to={`/txs/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
                             </>
                         )}
@@ -541,8 +541,11 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         return (
             <div key={i} className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
                 <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center overflow-hidden">
-                    <TokenIcon logo={collectionImage} symbol={collectionName} size={36} />
-                    {!extractLogoUrl(collectionImage) && <Repeat className="h-4 w-4 text-amber-500" />}
+                    {extractLogoUrl(collectionImage) ? (
+                        <TokenIcon logo={collectionImage} symbol={collectionName} size={36} />
+                    ) : (
+                        <Repeat className="h-4 w-4 text-amber-500" />
+                    )}
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
@@ -554,18 +557,13 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                         {tx.nft_id && <span className="text-xs text-zinc-500 font-mono">#{tx.nft_id}</span>}
                     </div>
                     <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                        {sender && <span>From <AddressLink address={sender} size={14} /></span>}
+                        {sender && <span className="inline-flex items-center gap-1">From <AddressLink address={sender} size={14} /></span>}
                         {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
-                        {receiver && <span>To <AddressLink address={receiver} size={14} /></span>}
-                        {tx.nft_type && (
-                            <>
-                                <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
-                                <Link to={`/contracts/${tx.nft_type}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-[10px]">{tx.nft_type}</Link>
-                            </>
-                        )}
+                        {receiver && <span className="inline-flex items-center gap-1">To <AddressLink address={receiver} size={14} /></span>}
                         {tx.transaction_hash && (
                             <>
                                 <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
+                                <span className="text-zinc-400">tx:</span>
                                 <Link to={`/txs/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
                             </>
                         )}
