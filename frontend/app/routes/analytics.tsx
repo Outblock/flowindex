@@ -58,6 +58,7 @@ interface DailyRow {
   defi_swap_count: number
   defi_unique_traders: number
   epoch_payout_total: string
+  epoch?: number | null
   bridge_to_evm_txs: number
 }
 
@@ -502,6 +503,7 @@ function AnalyticsPage() {
                   return {
                     ...row,
                     epoch_payout_total: mod.epoch_payout_total,
+                    epoch: mod.epoch,
                   }
                 }
                 if (module === 'bridge') {
@@ -888,7 +890,7 @@ function AnalyticsPage() {
     // Filter to only days with actual epoch payouts (non-zero) so there are no empty gaps
     const epochPayoutData = visibleDaily
       .filter((d) => toNum(d.epoch_payout_total) > 0)
-      .map((d) => ({ date: d.date, epoch_payout: toNum(d.epoch_payout_total) }))
+      .map((d) => ({ date: d.date, epoch_payout: toNum(d.epoch_payout_total), epoch: d.epoch }))
 
     m.set('epoch-payout', {
       loading: dailyLoading,
@@ -899,9 +901,9 @@ function AnalyticsPage() {
           margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
         >
           <CartesianGrid stroke={gridStroke} vertical={false} />
-          <XAxis {...xAxisProps()} />
+          <XAxis {...xAxisProps()} dataKey="epoch" tickFormatter={(v) => v ? `#${v}` : ''} />
           <YAxis {...yAxisProps()} tickFormatter={(v) => fmtNum(v)} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} formatter={(v) => [fmtComma(Math.round(toNum(v))), 'Epoch Payout']} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(59,130,246,0.06)' }} labelFormatter={(_, payload) => { const d = payload?.[0]?.payload; return d?.epoch ? `Epoch #${d.epoch} (${d.date})` : d?.date ?? '' }} formatter={(v) => [fmtComma(Math.round(toNum(v))), 'Epoch Payout']} />
           <Bar dataKey="epoch_payout" fill={C.blue} fillOpacity={0.7} name="Epoch Payout" radius={[3, 3, 0, 0]} />
         </BarChart>
       ),
