@@ -42,8 +42,8 @@ export default {
         // ... (keep rest default)
       },
       fontFamily: {
-        mono: ["Inconsolata", "Space Mono", "monospace"], // Tech look
-        sans: ["var(--font-sans)", ...fontFamily.sans],
+        mono: ["Geist Mono", "monospace"],
+        sans: ["Geist Sans", ...fontFamily.sans],
       },
       borderRadius: {
         lg: `var(--radius)`,

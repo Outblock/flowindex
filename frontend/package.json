@@ -37,6 +37,7 @@
     "date-fns": "^4.1.0",
     "diff": "^8.0.3",
     "framer-motion": "^11.0.0",
+    "geist": "^1.7.0",
     "lucide-react": "^0.563.0",
     "motion": "^12.34.0",
     "postprocessing": "^6.36.0",
