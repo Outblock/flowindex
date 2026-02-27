@@ -762,9 +762,11 @@ function TransactionDetail() {
                                 <div className="group">
                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">
                                         Proposer
-                                        <span className="text-zinc-400 ml-2 font-mono normal-case">
-                                            seq:{transaction.proposerSequenceNumber} key:{transaction.proposerKeyIndex}
-                                        </span>
+                                        {(transaction.proposerSequenceNumber > 0 || transaction.proposerKeyIndex > 0) && (
+                                            <span className="text-zinc-400 ml-2 font-mono normal-case">
+                                                seq:{transaction.proposerSequenceNumber} key:{transaction.proposerKeyIndex}
+                                            </span>
+                                        )}
                                     </p>
                                     <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/5 p-2.5 flex items-center hover:border-zinc-300 dark:hover:border-white/20 transition-colors rounded-sm">
                                         <div className="flex items-center gap-1 min-w-0">
