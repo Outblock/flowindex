@@ -89,12 +89,12 @@ function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boole
           <span className="text-xs font-mono text-zinc-900 dark:text-white font-bold">
             {formatAmount(tx.amount)}
           </span>
+          <span className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase">
+            {tx.token_symbol}
+          </span>
           <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500">≈</span>
           <span className="text-xs font-mono font-bold text-nothing-green-dark dark:text-nothing-green">
             {formatUSD(tx.usd_value)}
-          </span>
-          <span className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase">
-            {tx.token_symbol}
           </span>
         </div>
         <div className="flex items-center gap-1 mt-0.5 text-[10px] font-mono text-zinc-400 dark:text-gray-500">
