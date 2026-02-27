@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Home, Box, ArrowRightLeft, Users, FileText, Layers, Globe, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, BarChart3 } from 'lucide-react';
+import { Home, Box, ArrowRightLeft, Users, FileText, Layers, Globe, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, BarChart3, Code2 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useMobileMenu } from '../contexts/MobileMenuContext';
 import { FlowIndexLogo } from './FlowIndexLogo';
@@ -31,6 +31,7 @@ export default function Sidebar() {
         { label: 'Nodes', path: '/nodes', icon: Globe },
         { label: 'Indexing Status', path: '/stats', icon: Layers },
         { label: 'API Docs', path: '/api-docs', icon: FileText },
+        { label: 'Developer', path: '/developer', icon: Code2 },
     ];
 
     return (
