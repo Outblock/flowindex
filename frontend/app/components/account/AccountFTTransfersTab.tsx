@@ -10,6 +10,19 @@ interface Props {
     address: string;
 }
 
+function timeAgo(ts: string): string {
+    const diff = Date.now() - new Date(ts).getTime();
+    if (diff < 0) return 'just now';
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
+}
+
 export function AccountFTTransfersTab({ address }: Props) {
     const normalizedAddress = normalizeAddress(address);
 
@@ -64,28 +77,54 @@ export function AccountFTTransfersTab({ address }: Props) {
                                 <th className="p-4 font-normal">Amount</th>
                                 <th className="p-4 font-normal">From</th>
                                 <th className="p-4 font-normal">To</th>
-                                <th className="p-4 font-normal text-right">Block</th>
+                                <th className="p-4 font-normal text-right">Time</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                            {transfers.map((tx: any, i: number) => (
-                                <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                                    <td className="p-4 font-mono">{tx.token_id || tx.type_id || '—'}</td>
-                                    <td className="p-4 font-mono">
-                                        {tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
-                                        {tx.usd_value > 0 && (
-                                            <UsdValue value={tx.usd_value} className="ml-2 text-[10px]" />
-                                        )}
-                                    </td>
-                                    <td className="p-4">
-                                        {tx.from_address ? <AddressLink address={tx.from_address} /> : '—'}
-                                    </td>
-                                    <td className="p-4">
-                                        {tx.to_address ? <AddressLink address={tx.to_address} /> : '—'}
-                                    </td>
-                                    <td className="p-4 text-right text-zinc-500">{tx.block_height ?? '—'}</td>
-                                </tr>
-                            ))}
+                            {transfers.map((tx: any, i: number) => {
+                                const token = tx.token ?? {};
+                                const logo = token.logo;
+                                const name = token.name || token.symbol || tx.token_id || '—';
+                                const symbol = token.symbol || '';
+                                return (
+                                    <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-2">
+                                                {logo ? (
+                                                    <img src={logo} alt={name} className="w-5 h-5 rounded-full object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                                ) : (
+                                                    <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-white/10 flex items-center justify-center flex-shrink-0 text-[9px] font-bold text-zinc-500">
+                                                        {(symbol || name).charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                                <span className="font-medium text-zinc-900 dark:text-white">{name}</span>
+                                                {symbol && symbol !== name && (
+                                                    <span className="text-zinc-400 text-[10px] uppercase">{symbol}</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex flex-col">
+                                                <span className={`font-mono ${tx.direction === 'in' ? 'text-emerald-600 dark:text-emerald-400' : tx.direction === 'out' ? 'text-red-500 dark:text-red-400' : 'text-zinc-900 dark:text-white'}`}>
+                                                    {tx.direction === 'in' ? '+' : tx.direction === 'out' ? '-' : ''}
+                                                    {tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
+                                                    {symbol ? ` ${symbol}` : ''}
+                                                </span>
+                                                <UsdValue value={tx.usd_value} className="text-[10px]" />
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            {tx.sender ? <AddressLink address={tx.sender} /> : '—'}
+                                        </td>
+                                        <td className="p-4">
+                                            {tx.receiver ? <AddressLink address={tx.receiver} /> : '—'}
+                                        </td>
+                                        <td className="p-4 text-right text-zinc-500" title={tx.timestamp ? new Date(tx.timestamp).toLocaleString() : ''}>
+                                            {tx.timestamp ? timeAgo(tx.timestamp) : (tx.block_height ?? '—')}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 ) : !loading ? (
