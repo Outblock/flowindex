@@ -654,8 +654,8 @@ function Home() {
                     <DailyStatsChart />
                 </motion.div>
 
-                {/* Top Tokens & Top Collections Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Top Tokens, Top Collections & Whale Alert Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Top Tokens */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -814,16 +814,16 @@ function Home() {
                             )}
                         </div>
                     </motion.div>
-                </div>
 
-                {/* Whale Alert */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.7 }}
-                >
-                    <BigTransfersCompact />
-                </motion.div>
+                    {/* Whale Alert */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.7 }}
+                    >
+                        <BigTransfersCompact />
+                    </motion.div>
+                </div>
 
                 {/* Blocks & Transactions Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
