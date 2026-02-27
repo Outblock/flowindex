@@ -59,7 +59,13 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
 		ts := transferSummaries[t.ID]
-		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta))
+		o := toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta)
+		if fee := feesByTx[t.ID]; fee > 0 {
+			if p, ok := s.priceCache.GetPriceAt("FLOW", t.Timestamp); ok {
+				o["fee_usd"] = fee * p
+			}
+		}
+		out = append(out, o)
 	}
 
 	// Enrich with script template classification.
@@ -112,6 +118,11 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		evmExecs, _ = s.repo.GetEVMTransactionsByCadenceTx(r.Context(), tx.ID, tx.BlockHeight)
 	}
 	out := toFlowTransactionOutput(*tx, events, contracts[tx.ID], tags[tx.ID], feesByTx[tx.ID], evmExecs)
+	if fee := feesByTx[tx.ID]; fee > 0 {
+		if p, ok := s.priceCache.GetPriceAt("FLOW", tx.Timestamp); ok {
+			out["fee_usd"] = fee * p
+		}
+	}
 
 	// Enrich: script template classification using script_hash from the tx record directly
 	if tx.ScriptHash != "" {

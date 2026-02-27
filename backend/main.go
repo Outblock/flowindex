@@ -881,42 +881,92 @@ func main() {
 		}
 	}()
 
-	// Historical price backfill: fetch up to 365 days of daily FLOW/USD from CoinGecko.
-	// Only runs if existing data is less than 30 days deep.
+	// Historical price backfill: fetch daily prices from multiple sources.
+	// 1. Load existing prices from DB into in-memory cache.
+	// 2. Backfill from CoinGecko (FLOW), CryptoCompare (all market_symbol), DeFi Llama (all coingecko_id).
+	// 3. Reload cache after backfill.
 	enablePriceFeed := os.Getenv("ENABLE_PRICE_FEED") != "false"
 	if enablePriceFeed {
+		// Load existing prices into the in-memory cache immediately.
+		loadPriceCacheFromDB(ctx, repo, apiServer.PriceCache())
+
 		go func() {
+			// CoinGecko backfill for FLOW (dense hourly data)
 			earliest, err := repo.GetEarliestMarketPrice(ctx, "FLOW", "USD")
 			needsBackfill := err != nil || earliest.AsOf.After(time.Now().AddDate(0, 0, -30))
-			if !needsBackfill {
-				log.Printf("[price_backfill] Skipping: earliest price record at %s (>30 days)", earliest.AsOf.Format("2006-01-02"))
-				return
-			}
-			log.Println("[price_backfill] Fetching 365 days of FLOW/USD history from CoinGecko...")
-			ctxFetch, cancel := context.WithTimeout(ctx, 30*time.Second)
-			defer cancel()
-			history, err := market.FetchFlowPriceHistory(ctxFetch, 365)
-			if err != nil {
-				log.Printf("[price_backfill] Failed to fetch history: %v", err)
-				return
-			}
-			prices := make([]repository.MarketPrice, len(history))
-			for i, q := range history {
-				prices[i] = repository.MarketPrice{
-					Asset:     q.Asset,
-					Currency:  q.Currency,
-					Price:     q.Price,
-					MarketCap: q.MarketCap,
-					Source:    q.Source,
-					AsOf:      q.AsOf,
+			if needsBackfill {
+				log.Println("[price_backfill] Fetching 365 days of FLOW/USD history from CoinGecko...")
+				ctxFetch, cancel := context.WithTimeout(ctx, 30*time.Second)
+				history, err := market.FetchFlowPriceHistory(ctxFetch, 365)
+				cancel()
+				if err != nil {
+					log.Printf("[price_backfill] CoinGecko error: %v", err)
+				} else {
+					prices := make([]repository.MarketPrice, len(history))
+					for i, q := range history {
+						prices[i] = repository.MarketPrice{
+							Asset: q.Asset, Currency: q.Currency, Price: q.Price,
+							MarketCap: q.MarketCap, Source: q.Source, AsOf: q.AsOf,
+						}
+					}
+					inserted, err := repo.BulkInsertMarketPrices(ctx, prices)
+					if err != nil {
+						log.Printf("[price_backfill] CoinGecko insert error (%d inserted): %v", inserted, err)
+					} else {
+						log.Printf("[price_backfill] CoinGecko: %d new prices (of %d fetched)", inserted, len(history))
+					}
 				}
 			}
-			inserted, err := repo.BulkInsertMarketPrices(ctx, prices)
-			if err != nil {
-				log.Printf("[price_backfill] Insert error (inserted %d before failure): %v", inserted, err)
-				return
+
+			// CryptoCompare backfill for all tokens with market_symbol
+			symbols := getMarketSymbols(ctx, repo)
+			for _, sym := range symbols {
+				ctxCC, cancelCC := context.WithTimeout(ctx, 30*time.Second)
+				history, err := market.FetchDailyPriceHistory(ctxCC, sym, 2000)
+				cancelCC()
+				if err != nil {
+					log.Printf("[price_backfill] CryptoCompare %s: %v", sym, err)
+					continue
+				}
+				prices := make([]repository.MarketPrice, len(history))
+				for i, q := range history {
+					prices[i] = repository.MarketPrice{
+						Asset: strings.ToUpper(q.Asset), Currency: "USD",
+						Price: q.Price, Source: q.Source, AsOf: q.AsOf,
+					}
+				}
+				inserted, _ := repo.BulkInsertMarketPrices(ctx, prices)
+				if inserted > 0 {
+					log.Printf("[price_backfill] CryptoCompare %s: %d new prices", sym, inserted)
+				}
 			}
-			log.Printf("[price_backfill] Done: %d new daily prices inserted (of %d fetched)", inserted, len(history))
+
+			// DeFi Llama backfill for all tokens with coingecko_id
+			cgIDs, _ := repo.GetDistinctCoingeckoIDs(ctx)
+			for _, cgID := range cgIDs {
+				ctxDL, cancelDL := context.WithTimeout(ctx, 2*time.Minute)
+				history, err := market.FetchDefiLlamaPriceHistory(ctxDL, cgID)
+				cancelDL()
+				if err != nil {
+					log.Printf("[price_backfill] DeFiLlama %s: %v", cgID, err)
+					continue
+				}
+				prices := make([]repository.MarketPrice, len(history))
+				for i, q := range history {
+					prices[i] = repository.MarketPrice{
+						Asset: strings.ToUpper(q.Asset), Currency: "USD",
+						Price: q.Price, Source: q.Source, AsOf: q.AsOf,
+					}
+				}
+				inserted, _ := repo.BulkInsertMarketPrices(ctx, prices)
+				if inserted > 0 {
+					log.Printf("[price_backfill] DeFiLlama %s: %d new prices", cgID, inserted)
+				}
+			}
+
+			// Reload cache after backfill
+			loadPriceCacheFromDB(ctx, repo, apiServer.PriceCache())
+			log.Println("[price_backfill] Cache reloaded after backfill")
 		}()
 	}
 
@@ -948,6 +998,10 @@ func main() {
 					AsOf:           quote.AsOf,
 				}); err != nil {
 					log.Printf("Failed to store Flow price: %v", err)
+				} else {
+					apiServer.PriceCache().Append(strings.ToUpper(quote.Asset), []market.DailyPrice{
+						{Date: quote.AsOf.UTC().Truncate(24 * time.Hour), Price: quote.Price},
+					})
 				}
 			}
 
@@ -1052,4 +1106,41 @@ func redactDatabaseURL(raw string) string {
 	}
 	re = regexp.MustCompile(`(?i)(password=)([^\\s]+)`)
 	return re.ReplaceAllString(raw, `$1****`)
+}
+
+func loadPriceCacheFromDB(ctx context.Context, repo *repository.Repository, cache *market.PriceCache) {
+	assets, err := repo.GetDistinctPriceAssets(ctx)
+	if err != nil {
+		log.Printf("[price_cache] Failed to get assets: %v", err)
+		return
+	}
+	for _, asset := range assets {
+		prices, err := repo.GetMarketPriceHistory(ctx, asset, "USD", 8760)
+		if err != nil {
+			log.Printf("[price_cache] Failed to load %s: %v", asset, err)
+			continue
+		}
+		daily := make([]market.DailyPrice, len(prices))
+		for i, p := range prices {
+			daily[i] = market.DailyPrice{Date: p.AsOf.UTC().Truncate(24 * time.Hour), Price: p.Price}
+		}
+		cache.Load(asset, daily)
+		log.Printf("[price_cache] Loaded %d prices for %s", len(daily), asset)
+	}
+	// Stablecoins always $1
+	for _, stable := range []string{"USDC", "USDT", "FUSD"} {
+		if _, ok := cache.GetLatestPrice(stable); !ok {
+			today := time.Now().UTC().Truncate(24 * time.Hour)
+			cache.Load(stable, []market.DailyPrice{{Date: today, Price: 1.0}})
+		}
+	}
+}
+
+func getMarketSymbols(ctx context.Context, repo *repository.Repository) []string {
+	symbols, err := repo.GetDistinctMarketSymbols(ctx)
+	if err != nil {
+		log.Printf("[price_backfill] Failed to get market symbols: %v", err)
+		return []string{"FLOW"}
+	}
+	return symbols
 }
