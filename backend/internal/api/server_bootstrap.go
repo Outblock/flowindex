@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"flowscan-clone/internal/market"
 	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
@@ -103,6 +104,7 @@ type Server struct {
 	startBlock       uint64
 	blockscoutURL    string // e.g. "https://evm.flowindex.dev"
 	backfillProgress *BackfillProgress
+	priceCache       *market.PriceCache
 	statusCache      struct {
 		mu        sync.Mutex
 		payload   []byte
@@ -133,6 +135,7 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 		client:        client,
 		startBlock:    startBlock,
 		blockscoutURL: bsURL,
+		priceCache:    market.NewPriceCache(),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -158,6 +161,10 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 
 func (s *Server) SetBackfillProgress(bp *BackfillProgress) {
 	s.backfillProgress = bp
+}
+
+func (s *Server) PriceCache() *market.PriceCache {
+	return s.priceCache
 }
 
 func (s *Server) Start() error {

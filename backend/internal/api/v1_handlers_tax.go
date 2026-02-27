@@ -63,13 +63,10 @@ func (s *Server) handleTaxReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get latest FLOW price for approximate USD valuation
-	flowPrice := 0.0
-	if mp, err := s.repo.GetLatestMarketPrice(r.Context(), "FLOW", "USD"); err == nil && mp != nil {
-		flowPrice = mp.Price
-	}
+	// Build transfer list with per-transfer historical price info
+	ftIDs := collectTransferTokenIDs(ftTransfers, false)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
 
-	// Build transfer list with price info
 	var transfers []map[string]interface{}
 	var totalFTIn, totalFTOut float64
 
@@ -92,6 +89,15 @@ func (s *Server) handleTaxReport(w http.ResponseWriter, r *http.Request) {
 
 		tokenIdentifier := formatTokenVaultIdentifier(t.TokenTransfer.TokenContractAddress, t.ContractName)
 
+		// Historical price lookup
+		var usdPrice float64
+		id := formatTokenVaultIdentifier(t.TokenTransfer.TokenContractAddress, t.ContractName)
+		if m, ok := ftMeta[id]; ok && m.MarketSymbol != "" {
+			usdPrice, _ = s.priceCache.GetPriceAt(m.MarketSymbol, ts)
+		} else if t.ContractName == "FlowToken" {
+			usdPrice, _ = s.priceCache.GetPriceAt("FLOW", ts)
+		}
+
 		entry := map[string]interface{}{
 			"type":             "ft",
 			"transaction_hash": t.TokenTransfer.TransactionID,
@@ -102,7 +108,8 @@ func (s *Server) handleTaxReport(w http.ResponseWriter, r *http.Request) {
 			"direction":        direction,
 			"sender":           formatAddressV1(t.TokenTransfer.FromAddress),
 			"receiver":         formatAddressV1(t.TokenTransfer.ToAddress),
-			"approx_usd_price": flowPrice,
+			"approx_usd_price": usdPrice,
+			"usd_value":        amount * usdPrice,
 		}
 		transfers = append(transfers, entry)
 	}
@@ -137,12 +144,18 @@ func (s *Server) handleTaxReport(w http.ResponseWriter, r *http.Request) {
 		transfers = make([]map[string]interface{}, 0)
 	}
 
+	// Get latest FLOW price for summary
+	latestFlowPrice := 0.0
+	if p, ok := s.priceCache.GetLatestPrice("FLOW"); ok {
+		latestFlowPrice = p
+	}
+
 	summary := map[string]interface{}{
 		"address":         formatAddressV1(address),
 		"total_transfers": len(transfers),
 		"total_ft_in":     totalFTIn,
 		"total_ft_out":    totalFTOut,
-		"flow_price_usd":  flowPrice,
+		"flow_price_usd":  latestFlowPrice,
 		"transfers":       transfers,
 	}
 

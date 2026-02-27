@@ -372,7 +372,13 @@ func (s *Server) handleFlowAccountFTTransfers(w http.ResponseWriter, r *http.Req
 		if meta, ok := ftMeta[id]; ok {
 			m = &meta
 		}
-		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address, m))
+		var usdPrice float64
+		if m != nil && m.MarketSymbol != "" {
+			usdPrice, _ = s.priceCache.GetPriceAt(m.MarketSymbol, t.TokenTransfer.Timestamp)
+		} else if t.ContractName == "FlowToken" {
+			usdPrice, _ = s.priceCache.GetPriceAt("FLOW", t.TokenTransfer.Timestamp)
+		}
+		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address, m, usdPrice))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
@@ -610,7 +616,13 @@ func (s *Server) handleFlowAccountFTTokenTransfers(w http.ResponseWriter, r *htt
 		if meta, ok := ftMeta3[id]; ok {
 			m = &meta
 		}
-		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address, m))
+		var usdPrice float64
+		if m != nil && m.MarketSymbol != "" {
+			usdPrice, _ = s.priceCache.GetPriceAt(m.MarketSymbol, t.TokenTransfer.Timestamp)
+		} else if t.ContractName == "FlowToken" {
+			usdPrice, _ = s.priceCache.GetPriceAt("FLOW", t.TokenTransfer.Timestamp)
+		}
+		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, address, m, usdPrice))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }

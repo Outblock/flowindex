@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -281,6 +282,30 @@ func (s *Server) handleStatusGCPVMs(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(body)
+}
+
+func (s *Server) handleStatusPriceAt(w http.ResponseWriter, r *http.Request) {
+	asset := strings.ToUpper(r.URL.Query().Get("asset"))
+	if asset == "" {
+		asset = "FLOW"
+	}
+	tsStr := r.URL.Query().Get("ts")
+	if tsStr == "" {
+		writeAPIError(w, http.StatusBadRequest, "ts parameter required")
+		return
+	}
+	ts, err := time.Parse(time.RFC3339, tsStr)
+	if err != nil {
+		ts, err = time.Parse("2006-01-02", tsStr)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid ts format, use RFC3339 or YYYY-MM-DD")
+			return
+		}
+	}
+	price, found := s.priceCache.GetPriceAt(asset, ts)
+	writeAPIResponse(w, []map[string]interface{}{
+		{"asset": asset, "currency": "USD", "price": price, "found": found, "as_of": ts},
+	}, nil, nil)
 }
 
 func (s *Server) handleNotImplemented(w http.ResponseWriter, r *http.Request) {

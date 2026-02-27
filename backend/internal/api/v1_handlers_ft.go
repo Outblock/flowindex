@@ -33,7 +33,13 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 		if meta, ok := ftMeta[id]; ok {
 			m = &meta
 		}
-		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter, m))
+		var usdPrice float64
+		if m != nil && m.MarketSymbol != "" {
+			usdPrice, _ = s.priceCache.GetPriceAt(m.MarketSymbol, t.TokenTransfer.Timestamp)
+		} else if t.ContractName == "FlowToken" {
+			usdPrice, _ = s.priceCache.GetPriceAt("FLOW", t.TokenTransfer.Timestamp)
+		}
+		out = append(out, toFTTransferOutput(t.TokenTransfer, t.ContractName, addrFilter, m, usdPrice))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }

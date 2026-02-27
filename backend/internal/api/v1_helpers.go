@@ -300,6 +300,7 @@ func toFlowTransactionOutput(t models.Transaction, events []models.Event, contra
 		"contract_outputs":         []string{},
 		"tags":                     tags,
 		"fee":                      fee,
+		"fee_usd":                  0.0,
 	}
 	if t.ScriptHash != "" {
 		out["script_hash"] = t.ScriptHash
@@ -627,7 +628,7 @@ func transferDirection(addrFilter, from, to string) string {
 	return "deposit"
 }
 
-func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string, meta *repository.TokenMetadataInfo) map[string]interface{} {
+func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string, meta *repository.TokenMetadataInfo, usdPrice float64) map[string]interface{} {
 	tokenIdentifier := formatTokenVaultIdentifier(t.TokenContractAddress, contractName)
 	tokenName := ""
 	tokenSymbol := ""
@@ -657,7 +658,8 @@ func toFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string,
 		"verified":         false,
 		"is_primary":       false,
 		"classifier":       "Coin Transfer",
-		"approx_usd_price": 0,
+		"approx_usd_price": usdPrice,
+		"usd_value":        parseFloatOrZero(t.Amount) * usdPrice,
 		"receiver_balance": 0,
 		"token": map[string]interface{}{
 			"token":  tokenIdentifier,
