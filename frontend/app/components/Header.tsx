@@ -1,10 +1,109 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
-import { Search, Menu, X } from 'lucide-react';
+import { Search, Menu, X, Globe, ChevronDown, Check, ExternalLink } from 'lucide-react';
 import { useWebSocketStatus } from '../hooks/useWebSocket';
 import { useMobileMenu } from '../contexts/MobileMenuContext';
 import { resolveApiBaseUrl } from '../api';
 import { network } from '../fclConfig';
+
+const NETWORKS = [
+  {
+    group: 'Cadence',
+    items: [
+      { label: 'Mainnet', url: 'https://flowindex.io', network: 'mainnet', type: 'cadence' },
+      { label: 'Testnet', url: 'https://testnet.flowindex.io', network: 'testnet', type: 'cadence' },
+    ],
+  },
+  {
+    group: 'EVM',
+    items: [
+      { label: 'Mainnet', url: 'https://evm.flowindex.io', network: 'mainnet', type: 'evm' },
+      { label: 'Testnet', url: 'https://testnet.evm.flowindex.io', network: 'testnet', type: 'evm' },
+    ],
+  },
+];
+
+function getCurrentNetwork() {
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  if (host.startsWith('testnet.evm.')) return { type: 'evm', network: 'testnet' };
+  if (host.startsWith('evm.')) return { type: 'evm', network: 'mainnet' };
+  if (host.startsWith('testnet.')) return { type: 'cadence', network: 'testnet' };
+  return { type: 'cadence', network: network || 'mainnet' };
+}
+
+function NetworkSwitcher() {
+  const [isOpen, setIsOpen] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const current = getCurrentNetwork();
+
+  const currentLabel = `${current.type === 'evm' ? 'EVM ' : ''}${current.network.charAt(0).toUpperCase() + current.network.slice(1)}`;
+
+  const handleEnter = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setIsOpen(true);
+  };
+
+  const handleLeave = () => {
+    timeoutRef.current = setTimeout(() => setIsOpen(false), 150);
+  };
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+    >
+      {/* Trigger */}
+      <button
+        className="flex items-center gap-2 px-3 py-1.5 border rounded-sm bg-zinc-100 dark:bg-white/5 border-zinc-300 dark:border-white/10 hover:border-nothing-green/40 transition-colors text-[10px] uppercase tracking-widest cursor-pointer"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <Globe className="w-3 h-3 text-nothing-green" />
+        <span className="text-zinc-500">Network</span>
+        <span className="text-zinc-900 dark:text-white font-medium">{currentLabel}</span>
+        <ChevronDown className={`w-3 h-3 text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1.5 w-52 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-sm shadow-xl shadow-black/20 z-50 overflow-hidden">
+          {NETWORKS.map((group, gi) => (
+            <div key={group.group}>
+              {gi > 0 && <div className="border-t border-zinc-200 dark:border-white/5" />}
+              <div className="px-3 pt-2.5 pb-1 text-[9px] uppercase tracking-[0.15em] text-zinc-400 dark:text-zinc-500 font-medium">
+                {group.group}
+              </div>
+              {group.items.map((item) => {
+                const isActive = current.type === item.type && current.network === item.network;
+                return (
+                  <a
+                    key={`${item.type}-${item.network}`}
+                    href={item.url + (typeof window !== 'undefined' ? window.location.pathname : '')}
+                    className={`flex items-center justify-between px-3 py-2 text-xs transition-colors ${
+                      isActive
+                        ? 'text-nothing-green bg-nothing-green/5'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-nothing-green' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+                      <span>{item.label}</span>
+                    </div>
+                    {isActive ? (
+                      <Check className="w-3 h-3 text-nothing-green" />
+                    ) : (
+                      <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100" />
+                    )}
+                  </a>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Header() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -78,7 +177,7 @@ function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 relative bg-zinc-50/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 py-3 px-3 md:py-4 md:px-8 transition-colors duration-300 overflow-hidden">
+    <header className="sticky top-0 z-40 relative bg-zinc-50/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 py-3 px-3 md:py-4 md:px-8 transition-colors duration-300">
       {isNavigating && (
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-nothing-green to-transparent animate-pulse" />
       )}
@@ -116,19 +215,14 @@ function Header() {
           </div>
         </form>
 
-        {/* Network Status */}
-        <div className="hidden md:flex items-center gap-4 shrink-0">
-          <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest text-zinc-500">
-            <div className="flex items-center gap-2">
-              <span>Network</span>
-              <span className="text-zinc-900 dark:text-white capitalize">{network}</span>
-            </div>
-            <div className={`flex items-center gap-2 px-3 py-1.5 border rounded-sm ${isConnected ? 'bg-nothing-green/10 border-nothing-green/30' : 'bg-zinc-200 dark:bg-white/5 border-zinc-300 dark:border-white/10'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-nothing-green animate-pulse' : 'bg-gray-500'}`} />
-              <span className={isConnected ? 'text-nothing-green' : 'text-gray-500'}>
-                {isConnected ? 'System Online' : 'Offline'}
-              </span>
-            </div>
+        {/* Network Switcher + System Status */}
+        <div className="hidden md:flex items-center gap-3 shrink-0">
+          <NetworkSwitcher />
+          <div className={`flex items-center gap-2 px-3 py-1.5 border rounded-sm text-[10px] uppercase tracking-widest ${isConnected ? 'bg-nothing-green/10 border-nothing-green/30' : 'bg-zinc-200 dark:bg-white/5 border-zinc-300 dark:border-white/10'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-nothing-green animate-pulse' : 'bg-gray-500'}`} />
+            <span className={isConnected ? 'text-nothing-green' : 'text-gray-500'}>
+              {isConnected ? 'System Online' : 'Offline'}
+            </span>
           </div>
         </div>
       </div>
