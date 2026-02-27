@@ -1,11 +1,3 @@
-# Deploy to GCP (template)
-#
-# Before using, configure these GitHub secrets:
-#   WIF_PROVIDER        - Workload Identity Federation provider
-#   WIF_SERVICE_ACCOUNT - GCP service account email
-#
-# And update the env vars below to match your GCP project.
-
 name: Deploy to GCP
 
 on:
@@ -24,9 +16,6 @@ env:
   PROJECT_ID: flowindex-mainnet
   REGION: us-central1
   REGISTRY: us-central1-docker.pkg.dev/flowindex-mainnet/flowindex
-  BACKEND_VM: flowindex-backend
-  FRONTEND_VM: flowindex-frontend
-  GCE_ZONE: us-central1-a
 
 jobs:
   # Detect which services changed (or use manual input)
@@ -48,6 +37,8 @@ jobs:
               - 'backend/**'
               - 'openapi-v1.json'
               - 'openapi-v2.json'
+              - 'find-api.json'
+              - 'api.json'
               - '.github/workflows/deploy.yml'
             frontend:
               - 'frontend/**'
@@ -107,7 +98,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build & push backend
         run: |
@@ -120,7 +111,7 @@ jobs:
 
       - name: Kill old DB connections before deploy
         run: |
-          gcloud compute ssh ${{ env.BACKEND_VM }} --zone=${{ env.GCE_ZONE }} --command='
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
             docker exec postgres psql -U flowscan -d flowscan -c "
               SELECT pg_terminate_backend(pid)
               FROM pg_stat_activity
@@ -132,13 +123,13 @@ jobs:
 
       - name: Deploy backend (pull & restart on GCE)
         run: |
-          gcloud compute ssh ${{ env.BACKEND_VM }} --zone=${{ env.GCE_ZONE }} --command='
-            docker-credential-gcr configure-docker --registries=${{ env.REGION }}-docker.pkg.dev 2>/dev/null || true; \
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
             docker pull ${{ env.REGISTRY }}/backend:${{ github.sha }} && \
             docker stop backend 2>/dev/null; docker rm backend 2>/dev/null; \
             docker run -d --restart=always --name backend \
               --network=host \
-              --env-file /path/to/backend.env \
+              --env-file /mnt/stateful_partition/pgdata/backend.env \
               ${{ env.REGISTRY }}/backend:${{ github.sha }}
           '
 
@@ -166,7 +157,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build & push frontend
         run: |
@@ -180,15 +171,15 @@ jobs:
 
       - name: Deploy frontend (pull & restart on GCE)
         run: |
-          gcloud compute ssh ${{ env.FRONTEND_VM }} --zone=${{ env.GCE_ZONE }} --command='
-            docker-credential-gcr configure-docker --registries=${{ env.REGION }}-docker.pkg.dev 2>/dev/null || true; \
+          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
             docker pull ${{ env.REGISTRY }}/frontend:${{ github.sha }} && \
             docker stop frontend 2>/dev/null; docker rm frontend 2>/dev/null; \
             docker run -d --restart=always --name frontend \
               --network=host \
-              -e BACKEND_API=http://YOUR_BACKEND_INTERNAL_IP:8080 \
-              -e BACKEND_WS=http://YOUR_BACKEND_INTERNAL_IP:8080 \
-              -e VITE_API_URL=https://your-domain.com/api \
+              -e BACKEND_API=http://10.128.0.4:8080 \
+              -e BACKEND_WS=http://10.128.0.4:8080 \
+              -e VITE_API_URL=https://flowindex.io/api \
               ${{ env.REGISTRY }}/frontend:${{ github.sha }}
           '
 
@@ -213,7 +204,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build & push docs
         run: |
@@ -226,8 +217,8 @@ jobs:
       - name: Deploy docs to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
-          service: your-docs-service
-          region: ${{ env.REGION }}
+          service: flowindex-docs
+          region: us-central1
           image: ${{ env.REGISTRY }}/docs:${{ github.sha }}
 
   build-ai-chat:
@@ -251,7 +242,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build & push ai-chat
         run: |
@@ -263,12 +254,12 @@ jobs:
 
       - name: Deploy ai-chat (pull & restart on GCE)
         run: |
-          gcloud compute ssh ${{ env.BACKEND_VM }} --zone=${{ env.GCE_ZONE }} --command='
-            docker-credential-gcr configure-docker --registries=${{ env.REGION }}-docker.pkg.dev 2>/dev/null || true; \
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
             docker pull ${{ env.REGISTRY }}/ai-chat:${{ github.sha }} && \
             docker stop ai-chat 2>/dev/null; docker rm ai-chat 2>/dev/null; \
             docker run -d --restart=always --name ai-chat \
               --network=host \
-              --env-file /path/to/ai-chat.env \
+              --env-file /mnt/stateful_partition/pgdata/ai-chat.env \
               ${{ env.REGISTRY }}/ai-chat:${{ github.sha }}
           '
