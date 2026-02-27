@@ -19,7 +19,6 @@ interface BalancePoint {
     balance: number;
 }
 
- 
 interface FtMeta {
     id?: string;
     name?: string;
@@ -87,23 +86,12 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
     const [exporting, setExporting] = useState(false);
     const exportRef = useRef<HTMLDivElement>(null);
 
-    // Close dropdown on outside click
+    // Close dropdowns on outside click
     useEffect(() => {
         const handler = (e: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-                setDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
-
-    // Close export dropdown on outside click
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
-                setExportOpen(false);
-            }
+            const target = e.target as Node;
+            if (dropdownRef.current && !dropdownRef.current.contains(target)) setDropdownOpen(false);
+            if (exportRef.current && !exportRef.current.contains(target)) setExportOpen(false);
         };
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
@@ -197,16 +185,17 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
         fetchHistory(selectedToken, days);
     }, [selectedToken, days, fetchHistory]);
 
-    // Lazy-load sparklines for token overview list
+    // Lazy-load sparklines for top tokens in overview list
     useEffect(() => {
         if (tokenList.length === 0) return;
         let cancelled = false;
         const loadSparklines = async () => {
             const baseUrl = await resolveApiBaseUrl();
             const newSparklines = new Map<string, BalancePoint[]>();
-            // Fetch in parallel, batched
+            // Limit to top 20 tokens to avoid excessive API calls
+            const topTokens = tokenList.slice(0, 20);
             await Promise.all(
-                tokenList.map(async (t) => {
+                topTokens.map(async (t) => {
                     try {
                         const params = new URLSearchParams({ days: '14', token: t.identifier });
                         const res = await fetch(`${baseUrl}/flow/v1/account/${normalizedAddress}/balance/history?${params}`);
@@ -382,38 +371,49 @@ export function AccountBalanceTab({ address, staking, tokens }: Props) {
             </div>
 
             {/* Staking Summary Cards (FLOW only) */}
-            {isFlowToken(selectedToken) && stakingSummary && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <GlassCard className="p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Wallet className="h-3.5 w-3.5 text-zinc-400" />
-                            <p className="text-[10px] uppercase tracking-widest text-zinc-500">Vault Balance</p>
-                        </div>
-                        <p className="text-xl font-bold">{formatBalance(parseFloat(currentBalance))}</p>
-                    </GlassCard>
-                    <GlassCard className="p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Coins className="h-3.5 w-3.5 text-zinc-400" />
-                            <p className="text-[10px] uppercase tracking-widest text-zinc-500">Staked</p>
-                        </div>
-                        <p className="text-xl font-bold">{formatBalance(stakingSummary.totalStaked)}</p>
-                    </GlassCard>
-                    <GlassCard className="p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Award className="h-3.5 w-3.5 text-zinc-400" />
-                            <p className="text-[10px] uppercase tracking-widest text-zinc-500">Rewards</p>
-                        </div>
-                        <p className="text-xl font-bold text-nothing-green">{formatBalance(stakingSummary.totalRewards)}</p>
-                    </GlassCard>
-                    <GlassCard className="p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Clock className="h-3.5 w-3.5 text-zinc-400" />
-                            <p className="text-[10px] uppercase tracking-widest text-zinc-500">Unstaking</p>
-                        </div>
-                        <p className="text-xl font-bold">{formatBalance(stakingSummary.totalUnstaking)}</p>
-                    </GlassCard>
-                </div>
-            )}
+            {isFlowToken(selectedToken) && stakingSummary && (() => {
+                const vaultBal = parseFloat(currentBalance);
+                const totalFlow = vaultBal + stakingSummary.totalStaked + stakingSummary.totalRewards + stakingSummary.totalUnstaking + stakingSummary.totalCommitted;
+                return (
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <GlassCard className="p-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Wallet className="h-3.5 w-3.5 text-zinc-400" />
+                                <p className="text-[10px] uppercase tracking-widest text-zinc-500">Vault</p>
+                            </div>
+                            <p className="text-lg font-bold">{formatBalance(vaultBal)}</p>
+                        </GlassCard>
+                        <GlassCard className="p-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Coins className="h-3.5 w-3.5 text-zinc-400" />
+                                <p className="text-[10px] uppercase tracking-widest text-zinc-500">Staked</p>
+                            </div>
+                            <p className="text-lg font-bold">{formatBalance(stakingSummary.totalStaked)}</p>
+                        </GlassCard>
+                        <GlassCard className="p-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Award className="h-3.5 w-3.5 text-zinc-400" />
+                                <p className="text-[10px] uppercase tracking-widest text-zinc-500">Rewards</p>
+                            </div>
+                            <p className="text-lg font-bold text-nothing-green">{formatBalance(stakingSummary.totalRewards)}</p>
+                        </GlassCard>
+                        <GlassCard className="p-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Clock className="h-3.5 w-3.5 text-zinc-400" />
+                                <p className="text-[10px] uppercase tracking-widest text-zinc-500">Unstaking</p>
+                            </div>
+                            <p className="text-lg font-bold">{formatBalance(stakingSummary.totalUnstaking)}</p>
+                        </GlassCard>
+                        <GlassCard className="p-4 border-nothing-green/20">
+                            <div className="flex items-center gap-2 mb-1">
+                                <TrendingUp className="h-3.5 w-3.5 text-nothing-green" />
+                                <p className="text-[10px] uppercase tracking-widest text-nothing-green/70">Total FLOW</p>
+                            </div>
+                            <p className="text-lg font-bold text-nothing-green">{formatBalance(totalFlow)}</p>
+                        </GlassCard>
+                    </div>
+                );
+            })()}
 
             {/* Balance History Chart */}
             <GlassCard className="p-6 group hover:border-nothing-green/30 transition-all duration-300">
