@@ -174,24 +174,27 @@ func (r *Repository) GetDistinctMarketSymbols(ctx context.Context) ([]string, er
 	return symbols, nil
 }
 
-func (r *Repository) GetDistinctCoingeckoIDs(ctx context.Context) ([]string, error) {
+// GetCoingeckoToMarketSymbolMap returns a map of coingecko_id -> market_symbol
+// so DeFi Llama prices can be stored under the correct asset name.
+func (r *Repository) GetCoingeckoToMarketSymbolMap(ctx context.Context) (map[string]string, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT coingecko_id FROM app.ft_tokens
+		SELECT DISTINCT coingecko_id, market_symbol FROM app.ft_tokens
 		WHERE coingecko_id IS NOT NULL AND coingecko_id != ''
+		  AND market_symbol IS NOT NULL AND market_symbol != ''
 	`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var ids []string
+	m := make(map[string]string)
 	for rows.Next() {
-		var s string
-		if err := rows.Scan(&s); err != nil {
+		var cgID, sym string
+		if err := rows.Scan(&cgID, &sym); err != nil {
 			return nil, err
 		}
-		ids = append(ids, s)
+		m[cgID] = sym
 	}
-	return ids, nil
+	return m, nil
 }
 
 func IsNoRows(err error) bool {

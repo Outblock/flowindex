@@ -942,8 +942,8 @@ func main() {
 			}
 
 			// DeFi Llama backfill for all tokens with coingecko_id
-			cgIDs, _ := repo.GetDistinctCoingeckoIDs(ctx)
-			for _, cgID := range cgIDs {
+			cgMap, _ := repo.GetCoingeckoToMarketSymbolMap(ctx)
+			for cgID, marketSym := range cgMap {
 				ctxDL, cancelDL := context.WithTimeout(ctx, 2*time.Minute)
 				history, err := market.FetchDefiLlamaPriceHistory(ctxDL, cgID)
 				cancelDL()
@@ -954,13 +954,13 @@ func main() {
 				prices := make([]repository.MarketPrice, len(history))
 				for i, q := range history {
 					prices[i] = repository.MarketPrice{
-						Asset: strings.ToUpper(q.Asset), Currency: "USD",
+						Asset: strings.ToUpper(marketSym), Currency: "USD",
 						Price: q.Price, Source: q.Source, AsOf: q.AsOf,
 					}
 				}
 				inserted, _ := repo.BulkInsertMarketPrices(ctx, prices)
 				if inserted > 0 {
-					log.Printf("[price_backfill] DeFiLlama %s: %d new prices", cgID, inserted)
+					log.Printf("[price_backfill] DeFiLlama %s (%s): %d new prices", cgID, marketSym, inserted)
 				}
 			}
 
