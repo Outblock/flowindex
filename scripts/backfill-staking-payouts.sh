@@ -4,11 +4,11 @@
 #
 # Usage:
 #   ADMIN_TOKEN='your-token' ./scripts/backfill-staking-payouts.sh
-#   ADMIN_TOKEN='your-token' API_URL='http://34.170.76.156:8080' ./scripts/backfill-staking-payouts.sh
+#   ADMIN_TOKEN='your-token' API_URL='http://localhost:8080' ./scripts/backfill-staking-payouts.sh
 
 set -euo pipefail
 
-API_URL="${API_URL:-http://34.170.76.156:8080}"
+API_URL="${API_URL:-http://localhost:8080}"
 
 if [ -z "${ADMIN_TOKEN:-}" ]; then
   echo "ERROR: ADMIN_TOKEN is required"
