@@ -183,6 +183,16 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 				item["token_symbol"] = meta.Symbol
 				item["token_logo"] = meta.Logo
 				item["token_decimals"] = meta.Decimals
+				// USD value at transaction time
+				var usdPrice float64
+				if meta.MarketSymbol != "" {
+					usdPrice, _ = s.priceCache.GetPriceAt(meta.MarketSymbol, tx.Timestamp)
+				} else if ft.ContractName == "FlowToken" {
+					usdPrice, _ = s.priceCache.GetPriceAt("FLOW", tx.Timestamp)
+				}
+				if usdPrice > 0 {
+					item["usd_value"] = parseFloatOrZero(ft.Amount) * usdPrice
+				}
 			}
 			fromIsCOA := false
 			toIsCOA := false
