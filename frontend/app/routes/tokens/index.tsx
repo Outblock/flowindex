@@ -32,14 +32,16 @@ export const Route = createFileRoute('/tokens/')({
     page: Number(search.page) || 1,
     search: (search.search as string) || undefined,
   }),
-  loaderDeps: ({ search: { page, search } }) => ({ page, search }),
-  loader: async ({ deps: { page, search } }) => {
+  loader: async ({ location }) => {
+    const params = new URLSearchParams(location.search);
+    const page = Number(params.get('page') || '1');
+    const search = params.get('search') || '';
     try {
-      const data = await fetchTokens(page ?? 1, search || '');
-      return { ...data, page: page ?? 1, search: search || '' };
+      const data = await fetchTokens(page, search);
+      return { ...data, page, search };
     } catch (e) {
       console.error('Failed to load tokens', e);
-      return { tokens: [], meta: null, page: page ?? 1, search: search || '' };
+      return { tokens: [], meta: null, page, search };
     }
   },
 })

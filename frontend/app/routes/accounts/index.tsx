@@ -37,8 +37,11 @@ export const Route = createFileRoute('/accounts/')({
             collection: (search.collection as string) || '',
         }
     },
-    loaderDeps: ({ search: { page, tab, sort_by } }) => ({ page, tab, sort_by }),
-    loader: async ({ deps: { page, tab, sort_by } }) => {
+    loader: async ({ location }) => {
+        const params = new URLSearchParams(location.search);
+        const page = Number(params.get('page') || '1');
+        const tab = params.get('tab') || 'accounts';
+        const sort_by = params.get('sort_by') || 'block_height';
         const isSSR = import.meta.env.SSR;
         const limit = 20;
         const offset = ((page || 1) - 1) * limit;
@@ -74,13 +77,15 @@ const TABS: { key: Tab; label: string; icon: typeof Users }[] = [
 const DEFAULT_FLOW_TOKEN = 'A.1654653399040a61.FlowToken';
 
 function Accounts() {
-    const { accounts, meta, page, deferred } = Route.useLoaderData();
+    const { accounts, meta, page: initialPage, deferred } = Route.useLoaderData();
     const navigate = Route.useNavigate();
-    const { tab, sort_by, token, collection } = Route.useSearch();
+    const { page: searchPage, tab, sort_by, token, collection } = Route.useSearch();
     const [accountsData, setAccountsData] = useState<any[]>(accounts);
     const [accountsMeta, setAccountsMeta] = useState<any>(meta);
     const [accountsLoading, setAccountsLoading] = useState(Boolean(tab === 'accounts' && deferred));
     const [accountsError, setAccountsError] = useState('');
+
+    const page = searchPage ?? initialPage ?? 1;
 
     const { isConnected } = useWebSocketStatus();
     const nowTick = useTimeTicker(20000);
@@ -96,6 +101,7 @@ function Accounts() {
     const totalCount = Number(accountsMeta?.count || 0);
     const hasNext = totalCount > 0 ? offset + limit < totalCount : accountsData.length === limit;
 
+    // Sync loader data on initial mount / hard navigation
     useEffect(() => {
         setAccountsData(accounts);
         setAccountsMeta(meta);
@@ -103,8 +109,10 @@ function Accounts() {
         setAccountsLoading(Boolean(tab === 'accounts' && deferred));
     }, [accounts, meta, tab, deferred]);
 
+    // Fetch data client-side when page/tab/sort changes (or on deferred SSR fallback)
     useEffect(() => {
-        if (tab !== 'accounts' || !deferred) return;
+        if (tab !== 'accounts') return;
+        if (!deferred && searchPage === initialPage) return;
         let cancelled = false;
         const loadAccountsClientSide = async () => {
             setAccountsLoading(true);
@@ -118,6 +126,7 @@ function Accounts() {
                 const payload: any = res.data;
                 setAccountsData(payload?.data || []);
                 setAccountsMeta(payload?._meta || null);
+                setAccountsError('');
             } catch (err) {
                 if (!cancelled) {
                     console.error('Client fallback: failed to load accounts', err);
@@ -131,7 +140,7 @@ function Accounts() {
         return () => {
             cancelled = true;
         };
-    }, [tab, deferred, limit, offset, sort_by]);
+    }, [tab, deferred, searchPage, initialPage, limit, offset, sort_by]);
 
     const setSearch = (updates: Partial<AccountsSearch>) => {
         navigate({ search: (prev: AccountsSearch) => ({ ...prev, ...updates }) });

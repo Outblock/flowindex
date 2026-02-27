@@ -19,8 +19,8 @@ export const Route = createFileRoute('/nfts/')({
   validateSearch: (search: Record<string, unknown>): NFTsSearch => ({
     page: Number(search.page) || 1,
   }),
-  loaderDeps: ({ search: { page } }) => ({ page }),
-  loader: async ({ deps: { page } }) => {
+  loader: async ({ location }) => {
+    const page = Number(new URLSearchParams(location.search).get('page') || '1');
     const isSSR = import.meta.env.SSR;
     const limit = 25;
     const offset = ((page ?? 1) - 1) * limit;
@@ -89,7 +89,8 @@ function CollectionLogo({ name, src }: { name: string; src?: string }) {
 }
 
 function NFTs() {
-  const { collections, meta, page, deferred } = Route.useLoaderData();
+  const { collections, meta, page: initialPage, deferred } = Route.useLoaderData();
+  const { page: searchPage } = Route.useSearch();
   const navigate = Route.useNavigate();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [collectionsData, setCollectionsData] = useState<any[]>(collections);
@@ -97,11 +98,13 @@ function NFTs() {
   const [collectionsLoading, setCollectionsLoading] = useState(Boolean(deferred));
   const [collectionsError, setCollectionsError] = useState('');
 
+  const page = searchPage ?? initialPage ?? 1;
   const limit = 25;
   const offset = ((page ?? 1) - 1) * limit;
   const totalCount = Number(collectionsMeta?.count || 0);
   const hasNext = totalCount > 0 ? offset + limit < totalCount : collectionsData.length === limit;
 
+  // Sync loader data on initial mount / hard navigation
   useEffect(() => {
     setCollectionsData(collections);
     setCollectionsMeta(meta);
@@ -109,8 +112,9 @@ function NFTs() {
     setCollectionsLoading(Boolean(deferred));
   }, [collections, meta, deferred]);
 
+  // Fetch data client-side when page changes (or on deferred SSR fallback)
   useEffect(() => {
-    if (!deferred) return;
+    if (!deferred && searchPage === initialPage) return;
     let cancelled = false;
     const loadCollectionsClientSide = async () => {
       setCollectionsLoading(true);
@@ -121,6 +125,7 @@ function NFTs() {
         const payload: any = res.data;
         setCollectionsData(payload?.data || []);
         setCollectionsMeta(payload?._meta || null);
+        setCollectionsError('');
       } catch (err) {
         if (!cancelled) {
           console.error('Client fallback: failed to load NFT collections', err);
@@ -134,7 +139,7 @@ function NFTs() {
     return () => {
       cancelled = true;
     };
-  }, [deferred, limit, offset]);
+  }, [deferred, searchPage, initialPage, limit, offset]);
 
   const normalizeHex = (value: any) => {
     if (!value) return '';

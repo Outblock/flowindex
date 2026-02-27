@@ -35,8 +35,11 @@ export const Route = createFileRoute('/contracts/')({
             kind: (search.kind as string) || '',
         }
     },
-    loaderDeps: ({ search: { page, query, kind } }) => ({ page, query, kind }),
-    loader: async ({ deps: { page, query, kind } }) => {
+    loader: async ({ location }) => {
+        const params = new URLSearchParams(location.search);
+        const page = Number(params.get('page') || '1');
+        const query = params.get('query') || '';
+        const kind = params.get('kind') || '';
         const isSSR = import.meta.env.SSR;
         const limit = 25;
         const offset = ((page || 1) - 1) * limit;
@@ -101,9 +104,14 @@ function KindBadge({ kind }: { kind: string }) {
 }
 
 function Contracts() {
-    const { contracts, meta, page, query, kind, deferred } = Route.useLoaderData();
+    const { contracts, meta, page: initialPage, query: initialQuery, kind: initialKind, deferred } = Route.useLoaderData();
+    const { page: searchPage, query: searchQuery_, kind: searchKind } = Route.useSearch();
     const navigate = Route.useNavigate();
-    const _search = Route.useSearch();
+
+    const page = searchPage ?? initialPage ?? 1;
+    const query = searchQuery_ ?? initialQuery ?? '';
+    const kind = searchKind ?? initialKind ?? '';
+
     const [searchQuery, setSearchQuery] = useState(query); // Local state for input
     const [contractsData, setContractsData] = useState<any[]>(contracts);
     const [contractsMeta, setContractsMeta] = useState<any>(meta);
@@ -122,6 +130,7 @@ function Contracts() {
     const totalCount = Number(contractsMeta?.count || 0);
     const hasNext = totalCount > 0 ? offset + limit < totalCount : contractsData.length === limit;
 
+    // Sync loader data on initial mount / hard navigation
     useEffect(() => {
         setContractsData(contracts);
         setContractsMeta(meta);
@@ -129,8 +138,9 @@ function Contracts() {
         setContractsLoading(Boolean(deferred));
     }, [contracts, meta, deferred]);
 
+    // Fetch data client-side when page/query/kind changes (or on deferred SSR fallback)
     useEffect(() => {
-        if (!deferred) return;
+        if (!deferred && searchPage === initialPage && searchQuery_ === initialQuery && searchKind === initialKind) return;
         let cancelled = false;
         const loadContractsClientSide = async () => {
             setContractsLoading(true);
@@ -146,6 +156,7 @@ function Contracts() {
                 const payload: any = res.data;
                 setContractsData(payload?.data || []);
                 setContractsMeta(payload?._meta || null);
+                setContractsError('');
             } catch (err) {
                 if (!cancelled) {
                     console.error('Client fallback: failed to load contracts', err);
@@ -159,7 +170,7 @@ function Contracts() {
         return () => {
             cancelled = true;
         };
-    }, [deferred, limit, offset, query, kind]);
+    }, [deferred, searchPage, initialPage, searchQuery_, initialQuery, searchKind, initialKind, limit, offset, query, kind]);
 
     const normalizeHex = (value: any) => {
         if (!value) return '';
