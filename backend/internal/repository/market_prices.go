@@ -137,6 +137,63 @@ func (r *Repository) BulkInsertMarketPrices(ctx context.Context, prices []Market
 	return total, nil
 }
 
+func (r *Repository) GetDistinctPriceAssets(ctx context.Context) ([]string, error) {
+	rows, err := r.db.Query(ctx, `SELECT DISTINCT UPPER(asset) FROM app.market_prices ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var assets []string
+	for rows.Next() {
+		var a string
+		if err := rows.Scan(&a); err != nil {
+			return nil, err
+		}
+		assets = append(assets, a)
+	}
+	return assets, nil
+}
+
+func (r *Repository) GetDistinctMarketSymbols(ctx context.Context) ([]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT market_symbol FROM app.ft_tokens
+		WHERE market_symbol IS NOT NULL AND market_symbol != ''
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var symbols []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		symbols = append(symbols, s)
+	}
+	return symbols, nil
+}
+
+func (r *Repository) GetDistinctCoingeckoIDs(ctx context.Context) ([]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT coingecko_id FROM app.ft_tokens
+		WHERE coingecko_id IS NOT NULL AND coingecko_id != ''
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		ids = append(ids, s)
+	}
+	return ids, nil
+}
+
 func IsNoRows(err error) bool {
 	return err == pgx.ErrNoRows
 }

@@ -580,11 +580,12 @@ func splitTxRefs(refs []TxRef) ([][]byte, []uint64) {
 
 // TokenMetadataInfo is a lightweight struct for token display info (icon, symbol, name).
 type TokenMetadataInfo struct {
-	Name        string `json:"name"`
-	Symbol      string `json:"symbol"`
-	Decimals    int    `json:"decimals"`
-	Logo        string `json:"logo,omitempty"`
-	Description string `json:"description,omitempty"`
+	Name         string `json:"name"`
+	Symbol       string `json:"symbol"`
+	Decimals     int    `json:"decimals"`
+	Logo         string `json:"logo,omitempty"`
+	Description  string `json:"description,omitempty"`
+	MarketSymbol string `json:"market_symbol,omitempty"`
 }
 
 // GetFTTokenMetadataByIdentifiers returns display metadata for a set of token identifiers (e.g. "A.1654653399040a61.FlowToken").
@@ -609,16 +610,17 @@ func (r *Repository) GetFTTokenMetadataByIdentifiers(ctx context.Context, identi
 
 	for k, origIDs := range seen {
 		var t models.FTToken
+		var marketSymbol string
 		err := r.db.QueryRow(ctx, `
 			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(decimals,0),
-			       COALESCE(logo::text, ''), COALESCE(description,'')
+			       COALESCE(logo::text, ''), COALESCE(description,''), COALESCE(market_symbol,'')
 			FROM app.ft_tokens
 			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
-			Scan(&t.Name, &t.Symbol, &t.Decimals, &t.Logo, &t.Description)
+			Scan(&t.Name, &t.Symbol, &t.Decimals, &t.Logo, &t.Description, &marketSymbol)
 		if err != nil {
 			continue // token not found or error, skip
 		}
-		info := TokenMetadataInfo{Name: t.Name, Symbol: t.Symbol, Decimals: t.Decimals, Description: t.Description, Logo: t.Logo}
+		info := TokenMetadataInfo{Name: t.Name, Symbol: t.Symbol, Decimals: t.Decimals, Description: t.Description, Logo: t.Logo, MarketSymbol: marketSymbol}
 		for _, origID := range origIDs {
 			out[origID] = info
 		}
