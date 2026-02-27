@@ -192,6 +192,7 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 				}
 				if usdPrice > 0 {
 					item["usd_value"] = parseFloatOrZero(ft.Amount) * usdPrice
+					item["approx_usd_price"] = usdPrice
 				}
 			}
 			fromIsCOA := false
