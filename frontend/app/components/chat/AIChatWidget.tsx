@@ -800,9 +800,11 @@ export default function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+  const [mobileHeight, setMobileHeight] = useState<number | null>(null);
   const isDragging = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Drag-to-resize handler
   const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -833,6 +835,37 @@ export default function AIChatWidget() {
     window.addEventListener('touchmove', onMove);
     window.addEventListener('touchend', onUp);
   }, []);
+
+  // Mobile keyboard: track visual viewport height so the panel shrinks when keyboard opens
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isOpen) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const isMobile = window.innerWidth < 768;
+    if (!isMobile) { setMobileHeight(null); return; }
+
+    const onResize = () => {
+      // visualViewport.height shrinks when the keyboard is open
+      setMobileHeight(vv.height);
+      // On iOS, the viewport may scroll up; keep the panel pinned to the top
+      if (panelRef.current) {
+        panelRef.current.style.top = `${vv.offsetTop}px`;
+      }
+    };
+
+    onResize();
+    vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
+    return () => {
+      vv.removeEventListener('resize', onResize);
+      vv.removeEventListener('scroll', onResize);
+      setMobileHeight(null);
+      if (panelRef.current) {
+        panelRef.current.style.top = '';
+      }
+    };
+  }, [isOpen]);
 
   const { messages, sendMessage, status, stop, setMessages } = useChat({
     transport: new DefaultChatTransport({
@@ -908,12 +941,16 @@ export default function AIChatWidget() {
 
             {/* Panel */}
             <motion.div
+              ref={panelRef}
               initial={{ x: '100%', opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: '100%', opacity: 0 }}
               transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-              style={{ width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined }}
-              className="fixed top-0 right-0 h-full z-[71] w-full md:w-auto bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-white/10 flex flex-col shadow-2xl"
+              style={{
+                width: typeof window !== 'undefined' && window.innerWidth >= 768 ? panelWidth : undefined,
+                height: mobileHeight != null ? `${mobileHeight}px` : undefined,
+              }}
+              className="fixed top-0 right-0 z-[71] w-full md:w-auto bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-white/10 flex flex-col shadow-2xl h-[100dvh] md:h-full"
             >
               {/* Resize handle */}
               <div
@@ -1004,39 +1041,46 @@ export default function AIChatWidget() {
               </div>
 
               {/* Input */}
-              <div className="shrink-0 border-t border-zinc-200 dark:border-white/10 px-4 py-3">
-                <div className="relative flex items-end">
+              <div className="shrink-0 border-t border-zinc-200 dark:border-white/10 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
+                  className="relative flex items-end"
+                >
                   <textarea
                     ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    onFocus={() => {
+                      // On mobile, scroll messages to bottom when keyboard opens
+                      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+                    }}
                     placeholder="Ask a question..."
                     rows={1}
-                    className="w-full resize-none text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-11 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
+                    enterKeyHint="send"
+                    className="w-full resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-11 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
                     style={{ maxHeight: '80px' }}
                   />
                   {isStreaming ? (
                     <button
                       type="button"
                       onClick={() => stop()}
-                      className="absolute right-1.5 bottom-1.5 w-7 h-7 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors"
+                      className="absolute right-1.5 bottom-1.5 w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors"
                       title="Stop"
                     >
                       <X size={14} />
                     </button>
                   ) : (
                     <button
-                      type="button"
-                      onClick={() => handleSend(input)}
+                      type="submit"
                       disabled={!input.trim()}
-                      className="absolute right-1.5 bottom-1.5 w-7 h-7 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      className="absolute right-1.5 bottom-1.5 w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       title="Send"
                     >
                       <Send size={13} />
                     </button>
                   )}
-                </div>
+                </form>
               </div>
             </motion.div>
           </>
