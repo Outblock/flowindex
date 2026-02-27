@@ -1,4 +1,6 @@
-/* Geist Sans — variable weight (100–900) */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* Geist Sans — variable weight (100–900), used in AI chat */
 @font-face {
   font-family: 'Geist Sans';
   src: url('/fonts/Geist-Variable.woff2') format('woff2');
@@ -7,7 +9,7 @@
   font-display: swap;
 }
 
-/* Geist Mono — variable weight (100–900) */
+/* Geist Mono — variable weight (100–900), used in AI chat */
 @font-face {
   font-family: 'Geist Mono';
   src: url('/fonts/GeistMono-Variable.woff2') format('woff2');
@@ -63,6 +65,13 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* AI chat panel uses Geist fonts */
+.ai-chat-panel .font-mono,
+.ai-chat-panel code,
+.ai-chat-panel pre {
+  font-family: 'Geist Mono', monospace !important;
 }
 
 @layer utilities {
