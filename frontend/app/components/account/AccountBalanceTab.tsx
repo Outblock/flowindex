@@ -42,7 +42,7 @@ export function AccountBalanceTab({ address }: Props) {
                 balance: parseFloat(p.balance) || 0,
             }));
             setData(points);
-            setCurrentBalance(json.meta?.current_balance || '0');
+            setCurrentBalance(json._meta?.current_balance || json.meta?.current_balance || '0');
         } catch (err) {
             console.error('Failed to load balance history', err);
             setError('Failed to load balance history');
