@@ -197,6 +197,28 @@ func (r *Repository) GetCoingeckoToMarketSymbolMap(ctx context.Context) (map[str
 	return m, nil
 }
 
+// GetContractNameToMarketSymbolMap returns a map of contract_name -> market_symbol
+// for all FT tokens that have a market_symbol set.
+func (r *Repository) GetContractNameToMarketSymbolMap(ctx context.Context) (map[string]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT contract_name, market_symbol FROM app.ft_tokens
+		WHERE market_symbol IS NOT NULL AND market_symbol != ''
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[string]string)
+	for rows.Next() {
+		var cn, ms string
+		if err := rows.Scan(&cn, &ms); err != nil {
+			return nil, err
+		}
+		m[cn] = ms
+	}
+	return m, nil
+}
+
 func IsNoRows(err error) bool {
 	return err == pgx.ErrNoRows
 }

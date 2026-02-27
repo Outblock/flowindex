@@ -8,6 +8,8 @@ import { GlassCard } from '../ui/GlassCard';
 import { EVMBridgeBadge } from '../ui/EVMBridgeBadge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getFlowV1Ft } from '../../api/gen/find';
+import { UsdValue } from '../UsdValue';
+import { resolveApiBaseUrl } from '../../api';
 
 interface Props {
     address: string;
@@ -20,6 +22,8 @@ export function AccountTokensTab({ address }: Props) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [backendFTs, setBackendFTs] = useState<any[]>([]);
+    // prices: { market_symbol -> usd_price }, tokenMap: { contract_name -> market_symbol }
+    const [priceData, setPriceData] = useState<{ prices: Record<string, number>; tokenMap: Record<string, string> }>({ prices: {}, tokenMap: {} });
 
     const loadTokens = async () => {
         setLoading(true);
@@ -56,6 +60,16 @@ export function AccountTokensTab({ address }: Props) {
         }).catch(() => {});
     }, []);
 
+    // Fetch all token prices once
+    useEffect(() => {
+        resolveApiBaseUrl().then((base) =>
+            fetch(`${base}/status/prices`).then(r => r.json()).then((res) => {
+                const d = res?.data?.[0];
+                if (d) setPriceData({ prices: d.prices || {}, tokenMap: d.token_map || {} });
+            })
+        ).catch(() => {});
+    }, []);
+
     // Build lookup map: "A.{hex}.{ContractName}" → backend metadata
     const metaMap = useMemo(() => {
         const map: Record<string, { name?: string; symbol?: string; logo?: string; evm_address?: string; is_verified?: boolean }> = {};
@@ -65,6 +79,13 @@ export function AccountTokensTab({ address }: Props) {
         }
         return map;
     }, [backendFTs]);
+
+    // Get USD price for a token by contract name
+    const getTokenPrice = (contractName: string): number => {
+        const sym = priceData.tokenMap[contractName];
+        if (sym && priceData.prices[sym]) return priceData.prices[sym];
+        return 0;
+    };
 
     const [hideZero, setHideZero] = useState(true);
 
@@ -169,6 +190,10 @@ export function AccountTokensTab({ address }: Props) {
                                             <div className="text-lg font-mono font-bold text-zinc-900 dark:text-white">
                                                 {t.balance != null ? Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
                                             </div>
+                                            {t.balance != null && Number(t.balance) > 0 && (() => {
+                                                const price = getTokenPrice(t.contractName);
+                                                return price > 0 ? <UsdValue amount={Number(t.balance)} price={price} className="text-xs" /> : null;
+                                            })()}
                                         </div>
                                     </GlassCard>
                                 </motion.div>
