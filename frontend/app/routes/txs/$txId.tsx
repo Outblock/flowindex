@@ -223,10 +223,10 @@ function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, formatAddr: 
                 <TokenBubble logo={logo} symbol={symbol} size={24} />
                 <span className="text-sm font-mono font-semibold text-zinc-900 dark:text-white whitespace-nowrap">{formattedAmount}</span>
                 <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">{symbol}</span>
+                {badge}
                 {formattedAmount !== '—' && usdPrice != null && usdPrice > 0 && (
                     <UsdValue amount={Number(amount)} price={usdPrice} className="text-[10px]" />
                 )}
-                {badge}
                 <ArrowRight className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 flex-shrink-0" />
             </div>
             {/* TO */}
