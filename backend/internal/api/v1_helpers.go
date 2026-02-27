@@ -266,7 +266,7 @@ func toFlowBlockOutput(b models.Block) map[string]interface{} {
 }
 
 func toFlowEventOutput(e models.Event) map[string]interface{} {
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"type":         e.Type,
 		"transaction":  e.TransactionID,
 		"event_index":  e.EventIndex,
@@ -274,6 +274,37 @@ func toFlowEventOutput(e models.Event) map[string]interface{} {
 		"timestamp":    e.Timestamp.UTC().Format(time.RFC3339),
 		"payload":      e.Payload,
 	}
+	if e.Values != nil && len(e.Values) > 0 && string(e.Values) != "null" {
+		out["values"] = e.Values
+	}
+	// Parse contract_address, contract_name, event_name from event type
+	// Flow event types: "A.<hex>.<ContractName>.<EventName>" or "flow.<System>.<EventName>"
+	contractAddr := e.ContractAddress
+	contractName := e.ContractName
+	eventName := e.EventName
+	if contractAddr == "" || contractName == "" || eventName == "" {
+		parts := strings.Split(e.Type, ".")
+		if len(parts) >= 4 && parts[0] == "A" {
+			contractAddr = parts[1]
+			contractName = parts[2]
+			eventName = parts[3]
+		} else if len(parts) >= 3 {
+			contractName = parts[1]
+			eventName = parts[2]
+		} else if len(parts) >= 2 {
+			eventName = parts[len(parts)-1]
+		}
+	}
+	if contractAddr != "" {
+		out["contract_address"] = formatAddressV1(contractAddr)
+	}
+	if contractName != "" {
+		out["contract_name"] = contractName
+	}
+	if eventName != "" {
+		out["event_name"] = eventName
+	}
+	return out
 }
 
 func toFlowTransactionOutput(t models.Transaction, events []models.Event, contracts []string, tags []string, fee float64, evmExecs ...[]repository.EVMTransactionRecord) map[string]interface{} {
