@@ -377,3 +377,72 @@ func (s *Store) CountUserEndpoints(ctx context.Context, userID string) (int, err
 	).Scan(&count)
 	return count, err
 }
+
+// --- Admin queries ---
+
+// AdminUserRow represents a user profile with subscription and endpoint counts.
+type AdminUserRow struct {
+	UserID      string    `json:"user_id"`
+	TierID      string    `json:"tier_id"`
+	IsSuspended bool      `json:"is_suspended"`
+	CreatedAt   time.Time `json:"created_at"`
+	SubCount    int       `json:"subscription_count"`
+	EpCount     int       `json:"endpoint_count"`
+}
+
+// AdminListUsers returns user profiles with subscription and endpoint counts.
+func (s *Store) AdminListUsers(ctx context.Context, limit, offset int) ([]AdminUserRow, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT p.user_id, p.tier_id, p.is_suspended, p.created_at,
+		        (SELECT COUNT(*) FROM public.subscriptions WHERE user_id = p.user_id) as sub_count,
+		        (SELECT COUNT(*) FROM public.endpoints WHERE user_id = p.user_id) as ep_count
+		 FROM public.user_profiles p
+		 ORDER BY p.created_at DESC
+		 LIMIT $1 OFFSET $2`, limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []AdminUserRow
+	for rows.Next() {
+		var u AdminUserRow
+		if err := rows.Scan(&u.UserID, &u.TierID, &u.IsSuspended, &u.CreatedAt, &u.SubCount, &u.EpCount); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+// AdminGlobalStats returns aggregate statistics about the webhook system.
+func (s *Store) AdminGlobalStats(ctx context.Context) (map[string]interface{}, error) {
+	var totalUsers, totalSubs, totalEndpoints, deliveries24h int
+
+	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM public.user_profiles`).Scan(&totalUsers)
+	if err != nil {
+		return nil, err
+	}
+	err = s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM public.subscriptions`).Scan(&totalSubs)
+	if err != nil {
+		return nil, err
+	}
+	err = s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM public.endpoints`).Scan(&totalEndpoints)
+	if err != nil {
+		return nil, err
+	}
+	err = s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM public.delivery_logs WHERE delivered_at > now() - interval '24 hours'`,
+	).Scan(&deliveries24h)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"total_users":         totalUsers,
+		"total_subscriptions": totalSubs,
+		"total_endpoints":     totalEndpoints,
+		"deliveries_last_24h": deliveries24h,
+	}, nil
+}

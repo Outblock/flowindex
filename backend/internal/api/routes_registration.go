@@ -18,6 +18,12 @@ func registerBaseRoutes(r *mux.Router, s *Server) {
 func registerAdminRoutes(r *mux.Router, s *Server) {
 	admin := r.PathPrefix("/admin").Subrouter()
 	admin.Use(adminAuthMiddleware)
+
+	// Webhook admin routes (registered first so /webhook/... paths match before other patterns)
+	if s.webhookAdminHandlers != nil {
+		s.webhookAdminHandlers.RegisterRoutes(admin)
+	}
+
 	admin.HandleFunc("/refetch-token-metadata", s.handleAdminRefetchTokenMetadata).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/batch-fetch-metadata", s.handleAdminBatchFetchMetadata).Methods("POST", "OPTIONS")
 	admin.HandleFunc("/refetch-bridge", s.handleAdminRefetchBridge).Methods("POST", "OPTIONS")
