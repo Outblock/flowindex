@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Coins, Filter } from 'lucide-react';
+import { Coins, Filter, Layers, Box, Info } from 'lucide-react';
 import { VerifiedBadge } from '../ui/VerifiedBadge';
 import type { FTVaultInfo } from '../../../cadence/cadence.gen';
 import { normalizeAddress, getTokenLogoURL } from './accountUtils';
@@ -11,19 +11,45 @@ import { getFlowV1Ft } from '../../api/gen/find';
 import { UsdValue } from '../UsdValue';
 import { resolveApiBaseUrl } from '../../api';
 
-interface Props {
+type TokenSubTab = 'all' | 'cadence' | 'evm';
+
+interface EVMToken {
     address: string;
+    name: string;
+    symbol: string;
+    decimals: number;
+    icon_url?: string;
+    balance: number;
+    rawValue: string;
 }
 
-export function AccountTokensTab({ address }: Props) {
+interface Props {
+    address: string;
+    coaAddress?: string;
+    subtab?: string;
+    onSubTabChange?: (subtab: string | undefined) => void;
+}
+
+export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }: Props) {
     const normalizedAddress = normalizeAddress(address);
 
+    // Determine active sub-tab
+    const activeSubTab: TokenSubTab = (subtab === 'cadence' || subtab === 'evm') ? subtab : 'all';
+    const setSubTab = (tab: TokenSubTab) => {
+        onSubTabChange?.(tab === 'all' ? undefined : tab);
+    };
+
+    // --- Cadence tokens state ---
     const [tokens, setTokens] = useState<FTVaultInfo[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [backendFTs, setBackendFTs] = useState<any[]>([]);
-    // prices: { market_symbol -> usd_price }, tokenMap: { contract_name -> market_symbol }
     const [priceData, setPriceData] = useState<{ prices: Record<string, number>; tokenMap: Record<string, string> }>({ prices: {}, tokenMap: {} });
+
+    // --- EVM tokens state ---
+    const [evmTokens, setEvmTokens] = useState<EVMToken[]>([]);
+    const [evmLoading, setEvmLoading] = useState(false);
+    const [evmError, setEvmError] = useState<string | null>(null);
 
     const loadTokens = async () => {
         setLoading(true);
@@ -50,7 +76,6 @@ export function AccountTokensTab({ address }: Props) {
         getFlowV1Ft({ query: { limit: 100, offset: 0 } }).then((res) => {
             const items = (res.data as any)?.data || [];
             setBackendFTs(items);
-            // Fetch more if there are exactly 100 (paginate)
             if (items.length >= 100) {
                 getFlowV1Ft({ query: { limit: 100, offset: 100 } }).then((res2) => {
                     const more = (res2.data as any)?.data || [];
@@ -70,7 +95,45 @@ export function AccountTokensTab({ address }: Props) {
         ).catch(() => {});
     }, []);
 
-    // Build lookup map: "A.{hex}.{ContractName}" → backend metadata
+    // Fetch EVM tokens when coaAddress is available
+    useEffect(() => {
+        if (!coaAddress) {
+            setEvmTokens([]);
+            return;
+        }
+        let cancelled = false;
+        const load = async () => {
+            setEvmLoading(true);
+            setEvmError(null);
+            try {
+                const base = await resolveApiBaseUrl();
+                const res = await fetch(`${base}/flow/evm/address/${coaAddress}/token?type=ERC-20`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = await res.json();
+                const items = json?.items || [];
+                if (cancelled) return;
+                setEvmTokens(items.map((item: any) => ({
+                    address: item.token?.address || '',
+                    name: item.token?.name || 'Unknown',
+                    symbol: item.token?.symbol || '???',
+                    decimals: Number(item.token?.decimals || 18),
+                    icon_url: item.token?.icon_url || '',
+                    balance: Number(item.value || '0') / Math.pow(10, Number(item.token?.decimals || 18)),
+                    rawValue: item.value || '0',
+                })));
+            } catch (err) {
+                if (cancelled) return;
+                console.error('Failed to load EVM tokens', err);
+                setEvmError('Failed to load EVM tokens');
+            } finally {
+                if (!cancelled) setEvmLoading(false);
+            }
+        };
+        load();
+        return () => { cancelled = true; };
+    }, [coaAddress]);
+
+    // Build lookup map: "A.{hex}.{ContractName}" -> backend metadata
     const metaMap = useMemo(() => {
         const map: Record<string, { name?: string; symbol?: string; logo?: string; evm_address?: string; is_verified?: boolean }> = {};
         for (const ft of backendFTs) {
@@ -80,10 +143,18 @@ export function AccountTokensTab({ address }: Props) {
         return map;
     }, [backendFTs]);
 
-    // Get USD price for a token by contract name
+    // Get USD price for a token by contract name or symbol
     const getTokenPrice = (contractName: string): number => {
         const sym = priceData.tokenMap[contractName];
         if (sym && priceData.prices[sym]) return priceData.prices[sym];
+        return 0;
+    };
+
+    const getTokenPriceBySymbol = (symbol: string): number => {
+        if (priceData.prices[symbol]) return priceData.prices[symbol];
+        // Try uppercase
+        const upper = symbol.toUpperCase();
+        if (priceData.prices[upper]) return priceData.prices[upper];
         return 0;
     };
 
@@ -96,13 +167,108 @@ export function AccountTokensTab({ address }: Props) {
         return list;
     }, [tokens, hideZero]);
 
+    const displayEvmTokens = useMemo(() => {
+        let list = [...evmTokens];
+        if (hideZero) list = list.filter(t => t.balance > 0);
+        list.sort((a, b) => b.balance - a.balance);
+        return list;
+    }, [evmTokens, hideZero]);
+
+    // --- Merged "All" view ---
+    // Build a merged list: Cadence tokens with optional matched EVM balance, plus unmatched EVM-only tokens
+    const mergedTokens = useMemo(() => {
+        if (activeSubTab !== 'all') return [];
+
+        // Build EVM lookup by lowercase address
+        const evmByAddr = new Map<string, EVMToken>();
+        for (const et of displayEvmTokens) {
+            if (et.address) evmByAddr.set(et.address.toLowerCase(), et);
+        }
+
+        const matched = new Set<string>();
+        const merged: Array<{
+            type: 'cadence' | 'evm' | 'bridged';
+            cadenceToken?: FTVaultInfo;
+            evmToken?: EVMToken;
+            identifier?: string;
+            meta?: any;
+            displayName: string;
+            displaySymbol: string;
+            logoUrl: string;
+            sortValue: number;
+        }> = [];
+
+        for (const t of displayTokens) {
+            const identifier = `A.${normalizeAddress(t.contractAddress).replace(/^0x/, '')}.${t.contractName}`;
+            const meta = metaMap[identifier];
+            const evmAddr = meta?.evm_address || (t as any).evmAddress || '';
+            const matchedEvm = evmAddr ? evmByAddr.get(evmAddr.toLowerCase()) : undefined;
+            if (matchedEvm) matched.add(matchedEvm.address.toLowerCase());
+
+            const logoUrl = meta?.logo || getTokenLogoURL(t);
+            const displayName = meta?.name || t.name || t.contractName;
+            const displaySymbol = meta?.symbol || t.symbol;
+
+            merged.push({
+                type: matchedEvm ? 'bridged' : 'cadence',
+                cadenceToken: t,
+                evmToken: matchedEvm,
+                identifier,
+                meta,
+                displayName,
+                displaySymbol,
+                logoUrl,
+                sortValue: Number(t.balance || 0),
+            });
+        }
+
+        // Append unmatched EVM-only tokens
+        for (const et of displayEvmTokens) {
+            if (!matched.has(et.address.toLowerCase())) {
+                merged.push({
+                    type: 'evm',
+                    evmToken: et,
+                    displayName: et.name,
+                    displaySymbol: et.symbol,
+                    logoUrl: et.icon_url || '',
+                    sortValue: et.balance,
+                });
+            }
+        }
+
+        return merged;
+    }, [activeSubTab, displayTokens, displayEvmTokens, metaMap]);
+
+    // --- Sub-tab filter buttons ---
+    const subTabs: { id: TokenSubTab; label: string; icon: any }[] = [
+        { id: 'all', label: 'All', icon: Layers },
+        { id: 'cadence', label: 'Cadence', icon: Coins },
+        { id: 'evm', label: 'EVM', icon: Box },
+    ];
+
+    const isAnythingLoading = loading || evmLoading;
+
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 flex items-center gap-2">
-                    <Coins className="w-4 h-4" />
-                    Fungible Tokens ({displayTokens.length}{hideZero && tokens.length !== displayTokens.length ? ` / ${tokens.length}` : ''})
-                </h3>
+            {/* Sub-tab bar + filters */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                    {subTabs.map(({ id, label, icon: Icon }) => (
+                        <button
+                            key={id}
+                            onClick={() => setSubTab(id)}
+                            className={`px-4 py-2 text-[10px] uppercase tracking-widest border transition-colors rounded-sm whitespace-nowrap shrink-0 ${activeSubTab === id
+                                ? 'border-nothing-green-dark dark:border-nothing-green text-zinc-900 dark:text-white bg-zinc-100 dark:bg-white/5'
+                                : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
+                            }`}
+                        >
+                            <span className="flex items-center gap-2">
+                                <Icon className={`h-3 w-3 ${activeSubTab === id ? 'text-nothing-green-dark dark:text-nothing-green' : ''}`} />
+                                {label}
+                            </span>
+                        </button>
+                    ))}
+                </div>
                 <button
                     onClick={() => setHideZero(prev => !prev)}
                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] uppercase tracking-widest border rounded-sm transition-colors ${hideZero ? 'border-nothing-green-dark/30 dark:border-nothing-green/30 text-nothing-green-dark dark:text-nothing-green bg-nothing-green/5' : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
@@ -112,109 +278,265 @@ export function AccountTokensTab({ address }: Props) {
                 </button>
             </div>
 
-            {error && (
+            {error && activeSubTab !== 'evm' && (
                 <GlassCard className="border-red-200 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/10">
                     <div className="text-xs text-red-500 dark:text-red-400">{error}</div>
                 </GlassCard>
             )}
-
-            <div className="flex flex-col gap-3">
-                {loading ? (
-                    <div className="flex flex-col gap-3">
-                        {[1, 2, 3].map((i) => (
-                            <GlassCard key={i} className="p-4 flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-4 w-full">
-                                    <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-white/5 animate-pulse flex-shrink-0" />
-                                    <div className="space-y-2 flex-1">
-                                        <div className="h-4 w-32 bg-zinc-200 dark:bg-white/5 animate-pulse rounded" />
-                                        <div className="h-3 w-24 bg-zinc-200 dark:bg-white/5 animate-pulse rounded" />
-                                    </div>
-                                </div>
-                                <div className="h-6 w-24 bg-zinc-200 dark:bg-white/5 animate-pulse rounded flex-shrink-0" />
-                            </GlassCard>
-                        ))}
-                    </div>
-                ) : (
-                    <AnimatePresence mode="popLayout">
-                        {displayTokens.map((t: FTVaultInfo, i: number) => {
-                            const identifier = `A.${normalizeAddress(t.contractAddress).replace(/^0x/, '')}.${t.contractName}`;
-                            const meta = metaMap[identifier];
-                            const logoUrl = meta?.logo || getTokenLogoURL(t);
-                            const displayName = meta?.name || t.name || t.contractName;
-                            const displaySymbol = meta?.symbol || t.symbol;
-                            const evmAddr = meta?.evm_address || (t as any).evmAddress || '';
-                            return (
-                                <motion.div
-                                    key={`${t.contractAddress}-${t.contractName}`}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.05 }}
-                                >
-                                    <GlassCard className="hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden p-4 flex items-center justify-between gap-4">
-                                        <div className="flex items-center gap-4 min-w-0">
-                                            <div className="flex-shrink-0">
-                                                {logoUrl ? (
-                                                    <img
-                                                        src={logoUrl}
-                                                        alt={displayName}
-                                                        className="w-10 h-10 object-cover bg-white dark:bg-white/10 shadow-sm rounded-full"
-                                                        loading="lazy"
-                                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
-                                                    />
-                                                ) : null}
-                                                <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-inner ${logoUrl ? 'hidden' : ''}`}>
-                                                    <Coins className="h-5 w-5 text-zinc-400" />
-                                                </div>
-                                            </div>
-
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{displayName}</div>
-                                                    <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{displaySymbol}</div>
-                                                    {evmAddr && <EVMBridgeBadge evmAddress={evmAddr} />}
-                                                </div>
-                                                <div className="flex items-center gap-1 mt-0.5">
-                                                    <Link
-                                                        to="/tokens/$token"
-                                                        params={{ token: identifier }}
-                                                        className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors truncate max-w-[160px]"
-                                                    >
-                                                        {t.contractName}
-                                                    </Link>
-                                                    {meta?.is_verified && <VerifiedBadge size={13} />}
-                                                    {(() => {
-                                                        const p = getTokenPrice(t.contractName);
-                                                        if (!p) return null;
-                                                        const fmt = p >= 1 ? `$${p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : p >= 0.01 ? `$${p.toFixed(4)}` : `$${p.toFixed(6)}`;
-                                                        return <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">@ {fmt}</span>;
-                                                    })()}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="text-right flex-shrink-0">
-                                            <div className="text-lg font-mono font-bold text-zinc-900 dark:text-white">
-                                                {t.balance != null ? Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
-                                            </div>
-                                            {t.balance != null && Number(t.balance) > 0 && (() => {
-                                                const price = getTokenPrice(t.contractName);
-                                                return price > 0 ? <UsdValue amount={Number(t.balance)} price={price} className="text-xs" /> : null;
-                                            })()}
-                                        </div>
-                                    </GlassCard>
-                                </motion.div>
-                            );
-                        })}
-                    </AnimatePresence>
-                )}
-            </div>
-
-            {displayTokens.length === 0 && !loading && (
-                <GlassCard className="text-center py-12">
-                    <Coins className="w-12 h-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
-                    <div className="text-zinc-500 italic">No fungible tokens found</div>
+            {evmError && activeSubTab !== 'cadence' && (
+                <GlassCard className="border-red-200 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/10">
+                    <div className="text-xs text-red-500 dark:text-red-400">{evmError}</div>
                 </GlassCard>
             )}
+
+            {/* --- ALL TAB --- */}
+            {activeSubTab === 'all' && (
+                <div className="flex flex-col gap-3">
+                    {isAnythingLoading ? (
+                        <TokenListSkeleton />
+                    ) : (
+                        <AnimatePresence mode="popLayout">
+                            {mergedTokens.map((item, i) => {
+                                if (item.type === 'evm' && item.evmToken) {
+                                    return (
+                                        <motion.div key={`evm-${item.evmToken.address}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                                            <EVMTokenRow token={item.evmToken} getPrice={getTokenPriceBySymbol} />
+                                        </motion.div>
+                                    );
+                                }
+                                const t = item.cadenceToken!;
+                                return (
+                                    <motion.div key={`${t.contractAddress}-${t.contractName}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                                        <CadenceTokenRow
+                                            token={t}
+                                            identifier={item.identifier!}
+                                            meta={item.meta}
+                                            logoUrl={item.logoUrl}
+                                            displayName={item.displayName}
+                                            displaySymbol={item.displaySymbol}
+                                            getTokenPrice={getTokenPrice}
+                                            evmBalance={item.evmToken?.balance}
+                                        />
+                                    </motion.div>
+                                );
+                            })}
+                        </AnimatePresence>
+                    )}
+                    {mergedTokens.length === 0 && !isAnythingLoading && (
+                        <EmptyState />
+                    )}
+                </div>
+            )}
+
+            {/* --- CADENCE TAB --- */}
+            {activeSubTab === 'cadence' && (
+                <div className="flex flex-col gap-3">
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 flex items-center gap-2">
+                        <Coins className="w-4 h-4" />
+                        Cadence Tokens ({displayTokens.length}{hideZero && tokens.length !== displayTokens.length ? ` / ${tokens.length}` : ''})
+                    </h3>
+                    {loading ? (
+                        <TokenListSkeleton />
+                    ) : (
+                        <AnimatePresence mode="popLayout">
+                            {displayTokens.map((t: FTVaultInfo, i: number) => {
+                                const identifier = `A.${normalizeAddress(t.contractAddress).replace(/^0x/, '')}.${t.contractName}`;
+                                const meta = metaMap[identifier];
+                                const logoUrl = meta?.logo || getTokenLogoURL(t);
+                                const displayName = meta?.name || t.name || t.contractName;
+                                const displaySymbol = meta?.symbol || t.symbol;
+                                return (
+                                    <motion.div key={`${t.contractAddress}-${t.contractName}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                                        <CadenceTokenRow
+                                            token={t}
+                                            identifier={identifier}
+                                            meta={meta}
+                                            logoUrl={logoUrl}
+                                            displayName={displayName}
+                                            displaySymbol={displaySymbol}
+                                            getTokenPrice={getTokenPrice}
+                                        />
+                                    </motion.div>
+                                );
+                            })}
+                        </AnimatePresence>
+                    )}
+                    {displayTokens.length === 0 && !loading && <EmptyState />}
+                </div>
+            )}
+
+            {/* --- EVM TAB --- */}
+            {activeSubTab === 'evm' && (
+                <div className="flex flex-col gap-3">
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 flex items-center gap-2">
+                        <Box className="w-4 h-4" />
+                        EVM Tokens ({displayEvmTokens.length})
+                    </h3>
+                    {!coaAddress ? (
+                        <GlassCard className="text-center py-12">
+                            <Info className="w-12 h-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
+                            <div className="text-zinc-500 italic">This account does not have a COA (EVM) address</div>
+                            <div className="text-xs text-zinc-400 mt-2">EVM token balances are only available for accounts with a Cadence-Owned Account on Flow EVM.</div>
+                        </GlassCard>
+                    ) : evmLoading ? (
+                        <TokenListSkeleton />
+                    ) : (
+                        <AnimatePresence mode="popLayout">
+                            {displayEvmTokens.map((t, i) => (
+                                <motion.div key={t.address} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                                    <EVMTokenRow token={t} getPrice={getTokenPriceBySymbol} />
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+                    )}
+                    {coaAddress && displayEvmTokens.length === 0 && !evmLoading && (
+                        <GlassCard className="text-center py-12">
+                            <Box className="w-12 h-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
+                            <div className="text-zinc-500 italic">No ERC-20 tokens found on EVM</div>
+                        </GlassCard>
+                    )}
+                </div>
+            )}
         </div>
+    );
+}
+
+// --- Reusable sub-components ---
+
+function TokenListSkeleton() {
+    return (
+        <div className="flex flex-col gap-3">
+            {[1, 2, 3].map((i) => (
+                <GlassCard key={i} className="p-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 w-full">
+                        <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-white/5 animate-pulse flex-shrink-0" />
+                        <div className="space-y-2 flex-1">
+                            <div className="h-4 w-32 bg-zinc-200 dark:bg-white/5 animate-pulse rounded" />
+                            <div className="h-3 w-24 bg-zinc-200 dark:bg-white/5 animate-pulse rounded" />
+                        </div>
+                    </div>
+                    <div className="h-6 w-24 bg-zinc-200 dark:bg-white/5 animate-pulse rounded flex-shrink-0" />
+                </GlassCard>
+            ))}
+        </div>
+    );
+}
+
+function EmptyState() {
+    return (
+        <GlassCard className="text-center py-12">
+            <Coins className="w-12 h-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
+            <div className="text-zinc-500 italic">No fungible tokens found</div>
+        </GlassCard>
+    );
+}
+
+function TokenIcon({ logoUrl, name }: { logoUrl: string; name: string }) {
+    return (
+        <div className="flex-shrink-0">
+            {logoUrl ? (
+                <img
+                    src={logoUrl}
+                    alt={name}
+                    className="w-10 h-10 object-cover bg-white dark:bg-white/10 shadow-sm rounded-full"
+                    loading="lazy"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                />
+            ) : null}
+            <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-inner ${logoUrl ? 'hidden' : ''}`}>
+                <Coins className="h-5 w-5 text-zinc-400" />
+            </div>
+        </div>
+    );
+}
+
+function CadenceTokenRow({ token: t, identifier, meta, logoUrl, displayName, displaySymbol, getTokenPrice, evmBalance }: {
+    token: FTVaultInfo;
+    identifier: string;
+    meta: any;
+    logoUrl: string;
+    displayName: string;
+    displaySymbol: string;
+    getTokenPrice: (name: string) => number;
+    evmBalance?: number;
+}) {
+    const evmAddr = meta?.evm_address || (t as any).evmAddress || '';
+    return (
+        <GlassCard className="hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+                <TokenIcon logoUrl={logoUrl} name={displayName} />
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                        <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{displayName}</div>
+                        <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{displaySymbol}</div>
+                        {evmAddr && <EVMBridgeBadge evmAddress={evmAddr} />}
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                        <Link
+                            to="/tokens/$token"
+                            params={{ token: identifier }}
+                            className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors truncate max-w-[160px]"
+                        >
+                            {t.contractName}
+                        </Link>
+                        {meta?.is_verified && <VerifiedBadge size={13} />}
+                        {(() => {
+                            const p = getTokenPrice(t.contractName);
+                            if (!p) return null;
+                            const fmt = p >= 1 ? `$${p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : p >= 0.01 ? `$${p.toFixed(4)}` : `$${p.toFixed(6)}`;
+                            return <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">@ {fmt}</span>;
+                        })()}
+                    </div>
+                </div>
+            </div>
+
+            <div className="text-right flex-shrink-0">
+                <div className="text-lg font-mono font-bold text-zinc-900 dark:text-white">
+                    {t.balance != null ? Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '-'}
+                </div>
+                {t.balance != null && Number(t.balance) > 0 && (() => {
+                    const price = getTokenPrice(t.contractName);
+                    return price > 0 ? <UsdValue amount={Number(t.balance)} price={price} className="text-xs" /> : null;
+                })()}
+                {evmBalance != null && evmBalance > 0 && (
+                    <div className="text-[10px] font-mono text-zinc-400 mt-0.5">
+                        + {evmBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })} on EVM
+                    </div>
+                )}
+            </div>
+        </GlassCard>
+    );
+}
+
+function EVMTokenRow({ token, getPrice }: { token: EVMToken; getPrice: (symbol: string) => number }) {
+    const price = getPrice(token.symbol);
+    return (
+        <GlassCard className="hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+                <TokenIcon logoUrl={token.icon_url || ''} name={token.name} />
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                        <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{token.name}</div>
+                        <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{token.symbol}</div>
+                        <span className="text-[9px] font-mono text-purple-500 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full border border-purple-200 dark:border-purple-800">EVM</span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                        <span className="text-[10px] font-mono text-zinc-400 truncate max-w-[200px]">{token.address}</span>
+                        {price > 0 && (() => {
+                            const fmt = price >= 1 ? `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : price >= 0.01 ? `$${price.toFixed(4)}` : `$${price.toFixed(6)}`;
+                            return <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">@ {fmt}</span>;
+                        })()}
+                    </div>
+                </div>
+            </div>
+            <div className="text-right flex-shrink-0">
+                <div className="text-lg font-mono font-bold text-zinc-900 dark:text-white">
+                    {token.balance.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                </div>
+                {token.balance > 0 && price > 0 && (
+                    <UsdValue amount={token.balance} price={price} className="text-xs" />
+                )}
+            </div>
+        </GlassCard>
     );
 }

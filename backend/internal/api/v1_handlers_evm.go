@@ -22,6 +22,11 @@ func (s *Server) handleFlowListEVMTokens(w http.ResponseWriter, r *http.Request)
 	s.proxyBlockscout(w, r, "/api/v2/tokens")
 }
 
+func (s *Server) handleFlowGetEVMAddressTokens(w http.ResponseWriter, r *http.Request) {
+	address := normalizeAddr(mux.Vars(r)["address"])
+	s.proxyBlockscout(w, r, "/api/v2/addresses/0x"+address+"/tokens")
+}
+
 func (s *Server) handleFlowGetEVMToken(w http.ResponseWriter, r *http.Request) {
 	address := normalizeAddr(mux.Vars(r)["address"])
 	if len(address) != 40 {
