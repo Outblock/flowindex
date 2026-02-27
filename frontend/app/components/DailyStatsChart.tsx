@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Link } from '@tanstack/react-router';
+import { ArrowRight } from 'lucide-react';
 import { ensureHeyApiConfigured } from '../api/heyapi';
 import { getStatusV1Stat } from '../api/gen/find';
 
@@ -16,7 +18,7 @@ function formatTickLabel(dateStr: string, rangeDays: number): string {
 export function DailyStatsChart() {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [rangeDays, setRangeDays] = useState(7);
+    const [rangeDays, setRangeDays] = useState(30);
 
     useEffect(() => {
         const loadStats = async () => {
@@ -100,6 +102,12 @@ export function DailyStatsChart() {
                             {range.label}
                         </button>
                     ))}
+                    <Link
+                        to="/analytics"
+                        className="ml-2 text-[9px] uppercase tracking-wider px-2 py-1 text-nothing-green-dark dark:text-nothing-green hover:underline inline-flex items-center gap-1"
+                    >
+                        View More <ArrowRight className="h-3 w-3" />
+                    </Link>
                 </div>
             </div>
             <div className="h-[200px] w-full">
