@@ -517,8 +517,9 @@ func main() {
 	}
 
 	// --- Webhook Notification System ---
-	var webhookHandlersOpt func(*api.Server)           // option for server
-	var webhookOrchestrator *webhooks.Orchestrator      // started after ctx is created
+	var webhookHandlersOpt func(*api.Server)            // option for server
+	var webhookAdminHandlersOpt func(*api.Server)       // option for admin routes
+	var webhookOrchestrator *webhooks.Orchestrator       // started after ctx is created
 
 	if supabaseDBURL := os.Getenv("SUPABASE_DB_URL"); supabaseDBURL != "" {
 		jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
@@ -554,9 +555,14 @@ func main() {
 			subCache := webhooks.NewSubscriptionCache(whStore, 30*time.Second)
 			webhookOrchestrator = webhooks.NewOrchestrator(bus, subCache, matcherRegistry, delivery, whStore)
 
-			// API handlers
-			whHandlers := webhooks.NewHandlers(whStore, whAuth)
+			// Rate limiter + API handlers
+			rateLimiter := webhooks.NewRateLimiter(whStore)
+			whHandlers := webhooks.NewHandlers(whStore, whAuth, rateLimiter)
 			webhookHandlersOpt = api.WithWebhookHandlers(whHandlers)
+
+			// Admin handlers
+			whAdminHandlers := webhooks.NewAdminHandlers(whStore)
+			webhookAdminHandlersOpt = api.WithWebhookAdminHandlers(whAdminHandlers)
 
 			log.Println("[webhooks] notification system initialized")
 		}
@@ -572,6 +578,9 @@ func main() {
 	}
 	if webhookHandlersOpt != nil {
 		serverOpts = append(serverOpts, webhookHandlersOpt)
+	}
+	if webhookAdminHandlersOpt != nil {
+		serverOpts = append(serverOpts, webhookAdminHandlersOpt)
 	}
 	apiServer := api.NewServer(repo, flowClient, apiPort, startBlock, serverOpts...)
 

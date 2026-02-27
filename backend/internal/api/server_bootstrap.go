@@ -103,6 +103,12 @@ type WebhookRouteRegistrar interface {
 	RegisterRoutes(r *mux.Router)
 }
 
+// WebhookAdminRegistrar is implemented by the webhook AdminHandlers to register
+// admin routes on the existing admin subrouter (which already has adminAuthMiddleware).
+type WebhookAdminRegistrar interface {
+	RegisterRoutes(r *mux.Router)
+}
+
 type Server struct {
 	repo               *repository.Repository
 	client             FlowClient
@@ -111,7 +117,8 @@ type Server struct {
 	blockscoutURL      string // e.g. "https://evm.flowindex.dev"
 	backfillProgress   *BackfillProgress
 	priceCache         *market.PriceCache
-	webhookHandlers    WebhookRouteRegistrar
+	webhookHandlers      WebhookRouteRegistrar
+	webhookAdminHandlers WebhookAdminRegistrar
 	statusCache      struct {
 		mu        sync.Mutex
 		payload   []byte
@@ -174,6 +181,13 @@ func (s *Server) SetBackfillProgress(bp *BackfillProgress) {
 func WithWebhookHandlers(wh WebhookRouteRegistrar) func(*Server) {
 	return func(s *Server) {
 		s.webhookHandlers = wh
+	}
+}
+
+// WithWebhookAdminHandlers returns a Server option that attaches webhook admin handlers.
+func WithWebhookAdminHandlers(wh WebhookAdminRegistrar) func(*Server) {
+	return func(s *Server) {
+		s.webhookAdminHandlers = wh
 	}
 }
 
