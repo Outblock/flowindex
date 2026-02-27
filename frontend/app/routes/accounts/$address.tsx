@@ -16,7 +16,7 @@ import Avatar from 'boring-avatars';
 import { colorsFromAddress } from '../../components/AddressLink';
 import { normalizeAddress, backfillCOAMapping } from '../../components/account/accountUtils';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
-import type { StakingInfo, StorageInfo } from '../../../cadence/cadence.gen';
+import type { FTVaultInfo, StakingInfo, StorageInfo } from '../../../cadence/cadence.gen';
 import { AccountActivityTab } from '../../components/account/AccountActivityTab';
 import { AccountTokensTab } from '../../components/account/AccountTokensTab';
 import { AccountNFTsTab } from '../../components/account/AccountNFTsTab';
@@ -170,7 +170,7 @@ function AccountDetail() {
     const normalizedAddress = normalizeAddress(address);
 
     const [onChainData, setOnChainData] = useState<{
-        balance?: number; storage?: StorageInfo; staking?: StakingInfo; coaAddress?: string;
+        balance?: number; storage?: StorageInfo; staking?: StakingInfo; coaAddress?: string; tokens?: FTVaultInfo[];
     } | null>(null);
 
     const [flowPrice, setFlowPrice] = useState(0);
@@ -202,6 +202,7 @@ function AccountDetail() {
                     storage: tokenRes?.storage || undefined,
                     staking: stakingRes?.stakingInfo || undefined,
                     coaAddress: accountInfoRes?.coaAddress || undefined,
+                    tokens: tokenRes?.tokens || undefined,
                 });
                 // Backfill COA mapping so future COA address visits redirect
                 if (accountInfoRes?.coaAddress) {
@@ -566,7 +567,7 @@ function AccountDetail() {
 
                     <div className="min-h-[500px]">
                         {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} initialNextCursor={initialNextCursor} subtab={activeSubTab} onSubTabChange={setActiveSubTab} />}
-                        {activeTab === 'balance' && <AccountBalanceTab address={normalizedAddress} />}
+                        {activeTab === 'balance' && <AccountBalanceTab address={normalizedAddress} staking={onChainData?.staking} tokens={onChainData?.tokens} />}
                         {activeTab === 'tokens' && <AccountTokensTab address={address} coaAddress={onChainData?.coaAddress} subtab={activeSubTab} onSubTabChange={setActiveSubTab} />}
                         {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
                         {activeTab === 'staking' && <AccountStakingTab address={address} />}
