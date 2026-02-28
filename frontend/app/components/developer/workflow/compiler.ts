@@ -16,6 +16,30 @@ export interface CompileResult {
 }
 
 /**
+ * Normalize trigger config values to match backend matcher expectations:
+ * - "addresses" string → string[] (split on comma)
+ * - "min_amount" string → number
+ * - Other numeric-looking values stay as strings (backend handles them)
+ */
+function normalizeTriggerConfig(config: Record<string, string>): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(config)) {
+    if (value === undefined || value === '') continue
+    if (key === 'addresses') {
+      // Backend expects string array
+      result[key] = value.split(',').map((s) => s.trim()).filter(Boolean)
+    } else if (key === 'min_amount') {
+      // Backend expects number
+      const n = parseFloat(value)
+      result[key] = isNaN(n) ? 0 : n
+    } else {
+      result[key] = value
+    }
+  }
+  return result
+}
+
+/**
  * Walk the DAG from each trigger node to each reachable destination node.
  * Collect conditions from IF/Filter nodes along the way.
  * Returns a list of compiled paths ready to become subscriptions.
@@ -65,7 +89,7 @@ export function compileWorkflow(nodes: Node[], edges: Edge[]): CompileResult {
         paths.push({
           triggerNodeId: trigger.id,
           eventType: meta.eventType!,
-          conditions: { ...conditions, ...(trigger.data.config ?? {}) },
+          conditions: { ...conditions, ...normalizeTriggerConfig(trigger.data.config ?? {}) },
           destinationNodeId: node.id,
           destinationType: nodeMeta.type,
           destinationConfig: node.data.config ?? {},

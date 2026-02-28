@@ -21,16 +21,14 @@ func (m *LargeTransferMatcher) Match(data interface{}, conditions json.RawMessag
 		return false
 	}
 
-	// Verify min_amount is present in conditions
-	var check struct {
-		MinAmount *float64 `json:"min_amount"`
-	}
+	// Verify min_amount is present in conditions (accept both number and string)
+	var check map[string]interface{}
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &check); err != nil {
 			return false
 		}
 	}
-	if check.MinAmount == nil {
+	if check["min_amount"] == nil {
 		return false
 	}
 

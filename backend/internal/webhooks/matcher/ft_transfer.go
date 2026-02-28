@@ -9,11 +9,72 @@ import (
 )
 
 // ftTransferConditions defines the JSON filter schema for FT transfers.
+// Fields use flexible types to handle both frontend string values and proper typed values.
 type ftTransferConditions struct {
-	Addresses     []string `json:"addresses"`
-	Direction     string   `json:"direction"`      // "in", "out", "both" (default "both")
-	TokenContract string   `json:"token_contract"` // match TokenContractAddress
-	MinAmount     *float64 `json:"min_amount"`
+	Addresses     flexStringSlice `json:"addresses"`
+	Direction     string          `json:"direction"`      // "in", "out", "both" (default "both")
+	TokenContract string          `json:"token_contract"` // match TokenContractAddress
+	MinAmount     *flexFloat64    `json:"min_amount"`
+}
+
+// flexFloat64 unmarshals from either a JSON number or a numeric string.
+type flexFloat64 float64
+
+func (f *flexFloat64) UnmarshalJSON(data []byte) error {
+	// Try number first
+	var n float64
+	if err := json.Unmarshal(data, &n); err == nil {
+		*f = flexFloat64(n)
+		return nil
+	}
+	// Try string
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		n, err := strconv.ParseFloat(s, 64)
+		if err == nil {
+			*f = flexFloat64(n)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (f *flexFloat64) Float64() float64 {
+	if f == nil {
+		return 0
+	}
+	return float64(*f)
+}
+
+// flexStringSlice unmarshals from either a JSON array of strings or a comma-separated string.
+type flexStringSlice []string
+
+func (f *flexStringSlice) UnmarshalJSON(data []byte) error {
+	// Try array first
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		*f = arr
+		return nil
+	}
+	// Try single string (comma-separated)
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		if s == "" {
+			*f = nil
+			return nil
+		}
+		parts := strings.Split(s, ",")
+		result := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				result = append(result, p)
+			}
+		}
+		*f = result
+		return nil
+	}
+	return nil
 }
 
 // FTTransferMatcher matches fungible token transfers.
@@ -42,9 +103,18 @@ func matchFTTransfer(tt *models.TokenTransfer, conditions json.RawMessage) bool 
 		}
 	}
 
-	// Check token contract filter (normalize 0x prefix on both sides)
+	// Check token contract filter.
+	// Supports both raw address ("1654653399040a61") and Cadence format ("A.1654653399040a61.FlowToken").
 	if cond.TokenContract != "" {
-		if !strings.EqualFold(normalizeAddress(tt.TokenContractAddress), normalizeAddress(cond.TokenContract)) {
+		condAddr := cond.TokenContract
+		// Extract address from Cadence identifier (A.<address>.<Name>)
+		if strings.HasPrefix(condAddr, "A.") {
+			parts := strings.SplitN(condAddr, ".", 3)
+			if len(parts) >= 2 {
+				condAddr = parts[1]
+			}
+		}
+		if !strings.EqualFold(normalizeAddress(tt.TokenContractAddress), normalizeAddress(condAddr)) {
 			return false
 		}
 	}
@@ -55,7 +125,7 @@ func matchFTTransfer(tt *models.TokenTransfer, conditions json.RawMessage) bool 
 		if err != nil {
 			return false
 		}
-		if amount < *cond.MinAmount {
+		if amount < cond.MinAmount.Float64() {
 			return false
 		}
 	}
