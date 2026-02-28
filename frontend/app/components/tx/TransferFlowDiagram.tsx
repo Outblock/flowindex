@@ -9,11 +9,51 @@ import ReactFlow, {
     Controls,
     useNodesState,
     useEdgesState,
+    getBezierPath,
+    EdgeLabelRenderer,
+    type EdgeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { formatShort } from '../account/accountUtils';
 import { extractLogoUrl } from '../TransactionRow';
 import { useTheme } from '../../contexts/ThemeContext';
+
+/* ── Custom edge that reliably renders React element labels ── */
+
+function LabeledEdge({
+    id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
+    style, markerEnd, data,
+}: EdgeProps) {
+    const [edgePath, labelX, labelY] = getBezierPath({
+        sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
+    });
+
+    return (
+        <>
+            <path id={id} className="react-flow__edge-path" d={edgePath} style={style} markerEnd={markerEnd as string} />
+            {/* Animated dashes overlay */}
+            <path d={edgePath} fill="none" style={{ ...style, strokeDasharray: '6 4' }} className="react-flow__edge-path">
+                <animate attributeName="stroke-dashoffset" from="24" to="0" dur="1s" repeatCount="indefinite" />
+            </path>
+            {data?.labelElement && (
+                <EdgeLabelRenderer>
+                    <div
+                        style={{
+                            position: 'absolute',
+                            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+                            pointerEvents: 'all',
+                        }}
+                        className="nodrag nopan"
+                    >
+                        {data.labelElement}
+                    </div>
+                </EdgeLabelRenderer>
+            )}
+        </>
+    );
+}
+
+const edgeTypes = { labeled: LabeledEdge };
 
 /* ── Shared Flow interface ── */
 
@@ -178,10 +218,10 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
             id: `e-${edgeIdx++}`,
             source: from,
             target: to,
-            label: labelEl,
+            type: 'labeled',
+            data: { labelElement: labelEl },
             style: { stroke: color, strokeWidth: 2 },
             markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
-            animated: true,
         });
     }
 
@@ -202,6 +242,7 @@ export function FlowDiagram({ initialNodes, initialEdges, isDark }: {
         <ReactFlow
             nodes={nodes}
             edges={edges}
+            edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             fitView
