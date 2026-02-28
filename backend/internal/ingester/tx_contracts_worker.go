@@ -224,6 +224,10 @@ func (w *TxContractsWorker) ProcessRange(ctx context.Context, fromHeight, toHeig
 		switch {
 		case isEVMTransactionExecutedEvent(evtType):
 			addTag(evt.TransactionID, "EVM")
+		case strings.Contains(evtType, "EVM.FLOWTokensWithdrawn") ||
+			strings.Contains(evtType, "EVM.FLOWTokensDeposited") ||
+			strings.Contains(evtType, "FlowEVMBridge"):
+			addTag(evt.TransactionID, "EVM_BRIDGE")
 		case strings.Contains(evtType, "NFTStorefront"):
 			addTag(evt.TransactionID, "MARKETPLACE")
 		case strings.Contains(evtType, "AccountContractAdded") || strings.Contains(evtType, "AccountContractUpdated"):
