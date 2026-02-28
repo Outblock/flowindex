@@ -79,6 +79,14 @@ func (h *Handlers) RegisterRoutes(r *mux.Router) {
 	authed.HandleFunc("/api-keys", h.handleListAPIKeys).Methods("GET", "OPTIONS")
 	authed.HandleFunc("/api-keys/{id}", h.handleDeleteAPIKey).Methods("DELETE", "OPTIONS")
 
+	// Workflows
+	authed.HandleFunc("/workflows", h.handleCreateWorkflow).Methods("POST", "OPTIONS")
+	authed.HandleFunc("/workflows", h.handleListWorkflows).Methods("GET", "OPTIONS")
+	authed.HandleFunc("/workflows/{id}", h.handleGetWorkflow).Methods("GET", "OPTIONS")
+	authed.HandleFunc("/workflows/{id}", h.handleUpdateWorkflow).Methods("PATCH", "OPTIONS")
+	authed.HandleFunc("/workflows/{id}", h.handleDeleteWorkflow).Methods("DELETE", "OPTIONS")
+	authed.HandleFunc("/workflows/{id}/deploy", h.handleDeployWorkflow).Methods("POST", "OPTIONS")
+
 	// Delivery Logs
 	authed.HandleFunc("/logs", h.handleListDeliveryLogs).Methods("GET", "OPTIONS")
 }
@@ -489,6 +497,156 @@ func (h *Handlers) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- Delivery Log handlers ---
+
+// --- Workflow handlers ---
+
+func (h *Handlers) handleCreateWorkflow(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+
+	var body struct {
+		Name       string          `json:"name"`
+		CanvasJSON json.RawMessage `json:"canvas_json"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+
+	wf := &Workflow{
+		UserID:     userID,
+		Name:       body.Name,
+		CanvasJSON: body.CanvasJSON,
+	}
+	if err := h.store.CreateWorkflow(r.Context(), wf); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create workflow")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, wf)
+}
+
+func (h *Handlers) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+
+	limit, offset := parsePagination(r)
+	workflows, err := h.store.ListWorkflows(r.Context(), userID, limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list workflows")
+		return
+	}
+	if workflows == nil {
+		workflows = []Workflow{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"items": workflows,
+		"count": len(workflows),
+	})
+}
+
+func (h *Handlers) handleGetWorkflow(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	wf, err := h.store.GetWorkflow(r.Context(), id, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "workflow not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, wf)
+}
+
+func (h *Handlers) handleUpdateWorkflow(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+
+	var body struct {
+		Name       *string          `json:"name"`
+		CanvasJSON *json.RawMessage `json:"canvas_json"`
+		IsActive   *bool            `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.store.UpdateWorkflow(r.Context(), id, userID, body.Name, body.CanvasJSON, body.IsActive); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update workflow")
+		return
+	}
+
+	wf, err := h.store.GetWorkflow(r.Context(), id, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "workflow not found after update")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, wf)
+}
+
+func (h *Handlers) handleDeleteWorkflow(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	if err := h.store.DeleteWorkflow(r.Context(), id, userID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete workflow")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) handleDeployWorkflow(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+
+	isActive := true
+	if err := h.store.UpdateWorkflow(r.Context(), id, userID, nil, nil, &isActive); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to deploy workflow")
+		return
+	}
+
+	wf, err := h.store.GetWorkflow(r.Context(), id, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "workflow not found after deploy")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, wf)
 }
 
 // --- Delivery Log handlers ---

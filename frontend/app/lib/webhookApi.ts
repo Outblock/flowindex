@@ -45,6 +45,15 @@ export interface Subscription {
   updated_at: string;
 }
 
+export interface Workflow {
+  id: string;
+  name: string;
+  canvas_json: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DeliveryLog {
   id: string;
   subscription_id: string;
@@ -238,4 +247,42 @@ export async function listDeliveryLogs(params?: LogQueryParams): Promise<Paginat
     page,
     per_page: perPage,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Workflows
+// ---------------------------------------------------------------------------
+
+export async function listWorkflows(): Promise<Workflow[]> {
+  const data = await request<{ items: Workflow[]; count: number }>('/workflows');
+  return data.items ?? [];
+}
+
+export async function createWorkflow(name?: string, canvasJSON?: Record<string, unknown>): Promise<Workflow> {
+  return request<Workflow>('/workflows', {
+    method: 'POST',
+    body: JSON.stringify({ name: name ?? 'Untitled Workflow', canvas_json: canvasJSON ?? {} }),
+  });
+}
+
+export async function getWorkflow(id: string): Promise<Workflow> {
+  return request<Workflow>(`/workflows/${encodeURIComponent(id)}`);
+}
+
+export async function updateWorkflow(
+  id: string,
+  data: { name?: string; canvas_json?: Record<string, unknown>; is_active?: boolean },
+): Promise<Workflow> {
+  return request<Workflow>(`/workflows/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteWorkflow(id: string): Promise<void> {
+  return request<void>(`/workflows/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function deployWorkflow(id: string): Promise<Workflow> {
+  return request<Workflow>(`/workflows/${encodeURIComponent(id)}/deploy`, { method: 'POST' });
 }

@@ -62,6 +62,16 @@ type RateLimitTier struct {
 	MaxAPIRequests   int    `json:"max_api_requests"`
 }
 
+type Workflow struct {
+	ID         string          `json:"id"`
+	UserID     string          `json:"user_id,omitempty"`
+	Name       string          `json:"name"`
+	CanvasJSON json.RawMessage `json:"canvas_json"`
+	IsActive   bool            `json:"is_active"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
+}
+
 type DeliveryLog struct {
 	ID             string          `json:"id"`
 	SubscriptionID string          `json:"subscription_id,omitempty"`
@@ -419,6 +429,78 @@ func (s *Store) CountUserEndpoints(ctx context.Context, userID string) (int, err
 		`SELECT COUNT(*) FROM public.endpoints WHERE user_id = $1`, userID,
 	).Scan(&count)
 	return count, err
+}
+
+// --- Workflows ---
+
+func (s *Store) CreateWorkflow(ctx context.Context, w *Workflow) error {
+	return s.pool.QueryRow(ctx,
+		`INSERT INTO public.workflows (user_id, name, canvas_json)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, created_at, updated_at`,
+		w.UserID, w.Name, w.CanvasJSON,
+	).Scan(&w.ID, &w.CreatedAt, &w.UpdatedAt)
+}
+
+func (s *Store) ListWorkflows(ctx context.Context, userID string, limit, offset int) ([]Workflow, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, user_id, name, canvas_json, is_active, created_at, updated_at
+		 FROM public.workflows WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3`,
+		userID, limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var workflows []Workflow
+	for rows.Next() {
+		var w Workflow
+		if err := rows.Scan(&w.ID, &w.UserID, &w.Name, &w.CanvasJSON, &w.IsActive, &w.CreatedAt, &w.UpdatedAt); err != nil {
+			return nil, err
+		}
+		workflows = append(workflows, w)
+	}
+	return workflows, nil
+}
+
+func (s *Store) GetWorkflow(ctx context.Context, id, userID string) (*Workflow, error) {
+	var w Workflow
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, user_id, name, canvas_json, is_active, created_at, updated_at
+		 FROM public.workflows WHERE id = $1 AND user_id = $2`, id, userID,
+	).Scan(&w.ID, &w.UserID, &w.Name, &w.CanvasJSON, &w.IsActive, &w.CreatedAt, &w.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
+
+func (s *Store) UpdateWorkflow(ctx context.Context, id, userID string, name *string, canvasJSON *json.RawMessage, isActive *bool) error {
+	if name != nil {
+		if _, err := s.pool.Exec(ctx,
+			`UPDATE public.workflows SET name = $1, updated_at = now() WHERE id = $2 AND user_id = $3`, *name, id, userID); err != nil {
+			return err
+		}
+	}
+	if canvasJSON != nil {
+		if _, err := s.pool.Exec(ctx,
+			`UPDATE public.workflows SET canvas_json = $1, updated_at = now() WHERE id = $2 AND user_id = $3`, *canvasJSON, id, userID); err != nil {
+			return err
+		}
+	}
+	if isActive != nil {
+		if _, err := s.pool.Exec(ctx,
+			`UPDATE public.workflows SET is_active = $1, updated_at = now() WHERE id = $2 AND user_id = $3`, *isActive, id, userID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) DeleteWorkflow(ctx context.Context, id, userID string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM public.workflows WHERE id = $1 AND user_id = $2`, id, userID)
+	return err
 }
 
 // --- Admin queries ---

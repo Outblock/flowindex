@@ -5,7 +5,7 @@ import {
   LayoutDashboard,
   Key,
   Globe,
-  Bell,
+  GitBranch,
   FileText,
   LogOut,
   Loader2,
@@ -24,7 +24,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/developer', icon: LayoutDashboard },
   { label: 'API Keys', path: '/developer/keys', icon: Key },
   { label: 'Endpoints', path: '/developer/endpoints', icon: Globe },
-  { label: 'Subscriptions', path: '/developer/subscriptions', icon: Bell },
+  { label: 'Workflows', path: '/developer/subscriptions', icon: GitBranch },
   { label: 'Delivery Logs', path: '/developer/logs', icon: FileText },
 ]
 

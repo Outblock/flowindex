@@ -43,6 +43,7 @@ import { Route as BlocksHeightRouteImport } from './routes/blocks/$height'
 import { Route as AccountsAddressRouteImport } from './routes/accounts/$address'
 import { Route as NftsNftTypeIndexRouteImport } from './routes/nfts/$nftType/index'
 import { Route as TxsEvmTxIdRouteImport } from './routes/txs/evm/$txId'
+import { Route as DeveloperSubscriptionsIdRouteImport } from './routes/developer/subscriptions.$id'
 import { Route as NftsNftTypeItemIdRouteImport } from './routes/nfts/$nftType/item/$id'
 
 const StatsRoute = StatsRouteImport.update({
@@ -215,6 +216,12 @@ const TxsEvmTxIdRoute = TxsEvmTxIdRouteImport.update({
   path: '/txs/evm/$txId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DeveloperSubscriptionsIdRoute =
+  DeveloperSubscriptionsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => DeveloperSubscriptionsRoute,
+  } as any)
 const NftsNftTypeItemIdRoute = NftsNftTypeItemIdRouteImport.update({
   id: '/item/$id',
   path: '/item/$id',
@@ -237,7 +244,7 @@ export interface FileRoutesByFullPath {
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/developer/logs': typeof DeveloperLogsRoute
-  '/developer/subscriptions': typeof DeveloperSubscriptionsRoute
+  '/developer/subscriptions': typeof DeveloperSubscriptionsRouteWithChildren
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
@@ -254,6 +261,7 @@ export interface FileRoutesByFullPath {
   '/transactions/': typeof TransactionsIndexRoute
   '/tx/': typeof TxIndexRoute
   '/txs/': typeof TxsIndexRoute
+  '/developer/subscriptions/$id': typeof DeveloperSubscriptionsIdRoute
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
   '/nfts/$nftType/': typeof NftsNftTypeIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
@@ -274,7 +282,7 @@ export interface FileRoutesByTo {
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/developer/logs': typeof DeveloperLogsRoute
-  '/developer/subscriptions': typeof DeveloperSubscriptionsRoute
+  '/developer/subscriptions': typeof DeveloperSubscriptionsRouteWithChildren
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
@@ -290,6 +298,7 @@ export interface FileRoutesByTo {
   '/transactions': typeof TransactionsIndexRoute
   '/tx': typeof TxIndexRoute
   '/txs': typeof TxsIndexRoute
+  '/developer/subscriptions/$id': typeof DeveloperSubscriptionsIdRoute
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
   '/nfts/$nftType': typeof NftsNftTypeIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
@@ -311,7 +320,7 @@ export interface FileRoutesById {
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/developer/logs': typeof DeveloperLogsRoute
-  '/developer/subscriptions': typeof DeveloperSubscriptionsRoute
+  '/developer/subscriptions': typeof DeveloperSubscriptionsRouteWithChildren
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/nfts/$nftType': typeof NftsNftTypeRouteWithChildren
   '/tokens/$token': typeof TokensTokenRoute
@@ -328,6 +337,7 @@ export interface FileRoutesById {
   '/transactions/': typeof TransactionsIndexRoute
   '/tx/': typeof TxIndexRoute
   '/txs/': typeof TxsIndexRoute
+  '/developer/subscriptions/$id': typeof DeveloperSubscriptionsIdRoute
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
   '/nfts/$nftType/': typeof NftsNftTypeIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
@@ -367,6 +377,7 @@ export interface FileRouteTypes {
     | '/transactions/'
     | '/tx/'
     | '/txs/'
+    | '/developer/subscriptions/$id'
     | '/txs/evm/$txId'
     | '/nfts/$nftType/'
     | '/nfts/$nftType/item/$id'
@@ -403,6 +414,7 @@ export interface FileRouteTypes {
     | '/transactions'
     | '/tx'
     | '/txs'
+    | '/developer/subscriptions/$id'
     | '/txs/evm/$txId'
     | '/nfts/$nftType'
     | '/nfts/$nftType/item/$id'
@@ -440,6 +452,7 @@ export interface FileRouteTypes {
     | '/transactions/'
     | '/tx/'
     | '/txs/'
+    | '/developer/subscriptions/$id'
     | '/txs/evm/$txId'
     | '/nfts/$nftType/'
     | '/nfts/$nftType/item/$id'
@@ -461,7 +474,7 @@ export interface RootRouteChildren {
   DeveloperKeysRoute: typeof DeveloperKeysRoute
   DeveloperLoginRoute: typeof DeveloperLoginRoute
   DeveloperLogsRoute: typeof DeveloperLogsRoute
-  DeveloperSubscriptionsRoute: typeof DeveloperSubscriptionsRoute
+  DeveloperSubscriptionsRoute: typeof DeveloperSubscriptionsRouteWithChildren
   KeyPublicKeyRoute: typeof KeyPublicKeyRoute
   NftsNftTypeRoute: typeof NftsNftTypeRouteWithChildren
   TokensTokenRoute: typeof TokensTokenRoute
@@ -721,6 +734,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TxsEvmTxIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/developer/subscriptions/$id': {
+      id: '/developer/subscriptions/$id'
+      path: '/$id'
+      fullPath: '/developer/subscriptions/$id'
+      preLoaderRoute: typeof DeveloperSubscriptionsIdRouteImport
+      parentRoute: typeof DeveloperSubscriptionsRoute
+    }
     '/nfts/$nftType/item/$id': {
       id: '/nfts/$nftType/item/$id'
       path: '/item/$id'
@@ -730,6 +750,20 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface DeveloperSubscriptionsRouteChildren {
+  DeveloperSubscriptionsIdRoute: typeof DeveloperSubscriptionsIdRoute
+}
+
+const DeveloperSubscriptionsRouteChildren: DeveloperSubscriptionsRouteChildren =
+  {
+    DeveloperSubscriptionsIdRoute: DeveloperSubscriptionsIdRoute,
+  }
+
+const DeveloperSubscriptionsRouteWithChildren =
+  DeveloperSubscriptionsRoute._addFileChildren(
+    DeveloperSubscriptionsRouteChildren,
+  )
 
 interface NftsNftTypeRouteChildren {
   NftsNftTypeIndexRoute: typeof NftsNftTypeIndexRoute
@@ -761,7 +795,7 @@ const rootRouteChildren: RootRouteChildren = {
   DeveloperKeysRoute: DeveloperKeysRoute,
   DeveloperLoginRoute: DeveloperLoginRoute,
   DeveloperLogsRoute: DeveloperLogsRoute,
-  DeveloperSubscriptionsRoute: DeveloperSubscriptionsRoute,
+  DeveloperSubscriptionsRoute: DeveloperSubscriptionsRouteWithChildren,
   KeyPublicKeyRoute: KeyPublicKeyRoute,
   NftsNftTypeRoute: NftsNftTypeRouteWithChildren,
   TokensTokenRoute: TokensTokenRoute,
