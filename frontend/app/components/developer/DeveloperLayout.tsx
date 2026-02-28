@@ -9,8 +9,7 @@ import {
   FileText,
   LogOut,
   Loader2,
-  Menu,
-  X,
+  ChevronDown,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -33,7 +32,8 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
   const navigate = useNavigate()
   const routerState = useRouterState()
   const currentPath = routerState.location.pathname
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -42,9 +42,10 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
     }
   }, [loading, user, navigate])
 
-  // Close sidebar on route change
+  // Close menus on route change
   useEffect(() => {
-    setSidebarOpen(false)
+    setMobileMenuOpen(false)
+    setUserMenuOpen(false)
   }, [currentPath])
 
   if (loading) {
@@ -59,102 +60,137 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
     return null
   }
 
-  const sidebarContent = (
-    <>
-      {/* User info */}
-      <div className="p-4 border-b border-neutral-800">
-        <p className="text-xs text-neutral-500 uppercase tracking-wider mb-1">Developer Portal</p>
-        <p className="text-sm text-white truncate" title={user.email}>
-          {user.email}
-        </p>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive = currentPath === item.path || (item.path !== '/developer' && currentPath.startsWith(item.path))
-          const Icon = item.icon
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                isActive
-                  ? 'text-[#00ef8b] bg-[#00ef8b]/10'
-                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-              }`}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              {item.label}
-            </Link>
-          )
-        })}
-      </nav>
-
-      {/* Sign out */}
-      <div className="p-2 border-t border-neutral-800">
-        <button
-          onClick={() => {
-            signOut()
-            navigate({ to: '/developer/login' })
-          }}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-        >
-          <LogOut className="w-4 h-4 shrink-0" />
-          Sign out
-        </button>
-      </div>
-    </>
-  )
-
   return (
-    <div className="flex-1 flex flex-col md:flex-row min-h-0">
-      {/* Mobile top bar */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-sm sticky top-0 z-30">
-        <p className="text-xs text-neutral-500 uppercase tracking-wider">Developer Portal</p>
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
-        >
-          {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Top tab bar */}
+      <div className="border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-sm sticky top-0 z-30 shrink-0">
+        <div className="flex items-center justify-between px-4 h-11">
+          {/* Left: portal label + tabs */}
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold mr-3 shrink-0 hidden sm:block">
+              Dev Portal
+            </span>
+
+            {/* Desktop tabs */}
+            <nav className="hidden md:flex items-center gap-0.5">
+              {navItems.map((item) => {
+                const isActive = currentPath === item.path || (item.path !== '/developer' && currentPath.startsWith(item.path))
+                const Icon = item.icon
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      isActive
+                        ? 'text-[#00ef8b] bg-[#00ef8b]/10'
+                        : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </nav>
+
+            {/* Mobile: current page + dropdown trigger */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-white hover:bg-neutral-800 transition-colors"
+            >
+              {(() => {
+                const active = navItems.find((item) =>
+                  currentPath === item.path || (item.path !== '/developer' && currentPath.startsWith(item.path))
+                ) ?? navItems[0]
+                const Icon = active.icon
+                return (
+                  <>
+                    <Icon className="w-3.5 h-3.5" />
+                    {active.label}
+                    <ChevronDown className={`w-3 h-3 text-neutral-500 transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`} />
+                  </>
+                )
+              })()}
+            </button>
+          </div>
+
+          {/* Right: user menu */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            >
+              <span className="truncate max-w-[120px]">{user.email}</span>
+              <ChevronDown className={`w-3 h-3 text-neutral-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <AnimatePresence>
+              {userMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 top-full mt-1 z-50 w-44 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl overflow-hidden"
+                  >
+                    <div className="px-3 py-2 border-b border-neutral-800">
+                      <p className="text-xs text-neutral-500 truncate">{user.email}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        signOut()
+                        navigate({ to: '/developer/login' })
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-xs text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      Sign out
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Mobile dropdown nav */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.nav
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="md:hidden overflow-hidden border-t border-neutral-800"
+            >
+              <div className="p-2 space-y-0.5">
+                {navItems.map((item) => {
+                  const isActive = currentPath === item.path || (item.path !== '/developer' && currentPath.startsWith(item.path))
+                  const Icon = item.icon
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive
+                          ? 'text-[#00ef8b] bg-[#00ef8b]/10'
+                          : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            </motion.nav>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Mobile sidebar overlay */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="md:hidden fixed inset-0 z-40 bg-black/60"
-              onClick={() => setSidebarOpen(false)}
-            />
-            <motion.aside
-              initial={{ x: -280 }}
-              animate={{ x: 0 }}
-              exit={{ x: -280 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="md:hidden fixed left-0 top-0 bottom-0 z-50 w-[280px] bg-neutral-900 border-r border-neutral-800 flex flex-col"
-            >
-              {sidebarContent}
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Desktop sidebar */}
-      <motion.aside
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="hidden md:flex w-64 border-r border-neutral-800 bg-neutral-900/50 flex-col shrink-0"
-      >
-        {sidebarContent}
-      </motion.aside>
-
-      {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+      {/* Main content — full width, no padding (children manage their own) */}
+      <main className="flex-1 overflow-y-auto">
         {children}
       </main>
     </div>
