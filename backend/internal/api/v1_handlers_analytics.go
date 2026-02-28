@@ -134,3 +134,24 @@ func (s *Server) handleBigTransfers(w http.ResponseWriter, r *http.Request) {
 	}
 	writeAPIResponse(w, results, map[string]interface{}{"count": len(results)}, nil)
 }
+
+func (s *Server) handleTopContracts(w http.ResponseWriter, r *http.Request) {
+	hours := 24
+	if v := r.URL.Query().Get("hours"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 720 {
+			hours = n
+		}
+	}
+	limit := 10
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			limit = n
+		}
+	}
+	results, err := s.repo.GetTopContracts(r.Context(), hours, limit)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, results, map[string]interface{}{"count": len(results)}, nil)
+}
