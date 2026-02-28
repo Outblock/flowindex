@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -717,15 +717,35 @@ function ChartToolPart({ part }: { part: any }) {
 
 function ChatMessage({ message }: { message: UIMessage }) {
   if (message.role === 'user') {
+    const textContent = message.parts
+      .filter((p) => p.type === 'text')
+      .map((p) => (p as any).text)
+      .join('');
+    // Extract image attachments from message
+    const images = (message as any).experimental_attachments?.filter(
+      (a: any) => a.contentType?.startsWith('image/'),
+    ) || [];
+
     return (
       <div className="flex justify-end mb-4">
         <div className="max-w-[85%] bg-nothing-green/10 border border-nothing-green/20 rounded-sm px-3 py-2">
-          <p className="text-[13px] text-zinc-700 dark:text-zinc-200 leading-relaxed">
-            {message.parts
-              .filter((p) => p.type === 'text')
-              .map((p) => (p as any).text)
-              .join('')}
-          </p>
+          {images.length > 0 && (
+            <div className="flex gap-1.5 mb-2 flex-wrap">
+              {images.map((img: any, i: number) => (
+                <img
+                  key={i}
+                  src={img.url}
+                  alt={img.name || 'attachment'}
+                  className="w-20 h-20 object-cover rounded-sm border border-nothing-green/20"
+                />
+              ))}
+            </div>
+          )}
+          {textContent && (
+            <p className="text-[13px] text-zinc-700 dark:text-zinc-200 leading-relaxed">
+              {textContent}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -754,6 +774,24 @@ function ChatMessage({ message }: { message: UIMessage }) {
               if (name === 'run_cadence') return <CadenceToolPart key={i} part={toolPart} />;
               if (name === 'run_sql' || name === 'runSQL' || name === 'run_flowindex_sql' || name === 'run_evm_sql') return <SqlToolPart key={i} part={toolPart} />;
               if (name === 'createChart') return <ChartToolPart key={i} part={toolPart} />;
+              // Friendly labels for new tools
+              if (name === 'web_search' || name === 'fetch_api') {
+                const label = name === 'web_search' ? 'Searching the web' : `Fetching ${toolPart.args?.url || toolPart.input?.url || 'API'}`;
+                const done = toolPart.state === 'output-available' || toolPart.state === 'result';
+                const err = toolPart.state === 'output-error';
+                return (
+                  <div key={i} className="flex items-center gap-2 py-1.5 px-2.5 my-1 text-[11px] text-zinc-500 bg-zinc-50 dark:bg-white/[0.03] border border-zinc-100 dark:border-white/5 rounded-sm">
+                    {!done && !err ? (
+                      <Loader2 size={10} className="animate-spin" />
+                    ) : err ? (
+                      <X size={10} className="text-red-400" />
+                    ) : (
+                      <Search size={10} className="text-nothing-green" />
+                    )}
+                    <span className="truncate">{done ? (name === 'web_search' ? 'Web search complete' : `Fetched API`) : label}...</span>
+                  </div>
+                );
+              }
               // Generic tool fallback
               const toolDone = toolPart.state === 'output-available' || toolPart.state === 'result';
               const toolErr = toolPart.state === 'output-error';
@@ -869,6 +907,22 @@ export default function AIChatWidget() {
 
   const [chatError, setChatError] = useState<string | null>(null);
 
+  // Image attachments
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const MAX_IMAGES = 4;
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+  const addImages = useCallback((files: FileList | File[]) => {
+    const images = Array.from(files).filter(f => f.type.startsWith('image/') && f.size <= MAX_IMAGE_SIZE);
+    setAttachments(prev => [...prev, ...images].slice(0, MAX_IMAGES));
+  }, []);
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
   // Custom fetch that strips the 'user-agent' header added by ai-sdk.
   // Safari/WebKit blocks cross-origin requests with custom User-Agent headers
   // when the server doesn't include 'User-Agent' in Access-Control-Allow-Headers.
@@ -913,12 +967,29 @@ export default function AIChatWidget() {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  const handleSend = useCallback((text: string) => {
-    if (!text.trim() || isStreaming) return;
+  const handleSend = useCallback(async (text: string) => {
+    if ((!text.trim() && attachments.length === 0) || isStreaming) return;
     setChatError(null);
-    sendMessage({ text });
+
+    // Convert images to data URL attachments for the AI SDK
+    const experimental_attachments = await Promise.all(
+      attachments.map(async (file) => {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        return { name: file.name, contentType: file.type, url: base64 };
+      })
+    );
+
+    sendMessage({
+      text: text || 'What is in this image?',
+      ...(experimental_attachments.length > 0 ? { experimental_attachments } : {}),
+    });
     setInput('');
-  }, [sendMessage, isStreaming]);
+    setAttachments([]);
+  }, [sendMessage, isStreaming, attachments]);
 
   const handleClear = () => {
     setMessages([]);
@@ -930,6 +1001,41 @@ export default function AIChatWidget() {
       handleSend(input);
     }
   };
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+    if (imageFiles.length > 0) {
+      addImages(imageFiles);
+    }
+  }, [addImages]);
+
+  // Drag & drop handlers for the chat panel
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer.files?.length) addImages(e.dataTransfer.files);
+  }, [addImages]);
 
   // Don't render during SSR
   if (import.meta.env.SSR) return null;
@@ -977,6 +1083,9 @@ export default function AIChatWidget() {
                 height: mobileHeight != null ? `${mobileHeight}px` : undefined,
               }}
               className="ai-chat-panel fixed top-0 right-0 z-[71] w-full md:w-auto bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-white/10 flex flex-col shadow-2xl h-[100dvh] md:h-full font-geist"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
               {/* Resize handle */}
               <div
@@ -987,6 +1096,23 @@ export default function AIChatWidget() {
               >
                 <div className="w-0.5 h-8 rounded-full bg-zinc-300 dark:bg-zinc-600 group-hover:bg-nothing-green group-active:bg-nothing-green transition-colors" />
               </div>
+              {/* Drag-drop overlay */}
+              <AnimatePresence>
+                {isDragOver && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 z-50 bg-nothing-green/10 border-2 border-dashed border-nothing-green flex items-center justify-center backdrop-blur-sm"
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <ImageIcon size={32} className="text-nothing-green" />
+                      <span className="text-sm font-bold text-nothing-green uppercase tracking-widest">Drop image here</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-white/10 shrink-0">
                 <div className="flex items-center gap-2">
@@ -1074,44 +1200,89 @@ export default function AIChatWidget() {
 
               {/* Input */}
               <div className="shrink-0 border-t border-zinc-200 dark:border-white/10 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+                {/* Image preview thumbnails */}
+                {attachments.length > 0 && (
+                  <div className="flex gap-2 mb-2 flex-wrap">
+                    {attachments.map((file, i) => (
+                      <div key={`${file.name}-${i}`} className="relative group w-14 h-14 rounded-sm overflow-hidden border border-zinc-200 dark:border-white/10">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={file.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(i)}
+                          className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X size={8} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <form
                   onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
                   className="relative flex items-end"
                 >
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => { if (e.target.files) addImages(e.target.files); e.target.value = ''; }}
+                  />
+
                   <textarea
                     ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
                     onFocus={() => {
                       // On mobile, scroll messages to bottom when keyboard opens
                       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
                     }}
-                    placeholder="Ask a question..."
+                    placeholder={attachments.length > 0 ? "Add a message or send..." : "Ask a question..."}
                     rows={1}
                     enterKeyHint="send"
-                    className="w-full resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-11 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
+                    className="w-full resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-[4.5rem] py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
                     style={{ maxHeight: '80px' }}
                   />
-                  {isStreaming ? (
+
+                  {/* Paperclip + Send buttons */}
+                  <div className="absolute right-1.5 bottom-1.5 flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => stop()}
-                      className="absolute right-1.5 bottom-1.5 w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors"
-                      title="Stop"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/10 rounded-sm transition-colors"
+                      title="Attach image"
                     >
-                      <X size={14} />
+                      <Paperclip size={13} />
                     </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={!input.trim()}
-                      className="absolute right-1.5 bottom-1.5 w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                      title="Send"
-                    >
-                      <Send size={13} />
-                    </button>
-                  )}
+                    {isStreaming ? (
+                      <button
+                        type="button"
+                        onClick={() => stop()}
+                        className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors"
+                        title="Stop"
+                      >
+                        <X size={14} />
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={!input.trim() && attachments.length === 0}
+                        className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        title="Send"
+                      >
+                        <Send size={13} />
+                      </button>
+                    )}
+                  </div>
                 </form>
               </div>
             </motion.div>
