@@ -165,13 +165,14 @@ func (c *Client) GetTransactionsByBlockHeight(ctx context.Context, height uint64
 	if err != nil {
 		return nil, err
 	}
-	block, _, err := pin.GetBlockByHeight(ctx, height)
+	// Use header-only fetch (skip collections) — we only need the block ID.
+	block, err := pin.GetBlockHeaderByHeight(ctx, height)
 	if err != nil {
 		return nil, fmt.Errorf("get block %d: %w", height, err)
 	}
 	txs, err := pin.GetTransactionsByBlockID(ctx, block.ID)
 	if err != nil {
-		return nil, fmt.Errorf("get txs for block %d: %w", height, err)
+		return nil, fmt.Errorf("get txs for block %d (node=%s): %w", height, pin.Node(), err)
 	}
 	return txs, nil
 }
