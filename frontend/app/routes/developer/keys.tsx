@@ -159,7 +159,7 @@ function DeveloperKeys() {
                     <td className="px-4 py-3 text-sm text-white">{apiKey.name}</td>
                     <td className="px-4 py-3">
                       <span className="text-sm font-mono text-neutral-400">
-                        {apiKey.key ? `${apiKey.key.slice(0, 12)}...` : '***'}
+                        {apiKey.key_prefix ? `${apiKey.key_prefix}...` : '***'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-400">

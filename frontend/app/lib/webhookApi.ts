@@ -18,7 +18,9 @@ export interface EventType {
 export interface APIKey {
   id: string;
   name: string;
-  key: string;
+  key?: string;
+  key_prefix?: string;
+  is_active?: boolean;
   created_at: string;
 }
 
@@ -107,7 +109,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // ---------------------------------------------------------------------------
 
 export async function listEventTypes(): Promise<EventType[]> {
-  return request<EventType[]>('/event-types');
+  const data = await request<{ items: string[]; count: number }>('/event-types');
+  return (data.items ?? []).map((name) => ({ id: name, name, description: name }));
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +118,8 @@ export async function listEventTypes(): Promise<EventType[]> {
 // ---------------------------------------------------------------------------
 
 export async function listAPIKeys(): Promise<APIKey[]> {
-  return request<APIKey[]>('/api-keys');
+  const data = await request<{ items: APIKey[]; count: number }>('/api-keys');
+  return data.items ?? [];
 }
 
 export async function createAPIKey(name: string): Promise<APIKey> {
@@ -134,7 +138,8 @@ export async function deleteAPIKey(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function listEndpoints(): Promise<Endpoint[]> {
-  return request<Endpoint[]>('/endpoints');
+  const data = await request<{ items: Endpoint[]; count: number }>('/endpoints');
+  return data.items ?? [];
 }
 
 export async function createEndpoint(url: string, description: string): Promise<Endpoint> {
@@ -163,7 +168,8 @@ export async function deleteEndpoint(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function listSubscriptions(): Promise<Subscription[]> {
-  return request<Subscription[]>('/subscriptions');
+  const data = await request<{ items: Subscription[]; count: number }>('/subscriptions');
+  return data.items ?? [];
 }
 
 export async function createSubscription(
@@ -208,5 +214,11 @@ export async function listDeliveryLogs(params?: LogQueryParams): Promise<Paginat
   if (params?.status_max != null) searchParams.set('status_max', String(params.status_max));
 
   const qs = searchParams.toString();
-  return request<PaginatedLogs>(`/logs${qs ? `?${qs}` : ''}`);
+  const data = await request<{ items: DeliveryLog[]; count: number }>(`/logs${qs ? `?${qs}` : ''}`);
+  return {
+    data: data.items ?? [],
+    total: data.count ?? 0,
+    page: params?.page ?? 1,
+    per_page: params?.per_page ?? 20,
+  };
 }
