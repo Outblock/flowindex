@@ -1772,14 +1772,14 @@ function TransactionDetail() {
                                                 <div className="flex items-center gap-3 px-3 py-2">
                                                     <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold w-28 flex-shrink-0">Script Hash</span>
                                                     <code className="text-[10px] text-zinc-600 dark:text-zinc-400 font-mono truncate flex-1">{scriptHashes.raw}</code>
-                                                    <CopyButton value={scriptHashes.raw} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex-shrink-0" />
+                                                    <CopyButton content={scriptHashes.raw} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex-shrink-0" />
                                                 </div>
                                             )}
                                             {scriptHashes.normalized && (
                                                 <div className="flex items-center gap-3 px-3 py-2">
                                                     <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold w-28 flex-shrink-0">Normalized</span>
                                                     <code className="text-[10px] text-zinc-600 dark:text-zinc-400 font-mono truncate flex-1">{scriptHashes.normalized}</code>
-                                                    <CopyButton value={scriptHashes.normalized} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex-shrink-0" />
+                                                    <CopyButton content={scriptHashes.normalized} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex-shrink-0" />
                                                 </div>
                                             )}
                                             {scriptHashes.raw && scriptHashes.normalized && scriptHashes.raw !== scriptHashes.normalized && (
