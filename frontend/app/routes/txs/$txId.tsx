@@ -1217,18 +1217,62 @@ function TransactionDetail() {
                                     </div>
                                 )}
 
-                                {/* FT Token Transfers */}
-                                {fullTx.ft_transfers?.length > 0 && (
+                                {/* FT Token Transfers — split cross-VM into two rows */}
+                                {fullTx.ft_transfers?.length > 0 && (() => {
+                                    // Expand cross-VM transfers into separate Cadence + EVM legs
+                                    const ftRows: { from: string; to: string; amount: string; symbol: string; logo: string; usdValue: number; transferType?: string; badge?: React.ReactNode }[] = [];
+                                    for (const ft of fullTx.ft_transfers) {
+                                        const sym = ft.token_symbol || ft.token?.split('.').pop() || '';
+                                        const amount = ft.amount;
+                                        const evmTo = ft.evm_to_address;
+                                        const evmFrom = ft.evm_from_address;
+
+                                        if (evmTo || evmFrom) {
+                                            // Leg 1: Cadence side
+                                            ftRows.push({
+                                                from: ft.from_address, to: ft.to_address,
+                                                amount, symbol: sym, logo: ft.token_logo,
+                                                usdValue: ft.usd_value || 0, transferType: ft.transfer_type,
+                                                badge: <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" />Cadence</span>,
+                                            });
+                                            // Leg 2: EVM side
+                                            if (evmTo) {
+                                                ftRows.push({
+                                                    from: ft.to_address, to: evmTo,
+                                                    amount, symbol: sym, logo: ft.token_logo,
+                                                    usdValue: ft.usd_value || 0,
+                                                    badge: <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" />EVM</span>,
+                                                });
+                                            }
+                                            if (evmFrom) {
+                                                ftRows.push({
+                                                    from: evmFrom, to: ft.from_address,
+                                                    amount, symbol: sym, logo: ft.token_logo,
+                                                    usdValue: ft.usd_value || 0,
+                                                    badge: <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" />EVM</span>,
+                                                });
+                                            }
+                                            continue;
+                                        }
+                                        // Normal transfer
+                                        ftRows.push({
+                                            from: ft.from_address, to: ft.to_address,
+                                            amount, symbol: sym, logo: ft.token_logo,
+                                            usdValue: ft.usd_value || 0, transferType: ft.transfer_type,
+                                        });
+                                    }
+
+                                    return (
                                     <div>
                                         <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <Coins className="h-4 w-4" /> Token Transfers ({fullTx.ft_transfers.length})
+                                            <Coins className="h-4 w-4" /> Token Transfers ({ftRows.length})
                                         </h3>
                                         <div className="divide-y divide-zinc-100 dark:divide-white/5 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
-                                            {fullTx.ft_transfers.map((ft: any, idx: number) => (
+                                            {ftRows.map((row, idx) => (
                                                 <div key={idx} className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors">
                                                     <div className="flex-shrink-0">
-                                                        {ft.token_logo ? (
-                                                            <img src={ft.token_logo} alt="" className="w-7 h-7 rounded-full border border-zinc-200 dark:border-white/10" />
+                                                        {row.logo ? (
+                                                            <img src={row.logo} alt="" className="w-7 h-7 rounded-full border border-zinc-200 dark:border-white/10" />
                                                         ) : (
                                                             <div className="w-7 h-7 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center">
                                                                 <Coins className="w-3.5 h-3.5 text-emerald-500" />
@@ -1238,65 +1282,28 @@ function TransactionDetail() {
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2 flex-wrap">
                                                             <span className="text-xs font-mono font-medium text-zinc-900 dark:text-white">
-                                                                {ft.amount != null ? Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
+                                                                {row.amount != null ? Number(row.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—'}
                                                             </span>
-                                                            <span className="text-[10px] text-zinc-500 font-medium uppercase">
-                                                                {ft.token_symbol || ft.token?.split('.').pop() || ''}
-                                                            </span>
-                                                            {ft.usd_value > 0 && <UsdValue value={ft.usd_value} className="text-[10px]" />}
-                                                            {ft.transfer_type === 'mint' && (
-                                                                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
-                                                                    Mint
-                                                                </span>
+                                                            <span className="text-[10px] text-zinc-500 font-medium uppercase">{row.symbol}</span>
+                                                            {row.usdValue > 0 && <UsdValue value={row.usdValue} className="text-[10px]" />}
+                                                            {row.transferType === 'mint' && (
+                                                                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Mint</span>
                                                             )}
-                                                            {ft.transfer_type === 'burn' && (
-                                                                <span className="text-[9px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
-                                                                    Burn
-                                                                </span>
+                                                            {row.transferType === 'burn' && (
+                                                                <span className="text-[9px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Burn</span>
                                                             )}
-                                                            {ft.is_cross_vm && (
-                                                                <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                                                    <Globe className="w-2.5 h-2.5" />
-                                                                    Cross-VM
-                                                                </span>
-                                                            )}
+                                                            {row.badge}
                                                         </div>
                                                         <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-0.5 flex-wrap">
-                                                            {(ft.evm_from_address || ft.from_address) && (
+                                                            {row.from && (
                                                                 <span className="inline-flex items-center gap-1">
-                                                                    From{' '}
-                                                                    {ft.evm_from_address ? (
-                                                                        <>
-                                                                            <AddressLink address={ft.evm_from_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />
-                                                                            <span className="text-purple-400 text-[9px]">(EVM)</span>
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <AddressLink address={ft.from_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
-                                                                            {ft.from_coa_flow_address && (
-                                                                                <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={ft.from_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
-                                                                            )}
-                                                                        </>
-                                                                    )}
+                                                                    From <AddressLink address={row.from} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
                                                                 </span>
                                                             )}
-                                                            {(ft.evm_from_address || ft.from_address) && (ft.evm_to_address || ft.to_address) && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
-                                                            {(ft.evm_to_address || ft.to_address) && (
+                                                            {row.from && row.to && <span className="text-zinc-300 dark:text-zinc-600">→</span>}
+                                                            {row.to && (
                                                                 <span className="inline-flex items-center gap-1">
-                                                                    To{' '}
-                                                                    {ft.evm_to_address ? (
-                                                                        <>
-                                                                            <AddressLink address={ft.evm_to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />
-                                                                            <span className="text-purple-400 text-[9px]">(EVM)</span>
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <AddressLink address={ft.to_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
-                                                                            {ft.to_coa_flow_address && (
-                                                                                <span className="text-purple-500 ml-1 inline-flex items-center gap-0.5">(COA → <AddressLink address={ft.to_coa_flow_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px] text-purple-500" />)</span>
-                                                                            )}
-                                                                        </>
-                                                                    )}
+                                                                    To <AddressLink address={row.to} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
                                                                 </span>
                                                             )}
                                                         </div>
@@ -1305,7 +1312,8 @@ function TransactionDetail() {
                                             ))}
                                         </div>
                                     </div>
-                                )}
+                                    );
+                                })()}
 
                                 {/* NFT Transfers */}
                                 {fullTx.nft_transfers?.length > 0 && (
