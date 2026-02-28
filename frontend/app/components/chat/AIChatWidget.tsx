@@ -1412,7 +1412,7 @@ export default function AIChatWidget() {
                             <ChevronUp size={8} className="ml-0.5 opacity-60" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent side="top" align="start" className="min-w-[180px]">
+                        <DropdownMenuContent side="top" align="start" className="min-w-[180px] z-[80]">
                           <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-zinc-400">Model</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <DropdownMenuRadioGroup value={chatMode} onValueChange={(v) => handleModeChange(v as ChatMode)}>
