@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain, ChevronUp } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuLabel,
@@ -803,26 +803,40 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
                   </div>
                 );
               }
-              // Generic tool fallback — expandable
+              // Generic tool fallback — compact expandable
               const toolDone = toolPart.state === 'output-available' || toolPart.state === 'result';
               const toolErr = toolPart.state === 'output-error';
               const toolOutput = toolDone ? toolPart.output : toolErr ? (toolPart.errorText || 'Tool call failed') : null;
               const toolInput = toolPart.input ?? toolPart.args;
               const hasDetails = toolInput || toolOutput;
+              // Friendly tool name: snake_case → Title Case
+              const friendlyName = name.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+              // Brief summary of input for the collapsed line
+              const inputSummary = toolInput
+                ? typeof toolInput === 'string'
+                  ? toolInput.slice(0, 60)
+                  : (() => { const s = JSON.stringify(toolInput); return s.length > 80 ? s.slice(0, 77) + '...' : s; })()
+                : '';
+              // Truncate long output for display
+              const truncateOutput = (v: unknown) => {
+                const s = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+                return s.length > 2000 ? s.slice(0, 2000) + '\n...[truncated]' : s;
+              };
               return (
                 <details key={i} className="my-1 rounded-sm border border-zinc-100 dark:border-white/5 overflow-hidden">
                   <summary className="flex items-center gap-2 py-1.5 px-2.5 text-[11px] text-zinc-400 bg-zinc-50 dark:bg-white/[0.02] cursor-pointer hover:bg-zinc-100 dark:hover:bg-white/[0.04] select-none">
                     {!toolDone && !toolErr ? (
-                      <Loader2 size={10} className="animate-spin" />
+                      <Loader2 size={10} className="animate-spin flex-shrink-0" />
                     ) : toolErr ? (
-                      <X size={10} className="text-red-400" />
+                      <X size={10} className="text-red-400 flex-shrink-0" />
                     ) : (
-                      <Check size={10} className="text-nothing-green" />
+                      <Check size={10} className="text-nothing-green flex-shrink-0" />
                     )}
-                    <span className="uppercase tracking-widest font-bold">{name}</span>
+                    <span className="font-bold truncate">{friendlyName}</span>
+                    {inputSummary && <span className="text-zinc-500 truncate ml-1 font-mono text-[10px]">{inputSummary}</span>}
                   </summary>
                   {hasDetails && (
-                    <div className="px-3 py-2 text-[11px] font-mono space-y-1.5 bg-zinc-900 text-zinc-400 overflow-x-auto">
+                    <div className="px-3 py-2 text-[11px] font-mono space-y-1.5 bg-zinc-900 text-zinc-400 max-h-[200px] overflow-auto">
                       {toolInput && (
                         <div>
                           <span className="text-zinc-500">Input: </span>
@@ -832,7 +846,7 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
                       {toolOutput && (
                         <div>
                           <span className="text-zinc-500">Output: </span>
-                          <pre className={`whitespace-pre-wrap break-words ${toolErr ? 'text-red-400' : 'text-zinc-300'}`}>{typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput, null, 2)}</pre>
+                          <pre className={`whitespace-pre-wrap break-words ${toolErr ? 'text-red-400' : 'text-zinc-300'}`}>{truncateOutput(toolOutput)}</pre>
                         </div>
                       )}
                     </div>
@@ -1439,9 +1453,9 @@ export default function AIChatWidget() {
                             ? 'bg-zinc-500/10 border border-zinc-500/30 text-zinc-500'
                             : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
                         }`}
-                        title={hideTools ? 'Tool calls hidden' : 'Hide tool calls'}
+                        title={hideTools ? 'Show tool calls' : 'Hide tool calls'}
                       >
-                        <Code size={10} />
+                        {hideTools ? <EyeOff size={10} /> : <Eye size={10} />}
                         Tools
                       </button>
                       {/* MCP tools hover popover */}
