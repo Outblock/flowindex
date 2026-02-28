@@ -30,6 +30,9 @@ export const KPI_DEFS: KpiDef[] = [
   { key: 'kpi-defi-swaps', label: 'DeFi Swaps (24h)', chartKey: 'defi-swaps' },
   { key: 'kpi-bridge-evm', label: 'Bridge->EVM Txs (24h)', chartKey: 'bridge-evm' },
   { key: 'kpi-epoch-payout', label: 'Epoch Payout', chartKey: 'epoch-payout' },
+  { key: 'kpi-whale-txs', label: 'Whale Txs (24h)' },
+  { key: 'kpi-total-staked', label: 'Total Staked' },
+  { key: 'kpi-node-count', label: 'Node Count' },
 ]
 
 export const CARD_DEFS: CardDef[] = [
@@ -50,6 +53,9 @@ export const CARD_DEFS: CardDef[] = [
   { key: 'total-staked', title: 'Total Staked per Epoch', defaultW: 2, tabs: ['network'] },
   { key: 'node-count', title: 'Node Count per Epoch', defaultW: 1, tabs: ['network'] },
   { key: 'contract-activity', title: 'Contract Activity', defaultW: 2, tabs: ['network'] },
+  { key: 'whale-recent', title: 'Recent Whale Transfers', defaultW: 2, tabs: ['tokens'] },
+  { key: 'top-contracts', title: 'Top Contracts (24h)', defaultW: 1, tabs: ['network'] },
+  { key: 'token-volume', title: 'Token Volume (24h)', defaultW: 1, tabs: ['tokens'] },
 ]
 
 /** Build a layout array for a given number of columns */

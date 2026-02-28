@@ -183,6 +183,10 @@ func registerStatusRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/analytics/daily/module/{module}", cachedHandler(2*time.Minute, s.handleAnalyticsDailyModule)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/analytics/transfers/daily", cachedHandler(5*time.Minute, s.handleAnalyticsTransfersDaily)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/analytics/big-transfers", cachedHandler(2*time.Minute, s.handleBigTransfers)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/insights/top-contracts", cachedHandler(5*time.Minute, s.handleTopContracts)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/analytics/top-contracts", cachedHandler(5*time.Minute, s.handleTopContracts)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/insights/token-volume", cachedHandler(5*time.Minute, s.handleTokenVolume)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/analytics/token-volume", cachedHandler(5*time.Minute, s.handleTokenVolume)).Methods("GET", "OPTIONS")
 }
 
 func registerDeferredRoutes(r *mux.Router, s *Server) {

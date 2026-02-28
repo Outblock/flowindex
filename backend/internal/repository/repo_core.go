@@ -131,6 +131,48 @@ func (r *Repository) MigrateWithDedicatedConn(ctx context.Context, dbURL, schema
 	return nil
 }
 
+// RunMigration opens a single dedicated connection (no pool), optionally terminates
+// other connections, runs the schema file, and closes. Designed for ephemeral
+// "migrate-only" invocations that exit immediately after.
+func RunMigration(ctx context.Context, dbURL, schemaPath string, terminateConns bool) error {
+	content, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return fmt.Errorf("failed to read schema file: %w", err)
+	}
+
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		return fmt.Errorf("dedicated migration conn: %w", err)
+	}
+	defer conn.Close(ctx)
+
+	if terminateConns {
+		var terminated int
+		err = conn.QueryRow(ctx, `
+			SELECT count(*) FROM (
+				SELECT pg_terminate_backend(pid)
+				FROM pg_stat_activity
+				WHERE datname = current_database()
+				  AND pid <> pg_backend_pid()
+				  AND leader_pid IS DISTINCT FROM pg_backend_pid()
+			) t
+		`).Scan(&terminated)
+		if err != nil {
+			return fmt.Errorf("terminate other connections: %w", err)
+		}
+		if terminated > 0 {
+			fmt.Printf("Terminated %d connection(s) before migration\n", terminated)
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	_, err = conn.Exec(ctx, string(content))
+	if err != nil {
+		return fmt.Errorf("failed to execute schema: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) Close() {
 	r.db.Close()
 }

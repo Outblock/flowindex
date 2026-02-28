@@ -205,6 +205,51 @@ export interface BigTransfer {
   to_address: string;
 }
 
+export interface TopContract {
+  contract_identifier: string
+  contract_name: string
+  address: string
+  tx_count: number
+  unique_callers: number
+}
+
+export async function fetchTopContracts(opts: { hours?: number; limit?: number } = {}): Promise<TopContract[]> {
+  await ensureHeyApiConfigured()
+  const params = new URLSearchParams()
+  if (opts.hours) params.set('hours', String(opts.hours))
+  if (opts.limit) params.set('limit', String(opts.limit))
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  try {
+    const json = await fetchJsonWithTimeout(`${_baseURL}/insights/top-contracts${qs}`)
+    return json?.data ?? []
+  } catch {
+    return []
+  }
+}
+
+export interface TokenVolume {
+  symbol: string
+  contract_name: string
+  logo?: string
+  transfer_count: number
+  total_amount: string
+  usd_volume: number
+}
+
+export async function fetchTokenVolume(opts: { hours?: number; limit?: number } = {}): Promise<TokenVolume[]> {
+  await ensureHeyApiConfigured()
+  const params = new URLSearchParams()
+  if (opts.hours) params.set('hours', String(opts.hours))
+  if (opts.limit) params.set('limit', String(opts.limit))
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  try {
+    const json = await fetchJsonWithTimeout(`${_baseURL}/insights/token-volume${qs}`)
+    return json?.data ?? []
+  } catch {
+    return []
+  }
+}
+
 export async function fetchBigTransfers(
   opts: { limit?: number; offset?: number; minUsd?: number; type?: string; timeoutMs?: number } = {}
 ): Promise<BigTransfer[]> {

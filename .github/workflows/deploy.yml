@@ -107,28 +107,21 @@ jobs:
             .
           docker push ${{ env.REGISTRY }}/backend --all-tags
 
-      - name: Kill old DB connections before deploy
+      - name: Deploy backend (zero-downtime)
         run: |
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
-            docker exec postgres psql -U flowscan -d flowscan -c "
-              SELECT pg_terminate_backend(pid)
-              FROM pg_stat_activity
-              WHERE datname = current_database()
-                AND pid <> pg_backend_pid()
-                AND state != '\''active'\'';
-            " 2>/dev/null || true
-          '
-
-      - name: Deploy backend (pull & restart on GCE)
-        run: |
-          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
-            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
-            docker pull ${{ env.REGISTRY }}/backend:${{ github.sha }} && \
-            docker stop backend 2>/dev/null; docker rm backend 2>/dev/null; \
+            IMAGE=${{ env.REGISTRY }}/backend:${{ github.sha }}
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true
+            docker pull $IMAGE
+            docker stop backend 2>/dev/null; docker rm backend 2>/dev/null
+            docker run --rm --network=host \
+              --env-file /mnt/stateful_partition/pgdata/backend.env \
+              $IMAGE ./indexer migrate --terminate-conns
             docker run -d --restart=always --name backend \
               --network=host \
               --env-file /mnt/stateful_partition/pgdata/backend.env \
-              ${{ env.REGISTRY }}/backend:${{ github.sha }}
+              -e SKIP_MIGRATION=true \
+              $IMAGE
           '
 
   build-frontend:

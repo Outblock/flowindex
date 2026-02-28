@@ -127,12 +127,12 @@ func (r *Repository) GetAnalyticsDailyEpochModule(ctx context.Context, from, to 
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
 		)
 		SELECT d.date::text,
-		       COALESCE(m.epoch_payout_total, 0)::text,
+		       COALESCE(e.payout_total, 0)::text,
 		       e.epoch
 		FROM dates d
-		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
 		LEFT JOIN app.epoch_stats e ON e.payout_time::date = d.date
 		    AND e.payout_time > '0001-01-01'
+		    AND e.payout_total > 0
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
@@ -155,10 +155,19 @@ func (r *Repository) GetAnalyticsDailyBridgeModule(ctx context.Context, from, to
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
+		),
+		bridge_txs AS (
+			SELECT DATE(ft.timestamp) AS d, COUNT(DISTINCT ft.transaction_id)::bigint AS cnt
+			FROM app.ft_transfers ft
+			JOIN raw.transactions rtx ON rtx.id = ft.transaction_id AND rtx.block_height = ft.block_height
+			WHERE ft.timestamp >= $1::timestamptz AND ft.timestamp < ($2::date + interval '1 day')
+			  AND (ft.from_address IS NULL OR ft.to_address IS NULL)
+			  AND rtx.is_evm = true
+			GROUP BY 1
 		)
-		SELECT d.date::text, COALESCE(m.bridge_to_evm_txs, 0)::bigint
+		SELECT d.date::text, COALESCE(b.cnt, 0)::bigint
 		FROM dates d
-		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
+		LEFT JOIN bridge_txs b ON b.d = d.date
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
@@ -437,6 +446,123 @@ LIMIT $%d OFFSET $%d`,
 	}
 	if out == nil {
 		out = []BigTransfer{}
+	}
+	return out, rows.Err()
+}
+
+// TopContract represents a contract ranked by transaction count.
+type TopContract struct {
+	ContractIdentifier string `json:"contract_identifier"`
+	ContractName       string `json:"contract_name"`
+	Address            string `json:"address"`
+	TxCount            int64  `json:"tx_count"`
+	UniqueCallers      int64  `json:"unique_callers"`
+}
+
+// GetTopContracts returns contracts ranked by transaction count in the last N hours.
+func (r *Repository) GetTopContracts(ctx context.Context, hours int, limit int) ([]TopContract, error) {
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	query := `
+		SELECT tc.contract_identifier,
+		       COALESCE(sc.contract_name, split_part(tc.contract_identifier, '.', 3)) AS contract_name,
+		       COALESCE('0x' || encode(sc.address, 'hex'), split_part(tc.contract_identifier, '.', 2)) AS address,
+		       COUNT(*)::bigint AS tx_count,
+		       COUNT(DISTINCT t.proposer)::bigint AS unique_callers
+		FROM app.tx_contracts tc
+		JOIN raw.tx_lookup tl ON tl.id = tc.transaction_id
+		JOIN raw.transactions t ON t.id = tc.transaction_id AND t.block_height = tl.block_height
+		LEFT JOIN app.smart_contracts sc ON sc.identifier = tc.contract_identifier
+		WHERE tl.timestamp > NOW() - make_interval(hours => $1)
+		GROUP BY tc.contract_identifier, sc.contract_name, sc.address
+		ORDER BY tx_count DESC
+		LIMIT $2`
+	rows, err := r.db.Query(ctx, query, hours, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TopContract
+	for rows.Next() {
+		var c TopContract
+		if err := rows.Scan(&c.ContractIdentifier, &c.ContractName, &c.Address, &c.TxCount, &c.UniqueCallers); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	if out == nil {
+		out = []TopContract{}
+	}
+	return out, rows.Err()
+}
+
+// TokenVolume represents a token ranked by transfer volume.
+type TokenVolume struct {
+	Symbol        string  `json:"symbol"`
+	ContractName  string  `json:"contract_name"`
+	Logo          string  `json:"logo,omitempty"`
+	TransferCount int64   `json:"transfer_count"`
+	TotalAmount   string  `json:"total_amount"`
+	UsdVolume     float64 `json:"usd_volume"`
+}
+
+// GetTokenVolume returns tokens ranked by USD transfer volume in the last N hours.
+func (r *Repository) GetTokenVolume(ctx context.Context, hours int, limit int, priceMap map[string]float64) ([]TokenVolume, error) {
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	if len(priceMap) == 0 {
+		return []TokenVolume{}, nil
+	}
+
+	var valuesRows []string
+	args := make([]interface{}, 0, len(priceMap)*2+2)
+	argIdx := 1
+	for symbol, price := range priceMap {
+		valuesRows = append(valuesRows, fmt.Sprintf("($%d, $%d::numeric)", argIdx, argIdx+1))
+		args = append(args, symbol, price)
+		argIdx += 2
+	}
+	pricesCTE := "prices(symbol, usd_price) AS (VALUES " + strings.Join(valuesRows, ", ") + ")"
+
+	hoursIdx := argIdx
+	limitIdx := argIdx + 1
+	args = append(args, hours, limit)
+
+	query := fmt.Sprintf(`
+		WITH %s
+		SELECT
+			COALESCE(tk.symbol, tk.contract_name, '') AS symbol,
+			COALESCE(tk.contract_name, '') AS contract_name,
+			COALESCE(tk.logo::text, '') AS logo,
+			COUNT(*)::bigint AS transfer_count,
+			SUM(ft.amount)::text AS total_amount,
+			(SUM(ft.amount) * p.usd_price)::float8 AS usd_volume
+		FROM app.ft_transfers ft
+		JOIN app.ft_tokens tk ON tk.contract_address = ft.token_contract_address AND tk.contract_name = ft.contract_name
+		JOIN prices p ON p.symbol = tk.market_symbol
+		WHERE ft.timestamp > NOW() - make_interval(hours => $%d)
+		GROUP BY tk.symbol, tk.contract_name, tk.logo, p.usd_price
+		ORDER BY usd_volume DESC
+		LIMIT $%d`,
+		pricesCTE, hoursIdx, limitIdx)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TokenVolume
+	for rows.Next() {
+		var tv TokenVolume
+		if err := rows.Scan(&tv.Symbol, &tv.ContractName, &tv.Logo, &tv.TransferCount, &tv.TotalAmount, &tv.UsdVolume); err != nil {
+			return nil, err
+		}
+		out = append(out, tv)
+	}
+	if out == nil {
+		out = []TokenVolume{}
 	}
 	return out, rows.Err()
 }
