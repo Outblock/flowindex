@@ -378,6 +378,5 @@ jobs:
           '
           gcloud compute scp /tmp/deploy-studio.sh flowindex-backend:/tmp/deploy-studio.sh --zone=us-central1-a
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
-            chmod +x /tmp/deploy-studio.sh
-            /tmp/deploy-studio.sh ${{ env.REGISTRY }}/studio:${{ github.sha }}
+            bash /tmp/deploy-studio.sh ${{ env.REGISTRY }}/studio:${{ github.sha }}
           '
