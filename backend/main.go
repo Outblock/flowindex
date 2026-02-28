@@ -534,18 +534,21 @@ func main() {
 			whStore := webhooks.NewStore(whDB.Pool)
 			whAuth := webhooks.NewAuthMiddleware(jwtSecret, whStore.LookupAPIKey)
 
-			// Svix delivery, DirectDelivery (HTTP POST), or NoopDelivery
+			// Delivery backend: Hybrid (Svix + Direct) when Svix configured,
+			// otherwise DirectDelivery only.
+			directDelivery := webhooks.NewDirectDelivery(whStore)
 			var delivery webhooks.WebhookDelivery
 			if svixToken != "" {
 				svixClient, svixErr := webhooks.NewSvixClient(svixToken, svixURL)
 				if svixErr != nil {
-					log.Printf("[webhooks] Svix error: %v (using direct delivery)", svixErr)
-					delivery = webhooks.NewDirectDelivery(whStore)
+					log.Printf("[webhooks] Svix error: %v (using direct delivery only)", svixErr)
+					delivery = directDelivery
 				} else {
-					delivery = svixClient
+					delivery = webhooks.NewHybridDelivery(svixClient, directDelivery, whStore)
+					log.Println("[webhooks] using hybrid delivery (Svix + Direct for Discord/Slack)")
 				}
 			} else {
-				delivery = webhooks.NewDirectDelivery(whStore)
+				delivery = directDelivery
 				log.Println("[webhooks] using direct HTTP delivery (Svix not configured)")
 			}
 
