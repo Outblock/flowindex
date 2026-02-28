@@ -113,7 +113,7 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
                 const items = json?.items || [];
                 if (cancelled) return;
                 setEvmTokens(items.map((item: any) => ({
-                    address: item.token?.address || '',
+                    address: item.token?.address || item.token?.address_hash || '',
                     name: item.token?.name || 'Unknown',
                     symbol: item.token?.symbol || '???',
                     decimals: Number(item.token?.decimals || 18),
