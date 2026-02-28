@@ -367,7 +367,11 @@ jobs:
         run: |
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
             docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true
-            docker system prune -af --filter "until=72h" 2>/dev/null || true
+            echo "=== Disk usage before prune ==="
+            df -h / /var/lib/docker 2>/dev/null || df -h /
+            docker system prune -af 2>/dev/null || true
+            echo "=== Disk usage after prune ==="
+            df -h / /var/lib/docker 2>/dev/null || df -h /
             docker pull ${{ env.REGISTRY }}/studio:${{ github.sha }}
             docker pull supabase/postgres-meta:v0.84.2
             docker pull supabase/studio:latest
