@@ -206,7 +206,7 @@ export async function generateWorkflow(
       )}\n\nUser request: ${prompt}`
     : prompt
 
-  const res = await fetch(`${AI_CHAT_URL}/api/chat`, {
+  const res = await fetch(`${AI_CHAT_URL}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'omit',
@@ -264,7 +264,7 @@ export async function generateWorkflow(
   return { nodes: layoutedNodes, edges: styledEdges, name: parsed.name }
 }
 
-/** Collect streamed AI SDK text response into a single string. */
+/** Collect streamed plain-text response into a single string. */
 async function collectStreamedText(res: Response): Promise<string> {
   const reader = res.body?.getReader()
   if (!reader) throw new Error('No response body')
@@ -275,21 +275,7 @@ async function collectStreamedText(res: Response): Promise<string> {
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
-    const chunk = decoder.decode(value, { stream: true })
-    // AI SDK streams lines like: 0:"text chunk"\n
-    // We extract the text content from each line.
-    for (const line of chunk.split('\n')) {
-      if (line.startsWith('0:')) {
-        try {
-          const content = JSON.parse(line.slice(2))
-          if (typeof content === 'string') {
-            fullText += content
-          }
-        } catch {
-          // skip malformed lines
-        }
-      }
-    }
+    fullText += decoder.decode(value, { stream: true })
   }
 
   return fullText
