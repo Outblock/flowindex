@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check, CircleCheck, Tags, Trash2, Plus, Fish, ArrowLeftRight, ChartLine, Tag } from 'lucide-react'
+import { Shield, Search, Save, Coins, Image, Loader2, X, FileCode, RefreshCw, ChevronDown, ChevronRight, Sparkles, Download, Eye, Check, CircleCheck, Tags, Trash2, Plus, Fish, ArrowLeftRight, ChartLine, Tag, Users, Ban, Crown } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { VerifiedBadge } from '../components/ui/VerifiedBadge'
 import { resolveApiBaseUrl } from '../api'
@@ -10,8 +10,8 @@ import { Pagination } from '../components/Pagination'
 import Avatar from 'boring-avatars'
 import { colorsFromAddress } from '../components/AddressLink'
 
-type AdminTab = 'ft' | 'nft' | 'contracts' | 'scripts' | 'import' | 'labels'
-const VALID_TABS: AdminTab[] = ['ft', 'nft', 'contracts', 'scripts', 'import', 'labels']
+type AdminTab = 'ft' | 'nft' | 'contracts' | 'scripts' | 'import' | 'labels' | 'users'
+const VALID_TABS: AdminTab[] = ['ft', 'nft', 'contracts', 'scripts', 'import', 'labels', 'users']
 
 export const Route = createFileRoute('/admin')({
   component: AdminPage,
@@ -135,9 +135,10 @@ function AdminPage() {
         <TabButton active={tab === 'scripts'} onClick={() => setTab('scripts')} icon={<FileCode className="w-4 h-4" />} label="Script Templates" />
         <TabButton active={tab === 'import'} onClick={() => setTab('import')} icon={<Download className="w-4 h-4" />} label="Import Token" />
         <TabButton active={tab === 'labels'} onClick={() => setTab('labels')} icon={<Tags className="w-4 h-4" />} label="Account Labels" />
+        <TabButton active={tab === 'users'} onClick={() => setTab('users')} icon={<Users className="w-4 h-4" />} label="Webhook Users" />
       </div>
 
-      {tab === 'ft' ? <FTPanel token={token} /> : tab === 'nft' ? <NFTPanel token={token} /> : tab === 'contracts' ? <ContractsPanel token={token} /> : tab === 'scripts' ? <ScriptTemplatesPanel token={token} /> : tab === 'labels' ? <AccountLabelsPanel token={token} /> : <ImportTokenPanel token={token} />}
+      {tab === 'ft' ? <FTPanel token={token} /> : tab === 'nft' ? <NFTPanel token={token} /> : tab === 'contracts' ? <ContractsPanel token={token} /> : tab === 'scripts' ? <ScriptTemplatesPanel token={token} /> : tab === 'labels' ? <AccountLabelsPanel token={token} /> : tab === 'users' ? <WebhookUsersPanel token={token} /> : <ImportTokenPanel token={token} />}
     </div>
   )
 }
@@ -1591,6 +1592,222 @@ function Field({ label, value, onChange, multiline }: { label: string; value: st
       ) : (
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className={cls} />
       )}
+    </div>
+  )
+}
+
+// ── Webhook Users Panel ──────────────────────────────────────────────
+
+const TIER_OPTIONS = [
+  { id: 'free', label: 'Free', color: 'text-zinc-400' },
+  { id: 'pro', label: 'Pro', color: 'text-blue-400' },
+  { id: 'enterprise', label: 'Enterprise', color: 'text-purple-400' },
+  { id: 'ultimate', label: 'Ultimate', color: 'text-amber-400' },
+]
+
+interface WebhookUser {
+  user_id: string
+  email: string
+  tier_id: string
+  is_suspended: boolean
+  created_at: string
+  subscription_count: number
+  endpoint_count: number
+}
+
+interface WebhookStats {
+  total_users: number
+  total_subscriptions: number
+  total_endpoints: number
+  deliveries_last_24h: number
+}
+
+function WebhookUsersPanel({ token }: { token: string }) {
+  const [users, setUsers] = useState<WebhookUser[]>([])
+  const [stats, setStats] = useState<WebhookStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [updatingTier, setUpdatingTier] = useState<string | null>(null)
+  const [toggingSuspend, setToggingSuspend] = useState<string | null>(null)
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true)
+    try {
+      const searchParam = search ? `&search=${encodeURIComponent(search)}` : ''
+      const data = await adminFetch(`admin/webhook/users?limit=100&offset=0${searchParam}`, token)
+      setUsers(data.items || [])
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load users')
+    } finally {
+      setLoading(false)
+    }
+  }, [token, search])
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const data = await adminFetch('admin/webhook/stats', token)
+      setStats(data)
+    } catch {
+      // non-critical
+    }
+  }, [token])
+
+  useEffect(() => { fetchUsers(); fetchStats() }, [fetchUsers, fetchStats])
+
+  async function handleUpdateTier(userId: string, tierID: string) {
+    setUpdatingTier(userId)
+    try {
+      await adminFetch(`admin/webhook/users/${userId}/tier`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ tier_id: tierID }),
+      })
+      setUsers((prev) => prev.map((u) => u.user_id === userId ? { ...u, tier_id: tierID } : u))
+      toast.success(`Updated to ${tierID}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update tier')
+    } finally {
+      setUpdatingTier(null)
+    }
+  }
+
+  async function handleToggleSuspend(userId: string, currentlySuspended: boolean) {
+    setToggingSuspend(userId)
+    try {
+      await adminFetch(`admin/webhook/users/${userId}/suspend`, token, {
+        method: 'POST',
+        body: JSON.stringify({ suspend: !currentlySuspended }),
+      })
+      setUsers((prev) => prev.map((u) => u.user_id === userId ? { ...u, is_suspended: !currentlySuspended } : u))
+      toast.success(currentlySuspended ? 'User unsuspended' : 'User suspended')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update suspension')
+    } finally {
+      setToggingSuspend(null)
+    }
+  }
+
+  function handleSearch() {
+    setSearch(searchInput.trim())
+  }
+
+  const tierColor = (tid: string) => TIER_OPTIONS.find((t) => t.id === tid)?.color || 'text-zinc-400'
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      {/* Stats row */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard label="Users" value={stats.total_users} />
+          <StatCard label="Subscriptions" value={stats.total_subscriptions} />
+          <StatCard label="Endpoints" value={stats.total_endpoints} />
+          <StatCard label="Deliveries (24h)" value={stats.deliveries_last_24h} />
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          placeholder="Search by email or user ID..."
+          className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green"
+        />
+        <button
+          onClick={handleSearch}
+          className="px-4 py-2 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-xs uppercase tracking-widest font-mono text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors flex items-center gap-2"
+        >
+          <Search className="w-3.5 h-3.5" />
+          Search
+        </button>
+      </div>
+
+      {/* Users table */}
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-zinc-400" /></div>
+      ) : users.length === 0 ? (
+        <div className="text-center py-12 text-zinc-500 text-sm font-mono">No users found</div>
+      ) : (
+        <div className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-zinc-200 dark:border-white/10 text-left">
+                <th className="px-4 py-2.5 text-xs font-mono text-zinc-500 uppercase tracking-widest">User</th>
+                <th className="px-4 py-2.5 text-xs font-mono text-zinc-500 uppercase tracking-widest">Tier</th>
+                <th className="px-4 py-2.5 text-xs font-mono text-zinc-500 uppercase tracking-widest">Subs</th>
+                <th className="px-4 py-2.5 text-xs font-mono text-zinc-500 uppercase tracking-widest">Endpoints</th>
+                <th className="px-4 py-2.5 text-xs font-mono text-zinc-500 uppercase tracking-widest">Status</th>
+                <th className="px-4 py-2.5 text-xs font-mono text-zinc-500 uppercase tracking-widest">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+              {users.map((u) => (
+                <tr key={u.user_id} className="hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="text-sm text-zinc-900 dark:text-white font-mono truncate max-w-[200px]" title={u.email || u.user_id}>
+                      {u.email || u.user_id.slice(0, 12) + '...'}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-mono mt-0.5 truncate max-w-[200px]" title={u.user_id}>
+                      {u.user_id.slice(0, 8)}...
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={u.tier_id}
+                      onChange={(e) => handleUpdateTier(u.user_id, e.target.value)}
+                      disabled={updatingTier === u.user_id}
+                      className={`text-xs font-mono font-bold uppercase bg-transparent border border-zinc-200 dark:border-white/10 rounded px-2 py-1 ${tierColor(u.tier_id)} focus:outline-none focus:ring-1 focus:ring-nothing-green disabled:opacity-50`}
+                    >
+                      {TIER_OPTIONS.map((t) => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-sm font-mono text-zinc-600 dark:text-zinc-300">{u.subscription_count}</td>
+                  <td className="px-4 py-3 text-sm font-mono text-zinc-600 dark:text-zinc-300">{u.endpoint_count}</td>
+                  <td className="px-4 py-3">
+                    {u.is_suspended ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-mono text-red-400 bg-red-500/10 px-2 py-0.5 rounded">
+                        <Ban className="w-3 h-3" /> Suspended
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                        <Check className="w-3 h-3" /> Active
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => handleToggleSuspend(u.user_id, u.is_suspended)}
+                      disabled={toggingSuspend === u.user_id}
+                      className={`text-xs font-mono uppercase tracking-wide px-3 py-1 rounded transition-colors disabled:opacity-50 ${
+                        u.is_suspended
+                          ? 'text-emerald-500 hover:bg-emerald-500/10'
+                          : 'text-red-400 hover:bg-red-500/10'
+                      }`}
+                    >
+                      {toggingSuspend === u.user_id ? (
+                        <Loader2 className="w-3 h-3 animate-spin inline" />
+                      ) : u.is_suspended ? 'Unsuspend' : 'Suspend'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="px-4 py-3 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-sm">
+      <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">{label}</p>
+      <p className="text-xl font-bold text-zinc-900 dark:text-white font-mono mt-0.5">{value.toLocaleString()}</p>
     </div>
   )
 }

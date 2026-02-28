@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -508,6 +509,7 @@ func (s *Store) DeleteWorkflow(ctx context.Context, id, userID string) error {
 // AdminUserRow represents a user profile with subscription and endpoint counts.
 type AdminUserRow struct {
 	UserID      string    `json:"user_id"`
+	Email       string    `json:"email"`
 	TierID      string    `json:"tier_id"`
 	IsSuspended bool      `json:"is_suspended"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -516,15 +518,26 @@ type AdminUserRow struct {
 }
 
 // AdminListUsers returns user profiles with subscription and endpoint counts.
-func (s *Store) AdminListUsers(ctx context.Context, limit, offset int) ([]AdminUserRow, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT p.user_id, p.tier_id, p.is_suspended, p.created_at,
+// If search is non-empty, filters by email or user_id prefix.
+func (s *Store) AdminListUsers(ctx context.Context, limit, offset int, search ...string) ([]AdminUserRow, error) {
+	q := `SELECT p.user_id, COALESCE(u.email, '') as email, p.tier_id, p.is_suspended, p.created_at,
 		        (SELECT COUNT(*) FROM public.subscriptions WHERE user_id = p.user_id) as sub_count,
 		        (SELECT COUNT(*) FROM public.endpoints WHERE user_id = p.user_id) as ep_count
 		 FROM public.user_profiles p
-		 ORDER BY p.created_at DESC
-		 LIMIT $1 OFFSET $2`, limit, offset,
-	)
+		 LEFT JOIN auth.users u ON u.id = p.user_id`
+
+	var args []interface{}
+	if len(search) > 0 && search[0] != "" {
+		q += ` WHERE u.email ILIKE $1 OR p.user_id::text ILIKE $1`
+		args = append(args, "%"+search[0]+"%")
+		q += fmt.Sprintf(` ORDER BY p.created_at DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
+	} else {
+		q += ` ORDER BY p.created_at DESC LIMIT $1 OFFSET $2`
+		args = append(args, limit, offset)
+	}
+
+	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +546,7 @@ func (s *Store) AdminListUsers(ctx context.Context, limit, offset int) ([]AdminU
 	var users []AdminUserRow
 	for rows.Next() {
 		var u AdminUserRow
-		if err := rows.Scan(&u.UserID, &u.TierID, &u.IsSuspended, &u.CreatedAt, &u.SubCount, &u.EpCount); err != nil {
+		if err := rows.Scan(&u.UserID, &u.Email, &u.TierID, &u.IsSuspended, &u.CreatedAt, &u.SubCount, &u.EpCount); err != nil {
 			return nil, err
 		}
 		users = append(users, u)

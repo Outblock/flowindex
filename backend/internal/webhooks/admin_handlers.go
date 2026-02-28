@@ -35,8 +35,9 @@ func (ah *AdminHandlers) RegisterRoutes(r *mux.Router) {
 
 func (ah *AdminHandlers) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
+	search := r.URL.Query().Get("search")
 
-	users, err := ah.store.AdminListUsers(r.Context(), limit, offset)
+	users, err := ah.store.AdminListUsers(r.Context(), limit, offset, search)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list users")
 		return
