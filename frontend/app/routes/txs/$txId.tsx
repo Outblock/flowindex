@@ -1159,6 +1159,7 @@ function TransactionDetail() {
                                                     lineProps={(lineNumber: number) => {
                                                         if (lineNumber === errLine) {
                                                             return {
+                                                                id: 'error-context-line',
                                                                 style: { backgroundColor: 'rgba(239,68,68,0.2)', borderLeft: '3px solid #ef4444', display: 'block' },
                                                             };
                                                         }
@@ -1167,12 +1168,13 @@ function TransactionDetail() {
                                                 >
                                                     {snippet}
                                                 </SyntaxHighlighter>
-                                                {/* Inline error annotation */}
                                                 {parsed.summary && (
-                                                    <div className="border-t border-red-500/20 bg-red-500/10 px-4 py-1.5 flex items-center gap-1.5">
-                                                        <AlertCircle className="h-3 w-3 text-red-400 flex-shrink-0" />
-                                                        <span className="text-[10px] text-red-400 font-mono">{parsed.summary}</span>
-                                                    </div>
+                                                    <ScriptErrorAnnotation
+                                                        targetId="error-context-line"
+                                                        message={parsed.summary}
+                                                        line={errLine}
+                                                        isDark={true}
+                                                    />
                                                 )}
                                             </div>
                                         );
