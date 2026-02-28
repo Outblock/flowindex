@@ -23,6 +23,7 @@ import { deriveEnrichments } from '../../lib/deriveFromEvents';
 import { NFTDetailModal } from '../../components/NFTDetailModal';
 import { UsdValue } from '../../components/UsdValue';
 import { parseCadenceError } from '../../lib/parseCadenceError';
+import { sha256Hex, normalizedScriptHash } from '../../lib/normalizeScript';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -786,6 +787,21 @@ function TransactionDetail() {
         }
         return set;
     }, [parsedError]);
+
+    // Compute script hashes (script_hash from API, normalized_hash client-side)
+    const [scriptHashes, setScriptHashes] = useState<{ raw: string; normalized: string }>({ raw: '', normalized: '' });
+    useEffect(() => {
+        const script = transaction?.script;
+        const apiHash = transaction?.script_hash;
+        if (!script) return;
+        (async () => {
+            const [rawHash, normHash] = await Promise.all([
+                apiHash ? Promise.resolve(apiHash) : sha256Hex(script),
+                normalizedScriptHash(script),
+            ]);
+            setScriptHashes({ raw: rawHash, normalized: normHash });
+        })();
+    }, [transaction?.script, transaction?.script_hash]);
 
     const [expandedPayloads, setExpandedPayloads] = useState<Record<number, boolean>>({});
     const [selectedNft, setSelectedNft] = useState<any | null>(null);
@@ -1746,6 +1762,31 @@ function TransactionDetail() {
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-24 text-zinc-600 border border-zinc-200 dark:border-white/5 border-dashed rounded-sm">
                                             <p className="text-xs uppercase tracking-widest">No Script Content Available</p>
+                                        </div>
+                                    )}
+
+                                    {/* Script Hashes */}
+                                    {transaction.script && (scriptHashes.raw || scriptHashes.normalized) && (
+                                        <div className="mt-3 border border-zinc-200 dark:border-white/5 rounded-sm divide-y divide-zinc-200 dark:divide-white/5">
+                                            {scriptHashes.raw && (
+                                                <div className="flex items-center gap-3 px-3 py-2">
+                                                    <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold w-28 flex-shrink-0">Script Hash</span>
+                                                    <code className="text-[10px] text-zinc-600 dark:text-zinc-400 font-mono truncate flex-1">{scriptHashes.raw}</code>
+                                                    <CopyButton value={scriptHashes.raw} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex-shrink-0" />
+                                                </div>
+                                            )}
+                                            {scriptHashes.normalized && (
+                                                <div className="flex items-center gap-3 px-3 py-2">
+                                                    <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold w-28 flex-shrink-0">Normalized</span>
+                                                    <code className="text-[10px] text-zinc-600 dark:text-zinc-400 font-mono truncate flex-1">{scriptHashes.normalized}</code>
+                                                    <CopyButton value={scriptHashes.normalized} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex-shrink-0" />
+                                                </div>
+                                            )}
+                                            {scriptHashes.raw && scriptHashes.normalized && scriptHashes.raw !== scriptHashes.normalized && (
+                                                <div className="px-3 py-1.5">
+                                                    <span className="text-[9px] text-zinc-400 italic">Normalized hash groups scripts that differ only in comments/whitespace</span>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
