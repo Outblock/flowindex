@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Coins, Filter, Layers, Box, Info } from 'lucide-react';
+import { Coins, Filter, Layers, Box, Info, ChevronDown } from 'lucide-react';
 import { VerifiedBadge } from '../ui/VerifiedBadge';
 import type { FTVaultInfo } from '../../../cadence/cadence.gen';
 import { normalizeAddress, getTokenLogoURL } from './accountUtils';
@@ -113,7 +113,7 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
                 const items = json?.items || [];
                 if (cancelled) return;
                 setEvmTokens(items.map((item: any) => ({
-                    address: item.token?.address || '',
+                    address: item.token?.address || item.token?.address_hash || '',
                     name: item.token?.name || 'Unknown',
                     symbol: item.token?.symbol || '???',
                     decimals: Number(item.token?.decimals || 18),
@@ -163,26 +163,45 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
     const displayTokens = useMemo(() => {
         let list = [...tokens];
         if (hideZero) list = list.filter(t => t.balance != null && Number(t.balance) > 0);
-        list.sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
+        // Sort by USD value first, then by quantity
+        list.sort((a, b) => {
+            const aUsd = Number(a.balance || 0) * getTokenPrice(a.contractName);
+            const bUsd = Number(b.balance || 0) * getTokenPrice(b.contractName);
+            if (aUsd > 0 || bUsd > 0) return bUsd - aUsd;
+            return Number(b.balance || 0) - Number(a.balance || 0);
+        });
         return list;
-    }, [tokens, hideZero]);
+    }, [tokens, hideZero, priceData]);
 
     const displayEvmTokens = useMemo(() => {
         let list = [...evmTokens];
         if (hideZero) list = list.filter(t => t.balance > 0);
-        list.sort((a, b) => b.balance - a.balance);
+        // Sort by USD value first, then by quantity
+        list.sort((a, b) => {
+            const aUsd = a.balance * getTokenPriceBySymbol(a.symbol);
+            const bUsd = b.balance * getTokenPriceBySymbol(b.symbol);
+            if (aUsd > 0 || bUsd > 0) return bUsd - aUsd;
+            return b.balance - a.balance;
+        });
         return list;
-    }, [evmTokens, hideZero]);
+    }, [evmTokens, hideZero, priceData]);
 
     // --- Merged "All" view ---
     // Build a merged list: Cadence tokens with optional matched EVM balance, plus unmatched EVM-only tokens
     const mergedTokens = useMemo(() => {
         if (activeSubTab !== 'all') return [];
 
-        // Build EVM lookup by lowercase address
+        // Build EVM lookups: by lowercase address AND by normalized symbol
         const evmByAddr = new Map<string, EVMToken>();
+        const evmBySymbol = new Map<string, EVMToken>();
         for (const et of displayEvmTokens) {
             if (et.address) evmByAddr.set(et.address.toLowerCase(), et);
+            if (et.symbol) {
+                const normSym = et.symbol.toUpperCase();
+                // Only use symbol lookup if no collision
+                if (!evmBySymbol.has(normSym)) evmBySymbol.set(normSym, et);
+                else evmBySymbol.set(normSym, undefined as any); // collision — disable
+            }
         }
 
         const matched = new Set<string>();
@@ -196,22 +215,37 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
             displaySymbol: string;
             logoUrl: string;
             sortValue: number;
+            sortUsd: number;
         }> = [];
 
         for (const t of displayTokens) {
             const identifier = `A.${normalizeAddress(t.contractAddress).replace(/^0x/, '')}.${t.contractName}`;
             const meta = metaMap[identifier];
             const evmAddr = meta?.evm_address || (t as any).evmAddress || '';
-            const matchedEvm = evmAddr ? evmByAddr.get(evmAddr.toLowerCase()) : undefined;
+
+            // Primary match: by evm_address from metadata
+            let matchedEvm = evmAddr ? evmByAddr.get(evmAddr.toLowerCase()) : undefined;
+
+            // Fallback match: by symbol when evm_address not available
+            if (!matchedEvm && !evmAddr) {
+                const sym = (meta?.symbol || t.symbol || '').toUpperCase();
+                if (sym) {
+                    const candidate = evmBySymbol.get(sym);
+                    if (candidate) matchedEvm = candidate;
+                }
+            }
+
             if (matchedEvm) matched.add(matchedEvm.address.toLowerCase());
 
             const logoUrl = meta?.logo || getTokenLogoURL(t);
             const displayName = meta?.name || t.name || t.contractName;
             const displaySymbol = meta?.symbol || t.symbol;
 
-            // For bridged tokens, use combined balance for sorting
             const cadenceBal = Number(t.balance || 0);
             const evmBal = matchedEvm ? matchedEvm.balance : 0;
+            const cadencePrice = getTokenPrice(t.contractName);
+            const evmPrice = matchedEvm ? (getTokenPriceBySymbol(matchedEvm.symbol) || cadencePrice) : 0;
+            const totalUsd = cadenceBal * cadencePrice + evmBal * evmPrice;
 
             merged.push({
                 type: matchedEvm ? 'bridged' : 'cadence',
@@ -223,12 +257,14 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
                 displaySymbol,
                 logoUrl,
                 sortValue: cadenceBal + evmBal,
+                sortUsd: totalUsd,
             });
         }
 
         // Append unmatched EVM-only tokens
         for (const et of displayEvmTokens) {
             if (!matched.has(et.address.toLowerCase())) {
+                const price = getTokenPriceBySymbol(et.symbol);
                 merged.push({
                     type: 'evm',
                     evmToken: et,
@@ -236,15 +272,21 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
                     displaySymbol: et.symbol,
                     logoUrl: et.icon_url || '',
                     sortValue: et.balance,
+                    sortUsd: et.balance * price,
                 });
             }
         }
 
-        // Sort by combined value descending
-        merged.sort((a, b) => b.sortValue - a.sortValue);
+        // Sort by USD value first (tokens with price), then by quantity
+        merged.sort((a, b) => {
+            // Tokens with USD value sort first, by USD descending
+            if (a.sortUsd > 0 || b.sortUsd > 0) return b.sortUsd - a.sortUsd;
+            // Fallback: sort by quantity descending
+            return b.sortValue - a.sortValue;
+        });
 
         return merged;
-    }, [activeSubTab, displayTokens, displayEvmTokens, metaMap]);
+    }, [activeSubTab, displayTokens, displayEvmTokens, metaMap, priceData]);
 
     // --- Sub-tab filter buttons ---
     const subTabs: { id: TokenSubTab; label: string; icon: any }[] = [
@@ -496,6 +538,7 @@ function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl,
     getTokenPrice: (name: string) => number;
     getTokenPriceBySymbol: (symbol: string) => number;
 }) {
+    const [expanded, setExpanded] = useState(false);
     const cadenceBal = Number(t.balance || 0);
     const evmBal = evmToken.balance;
     const totalBal = cadenceBal + evmBal;
@@ -503,27 +546,32 @@ function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl,
     const evmPrice = getTokenPriceBySymbol(evmToken.symbol) || cadencePrice;
     const totalUsd = cadenceBal * cadencePrice + evmBal * evmPrice;
 
-    // Use best available logo: cadence metadata logo or EVM icon, complement each other
+    // Use best available logo: complement cadence metadata logo with EVM icon
     const cadenceLogoUrl = logoUrl;
     const evmLogoUrl = evmToken.icon_url || '';
     const bestLogo = cadenceLogoUrl || evmLogoUrl;
 
     return (
         <GlassCard className="hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden p-4">
-            {/* Header: token identity + combined total */}
-            <div className="flex items-center justify-between gap-4">
+            {/* Header: token identity + combined total — clickable to expand */}
+            <button
+                className="flex items-center justify-between gap-4 w-full text-left cursor-pointer"
+                onClick={() => setExpanded(prev => !prev)}
+            >
                 <div className="flex items-center gap-4 min-w-0">
                     <TokenIcon logoUrl={bestLogo} name={displayName} />
                     <div className="min-w-0">
                         <div className="flex items-center gap-2">
                             <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{displayName}</div>
                             <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{displaySymbol}</div>
-                            <EVMBridgeBadge evmAddress={meta?.evm_address || (t as any).evmAddress || ''} />
+                            <EVMBridgeBadge evmAddress={meta?.evm_address || evmToken.address || ''} />
+                            <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
                             <Link
                                 to="/tokens/$token"
                                 params={{ token: identifier }}
+                                onClick={(e) => e.stopPropagation()}
                                 className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors truncate max-w-[160px]"
                             >
                                 {t.contractName}
@@ -545,41 +593,53 @@ function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl,
                     </div>
                     {totalUsd > 0 && <UsdValue amount={1} price={totalUsd} className="text-xs" />}
                 </div>
-            </div>
+            </button>
 
-            {/* Sub-rows: Cadence + EVM breakdowns */}
-            <div className="mt-3 ml-14 border-t border-zinc-100 dark:border-white/5 pt-2 space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                        <SmallTokenIcon logoUrl={cadenceLogoUrl} fallback={<Coins className="w-4 h-4 text-zinc-400" />} />
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Cadence</span>
-                        <span className="text-[10px] font-mono text-zinc-400">{t.symbol || displaySymbol}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="font-mono text-zinc-700 dark:text-zinc-300">
-                            {cadenceBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
-                        </span>
-                        {cadenceBal > 0 && cadencePrice > 0 && (
-                            <UsdValue amount={cadenceBal} price={cadencePrice} className="text-[10px] text-zinc-400" />
-                        )}
-                    </div>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                        <SmallTokenIcon logoUrl={evmLogoUrl} fallback={<Box className="w-4 h-4 text-purple-400" />} />
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-purple-500 dark:text-purple-400">EVM</span>
-                        <span className="text-[10px] font-mono text-zinc-400">{evmToken.symbol}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="font-mono text-zinc-700 dark:text-zinc-300">
-                            {evmBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
-                        </span>
-                        {evmBal > 0 && evmPrice > 0 && (
-                            <UsdValue amount={evmBal} price={evmPrice} className="text-[10px] text-zinc-400" />
-                        )}
-                    </div>
-                </div>
-            </div>
+            {/* Collapsible sub-rows: Cadence + EVM breakdowns */}
+            <AnimatePresence>
+                {expanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="mt-3 ml-14 border-t border-zinc-100 dark:border-white/5 pt-2 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2">
+                                    <SmallTokenIcon logoUrl={cadenceLogoUrl} fallback={<Coins className="w-4 h-4 text-zinc-400" />} />
+                                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Cadence</span>
+                                    <span className="text-[10px] font-mono text-zinc-400">{t.symbol || displaySymbol}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-mono text-zinc-700 dark:text-zinc-300">
+                                        {cadenceBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                                    </span>
+                                    {cadenceBal > 0 && cadencePrice > 0 && (
+                                        <UsdValue amount={cadenceBal} price={cadencePrice} className="text-[10px] text-zinc-400" />
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2">
+                                    <SmallTokenIcon logoUrl={evmLogoUrl} fallback={<Box className="w-4 h-4 text-purple-400" />} />
+                                    <span className="text-[10px] font-mono uppercase tracking-wider text-purple-500 dark:text-purple-400">EVM</span>
+                                    <span className="text-[10px] font-mono text-zinc-400">{evmToken.symbol}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-mono text-zinc-700 dark:text-zinc-300">
+                                        {evmBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                                    </span>
+                                    {evmBal > 0 && evmPrice > 0 && (
+                                        <UsdValue amount={evmBal} price={evmPrice} className="text-[10px] text-zinc-400" />
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </GlassCard>
     );
 }
