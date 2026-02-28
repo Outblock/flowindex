@@ -3,7 +3,7 @@ services:
     image: postgres:14
     environment:
       POSTGRES_USER: flowscan
-      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_PASSWORD: flowscan-local
       POSTGRES_DB: flowscan
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -22,7 +22,7 @@ services:
       dockerfile: backend/Dockerfile
     restart: always
     environment:
-      - DB_URL=postgres://flowscan:secretpassword@db:5432/flowscan?sslmode=disable
+      - DB_URL=postgres://flowscan:flowscan-local@db:5432/flowscan?sslmode=disable
       - FLOW_ACCESS_NODE=access-001.mainnet28.nodes.onflow.org:9000
       - PORT=8080
       - START_BLOCK=140900000
@@ -39,8 +39,8 @@ services:
       - FLOW_RPC_RPS=5
       - FLOW_RPC_BURST=5
       - MAX_REORG_DEPTH=1000
-      - SUPABASE_DB_URL=postgres://postgres:supabase-secret@supabase-db:5432/supabase
-      - SUPABASE_JWT_SECRET=super-secret-jwt-token-with-at-least-32-characters-long
+      - SUPABASE_DB_URL=postgres://postgres:${SUPABASE_DB_PASSWORD}@supabase-db:5432/supabase
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
       - SVIX_AUTH_TOKEN=${SVIX_AUTH_TOKEN:-}
       - SVIX_SERVER_URL=${SVIX_SERVER_URL:-http://svix:8071}
     ports:
@@ -59,7 +59,7 @@ services:
       - BACKEND_API=http://backend:8080
       - BACKEND_WS=http://backend:8080
       - DOCS_URL=http://localhost:3001
-      - VITE_GOTRUE_URL=http://localhost:9999
+      - VITE_GOTRUE_URL=${API_EXTERNAL_URL:-http://localhost:9999}
     ports:
       - "5173:8080" # Nginx listens on 8080 inside the container
     depends_on:
@@ -69,7 +69,7 @@ services:
   supabase-db:
     image: supabase/postgres:15.8.1.060
     environment:
-      POSTGRES_PASSWORD: ${SUPABASE_DB_PASSWORD:-supabase-secret}
+      POSTGRES_PASSWORD: ${SUPABASE_DB_PASSWORD}
       POSTGRES_DB: supabase
     volumes:
       - supabase_db_data:/var/lib/postgresql/data
@@ -91,9 +91,9 @@ services:
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:9999}
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:supabase-secret@supabase-db:5432/supabase
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${SUPABASE_DB_PASSWORD}@supabase-db:5432/supabase
       GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:5173}
-      GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
       GOTRUE_JWT_EXP: 3600
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
@@ -114,10 +114,10 @@ services:
       supabase-db:
         condition: service_healthy
     environment:
-      PGRST_DB_URI: postgres://authenticator:supabase-secret@supabase-db:5432/supabase
+      PGRST_DB_URI: postgres://authenticator:${SUPABASE_DB_PASSWORD}@supabase-db:5432/supabase
       PGRST_DB_SCHEMAS: public
       PGRST_DB_ANON_ROLE: anon
-      PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET}
     ports:
       - "3000:3000"
 
@@ -132,7 +132,7 @@ services:
       PG_META_DB_PORT: 5432
       PG_META_DB_NAME: supabase
       PG_META_DB_USER: postgres
-      PG_META_DB_PASSWORD: ${SUPABASE_DB_PASSWORD:-supabase-secret}
+      PG_META_DB_PASSWORD: ${SUPABASE_DB_PASSWORD}
 
   supabase-studio:
     image: supabase/studio:20241029-46e1e55
@@ -143,8 +143,8 @@ services:
       STUDIO_PG_META_URL: http://supabase-meta:8080
       SUPABASE_URL: http://supabase-rest:3000
       SUPABASE_REST_URL: http://supabase-rest:3000
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzcyMjk2MDk1LCJleHAiOjIwODc2NTYwOTV9.wJkofk987TOCcgAIy368rJ8GX5TupoZntP08roY7Mw8}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzIyOTYwOTUsImV4cCI6MjA4NzY1NjA5NX0.i_brlVlMik4Z0wngR8qdwvkb-0kLtYqG9P0SsAGSjnA}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       NEXT_PUBLIC_ENABLE_LOGS: "true"
       NEXT_ANALYTICS_BACKEND_PROVIDER: ""
     ports:
