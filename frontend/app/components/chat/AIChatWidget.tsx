@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -722,22 +722,28 @@ function ChatMessage({ message }: { message: UIMessage }) {
       .map((p) => (p as any).text)
       .join('');
     // Extract image attachments from message
-    const images = (message as any).experimental_attachments?.filter(
-      (a: any) => a.contentType?.startsWith('image/'),
-    ) || [];
+    const allAttachments = (message as any).experimental_attachments || [];
+    const images = allAttachments.filter((a: any) => a.contentType?.startsWith('image/'));
+    const pdfs = allAttachments.filter((a: any) => a.contentType === 'application/pdf');
 
     return (
       <div className="flex justify-end mb-4">
         <div className="max-w-[85%] bg-nothing-green/10 border border-nothing-green/20 rounded-sm px-3 py-2">
-          {images.length > 0 && (
+          {(images.length > 0 || pdfs.length > 0) && (
             <div className="flex gap-1.5 mb-2 flex-wrap">
               {images.map((img: any, i: number) => (
                 <img
-                  key={i}
+                  key={`img-${i}`}
                   src={img.url}
                   alt={img.name || 'attachment'}
                   className="w-20 h-20 object-cover rounded-sm border border-nothing-green/20"
                 />
+              ))}
+              {pdfs.map((pdf: any, i: number) => (
+                <div key={`pdf-${i}`} className="w-20 h-20 rounded-sm border border-nothing-green/20 bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center">
+                  <FileText size={20} className="text-red-500" />
+                  <span className="text-[8px] text-red-500 font-bold mt-0.5 truncate max-w-[70px]">{pdf.name || 'PDF'}</span>
+                </div>
               ))}
             </div>
           )}
@@ -907,17 +913,22 @@ export default function AIChatWidget() {
 
   const [chatError, setChatError] = useState<string | null>(null);
 
-  // Image attachments
+  // File attachments (images + PDFs)
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const MAX_IMAGES = 4;
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+  const MAX_FILES = 4;
+  const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB (PDFs can be large)
+  const ACCEPTED_TYPES = ['image/', 'application/pdf'];
 
-  const addImages = useCallback((files: FileList | File[]) => {
-    const images = Array.from(files).filter(f => f.type.startsWith('image/') && f.size <= MAX_IMAGE_SIZE);
-    setAttachments(prev => [...prev, ...images].slice(0, MAX_IMAGES));
+  const isAcceptedFile = useCallback((f: File) => {
+    return f.size <= MAX_FILE_SIZE && ACCEPTED_TYPES.some(t => f.type.startsWith(t));
   }, []);
+
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const accepted = Array.from(files).filter(isAcceptedFile);
+    setAttachments(prev => [...prev, ...accepted].slice(0, MAX_FILES));
+  }, [isAcceptedFile]);
 
   const removeAttachment = useCallback((index: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
@@ -971,7 +982,7 @@ export default function AIChatWidget() {
     if ((!text.trim() && attachments.length === 0) || isStreaming) return;
     setChatError(null);
 
-    // Convert images to data URL attachments for the AI SDK
+    // Convert files to data URL attachments for the AI SDK
     const experimental_attachments = await Promise.all(
       attachments.map(async (file) => {
         const base64 = await new Promise<string>((resolve) => {
@@ -984,7 +995,7 @@ export default function AIChatWidget() {
     );
 
     sendMessage({
-      text: text || 'What is in this image?',
+      text: text || 'Analyze this file',
       ...(experimental_attachments.length > 0 ? { experimental_attachments } : {}),
     });
     setInput('');
@@ -1005,17 +1016,17 @@ export default function AIChatWidget() {
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    const imageFiles: File[] = [];
+    const pastedFiles: File[] = [];
     for (const item of items) {
-      if (item.type.startsWith('image/')) {
+      if (item.type.startsWith('image/') || item.type === 'application/pdf') {
         const file = item.getAsFile();
-        if (file) imageFiles.push(file);
+        if (file) pastedFiles.push(file);
       }
     }
-    if (imageFiles.length > 0) {
-      addImages(imageFiles);
+    if (pastedFiles.length > 0) {
+      addFiles(pastedFiles);
     }
-  }, [addImages]);
+  }, [addFiles]);
 
   // Drag & drop handlers for the chat panel
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -1034,8 +1045,8 @@ export default function AIChatWidget() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-    if (e.dataTransfer.files?.length) addImages(e.dataTransfer.files);
-  }, [addImages]);
+    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+  }, [addFiles]);
 
   // Don't render during SSR
   if (import.meta.env.SSR) return null;
@@ -1107,7 +1118,8 @@ export default function AIChatWidget() {
                   >
                     <div className="flex flex-col items-center gap-2">
                       <ImageIcon size={32} className="text-nothing-green" />
-                      <span className="text-sm font-bold text-nothing-green uppercase tracking-widest">Drop image here</span>
+                      <span className="text-sm font-bold text-nothing-green uppercase tracking-widest">Drop file here</span>
+                      <span className="text-[10px] text-nothing-green/60">Images & PDFs</span>
                     </div>
                   </motion.div>
                 )}
@@ -1200,16 +1212,23 @@ export default function AIChatWidget() {
 
               {/* Input */}
               <div className="shrink-0 border-t border-zinc-200 dark:border-white/10 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-                {/* Image preview thumbnails */}
+                {/* File preview thumbnails */}
                 {attachments.length > 0 && (
                   <div className="flex gap-2 mb-2 flex-wrap">
                     {attachments.map((file, i) => (
                       <div key={`${file.name}-${i}`} className="relative group w-14 h-14 rounded-sm overflow-hidden border border-zinc-200 dark:border-white/10">
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={file.name}
-                          className="w-full h-full object-cover"
-                        />
+                        {file.type === 'application/pdf' ? (
+                          <div className="w-full h-full bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center">
+                            <FileText size={18} className="text-red-500" />
+                            <span className="text-[8px] text-red-500 font-bold mt-0.5">PDF</span>
+                          </div>
+                        ) : (
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={file.name}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
                         <button
                           type="button"
                           onClick={() => removeAttachment(i)}
@@ -1230,10 +1249,10 @@ export default function AIChatWidget() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,application/pdf"
                     multiple
                     className="hidden"
-                    onChange={(e) => { if (e.target.files) addImages(e.target.files); e.target.value = ''; }}
+                    onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }}
                   />
 
                   <textarea
@@ -1259,7 +1278,7 @@ export default function AIChatWidget() {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/10 rounded-sm transition-colors"
-                      title="Attach image"
+                      title="Attach image or PDF"
                     >
                       <Paperclip size={13} />
                     </button>
