@@ -19,16 +19,16 @@ type StakingEventMatcher struct{}
 
 func (m *StakingEventMatcher) EventType() string { return "staking.event" }
 
-func (m *StakingEventMatcher) Match(data interface{}, conditions json.RawMessage) bool {
+func (m *StakingEventMatcher) Match(data interface{}, conditions json.RawMessage) MatchResult {
 	se, ok := data.(*models.StakingEvent)
 	if !ok {
-		return false
+		return MatchResult{}
 	}
 
 	var cond stakingEventConditions
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &cond); err != nil {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -42,14 +42,14 @@ func (m *StakingEventMatcher) Match(data interface{}, conditions json.RawMessage
 			}
 		}
 		if !found {
-			return false
+			return MatchResult{}
 		}
 	}
 
 	// Check node_id
 	if cond.NodeID != "" {
 		if se.NodeID != cond.NodeID {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -57,12 +57,22 @@ func (m *StakingEventMatcher) Match(data interface{}, conditions json.RawMessage
 	if cond.MinAmount != nil {
 		amount, err := strconv.ParseFloat(se.Amount, 64)
 		if err != nil {
-			return false
+			return MatchResult{}
 		}
 		if amount < *cond.MinAmount {
-			return false
+			return MatchResult{}
 		}
 	}
 
-	return true
+	return MatchResult{
+		Matched: true,
+		EventData: map[string]interface{}{
+			"event_type":   se.EventType,
+			"node_id":      se.NodeID,
+			"delegator_id": se.DelegatorID,
+			"amount":       se.Amount,
+			"tx_id":        se.TransactionID,
+			"block_height": se.BlockHeight,
+		},
+	}
 }

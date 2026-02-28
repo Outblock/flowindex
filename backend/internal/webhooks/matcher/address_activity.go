@@ -17,21 +17,29 @@ type AddressActivityMatcher struct{}
 
 func (m *AddressActivityMatcher) EventType() string { return "address.activity" }
 
-func (m *AddressActivityMatcher) Match(data interface{}, conditions json.RawMessage) bool {
+func (m *AddressActivityMatcher) Match(data interface{}, conditions json.RawMessage) MatchResult {
 	tx, ok := data.(*models.Transaction)
 	if !ok {
-		return false
+		return MatchResult{}
 	}
 
 	var cond addressActivityConditions
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &cond); err != nil {
-			return false
+			return MatchResult{}
 		}
 	}
 
+	eventData := map[string]interface{}{
+		"tx_id":       tx.ID,
+		"block_height": tx.BlockHeight,
+		"proposer":    tx.ProposerAddress,
+		"payer":       tx.PayerAddress,
+		"authorizers": tx.Authorizers,
+	}
+
 	if len(cond.Addresses) == 0 {
-		return true
+		return MatchResult{Matched: true, EventData: eventData}
 	}
 
 	// Build role set (empty = all roles)
@@ -43,19 +51,19 @@ func (m *AddressActivityMatcher) Match(data interface{}, conditions json.RawMess
 
 	for _, addr := range cond.Addresses {
 		if (allRoles || roleSet["PROPOSER"]) && strings.EqualFold(tx.ProposerAddress, addr) {
-			return true
+			return MatchResult{Matched: true, EventData: eventData}
 		}
 		if (allRoles || roleSet["PAYER"]) && strings.EqualFold(tx.PayerAddress, addr) {
-			return true
+			return MatchResult{Matched: true, EventData: eventData}
 		}
 		if allRoles || roleSet["AUTHORIZER"] {
 			for _, auth := range tx.Authorizers {
 				if strings.EqualFold(auth, addr) {
-					return true
+					return MatchResult{Matched: true, EventData: eventData}
 				}
 			}
 		}
 	}
 
-	return false
+	return MatchResult{}
 }

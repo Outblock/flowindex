@@ -82,24 +82,37 @@ type FTTransferMatcher struct{}
 
 func (m *FTTransferMatcher) EventType() string { return "ft.transfer" }
 
-func (m *FTTransferMatcher) Match(data interface{}, conditions json.RawMessage) bool {
+func (m *FTTransferMatcher) Match(data interface{}, conditions json.RawMessage) MatchResult {
 	tt, ok := data.(*models.TokenTransfer)
 	if !ok {
-		return false
+		return MatchResult{}
 	}
 	// Must be a fungible token transfer
 	if tt.IsNFT {
-		return false
+		return MatchResult{}
 	}
 	return matchFTTransfer(tt, conditions)
 }
 
+// ftTransferEventData builds a flat event data map from a TokenTransfer.
+func ftTransferEventData(tt *models.TokenTransfer) map[string]interface{} {
+	return map[string]interface{}{
+		"from_address":           tt.FromAddress,
+		"to_address":             tt.ToAddress,
+		"amount":                 tt.Amount,
+		"token_contract_address": tt.TokenContractAddress,
+		"contract_name":          tt.ContractName,
+		"tx_id":                  tt.TransactionID,
+		"block_height":           tt.BlockHeight,
+	}
+}
+
 // matchFTTransfer is shared logic used by both FTTransferMatcher and LargeTransferMatcher.
-func matchFTTransfer(tt *models.TokenTransfer, conditions json.RawMessage) bool {
+func matchFTTransfer(tt *models.TokenTransfer, conditions json.RawMessage) MatchResult {
 	var cond ftTransferConditions
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &cond); err != nil {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -114,8 +127,15 @@ func matchFTTransfer(tt *models.TokenTransfer, conditions json.RawMessage) bool 
 				condAddr = parts[1]
 			}
 		}
-		if !strings.EqualFold(normalizeAddress(tt.TokenContractAddress), normalizeAddress(condAddr)) {
-			return false
+		dbAddr := tt.TokenContractAddress
+		if strings.HasPrefix(dbAddr, "A.") {
+			parts := strings.SplitN(dbAddr, ".", 3)
+			if len(parts) >= 2 {
+				dbAddr = parts[1]
+			}
+		}
+		if !strings.EqualFold(normalizeAddress(dbAddr), normalizeAddress(condAddr)) {
+			return MatchResult{}
 		}
 	}
 
@@ -123,10 +143,10 @@ func matchFTTransfer(tt *models.TokenTransfer, conditions json.RawMessage) bool 
 	if cond.MinAmount != nil {
 		amount, err := strconv.ParseFloat(tt.Amount, 64)
 		if err != nil {
-			return false
+			return MatchResult{}
 		}
 		if amount < cond.MinAmount.Float64() {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -160,9 +180,9 @@ func matchFTTransfer(tt *models.TokenTransfer, conditions json.RawMessage) bool 
 			}
 		}
 		if !matched {
-			return false
+			return MatchResult{}
 		}
 	}
 
-	return true
+	return MatchResult{Matched: true, EventData: ftTransferEventData(tt)}
 }

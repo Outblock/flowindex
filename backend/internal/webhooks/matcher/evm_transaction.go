@@ -19,30 +19,30 @@ type EVMTransactionMatcher struct{}
 
 func (m *EVMTransactionMatcher) EventType() string { return "evm.transaction" }
 
-func (m *EVMTransactionMatcher) Match(data interface{}, conditions json.RawMessage) bool {
+func (m *EVMTransactionMatcher) Match(data interface{}, conditions json.RawMessage) MatchResult {
 	etx, ok := data.(*models.EVMTransaction)
 	if !ok {
-		return false
+		return MatchResult{}
 	}
 
 	var cond evmTransactionConditions
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &cond); err != nil {
-			return false
+			return MatchResult{}
 		}
 	}
 
 	// Check from address
 	if cond.From != "" {
 		if !strings.EqualFold(etx.FromAddress, cond.From) {
-			return false
+			return MatchResult{}
 		}
 	}
 
 	// Check to address
 	if cond.To != "" {
 		if !strings.EqualFold(etx.ToAddress, cond.To) {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -50,12 +50,22 @@ func (m *EVMTransactionMatcher) Match(data interface{}, conditions json.RawMessa
 	if cond.MinValue != nil {
 		val, err := strconv.ParseFloat(etx.Value, 64)
 		if err != nil {
-			return false
+			return MatchResult{}
 		}
 		if val < *cond.MinValue {
-			return false
+			return MatchResult{}
 		}
 	}
 
-	return true
+	return MatchResult{
+		Matched: true,
+		EventData: map[string]interface{}{
+			"evm_hash":     etx.EVMHash,
+			"from_address": etx.FromAddress,
+			"to_address":   etx.ToAddress,
+			"value":        etx.Value,
+			"gas_used":     etx.GasUsed,
+			"tx_id":        etx.TransactionID,
+		},
+	}
 }

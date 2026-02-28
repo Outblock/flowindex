@@ -82,7 +82,8 @@ func (o *Orchestrator) processEvent(ctx context.Context, evt eventbus.Event) {
 	}
 
 	for _, sub := range subs {
-		if !m.Match(evt.Data, sub.Conditions) {
+		result := m.Match(evt.Data, sub.Conditions)
+		if !result.Matched {
 			continue
 		}
 		o.deliver(ctx, sub, evt)

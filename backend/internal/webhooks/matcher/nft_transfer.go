@@ -19,19 +19,19 @@ type NFTTransferMatcher struct{}
 
 func (m *NFTTransferMatcher) EventType() string { return "nft.transfer" }
 
-func (m *NFTTransferMatcher) Match(data interface{}, conditions json.RawMessage) bool {
+func (m *NFTTransferMatcher) Match(data interface{}, conditions json.RawMessage) MatchResult {
 	tt, ok := data.(*models.TokenTransfer)
 	if !ok {
-		return false
+		return MatchResult{}
 	}
 	if !tt.IsNFT {
-		return false
+		return MatchResult{}
 	}
 
 	var cond nftTransferConditions
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &cond); err != nil {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -39,7 +39,7 @@ func (m *NFTTransferMatcher) Match(data interface{}, conditions json.RawMessage)
 	// Supports both raw hex ("0b2a3299cc857e29") and Cadence identifier ("A.0b2a3299cc857e29.TopShot").
 	if cond.Collection != "" {
 		if !matchCollection(tt.TokenContractAddress, tt.ContractName, cond.Collection) {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -53,7 +53,7 @@ func (m *NFTTransferMatcher) Match(data interface{}, conditions json.RawMessage)
 			}
 		}
 		if !found {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -87,11 +87,22 @@ func (m *NFTTransferMatcher) Match(data interface{}, conditions json.RawMessage)
 			}
 		}
 		if !matched {
-			return false
+			return MatchResult{}
 		}
 	}
 
-	return true
+	return MatchResult{
+		Matched: true,
+		EventData: map[string]interface{}{
+			"from_address":      tt.FromAddress,
+			"to_address":        tt.ToAddress,
+			"nft_id":            tt.TokenID,
+			"collection_address": tt.TokenContractAddress,
+			"collection_name":   tt.ContractName,
+			"tx_id":             tt.TransactionID,
+			"block_height":      tt.BlockHeight,
+		},
+	}
 }
 
 // matchCollection checks if a transfer matches a collection condition.

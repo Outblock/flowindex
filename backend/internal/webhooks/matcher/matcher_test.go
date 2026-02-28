@@ -75,14 +75,14 @@ func TestMatcherWrongDataType(t *testing.T) {
 	r := NewRegistry()
 	RegisterAll(r)
 
-	// Every matcher should return false when given the wrong data type
+	// Every matcher should return Matched=false when given the wrong data type
 	wrongData := "not a model struct"
 	cond := json.RawMessage(`{}`)
 
 	for _, et := range r.EventTypes() {
 		m := r.Get(et)
-		if m.Match(wrongData, cond) {
-			t.Errorf("matcher %q should return false for wrong data type", et)
+		if m.Match(wrongData, cond).Matched {
+			t.Errorf("matcher %q should return Matched=false for wrong data type", et)
 		}
 	}
 }

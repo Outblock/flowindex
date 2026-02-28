@@ -16,21 +16,21 @@ type AccountKeyChangeMatcher struct{}
 
 func (m *AccountKeyChangeMatcher) EventType() string { return "account.key_change" }
 
-func (m *AccountKeyChangeMatcher) Match(data interface{}, conditions json.RawMessage) bool {
+func (m *AccountKeyChangeMatcher) Match(data interface{}, conditions json.RawMessage) MatchResult {
 	evt, ok := data.(*models.Event)
 	if !ok {
-		return false
+		return MatchResult{}
 	}
 
 	// Must be a key-related event
 	if !strings.Contains(evt.EventName, "KeyAdded") && !strings.Contains(evt.EventName, "KeyRevoked") {
-		return false
+		return MatchResult{}
 	}
 
 	var cond accountKeyChangeConditions
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &cond); err != nil {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -44,9 +44,17 @@ func (m *AccountKeyChangeMatcher) Match(data interface{}, conditions json.RawMes
 			}
 		}
 		if !found {
-			return false
+			return MatchResult{}
 		}
 	}
 
-	return true
+	return MatchResult{
+		Matched: true,
+		EventData: map[string]interface{}{
+			"address":      evt.ContractAddress,
+			"event_name":   evt.EventName,
+			"tx_id":        evt.TransactionID,
+			"block_height": evt.BlockHeight,
+		},
+	}
 }

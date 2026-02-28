@@ -17,36 +17,39 @@ type DefiLiquidityMatcher struct{}
 
 func (m *DefiLiquidityMatcher) EventType() string { return "defi.liquidity" }
 
-func (m *DefiLiquidityMatcher) Match(data interface{}, conditions json.RawMessage) bool {
+func (m *DefiLiquidityMatcher) Match(data interface{}, conditions json.RawMessage) MatchResult {
 	de, ok := data.(*models.DefiEvent)
 	if !ok {
-		return false
+		return MatchResult{}
 	}
 	// Must NOT be a Swap event
 	if strings.EqualFold(de.EventType, "Swap") {
-		return false
+		return MatchResult{}
 	}
 
 	var cond defiLiquidityConditions
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &cond); err != nil {
-			return false
+			return MatchResult{}
 		}
 	}
 
 	// Check pair_id
 	if cond.PairID != "" {
 		if de.PairID != cond.PairID {
-			return false
+			return MatchResult{}
 		}
 	}
 
 	// Check event_type filter
 	if cond.EventType != "" {
 		if !strings.EqualFold(de.EventType, cond.EventType) {
-			return false
+			return MatchResult{}
 		}
 	}
 
-	return true
+	return MatchResult{
+		Matched:   true,
+		EventData: defiEventData(de),
+	}
 }

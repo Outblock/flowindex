@@ -17,23 +17,23 @@ type ContractEventMatcher struct{}
 
 func (m *ContractEventMatcher) EventType() string { return "contract.event" }
 
-func (m *ContractEventMatcher) Match(data interface{}, conditions json.RawMessage) bool {
+func (m *ContractEventMatcher) Match(data interface{}, conditions json.RawMessage) MatchResult {
 	evt, ok := data.(*models.Event)
 	if !ok {
-		return false
+		return MatchResult{}
 	}
 
 	var cond contractEventConditions
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &cond); err != nil {
-			return false
+			return MatchResult{}
 		}
 	}
 
 	// Check contract address
 	if cond.ContractAddress != "" {
 		if !strings.EqualFold(evt.ContractAddress, cond.ContractAddress) {
-			return false
+			return MatchResult{}
 		}
 	}
 
@@ -47,9 +47,20 @@ func (m *ContractEventMatcher) Match(data interface{}, conditions json.RawMessag
 			}
 		}
 		if !found {
-			return false
+			return MatchResult{}
 		}
 	}
 
-	return true
+	return MatchResult{
+		Matched: true,
+		EventData: map[string]interface{}{
+			"event_type":       evt.Type,
+			"contract_address": evt.ContractAddress,
+			"contract_name":    evt.ContractName,
+			"event_name":       evt.EventName,
+			"fields":           string(evt.Values),
+			"tx_id":            evt.TransactionID,
+			"block_height":     evt.BlockHeight,
+		},
+	}
 }

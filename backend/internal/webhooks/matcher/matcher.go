@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+// MatchResult holds the outcome of a condition match, including a flattened
+// map of the matched event's fields so downstream stages (condition engine,
+// test endpoint) can inspect individual values.
+type MatchResult struct {
+	Matched   bool
+	EventData map[string]interface{}
+}
+
 // ConditionMatcher defines the interface for matching webhook conditions
 // against blockchain data objects.
 type ConditionMatcher interface {
@@ -15,7 +23,7 @@ type ConditionMatcher interface {
 	// Match checks whether the given data object satisfies the conditions
 	// encoded in the JSON conditions blob. The data parameter is typically
 	// a pointer to a models struct (TokenTransfer, Event, etc.).
-	Match(data interface{}, conditions json.RawMessage) bool
+	Match(data interface{}, conditions json.RawMessage) MatchResult
 }
 
 // Registry holds a set of registered ConditionMatchers keyed by EventType.

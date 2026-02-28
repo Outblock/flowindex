@@ -12,24 +12,24 @@ type LargeTransferMatcher struct{}
 
 func (m *LargeTransferMatcher) EventType() string { return "ft.large_transfer" }
 
-func (m *LargeTransferMatcher) Match(data interface{}, conditions json.RawMessage) bool {
+func (m *LargeTransferMatcher) Match(data interface{}, conditions json.RawMessage) MatchResult {
 	tt, ok := data.(*models.TokenTransfer)
 	if !ok {
-		return false
+		return MatchResult{}
 	}
 	if tt.IsNFT {
-		return false
+		return MatchResult{}
 	}
 
 	// Verify min_amount is present in conditions (accept both number and string)
 	var check map[string]interface{}
 	if len(conditions) > 0 {
 		if err := json.Unmarshal(conditions, &check); err != nil {
-			return false
+			return MatchResult{}
 		}
 	}
 	if check["min_amount"] == nil {
-		return false
+		return MatchResult{}
 	}
 
 	return matchFTTransfer(tt, conditions)
