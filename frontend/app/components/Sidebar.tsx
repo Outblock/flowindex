@@ -18,7 +18,9 @@ export default function Sidebar() {
         return location.pathname.startsWith(path);
     };
 
-    const navItems: Array<{ label: string; path: string; icon: typeof Home; disabled?: boolean }> = [
+    type NavItem = { label: string; path: string; icon: typeof Home; disabled?: boolean };
+
+    const explorerItems: NavItem[] = [
         { label: 'Home Page', path: '/', icon: Home },
         { label: 'Analytics', path: '/analytics', icon: BarChart3 },
         { label: 'Transactions', path: '/txs', icon: ArrowRightLeft },
@@ -30,8 +32,11 @@ export default function Sidebar() {
         { label: 'Scheduled Txs', path: '/scheduled', icon: Clock },
         { label: 'Nodes', path: '/nodes', icon: Globe },
         { label: 'Indexing Status', path: '/stats', icon: Layers },
+    ];
+
+    const developerItems: NavItem[] = [
         { label: 'API Docs', path: '/api-docs', icon: FileText },
-        { label: 'Developer', path: '/developer', icon: Code2 },
+        { label: 'Developer Portal', path: '/developer', icon: Code2 },
     ];
 
     return (
@@ -64,7 +69,7 @@ export default function Sidebar() {
 
                             {/* Nav Items */}
                             <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
-                                {navItems.map((item) => (
+                                {explorerItems.map((item) => (
                                     <Link
                                         key={item.label}
                                         to={item.disabled ? '#' : item.path}
@@ -79,6 +84,28 @@ export default function Sidebar() {
                                         <span className="text-sm font-medium">{item.label}</span>
                                     </Link>
                                 ))}
+
+                                {/* Developer Section */}
+                                <div className="pt-4 mt-4 border-t border-zinc-200 dark:border-white/10">
+                                    <span className="px-4 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Developer</span>
+                                    <div className="mt-2 space-y-1">
+                                        {developerItems.map((item) => (
+                                            <Link
+                                                key={item.label}
+                                                to={item.disabled ? '#' : item.path}
+                                                onClick={(e) => {
+                                                    if (item.disabled) e.preventDefault();
+                                                    else closeMobileMenu();
+                                                }}
+                                                className={`flex items-center space-x-3 px-4 py-3 rounded-sm transition-colors ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-white/5'
+                                                    } ${isActive(item.path) && !item.disabled ? 'text-nothing-green bg-nothing-green/10' : 'text-zinc-600 dark:text-zinc-400'}`}
+                                            >
+                                                <item.icon className="w-5 h-5 shrink-0" />
+                                                <span className="text-sm font-medium">{item.label}</span>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </div>
                             </nav>
 
                             {/* Footer */}
@@ -125,12 +152,12 @@ export default function Sidebar() {
 
                 {/* Navigation */}
                 <nav className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar overflow-x-hidden">
-                    {navItems.map((item) => (
+                    {explorerItems.map((item) => (
                         <Link
                             key={item.label}
                             to={item.disabled ? '#' : item.path}
                             className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-sm transition-all duration-200 group relative
-                                ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-white/5'} 
+                                ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-white/5'}
                                 ${isActive(item.path) && !item.disabled
                                     ? 'bg-nothing-green/10 text-nothing-green border-r-2 border-nothing-green'
                                     : 'text-zinc-600 dark:text-zinc-400'}`}
@@ -146,6 +173,36 @@ export default function Sidebar() {
                             )}
                         </Link>
                     ))}
+
+                    {/* Developer Section */}
+                    <div className={`pt-4 mt-2 border-t border-zinc-200 dark:border-white/10 ${isCollapsed ? '' : ''}`}>
+                        {!isCollapsed && (
+                            <span className="px-4 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Developer</span>
+                        )}
+                        <div className={`${isCollapsed ? '' : 'mt-2'} space-y-2`}>
+                            {developerItems.map((item) => (
+                                <Link
+                                    key={item.label}
+                                    to={item.disabled ? '#' : item.path}
+                                    className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-sm transition-all duration-200 group relative
+                                        ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-white/5'}
+                                        ${isActive(item.path) && !item.disabled
+                                            ? 'bg-nothing-green/10 text-nothing-green border-r-2 border-nothing-green'
+                                            : 'text-zinc-600 dark:text-zinc-400'}`}
+                                    onClick={(e) => item.disabled && e.preventDefault()}
+                                    title={isCollapsed ? item.label : ''}
+                                >
+                                    <item.icon className={`h-5 w-5 shrink-0 ${isActive(item.path) && !item.disabled ? 'text-nothing-green' : 'text-zinc-500 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-300'}`} />
+
+                                    {!isCollapsed && (
+                                        <span className={`text-sm font-medium tracking-wide whitespace-nowrap ${isActive(item.path) && !item.disabled ? 'text-zinc-900 dark:text-white' : ''}`}>
+                                            {item.label}
+                                        </span>
+                                    )}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
                 </nav>
 
                 {/* Footer / Controls */}
