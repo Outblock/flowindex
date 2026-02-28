@@ -16,7 +16,7 @@ type TxIDRow struct {
 // where proposer_key_index IS NULL.
 func (r *Repository) GetTxIDsWithNullProposerKey(ctx context.Context, fromHeight, toHeight uint64) ([]TxIDRow, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, block_height
+		SELECT encode(id, 'hex'), block_height
 		FROM raw.transactions
 		WHERE block_height >= $1 AND block_height < $2
 		  AND proposer_key_index IS NULL
@@ -59,7 +59,7 @@ func (r *Repository) BatchUpdateProposerKeys(ctx context.Context, ids []string, 
 			       unnest($3::int[]) AS key_idx,
 			       unnest($4::bigint[]) AS seq_num
 		) v
-		WHERE t.id = v.id AND t.block_height = v.height
+		WHERE t.id = decode(v.id, 'hex') AND t.block_height = v.height
 	`)
 
 	// Convert slices to pgx-compatible arrays
