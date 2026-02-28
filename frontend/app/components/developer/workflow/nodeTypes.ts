@@ -17,8 +17,15 @@ export interface NodeTypeMeta {
   eventType?: string     // maps to subscription event_type (triggers only)
   /** Config field definitions for the right panel form */
   configFields: ConfigFieldDef[]
+  /** Typed output schema describing the fields this trigger emits */
+  outputSchema?: Record<string, SchemaField>
   /** Number of output handles (default 1). IF node has 2. */
   outputs?: number
+}
+
+export interface SchemaField {
+  type: 'string' | 'number' | 'boolean' | 'address' | 'hash'
+  label: string
 }
 
 export interface ConfigFieldDef {
@@ -50,6 +57,15 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
       { key: 'token_contract', label: 'Token', type: 'searchable', fetchFn: 'ft_tokens', placeholder: 'Search tokens...' },
       { key: 'min_amount', label: 'Min Amount', type: 'number', placeholder: '0' },
     ],
+    outputSchema: {
+      from_address: { type: 'address', label: 'From Address' },
+      to_address: { type: 'address', label: 'To Address' },
+      amount: { type: 'string', label: 'Amount' },
+      token_contract_address: { type: 'address', label: 'Token Contract Address' },
+      contract_name: { type: 'string', label: 'Token Name' },
+      tx_id: { type: 'hash', label: 'Transaction ID' },
+      block_height: { type: 'number', label: 'Block Height' },
+    },
   },
   {
     type: 'trigger_nft_transfer', label: 'NFT Transfer', category: 'trigger',
@@ -59,6 +75,15 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
       { key: 'collection', label: 'Collection', type: 'searchable', fetchFn: 'nft_collections', placeholder: 'Search NFT collections...' },
       { key: 'direction', label: 'Direction', type: 'select', options: ['in', 'out', 'both'] },
     ],
+    outputSchema: {
+      from_address: { type: 'address', label: 'From Address' },
+      to_address: { type: 'address', label: 'To Address' },
+      nft_id: { type: 'string', label: 'NFT ID' },
+      collection_address: { type: 'address', label: 'Collection Address' },
+      collection_name: { type: 'string', label: 'Collection Name' },
+      tx_id: { type: 'hash', label: 'Transaction ID' },
+      block_height: { type: 'number', label: 'Block Height' },
+    },
   },
   {
     type: 'trigger_account_event', label: 'Account Event', category: 'trigger',
@@ -74,6 +99,12 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
         { value: 'contract.removed', label: 'Contract Removed' },
       ] },
     ],
+    outputSchema: {
+      address: { type: 'address', label: 'Account Address' },
+      event_name: { type: 'string', label: 'Event Name' },
+      tx_id: { type: 'hash', label: 'Transaction ID' },
+      block_height: { type: 'number', label: 'Block Height' },
+    },
   },
   {
     type: 'trigger_tx_sealed', label: 'TX Sealed', category: 'trigger',
@@ -82,11 +113,21 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
       { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
       { key: 'roles', label: 'Roles', type: 'text', placeholder: 'PROPOSER,PAYER', isArray: true },
     ],
+    outputSchema: {
+      tx_id: { type: 'hash', label: 'Transaction ID' },
+      block_height: { type: 'number', label: 'Block Height' },
+      proposer: { type: 'address', label: 'Proposer' },
+      payer: { type: 'address', label: 'Payer' },
+      authorizers: { type: 'string', label: 'Authorizers' },
+    },
   },
   {
     type: 'trigger_block_sealed', label: 'Block Sealed', category: 'trigger',
     icon: Box, color: COLORS.trigger, eventType: 'block.sealed',
     configFields: [],
+    outputSchema: {
+      block_height: { type: 'number', label: 'Block Height' },
+    },
   },
   {
     type: 'trigger_evm_tx', label: 'EVM Transaction', category: 'trigger',
@@ -96,6 +137,14 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
       { key: 'to', label: 'To', type: 'text', placeholder: '0x...' },
       { key: 'min_value', label: 'Min Value (wei)', type: 'number', placeholder: '0' },
     ],
+    outputSchema: {
+      evm_hash: { type: 'hash', label: 'EVM Hash' },
+      from_address: { type: 'address', label: 'From Address' },
+      to_address: { type: 'address', label: 'To Address' },
+      value: { type: 'string', label: 'Value (wei)' },
+      gas_used: { type: 'number', label: 'Gas Used' },
+      tx_id: { type: 'hash', label: 'Flow Transaction ID' },
+    },
   },
   {
     type: 'trigger_contract_event', label: 'Contract Event', category: 'trigger',
@@ -104,6 +153,15 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
       { key: 'contract_address', label: 'Contract', type: 'searchable', fetchFn: 'contracts', placeholder: 'Search contracts...' },
       { key: 'event_names', label: 'Events', type: 'searchable', fetchFn: 'contract_events', linkedField: 'contract_address', placeholder: 'Select events...' },
     ],
+    outputSchema: {
+      event_type: { type: 'string', label: 'Event Type' },
+      contract_address: { type: 'address', label: 'Contract Address' },
+      contract_name: { type: 'string', label: 'Contract Name' },
+      event_name: { type: 'string', label: 'Event Name' },
+      fields: { type: 'string', label: 'Event Fields (JSON)' },
+      tx_id: { type: 'hash', label: 'Transaction ID' },
+      block_height: { type: 'number', label: 'Block Height' },
+    },
   },
   {
     type: 'trigger_balance_change', label: 'Balance Change', category: 'trigger',
@@ -113,6 +171,15 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
       { key: 'token_contract', label: 'Token', type: 'searchable', fetchFn: 'ft_tokens', placeholder: 'Search tokens...' },
       { key: 'min_amount', label: 'Threshold', type: 'number', placeholder: '1000' },
     ],
+    outputSchema: {
+      from_address: { type: 'address', label: 'From Address' },
+      to_address: { type: 'address', label: 'To Address' },
+      amount: { type: 'string', label: 'Amount' },
+      token_contract_address: { type: 'address', label: 'Token Contract Address' },
+      contract_name: { type: 'string', label: 'Token Name' },
+      tx_id: { type: 'hash', label: 'Transaction ID' },
+      block_height: { type: 'number', label: 'Block Height' },
+    },
   },
   {
     type: 'trigger_schedule', label: 'Schedule', category: 'trigger',
@@ -121,6 +188,9 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
       { key: 'cron', label: 'Cron Expression', type: 'text', placeholder: '0 * * * *' },
       { key: 'timezone', label: 'Timezone', type: 'text', placeholder: 'UTC' },
     ],
+    outputSchema: {
+      triggered_at: { type: 'string', label: 'Triggered At (ISO)' },
+    },
   },
 ]
 
