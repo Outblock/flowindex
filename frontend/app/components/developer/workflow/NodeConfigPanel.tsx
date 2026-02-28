@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import { X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { Node, Edge } from 'reactflow'
 import { NODE_TYPE_MAP } from './nodeTypes'
-import type { ConfigFieldDef } from './nodeTypes'
+import type { ConfigFieldDef, SchemaField } from './nodeTypes'
 import SearchableSelect from './SearchableSelect'
 import { fetchFTTokens, fetchNFTCollections, fetchContracts, fetchContractEvents, fetchEventsByName } from './fetchOptions'
 
@@ -12,10 +14,43 @@ const FETCH_FN_MAP: Record<string, (query: string) => Promise<any[]>> = {
   events_search: fetchEventsByName,
 }
 
+/**
+ * Walk backward through edges from a node to find the nearest upstream
+ * trigger node and return its outputSchema.
+ */
+function getUpstreamOutputSchema(
+  nodeId: string,
+  nodes: Node[],
+  edges: Edge[]
+): Record<string, SchemaField> | undefined {
+  const visited = new Set<string>()
+  const queue = [nodeId]
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    if (visited.has(current)) continue
+    visited.add(current)
+    const node = nodes.find((n) => n.id === current)
+    if (!node) continue
+    const meta = NODE_TYPE_MAP[node.data?.nodeType]
+    if (meta?.category === 'trigger' && meta.outputSchema) {
+      return meta.outputSchema
+    }
+    // Walk backward: find edges where this node is the target
+    for (const edge of edges) {
+      if (edge.target === current) {
+        queue.push(edge.source)
+      }
+    }
+  }
+  return undefined
+}
+
 interface NodeConfigPanelProps {
   selectedNodeId: string | null
   nodeType: string | null
   config: Record<string, string>
+  nodes: Node[]
+  edges: Edge[]
   onConfigChange: (key: string, value: string) => void
   onClose: () => void
   onDelete: () => void
@@ -25,11 +60,19 @@ export default function NodeConfigPanel({
   selectedNodeId,
   nodeType,
   config,
+  nodes,
+  edges,
   onConfigChange,
   onClose,
   onDelete,
 }: NodeConfigPanelProps) {
   const meta = nodeType ? NODE_TYPE_MAP[nodeType] : null
+
+  // For condition nodes, resolve upstream trigger's output schema
+  const upstreamSchema = useMemo(() => {
+    if (!selectedNodeId || !meta || meta.category !== 'condition') return undefined
+    return getUpstreamOutputSchema(selectedNodeId, nodes, edges)
+  }, [selectedNodeId, meta, nodes, edges])
 
   return (
     <AnimatePresence>
@@ -68,7 +111,20 @@ export default function NodeConfigPanel({
                   >
                     {field.label}
                   </label>
-                  {field.type === 'searchable' ? (
+                  {/* Condition node "field" key: show dropdown from upstream schema */}
+                  {field.key === 'field' && meta?.category === 'condition' && upstreamSchema ? (
+                    <select
+                      id={`cfg-${field.key}`}
+                      value={config[field.key] ?? ''}
+                      onChange={(e) => onConfigChange(field.key, e.target.value)}
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-neutral-800 border border-zinc-300 dark:border-neutral-700 rounded-lg text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                    >
+                      <option value="">Select field...</option>
+                      {Object.entries(upstreamSchema).map(([key, schema]) => (
+                        <option key={key} value={key}>{schema.label}</option>
+                      ))}
+                    </select>
+                  ) : field.type === 'searchable' ? (
                     <SearchableSelect
                       value={config[field.key] ?? ''}
                       onChange={(val) => onConfigChange(field.key, val)}

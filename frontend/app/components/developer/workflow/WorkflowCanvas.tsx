@@ -506,6 +506,8 @@ export default function WorkflowCanvas({
           selectedNodeId={selectedNodeId}
           nodeType={selectedNode?.data?.nodeType ?? null}
           config={selectedNode?.data?.config ?? {}}
+          nodes={nodes}
+          edges={edges}
           onConfigChange={handleConfigChange}
           onClose={() => setSelectedNodeId(null)}
           onDelete={handleDeleteNode}
