@@ -86,6 +86,17 @@ func (o *Orchestrator) processEvent(ctx context.Context, evt eventbus.Event) {
 		if !result.Matched {
 			continue
 		}
+
+		// Evaluate generic conditions from IF/Filter workflow nodes.
+		if result.EventData != nil && len(sub.Conditions) > 0 {
+			var allConditions map[string]interface{}
+			if err := json.Unmarshal(sub.Conditions, &allConditions); err == nil {
+				if !matcher.EvaluateConditions(allConditions, result.EventData) {
+					continue
+				}
+			}
+		}
+
 		o.deliver(ctx, sub, evt)
 	}
 }
