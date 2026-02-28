@@ -1379,22 +1379,42 @@ export default function AIChatWidget() {
                         </div>
                       </div>
                     </div>
-                      {CHAT_MODES.map(({ key, label, icon: Icon, desc }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => handleModeChange(key)}
-                          className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
-                            chatMode === key
-                              ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
-                              : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
-                          }`}
-                          title={desc}
-                        >
-                          <Icon size={10} />
-                          {label}
-                        </button>
-                      ))}
+                      {/* Mode selector with hover dropdown */}
+                      <div className="relative group/mode">
+                        {(() => {
+                          const current = CHAT_MODES.find(m => m.key === chatMode) || CHAT_MODES[0];
+                          const CurrentIcon = current.icon;
+                          return (
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all bg-amber-500/10 border border-amber-500/30 text-amber-500"
+                            >
+                              <CurrentIcon size={10} />
+                              {current.label}
+                            </button>
+                          );
+                        })()}
+                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/mode:block z-50">
+                          <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md shadow-lg py-1 min-w-[140px]">
+                            {CHAT_MODES.map(({ key, label, icon: Icon, desc }) => (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => handleModeChange(key)}
+                                className={`w-full flex items-center gap-2 px-3 py-1.5 text-[11px] transition-colors ${
+                                  chatMode === key
+                                    ? 'text-amber-500 bg-amber-500/5'
+                                    : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700'
+                                }`}
+                              >
+                                <Icon size={12} />
+                                <span className="font-semibold">{label}</span>
+                                <span className="text-zinc-400 dark:text-zinc-500 text-[10px] ml-auto">{desc}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setHideTools(v => !v)}
