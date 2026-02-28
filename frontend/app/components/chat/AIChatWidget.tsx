@@ -22,11 +22,6 @@ SyntaxHighlighter.registerLanguage('cadence', swift);
 
 const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io';
 
-/** Open the AI chat widget and optionally send a message. */
-export function openAIChat(message?: string) {
-  window.dispatchEvent(new CustomEvent('ai-chat:open', { detail: { message } }));
-}
-
 /* ── SQL Result Table (compact, inline) ── */
 
 interface SqlResult {

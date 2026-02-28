@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'rea
 import { resolveApiBaseUrl } from '../../api';
 import { buildMeta } from '../../lib/og/meta';
 import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown, Sparkles } from 'lucide-react';
-import { openAIChat } from '../../components/chat/AIChatWidget';
+import { openAIChat } from '../../components/chat/openAIChat';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
