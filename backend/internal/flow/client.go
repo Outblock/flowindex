@@ -158,6 +158,24 @@ func (c *Client) GetTransaction(ctx context.Context, txID flow.Identifier) (*flo
 	return tx, err
 }
 
+// GetTransactionsByBlockHeight fetches all transactions for a block at the given height
+// in a single RPC call. Much more efficient than fetching transactions individually.
+func (c *Client) GetTransactionsByBlockHeight(ctx context.Context, height uint64) ([]*flow.Transaction, error) {
+	pin, err := c.PinByHeight(height)
+	if err != nil {
+		return nil, err
+	}
+	block, _, err := pin.GetBlockByHeight(ctx, height)
+	if err != nil {
+		return nil, fmt.Errorf("get block %d: %w", height, err)
+	}
+	txs, err := pin.GetTransactionsByBlockID(ctx, block.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get txs for block %d: %w", height, err)
+	}
+	return txs, nil
+}
+
 // GetTransactionResult fetches the result (status, events)
 func (c *Client) GetTransactionResult(ctx context.Context, txID flow.Identifier) (*flow.TransactionResult, error) {
 	var res *flow.TransactionResult

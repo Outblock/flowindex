@@ -38,6 +38,32 @@ func (r *Repository) GetTxIDsWithNullProposerKey(ctx context.Context, fromHeight
 	return result, rows.Err()
 }
 
+// GetBlockHeightsWithNullProposerKey returns distinct block heights in [fromHeight, toHeight)
+// that have at least one transaction with proposer_key_index IS NULL.
+func (r *Repository) GetBlockHeightsWithNullProposerKey(ctx context.Context, fromHeight, toHeight uint64) ([]uint64, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT block_height
+		FROM raw.transactions
+		WHERE block_height >= $1 AND block_height < $2
+		  AND proposer_key_index IS NULL
+		ORDER BY block_height
+	`, fromHeight, toHeight)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []uint64
+	for rows.Next() {
+		var h uint64
+		if err := rows.Scan(&h); err != nil {
+			return nil, err
+		}
+		result = append(result, h)
+	}
+	return result, rows.Err()
+}
+
 // BatchUpdateProposerKeys updates proposer_key_index and proposer_sequence_number
 // for a batch of transactions. Uses unnest for efficient multi-row UPDATE.
 func (r *Repository) BatchUpdateProposerKeys(ctx context.Context, ids []string, heights []uint64, keyIdxs []uint32, seqNums []uint64) error {

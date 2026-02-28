@@ -10,20 +10,26 @@ import (
 
 	"flowscan-clone/internal/repository"
 
-	flowsdk "github.com/onflow/flow-go-sdk"
+	flow "github.com/onflow/flow-go-sdk"
 )
 
-// TransactionFetcher is the subset of the Flow client needed by this worker.
+// BlockTransactionFetcher can fetch all transactions for a block at a given height.
+type BlockTransactionFetcher interface {
+	GetTransactionsByBlockHeight(ctx context.Context, height uint64) ([]*flow.Transaction, error)
+}
+
+// TransactionFetcher is the subset of the Flow client needed for per-tx fallback.
 type TransactionFetcher interface {
-	GetTransaction(ctx context.Context, txID flowsdk.Identifier) (*flowsdk.Transaction, error)
+	GetTransaction(ctx context.Context, txID flow.Identifier) (*flow.Transaction, error)
 }
 
 // ProposerKeyBackfillWorker fills in NULL proposer_key_index and
 // proposer_sequence_number values on existing raw.transactions rows
-// by querying the Flow Access API for each transaction.
+// by fetching all transactions per block from the Flow Access API.
 type ProposerKeyBackfillWorker struct {
-	repo *repository.Repository
-	flow TransactionFetcher
+	repo      *repository.Repository
+	blockFlow BlockTransactionFetcher
+	txFlow    TransactionFetcher // fallback for per-tx fetch (unused now)
 }
 
 type proposerKeyUpdate struct {
@@ -33,71 +39,77 @@ type proposerKeyUpdate struct {
 	seqNum uint64
 }
 
-func NewProposerKeyBackfillWorker(repo *repository.Repository, flow TransactionFetcher) *ProposerKeyBackfillWorker {
-	return &ProposerKeyBackfillWorker{repo: repo, flow: flow}
+func NewProposerKeyBackfillWorker(repo *repository.Repository, flow interface{}) *ProposerKeyBackfillWorker {
+	w := &ProposerKeyBackfillWorker{repo: repo}
+	if bf, ok := flow.(BlockTransactionFetcher); ok {
+		w.blockFlow = bf
+	}
+	if tf, ok := flow.(TransactionFetcher); ok {
+		w.txFlow = tf
+	}
+	return w
 }
 
 func (w *ProposerKeyBackfillWorker) Name() string { return "proposer_key_backfill" }
 
 func (w *ProposerKeyBackfillWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint64) error {
-	// 1. Get transaction IDs in this range that have NULL proposer_key_index.
-	txIDs, err := w.repo.GetTxIDsWithNullProposerKey(ctx, fromHeight, toHeight)
+	// 1. Get distinct block heights that need backfill.
+	heights, err := w.repo.GetBlockHeightsWithNullProposerKey(ctx, fromHeight, toHeight)
 	if err != nil {
-		return fmt.Errorf("get tx ids with null proposer key: %w", err)
+		return fmt.Errorf("get block heights with null proposer key: %w", err)
 	}
 
-	if len(txIDs) == 0 {
+	if len(heights) == 0 {
 		return nil
 	}
 
-	log.Printf("[proposer_key_backfill] Range [%d, %d): %d transactions to backfill", fromHeight, toHeight, len(txIDs))
+	log.Printf("[proposer_key_backfill] Range [%d, %d): %d blocks to backfill", fromHeight, toHeight, len(heights))
 
-	// 2. Fetch from chain concurrently and collect updates.
-	const fetchConcurrency = 20
+	// 2. Fetch all txs per block concurrently.
+	const fetchConcurrency = 10
 	sem := make(chan struct{}, fetchConcurrency)
 	var mu sync.Mutex
 	var updates []proposerKeyUpdate
+	var fetchErrors int
 
-	for _, row := range txIDs {
+	for _, h := range heights {
 		if ctx.Err() != nil {
 			break
 		}
 
-		// Parse hex tx ID to flow.Identifier
-		idBytes, err := hex.DecodeString(row.ID)
-		if err != nil {
-			log.Printf("[proposer_key_backfill] invalid tx id hex %s: %v", row.ID, err)
-			continue
-		}
-		var flowID flowsdk.Identifier
-		copy(flowID[:], idBytes)
-
 		sem <- struct{}{}
-		go func(r repository.TxIDRow, fid flowsdk.Identifier) {
+		go func(height uint64) {
 			defer func() { <-sem }()
 
-			fetchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			tx, err := w.flow.GetTransaction(fetchCtx, fid)
+			fetchCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			txs, err := w.blockFlow.GetTransactionsByBlockHeight(fetchCtx, height)
 			cancel()
 
 			if err != nil {
-				// Only log once per unique tx to avoid spam
-				w.repo.LogIndexingError(ctx, w.Name(), r.Height, r.ID, "FETCH_TX", err.Error(), nil)
+				mu.Lock()
+				fetchErrors++
+				mu.Unlock()
+				w.repo.LogIndexingError(ctx, w.Name(), height, "", "FETCH_BLOCK_TXS", err.Error(), nil)
 				return
 			}
 
+			var local []proposerKeyUpdate
+			for _, tx := range txs {
+				local = append(local, proposerKeyUpdate{
+					txID:   hex.EncodeToString(tx.ID().Bytes()),
+					height: height,
+					keyIdx: tx.ProposalKey.KeyIndex,
+					seqNum: tx.ProposalKey.SequenceNumber,
+				})
+			}
+
 			mu.Lock()
-			updates = append(updates, proposerKeyUpdate{
-				txID:   r.ID,
-				height: r.Height,
-				keyIdx: tx.ProposalKey.KeyIndex,
-				seqNum: tx.ProposalKey.SequenceNumber,
-			})
+			updates = append(updates, local...)
 			mu.Unlock()
-		}(row, flowID)
+		}(h)
 	}
 
-	// Wait for all in-flight fetches to complete
+	// Wait for all in-flight fetches
 	for i := 0; i < fetchConcurrency; i++ {
 		sem <- struct{}{}
 	}
@@ -118,7 +130,8 @@ func (w *ProposerKeyBackfillWorker) ProcessRange(ctx context.Context, fromHeight
 		}
 	}
 
-	log.Printf("[proposer_key_backfill] Range [%d, %d): updated %d/%d transactions", fromHeight, toHeight, len(updates), len(txIDs))
+	log.Printf("[proposer_key_backfill] Range [%d, %d): updated %d txs from %d blocks (fetch_errors=%d)",
+		fromHeight, toHeight, len(updates), len(heights), fetchErrors)
 	return nil
 }
 
