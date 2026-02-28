@@ -867,10 +867,10 @@ const MAX_WIDTH = 1100;
 const DEFAULT_WIDTH = 480;
 
 type ChatMode = 'fast' | 'balanced' | 'deep';
-const CHAT_MODES: { key: ChatMode; label: string; icon: typeof Zap; desc: string }[] = [
-  { key: 'fast', label: 'Fast', icon: Zap, desc: 'Quick answers' },
-  { key: 'balanced', label: 'Balanced', icon: Scale, desc: 'Better quality' },
-  { key: 'deep', label: 'Deep', icon: Brain, desc: 'Extended thinking' },
+const CHAT_MODES: { key: ChatMode; label: string; icon: typeof Zap; desc: string; model: string }[] = [
+  { key: 'fast', label: 'Fast', icon: Zap, desc: 'Quick answers', model: 'Haiku' },
+  { key: 'balanced', label: 'Balanced', icon: Scale, desc: 'Better quality', model: 'Sonnet' },
+  { key: 'deep', label: 'Deep', icon: Brain, desc: 'Extended thinking', model: 'Opus' },
 ];
 const MODE_STORAGE_KEY = 'flowai-chat-mode';
 
@@ -1416,11 +1416,13 @@ export default function AIChatWidget() {
                           <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-zinc-400">Model</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <DropdownMenuRadioGroup value={chatMode} onValueChange={(v) => handleModeChange(v as ChatMode)}>
-                            {CHAT_MODES.map(({ key, label, icon: Icon, desc }) => (
+                            {CHAT_MODES.map(({ key, label, icon: Icon, desc, model }) => (
                               <DropdownMenuRadioItem key={key} value={key} className="cursor-pointer">
                                 <Icon size={14} className="mr-1" />
-                                <span className="font-medium">{label}</span>
-                                <span className="ml-auto text-[10px] text-zinc-400">{desc}</span>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{label}</span>
+                                  <span className="text-[10px] text-zinc-400">{model} · {desc}</span>
+                                </div>
                               </DropdownMenuRadioItem>
                             ))}
                           </DropdownMenuRadioGroup>
