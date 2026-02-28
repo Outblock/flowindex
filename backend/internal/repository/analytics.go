@@ -127,12 +127,12 @@ func (r *Repository) GetAnalyticsDailyEpochModule(ctx context.Context, from, to 
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
 		)
 		SELECT d.date::text,
-		       COALESCE(m.epoch_payout_total, 0)::text,
+		       COALESCE(e.payout_total, 0)::text,
 		       e.epoch
 		FROM dates d
-		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
 		LEFT JOIN app.epoch_stats e ON e.payout_time::date = d.date
 		    AND e.payout_time > '0001-01-01'
+		    AND e.payout_total > 0
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
@@ -155,10 +155,19 @@ func (r *Repository) GetAnalyticsDailyBridgeModule(ctx context.Context, from, to
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
+		),
+		bridge_txs AS (
+			SELECT DATE(ft.timestamp) AS d, COUNT(DISTINCT ft.transaction_id)::bigint AS cnt
+			FROM app.ft_transfers ft
+			JOIN raw.transactions rtx ON rtx.id = ft.transaction_id AND rtx.block_height = ft.block_height
+			WHERE ft.timestamp >= $1::timestamptz AND ft.timestamp < ($2::date + interval '1 day')
+			  AND (ft.from_address IS NULL OR ft.to_address IS NULL)
+			  AND rtx.is_evm = true
+			GROUP BY 1
 		)
-		SELECT d.date::text, COALESCE(m.bridge_to_evm_txs, 0)::bigint
+		SELECT d.date::text, COALESCE(b.cnt, 0)::bigint
 		FROM dates d
-		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
+		LEFT JOIN bridge_txs b ON b.d = d.date
 		ORDER BY d.date ASC`
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
