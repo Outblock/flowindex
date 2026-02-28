@@ -303,8 +303,18 @@ jobs:
           set -e
           REGISTRY_IMAGE="$1"
 
-          # Source backend.env for SUPABASE_DB_URL, SUPABASE_JWT_SECRET, etc.
-          set -a; source /mnt/stateful_partition/pgdata/backend.env; set +a
+          # Load env files safely (handles values with backticks/special chars)
+          load_env() {
+            while IFS= read -r line || [ -n "$line" ]; do
+              # Skip comments and blank lines
+              [[ "$line" =~ ^[[:space:]]*# ]] && continue
+              [[ -z "$line" ]] && continue
+              # Export the variable
+              export "$line" 2>/dev/null || true
+            done < "$1"
+          }
+
+          load_env /mnt/stateful_partition/pgdata/backend.env
 
           # Auto-create studio.env with defaults if it does not exist
           STUDIO_ENV=/mnt/stateful_partition/pgdata/studio.env
@@ -313,7 +323,7 @@ jobs:
             printf "STUDIO_USER=admin\nSTUDIO_PASSWORD=%s\n" "$GENERATED_PW" > "$STUDIO_ENV"
             echo "Created $STUDIO_ENV with generated password: $GENERATED_PW"
           fi
-          set -a; source "$STUDIO_ENV"; set +a
+          load_env "$STUDIO_ENV"
 
           # Parse DB credentials from SUPABASE_DB_URL (postgres://user:pass@host:port/dbname)
           DB_USER=$(echo "$SUPABASE_DB_URL" | sed -n 's|postgres://\([^:]*\):.*|\1|p')
