@@ -98,6 +98,9 @@ func (h *Handlers) RegisterRoutes(r *mux.Router) {
 
 	// Delivery Logs
 	authed.HandleFunc("/logs", h.handleListDeliveryLogs).Methods("GET", "OPTIONS")
+
+	// Account / Usage
+	authed.HandleFunc("/account/usage", h.handleGetAccountUsage).Methods("GET", "OPTIONS")
 }
 
 // --- Helpers ---
@@ -506,6 +509,33 @@ func (h *Handlers) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) handleGetAccountUsage(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+
+	tier, err := h.store.GetUserTier(r.Context(), userID)
+	if err != nil {
+		// Default to free tier if profile not found
+		tier = &RateLimitTier{
+			ID: "free", Name: "Free",
+			MaxSubscriptions: 10, MaxEndpoints: 10,
+			MaxEventsPerHour: 5000, MaxAPIRequests: 300,
+		}
+	}
+
+	subCount, _ := h.store.CountUserSubscriptions(r.Context(), userID)
+	epCount, _ := h.store.CountUserEndpoints(r.Context(), userID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"tier":               tier,
+		"subscriptions_used": subCount,
+		"endpoints_used":     epCount,
+	})
 }
 
 // --- Delivery Log handlers ---

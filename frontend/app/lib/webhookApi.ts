@@ -22,6 +22,20 @@ export interface APIKey {
   key_prefix?: string;
   is_active?: boolean;
   created_at: string;
+  last_used?: string | null;
+}
+
+export interface AccountUsage {
+  tier: {
+    id: string;
+    name: string;
+    max_subscriptions: number;
+    max_endpoints: number;
+    max_events_per_hour: number;
+    max_api_requests: number;
+  };
+  subscriptions_used: number;
+  endpoints_used: number;
 }
 
 export type EndpointType = 'webhook' | 'discord' | 'slack' | 'telegram' | 'email';
@@ -295,4 +309,8 @@ export async function testWorkflow(
     method: 'POST',
     body: JSON.stringify({ overrides: overrides ?? {} }),
   });
+}
+
+export async function getAccountUsage(): Promise<AccountUsage> {
+  return request<AccountUsage>('/account/usage');
 }

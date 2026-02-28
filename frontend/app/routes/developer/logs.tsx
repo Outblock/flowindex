@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, Filter, Loader2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ChevronLeft, ChevronRight, Filter, Loader2, X, Copy, Check } from 'lucide-react'
 import DeveloperLayout from '../../components/developer/DeveloperLayout'
 import { listDeliveryLogs } from '../../lib/webhookApi'
 import type { DeliveryLog } from '../../lib/webhookApi'
@@ -28,6 +28,15 @@ function truncate(str: string, max: number): string {
   return str.length > max ? str.slice(0, max - 3) + '...' : str
 }
 
+function formatPayload(payload: unknown): string {
+  try {
+    const obj = typeof payload === 'string' ? JSON.parse(payload) : payload
+    return JSON.stringify(obj, null, 2)
+  } catch {
+    return typeof payload === 'string' ? payload : String(payload)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -37,6 +46,8 @@ function DeveloperLogs() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [selectedLog, setSelectedLog] = useState<DeliveryLog | null>(null)
+  const [copied, setCopied] = useState(false)
 
   // Filters
   const [filterEventType, setFilterEventType] = useState('')
@@ -84,6 +95,13 @@ function DeveloperLogs() {
     } else {
       fetchLogs()
     }
+  }
+
+  function handleCopyPayload() {
+    if (!selectedLog) return
+    navigator.clipboard.writeText(formatPayload(selectedLog.payload))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
@@ -195,7 +213,8 @@ function DeveloperLogs() {
                         key={log.id}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="hover:bg-neutral-800/30 transition-colors"
+                        onClick={() => setSelectedLog(log)}
+                        className="hover:bg-neutral-800/30 transition-colors cursor-pointer"
                       >
                         <td className="px-4 py-3 text-sm text-neutral-300 whitespace-nowrap">
                           {new Date(log.delivered_at).toLocaleString()}
@@ -215,11 +234,6 @@ function DeveloperLogs() {
                         <td className="px-4 py-3">
                           <span
                             className="text-xs font-mono text-neutral-400 block max-w-[300px] truncate"
-                            title={
-                              typeof log.payload === 'string'
-                                ? log.payload
-                                : JSON.stringify(log.payload)
-                            }
                           >
                             {payloadPreview}
                           </span>
@@ -263,6 +277,101 @@ function DeveloperLogs() {
           </div>
         )}
       </div>
+
+      {/* Log Detail Slide-over */}
+      <AnimatePresence>
+        {selectedLog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setSelectedLog(null) }}
+          >
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="w-full max-w-lg bg-neutral-900 border-l border-neutral-800 h-full overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800 sticky top-0 bg-neutral-900 z-10">
+                <h2 className="text-base font-semibold text-white">Delivery Detail</h2>
+                <button
+                  onClick={() => setSelectedLog(null)}
+                  className="p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-5">
+                {/* Meta fields */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-neutral-500 mb-1">Timestamp</p>
+                    <p className="text-sm text-neutral-200">
+                      {new Date(selectedLog.delivered_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500 mb-1">Status Code</p>
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(selectedLog.status_code)}`}
+                    >
+                      {selectedLog.status_code != null ? selectedLog.status_code : '--'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500 mb-1">Event Type</p>
+                    <p className="text-sm font-mono text-[#00ef8b]">{selectedLog.event_type}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500 mb-1">Log ID</p>
+                    <p className="text-sm font-mono text-neutral-400 truncate" title={selectedLog.id}>
+                      {selectedLog.id}
+                    </p>
+                  </div>
+                  {selectedLog.subscription_id && (
+                    <div>
+                      <p className="text-xs text-neutral-500 mb-1">Subscription</p>
+                      <p className="text-sm font-mono text-neutral-400 truncate" title={selectedLog.subscription_id}>
+                        {selectedLog.subscription_id}
+                      </p>
+                    </div>
+                  )}
+                  {selectedLog.endpoint_id && (
+                    <div>
+                      <p className="text-xs text-neutral-500 mb-1">Endpoint</p>
+                      <p className="text-sm font-mono text-neutral-400 truncate" title={selectedLog.endpoint_id}>
+                        {selectedLog.endpoint_id}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Payload */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-neutral-500 uppercase tracking-wider font-medium">Payload</p>
+                    <button
+                      onClick={handleCopyPayload}
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-700 rounded-md transition-colors"
+                    >
+                      {copied ? <Check className="w-3 h-3 text-[#00ef8b]" /> : <Copy className="w-3 h-3" />}
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="p-4 bg-neutral-950 border border-neutral-800 rounded-lg text-xs font-mono text-neutral-300 overflow-x-auto whitespace-pre-wrap break-all max-h-[60vh]">
+                    {formatPayload(selectedLog.payload)}
+                  </pre>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </DeveloperLayout>
   )
 }

@@ -1,10 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Trash2, Copy, Check, Key, Loader2, AlertTriangle, Eye, EyeOff, Edit2 } from 'lucide-react'
+import { Plus, Trash2, Copy, Check, Key, Loader2, AlertTriangle, Eye, EyeOff, Edit2, Zap } from 'lucide-react'
 import DeveloperLayout from '../../components/developer/DeveloperLayout'
-import { listAPIKeys, createAPIKey, deleteAPIKey } from '../../lib/webhookApi'
-import type { APIKey } from '../../lib/webhookApi'
+import { listAPIKeys, createAPIKey, deleteAPIKey, getAccountUsage } from '../../lib/webhookApi'
+import type { APIKey, AccountUsage } from '../../lib/webhookApi'
 
 export const Route = createFileRoute('/developer/keys')({
   component: DeveloperKeys,
@@ -15,10 +15,27 @@ function maskKey(prefix: string | undefined): string {
   return prefix + '••••••••••••••••'
 }
 
+function timeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Never'
+  const d = new Date(dateStr)
+  const now = Date.now()
+  const diffMs = now - d.getTime()
+  if (diffMs < 0) return 'Just now'
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return d.toLocaleDateString()
+}
+
 function DeveloperKeys() {
   const [keys, setKeys] = useState<APIKey[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [usage, setUsage] = useState<AccountUsage | null>(null)
 
   // Create modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -52,9 +69,19 @@ function DeveloperKeys() {
     }
   }, [])
 
+  const fetchUsage = useCallback(async () => {
+    try {
+      const data = await getAccountUsage()
+      setUsage(data)
+    } catch {
+      // Non-critical, silently ignore
+    }
+  }, [])
+
   useEffect(() => {
     fetchKeys()
-  }, [fetchKeys])
+    fetchUsage()
+  }, [fetchKeys, fetchUsage])
 
   async function handleCreate() {
     if (!createName.trim()) return
@@ -94,7 +121,7 @@ function DeveloperKeys() {
   }
 
   function handleCopyPrefix(apiKey: APIKey) {
-    const text = apiKey.key_prefix ? `${apiKey.key_prefix}...` : ''
+    const text = apiKey.key_prefix ?? ''
     if (!text) return
     navigator.clipboard.writeText(text)
     setCopiedKeyId(apiKey.id)
@@ -119,7 +146,6 @@ function DeveloperKeys() {
     if (!editTarget || !editName.trim()) return
     setSaving(true)
     try {
-      // Update locally (backend doesn't have a rename endpoint yet, but we'll update the UI)
       setKeys((prev) =>
         prev.map((k) => (k.id === editTarget.id ? { ...k, name: editName.trim() } : k)),
       )
@@ -156,6 +182,41 @@ function DeveloperKeys() {
             <span className="sm:hidden">Create</span>
           </button>
         </div>
+
+        {/* Rate Limit / Usage Card */}
+        {usage && (
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 md:p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Zap className="w-4 h-4 text-[#00ef8b]" />
+              <span className="text-sm font-medium text-white">
+                {usage.tier.name} Plan
+              </span>
+              <span className="text-xs px-2 py-0.5 rounded bg-neutral-800 text-neutral-400">
+                {usage.tier.id}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <UsageMeter
+                label="Subscriptions"
+                used={usage.subscriptions_used}
+                max={usage.tier.max_subscriptions}
+              />
+              <UsageMeter
+                label="Endpoints"
+                used={usage.endpoints_used}
+                max={usage.tier.max_endpoints}
+              />
+              <div>
+                <p className="text-xs text-neutral-500 mb-1">Events / hour</p>
+                <p className="text-sm text-neutral-200 font-mono">{usage.tier.max_events_per_hour.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-neutral-500 mb-1">API requests / hour</p>
+                <p className="text-sm text-neutral-200 font-mono">{usage.tier.max_api_requests.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error banner */}
         {error && (
@@ -226,14 +287,15 @@ function DeveloperKeys() {
                         <button
                           onClick={() => handleCopyPrefix(apiKey)}
                           className="p-1 rounded text-neutral-500 hover:text-white transition-colors shrink-0"
-                          title="Copy"
+                          title="Copy key prefix"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5 text-[#00ef8b]" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
                       </div>
-                      <p className="text-xs text-neutral-500">
-                        Created {new Date(apiKey.created_at).toLocaleDateString()}
-                      </p>
+                      <div className="flex items-center justify-between text-xs text-neutral-500">
+                        <span>Created {new Date(apiKey.created_at).toLocaleDateString()}</span>
+                        <span>Last used: {timeAgo(apiKey.last_used)}</span>
+                      </div>
                     </motion.div>
                   )
                 })}
@@ -246,6 +308,7 @@ function DeveloperKeys() {
                     <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">Name</th>
                     <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">Key</th>
                     <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">Created</th>
+                    <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">Last Used</th>
                     <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider w-28"></th>
                   </tr>
                 </thead>
@@ -285,6 +348,9 @@ function DeveloperKeys() {
                         <td className="px-4 py-3 text-sm text-neutral-400">
                           {new Date(apiKey.created_at).toLocaleDateString()}
                         </td>
+                        <td className="px-4 py-3 text-sm text-neutral-400">
+                          {timeAgo(apiKey.last_used)}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
                             <button
@@ -311,6 +377,13 @@ function DeveloperKeys() {
             </>
           )}
         </div>
+
+        {/* Tip about full key */}
+        {keys.length > 0 && (
+          <p className="text-xs text-neutral-500 text-center">
+            Full API keys are only shown once at creation. The copy button copies the key prefix for identification.
+          </p>
+        )}
       </div>
 
       {/* Create Key Modal */}
@@ -481,5 +554,24 @@ function DeveloperKeys() {
         )}
       </AnimatePresence>
     </DeveloperLayout>
+  )
+}
+
+function UsageMeter({ label, used, max }: { label: string; used: number; max: number }) {
+  const pct = max > 0 ? Math.min(100, (used / max) * 100) : 0
+  const isHigh = pct >= 80
+  return (
+    <div>
+      <p className="text-xs text-neutral-500 mb-1">{label}</p>
+      <p className="text-sm text-neutral-200 font-mono mb-1.5">
+        {used} <span className="text-neutral-500">/ {max}</span>
+      </p>
+      <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${isHigh ? 'bg-amber-500' : 'bg-[#00ef8b]'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   )
 }
