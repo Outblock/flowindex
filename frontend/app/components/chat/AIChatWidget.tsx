@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -1286,105 +1286,145 @@ export default function AIChatWidget() {
                   </div>
                 )}
 
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }}
+                />
+
                 <form
                   onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
-                  className="relative flex items-end"
+                  className="flex gap-2"
                 >
-                  {/* Hidden file input */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,application/pdf"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }}
-                  />
+                  {/* Left: textarea + toggles */}
+                  <div className="flex-1 min-w-0">
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
+                      onFocus={() => {
+                        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+                      }}
+                      placeholder={attachments.length > 0 ? "Add a message or send..." : "Ask anything..."}
+                      rows={2}
+                      enterKeyHint="send"
+                      className="w-full resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm px-3 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
+                      style={{ maxHeight: '120px' }}
+                    />
 
-                  <textarea
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    onPaste={handlePaste}
-                    onFocus={() => {
-                      // On mobile, scroll messages to bottom when keyboard opens
-                      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
-                    }}
-                    placeholder={attachments.length > 0 ? "Add a message or send..." : "Ask a question..."}
-                    rows={2}
-                    enterKeyHint="send"
-                    className="w-full resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-[4.5rem] py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
-                    style={{ maxHeight: '120px' }}
-                  />
-
-                  {/* Paperclip + Send buttons */}
-                  <div className="absolute right-1.5 bottom-1.5 flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/10 rounded-sm transition-colors"
-                      title="Attach image or PDF"
-                    >
-                      <Paperclip size={13} />
-                    </button>
-                    {isStreaming ? (
+                    {/* Bottom row: attach + toggles */}
+                    <div className="flex items-center gap-1.5 mt-1.5">
                       <button
                         type="button"
-                        onClick={() => stop()}
-                        className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors"
-                        title="Stop"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/10 rounded-sm transition-colors border border-transparent hover:border-zinc-200 dark:hover:border-white/10"
+                        title="Attach image or PDF"
                       >
-                        <X size={14} />
+                        <Plus size={13} />
                       </button>
-                    ) : (
                       <button
-                        type="submit"
-                        disabled={!input.trim() && attachments.length === 0}
-                        className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                        title="Send"
+                        type="button"
+                        onClick={() => setThinkMode(v => !v)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
+                          thinkMode
+                            ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
+                            : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
+                        }`}
+                        title={thinkMode ? 'Extended thinking ON' : 'Enable extended thinking'}
                       >
-                        <Send size={13} />
+                        <Sparkles size={10} />
+                        Think
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => setHideTools(v => !v)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
+                          hideTools
+                            ? 'bg-zinc-500/10 border border-zinc-500/30 text-zinc-500'
+                            : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
+                        }`}
+                        title={hideTools ? 'Tool calls hidden' : 'Hide tool calls'}
+                      >
+                        <Code size={10} />
+                        Tools
+                      </button>
+                      {/* MCP tools hover popover */}
+                      <div className="relative group/mcp">
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10 transition-all"
+                          title="Connected MCP tools"
+                        >
+                          <Wrench size={10} />
+                          MCP
+                        </button>
+                        {/* Hover dropdown */}
+                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/mcp:block z-50">
+                          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-sm shadow-xl p-2.5 w-56">
+                            <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-400 mb-2">Connected Tools</p>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <Database size={10} className="text-nothing-green shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">FlowIndex SQL</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Database size={10} className="text-blue-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">EVM Blockscout SQL</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Code size={10} className="text-purple-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Cadence Scripts</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Code size={10} className="text-purple-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Cadence Check & Docs</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Search size={10} className="text-amber-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Web Search</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <ChevronRight size={10} className="text-cyan-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">API Fetch</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Download size={10} className="text-pink-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Chart Visualization</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </form>
 
-                {/* Toggles row */}
-                <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center gap-1.5">
+                  {/* Right: tall send/stop button */}
+                  {isStreaming ? (
                     <button
                       type="button"
-                      onClick={() => setThinkMode(v => !v)}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
-                        thinkMode
-                          ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
-                          : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
-                      }`}
-                      title={thinkMode ? 'Extended thinking enabled' : 'Enable extended thinking'}
+                      onClick={() => stop()}
+                      className="self-stretch w-11 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors shrink-0"
+                      title="Stop"
                     >
-                      <Sparkles size={10} />
-                      Think
-                      {thinkMode && <span className="text-[8px] opacity-60">ON</span>}
+                      <X size={16} />
                     </button>
+                  ) : (
                     <button
-                      type="button"
-                      onClick={() => setHideTools(v => !v)}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
-                        hideTools
-                          ? 'bg-zinc-500/10 border border-zinc-500/30 text-zinc-500'
-                          : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
-                      }`}
-                      title={hideTools ? 'Tool calls hidden' : 'Hide tool calls (SQL, Cadence, etc.)'}
+                      type="submit"
+                      disabled={!input.trim() && attachments.length === 0}
+                      className="self-stretch w-11 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
+                      title="Send"
                     >
-                      <Code size={10} />
-                      Tools
-                      {hideTools && <span className="text-[8px] opacity-60">OFF</span>}
+                      <Send size={16} />
                     </button>
-                  </div>
-                  <span className="text-[9px] text-zinc-400">
-                    Shift+Enter for new line
-                  </span>
-                </div>
+                  )}
+                </form>
               </div>
             </motion.div>
           </>
