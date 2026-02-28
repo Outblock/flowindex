@@ -112,6 +112,7 @@ type WebhookAdminRegistrar interface {
 type Server struct {
 	repo               *repository.Repository
 	client             FlowClient
+	historyClient      interface{} // flow client with historic spork nodes (for backfill workers)
 	httpServer         *http.Server
 	startBlock         uint64
 	blockscoutURL      string // e.g. "https://evm.flowindex.dev"
@@ -181,6 +182,13 @@ func (s *Server) SetBackfillProgress(bp *BackfillProgress) {
 func WithWebhookHandlers(wh WebhookRouteRegistrar) func(*Server) {
 	return func(s *Server) {
 		s.webhookHandlers = wh
+	}
+}
+
+// WithHistoryClient returns a Server option that provides a Flow client with historic spork nodes.
+func WithHistoryClient(c interface{}) func(*Server) {
+	return func(s *Server) {
+		s.historyClient = c
 	}
 }
 

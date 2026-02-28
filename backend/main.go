@@ -580,6 +580,7 @@ func main() {
 		func(s *api.Server) {
 			s.SetBackfillProgress(backfillProgress)
 		},
+		api.WithHistoryClient(historyClient),
 	}
 	if webhookHandlersOpt != nil {
 		serverOpts = append(serverOpts, webhookHandlersOpt)
