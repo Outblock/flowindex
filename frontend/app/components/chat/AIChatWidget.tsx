@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { AnimatedMarkdown } from 'flowtoken';
+import 'flowtoken/dist/styles.css';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -773,7 +774,7 @@ function ChatMessage({ message, hideTools, isStreamingMsg }: { message: UIMessag
               return (
                 <div key={i} className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
                   {isStreamingMsg ? (
-                    <AnimatedMarkdown content={(part as any).text} animation="colorTransition" animationDuration={600} animationTimingFunction="ease-out" />
+                    <AnimatedMarkdown content={(part as any).text} animation="colorTransition" animationDuration="0.6s" animationTimingFunction="ease-out" sep="word" />
                   ) : (
                     <MarkdownContent text={(part as any).text} />
                   )}
