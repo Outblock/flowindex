@@ -42,9 +42,9 @@ func matchFTTransfer(tt *models.TokenTransfer, conditions json.RawMessage) bool 
 		}
 	}
 
-	// Check token contract filter
+	// Check token contract filter (normalize 0x prefix on both sides)
 	if cond.TokenContract != "" {
-		if !strings.EqualFold(tt.TokenContractAddress, cond.TokenContract) {
+		if !strings.EqualFold(normalizeAddress(tt.TokenContractAddress), normalizeAddress(cond.TokenContract)) {
 			return false
 		}
 	}
@@ -60,25 +60,28 @@ func matchFTTransfer(tt *models.TokenTransfer, conditions json.RawMessage) bool 
 		}
 	}
 
-	// Check address filter
+	// Check address filter (normalize 0x prefix on both sides)
 	if len(cond.Addresses) > 0 {
 		direction := strings.ToLower(cond.Direction)
 		if direction == "" {
 			direction = "both"
 		}
+		normFrom := normalizeAddress(tt.FromAddress)
+		normTo := normalizeAddress(tt.ToAddress)
 		matched := false
 		for _, addr := range cond.Addresses {
+			normAddr := normalizeAddress(addr)
 			switch direction {
 			case "in":
-				if strings.EqualFold(tt.ToAddress, addr) {
+				if strings.EqualFold(normTo, normAddr) {
 					matched = true
 				}
 			case "out":
-				if strings.EqualFold(tt.FromAddress, addr) {
+				if strings.EqualFold(normFrom, normAddr) {
 					matched = true
 				}
 			default: // "both"
-				if strings.EqualFold(tt.FromAddress, addr) || strings.EqualFold(tt.ToAddress, addr) {
+				if strings.EqualFold(normFrom, normAddr) || strings.EqualFold(normTo, normAddr) {
 					matched = true
 				}
 			}

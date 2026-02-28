@@ -1,6 +1,9 @@
 package matcher
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // ConditionMatcher defines the interface for matching webhook conditions
 // against blockchain data objects.
@@ -42,6 +45,12 @@ func (r *Registry) EventTypes() []string {
 		types = append(types, t)
 	}
 	return types
+}
+
+// normalizeAddress strips the "0x" prefix from a Flow address so it can be
+// compared with the hex-encoded addresses stored in the database.
+func normalizeAddress(addr string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(addr, "0x"), "0X")
 }
 
 // RegisterAll registers all built-in condition matchers.
