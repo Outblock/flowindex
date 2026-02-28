@@ -18,7 +18,7 @@ import type {
   ReactFlowInstance,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import { Save, Rocket, Loader2, ArrowLeft, Pencil, Check, Sparkles } from 'lucide-react'
+import { Save, Rocket, Loader2, ArrowLeft, Pencil, Check, Sparkles, FlaskConical } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 
 import TriggerNode from './nodes/TriggerNode'
@@ -27,6 +27,7 @@ import DestinationNode from './nodes/DestinationNode'
 import NodePalette from './NodePalette'
 import NodeConfigPanel from './NodeConfigPanel'
 import { NODE_TYPE_MAP } from './nodeTypes'
+import TestPanel from './TestPanel'
 import { compileWorkflow } from './compiler'
 import { generateWorkflow } from './aiGenerate'
 import {
@@ -90,6 +91,9 @@ export default function WorkflowCanvas({
     message: string
   } | null>(null)
 
+  // Test panel
+  const [showTestPanel, setShowTestPanel] = useState(false)
+
   // AI prompt bar
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiGenerating, setAiGenerating] = useState(false)
@@ -104,6 +108,15 @@ export default function WorkflowCanvas({
     () => nodes.find((n) => n.id === selectedNodeId),
     [nodes, selectedNodeId]
   )
+
+  const triggerOutputSchema = useMemo(() => {
+    const triggerNode = nodes.find((n) => {
+      const meta = NODE_TYPE_MAP[n.data?.nodeType]
+      return meta?.category === 'trigger'
+    })
+    if (!triggerNode) return undefined
+    return NODE_TYPE_MAP[triggerNode.data.nodeType]?.outputSchema
+  }, [nodes])
 
   // --- ReactFlow callbacks ---
 
@@ -403,6 +416,18 @@ export default function WorkflowCanvas({
         </button>
 
         <button
+          onClick={() => setShowTestPanel((v) => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 border text-sm rounded-lg transition-colors ${
+            showTestPanel
+              ? 'bg-[#00ef8b]/10 border-[#00ef8b]/30 text-[#00ef8b]'
+              : 'bg-zinc-100 dark:bg-neutral-800 border-zinc-300 dark:border-neutral-700 text-zinc-600 dark:text-neutral-300 hover:bg-zinc-200 dark:hover:bg-neutral-700'
+          }`}
+        >
+          <FlaskConical className="w-3.5 h-3.5" />
+          Test
+        </button>
+
+        <button
           onClick={handleDeploy}
           disabled={deploying}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00ef8b] text-black text-sm font-medium rounded-lg hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50"
@@ -512,6 +537,14 @@ export default function WorkflowCanvas({
           onClose={() => setSelectedNodeId(null)}
           onDelete={handleDeleteNode}
         />
+
+        {showTestPanel && (
+          <TestPanel
+            workflowId={workflowId}
+            outputSchema={triggerOutputSchema}
+            onClose={() => setShowTestPanel(false)}
+          />
+        )}
       </div>
     </div>
   )

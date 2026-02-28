@@ -286,3 +286,13 @@ export async function deleteWorkflow(id: string): Promise<void> {
 export async function deployWorkflow(id: string): Promise<Workflow> {
   return request<Workflow>(`/workflows/${encodeURIComponent(id)}/deploy`, { method: 'POST' });
 }
+
+export async function testWorkflow(
+  id: string,
+  overrides?: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/workflows/${encodeURIComponent(id)}/test`, {
+    method: 'POST',
+    body: JSON.stringify({ overrides: overrides ?? {} }),
+  });
+}
