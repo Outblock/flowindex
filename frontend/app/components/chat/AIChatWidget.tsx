@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -857,10 +857,28 @@ const MIN_WIDTH = 380;
 const MAX_WIDTH = 1100;
 const DEFAULT_WIDTH = 480;
 
+type ChatMode = 'fast' | 'balanced' | 'deep';
+const CHAT_MODES: { key: ChatMode; label: string; icon: typeof Zap; desc: string }[] = [
+  { key: 'fast', label: 'Fast', icon: Zap, desc: 'Quick answers' },
+  { key: 'balanced', label: 'Balanced', icon: Scale, desc: 'Better quality' },
+  { key: 'deep', label: 'Deep', icon: Brain, desc: 'Extended thinking' },
+];
+const MODE_STORAGE_KEY = 'flowai-chat-mode';
+
+function getStoredMode(): ChatMode {
+  try {
+    const v = localStorage.getItem(MODE_STORAGE_KEY);
+    if (v === 'fast' || v === 'balanced' || v === 'deep') return v;
+  } catch {
+    // localStorage unavailable
+  }
+  return 'fast';
+}
+
 export default function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
-  const [thinkMode, setThinkMode] = useState(false);
+  const [chatMode, setChatMode] = useState<ChatMode>(getStoredMode);
   const [hideTools, setHideTools] = useState(false);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [mobileHeight, setMobileHeight] = useState<number | null>(null);
@@ -868,6 +886,11 @@ export default function AIChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const handleModeChange = useCallback((m: ChatMode) => {
+    setChatMode(m);
+    try { localStorage.setItem(MODE_STORAGE_KEY, m); } catch { /* noop */ }
+  }, []);
 
   // Drag-to-resize handler
   const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -953,10 +976,10 @@ export default function AIChatWidget() {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Custom fetch: strips user-agent header (Safari CORS workaround) and injects thinking flag.
+  // Custom fetch: strips user-agent header (Safari CORS workaround) and injects mode.
   // See: https://github.com/vercel/ai/issues/9256
-  const thinkModeRef = useRef(thinkMode);
-  thinkModeRef.current = thinkMode;
+  const chatModeRef = useRef(chatMode);
+  chatModeRef.current = chatMode;
 
   const safeFetch = useCallback(async (url: RequestInfo | URL, init?: RequestInit) => {
     if (init?.headers) {
@@ -964,13 +987,15 @@ export default function AIChatWidget() {
       headers.delete('user-agent');
       init = { ...init, headers };
     }
-    // Inject thinking flag into the request body
-    if (init?.body && thinkModeRef.current) {
+    // Inject mode into the request body
+    if (init?.body) {
       try {
         const parsed = JSON.parse(init.body as string);
-        parsed.thinking = true;
+        parsed.mode = chatModeRef.current;
         init = { ...init, body: JSON.stringify(parsed) };
-      } catch { /* not JSON, skip */ }
+      } catch {
+        // not JSON, skip
+      }
     }
     return globalThis.fetch(url, init);
   }, []);
@@ -1354,19 +1379,22 @@ export default function AIChatWidget() {
                         </div>
                       </div>
                     </div>
-                      <button
-                        type="button"
-                        onClick={() => setThinkMode(v => !v)}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
-                          thinkMode
-                            ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
-                            : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
-                        }`}
-                        title={thinkMode ? 'Extended thinking ON' : 'Enable extended thinking'}
-                      >
-                        <Sparkles size={10} />
-                        Think
-                      </button>
+                      {CHAT_MODES.map(({ key, label, icon: Icon, desc }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => handleModeChange(key)}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
+                            chatMode === key
+                              ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
+                              : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
+                          }`}
+                          title={desc}
+                        >
+                          <Icon size={10} />
+                          {label}
+                        </button>
+                      ))}
                       <button
                         type="button"
                         onClick={() => setHideTools(v => !v)}

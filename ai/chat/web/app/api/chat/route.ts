@@ -39,30 +39,70 @@ function isUrlAllowed(url: string): boolean {
   }
 }
 
+// Mode -> model + thinking config
+const MODE_CONFIG = {
+  fast: {
+    model: "claude-haiku-4-5-20251001",
+    thinking: false,
+  },
+  balanced: {
+    model: "claude-sonnet-4-6",
+    thinking: false,
+  },
+  deep: {
+    model: "claude-sonnet-4-6",
+    thinking: true,
+  },
+} as const;
+
+type ChatMode = keyof typeof MODE_CONFIG;
+
+// Try to connect to an MCP server and fetch its tools. Returns empty on failure.
+async function safeMcpTools(
+  url: string
+): Promise<{
+  tools: Record<string, any>;
+  client: Awaited<ReturnType<typeof createMCPClient>> | null;
+}> {
+  try {
+    const client = await createMCPClient({ transport: { type: "http", url } });
+    const tools = await client.tools();
+    return { tools, client };
+  } catch (e) {
+    console.error(`[chat] MCP connection failed (${url}):`, e);
+    return { tools: {}, client: null };
+  }
+}
+
 export async function POST(req: Request) {
-  const { messages, thinking }: { messages: UIMessage[]; thinking?: boolean } =
+  const { messages, mode: rawMode }: { messages: UIMessage[]; mode?: string } =
     await req.json();
 
-  const [mcpClient, cadenceMcp, evmMcp] = await Promise.all([
-    createMCPClient({ transport: { type: "http", url: MCP_URL } }),
-    createMCPClient({ transport: { type: "http", url: CADENCE_MCP_URL } }),
-    createMCPClient({ transport: { type: "http", url: EVM_MCP_URL } }),
-  ]);
+  const mode: ChatMode =
+    rawMode && rawMode in MODE_CONFIG ? (rawMode as ChatMode) : "fast";
+  const cfg = MODE_CONFIG[mode];
 
-  const [mcpTools, cadenceTools, evmTools] = await Promise.all([
-    mcpClient.tools(),
-    cadenceMcp.tools(),
-    evmMcp.tools(),
+  const [mcp, cadenceMcp, evmMcp] = await Promise.all([
+    safeMcpTools(MCP_URL),
+    safeMcpTools(CADENCE_MCP_URL),
+    safeMcpTools(EVM_MCP_URL),
   ]);
 
   const result = streamText({
-    model: anthropic(process.env.LLM_MODEL || "claude-sonnet-4-6"),
+    model: anthropic(cfg.model),
+    ...(cfg.thinking && {
+      providerOptions: {
+        anthropic: {
+          thinking: { type: "enabled", budgetTokens: 10000 },
+        },
+      },
+    }),
     system: getSystemPrompt(),
     messages: await convertToModelMessages(messages),
     tools: {
-      ...mcpTools,
-      ...cadenceTools,
-      ...evmTools,
+      ...mcp.tools,
+      ...cadenceMcp.tools,
+      ...evmMcp.tools,
 
       // Web search — built-in Anthropic provider tool
       web_search: anthropic.tools.webSearch_20250305() as any,
@@ -157,20 +197,17 @@ export async function POST(req: Request) {
         },
       }),
     },
-    ...(thinking
-      ? {
-          providerOptions: {
-            anthropic: {
-              thinking: { type: "enabled" as const, budgetTokens: 10000 },
-            },
-          },
-        }
-      : {}),
     stopWhen: stepCountIs(15),
     onFinish: async () => {
-      await Promise.all([mcpClient.close(), cadenceMcp.close(), evmMcp.close()]);
+      await Promise.all(
+        [mcp.client?.close(), cadenceMcp.client?.close(), evmMcp.client?.close()].filter(
+          Boolean,
+        ),
+      );
     },
   });
 
-  return result.toUIMessageStreamResponse();
+  return result.toUIMessageStreamResponse({
+    sendReasoning: cfg.thinking,
+  });
 }
