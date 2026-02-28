@@ -141,7 +141,7 @@ function DeveloperDashboardPage() {
                         {log.status_code}
                       </span>
                       <span className="text-xs text-neutral-500">
-                        {new Date(log.created_at).toLocaleString()}
+                        {new Date(log.delivered_at).toLocaleString()}
                       </span>
                     </div>
                   )

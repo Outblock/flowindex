@@ -181,9 +181,9 @@ function DeveloperLogs() {
                     let payloadPreview = ''
                     try {
                       payloadPreview = truncate(
-                        typeof log.request_body === 'string'
-                          ? log.request_body
-                          : JSON.stringify(log.request_body),
+                        typeof log.payload === 'string'
+                          ? log.payload
+                          : JSON.stringify(log.payload),
                         80,
                       )
                     } catch {
@@ -198,7 +198,7 @@ function DeveloperLogs() {
                         className="hover:bg-neutral-800/30 transition-colors"
                       >
                         <td className="px-4 py-3 text-sm text-neutral-300 whitespace-nowrap">
-                          {new Date(log.created_at).toLocaleString()}
+                          {new Date(log.delivered_at).toLocaleString()}
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-sm font-mono text-[#00ef8b]">
@@ -216,9 +216,9 @@ function DeveloperLogs() {
                           <span
                             className="text-xs font-mono text-neutral-400 block max-w-[300px] truncate"
                             title={
-                              typeof log.request_body === 'string'
-                                ? log.request_body
-                                : JSON.stringify(log.request_body)
+                              typeof log.payload === 'string'
+                                ? log.payload
+                                : JSON.stringify(log.payload)
                             }
                           >
                             {payloadPreview}

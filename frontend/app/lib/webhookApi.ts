@@ -44,11 +44,12 @@ export interface Subscription {
 export interface DeliveryLog {
   id: string;
   subscription_id: string;
+  endpoint_id: string;
   event_type: string;
   status_code: number;
-  request_body: string;
-  response_body: string;
-  created_at: string;
+  payload: Record<string, unknown>;
+  delivered_at: string;
+  svix_msg_id?: string;
 }
 
 export interface PaginatedLogs {
@@ -206,19 +207,21 @@ export async function deleteSubscription(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function listDeliveryLogs(params?: LogQueryParams): Promise<PaginatedLogs> {
+  const perPage = params?.per_page ?? 20;
+  const page = params?.page ?? 1;
+  const offset = (page - 1) * perPage;
+
   const searchParams = new URLSearchParams();
-  if (params?.page != null) searchParams.set('page', String(params.page));
-  if (params?.per_page != null) searchParams.set('per_page', String(params.per_page));
+  searchParams.set('limit', String(perPage));
+  if (offset > 0) searchParams.set('offset', String(offset));
   if (params?.event_type) searchParams.set('event_type', params.event_type);
-  if (params?.status_min != null) searchParams.set('status_min', String(params.status_min));
-  if (params?.status_max != null) searchParams.set('status_max', String(params.status_max));
 
   const qs = searchParams.toString();
   const data = await request<{ items: DeliveryLog[]; count: number }>(`/logs${qs ? `?${qs}` : ''}`);
   return {
     data: data.items ?? [],
     total: data.count ?? 0,
-    page: params?.page ?? 1,
-    per_page: params?.per_page ?? 20,
+    page,
+    per_page: perPage,
   };
 }
