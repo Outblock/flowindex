@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"flowscan-clone/internal/repository"
@@ -51,13 +52,15 @@ func (w *ProposerKeyBackfillWorker) ProcessRange(ctx context.Context, fromHeight
 
 	log.Printf("[proposer_key_backfill] Range [%d, %d): %d transactions to backfill", fromHeight, toHeight, len(txIDs))
 
-	// 2. Fetch from chain and batch update.
-	const batchSize = 100
-	var batch []proposerKeyUpdate
+	// 2. Fetch from chain concurrently and collect updates.
+	const fetchConcurrency = 20
+	sem := make(chan struct{}, fetchConcurrency)
+	var mu sync.Mutex
+	var updates []proposerKeyUpdate
 
 	for _, row := range txIDs {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			break
 		}
 
 		// Parse hex tx ID to flow.Identifier
@@ -69,40 +72,53 @@ func (w *ProposerKeyBackfillWorker) ProcessRange(ctx context.Context, fromHeight
 		var flowID flowsdk.Identifier
 		copy(flowID[:], idBytes)
 
-		// Fetch transaction from chain with timeout
-		fetchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		tx, err := w.flow.GetTransaction(fetchCtx, flowID)
-		cancel()
+		sem <- struct{}{}
+		go func(r repository.TxIDRow, fid flowsdk.Identifier) {
+			defer func() { <-sem }()
 
-		if err != nil {
-			log.Printf("[proposer_key_backfill] failed to fetch tx %s: %v", row.ID, err)
-			w.repo.LogIndexingError(ctx, w.Name(), row.Height, row.ID, "FETCH_TX", err.Error(), nil)
-			continue // Skip this tx, don't fail the whole range
-		}
+			fetchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			tx, err := w.flow.GetTransaction(fetchCtx, fid)
+			cancel()
 
-		batch = append(batch, proposerKeyUpdate{
-			txID:   row.ID,
-			height: row.Height,
-			keyIdx: tx.ProposalKey.KeyIndex,
-			seqNum: tx.ProposalKey.SequenceNumber,
-		})
-
-		// Flush batch
-		if len(batch) >= batchSize {
-			if err := w.flushBatch(ctx, batch); err != nil {
-				return err
+			if err != nil {
+				// Only log once per unique tx to avoid spam
+				w.repo.LogIndexingError(ctx, w.Name(), r.Height, r.ID, "FETCH_TX", err.Error(), nil)
+				return
 			}
-			batch = batch[:0]
-		}
+
+			mu.Lock()
+			updates = append(updates, proposerKeyUpdate{
+				txID:   r.ID,
+				height: r.Height,
+				keyIdx: tx.ProposalKey.KeyIndex,
+				seqNum: tx.ProposalKey.SequenceNumber,
+			})
+			mu.Unlock()
+		}(row, flowID)
 	}
 
-	// Flush remaining
-	if len(batch) > 0 {
-		if err := w.flushBatch(ctx, batch); err != nil {
+	// Wait for all in-flight fetches to complete
+	for i := 0; i < fetchConcurrency; i++ {
+		sem <- struct{}{}
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// 3. Batch update all collected results
+	const batchSize = 500
+	for i := 0; i < len(updates); i += batchSize {
+		end := i + batchSize
+		if end > len(updates) {
+			end = len(updates)
+		}
+		if err := w.flushBatch(ctx, updates[i:end]); err != nil {
 			return err
 		}
 	}
 
+	log.Printf("[proposer_key_backfill] Range [%d, %d): updated %d/%d transactions", fromHeight, toHeight, len(updates), len(txIDs))
 	return nil
 }
 
