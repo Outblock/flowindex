@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useSearch, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
 import type { Layout } from 'react-grid-layout'
 import {
@@ -31,11 +31,16 @@ import {
   ensureHeyApiConfigured,
   getBaseURL,
 } from '../api/heyapi'
+import { BigTransfersFull } from '../components/BigTransfersCard'
 import { CARD_DEFS, KPI_DEFS, DEFAULT_KPI_LAYOUTS } from './analytics-layout'
 import { useGridLayout } from '../hooks/useGridLayout'
+import { SafeNumberFlow } from '../components/SafeNumberFlow'
 
 export const Route = createFileRoute('/analytics')({
   component: AnalyticsPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as string) || undefined,
+  }),
 })
 
 /* ── types ── */
@@ -196,7 +201,7 @@ function fmtTooltipValue(v: unknown, name: string): [string, string] {
 
 /* ── tab types ── */
 
-type AnalyticsTab = 'all' | 'transactions' | 'tokens' | 'network' | 'price'
+type AnalyticsTab = 'all' | 'transactions' | 'tokens' | 'network' | 'price' | 'whales'
 
 const TABS: { label: string; value: AnalyticsTab }[] = [
   { label: 'All', value: 'all' },
@@ -204,6 +209,7 @@ const TABS: { label: string; value: AnalyticsTab }[] = [
   { label: 'Tokens', value: 'tokens' },
   { label: 'Network', value: 'network' },
   { label: 'Price', value: 'price' },
+  { label: 'Whales', value: 'whales' },
 ]
 
 /* ── chart skeleton ── */
@@ -306,9 +312,20 @@ function yAxisProps(formatter?: (v: number) => string) {
 
 /* ── KPI card (compact + expanded) ── */
 
+type KpiFormat = 'comma' | 'compact' | 'percent' | 'price'
+
+const KPI_NUMBER_FORMATS: Record<KpiFormat, Intl.NumberFormatOptions> = {
+  comma: { useGrouping: true, maximumFractionDigits: 0 },
+  compact: { notation: 'compact', maximumFractionDigits: 1 },
+  percent: { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+  price: { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 },
+}
+
 function KpiCard({
   label,
   value,
+  numericValue,
+  kpiFormat,
   delta,
   deltaLabel,
   invertColor,
@@ -321,6 +338,8 @@ function KpiCard({
 }: {
   label: string
   value: string
+  numericValue?: number | null
+  kpiFormat?: KpiFormat
   delta?: number | null
   deltaLabel?: string
   invertColor?: boolean
@@ -345,6 +364,20 @@ function KpiCard({
     deltaText = deltaLabel ?? `${sign}${fmtNum(delta)}`
   }
 
+  const fmt = kpiFormat ? KPI_NUMBER_FORMATS[kpiFormat] : undefined
+  const renderValue = (cls: string) => {
+    if (numericValue != null && Number.isFinite(numericValue) && fmt) {
+      return (
+        <span className={cls}>
+          {kpiFormat === 'percent' && <SafeNumberFlow value={numericValue} format={fmt} className="" />}
+          {kpiFormat === 'percent' && '%'}
+          {kpiFormat !== 'percent' && <SafeNumberFlow value={numericValue} format={fmt} className="" />}
+        </span>
+      )
+    }
+    return <span className={cls}>{value}</span>
+  }
+
   if (expanded && chartNode) {
     return (
       <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-4 h-full flex flex-col hover:border-nothing-green/30 transition-colors">
@@ -353,8 +386,12 @@ function KpiCard({
             <GripVertical className="drag-handle w-3 h-3 text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 flex-shrink-0" />
           )}
           <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">{label}</span>
-          <span className="text-sm font-bold text-zinc-900 dark:text-white font-mono ml-auto">{value}</span>
-          {deltaText && <span className={`text-xs font-mono ${deltaColor}`}>{deltaText}</span>}
+          {loading ? (
+            <div className="h-4 w-16 bg-zinc-200 dark:bg-white/10 rounded animate-pulse ml-auto" />
+          ) : (
+            renderValue("text-sm font-bold text-zinc-900 dark:text-white font-mono ml-auto")
+          )}
+          {deltaText && !loading && <span className={`text-xs font-mono ${deltaColor}`}>{deltaText}</span>}
         </div>
         <div className="flex-1 min-h-0">
           {chartLoading ? (
@@ -382,7 +419,7 @@ function KpiCard({
       {loading ? (
         <div className="h-5 w-20 bg-zinc-200 dark:bg-white/10 rounded animate-pulse mt-2" />
       ) : (
-        <span className="text-xl font-bold text-zinc-900 dark:text-white font-mono mt-2">{value}</span>
+        renderValue("text-xl font-bold text-zinc-900 dark:text-white font-mono mt-2")
       )}
       {deltaText && !loading && <span className={`text-xs font-mono mt-1 ${deltaColor}`}>{deltaText}</span>}
     </div>
@@ -429,11 +466,19 @@ function SectionHeader({ title }: { title: string }) {
 /* ── main page ── */
 
 function AnalyticsPage() {
+  const { tab: urlTab } = useSearch({ from: '/analytics' })
+  const navigate = useNavigate()
+  const VALID_TABS: AnalyticsTab[] = ['all', 'transactions', 'tokens', 'network', 'price', 'whales']
+  const initialTab = VALID_TABS.includes(urlTab as AnalyticsTab) ? (urlTab as AnalyticsTab) : 'all'
   const [rangeDays, setRangeDays] = useState(30)
   const [customRange, setCustomRange] = useState<{ from: Date; to: Date } | null>(null)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [pendingRange, setPendingRange] = useState<{ from?: Date; to?: Date } | undefined>(undefined)
-  const [activeTab, setActiveTab] = useState<AnalyticsTab>('all')
+  const [activeTab, setActiveTabState] = useState<AnalyticsTab>(initialTab)
+  const setActiveTab = (tab: AnalyticsTab) => {
+    setActiveTabState(tab)
+    navigate({ search: tab === 'all' ? {} : { tab }, replace: true } as any)
+  }
 
   const selectPreset = (days: number) => {
     setRangeDays(days)
@@ -690,24 +735,32 @@ function AnalyticsPage() {
   /* ── KPI data map ── */
 
   const kpiDataMap = useMemo(() => {
-    const m = new Map<string, { value: string; delta?: number | null; deltaLabel?: string; invertColor?: boolean; loading?: boolean }>()
+    const m = new Map<string, { value: string; numericValue?: number | null; kpiFormat?: KpiFormat; delta?: number | null; deltaLabel?: string; invertColor?: boolean; loading?: boolean }>()
 
     m.set('kpi-total-tx', {
       value: totals ? fmtComma(totals.transaction_count) : '--',
+      numericValue: totals?.transaction_count,
+      kpiFormat: 'comma',
       delta: latest?.tx_count,
       deltaLabel: latest ? `+${fmtNum(latest.tx_count)} today` : undefined,
       loading: totalsLoading,
     })
     m.set('kpi-active-accounts', {
       value: latest ? fmtComma(latest.active_accounts) : '--',
+      numericValue: latest?.active_accounts,
+      kpiFormat: 'comma',
       delta: delta(latest?.active_accounts, prev?.active_accounts),
     })
     m.set('kpi-gas-burned', {
       value: latest ? fmtNum(latest.total_gas_used) : '--',
+      numericValue: latest?.total_gas_used,
+      kpiFormat: 'compact',
       delta: delta(latest?.total_gas_used, prev?.total_gas_used),
     })
     m.set('kpi-error-rate', {
       value: latest ? fmtPct(latest.error_rate) : '--',
+      numericValue: latest?.error_rate,
+      kpiFormat: 'percent',
       delta: delta(latest?.error_rate, prev?.error_rate),
       deltaLabel:
         latest && prev
@@ -717,6 +770,8 @@ function AnalyticsPage() {
     })
     m.set('kpi-flow-price', {
       value: netStats ? fmtPrice(netStats.price) : '--',
+      numericValue: netStats?.price,
+      kpiFormat: 'price',
       delta: netStats?.price_change_24h,
       deltaLabel: netStats
         ? `${netStats.price_change_24h > 0 ? '+' : ''}${netStats.price_change_24h.toFixed(2)}%`
@@ -725,33 +780,48 @@ function AnalyticsPage() {
     })
     m.set('kpi-contracts', {
       value: latest ? fmtComma(latest.new_contracts) : '--',
+      numericValue: latest?.new_contracts,
+      kpiFormat: 'comma',
       delta: delta(latest?.new_contracts, prev?.new_contracts),
     })
     m.set('kpi-new-accounts', {
       value: latest ? fmtComma(latest.new_accounts) : '--',
+      numericValue: latest?.new_accounts,
+      kpiFormat: 'comma',
       delta: delta(latest?.new_accounts, prev?.new_accounts),
     })
     m.set('kpi-coa-new', {
       value: latest ? fmtComma(latest.coa_new_accounts) : '--',
+      numericValue: latest?.coa_new_accounts,
+      kpiFormat: 'comma',
       delta: delta(latest?.coa_new_accounts, prev?.coa_new_accounts),
     })
     m.set('kpi-evm-active', {
       value: latest ? fmtComma(latest.evm_active_addresses) : '--',
+      numericValue: latest?.evm_active_addresses,
+      kpiFormat: 'comma',
       delta: delta(latest?.evm_active_addresses, prev?.evm_active_addresses),
     })
     m.set('kpi-defi-swaps', {
       value: latest ? fmtComma(latest.defi_swap_count) : '--',
+      numericValue: latest?.defi_swap_count,
+      kpiFormat: 'comma',
       delta: delta(latest?.defi_swap_count, prev?.defi_swap_count),
     })
     m.set('kpi-bridge-evm', {
       value: latest ? fmtComma(latest.bridge_to_evm_txs) : '--',
+      numericValue: latest?.bridge_to_evm_txs,
+      kpiFormat: 'comma',
       delta: delta(latest?.bridge_to_evm_txs, prev?.bridge_to_evm_txs),
     })
     m.set('kpi-epoch-payout', (() => {
+      const epochTotal = latest ? Math.round(toNum(latest.epoch_payout_total)) : null
       const d = latest && prev ? toNum(latest.epoch_payout_total) - toNum(prev.epoch_payout_total) : null
       const sign = d != null && d > 0 ? '+' : ''
       return {
-        value: latest ? fmtComma(Math.round(toNum(latest.epoch_payout_total))) : '--',
+        value: epochTotal != null ? fmtComma(epochTotal) : '--',
+        numericValue: epochTotal,
+        kpiFormat: 'comma' as KpiFormat,
         delta: d,
         deltaLabel: d != null ? `${sign}${fmtComma(Math.round(d))}` : undefined,
       }
@@ -1283,6 +1353,9 @@ function AnalyticsPage() {
         </div>
 
         {/* Content renders progressively as each API responds */}
+        {activeTab === 'whales' ? (
+          <BigTransfersFull />
+        ) : (
         <div ref={containerRef}>
           {mounted && (
             <>
@@ -1309,6 +1382,8 @@ function AnalyticsPage() {
                       <KpiCard
                         label={kpi.label}
                         value={data?.value ?? '--'}
+                        numericValue={data?.numericValue}
+                        kpiFormat={data?.kpiFormat}
                         delta={data?.delta}
                         deltaLabel={data?.deltaLabel}
                         invertColor={data?.invertColor}
@@ -1358,6 +1433,7 @@ function AnalyticsPage() {
             </>
           )}
         </div>
+        )}
       </div>
     </div>
   )

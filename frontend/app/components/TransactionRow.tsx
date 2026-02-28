@@ -563,9 +563,9 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                     // Enrich derived ft_transfers with logo/symbol/name from transfer_summary
                     const summaryFT: any[] = tx.transfer_summary?.ft || [];
                     if (summaryFT.length > 0 && derived.ft_transfers.length > 0) {
-                        const metaByToken = new Map<string, { logo?: string; symbol?: string; name?: string }>();
+                        const metaByToken = new Map<string, { logo?: string; symbol?: string; name?: string; usd_price?: number }>();
                         for (const sf of summaryFT) {
-                            if (sf.token) metaByToken.set(sf.token, { logo: sf.logo, symbol: sf.symbol, name: sf.name });
+                            if (sf.token) metaByToken.set(sf.token, { logo: sf.logo, symbol: sf.symbol, name: sf.name, usd_price: sf.usd_price });
                         }
                         for (const ft of derived.ft_transfers) {
                             const meta = metaByToken.get(ft.token);
@@ -573,6 +573,7 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                                 if (meta.logo && !ft.token_logo) ft.token_logo = meta.logo;
                                 if (meta.symbol && !ft.token_symbol) ft.token_symbol = meta.symbol;
                                 if (meta.name && !ft.token_name) ft.token_name = meta.name;
+                                if (meta.usd_price && !ft.usd_value) ft.usd_value = Number(ft.amount) * meta.usd_price;
                             }
                         }
                     }
@@ -708,14 +709,13 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                                     {isMint && <span className="text-[9px] px-1 py-0.5 rounded border border-lime-300 dark:border-lime-500/30 text-lime-600 dark:text-lime-400 bg-lime-50 dark:bg-lime-500/10 font-semibold">MINT</span>}
                                     {isBurn && <span className="text-[9px] px-1 py-0.5 rounded border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 font-semibold">BURN</span>}
                                     {ft.from_address && ft.to_address && (
-                                        <span className="text-zinc-400 text-[10px] inline-flex items-center gap-1">
-                                            <AddressWithTag addr={ft.from_address} />
+                                        <span className="text-zinc-400 text-[10px] inline-flex items-center gap-1 flex-wrap">
+                                            <AddressWithTag addr={ft.evm_from_address || ft.from_address} />
+                                            {ft.evm_from_address && <span className="text-[8px] text-purple-400">EVM</span>}
                                             <span>→</span>
-                                            <AddressWithTag addr={ft.to_address} />
+                                            <AddressWithTag addr={ft.evm_to_address || ft.to_address} />
+                                            {ft.evm_to_address && <span className="text-[8px] text-purple-400">EVM</span>}
                                         </span>
-                                    )}
-                                    {ft.is_cross_vm && (
-                                        <span className="text-[9px] px-1 py-0.5 rounded border border-purple-300 dark:border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 font-semibold">CROSS-VM</span>
                                     )}
                                 </div>
                             );
@@ -865,9 +865,6 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                                     {exec.from && <AddressWithTag addr={exec.from} />}
                                     {exec.from && exec.to && <span>→</span>}
                                     {exec.to && <AddressWithTag addr={exec.to} />}
-                                    {exec.value && Number(exec.value) > 0 && (
-                                        <span className="font-mono text-zinc-600 dark:text-zinc-300 ml-1">{Number(exec.value).toLocaleString()} wei</span>
-                                    )}
                                 </div>
                             </div>
                         ))}

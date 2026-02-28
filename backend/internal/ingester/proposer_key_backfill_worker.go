@@ -7,18 +7,22 @@ import (
 	"log"
 	"time"
 
-	flowclient "flowscan-clone/internal/flow"
 	"flowscan-clone/internal/repository"
 
 	flowsdk "github.com/onflow/flow-go-sdk"
 )
+
+// TransactionFetcher is the subset of the Flow client needed by this worker.
+type TransactionFetcher interface {
+	GetTransaction(ctx context.Context, txID flowsdk.Identifier) (*flowsdk.Transaction, error)
+}
 
 // ProposerKeyBackfillWorker fills in NULL proposer_key_index and
 // proposer_sequence_number values on existing raw.transactions rows
 // by querying the Flow Access API for each transaction.
 type ProposerKeyBackfillWorker struct {
 	repo *repository.Repository
-	flow *flowclient.Client
+	flow TransactionFetcher
 }
 
 type proposerKeyUpdate struct {
@@ -28,7 +32,7 @@ type proposerKeyUpdate struct {
 	seqNum uint64
 }
 
-func NewProposerKeyBackfillWorker(repo *repository.Repository, flow *flowclient.Client) *ProposerKeyBackfillWorker {
+func NewProposerKeyBackfillWorker(repo *repository.Repository, flow TransactionFetcher) *ProposerKeyBackfillWorker {
 	return &ProposerKeyBackfillWorker{repo: repo, flow: flow}
 }
 

@@ -209,6 +209,10 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
             const displayName = meta?.name || t.name || t.contractName;
             const displaySymbol = meta?.symbol || t.symbol;
 
+            // For bridged tokens, use combined balance for sorting
+            const cadenceBal = Number(t.balance || 0);
+            const evmBal = matchedEvm ? matchedEvm.balance : 0;
+
             merged.push({
                 type: matchedEvm ? 'bridged' : 'cadence',
                 cadenceToken: t,
@@ -218,7 +222,7 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
                 displayName,
                 displaySymbol,
                 logoUrl,
-                sortValue: Number(t.balance || 0),
+                sortValue: cadenceBal + evmBal,
             });
         }
 
@@ -235,6 +239,9 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
                 });
             }
         }
+
+        // Sort by combined value descending
+        merged.sort((a, b) => b.sortValue - a.sortValue);
 
         return merged;
     }, [activeSubTab, displayTokens, displayEvmTokens, metaMap]);
@@ -304,6 +311,23 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
                                         </motion.div>
                                     );
                                 }
+                                if (item.type === 'bridged' && item.cadenceToken && item.evmToken) {
+                                    return (
+                                        <motion.div key={`bridged-${item.identifier}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                                            <BridgedTokenRow
+                                                cadenceToken={item.cadenceToken}
+                                                evmToken={item.evmToken}
+                                                identifier={item.identifier!}
+                                                meta={item.meta}
+                                                logoUrl={item.logoUrl}
+                                                displayName={item.displayName}
+                                                displaySymbol={item.displaySymbol}
+                                                getTokenPrice={getTokenPrice}
+                                                getTokenPriceBySymbol={getTokenPriceBySymbol}
+                                            />
+                                        </motion.div>
+                                    );
+                                }
                                 const t = item.cadenceToken!;
                                 return (
                                     <motion.div key={`${t.contractAddress}-${t.contractName}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
@@ -315,7 +339,6 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
                                             displayName={item.displayName}
                                             displaySymbol={item.displaySymbol}
                                             getTokenPrice={getTokenPrice}
-                                            evmBalance={item.evmToken?.balance}
                                         />
                                     </motion.div>
                                 );
@@ -450,7 +473,118 @@ function TokenIcon({ logoUrl, name }: { logoUrl: string; name: string }) {
     );
 }
 
-function CadenceTokenRow({ token: t, identifier, meta, logoUrl, displayName, displaySymbol, getTokenPrice, evmBalance }: {
+function SmallTokenIcon({ logoUrl, fallback }: { logoUrl: string; fallback?: React.ReactNode }) {
+    if (!logoUrl) return <>{fallback || <Coins className="w-4 h-4 text-zinc-400" />}</>;
+    return (
+        <img
+            src={logoUrl}
+            className="w-4 h-4 rounded-full object-cover bg-white dark:bg-white/10"
+            loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+    );
+}
+
+function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl, displayName, displaySymbol, getTokenPrice, getTokenPriceBySymbol }: {
+    cadenceToken: FTVaultInfo;
+    evmToken: EVMToken;
+    identifier: string;
+    meta: any;
+    logoUrl: string;
+    displayName: string;
+    displaySymbol: string;
+    getTokenPrice: (name: string) => number;
+    getTokenPriceBySymbol: (symbol: string) => number;
+}) {
+    const cadenceBal = Number(t.balance || 0);
+    const evmBal = evmToken.balance;
+    const totalBal = cadenceBal + evmBal;
+    const cadencePrice = getTokenPrice(t.contractName);
+    const evmPrice = getTokenPriceBySymbol(evmToken.symbol) || cadencePrice;
+    const totalUsd = cadenceBal * cadencePrice + evmBal * evmPrice;
+
+    // Use best available logo: cadence metadata logo or EVM icon, complement each other
+    const cadenceLogoUrl = logoUrl;
+    const evmLogoUrl = evmToken.icon_url || '';
+    const bestLogo = cadenceLogoUrl || evmLogoUrl;
+
+    return (
+        <GlassCard className="hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden p-4">
+            {/* Header: token identity + combined total */}
+            <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4 min-w-0">
+                    <TokenIcon logoUrl={bestLogo} name={displayName} />
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                            <div className="font-bold text-zinc-900 dark:text-white leading-tight truncate">{displayName}</div>
+                            <div className="text-[10px] font-mono text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{displaySymbol}</div>
+                            <EVMBridgeBadge evmAddress={meta?.evm_address || (t as any).evmAddress || ''} />
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                            <Link
+                                to="/tokens/$token"
+                                params={{ token: identifier }}
+                                className="text-[10px] font-mono text-zinc-400 hover:text-nothing-green-dark dark:hover:text-nothing-green transition-colors truncate max-w-[160px]"
+                            >
+                                {t.contractName}
+                            </Link>
+                            {meta?.is_verified && <VerifiedBadge size={13} />}
+                            {(() => {
+                                const p = cadencePrice;
+                                if (!p) return null;
+                                const fmt = p >= 1 ? `$${p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : p >= 0.01 ? `$${p.toFixed(4)}` : `$${p.toFixed(6)}`;
+                                return <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-500">@ {fmt}</span>;
+                            })()}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="text-right flex-shrink-0">
+                    <div className="text-lg font-mono font-bold text-zinc-900 dark:text-white">
+                        {totalBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                    </div>
+                    {totalUsd > 0 && <UsdValue amount={1} price={totalUsd} className="text-xs" />}
+                </div>
+            </div>
+
+            {/* Sub-rows: Cadence + EVM breakdowns */}
+            <div className="mt-3 ml-14 border-t border-zinc-100 dark:border-white/5 pt-2 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                        <SmallTokenIcon logoUrl={cadenceLogoUrl} fallback={<Coins className="w-4 h-4 text-zinc-400" />} />
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Cadence</span>
+                        <span className="text-[10px] font-mono text-zinc-400">{t.symbol || displaySymbol}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="font-mono text-zinc-700 dark:text-zinc-300">
+                            {cadenceBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                        </span>
+                        {cadenceBal > 0 && cadencePrice > 0 && (
+                            <UsdValue amount={cadenceBal} price={cadencePrice} className="text-[10px] text-zinc-400" />
+                        )}
+                    </div>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                        <SmallTokenIcon logoUrl={evmLogoUrl} fallback={<Box className="w-4 h-4 text-purple-400" />} />
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-purple-500 dark:text-purple-400">EVM</span>
+                        <span className="text-[10px] font-mono text-zinc-400">{evmToken.symbol}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="font-mono text-zinc-700 dark:text-zinc-300">
+                            {evmBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                        </span>
+                        {evmBal > 0 && evmPrice > 0 && (
+                            <UsdValue amount={evmBal} price={evmPrice} className="text-[10px] text-zinc-400" />
+                        )}
+                    </div>
+                </div>
+            </div>
+        </GlassCard>
+    );
+}
+
+function CadenceTokenRow({ token: t, identifier, meta, logoUrl, displayName, displaySymbol, getTokenPrice }: {
     token: FTVaultInfo;
     identifier: string;
     meta: any;
@@ -458,7 +592,6 @@ function CadenceTokenRow({ token: t, identifier, meta, logoUrl, displayName, dis
     displayName: string;
     displaySymbol: string;
     getTokenPrice: (name: string) => number;
-    evmBalance?: number;
 }) {
     const evmAddr = meta?.evm_address || (t as any).evmAddress || '';
     return (
@@ -498,11 +631,6 @@ function CadenceTokenRow({ token: t, identifier, meta, logoUrl, displayName, dis
                     const price = getTokenPrice(t.contractName);
                     return price > 0 ? <UsdValue amount={Number(t.balance)} price={price} className="text-xs" /> : null;
                 })()}
-                {evmBalance != null && evmBalance > 0 && (
-                    <div className="text-[10px] font-mono text-zinc-400 mt-0.5">
-                        + {evmBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })} on EVM
-                    </div>
-                )}
             </div>
         </GlassCard>
     );

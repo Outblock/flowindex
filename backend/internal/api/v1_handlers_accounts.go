@@ -339,7 +339,8 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 	out := make([]map[string]interface{}, 0, len(txs))
 	for _, t := range txs {
 		ts := transferSummaries[t.ID]
-		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta))
+		ftPrices := s.buildFTPrices(ftMeta, t.Timestamp)
+		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta, ftPrices))
 	}
 	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}
 	// Include pre-computed total from address_stats if available.

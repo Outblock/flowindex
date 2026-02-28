@@ -99,6 +99,10 @@ export async function fetchNetworkStats(opts?: { timeoutMs?: number }): Promise<
     epoch: epoch?.epoch ?? epoch?.current_epoch ?? null,
     epoch_progress: epoch?.epoch_progress ?? epoch?.progress ?? 0,
     updated_at: epoch?.updated_at ?? epoch?.as_of ?? null,
+    start_view: epoch?.start_view ?? null,
+    end_view: epoch?.end_view ?? null,
+    current_view: epoch?.current_view ?? null,
+    phase: epoch?.phase ?? null,
     total_staked: tokenomics?.total_staked ?? 0,
     total_supply: tokenomics?.total_supply ?? 0,
     active_nodes: tokenomics?.validator_count ?? tokenomics?.active_nodes ?? 0,
@@ -152,7 +156,7 @@ export async function fetchAnalyticsDaily(from?: string, to?: string): Promise<a
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${_baseURL}/analytics/daily${qs}`);
+  const res = await fetch(`${_baseURL}/insights/daily${qs}`);
   if (!res.ok) return [];
   const json = await res.json();
   return json?.data ?? [];
@@ -166,7 +170,7 @@ export async function fetchAnalyticsDailyModule(module: string, from?: string, t
   if (to) params.set('to', to);
   const qs = params.toString() ? `?${params.toString()}` : '';
   try {
-    const json = await fetchJsonWithTimeout(`${_baseURL}/analytics/daily/module/${encodeURIComponent(module)}${qs}`, timeoutMs);
+    const json = await fetchJsonWithTimeout(`${_baseURL}/insights/daily/module/${encodeURIComponent(module)}${qs}`, timeoutMs);
     return json?.data ?? [];
   } catch {
     return [];
@@ -180,8 +184,41 @@ export async function fetchAnalyticsTransfersDaily(from?: string, to?: string): 
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${_baseURL}/analytics/transfers/daily${qs}`);
+  const res = await fetch(`${_baseURL}/insights/transfers/daily${qs}`);
   if (!res.ok) return [];
   const json = await res.json();
   return json?.data ?? [];
+}
+
+export interface BigTransfer {
+  tx_id: string;
+  block_height: number;
+  timestamp: string;
+  type: 'mint' | 'burn' | 'transfer' | 'swap' | 'bridge';
+  token_symbol: string;
+  token_contract_address: string;
+  contract_name: string;
+  token_logo?: string;
+  amount: string;
+  usd_value: number;
+  from_address: string;
+  to_address: string;
+}
+
+export async function fetchBigTransfers(
+  opts: { limit?: number; offset?: number; minUsd?: number; type?: string; timeoutMs?: number } = {}
+): Promise<BigTransfer[]> {
+  await ensureHeyApiConfigured();
+  const params = new URLSearchParams();
+  if (opts.limit) params.set('limit', String(opts.limit));
+  if (opts.offset) params.set('offset', String(opts.offset));
+  if (opts.minUsd) params.set('min_usd', String(opts.minUsd));
+  if (opts.type) params.set('type', opts.type);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  try {
+    const json = await fetchJsonWithTimeout(`${_baseURL}/insights/big-transfers${qs}`, opts.timeoutMs ?? 10000);
+    return json?.data ?? [];
+  } catch {
+    return [];
+  }
 }

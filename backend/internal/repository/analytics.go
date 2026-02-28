@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -283,6 +285,158 @@ func (r *Repository) GetTransferDailyStats(ctx context.Context, from, to time.Ti
 			return nil, err
 		}
 		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+// BigTransfer represents a large-value fungible token transfer or DeFi swap.
+type BigTransfer struct {
+	TxID                 string  `json:"tx_id"`
+	BlockHeight          uint64  `json:"block_height"`
+	Timestamp            string  `json:"timestamp"`
+	Type                 string  `json:"type"`
+	TokenSymbol          string  `json:"token_symbol"`
+	TokenContractAddress string  `json:"token_contract_address"`
+	ContractName         string  `json:"contract_name"`
+	TokenLogo            string  `json:"token_logo,omitempty"`
+	Amount               string  `json:"amount"`
+	UsdValue             float64 `json:"usd_value"`
+	FromAddress          string  `json:"from_address"`
+	ToAddress            string  `json:"to_address"`
+}
+
+// GetBigTransfers returns recent large-value FT transfers and DeFi swaps whose
+// estimated USD value exceeds minUSD, using the supplied priceMap for valuation.
+func (r *Repository) GetBigTransfers(ctx context.Context, priceMap map[string]float64, minUSD float64, limit, offset int, transferTypes []string) ([]BigTransfer, error) {
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	// Build inline price table from priceMap.
+	if len(priceMap) == 0 {
+		return []BigTransfer{}, nil
+	}
+
+	var valuesRows []string
+	args := make([]interface{}, 0, len(priceMap)*2+4)
+	argIdx := 1
+	for symbol, price := range priceMap {
+		valuesRows = append(valuesRows, fmt.Sprintf("($%d, $%d::numeric)", argIdx, argIdx+1))
+		args = append(args, symbol, price)
+		argIdx += 2
+	}
+	pricesCTE := "prices(symbol, usd_price) AS (VALUES " + strings.Join(valuesRows, ", ") + ")"
+
+	// minUSD, limit, offset placeholders
+	minUSDIdx := argIdx
+	limitIdx := argIdx + 1
+	offsetIdx := argIdx + 2
+	args = append(args, minUSD, limit, offset)
+
+	// Build optional type filter.
+	var typeFilter string
+	if len(transferTypes) > 0 {
+		typeFilter = fmt.Sprintf(" WHERE combined.type = ANY($%d)", argIdx+3)
+		args = append(args, transferTypes)
+	}
+
+	query := fmt.Sprintf(`
+WITH %s
+SELECT tx_id, block_height, timestamp, type, token_symbol,
+       token_contract_address, contract_name, token_logo, amount, usd_value,
+       from_address, to_address
+FROM (
+  -- FT transfers
+  SELECT
+    encode(ft.transaction_id, 'hex') AS tx_id,
+    ft.block_height,
+    ft.timestamp,
+    CASE
+      WHEN (ft.from_address IS NULL OR ft.to_address IS NULL)
+           AND EXISTS (SELECT 1 FROM raw.transactions rtx
+                       WHERE rtx.id = ft.transaction_id
+                         AND rtx.block_height = ft.block_height
+                         AND rtx.is_evm = true)
+        THEN 'bridge'
+      WHEN ft.from_address IS NULL THEN 'mint'
+      WHEN ft.to_address IS NULL THEN 'burn'
+      ELSE 'transfer'
+    END AS type,
+    COALESCE(tk.symbol, tk.contract_name, '') AS token_symbol,
+    COALESCE(encode(ft.token_contract_address, 'hex'), '') AS token_contract_address,
+    COALESCE(ft.contract_name, '') AS contract_name,
+    COALESCE(tk.logo::text, '') AS token_logo,
+    ft.amount::text AS amount,
+    (ft.amount * p.usd_price)::float8 AS usd_value,
+    COALESCE(encode(ft.from_address, 'hex'), '') AS from_address,
+    COALESCE(encode(ft.to_address, 'hex'), '') AS to_address
+  FROM app.ft_transfers ft
+  JOIN app.ft_tokens tk
+    ON tk.contract_address = ft.token_contract_address
+   AND tk.contract_name = ft.contract_name
+  JOIN prices p ON p.symbol = tk.market_symbol
+  WHERE ft.timestamp > NOW() - INTERVAL '7 days'
+    AND ft.amount * p.usd_price >= $%d
+
+  UNION ALL
+
+  -- DeFi swaps (use asset0 amount for valuation)
+  SELECT
+    encode(de.transaction_id, 'hex') AS tx_id,
+    de.block_height,
+    de.timestamp,
+    'swap' AS type,
+    COALESCE(dp.asset0_symbol, '') || '/' || COALESCE(dp.asset1_symbol, '') AS token_symbol,
+    '' AS token_contract_address,
+    dp.dex_key AS contract_name,
+    '' AS token_logo,
+    GREATEST(de.asset0_in, de.asset0_out)::text AS amount,
+    (GREATEST(de.asset0_in, de.asset0_out) * p.usd_price)::float8 AS usd_value,
+    COALESCE(encode(de.maker, 'hex'), '') AS from_address,
+    '' AS to_address
+  FROM app.defi_events de
+  JOIN app.defi_pairs dp ON dp.id = de.pair_id
+  JOIN prices p ON p.symbol = dp.asset0_symbol
+  WHERE de.event_type = 'Swap'
+    AND de.timestamp > NOW() - INTERVAL '7 days'
+    AND GREATEST(de.asset0_in, de.asset0_out) * p.usd_price >= $%d
+) combined
+%s
+ORDER BY combined.timestamp DESC
+LIMIT $%d OFFSET $%d`,
+		pricesCTE,
+		minUSDIdx,
+		minUSDIdx,
+		typeFilter,
+		limitIdx,
+		offsetIdx,
+	)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []BigTransfer
+	for rows.Next() {
+		var bt BigTransfer
+		var ts time.Time
+		if err := rows.Scan(
+			&bt.TxID, &bt.BlockHeight, &ts, &bt.Type,
+			&bt.TokenSymbol, &bt.TokenContractAddress, &bt.ContractName,
+			&bt.TokenLogo, &bt.Amount, &bt.UsdValue, &bt.FromAddress, &bt.ToAddress,
+		); err != nil {
+			return nil, err
+		}
+		bt.Timestamp = ts.UTC().Format(time.RFC3339)
+		out = append(out, bt)
+	}
+	if out == nil {
+		out = []BigTransfer{}
 	}
 	return out, rows.Err()
 }

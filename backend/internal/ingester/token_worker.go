@@ -445,10 +445,28 @@ func isFeeVaultAddress(addr string) bool {
 	return normalized != "" && normalized == feeVault
 }
 
+// stakingContracts are contracts whose events track staking state changes,
+// NOT token transfers. e.g. FlowIDTableStaking.TokensWithdrawn is a staking
+// event, not a FungibleToken transfer, even though it contains ".TokensWithdrawn".
+var stakingContracts = map[string]bool{
+	"FlowIDTableStaking":   true,
+	"FlowStakingCollection": true,
+	"LockedTokens":          true,
+	"FlowEpoch":             true,
+	"FlowDKG":               true,
+	"FlowClusterQC":         true,
+}
+
 func classifyTokenEvent(eventType string) (bool, bool) {
+	cn := parseContractName(eventType)
 	// EVM bridge events (EVM.FLOWTokensWithdrawn/Deposited) are NOT standard FT events.
 	// They must be excluded before the generic checks below which would match them.
-	if parseContractName(eventType) == "EVM" {
+	if cn == "EVM" {
+		return false, false
+	}
+	// Staking/epoch contract events (e.g. FlowIDTableStaking.TokensWithdrawn) are NOT
+	// token transfer events — they track staking state changes, not FT movements.
+	if stakingContracts[cn] {
 		return false, false
 	}
 	if strings.Contains(eventType, "NonFungibleToken.") &&

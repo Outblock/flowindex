@@ -112,7 +112,7 @@ export default function Sidebar() {
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -10 }}
-                                    className="flex flex-col whitespace-nowrap overflow-hidden"
+                                    className="flex flex-col whitespace-nowrap overflow-hidden pr-1"
                                 >
                                     <span className="text-2xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic leading-none">
                                         flow<span className="text-nothing-green">index</span>

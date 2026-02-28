@@ -10,7 +10,7 @@ RUN go mod download
 
 COPY backend/ .
 # OpenAPI specs live at the repo root but are served by the backend.
-COPY openapi-v1.json openapi-v2.json find-api.json api.json ./
+COPY openapi-v1.json openapi-v2.json ./
 RUN go mod tidy
 ARG GIT_COMMIT=unknown
 RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -ldflags="-X main.BuildCommit=${GIT_COMMIT}" -o indexer main.go
@@ -31,8 +31,6 @@ COPY --from=builder /app/backfill_token_transfers .
 COPY --from=builder /app/schema_v2.sql .
 COPY --from=builder /app/openapi-v1.json .
 COPY --from=builder /app/openapi-v2.json .
-COPY --from=builder /app/find-api.json .
-COPY --from=builder /app/api.json .
 COPY --from=builder /app/docs ./docs
 
 EXPOSE 8080

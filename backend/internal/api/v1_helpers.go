@@ -735,7 +735,7 @@ func toNFTTransferOutput(t models.TokenTransfer, contractName, addrFilter string
 	return out
 }
 
-func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[string]repository.TokenMetadataInfo) map[string]interface{} {
+func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[string]repository.TokenMetadataInfo, ftPrices map[string]float64) map[string]interface{} {
 	ft := make([]map[string]interface{}, 0, len(s.FT))
 	for _, f := range s.FT {
 		item := map[string]interface{}{
@@ -756,6 +756,9 @@ func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[s
 			if m.Logo != "" {
 				item["logo"] = m.Logo
 			}
+		}
+		if p, ok := ftPrices[f.Token]; ok && p > 0 {
+			item["usd_price"] = p
 		}
 		ft = append(ft, item)
 	}
@@ -785,14 +788,35 @@ func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[s
 	}
 }
 
-func toFlowTransactionOutputWithTransfers(t models.Transaction, events []models.Event, contracts []string, tags []string, fee float64, transfers *repository.TransferSummary, ftMeta, nftMeta map[string]repository.TokenMetadataInfo) map[string]interface{} {
+func toFlowTransactionOutputWithTransfers(t models.Transaction, events []models.Event, contracts []string, tags []string, fee float64, transfers *repository.TransferSummary, ftMeta, nftMeta map[string]repository.TokenMetadataInfo, ftPrices map[string]float64) map[string]interface{} {
 	out := toFlowTransactionOutput(t, events, contracts, tags, fee)
 	if transfers != nil {
-		out["transfer_summary"] = toTransferSummaryOutput(*transfers, ftMeta, nftMeta)
+		out["transfer_summary"] = toTransferSummaryOutput(*transfers, ftMeta, nftMeta, ftPrices)
 	} else {
 		out["transfer_summary"] = map[string]interface{}{"ft": []interface{}{}, "nft": []interface{}{}}
 	}
 	return out
+}
+
+// buildFTPrices returns a map of token identifier -> USD price at the given timestamp.
+func (s *Server) buildFTPrices(ftMeta map[string]repository.TokenMetadataInfo, ts time.Time) map[string]float64 {
+	if s.priceCache == nil {
+		return nil
+	}
+	prices := make(map[string]float64, len(ftMeta))
+	for id, meta := range ftMeta {
+		sym := meta.MarketSymbol
+		if sym == "" {
+			sym = meta.Symbol
+		}
+		if sym == "" {
+			continue
+		}
+		if p, ok := s.priceCache.GetPriceAt(sym, ts); ok && p > 0 {
+			prices[id] = p
+		}
+	}
+	return prices
 }
 
 // collectTransferTokenIDs extracts unique token identifiers from a transfer list.

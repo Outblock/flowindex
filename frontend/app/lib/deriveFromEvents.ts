@@ -18,6 +18,15 @@ export interface FTTransfer {
   amount: string;
   event_index: number;
   transfer_type: TransferType;
+  /** Actual EVM destination when the Cadence-level `to` is a COA bridge */
+  evm_to_address?: string;
+  /** Actual EVM source when the Cadence-level `from` is a COA bridge */
+  evm_from_address?: string;
+  /** Display fields enriched from transfer_summary metadata */
+  token_logo?: string;
+  token_symbol?: string;
+  token_name?: string;
+  usd_value?: number;
 }
 
 export interface NFTTransfer {
@@ -155,9 +164,20 @@ function formatAddr(addr: string): string {
 const WRAPPER_CONTRACTS = new Set(['FungibleToken', 'NonFungibleToken']);
 const FEE_VAULT_ADDRESS = 'f919ee77447b7497';
 
+const STAKING_CONTRACTS = new Set([
+  'FlowIDTableStaking', 'FlowStakingCollection', 'LockedTokens', 'FlowEpoch',
+  'FlowDKG', 'FlowClusterQC',
+]);
+
 function classifyTokenEvent(eventType: string): { isToken: boolean; isNFT: boolean } {
+  const contractName = parseContractName(eventType);
   // EVM bridge events (EVM.FLOWTokensWithdrawn/Deposited) are NOT standard FT events
-  if (parseContractName(eventType) === 'EVM') {
+  if (contractName === 'EVM') {
+    return { isToken: false, isNFT: false };
+  }
+  // Staking/epoch contract events (e.g. FlowIDTableStaking.TokensWithdrawn) are NOT
+  // token transfer events — they track staking state changes, not FT movements.
+  if (STAKING_CONTRACTS.has(contractName)) {
     return { isToken: false, isNFT: false };
   }
   if (eventType.includes('NonFungibleToken.') &&
@@ -389,6 +409,65 @@ function buildTokenTransfers(legs: TokenLeg[]): RawTransfer[] {
 
 // ── EVM extraction ──
 
+/** Decode a Flow EVM "direct call" raw_tx_payload (0xff-prefixed RLP).
+ *  Format: 0xff || RLP([nonce, subType, from(20B), to(20B), data, value, gasLimit, ...])
+ */
+function decodeDirectCallPayload(hexPayload: string): { from: string; to: string; value: string } | null {
+  try {
+    let hex = hexPayload.replace(/^0x/, '').toLowerCase();
+    if (!hex.startsWith('ff') || hex.length < 10) return null;
+    hex = hex.slice(2);
+    const bytes = new Uint8Array(hex.match(/.{2}/g)!.map(b => parseInt(b, 16)));
+    let pos = 0;
+    // Skip RLP list header
+    if (bytes[pos] >= 0xf8) { pos += 1 + (bytes[pos] - 0xf7); }
+    else if (bytes[pos] >= 0xc0) { pos += 1; }
+    else { return null; }
+
+    function readItem(): Uint8Array {
+      if (pos >= bytes.length) return new Uint8Array(0);
+      const b = bytes[pos];
+      if (b <= 0x7f) { pos++; return new Uint8Array([b]); }
+      if (b <= 0xb7) { const len = b - 0x80; pos++; const out = bytes.slice(pos, pos + len); pos += len; return out; }
+      if (b <= 0xbf) { const ll = b - 0xb7; pos++; let len = 0; for (let i = 0; i < ll; i++) len = (len << 8) | bytes[pos + i]; pos += ll; const out = bytes.slice(pos, pos + len); pos += len; return out; }
+      return new Uint8Array(0);
+    }
+    const toHex = (b: Uint8Array) => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+
+    readItem(); // nonce
+    readItem(); // subType
+    const fromBytes = readItem(); // from (20 bytes)
+    const toBytes = readItem(); // to (20 bytes)
+    readItem(); // data
+    const valueBytes = readItem(); // value
+    const from = fromBytes.length === 20 ? '0x' + toHex(fromBytes) : '';
+    const toH = toHex(toBytes);
+    const to = toBytes.length === 20 && !/^0{40}$/.test(toH) ? '0x' + toH : '';
+    let value = '0';
+    if (valueBytes.length > 0) {
+      let n = BigInt(0);
+      for (const byte of valueBytes) n = (n << BigInt(8)) | BigInt(byte);
+      value = n.toString();
+    }
+    return { from, to, value };
+  } catch { return null; }
+}
+
+/** Try to extract raw tx payload hex from parsed Cadence event fields */
+function extractPayloadHex(fields: Record<string, any>): string {
+  for (const key of ['payload', 'transaction', 'tx', 'txPayload', 'transactionPayload']) {
+    if (key in fields && fields[key] != null) {
+      const v = fields[key];
+      if (typeof v === 'string') return v;
+      // byte array as number array → hex
+      if (Array.isArray(v) && v.length > 0) {
+        return '0x' + v.map((b: any) => (Number(b) & 0xff).toString(16).padStart(2, '0')).join('');
+      }
+    }
+  }
+  return '';
+}
+
 function extractEVMHash(payload: Record<string, any>): string {
   for (const key of ['hash', 'transactionHash', 'txHash', 'evmHash']) {
     if (key in payload) {
@@ -451,14 +530,32 @@ function parseEVMExecution(event: any): EVMExecution | null {
   const hash = extractEVMHash(fields);
   if (!hash) return null;
 
+  let from = formatAddr(extractHexField(fields, 'from', 'fromAddress', 'sender'));
+  let to = formatAddr(extractHexField(fields, 'to', 'toAddress', 'recipient'));
+  let value = extractStringField(fields, 'value') || '0';
+
+  // For Flow direct calls (0xff prefix), from/to aren't in top-level event fields —
+  // they're only in the raw transaction payload bytes. Decode from there.
+  if (!from || !to) {
+    const payloadHex = extractPayloadHex(fields);
+    if (payloadHex) {
+      const decoded = decodeDirectCallPayload(payloadHex);
+      if (decoded) {
+        if (!from && decoded.from) from = decoded.from;
+        if (!to && decoded.to) to = decoded.to;
+        if (value === '0' && decoded.value !== '0') value = decoded.value;
+      }
+    }
+  }
+
   return {
     hash: '0x' + hash,
-    from: formatAddr(extractHexField(fields, 'from', 'fromAddress', 'sender')),
-    to: formatAddr(extractHexField(fields, 'to', 'toAddress', 'recipient')),
+    from,
+    to,
     gas_used: extractNumField(fields, 'gasConsumed', 'gasUsed', 'gas_used'),
     gas_limit: extractNumField(fields, 'gasLimit', 'gas', 'gas_limit'),
     gas_price: extractStringField(fields, 'gasPrice', 'gas_price') || '0',
-    value: extractStringField(fields, 'value') || '0',
+    value,
     status: 'SEALED',
     event_index: event.event_index ?? 0,
     block_number: event.block_height,
@@ -669,6 +766,40 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
         event_index: t.eventIndex,
         transfer_type: transferType,
       });
+    }
+  }
+
+  // Enrich cross-VM FlowToken transfers with actual EVM destination/source
+  // from EVM.TransactionExecuted events. The Cadence-level transfer only sees the
+  // COA bridge address, but the EVM execution reveals the true recipient/sender.
+  if (evmExecutions.length > 0 && ftTransfers.length > 0) {
+    for (const ft of ftTransfers) {
+      if (!ft.token.includes('FlowToken')) continue;
+      const toNorm = normalizeFlowAddress(ft.to_address);
+      const fromNorm = normalizeFlowAddress(ft.from_address);
+      // COA addresses: 40 hex chars with 10+ leading zeros
+      const isToCOA = toNorm.length > 16 && /^0{10,}/.test(toNorm);
+      const isFromCOA = fromNorm.length > 16 && /^0{10,}/.test(fromNorm);
+      if (isToCOA) {
+        // FLOW going Cadence → EVM: find EVM execution from the COA with value > 0
+        const exec = evmExecutions.find(e => {
+          const execFrom = normalizeFlowAddress(e.from);
+          return execFrom === toNorm && e.to && parseFloat(e.value) > 0;
+        });
+        if (exec) {
+          ft.evm_to_address = exec.to;
+        }
+      }
+      if (isFromCOA) {
+        // FLOW going EVM → Cadence: find EVM execution to the COA with value > 0
+        const exec = evmExecutions.find(e => {
+          const execTo = normalizeFlowAddress(e.to);
+          return execTo === fromNorm && e.from && parseFloat(e.value) > 0;
+        });
+        if (exec) {
+          ft.evm_from_address = exec.from;
+        }
+      }
     }
   }
 

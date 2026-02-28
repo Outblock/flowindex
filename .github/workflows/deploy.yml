@@ -37,8 +37,6 @@ jobs:
               - 'backend/**'
               - 'openapi-v1.json'
               - 'openapi-v2.json'
-              - 'find-api.json'
-              - 'api.json'
               - '.github/workflows/deploy.yml'
             frontend:
               - 'frontend/**'

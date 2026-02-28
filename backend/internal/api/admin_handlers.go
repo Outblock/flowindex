@@ -1274,3 +1274,141 @@ func (s *Server) handleAdminBackfillStakingBlocks(w http.ResponseWriter, r *http
 		"errors":    errMsgs,
 	}, nil, nil)
 }
+
+// handleAdminReprocessWorker re-runs a specific worker (forward) for a height range.
+// POST /admin/reprocess-worker
+//
+//	{"worker": "token_worker", "from_height": 85000000, "to_height": 143000000,
+//	 "chunk_size": 1000, "concurrency": 4, "delete_staking_transfers": true}
+//
+// Supported workers: token_worker, evm_worker
+func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Worker                  string `json:"worker"`
+		FromHeight              uint64 `json:"from_height"`
+		ToHeight                uint64 `json:"to_height"`
+		ChunkSize               uint64 `json:"chunk_size"`
+		Concurrency             int    `json:"concurrency"`
+		DeleteStakingTransfers  bool   `json:"delete_staking_transfers"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Worker == "" || req.FromHeight == 0 || req.ToHeight == 0 {
+		writeAPIError(w, http.StatusBadRequest, "worker, from_height, and to_height are required")
+		return
+	}
+	if req.ToHeight < req.FromHeight {
+		writeAPIError(w, http.StatusBadRequest, "to_height must be >= from_height")
+		return
+	}
+	if req.ChunkSize == 0 {
+		req.ChunkSize = 1000
+	}
+	if req.Concurrency < 1 {
+		req.Concurrency = 1
+	}
+	if req.Concurrency > 16 {
+		req.Concurrency = 16
+	}
+
+	// Instantiate the worker
+	var proc ingester.Processor
+	switch req.Worker {
+	case "token_worker":
+		proc = ingester.NewTokenWorker(s.repo)
+	case "evm_worker":
+		proc = ingester.NewEVMWorker(s.repo)
+	case "proposer_key_backfill":
+		if s.client == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "no Flow client configured")
+			return
+		}
+		proc = ingester.NewProposerKeyBackfillWorker(s.repo, s.client)
+	default:
+		writeAPIError(w, http.StatusBadRequest, fmt.Sprintf("unsupported worker: %s (supported: token_worker, evm_worker, proposer_key_backfill)", req.Worker))
+		return
+	}
+
+	// Optional: delete staking FT transfers before re-processing
+	if req.DeleteStakingTransfers && req.Worker == "token_worker" {
+		stakingContracts := []string{"FlowIDTableStaking", "FlowStakingCollection", "LockedTokens", "FlowEpoch", "FlowDKG", "FlowClusterQC"}
+		for _, cn := range stakingContracts {
+			deleted, _, err := s.repo.DeleteFTTransfersByContractName(r.Context(), cn)
+			if err != nil {
+				log.Printf("[admin] reprocess-worker: failed to delete %s transfers: %v", cn, err)
+			} else if deleted > 0 {
+				log.Printf("[admin] reprocess-worker: deleted %d bogus %s FT transfers", deleted, cn)
+			}
+		}
+	}
+
+	// Build chunks
+	type chunk struct{ from, to uint64 }
+	var chunks []chunk
+	for h := req.FromHeight; h < req.ToHeight; h += req.ChunkSize {
+		end := h + req.ChunkSize
+		if end > req.ToHeight {
+			end = req.ToHeight
+		}
+		chunks = append(chunks, chunk{from: h, to: end})
+	}
+
+	totalChunks := len(chunks)
+	log.Printf("[admin] reprocess-worker: %s from %d to %d (%d chunks, concurrency=%d)",
+		req.Worker, req.FromHeight, req.ToHeight, totalChunks, req.Concurrency)
+
+	// Process in parallel with bounded concurrency
+	// Run in background goroutine so the HTTP response returns immediately.
+	go func() {
+		sem := make(chan struct{}, req.Concurrency)
+		var mu sync.Mutex
+		processed := 0
+		errored := 0
+		startTime := time.Now()
+
+		for i, c := range chunks {
+			sem <- struct{}{}
+			go func(idx int, ch chunk) {
+				defer func() { <-sem }()
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+				if err := proc.ProcessRange(ctx, ch.from, ch.to); err != nil {
+					mu.Lock()
+					errored++
+					mu.Unlock()
+					log.Printf("[admin] reprocess-worker: %s chunk [%d,%d) FAILED: %v", req.Worker, ch.from, ch.to, err)
+				} else {
+					mu.Lock()
+					processed++
+					p := processed
+					e := errored
+					mu.Unlock()
+					if p%100 == 0 || p+e == totalChunks {
+						elapsed := time.Since(startTime).Round(time.Second)
+						log.Printf("[admin] reprocess-worker: %s progress %d/%d (errors=%d) elapsed=%s",
+							req.Worker, p, totalChunks, e, elapsed)
+					}
+				}
+			}(i, c)
+		}
+		// Wait for all goroutines
+		for i := 0; i < req.Concurrency; i++ {
+			sem <- struct{}{}
+		}
+		elapsed := time.Since(startTime).Round(time.Second)
+		log.Printf("[admin] reprocess-worker: %s DONE processed=%d errored=%d total=%d elapsed=%s",
+			req.Worker, processed, errored, totalChunks, elapsed)
+	}()
+
+	writeAPIResponse(w, map[string]interface{}{
+		"worker":      req.Worker,
+		"from_height": req.FromHeight,
+		"to_height":   req.ToHeight,
+		"chunk_size":  req.ChunkSize,
+		"concurrency": req.Concurrency,
+		"total_chunks": totalChunks,
+		"message":     fmt.Sprintf("Reprocessing %s from %d to %d in background (%d chunks). Check server logs for progress.", req.Worker, req.FromHeight, req.ToHeight, totalChunks),
+	}, nil, nil)
+}

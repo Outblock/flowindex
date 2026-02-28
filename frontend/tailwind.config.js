@@ -42,8 +42,10 @@ export default {
         // ... (keep rest default)
       },
       fontFamily: {
-        mono: ["Geist Mono", "monospace"],
-        sans: ["Geist Sans", ...fontFamily.sans],
+        mono: ["Inconsolata", "Space Mono", "monospace"],
+        sans: ["Inconsolata", "Space Mono", ...fontFamily.sans],
+        'geist': ["Geist Sans", "sans-serif"],
+        'geist-mono': ["Geist Mono", "monospace"],
       },
       borderRadius: {
         lg: `var(--radius)`,
