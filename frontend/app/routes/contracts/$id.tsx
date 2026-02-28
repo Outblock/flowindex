@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Contract } from '../../api/gen/find';
 import { resolveApiBaseUrl } from '../../api';
@@ -44,9 +44,15 @@ interface ContractTransaction {
 
 export const Route = createFileRoute('/contracts/$id')({
     component: ContractDetail,
-    validateSearch: (search: Record<string, unknown>): { tab?: ContractTab } => {
+    validateSearch: (search: Record<string, unknown>): { tab?: ContractTab; line?: number; col?: number } => {
         const tab = search.tab as string;
-        return { tab: VALID_TABS.includes(tab as ContractTab) ? (tab as ContractTab) : undefined };
+        const line = Number(search.line) || undefined;
+        const col = Number(search.col) || undefined;
+        return {
+            tab: VALID_TABS.includes(tab as ContractTab) ? (tab as ContractTab) : undefined,
+            line,
+            col,
+        };
     },
     loader: async ({ params }) => {
         try {
@@ -96,7 +102,7 @@ export const Route = createFileRoute('/contracts/$id')({
 
 function ContractDetail() {
     const { id } = Route.useParams();
-    const { tab: searchTab } = Route.useSearch();
+    const { tab: searchTab, line: highlightLine } = Route.useSearch();
     const navigate = useNavigate({ from: Route.fullPath });
     const { contract: initialContract, code: initialCode, error: initialError } = Route.useLoaderData();
 
@@ -107,6 +113,18 @@ function ContractDetail() {
     const nowTick = useTimeTicker(20000);
     const { theme } = useTheme();
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
+    const scrolledRef = useRef(false);
+
+    // Scroll to highlighted line on mount
+    useEffect(() => {
+        if (highlightLine && code && !scrolledRef.current) {
+            scrolledRef.current = true;
+            setTimeout(() => {
+                const el = document.getElementById('contract-highlight-line');
+                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+        }
+    }, [highlightLine, code]);
 
     const switchTab = (tab: ContractTab) => {
         navigate({ search: { tab: tab === 'source' ? undefined : tab } as any, replace: true });
@@ -367,7 +385,22 @@ function ContractDetail() {
                                         height: '100%',
                                     }}
                                     showLineNumbers={true}
+                                    wrapLines={true}
                                     lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none", textAlign: "right" }}
+                                    lineProps={(lineNumber: number) => {
+                                        if (highlightLine && lineNumber === highlightLine) {
+                                            return {
+                                                id: 'contract-highlight-line',
+                                                style: {
+                                                    backgroundColor: theme === 'dark' ? 'rgba(74,222,128,0.12)' : 'rgba(22,163,74,0.08)',
+                                                    borderLeft: `3px solid ${theme === 'dark' ? '#4ade80' : '#16a34a'}`,
+                                                    marginLeft: '-3px',
+                                                    display: 'block',
+                                                },
+                                            };
+                                        }
+                                        return { style: { display: 'block' } };
+                                    }}
                                 >
                                     {code}
                                 </SyntaxHighlighter>

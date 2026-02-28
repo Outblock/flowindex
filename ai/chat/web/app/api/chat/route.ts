@@ -13,8 +13,8 @@ import { getSystemPrompt } from "@/lib/system-prompt";
 const MCP_URL = process.env.MCP_SERVER_URL || "http://localhost:8085/mcp";
 const CADENCE_MCP_URL =
   process.env.CADENCE_MCP_URL || "https://cadence-mcp.up.railway.app/mcp";
-const EVM_RPC_URL =
-  process.env.EVM_RPC_URL || "https://mainnet.evm.nodes.onflow.org";
+const EVM_MCP_URL =
+  process.env.EVM_MCP_URL || "https://flow-evm-mcp.up.railway.app/mcp";
 
 /* ── Curated API whitelist ── */
 
@@ -43,14 +43,16 @@ export async function POST(req: Request) {
   const { messages, thinking }: { messages: UIMessage[]; thinking?: boolean } =
     await req.json();
 
-  const [mcpClient, cadenceMcp] = await Promise.all([
+  const [mcpClient, cadenceMcp, evmMcp] = await Promise.all([
     createMCPClient({ transport: { type: "http", url: MCP_URL } }),
     createMCPClient({ transport: { type: "http", url: CADENCE_MCP_URL } }),
+    createMCPClient({ transport: { type: "http", url: EVM_MCP_URL } }),
   ]);
 
-  const [mcpTools, cadenceTools] = await Promise.all([
+  const [mcpTools, cadenceTools, evmTools] = await Promise.all([
     mcpClient.tools(),
     cadenceMcp.tools(),
+    evmMcp.tools(),
   ]);
 
   const result = streamText({
@@ -60,42 +62,10 @@ export async function POST(req: Request) {
     tools: {
       ...mcpTools,
       ...cadenceTools,
+      ...evmTools,
 
       // Web search — built-in Anthropic tool
       web_search: anthropic.tools.webSearch(),
-
-      // EVM JSON-RPC — direct calls to Flow EVM mainnet
-      evm_rpc: tool({
-        description:
-          "Execute EVM JSON-RPC calls against Flow EVM mainnet (chain ID 747). Supports standard Ethereum JSON-RPC methods: eth_call, eth_getBalance, eth_getTransactionByHash, eth_getTransactionReceipt, eth_blockNumber, eth_getBlockByNumber, eth_getLogs, eth_getCode, eth_getStorageAt, etc. Use this for live EVM on-chain state queries like token balances (ERC20/721/1155), contract reads, and transaction lookups.",
-        inputSchema: z.object({
-          method: z
-            .string()
-            .describe("JSON-RPC method name, e.g. 'eth_call', 'eth_getBalance'"),
-          params: z
-            .array(z.any())
-            .describe("JSON-RPC params array, e.g. ['0xaddr', 'latest'] for eth_getBalance"),
-        }),
-        execute: async ({ method, params }) => {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-          try {
-            const res = await fetch(EVM_RPC_URL, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-              signal: controller.signal,
-            });
-            const json = await res.json();
-            if (json.error) return { error: json.error.message || JSON.stringify(json.error) };
-            return { result: json.result };
-          } catch (err: unknown) {
-            return { error: err instanceof Error ? err.message : "EVM RPC call failed" };
-          } finally {
-            clearTimeout(timer);
-          }
-        },
-      }),
 
       // Curated API fetch
       fetch_api: tool({
@@ -198,7 +168,7 @@ export async function POST(req: Request) {
       : {}),
     stopWhen: stepCountIs(15),
     onFinish: async () => {
-      await Promise.all([mcpClient.close(), cadenceMcp.close()]);
+      await Promise.all([mcpClient.close(), cadenceMcp.close(), evmMcp.close()]);
     },
   });
 
