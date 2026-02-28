@@ -26,6 +26,7 @@ import { Route as DeveloperIndexRouteImport } from './routes/developer/index'
 import { Route as ContractsIndexRouteImport } from './routes/contracts/index'
 import { Route as BlocksIndexRouteImport } from './routes/blocks/index'
 import { Route as AccountsIndexRouteImport } from './routes/accounts/index'
+import { Route as AccountIndexRouteImport } from './routes/account/index'
 import { Route as TxsTxIdRouteImport } from './routes/txs/$txId'
 import { Route as TxTxIdRouteImport } from './routes/tx/$txId'
 import { Route as TransactionsTxIdRouteImport } from './routes/transactions/$txId'
@@ -41,6 +42,7 @@ import { Route as DeveloperCallbackRouteImport } from './routes/developer/callba
 import { Route as ContractsIdRouteImport } from './routes/contracts/$id'
 import { Route as BlocksHeightRouteImport } from './routes/blocks/$height'
 import { Route as AccountsAddressRouteImport } from './routes/accounts/$address'
+import { Route as AccountAddressRouteImport } from './routes/account/$address'
 import { Route as NftsNftTypeIndexRouteImport } from './routes/nfts/$nftType/index'
 import { Route as DeveloperSubscriptionsIndexRouteImport } from './routes/developer/subscriptions.index'
 import { Route as TxsEvmTxIdRouteImport } from './routes/txs/evm/$txId'
@@ -132,6 +134,11 @@ const AccountsIndexRoute = AccountsIndexRouteImport.update({
   path: '/accounts/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountIndexRoute = AccountIndexRouteImport.update({
+  id: '/account/',
+  path: '/account/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TxsTxIdRoute = TxsTxIdRouteImport.update({
   id: '/txs/$txId',
   path: '/txs/$txId',
@@ -207,6 +214,11 @@ const AccountsAddressRoute = AccountsAddressRouteImport.update({
   path: '/accounts/$address',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountAddressRoute = AccountAddressRouteImport.update({
+  id: '/account/$address',
+  path: '/account/$address',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NftsNftTypeIndexRoute = NftsNftTypeIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -243,6 +255,7 @@ export interface FileRoutesByFullPath {
   '/api-docs': typeof ApiDocsRoute
   '/nodes': typeof NodesRoute
   '/stats': typeof StatsRoute
+  '/account/$address': typeof AccountAddressRoute
   '/accounts/$address': typeof AccountsAddressRoute
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
@@ -258,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/transactions/$txId': typeof TransactionsTxIdRoute
   '/tx/$txId': typeof TxTxIdRoute
   '/txs/$txId': typeof TxsTxIdRoute
+  '/account/': typeof AccountIndexRoute
   '/accounts/': typeof AccountsIndexRoute
   '/blocks/': typeof BlocksIndexRoute
   '/contracts/': typeof ContractsIndexRoute
@@ -282,6 +296,7 @@ export interface FileRoutesByTo {
   '/api-docs': typeof ApiDocsRoute
   '/nodes': typeof NodesRoute
   '/stats': typeof StatsRoute
+  '/account/$address': typeof AccountAddressRoute
   '/accounts/$address': typeof AccountsAddressRoute
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
@@ -295,6 +310,7 @@ export interface FileRoutesByTo {
   '/transactions/$txId': typeof TransactionsTxIdRoute
   '/tx/$txId': typeof TxTxIdRoute
   '/txs/$txId': typeof TxsTxIdRoute
+  '/account': typeof AccountIndexRoute
   '/accounts': typeof AccountsIndexRoute
   '/blocks': typeof BlocksIndexRoute
   '/contracts': typeof ContractsIndexRoute
@@ -320,6 +336,7 @@ export interface FileRoutesById {
   '/api-docs': typeof ApiDocsRoute
   '/nodes': typeof NodesRoute
   '/stats': typeof StatsRoute
+  '/account/$address': typeof AccountAddressRoute
   '/accounts/$address': typeof AccountsAddressRoute
   '/blocks/$height': typeof BlocksHeightRoute
   '/contracts/$id': typeof ContractsIdRoute
@@ -335,6 +352,7 @@ export interface FileRoutesById {
   '/transactions/$txId': typeof TransactionsTxIdRoute
   '/tx/$txId': typeof TxTxIdRoute
   '/txs/$txId': typeof TxsTxIdRoute
+  '/account/': typeof AccountIndexRoute
   '/accounts/': typeof AccountsIndexRoute
   '/blocks/': typeof BlocksIndexRoute
   '/contracts/': typeof ContractsIndexRoute
@@ -361,6 +379,7 @@ export interface FileRouteTypes {
     | '/api-docs'
     | '/nodes'
     | '/stats'
+    | '/account/$address'
     | '/accounts/$address'
     | '/blocks/$height'
     | '/contracts/$id'
@@ -376,6 +395,7 @@ export interface FileRouteTypes {
     | '/transactions/$txId'
     | '/tx/$txId'
     | '/txs/$txId'
+    | '/account/'
     | '/accounts/'
     | '/blocks/'
     | '/contracts/'
@@ -400,6 +420,7 @@ export interface FileRouteTypes {
     | '/api-docs'
     | '/nodes'
     | '/stats'
+    | '/account/$address'
     | '/accounts/$address'
     | '/blocks/$height'
     | '/contracts/$id'
@@ -413,6 +434,7 @@ export interface FileRouteTypes {
     | '/transactions/$txId'
     | '/tx/$txId'
     | '/txs/$txId'
+    | '/account'
     | '/accounts'
     | '/blocks'
     | '/contracts'
@@ -437,6 +459,7 @@ export interface FileRouteTypes {
     | '/api-docs'
     | '/nodes'
     | '/stats'
+    | '/account/$address'
     | '/accounts/$address'
     | '/blocks/$height'
     | '/contracts/$id'
@@ -452,6 +475,7 @@ export interface FileRouteTypes {
     | '/transactions/$txId'
     | '/tx/$txId'
     | '/txs/$txId'
+    | '/account/'
     | '/accounts/'
     | '/blocks/'
     | '/contracts/'
@@ -477,6 +501,7 @@ export interface RootRouteChildren {
   ApiDocsRoute: typeof ApiDocsRoute
   NodesRoute: typeof NodesRoute
   StatsRoute: typeof StatsRoute
+  AccountAddressRoute: typeof AccountAddressRoute
   AccountsAddressRoute: typeof AccountsAddressRoute
   BlocksHeightRoute: typeof BlocksHeightRoute
   ContractsIdRoute: typeof ContractsIdRoute
@@ -492,6 +517,7 @@ export interface RootRouteChildren {
   TransactionsTxIdRoute: typeof TransactionsTxIdRoute
   TxTxIdRoute: typeof TxTxIdRoute
   TxsTxIdRoute: typeof TxsTxIdRoute
+  AccountIndexRoute: typeof AccountIndexRoute
   AccountsIndexRoute: typeof AccountsIndexRoute
   BlocksIndexRoute: typeof BlocksIndexRoute
   ContractsIndexRoute: typeof ContractsIndexRoute
@@ -626,6 +652,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/': {
+      id: '/account/'
+      path: '/account'
+      fullPath: '/account/'
+      preLoaderRoute: typeof AccountIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/txs/$txId': {
       id: '/txs/$txId'
       path: '/txs/$txId'
@@ -731,6 +764,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountsAddressRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/$address': {
+      id: '/account/$address'
+      path: '/account/$address'
+      fullPath: '/account/$address'
+      preLoaderRoute: typeof AccountAddressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/nfts/$nftType/': {
       id: '/nfts/$nftType/'
       path: '/'
@@ -807,6 +847,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDocsRoute: ApiDocsRoute,
   NodesRoute: NodesRoute,
   StatsRoute: StatsRoute,
+  AccountAddressRoute: AccountAddressRoute,
   AccountsAddressRoute: AccountsAddressRoute,
   BlocksHeightRoute: BlocksHeightRoute,
   ContractsIdRoute: ContractsIdRoute,
@@ -822,6 +863,7 @@ const rootRouteChildren: RootRouteChildren = {
   TransactionsTxIdRoute: TransactionsTxIdRoute,
   TxTxIdRoute: TxTxIdRoute,
   TxsTxIdRoute: TxsTxIdRoute,
+  AccountIndexRoute: AccountIndexRoute,
   AccountsIndexRoute: AccountsIndexRoute,
   BlocksIndexRoute: BlocksIndexRoute,
   ContractsIndexRoute: ContractsIndexRoute,

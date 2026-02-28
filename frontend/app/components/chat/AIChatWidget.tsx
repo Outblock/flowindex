@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
+import { AnimatedMarkdown } from 'flowtoken';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -139,7 +140,7 @@ function classifyHex(val: string): { type: 'cadence-addr' | 'evm-addr' | 'cadenc
   // Cadence address: 16 hex chars (with or without 0x)
   if (bare.length === 16 && /^[0-9a-f]+$/.test(bare)) {
     const addr = has0x ? val : `0x${val}`;
-    return { type: 'cadence-addr', url: `https://flowindex.io/account/${addr}` };
+    return { type: 'cadence-addr', url: `https://flowindex.io/accounts/${addr}` };
   }
   // EVM address: 40 hex chars (with or without 0x)
   if (bare.length === 40 && /^[0-9a-f]+$/.test(bare)) {
@@ -151,7 +152,7 @@ function classifyHex(val: string): { type: 'cadence-addr' | 'evm-addr' | 'cadenc
     if (has0x) {
       return { type: 'evm-tx', url: `https://evm.flowindex.io/tx/${val}` };
     }
-    return { type: 'cadence-tx', url: `https://flowindex.io/tx/${val}` };
+    return { type: 'cadence-tx', url: `https://flowindex.io/txs/${val}` };
   }
   return { type: 'hex', url: null };
 }
@@ -718,7 +719,7 @@ function ChartToolPart({ part }: { part: any }) {
 
 /* ── Chat Message ── */
 
-function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: boolean }) {
+function ChatMessage({ message, hideTools, isStreamingMsg }: { message: UIMessage; hideTools?: boolean; isStreamingMsg?: boolean }) {
   if (message.role === 'user') {
     const textContent = message.parts
       .filter((p) => p.type === 'text')
@@ -772,7 +773,11 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
               if (!(part as any).text?.trim()) return null;
               return (
                 <div key={i} className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                  <MarkdownContent text={(part as any).text} />
+                  {isStreamingMsg ? (
+                    <AnimatedMarkdown content={(part as any).text} animation="fadeIn" animationDuration={300} />
+                  ) : (
+                    <MarkdownContent text={(part as any).text} />
+                  )}
                 </div>
               );
             }
@@ -1307,8 +1312,13 @@ export default function AIChatWidget() {
                   </div>
                 ) : (
                   <>
-                    {messages.map((msg) => (
-                      <ChatMessage key={msg.id} message={msg} hideTools={hideTools} />
+                    {messages.map((msg, idx) => (
+                      <ChatMessage
+                        key={msg.id}
+                        message={msg}
+                        hideTools={hideTools}
+                        isStreamingMsg={isStreaming && idx === messages.length - 1 && msg.role === 'assistant'}
+                      />
                     ))}
                     {isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
                       <div className="flex items-center gap-2 mb-4">
