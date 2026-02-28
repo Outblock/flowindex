@@ -18,6 +18,9 @@ ENV PATH="/root/.bun/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-install EVM MCP server globally so it starts fast
+RUN /root/.bun/bin/bun install -g @mcpdotdirect/evm-mcp-server
+
 COPY . .
 
 # Copy built frontend assets + node_modules from stage 1
@@ -33,6 +36,6 @@ COPY nginx.conf /etc/nginx/sites-enabled/default
 
 COPY supervisord.conf /etc/supervisor/conf.d/vanna.conf
 
-EXPOSE 80 8084 8085 3001
+EXPOSE 80 8084 8085 3001 3002
 
 CMD ["supervisord", "-n"]

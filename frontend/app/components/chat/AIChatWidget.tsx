@@ -1386,6 +1386,10 @@ export default function AIChatWidget() {
                                 <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Cadence Check & Docs</span>
                               </div>
                               <div className="flex items-center gap-2">
+                                <Bot size={10} className="text-orange-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">EVM RPC (Chain 747)</span>
+                              </div>
+                              <div className="flex items-center gap-2">
                                 <Search size={10} className="text-amber-400 shrink-0" />
                                 <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Web Search</span>
                               </div>
@@ -1395,7 +1399,7 @@ export default function AIChatWidget() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Download size={10} className="text-pink-400 shrink-0" />
-                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Chart Visualization</span>
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Charts</span>
                               </div>
                             </div>
                           </div>

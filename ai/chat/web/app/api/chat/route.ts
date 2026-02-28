@@ -13,6 +13,8 @@ import { getSystemPrompt } from "@/lib/system-prompt";
 const MCP_URL = process.env.MCP_SERVER_URL || "http://localhost:8085/mcp";
 const CADENCE_MCP_URL =
   process.env.CADENCE_MCP_URL || "https://cadence-mcp.up.railway.app/mcp";
+const EVM_MCP_URL =
+  process.env.EVM_MCP_URL || "http://localhost:3002/sse";
 
 /* ── Curated API whitelist ── */
 
@@ -46,9 +48,18 @@ export async function POST(req: Request) {
     createMCPClient({ transport: { type: "http", url: CADENCE_MCP_URL } }),
   ]);
 
-  const [mcpTools, cadenceTools] = await Promise.all([
+  // EVM MCP is optional — gracefully degrade if unavailable
+  let evmMcp: Awaited<ReturnType<typeof createMCPClient>> | null = null;
+  try {
+    evmMcp = await createMCPClient({ transport: { type: "sse", url: EVM_MCP_URL } });
+  } catch (e) {
+    console.warn("[chat] EVM MCP unavailable:", (e as Error).message);
+  }
+
+  const [mcpTools, cadenceTools, evmTools] = await Promise.all([
     mcpClient.tools(),
     cadenceMcp.tools(),
+    evmMcp ? evmMcp.tools() : Promise.resolve({}),
   ]);
 
   const result = streamText({
@@ -58,6 +69,7 @@ export async function POST(req: Request) {
     tools: {
       ...mcpTools,
       ...cadenceTools,
+      ...evmTools,
 
       // Web search — built-in Anthropic tool
       web_search: anthropic.tools.webSearch(),
@@ -163,7 +175,7 @@ export async function POST(req: Request) {
       : {}),
     stopWhen: stepCountIs(15),
     onFinish: async () => {
-      await Promise.all([mcpClient.close(), cadenceMcp.close()]);
+      await Promise.all([mcpClient.close(), cadenceMcp.close(), evmMcp?.close()].filter(Boolean));
     },
   });
 
