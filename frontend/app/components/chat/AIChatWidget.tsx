@@ -2,14 +2,15 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain, ChevronUp } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuLabel,
-  DropdownMenuSeparator,
+  DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
+import { AnimatedMarkdown } from 'flowtoken';
+import 'flowtoken/dist/styles.css';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -133,15 +134,26 @@ function SqlResultTable({ result }: { result: SqlResult }) {
 
 function classifyHex(val: string): { type: 'cadence-addr' | 'evm-addr' | 'cadence-tx' | 'evm-tx' | 'hex'; url: string | null } {
   const hex = val.toLowerCase();
-  // Cadence address: 0x + 16 hex chars
-  if (/^0x[0-9a-f]{16}$/.test(hex))
-    return { type: 'cadence-addr', url: `https://flowindex.io/accounts/${val}` };
-  // EVM address: 0x + 40 hex chars
-  if (/^0x[0-9a-f]{40}$/.test(hex))
-    return { type: 'evm-addr', url: `https://evm.flowindex.io/address/${val}` };
-  // Tx hash: 0x + 64 hex chars — could be Cadence or EVM
-  if (/^0x[0-9a-f]{64}$/.test(hex))
+  const has0x = hex.startsWith('0x');
+  const bare = has0x ? hex.slice(2) : hex;
+
+  // Cadence address: 16 hex chars (with or without 0x)
+  if (bare.length === 16 && /^[0-9a-f]+$/.test(bare)) {
+    const addr = has0x ? val : `0x${val}`;
+    return { type: 'cadence-addr', url: `https://flowindex.io/accounts/${addr}` };
+  }
+  // EVM address: 40 hex chars (with or without 0x)
+  if (bare.length === 40 && /^[0-9a-f]+$/.test(bare)) {
+    const addr = has0x ? val : `0x${val}`;
+    return { type: 'evm-addr', url: `https://evm.flowindex.io/address/${addr}` };
+  }
+  // 64 hex chars: if 0x-prefixed → EVM tx, otherwise → Cadence tx
+  if (bare.length === 64 && /^[0-9a-f]+$/.test(bare)) {
+    if (has0x) {
+      return { type: 'evm-tx', url: `https://evm.flowindex.io/tx/${val}` };
+    }
     return { type: 'cadence-tx', url: `https://flowindex.io/txs/${val}` };
+  }
   return { type: 'hex', url: null };
 }
 
@@ -161,8 +173,11 @@ function formatCellValue(val: unknown): React.ReactNode {
     return <span className="text-zinc-300 dark:text-zinc-600 italic">null</span>;
   if (typeof val === 'number') return val.toLocaleString();
   if (typeof val === 'boolean') return val ? 'true' : 'false';
-  if (typeof val === 'string' && val.startsWith('0x'))
-    return <LinkedHex val={val} />;
+  if (typeof val === 'string') {
+    // Check if it's a linkable hex value (0x-prefixed or bare 64-char hash)
+    const { url } = classifyHex(val);
+    if (url) return <LinkedHex val={val} />;
+  }
   return String(val);
 }
 
@@ -265,7 +280,8 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
 
 /* ── Auto-link hex values in text ── */
 
-const HEX_RE = /\b(0x[0-9a-fA-F]{16,64})\b/g;
+// Match 0x-prefixed hex (16/40/64 chars) OR bare hex of exactly 64 chars (Cadence tx hash)
+const HEX_RE = /\b(0x[0-9a-fA-F]{16}|0x[0-9a-fA-F]{40}|0x[0-9a-fA-F]{64}|[0-9a-fA-F]{64})\b/g;
 
 function AutoLinkText({ children }: { children: React.ReactNode }): React.ReactNode {
   return processChildren(children);
@@ -703,16 +719,16 @@ function ChartToolPart({ part }: { part: any }) {
 
 /* ── Chat Message ── */
 
-function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: boolean }) {
+function ChatMessage({ message, hideTools, isStreamingMsg }: { message: UIMessage; hideTools?: boolean; isStreamingMsg?: boolean }) {
   if (message.role === 'user') {
     const textContent = message.parts
       .filter((p) => p.type === 'text')
       .map((p) => (p as any).text)
       .join('');
-    // Extract image attachments from message
-    const allAttachments = (message as any).experimental_attachments || [];
-    const images = allAttachments.filter((a: any) => a.contentType?.startsWith('image/'));
-    const pdfs = allAttachments.filter((a: any) => a.contentType === 'application/pdf');
+    // Extract file parts from message
+    const fileParts = message.parts.filter((p) => p.type === 'file') as any[];
+    const images = fileParts.filter((p) => p.mediaType?.startsWith('image/'));
+    const pdfs = fileParts.filter((p) => p.mediaType === 'application/pdf');
 
     return (
       <div className="flex justify-end mb-4">
@@ -723,14 +739,14 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
                 <img
                   key={`img-${i}`}
                   src={img.url}
-                  alt={img.name || 'attachment'}
+                  alt={img.filename || 'attachment'}
                   className="w-20 h-20 object-cover rounded-sm border border-nothing-green/20"
                 />
               ))}
               {pdfs.map((pdf: any, i: number) => (
                 <div key={`pdf-${i}`} className="w-20 h-20 rounded-sm border border-nothing-green/20 bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center">
                   <FileText size={20} className="text-red-500" />
-                  <span className="text-[8px] text-red-500 font-bold mt-0.5 truncate max-w-[70px]">{pdf.name || 'PDF'}</span>
+                  <span className="text-[8px] text-red-500 font-bold mt-0.5 truncate max-w-[70px]">{pdf.filename || 'PDF'}</span>
                 </div>
               ))}
             </div>
@@ -757,7 +773,11 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
               if (!(part as any).text?.trim()) return null;
               return (
                 <div key={i} className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                  <MarkdownContent text={(part as any).text} />
+                  {isStreamingMsg ? (
+                    <AnimatedMarkdown content={(part as any).text} animation="colorTransition" animationDuration="0.6s" animationTimingFunction="ease-out" sep="word" />
+                  ) : (
+                    <MarkdownContent text={(part as any).text} />
+                  )}
                 </div>
               );
             }
@@ -803,26 +823,40 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
                   </div>
                 );
               }
-              // Generic tool fallback — expandable
+              // Generic tool fallback — compact expandable
               const toolDone = toolPart.state === 'output-available' || toolPart.state === 'result';
               const toolErr = toolPart.state === 'output-error';
               const toolOutput = toolDone ? toolPart.output : toolErr ? (toolPart.errorText || 'Tool call failed') : null;
               const toolInput = toolPart.input ?? toolPart.args;
               const hasDetails = toolInput || toolOutput;
+              // Friendly tool name: snake_case → Title Case
+              const friendlyName = name.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+              // Brief summary of input for the collapsed line
+              const inputSummary = toolInput
+                ? typeof toolInput === 'string'
+                  ? toolInput.slice(0, 60)
+                  : (() => { const s = JSON.stringify(toolInput); return s.length > 80 ? s.slice(0, 77) + '...' : s; })()
+                : '';
+              // Truncate long output for display
+              const truncateOutput = (v: unknown) => {
+                const s = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+                return s.length > 2000 ? s.slice(0, 2000) + '\n...[truncated]' : s;
+              };
               return (
                 <details key={i} className="my-1 rounded-sm border border-zinc-100 dark:border-white/5 overflow-hidden">
                   <summary className="flex items-center gap-2 py-1.5 px-2.5 text-[11px] text-zinc-400 bg-zinc-50 dark:bg-white/[0.02] cursor-pointer hover:bg-zinc-100 dark:hover:bg-white/[0.04] select-none">
                     {!toolDone && !toolErr ? (
-                      <Loader2 size={10} className="animate-spin" />
+                      <Loader2 size={10} className="animate-spin flex-shrink-0" />
                     ) : toolErr ? (
-                      <X size={10} className="text-red-400" />
+                      <X size={10} className="text-red-400 flex-shrink-0" />
                     ) : (
-                      <Check size={10} className="text-nothing-green" />
+                      <Check size={10} className="text-nothing-green flex-shrink-0" />
                     )}
-                    <span className="uppercase tracking-widest font-bold">{name}</span>
+                    <span className="font-bold truncate">{friendlyName}</span>
+                    {inputSummary && <span className="text-zinc-500 truncate ml-1 font-mono text-[10px]">{inputSummary}</span>}
                   </summary>
                   {hasDetails && (
-                    <div className="px-3 py-2 text-[11px] font-mono space-y-1.5 bg-zinc-900 text-zinc-400 overflow-x-auto">
+                    <div className="px-3 py-2 text-[11px] font-mono space-y-1.5 bg-zinc-900 text-zinc-400 max-h-[200px] overflow-auto">
                       {toolInput && (
                         <div>
                           <span className="text-zinc-500">Input: </span>
@@ -832,7 +866,7 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
                       {toolOutput && (
                         <div>
                           <span className="text-zinc-500">Output: </span>
-                          <pre className={`whitespace-pre-wrap break-words ${toolErr ? 'text-red-400' : 'text-zinc-300'}`}>{typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput, null, 2)}</pre>
+                          <pre className={`whitespace-pre-wrap break-words ${toolErr ? 'text-red-400' : 'text-zinc-300'}`}>{truncateOutput(toolOutput)}</pre>
                         </div>
                       )}
                     </div>
@@ -867,10 +901,10 @@ const MAX_WIDTH = 1100;
 const DEFAULT_WIDTH = 480;
 
 type ChatMode = 'fast' | 'balanced' | 'deep';
-const CHAT_MODES: { key: ChatMode; label: string; icon: typeof Zap; desc: string }[] = [
-  { key: 'fast', label: 'Fast', icon: Zap, desc: 'Quick answers' },
-  { key: 'balanced', label: 'Balanced', icon: Scale, desc: 'Better quality' },
-  { key: 'deep', label: 'Deep', icon: Brain, desc: 'Extended thinking' },
+const CHAT_MODES: { key: ChatMode; label: string; icon: typeof Zap; desc: string; model: string }[] = [
+  { key: 'fast', label: 'Fast', icon: Zap, desc: 'Quick answers', model: 'Haiku' },
+  { key: 'balanced', label: 'Balanced', icon: Scale, desc: 'Better quality', model: 'Sonnet' },
+  { key: 'deep', label: 'Deep', icon: Brain, desc: 'Extended thinking', model: 'Opus' },
 ];
 const MODE_STORAGE_KEY = 'flowai-chat-mode';
 
@@ -1052,21 +1086,24 @@ export default function AIChatWidget() {
     if (Date.now() - stoppedAtRef.current < 300) return;
     setChatError(null);
 
-    // Convert files to data URL attachments for the AI SDK
-    const experimental_attachments = await Promise.all(
+    // Convert files to data URL parts for the AI SDK
+    const fileParts = await Promise.all(
       attachments.map(async (file) => {
-        const base64 = await new Promise<string>((resolve) => {
+        const dataUrl = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(file);
         });
-        return { name: file.name, contentType: file.type, url: base64 };
+        return { type: 'file' as const, filename: file.name, mediaType: file.type, url: dataUrl };
       })
     );
 
     sendMessage({
-      text: text || 'Analyze this file',
-      ...(experimental_attachments.length > 0 ? { experimental_attachments } : {}),
+      role: 'user',
+      parts: [
+        ...fileParts,
+        { type: 'text' as const, text: text || 'Analyze this file' },
+      ],
     });
     setInput('');
     setAttachments([]);
@@ -1275,8 +1312,13 @@ export default function AIChatWidget() {
                   </div>
                 ) : (
                   <>
-                    {messages.map((msg) => (
-                      <ChatMessage key={msg.id} message={msg} hideTools={hideTools} />
+                    {messages.map((msg, idx) => (
+                      <ChatMessage
+                        key={msg.id}
+                        message={msg}
+                        hideTools={hideTools}
+                        isStreamingMsg={isStreaming && idx === messages.length - 1 && msg.role === 'assistant'}
+                      />
                     ))}
                     {isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
                       <div className="flex items-center gap-2 mb-4">
@@ -1412,18 +1454,26 @@ export default function AIChatWidget() {
                             <ChevronUp size={8} className="ml-0.5 opacity-60" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent side="top" align="start" className="min-w-[180px]">
-                          <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-zinc-400">Model</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuRadioGroup value={chatMode} onValueChange={(v) => handleModeChange(v as ChatMode)}>
-                            {CHAT_MODES.map(({ key, label, icon: Icon, desc }) => (
-                              <DropdownMenuRadioItem key={key} value={key} className="cursor-pointer">
-                                <Icon size={14} className="mr-1" />
-                                <span className="font-medium">{label}</span>
-                                <span className="ml-auto text-[10px] text-zinc-400">{desc}</span>
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </DropdownMenuRadioGroup>
+                        <DropdownMenuContent side="top" align="start" className="min-w-[200px] z-[80] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg p-1">
+                          <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-zinc-400 px-2 py-1">Model</DropdownMenuLabel>
+                          <DropdownMenuSeparator className="bg-zinc-100 dark:bg-white/10" />
+                          {CHAT_MODES.map(({ key, label, icon: Icon, desc, model }) => (
+                            <DropdownMenuItem
+                              key={key}
+                              onClick={() => handleModeChange(key)}
+                              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-sm cursor-pointer transition-colors ${
+                                chatMode === key
+                                  ? 'bg-nothing-green/10 text-nothing-green'
+                                  : 'text-zinc-700 dark:text-zinc-300'
+                              }`}
+                            >
+                              <Icon size={14} className="shrink-0" />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-medium leading-tight">{label}</span>
+                                <span className={`text-[10px] leading-tight ${chatMode === key ? 'text-nothing-green/60' : 'text-zinc-400 dark:text-zinc-500'}`}>{model} · {desc}</span>
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
                         </DropdownMenuContent>
                       </DropdownMenu>
                       <button
@@ -1434,9 +1484,9 @@ export default function AIChatWidget() {
                             ? 'bg-zinc-500/10 border border-zinc-500/30 text-zinc-500'
                             : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
                         }`}
-                        title={hideTools ? 'Tool calls hidden' : 'Hide tool calls'}
+                        title={hideTools ? 'Show tool calls' : 'Hide tool calls'}
                       >
-                        <Code size={10} />
+                        {hideTools ? <EyeOff size={10} /> : <Eye size={10} />}
                         Tools
                       </button>
                       {/* MCP tools hover popover */}

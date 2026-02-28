@@ -186,3 +186,13 @@
 .dark::view-transition-new(root) {
   z-index: 2147483646;
 }
+
+/* Override flowtoken colorTransition: green → current text color */
+@keyframes ft-colorTransition {
+  from {
+    color: var(--nothing-green);
+  }
+  to {
+    color: currentColor;
+  }
+}
