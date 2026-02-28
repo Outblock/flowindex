@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -715,29 +715,35 @@ function ChartToolPart({ part }: { part: any }) {
 
 /* ── Chat Message ── */
 
-function ChatMessage({ message }: { message: UIMessage }) {
+function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: boolean }) {
   if (message.role === 'user') {
     const textContent = message.parts
       .filter((p) => p.type === 'text')
       .map((p) => (p as any).text)
       .join('');
     // Extract image attachments from message
-    const images = (message as any).experimental_attachments?.filter(
-      (a: any) => a.contentType?.startsWith('image/'),
-    ) || [];
+    const allAttachments = (message as any).experimental_attachments || [];
+    const images = allAttachments.filter((a: any) => a.contentType?.startsWith('image/'));
+    const pdfs = allAttachments.filter((a: any) => a.contentType === 'application/pdf');
 
     return (
       <div className="flex justify-end mb-4">
-        <div className="max-w-[85%] bg-nothing-green/10 border border-nothing-green/20 rounded-sm px-3 py-2">
-          {images.length > 0 && (
+        <div className="max-w-[85%] bg-nothing-green/10 border border-nothing-green/20 rounded-sm px-3 py-2 overflow-hidden break-words">
+          {(images.length > 0 || pdfs.length > 0) && (
             <div className="flex gap-1.5 mb-2 flex-wrap">
               {images.map((img: any, i: number) => (
                 <img
-                  key={i}
+                  key={`img-${i}`}
                   src={img.url}
                   alt={img.name || 'attachment'}
                   className="w-20 h-20 object-cover rounded-sm border border-nothing-green/20"
                 />
+              ))}
+              {pdfs.map((pdf: any, i: number) => (
+                <div key={`pdf-${i}`} className="w-20 h-20 rounded-sm border border-nothing-green/20 bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center">
+                  <FileText size={20} className="text-red-500" />
+                  <span className="text-[8px] text-red-500 font-bold mt-0.5 truncate max-w-[70px]">{pdf.name || 'PDF'}</span>
+                </div>
               ))}
             </div>
           )}
@@ -757,7 +763,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
         <div className="shrink-0 mt-0.5 w-5 h-5 rounded-sm bg-nothing-green/10 border border-nothing-green/20 flex items-center justify-center">
           <Bot size={11} className="text-nothing-green" />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden break-words">
           {message.parts.map((part, i) => {
             if (part.type === 'text') {
               if (!(part as any).text?.trim()) return null;
@@ -768,7 +774,24 @@ function ChatMessage({ message }: { message: UIMessage }) {
               );
             }
 
+            if (part.type === 'reasoning' || (part.type as string) === 'thinking') {
+              const text = (part as any).text || (part as any).reasoning || '';
+              if (!text.trim()) return null;
+              return (
+                <details key={i} className="my-1 group">
+                  <summary className="flex items-center gap-1.5 cursor-pointer text-[10px] text-amber-500/70 uppercase tracking-widest font-bold hover:text-amber-500 select-none">
+                    <Sparkles size={9} />
+                    Thinking
+                  </summary>
+                  <div className="mt-1 pl-3 border-l-2 border-amber-500/20 text-[11px] text-zinc-400 leading-relaxed whitespace-pre-wrap">
+                    {text}
+                  </div>
+                </details>
+              );
+            }
+
             if (part.type === 'tool-invocation' || (part.type as string) === 'dynamic-tool' || (part.type as string).startsWith('tool-')) {
+              if (hideTools) return null;
               const toolPart = part as any;
               const name = toolPart.toolName ?? toolPart.type?.split('-').slice(1).join('-') ?? '';
               if (name === 'run_cadence') return <CadenceToolPart key={i} part={toolPart} />;
@@ -837,6 +860,8 @@ const DEFAULT_WIDTH = 480;
 export default function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
+  const [thinkMode, setThinkMode] = useState(false);
+  const [hideTools, setHideTools] = useState(false);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [mobileHeight, setMobileHeight] = useState<number | null>(null);
   const isDragging = useRef(false);
@@ -907,31 +932,45 @@ export default function AIChatWidget() {
 
   const [chatError, setChatError] = useState<string | null>(null);
 
-  // Image attachments
+  // File attachments (images + PDFs)
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const MAX_IMAGES = 4;
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+  const MAX_FILES = 4;
+  const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB (PDFs can be large)
+  const ACCEPTED_TYPES = ['image/', 'application/pdf'];
 
-  const addImages = useCallback((files: FileList | File[]) => {
-    const images = Array.from(files).filter(f => f.type.startsWith('image/') && f.size <= MAX_IMAGE_SIZE);
-    setAttachments(prev => [...prev, ...images].slice(0, MAX_IMAGES));
+  const isAcceptedFile = useCallback((f: File) => {
+    return f.size <= MAX_FILE_SIZE && ACCEPTED_TYPES.some(t => f.type.startsWith(t));
   }, []);
+
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const accepted = Array.from(files).filter(isAcceptedFile);
+    setAttachments(prev => [...prev, ...accepted].slice(0, MAX_FILES));
+  }, [isAcceptedFile]);
 
   const removeAttachment = useCallback((index: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Custom fetch that strips the 'user-agent' header added by ai-sdk.
-  // Safari/WebKit blocks cross-origin requests with custom User-Agent headers
-  // when the server doesn't include 'User-Agent' in Access-Control-Allow-Headers.
+  // Custom fetch: strips user-agent header (Safari CORS workaround) and injects thinking flag.
   // See: https://github.com/vercel/ai/issues/9256
+  const thinkModeRef = useRef(thinkMode);
+  thinkModeRef.current = thinkMode;
+
   const safeFetch = useCallback(async (url: RequestInfo | URL, init?: RequestInit) => {
     if (init?.headers) {
       const headers = new Headers(init.headers);
       headers.delete('user-agent');
       init = { ...init, headers };
+    }
+    // Inject thinking flag into the request body
+    if (init?.body && thinkModeRef.current) {
+      try {
+        const parsed = JSON.parse(init.body as string);
+        parsed.thinking = true;
+        init = { ...init, body: JSON.stringify(parsed) };
+      } catch { /* not JSON, skip */ }
     }
     return globalThis.fetch(url, init);
   }, []);
@@ -971,7 +1010,7 @@ export default function AIChatWidget() {
     if ((!text.trim() && attachments.length === 0) || isStreaming) return;
     setChatError(null);
 
-    // Convert images to data URL attachments for the AI SDK
+    // Convert files to data URL attachments for the AI SDK
     const experimental_attachments = await Promise.all(
       attachments.map(async (file) => {
         const base64 = await new Promise<string>((resolve) => {
@@ -984,12 +1023,29 @@ export default function AIChatWidget() {
     );
 
     sendMessage({
-      text: text || 'What is in this image?',
+      text: text || 'Analyze this file',
       ...(experimental_attachments.length > 0 ? { experimental_attachments } : {}),
     });
     setInput('');
     setAttachments([]);
   }, [sendMessage, isStreaming, attachments]);
+
+  // Listen for external "open chat with message" events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.message) {
+        setIsOpen(true);
+        setTimeout(() => {
+          handleSend(detail.message);
+        }, 400);
+      } else {
+        setIsOpen(true);
+      }
+    };
+    window.addEventListener('ai-chat:open', handler);
+    return () => window.removeEventListener('ai-chat:open', handler);
+  }, [handleSend]);
 
   const handleClear = () => {
     setMessages([]);
@@ -1005,17 +1061,17 @@ export default function AIChatWidget() {
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    const imageFiles: File[] = [];
+    const pastedFiles: File[] = [];
     for (const item of items) {
-      if (item.type.startsWith('image/')) {
+      if (item.type.startsWith('image/') || item.type === 'application/pdf') {
         const file = item.getAsFile();
-        if (file) imageFiles.push(file);
+        if (file) pastedFiles.push(file);
       }
     }
-    if (imageFiles.length > 0) {
-      addImages(imageFiles);
+    if (pastedFiles.length > 0) {
+      addFiles(pastedFiles);
     }
-  }, [addImages]);
+  }, [addFiles]);
 
   // Drag & drop handlers for the chat panel
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -1034,8 +1090,8 @@ export default function AIChatWidget() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-    if (e.dataTransfer.files?.length) addImages(e.dataTransfer.files);
-  }, [addImages]);
+    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+  }, [addFiles]);
 
   // Don't render during SSR
   if (import.meta.env.SSR) return null;
@@ -1107,7 +1163,8 @@ export default function AIChatWidget() {
                   >
                     <div className="flex flex-col items-center gap-2">
                       <ImageIcon size={32} className="text-nothing-green" />
-                      <span className="text-sm font-bold text-nothing-green uppercase tracking-widest">Drop image here</span>
+                      <span className="text-sm font-bold text-nothing-green uppercase tracking-widest">Drop file here</span>
+                      <span className="text-[10px] text-nothing-green/60">Images & PDFs</span>
                     </div>
                   </motion.div>
                 )}
@@ -1177,7 +1234,7 @@ export default function AIChatWidget() {
                 ) : (
                   <>
                     {messages.map((msg) => (
-                      <ChatMessage key={msg.id} message={msg} />
+                      <ChatMessage key={msg.id} message={msg} hideTools={hideTools} />
                     ))}
                     {isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
                       <div className="flex items-center gap-2 mb-4">
@@ -1200,16 +1257,23 @@ export default function AIChatWidget() {
 
               {/* Input */}
               <div className="shrink-0 border-t border-zinc-200 dark:border-white/10 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-                {/* Image preview thumbnails */}
+                {/* File preview thumbnails */}
                 {attachments.length > 0 && (
                   <div className="flex gap-2 mb-2 flex-wrap">
                     {attachments.map((file, i) => (
                       <div key={`${file.name}-${i}`} className="relative group w-14 h-14 rounded-sm overflow-hidden border border-zinc-200 dark:border-white/10">
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={file.name}
-                          className="w-full h-full object-cover"
-                        />
+                        {file.type === 'application/pdf' ? (
+                          <div className="w-full h-full bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center">
+                            <FileText size={18} className="text-red-500" />
+                            <span className="text-[8px] text-red-500 font-bold mt-0.5">PDF</span>
+                          </div>
+                        ) : (
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={file.name}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
                         <button
                           type="button"
                           onClick={() => removeAttachment(i)}
@@ -1222,67 +1286,144 @@ export default function AIChatWidget() {
                   </div>
                 )}
 
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }}
+                />
+
                 <form
                   onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
-                  className="relative flex items-end"
+                  className="flex gap-2"
                 >
-                  {/* Hidden file input */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => { if (e.target.files) addImages(e.target.files); e.target.value = ''; }}
-                  />
+                  {/* Left: textarea + toggles */}
+                  <div className="flex-1 min-w-0">
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
+                      onFocus={() => {
+                        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+                      }}
+                      placeholder={attachments.length > 0 ? "Add a message or send..." : "Ask anything..."}
+                      rows={2}
+                      enterKeyHint="send"
+                      className="w-full resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm px-3 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
+                      style={{ maxHeight: '120px' }}
+                    />
 
-                  <textarea
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    onPaste={handlePaste}
-                    onFocus={() => {
-                      // On mobile, scroll messages to bottom when keyboard opens
-                      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
-                    }}
-                    placeholder={attachments.length > 0 ? "Add a message or send..." : "Ask a question..."}
-                    rows={1}
-                    enterKeyHint="send"
-                    className="w-full resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-[4.5rem] py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
-                    style={{ maxHeight: '80px' }}
-                  />
-
-                  {/* Paperclip + Send buttons */}
-                  <div className="absolute right-1.5 bottom-1.5 flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/10 rounded-sm transition-colors"
-                      title="Attach image"
-                    >
-                      <Paperclip size={13} />
-                    </button>
-                    {isStreaming ? (
+                    {/* Bottom row: attach + toggles */}
+                    <div className="flex items-center gap-1.5 mt-1.5">
                       <button
                         type="button"
-                        onClick={() => stop()}
-                        className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors"
-                        title="Stop"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/10 rounded-sm transition-colors border border-transparent hover:border-zinc-200 dark:hover:border-white/10"
+                        title="Attach image or PDF"
                       >
-                        <X size={14} />
+                        <Plus size={13} />
                       </button>
-                    ) : (
                       <button
-                        type="submit"
-                        disabled={!input.trim() && attachments.length === 0}
-                        className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                        title="Send"
+                        type="button"
+                        onClick={() => setThinkMode(v => !v)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
+                          thinkMode
+                            ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
+                            : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
+                        }`}
+                        title={thinkMode ? 'Extended thinking ON' : 'Enable extended thinking'}
                       >
-                        <Send size={13} />
+                        <Sparkles size={10} />
+                        Think
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => setHideTools(v => !v)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
+                          hideTools
+                            ? 'bg-zinc-500/10 border border-zinc-500/30 text-zinc-500'
+                            : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
+                        }`}
+                        title={hideTools ? 'Tool calls hidden' : 'Hide tool calls'}
+                      >
+                        <Code size={10} />
+                        Tools
+                      </button>
+                      {/* MCP tools hover popover */}
+                      <div className="relative group/mcp">
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10 transition-all"
+                          title="Connected MCP tools"
+                        >
+                          <Wrench size={10} />
+                          MCP
+                        </button>
+                        {/* Hover dropdown */}
+                        <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/mcp:block z-50">
+                          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-sm shadow-xl p-2.5 w-56">
+                            <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-400 mb-2">Connected Tools</p>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <Database size={10} className="text-nothing-green shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">FlowIndex SQL</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Database size={10} className="text-blue-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">EVM Blockscout SQL</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Code size={10} className="text-purple-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Cadence Scripts</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Code size={10} className="text-purple-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Cadence Check & Docs</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Search size={10} className="text-amber-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Web Search</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <ChevronRight size={10} className="text-cyan-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">API Fetch</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Download size={10} className="text-pink-400 shrink-0" />
+                                <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Chart Visualization</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Right: tall send/stop button */}
+                  {isStreaming ? (
+                    <button
+                      type="button"
+                      onClick={() => stop()}
+                      className="self-stretch w-11 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors shrink-0"
+                      title="Stop"
+                    >
+                      <X size={16} />
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={!input.trim() && attachments.length === 0}
+                      className="self-stretch w-11 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
+                      title="Send"
+                    >
+                      <Send size={16} />
+                    </button>
+                  )}
                 </form>
               </div>
             </motion.div>

@@ -3,7 +3,8 @@ import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
 import { buildMeta } from '../../lib/og/meta';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown, Sparkles } from 'lucide-react';
+import { openAIChat } from '../../components/chat/openAIChat';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 
@@ -1042,17 +1043,31 @@ function TransactionDetail() {
                 </div>
 
                 {/* Error Message Section */}
-                {(transaction.errorMessage || transaction.error_message || transaction.error) && (
-                    <div className="border border-red-500/30 bg-red-50 dark:bg-red-900/10 p-6 mb-8 flex items-start gap-4 rounded-sm">
-                        <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-0.5" />
-                        <div>
-                            <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest mb-1">Execution Error</h3>
-                            <p className="text-red-600 dark:text-red-300 text-xs font-mono break-all leading-relaxed">
-                                {transaction.errorMessage || transaction.error_message || transaction.error}
-                            </p>
+                {(transaction.errorMessage || transaction.error_message || transaction.error) && (() => {
+                    const errMsg = transaction.errorMessage || transaction.error_message || transaction.error;
+                    return (
+                        <div className="border border-red-500/30 bg-red-50 dark:bg-red-900/10 p-6 mb-8 flex items-start gap-4 rounded-sm">
+                            <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-3 mb-1">
+                                    <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest">Execution Error</h3>
+                                    <button
+                                        onClick={() => openAIChat(
+                                            `Briefly explain why this Flow transaction failed and how to fix it. Keep it short — 2-3 sentences max.\n\nTx: ${transaction.id || transaction.tx_hash}\nError: ${errMsg}`
+                                        )}
+                                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold bg-nothing-green/10 border border-nothing-green/20 text-nothing-green hover:bg-nothing-green/20 transition-colors shrink-0"
+                                    >
+                                        <Sparkles size={10} />
+                                        Analyze with AI
+                                    </button>
+                                </div>
+                                <p className="text-red-600 dark:text-red-300 text-xs font-mono break-all leading-relaxed">
+                                    {errMsg}
+                                </p>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* Transaction Summary Card */}
                 <TransactionSummaryCard transaction={fullTx} formatAddress={formatAddress} onNftClick={handleNftClick} isAdmin={isAdmin} />
