@@ -39,6 +39,14 @@ export function buildTokenIconMap(transaction: any): Map<string, string> {
             if (url) map.set(symbol, url);
         }
     }
+    for (const nt of transaction.nft_transfers || []) {
+        const name = nt.collection_name || nt.token?.split('.')?.pop();
+        const logo = nt.collection_logo || nt.nft_thumbnail;
+        if (name && logo) {
+            const url = typeof logo === 'string' && logo.startsWith('http') ? logo : extractLogoUrl(logo);
+            if (url) map.set(name, url);
+        }
+    }
     for (const swap of transaction.defi_events || []) {
         for (const key of ['asset0_logo', 'asset1_logo']) {
             const symKey = key.replace('_logo', '_symbol');
@@ -55,7 +63,7 @@ export function buildTokenIconMap(transaction: any): Map<string, string> {
 
 /* ── Layout: assign (x,y) per unique address, left-to-right ── */
 
-export function layoutGraph(flows: Flow[], isDark: boolean, _tokenIcons: Map<string, string>): { nodes: Node[]; edges: Edge[] } {
+export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<string, string>): { nodes: Node[]; edges: Edge[] } {
     const seen = new Map<string, { label: string; isSource: boolean; isTarget: boolean }>();
     for (const f of flows) {
         if (!seen.has(f.from)) seen.set(f.from, { label: f.fromLabel || formatShort(f.from, 8, 4), isSource: true, isTarget: false });
@@ -119,23 +127,60 @@ export function layoutGraph(flows: Flow[], isDark: boolean, _tokenIcons: Map<str
     ];
 
     const accentColor = isDark ? '#4ade80' : '#16a34a';
+    const nftColor = isDark ? '#a78bfa' : '#7c3aed';
 
-    const edges: Edge[] = flows.map((f, i) => {
-        const amountStr = Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 });
-        const usdStr = f.usdValue && f.usdValue > 0 ? ` (\u2248$${f.usdValue >= 1 ? f.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : f.usdValue.toFixed(4)})` : '';
-        return {
-            id: `e-${i}`,
-            source: f.from,
-            target: f.to,
-            label: `${amountStr} ${f.token}${usdStr}`,
-            labelStyle: { fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, fill: accentColor },
+    // Group flows by (source, target) pair to merge into single edges
+    const pairFlows = new Map<string, Flow[]>();
+    for (const f of flows) {
+        const pk = `${f.from}|${f.to}`;
+        const arr = pairFlows.get(pk);
+        if (arr) arr.push(f);
+        else pairFlows.set(pk, [f]);
+    }
+
+    const edges: Edge[] = [];
+    let edgeIdx = 0;
+    for (const [, group] of pairFlows) {
+        const from = group[0].from;
+        const to = group[0].to;
+        const hasNft = group.some(f => !f.usdValue && (f.token.includes('#') || f.token.includes('x')));
+        const color = hasNft && group.length === 1 ? nftColor : accentColor;
+
+        // Build label lines — each flow becomes one line with optional icon
+        const labelLines = group.map(f => {
+            const amountStr = Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 });
+            const usdStr = f.usdValue && f.usdValue > 0 ? ` ≈$${f.usdValue >= 1 ? f.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : f.usdValue.toFixed(4)}` : '';
+            const tokenSym = f.token.split(' ')[0];
+            const iconUrl = tokenIcons.get(tokenSym) || tokenIcons.get(f.token);
+            return { text: `${amountStr} ${f.token}${usdStr}`, iconUrl };
+        });
+
+        // Use React element label for rich rendering (icon + text)
+        const labelEl = (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: group.length > 1 ? '4px' : '0', alignItems: 'center' }}>
+                {labelLines.map((line, li) => (
+                    <div key={li} style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                        {line.iconUrl && (
+                            <img src={line.iconUrl} alt="" style={{ width: 14, height: 14, borderRadius: '50%', flexShrink: 0 }} />
+                        )}
+                        <span style={{ fontSize: '10px', fontFamily: 'ui-monospace, monospace', fontWeight: 600, color }}>{line.text}</span>
+                    </div>
+                ))}
+            </div>
+        );
+
+        edges.push({
+            id: `e-${edgeIdx++}`,
+            source: from,
+            target: to,
+            label: labelEl,
             labelBgStyle: { fill: isDark ? '#18181b' : '#ffffff', fillOpacity: 0.95, rx: 4, ry: 4 },
             labelBgPadding: [8, 4] as [number, number],
-            style: { stroke: accentColor, strokeWidth: 2 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: accentColor, width: 18, height: 18 },
+            style: { stroke: color, strokeWidth: 2 },
+            markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
             animated: true,
-        };
-    });
+        });
+    }
 
     return { nodes, edges };
 }
@@ -192,21 +237,54 @@ function transfersToFlows(detail: any): Flow[] {
     const defiEvents: any[] = detail?.defi_events || [];
 
     // Aggregate FT transfers by (from, to, symbol)
+    // Cross-VM transfers with evm_to/from are split into two legs (Cadence + EVM)
     const ftAgg = new Map<string, { from: string; to: string; amount: number; symbol: string; usdValue: number }>();
+    const directFlows: Flow[] = [];
     for (const ft of ftTransfers) {
         const from = ft.from_address;
         const to = ft.to_address;
         if (!from || !to) continue;
         const sym = ft.token_symbol || ft.token?.split('.').pop() || 'FT';
+        const amount = parseFloat(ft.amount) || 0;
+        const usdValue = parseFloat(ft.usd_value) || 0;
+        const evmTo = ft.evm_to_address;
+        const evmFrom = ft.evm_from_address;
+
+        if (evmTo || evmFrom) {
+            // Leg 1: Cadence transfer (from → COA)
+            directFlows.push({
+                from, fromLabel: formatShort(from, 8, 4),
+                to, toLabel: evmTo ? 'COA' : formatShort(to, 8, 4),
+                token: sym, amount: amount.toString(), usdValue,
+            });
+            // Leg 2: EVM execution (COA → EVM dest)
+            if (evmTo) {
+                directFlows.push({
+                    from: to, fromLabel: 'COA',
+                    to: evmTo, toLabel: formatShort(evmTo, 8, 4),
+                    token: sym, amount: amount.toString(), usdValue,
+                });
+            }
+            if (evmFrom) {
+                directFlows.push({
+                    from: evmFrom, fromLabel: formatShort(evmFrom, 8, 4),
+                    to: from, toLabel: formatShort(from, 8, 4),
+                    token: sym, amount: amount.toString(), usdValue,
+                });
+            }
+            continue;
+        }
+
         const key = `${from}|${to}|${sym}`;
         const existing = ftAgg.get(key);
         if (existing) {
-            existing.amount += parseFloat(ft.amount) || 0;
-            existing.usdValue += parseFloat(ft.usd_value) || 0;
+            existing.amount += amount;
+            existing.usdValue += usdValue;
         } else {
-            ftAgg.set(key, { from, to, amount: parseFloat(ft.amount) || 0, symbol: sym, usdValue: parseFloat(ft.usd_value) || 0 });
+            ftAgg.set(key, { from, to, amount, symbol: sym, usdValue });
         }
     }
+    flows.push(...directFlows);
     for (const agg of ftAgg.values()) {
         flows.push({
             from: agg.from,
@@ -297,7 +375,9 @@ export default function TransferFlowDiagram({ detail }: { detail: any }) {
 
     if (nodes.length === 0) return null;
 
-    const height = Math.max(200, Math.ceil(nodes.length / 2) * 100 + 60);
+    // Height based on tallest column, not total node count
+    const maxY = Math.max(...nodes.map(n => n.position.y));
+    const height = Math.max(200, maxY + 160);
 
     return (
         <div>
