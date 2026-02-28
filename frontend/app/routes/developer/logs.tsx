@@ -106,7 +106,7 @@ function DeveloperLogs() {
 
   return (
     <DeveloperLayout>
-      <div className="max-w-5xl mx-auto space-y-6 p-4 md:p-6">
+      <div className="flex-1 overflow-y-auto max-w-5xl mx-auto w-full space-y-6 p-4 md:p-6">
         {/* Header */}
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-white">Delivery Logs</h1>

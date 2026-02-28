@@ -53,7 +53,7 @@ function DeveloperDashboardPage() {
 
   return (
     <DeveloperLayout>
-      <div className="max-w-5xl mx-auto space-y-6 md:space-y-8 p-4 md:p-6">
+      <div className="flex-1 overflow-y-auto max-w-5xl mx-auto w-full space-y-6 md:space-y-8 p-4 md:p-6">
         {/* Page header */}
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
