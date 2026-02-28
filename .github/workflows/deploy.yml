@@ -161,6 +161,7 @@ jobs:
         run: |
           docker build -f frontend/Dockerfile \
             --build-arg VITE_API_URL=/api \
+            --build-arg VITE_GOTRUE_URL=/auth \
             --build-arg VITE_GIT_COMMIT=${{ github.sha }} \
             -t ${{ env.REGISTRY }}/frontend:latest \
             -t ${{ env.REGISTRY }}/frontend:${{ github.sha }} \
@@ -177,6 +178,7 @@ jobs:
               --network=host \
               -e BACKEND_API=http://10.128.0.4:8080 \
               -e BACKEND_WS=http://10.128.0.4:8080 \
+              -e GOTRUE_URL=http://10.128.0.4:9999 \
               -e VITE_API_URL=https://flowindex.io/api \
               ${{ env.REGISTRY }}/frontend:${{ github.sha }}
           '

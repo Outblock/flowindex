@@ -37,8 +37,14 @@ if [ -z "${BACKEND_WS:-}" ]; then
     export BACKEND_WS="${BACKEND_API}"
 fi
 
+# GoTrue (Supabase Auth) URL for nginx proxy
+if [ -z "${GOTRUE_URL:-}" ]; then
+    export GOTRUE_URL="http://127.0.0.1:9999"
+fi
+
 echo "Backend API: $BACKEND_API"
 echo "Backend WS:  $BACKEND_WS"
+echo "GoTrue URL:  $GOTRUE_URL"
 
 # Generate runtime config for the app (safe, public values only).
 # This lets us set DOCS_URL without rebuilding the frontend image.
@@ -59,7 +65,7 @@ export SSR_API_ORIGIN="${SSR_API_ORIGIN:-http://127.0.0.1:${LISTEN_PORT}}"
 
 # Render nginx template (envsubst) for backend proxy + SSR upstream.
 mkdir -p /etc/nginx/http.d
-envsubst '$DNS_RESOLVER $BACKEND_API $BACKEND_WS $LISTEN_PORT $SSR_PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/http.d/default.conf
+envsubst '$DNS_RESOLVER $BACKEND_API $BACKEND_WS $GOTRUE_URL $LISTEN_PORT $SSR_PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/http.d/default.conf
 
 # Patch Bun.serve idleTimeout (default 10s is too short for SSR rendering)
 sed -i 's/bun: { websocket: void 0 }/bun: { websocket: void 0, idleTimeout: 255 }/' /app/.output/server/index.mjs
