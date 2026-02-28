@@ -709,10 +709,10 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
       .filter((p) => p.type === 'text')
       .map((p) => (p as any).text)
       .join('');
-    // Extract image attachments from message
-    const allAttachments = (message as any).experimental_attachments || [];
-    const images = allAttachments.filter((a: any) => a.contentType?.startsWith('image/'));
-    const pdfs = allAttachments.filter((a: any) => a.contentType === 'application/pdf');
+    // Extract file parts from message
+    const fileParts = message.parts.filter((p) => p.type === 'file') as any[];
+    const images = fileParts.filter((p) => p.mediaType?.startsWith('image/'));
+    const pdfs = fileParts.filter((p) => p.mediaType === 'application/pdf');
 
     return (
       <div className="flex justify-end mb-4">
@@ -723,14 +723,14 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
                 <img
                   key={`img-${i}`}
                   src={img.url}
-                  alt={img.name || 'attachment'}
+                  alt={img.filename || 'attachment'}
                   className="w-20 h-20 object-cover rounded-sm border border-nothing-green/20"
                 />
               ))}
               {pdfs.map((pdf: any, i: number) => (
                 <div key={`pdf-${i}`} className="w-20 h-20 rounded-sm border border-nothing-green/20 bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center">
                   <FileText size={20} className="text-red-500" />
-                  <span className="text-[8px] text-red-500 font-bold mt-0.5 truncate max-w-[70px]">{pdf.name || 'PDF'}</span>
+                  <span className="text-[8px] text-red-500 font-bold mt-0.5 truncate max-w-[70px]">{pdf.filename || 'PDF'}</span>
                 </div>
               ))}
             </div>
@@ -1052,21 +1052,24 @@ export default function AIChatWidget() {
     if (Date.now() - stoppedAtRef.current < 300) return;
     setChatError(null);
 
-    // Convert files to data URL attachments for the AI SDK
-    const experimental_attachments = await Promise.all(
+    // Convert files to data URL parts for the AI SDK
+    const fileParts = await Promise.all(
       attachments.map(async (file) => {
-        const base64 = await new Promise<string>((resolve) => {
+        const dataUrl = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(file);
         });
-        return { name: file.name, contentType: file.type, url: base64 };
+        return { type: 'file' as const, filename: file.name, mediaType: file.type, url: dataUrl };
       })
     );
 
     sendMessage({
-      text: text || 'Analyze this file',
-      ...(experimental_attachments.length > 0 ? { experimental_attachments } : {}),
+      role: 'user',
+      parts: [
+        ...fileParts,
+        { type: 'text' as const, text: text || 'Analyze this file' },
+      ],
     });
     setInput('');
     setAttachments([]);
