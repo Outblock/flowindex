@@ -331,6 +331,60 @@ func (s *Server) extractContractCodeFromTx(ctx context.Context, txID, _ string) 
 	return ""
 }
 
+func (s *Server) handleContractEventTypes(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address, name, _ := splitContractIdentifier(vars["identifier"])
+	if address == "" || name == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid contract identifier")
+		return
+	}
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	events, err := s.repo.GetContractEventTypes(r.Context(), address, name, limit)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "failed to query event types")
+		return
+	}
+	data := make([]map[string]interface{}, len(events))
+	for i, e := range events {
+		data[i] = map[string]interface{}{
+			"type": e.Type, "event_name": e.EventName, "count": e.Count, "last_seen": e.LastSeen,
+		}
+	}
+	writeAPIResponse(w, data, map[string]interface{}{"count": len(data)}, nil)
+}
+
+func (s *Server) handleSearchEvents(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		writeAPIError(w, http.StatusBadRequest, "name parameter required")
+		return
+	}
+	limit := 20
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	events, err := s.repo.SearchEventsByName(r.Context(), name, limit)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "failed to search events")
+		return
+	}
+	data := make([]map[string]interface{}, len(events))
+	for i, e := range events {
+		data[i] = map[string]interface{}{
+			"type": e.Type, "contract_address": formatAddressV1(e.ContractAddress),
+			"contract_name": e.ContractName, "event_name": e.EventName, "count": e.Count,
+		}
+	}
+	writeAPIResponse(w, data, map[string]interface{}{"count": len(data)}, nil)
+}
+
 func (s *Server) handleContractVersionList(w http.ResponseWriter, r *http.Request) {
 	if s.repo == nil {
 		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")

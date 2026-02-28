@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"flowscan-clone/internal/models"
 )
@@ -848,6 +849,82 @@ func (r *Repository) GetFTTransfersByTransactionID(ctx context.Context, txID str
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// ContractEventType represents a distinct event type emitted by a contract.
+type ContractEventType struct {
+	Type      string
+	EventName string
+	Count     int64
+	LastSeen  time.Time
+}
+
+// GetContractEventTypes returns distinct event types emitted by a contract.
+func (r *Repository) GetContractEventTypes(ctx context.Context, contractAddress, contractName string, limit int) ([]ContractEventType, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	query := `
+		SELECT type, event_name, count(*) as cnt, max(timestamp) as last_seen
+		FROM raw.events
+		WHERE contract_address = $1 AND type LIKE $2
+		GROUP BY type, event_name
+		ORDER BY cnt DESC
+		LIMIT $3`
+	pattern := "A." + contractAddress + "." + contractName + ".%"
+	rows, err := r.db.Query(ctx, query, hexToBytes(contractAddress), pattern, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var results []ContractEventType
+	for rows.Next() {
+		var et ContractEventType
+		if err := rows.Scan(&et.Type, &et.EventName, &et.Count, &et.LastSeen); err != nil {
+			return nil, err
+		}
+		results = append(results, et)
+	}
+	return results, rows.Err()
+}
+
+// EventSearchResult represents a matching event type from a name search.
+type EventSearchResult struct {
+	Type            string
+	ContractAddress string
+	ContractName    string
+	EventName       string
+	Count           int64
+}
+
+// SearchEventsByName searches events by name across all contracts.
+func (r *Repository) SearchEventsByName(ctx context.Context, name string, limit int) ([]EventSearchResult, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	query := `
+		SELECT type, COALESCE(encode(contract_address, 'hex'), '') AS contract_address,
+		       split_part(type, '.', 3) as contract_name,
+		       event_name, count(*) as cnt
+		FROM raw.events
+		WHERE event_name ILIKE $1
+		GROUP BY type, contract_address, event_name
+		ORDER BY cnt DESC
+		LIMIT $2`
+	rows, err := r.db.Query(ctx, query, "%"+name+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var results []EventSearchResult
+	for rows.Next() {
+		var e EventSearchResult
+		if err := rows.Scan(&e.Type, &e.ContractAddress, &e.ContractName, &e.EventName, &e.Count); err != nil {
+			return nil, err
+		}
+		results = append(results, e)
+	}
+	return results, rows.Err()
 }
 
 // NFTTransferRow is a raw NFT transfer row for a transaction.
