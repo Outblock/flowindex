@@ -18,7 +18,7 @@ import type {
   ReactFlowInstance,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import { Save, Rocket, Loader2, ArrowLeft, Pencil, Check } from 'lucide-react'
+import { Save, Rocket, Loader2, ArrowLeft, Pencil, Check, Sparkles } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 
 import TriggerNode from './nodes/TriggerNode'
@@ -28,6 +28,7 @@ import NodePalette from './NodePalette'
 import NodeConfigPanel from './NodeConfigPanel'
 import { NODE_TYPE_MAP } from './nodeTypes'
 import { compileWorkflow } from './compiler'
+import { generateWorkflow } from './aiGenerate'
 import {
   updateWorkflow,
   deployWorkflow,
@@ -88,6 +89,11 @@ export default function WorkflowCanvas({
     ok: boolean
     message: string
   } | null>(null)
+
+  // AI prompt bar
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   // Selected node for config panel
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -215,6 +221,36 @@ export default function WorkflowCanvas({
     )
     setSelectedNodeId(null)
   }, [selectedNodeId])
+
+  // --- AI Generate ---
+
+  const handleAIGenerate = useCallback(async () => {
+    if (!aiPrompt.trim()) return
+    setAiGenerating(true)
+    setAiError(null)
+    try {
+      const result = await generateWorkflow(aiPrompt.trim(), nodes)
+      if (nodes.length === 0) {
+        // Empty canvas — replace
+        setNodes(result.nodes)
+        setEdges(result.edges)
+      } else {
+        // Smart merge — append
+        setNodes((nds) => [...nds, ...result.nodes])
+        setEdges((eds) => [...eds, ...result.edges])
+      }
+      if (result.name && name === 'Untitled Workflow') {
+        setName(result.name)
+      }
+      setAiPrompt('')
+      // Fit view after adding nodes
+      setTimeout(() => reactFlowRef.current?.fitView({ padding: 0.2 }), 100)
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'AI generation failed')
+    } finally {
+      setAiGenerating(false)
+    }
+  }, [aiPrompt, nodes, name])
 
   // --- Save ---
 
@@ -378,6 +414,41 @@ export default function WorkflowCanvas({
           )}
           Deploy
         </button>
+      </div>
+
+      {/* AI Prompt Bar */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-200 dark:border-neutral-800 bg-zinc-50/80 dark:bg-neutral-900/50 shrink-0">
+        <Sparkles className="w-4 h-4 text-[#00ef8b] shrink-0" />
+        <input
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              handleAIGenerate()
+            }
+          }}
+          placeholder="Describe your workflow... e.g. 'Alert me on Slack when 0x1234 receives FLOW'"
+          disabled={aiGenerating}
+          className="flex-1 px-3 py-1.5 bg-white dark:bg-neutral-800 border border-zinc-300 dark:border-neutral-700 rounded-lg text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors disabled:opacity-50"
+        />
+        <button
+          onClick={handleAIGenerate}
+          disabled={aiGenerating || !aiPrompt.trim()}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00ef8b] text-black text-sm font-medium rounded-lg hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50 shrink-0"
+        >
+          {aiGenerating ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="w-3.5 h-3.5" />
+          )}
+          Build
+        </button>
+        {aiError && (
+          <span className="text-xs text-red-500 dark:text-red-400 truncate max-w-[200px]" title={aiError}>
+            {aiError}
+          </span>
+        )}
       </div>
 
       {/* Canvas area */}
