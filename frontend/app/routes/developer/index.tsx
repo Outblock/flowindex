@@ -46,7 +46,7 @@ function DeveloperDashboardPage() {
   }, [])
 
   const statCards = [
-    { label: 'API Keys', value: stats.apiKeys, icon: Key, path: '/developer/api-keys', color: 'text-[#00ef8b]' },
+    { label: 'API Keys', value: stats.apiKeys, icon: Key, path: '/developer/keys', color: 'text-[#00ef8b]' },
     { label: 'Endpoints', value: stats.endpoints, icon: Globe, path: '/developer/endpoints', color: 'text-blue-400' },
     { label: 'Subscriptions', value: stats.subscriptions, icon: Bell, path: '/developer/subscriptions', color: 'text-amber-400' },
   ]
@@ -160,7 +160,7 @@ function DeveloperDashboardPage() {
           <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { label: 'Create API Key', path: '/developer/api-keys', icon: Key },
+              { label: 'Create API Key', path: '/developer/keys', icon: Key },
               { label: 'Add Endpoint', path: '/developer/endpoints', icon: Globe },
               { label: 'New Subscription', path: '/developer/subscriptions', icon: Bell },
               { label: 'View Logs', path: '/developer/logs', icon: FileText },

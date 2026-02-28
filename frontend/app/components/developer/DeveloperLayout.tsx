@@ -20,7 +20,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/developer', icon: LayoutDashboard },
-  { label: 'API Keys', path: '/developer/api-keys', icon: Key },
+  { label: 'API Keys', path: '/developer/keys', icon: Key },
   { label: 'Endpoints', path: '/developer/endpoints', icon: Globe },
   { label: 'Subscriptions', path: '/developer/subscriptions', icon: Bell },
   { label: 'Delivery Logs', path: '/developer/logs', icon: FileText },
