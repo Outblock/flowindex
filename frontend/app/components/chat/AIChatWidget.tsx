@@ -12,18 +12,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
-import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
-import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
-import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-
-SyntaxHighlighter.registerLanguage('sql', sql);
-SyntaxHighlighter.registerLanguage('swift', swift);
-SyntaxHighlighter.registerLanguage('cadence', swift);
 
 const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io';
 
@@ -182,13 +176,14 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const supportedLangs = ['sql', 'swift', 'cadence'];
-  const useSyntax = supportedLangs.includes(language);
+  // Map aliases to Prism-supported language names
+  const langMap: Record<string, string> = { cadence: 'swift', sh: 'bash', zsh: 'bash', shell: 'bash', ts: 'typescript', js: 'javascript', py: 'python', yml: 'yaml', Dockerfile: 'docker' };
+  const prismLang = langMap[language] || language || 'text';
 
   return (
     <div className="relative rounded-sm border border-zinc-200 dark:border-white/10 overflow-hidden my-2">
       <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-100 dark:bg-white/[0.03] border-b border-zinc-200 dark:border-white/10">
-        <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold">{language}</span>
+        <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold">{language || 'code'}</span>
         <button
           onClick={handleCopy}
           className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-colors"
@@ -196,20 +191,14 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
           {copied ? <Check size={12} className="text-nothing-green" /> : <Copy size={12} />}
         </button>
       </div>
-      {useSyntax ? (
-        <SyntaxHighlighter
-          language={language === 'cadence' ? 'swift' : language}
-          style={vscDarkPlus}
-          customStyle={{ margin: 0, padding: '12px', fontSize: '12px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
-          wrapLongLines
-        >
-          {code}
-        </SyntaxHighlighter>
-      ) : (
-        <pre className="p-3 text-[12px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
-          <code>{code}</code>
-        </pre>
-      )}
+      <SyntaxHighlighter
+        language={prismLang}
+        style={vscDarkPlus}
+        customStyle={{ margin: 0, padding: '12px', fontSize: '12px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
+        wrapLongLines
+      >
+        {code}
+      </SyntaxHighlighter>
     </div>
   );
 }
@@ -226,8 +215,8 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const supportedLangs = ['sql', 'swift', 'cadence'];
-  const useSyntax = supportedLangs.includes(language);
+  const langMap: Record<string, string> = { cadence: 'swift', sh: 'bash', zsh: 'bash', shell: 'bash', ts: 'typescript', js: 'javascript', py: 'python' };
+  const prismLang = langMap[language] || language || 'text';
 
   return (
     <div className="rounded-sm border border-zinc-200 dark:border-white/10 overflow-hidden my-1.5">
@@ -259,20 +248,14 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
             transition={{ duration: 0.2, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            {useSyntax ? (
-              <SyntaxHighlighter
-                language={language === 'cadence' ? 'swift' : language}
-                style={vscDarkPlus}
-                customStyle={{ margin: 0, padding: '12px', fontSize: '12px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
-                wrapLongLines
-              >
-                {code}
-              </SyntaxHighlighter>
-            ) : (
-              <pre className="p-3 text-[12px] leading-relaxed bg-zinc-900 text-zinc-300 overflow-x-auto font-mono whitespace-pre-wrap break-words">
-                <code>{code}</code>
-              </pre>
-            )}
+            <SyntaxHighlighter
+              language={prismLang}
+              style={vscDarkPlus}
+              customStyle={{ margin: 0, padding: '12px', fontSize: '12px', lineHeight: '1.6', background: '#18181b', borderRadius: 0 }}
+              wrapLongLines
+            >
+              {code}
+            </SyntaxHighlighter>
           </motion.div>
         )}
       </AnimatePresence>
@@ -820,20 +803,41 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
                   </div>
                 );
               }
-              // Generic tool fallback
+              // Generic tool fallback — expandable
               const toolDone = toolPart.state === 'output-available' || toolPart.state === 'result';
               const toolErr = toolPart.state === 'output-error';
+              const toolOutput = toolDone ? toolPart.output : toolErr ? (toolPart.errorText || 'Tool call failed') : null;
+              const toolInput = toolPart.input ?? toolPart.args;
+              const hasDetails = toolInput || toolOutput;
               return (
-                <div key={i} className="flex items-center gap-2 py-1 text-[11px] text-zinc-400">
-                  {!toolDone && !toolErr ? (
-                    <Loader2 size={10} className="animate-spin" />
-                  ) : toolErr ? (
-                    <X size={10} className="text-red-400" />
-                  ) : (
-                    <Check size={10} className="text-nothing-green" />
+                <details key={i} className="my-1 rounded-sm border border-zinc-100 dark:border-white/5 overflow-hidden">
+                  <summary className="flex items-center gap-2 py-1.5 px-2.5 text-[11px] text-zinc-400 bg-zinc-50 dark:bg-white/[0.02] cursor-pointer hover:bg-zinc-100 dark:hover:bg-white/[0.04] select-none">
+                    {!toolDone && !toolErr ? (
+                      <Loader2 size={10} className="animate-spin" />
+                    ) : toolErr ? (
+                      <X size={10} className="text-red-400" />
+                    ) : (
+                      <Check size={10} className="text-nothing-green" />
+                    )}
+                    <span className="uppercase tracking-widest font-bold">{name}</span>
+                  </summary>
+                  {hasDetails && (
+                    <div className="px-3 py-2 text-[11px] font-mono space-y-1.5 bg-zinc-900 text-zinc-400 overflow-x-auto">
+                      {toolInput && (
+                        <div>
+                          <span className="text-zinc-500">Input: </span>
+                          <pre className="whitespace-pre-wrap break-words text-zinc-300">{typeof toolInput === 'string' ? toolInput : JSON.stringify(toolInput, null, 2)}</pre>
+                        </div>
+                      )}
+                      {toolOutput && (
+                        <div>
+                          <span className="text-zinc-500">Output: </span>
+                          <pre className={`whitespace-pre-wrap break-words ${toolErr ? 'text-red-400' : 'text-zinc-300'}`}>{typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput, null, 2)}</pre>
+                        </div>
+                      )}
+                    </div>
                   )}
-                  <span className="uppercase tracking-widest">{name}</span>
-                </div>
+                </details>
               );
             }
 
@@ -877,7 +881,7 @@ function getStoredMode(): ChatMode {
   } catch {
     // localStorage unavailable
   }
-  return 'fast';
+  return 'balanced';
 }
 
 export default function AIChatWidget() {
@@ -1023,6 +1027,12 @@ export default function AIChatWidget() {
   });
 
   const isStreaming = status === 'streaming' || status === 'submitted';
+  const stoppedAtRef = useRef(0);
+
+  const handleStop = useCallback(() => {
+    stoppedAtRef.current = Date.now();
+    stop();
+  }, [stop]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1038,6 +1048,8 @@ export default function AIChatWidget() {
 
   const handleSend = useCallback(async (text: string) => {
     if ((!text.trim() && attachments.length === 0) || isStreaming) return;
+    // Prevent accidental sends immediately after clicking stop
+    if (Date.now() - stoppedAtRef.current < 300) return;
     setChatError(null);
 
     // Convert files to data URL attachments for the AI SDK
@@ -1327,7 +1339,7 @@ export default function AIChatWidget() {
                 />
 
                 <form
-                  onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
+                  onSubmit={(e) => { e.preventDefault(); if (!isStreaming) handleSend(input); }}
                 >
                   {/* Textarea + send button row */}
                   <div className="flex gap-2">
@@ -1349,7 +1361,7 @@ export default function AIChatWidget() {
                     {isStreaming ? (
                       <button
                         type="button"
-                        onClick={() => stop()}
+                        onClick={handleStop}
                         className="self-stretch w-10 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors shrink-0"
                         title="Stop"
                       >

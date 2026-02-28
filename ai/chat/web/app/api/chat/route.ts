@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     await req.json();
 
   const mode: ChatMode =
-    rawMode && rawMode in MODE_CONFIG ? (rawMode as ChatMode) : "fast";
+    rawMode && rawMode in MODE_CONFIG ? (rawMode as ChatMode) : "balanced";
   const cfg = MODE_CONFIG[mode];
 
   const [mcp, cadenceMcp, evmMcp] = await Promise.all([
