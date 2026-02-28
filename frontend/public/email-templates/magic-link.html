@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign in to FlowIndex</title>
+  <title>{{ .Token }} is your FlowIndex sign-in code</title>
   <style>body,html{background-color:#0a0a0a!important;}u+.body{background-color:#0a0a0a!important;}</style>
 </head>
 <body bgcolor="#0a0a0a" style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <!-- Preheader text (shows in email notification previews) -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">Your sign-in code is {{ .Token }} — enter it on FlowIndex or tap the button below.&#847;&zwnj;&nbsp;&#8199;&shy;&#847;&zwnj;&nbsp;&#8199;&shy;&#847;&zwnj;&nbsp;&#8199;&shy;&#847;&zwnj;&nbsp;&#8199;&shy;</div>
   <div style="background-color:#0a0a0a;width:100%;table-layout:fixed;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
     <tr>
@@ -26,29 +28,10 @@
 
               <!-- Title -->
               <p style="margin:0 0 6px;font-size:18px;font-weight:700;color:#ffffff;">Sign in to Developer Portal</p>
-              <p style="margin:0 0 28px;font-size:13px;color:#737373;line-height:1.5;">Use the button or enter the code below to sign in.</p>
+              <p style="margin:0 0 24px;font-size:13px;color:#737373;line-height:1.5;">Enter the code below or tap the button to sign in.</p>
 
-              <!-- Magic Link Button -->
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:28px;">
-                <tr>
-                  <td align="center">
-                    <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ .ConfirmationURL }}" style="height:40px;v-text-anchor:middle;width:200px;" arcsize="15%" fillcolor="#00ef8b"><center style="color:#000;font-size:14px;font-weight:600;">Sign In</center></v:roundrect><![endif]-->
-                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;background-color:#00ef8b;color:#000000;font-size:14px;font-weight:600;text-decoration:none;padding:12px 40px;border-radius:6px;line-height:1;mso-hide:all;">Sign In</a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Divider with "or" -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-                <tr>
-                  <td style="border-top:1px solid #262626;width:45%;"></td>
-                  <td align="center" style="padding:0 12px;white-space:nowrap;"><span style="font-size:11px;color:#525252;text-transform:uppercase;letter-spacing:1px;">or</span></td>
-                  <td style="border-top:1px solid #262626;width:45%;"></td>
-                </tr>
-              </table>
-
-              <!-- OTP Code -->
-              <p style="margin:0 0 12px;font-size:12px;color:#737373;text-align:center;">Enter this verification code:</p>
+              <!-- OTP Code (first — visible in notification preview) -->
+              <p style="margin:0 0 12px;font-size:12px;color:#737373;text-align:center;">Your verification code:</p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
                 <tr>
                   <td align="center">
@@ -63,8 +46,27 @@
                 </tr>
               </table>
 
+              <!-- Divider with "or" -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="border-top:1px solid #262626;width:45%;"></td>
+                  <td align="center" style="padding:0 12px;white-space:nowrap;"><span style="font-size:11px;color:#525252;text-transform:uppercase;letter-spacing:1px;">or</span></td>
+                  <td style="border-top:1px solid #262626;width:45%;"></td>
+                </tr>
+              </table>
+
+              <!-- Magic Link Button -->
+              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:28px;">
+                <tr>
+                  <td align="center">
+                    <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ .ConfirmationURL }}" style="height:40px;v-text-anchor:middle;width:200px;" arcsize="15%" fillcolor="#00ef8b"><center style="color:#000;font-size:14px;font-weight:600;">Sign In</center></v:roundrect><![endif]-->
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;background-color:#00ef8b;color:#000000;font-size:14px;font-weight:600;text-decoration:none;padding:12px 40px;border-radius:6px;line-height:1;mso-hide:all;">Sign In with Magic Link</a>
+                  </td>
+                </tr>
+              </table>
+
               <!-- Expiry note -->
-              <p style="margin:0;font-size:11px;color:#525252;text-align:center;">This link and code expire in 1 hour.</p>
+              <p style="margin:0;font-size:11px;color:#525252;text-align:center;">This link and code expire in 10 minutes.</p>
             </td>
           </tr>
 
