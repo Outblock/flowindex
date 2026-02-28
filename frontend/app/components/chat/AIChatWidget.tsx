@@ -1004,24 +1004,6 @@ export default function AIChatWidget() {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  // Listen for external "open chat with message" events
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.message) {
-        setIsOpen(true);
-        // Small delay to let the panel animate open before sending
-        setTimeout(() => {
-          handleSend(detail.message);
-        }, 400);
-      } else {
-        setIsOpen(true);
-      }
-    };
-    window.addEventListener('ai-chat:open', handler);
-    return () => window.removeEventListener('ai-chat:open', handler);
-  }, [handleSend]);
-
   const handleSend = useCallback(async (text: string) => {
     if ((!text.trim() && attachments.length === 0) || isStreaming) return;
     setChatError(null);
@@ -1045,6 +1027,23 @@ export default function AIChatWidget() {
     setInput('');
     setAttachments([]);
   }, [sendMessage, isStreaming, attachments]);
+
+  // Listen for external "open chat with message" events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.message) {
+        setIsOpen(true);
+        setTimeout(() => {
+          handleSend(detail.message);
+        }, 400);
+      } else {
+        setIsOpen(true);
+      }
+    };
+    window.addEventListener('ai-chat:open', handler);
+    return () => window.removeEventListener('ai-chat:open', handler);
+  }, [handleSend]);
 
   const handleClear = () => {
     setMessages([]);
