@@ -157,7 +157,7 @@ export function NFTDetailModal({ nft, nftType, nftId, collectionId = '', collect
                         {/* Tab content */}
                         <div className="flex-1 overflow-y-auto p-4">
                             {activeTab === 'detail' && (
-                                <NFTMetadata nft={nft} collectionName={collectionName} />
+                                <NFTMetadata nft={nft} collectionName={collectionName} hideHeader />
                             )}
 
                             {activeTab === 'history' && (
