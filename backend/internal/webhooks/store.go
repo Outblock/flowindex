@@ -200,6 +200,18 @@ func (s *Store) ListEndpoints(ctx context.Context, userID string) ([]Endpoint, e
 	return eps, nil
 }
 
+func (s *Store) GetEndpointByID(ctx context.Context, id string) (*Endpoint, error) {
+	var ep Endpoint
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, user_id, svix_ep_id, url, description, is_active, created_at
+		 FROM public.endpoints WHERE id = $1`, id,
+	).Scan(&ep.ID, &ep.UserID, &ep.SvixEpID, &ep.URL, &ep.Description, &ep.IsActive, &ep.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &ep, nil
+}
+
 func (s *Store) DeleteEndpoint(ctx context.Context, id, userID string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM public.endpoints WHERE id = $1 AND user_id = $2`, id, userID)
 	return err
@@ -266,8 +278,8 @@ func (s *Store) GetActiveSubscriptionsByType(ctx context.Context, eventType stri
 	rows, err := s.pool.Query(ctx,
 		`SELECT s.id, s.user_id, s.endpoint_id, s.event_type, s.conditions, s.is_enabled, s.created_at, s.updated_at
 		 FROM public.subscriptions s
-		 JOIN public.user_profiles p ON p.user_id = s.user_id
-		 WHERE s.event_type = $1 AND s.is_enabled = true AND p.is_suspended = false`,
+		 LEFT JOIN public.user_profiles p ON p.user_id = s.user_id
+		 WHERE s.event_type = $1 AND s.is_enabled = true AND COALESCE(p.is_suspended, false) = false`,
 		eventType,
 	)
 	if err != nil {

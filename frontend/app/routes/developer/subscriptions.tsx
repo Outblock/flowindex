@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Trash2, Loader2, AlertTriangle, Bell } from 'lucide-react'
+import { Plus, Trash2, Pencil, Loader2, AlertTriangle, Bell } from 'lucide-react'
 import DeveloperLayout from '../../components/developer/DeveloperLayout'
 import {
   listSubscriptions,
@@ -234,8 +234,9 @@ function DeveloperSubscriptions() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Create modal state
+  // Create/Edit modal state
   const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null) // null = create, string = edit
   const [formEventType, setFormEventType] = useState<EventTypeId>('ft.transfer')
   const [formEndpointId, setFormEndpointId] = useState('')
   const [formConditions, setFormConditions] = useState<Record<string, string>>({})
@@ -275,14 +276,31 @@ function DeveloperSubscriptions() {
   // --- Modal helpers ---
 
   function openCreateModal() {
+    setEditingId(null)
     setFormEventType('ft.transfer')
     setFormEndpointId(endpoints[0]?.id ?? '')
     setFormConditions({})
     setShowModal(true)
   }
 
+  function openEditModal(sub: SubscriptionRow) {
+    setEditingId(sub.id)
+    setFormEventType(sub.event_type as EventTypeId)
+    setFormEndpointId(sub.endpoint_id)
+    // Flatten conditions into form values
+    const flat: Record<string, string> = {}
+    if (sub.conditions) {
+      for (const [k, v] of Object.entries(sub.conditions)) {
+        flat[k] = Array.isArray(v) ? v.join(',') : String(v ?? '')
+      }
+    }
+    setFormConditions(flat)
+    setShowModal(true)
+  }
+
   function closeModal() {
     setShowModal(false)
+    setEditingId(null)
     setFormConditions({})
   }
 
@@ -292,20 +310,34 @@ function DeveloperSubscriptions() {
 
   // --- Actions ---
 
-  async function handleCreate() {
+  async function handleSave() {
     if (!formEndpointId) return
     setSaving(true)
     try {
       const conditions = buildConditions(formEventType, formConditions)
-      const created = await createSubscription(formEndpointId, formEventType, conditions)
-      const ep = endpoints.find((e) => e.id === formEndpointId)
-      setSubscriptions((prev) => [
-        { ...created, is_enabled: true, endpoint_url: ep?.url },
-        ...prev,
-      ])
+      if (editingId) {
+        // Update existing subscription
+        const updated = await updateSubscription(editingId, { conditions })
+        const ep = endpoints.find((e) => e.id === formEndpointId)
+        setSubscriptions((prev) =>
+          prev.map((s) =>
+            s.id === editingId
+              ? { ...s, ...updated, endpoint_url: ep?.url }
+              : s,
+          ),
+        )
+      } else {
+        // Create new subscription
+        const created = await createSubscription(formEndpointId, formEventType, conditions)
+        const ep = endpoints.find((e) => e.id === formEndpointId)
+        setSubscriptions((prev) => [
+          { ...created, is_enabled: true, endpoint_url: ep?.url },
+          ...prev,
+        ])
+      }
       closeModal()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create subscription')
+      setError(err instanceof Error ? err.message : `Failed to ${editingId ? 'update' : 'create'} subscription`)
       closeModal()
     } finally {
       setSaving(false)
@@ -316,7 +348,7 @@ function DeveloperSubscriptions() {
     const newEnabled = !sub.is_enabled
     setTogglingIds((prev) => new Set(prev).add(sub.id))
     try {
-      await updateSubscription(sub.id, { is_enabled: newEnabled } as never)
+      await updateSubscription(sub.id, { is_enabled: newEnabled })
       setSubscriptions((prev) =>
         prev.map((s) => (s.id === sub.id ? { ...s, is_enabled: newEnabled } : s)),
       )
@@ -474,7 +506,14 @@ function DeveloperSubscriptions() {
                         />
                       </button>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 flex items-center gap-1">
+                      <button
+                        onClick={() => openEditModal(sub)}
+                        className="p-1.5 rounded-md text-neutral-500 hover:text-[#00ef8b] hover:bg-[#00ef8b]/10 transition-colors"
+                        title="Edit subscription"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => setDeleteTarget(sub)}
                         className="p-1.5 rounded-md text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -509,7 +548,9 @@ function DeveloperSubscriptions() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-lg mx-4 p-6 space-y-4 max-h-[85vh] overflow-y-auto"
             >
-              <h2 className="text-lg font-semibold text-white">New Subscription</h2>
+              <h2 className="text-lg font-semibold text-white">
+                {editingId ? 'Edit Subscription' : 'New Subscription'}
+              </h2>
 
               {/* Event Type */}
               <div>
@@ -526,7 +567,8 @@ function DeveloperSubscriptions() {
                     setFormEventType(e.target.value as EventTypeId)
                     setFormConditions({})
                   }}
-                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                  disabled={!!editingId}
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors disabled:opacity-60"
                 >
                   {EVENT_TYPES.map((et) => (
                     <option key={et} value={et}>
@@ -548,7 +590,8 @@ function DeveloperSubscriptions() {
                   id="sub-endpoint"
                   value={formEndpointId}
                   onChange={(e) => setFormEndpointId(e.target.value)}
-                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                  disabled={!!editingId}
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors disabled:opacity-60"
                 >
                   {endpoints.map((ep) => (
                     <option key={ep.id} value={ep.id}>
@@ -621,12 +664,12 @@ function DeveloperSubscriptions() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleCreate}
+                  onClick={handleSave}
                   disabled={!formEndpointId || saving}
                   className="flex-1 py-2 bg-[#00ef8b] text-black text-sm font-medium rounded-lg hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Create
+                  {editingId ? 'Save' : 'Create'}
                 </button>
               </div>
             </motion.div>

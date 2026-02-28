@@ -96,6 +96,7 @@ func (o *Orchestrator) deliver(ctx context.Context, sub Subscription, evt eventb
 		"block_height": evt.Height,
 		"timestamp":    evt.Timestamp.UTC().Format(time.RFC3339),
 		"data":         evt.Data,
+		"_endpoint_id": sub.EndpointID, // used by DirectDelivery for targeted delivery
 	}
 
 	// Use the user ID as the Svix application ID (one app per user).

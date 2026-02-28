@@ -189,7 +189,7 @@ export async function createSubscription(
 
 export async function updateSubscription(
   id: string,
-  data: Partial<Pick<Subscription, 'event_type' | 'conditions'>>,
+  data: { conditions?: Record<string, unknown> | null; is_enabled?: boolean },
 ): Promise<Subscription> {
   return request<Subscription>(`/subscriptions/${encodeURIComponent(id)}`, {
     method: 'PATCH',

@@ -79,6 +79,11 @@ func NewLiveDeriver(repo *repository.Repository, processors []Processor, cfg Liv
 	}
 }
 
+// AddProcessor appends a processor to the LiveDeriver. Must be called before Start.
+func (d *LiveDeriver) AddProcessor(p Processor) {
+	d.processors = append(d.processors, p)
+}
+
 func (d *LiveDeriver) Start(ctx context.Context) {
 	if len(d.processors) == 0 {
 		log.Printf("[live_deriver] Disabled: no processors configured")
@@ -177,6 +182,7 @@ func (d *LiveDeriver) processRange(ctx context.Context, fromHeight, toHeight uin
 			"ft_holdings_worker":   true,
 			"nft_ownership_worker": true,
 			"daily_balance_worker": true,
+			"webhook_processor":    true,
 		}
 		var phase1, phase2 []Processor
 		for _, p := range d.processors {

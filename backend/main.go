@@ -534,18 +534,19 @@ func main() {
 			whStore := webhooks.NewStore(whDB.Pool)
 			whAuth := webhooks.NewAuthMiddleware(jwtSecret, whStore.LookupAPIKey)
 
-			// Svix delivery (or NoopDelivery if not configured)
+			// Svix delivery, DirectDelivery (HTTP POST), or NoopDelivery
 			var delivery webhooks.WebhookDelivery
 			if svixToken != "" {
 				svixClient, svixErr := webhooks.NewSvixClient(svixToken, svixURL)
 				if svixErr != nil {
-					log.Printf("[webhooks] Svix error: %v (using noop delivery)", svixErr)
-					delivery = &webhooks.NoopDelivery{}
+					log.Printf("[webhooks] Svix error: %v (using direct delivery)", svixErr)
+					delivery = webhooks.NewDirectDelivery(whStore)
 				} else {
 					delivery = svixClient
 				}
 			} else {
-				delivery = &webhooks.NoopDelivery{}
+				delivery = webhooks.NewDirectDelivery(whStore)
+				log.Println("[webhooks] using direct HTTP delivery (Svix not configured)")
 			}
 
 			// EventBus + Matchers + Orchestrator
@@ -563,6 +564,14 @@ func main() {
 			// Admin handlers
 			whAdminHandlers := webhooks.NewAdminHandlers(whStore)
 			webhookAdminHandlersOpt = api.WithWebhookAdminHandlers(whAdminHandlers)
+
+			// Add webhook processor to LiveDeriver so token transfers
+			// are published to the event bus for webhook matching.
+			if liveDeriver != nil {
+				whProcessor := webhooks.NewWebhookProcessor(repo, bus)
+				liveDeriver.AddProcessor(whProcessor)
+				log.Println("[webhooks] webhook_processor added to live_deriver")
+			}
 
 			log.Println("[webhooks] notification system initialized")
 		}
