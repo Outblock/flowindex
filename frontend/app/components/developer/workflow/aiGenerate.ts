@@ -14,7 +14,15 @@ function buildNodeCatalog(): string {
   for (const n of ALL_NODE_TYPES) {
     const fields = n.configFields.map((f) => {
       let desc = `${f.key} (${f.type})`
-      if (f.options) {
+      if (f.key === 'token_contract') {
+        desc += ' [format: A.<address>.<ContractName>, e.g. A.1654653399040a61.FlowToken for FLOW, A.b19436aae4d94622.FiatToken for USDC]'
+      } else if (f.key === 'collection') {
+        desc += ' [format: A.<address>.<ContractName>, e.g. A.0b2a3299cc857e29.TopShot for NBA Top Shot]'
+      } else if (f.key === 'contract_address' && f.type === 'searchable') {
+        desc += ' [Flow contract identifier, e.g. A.1654653399040a61.FlowToken]'
+      } else if (f.key === 'event_names') {
+        desc += ' [comma-separated event names from the contract]'
+      } else if (f.options) {
         const opts =
           typeof f.options[0] === 'string'
             ? (f.options as string[]).join('|')
