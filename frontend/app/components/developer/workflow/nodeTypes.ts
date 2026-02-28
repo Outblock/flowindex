@@ -182,6 +182,19 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
     },
   },
   {
+    type: 'trigger_balance_report', label: 'Balance Report', category: 'trigger',
+    icon: Wallet, color: COLORS.trigger, eventType: 'balance.check',
+    configFields: [
+      { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x18eb4ee6b3c026d2', isArray: true },
+    ],
+    outputSchema: {
+      address: { type: 'address', label: 'Address' },
+      balance: { type: 'string', label: 'Balance (FLOW)' },
+      balance_raw: { type: 'number', label: 'Balance (raw UFix64)' },
+      token: { type: 'string', label: 'Token' },
+    },
+  },
+  {
     type: 'trigger_schedule', label: 'Schedule', category: 'trigger',
     icon: Clock, color: COLORS.trigger, eventType: 'schedule',
     configFields: [

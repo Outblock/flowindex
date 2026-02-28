@@ -513,6 +513,7 @@ func main() {
 	var webhookHandlersOpt func(*api.Server)            // option for server
 	var webhookAdminHandlersOpt func(*api.Server)       // option for admin routes
 	var webhookOrchestrator *webhooks.Orchestrator       // started after ctx is created
+	var balanceMonitor *webhooks.BalanceMonitor           // started after ctx is created
 
 	if supabaseDBURL := os.Getenv("SUPABASE_DB_URL"); supabaseDBURL != "" {
 		jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
@@ -573,6 +574,15 @@ func main() {
 				log.Println("[webhooks] webhook_processor added to live_deriver")
 			}
 
+			// Balance monitor: periodically checks FLOW balances for subscribed addresses.
+			balanceCheckInterval := 60 * time.Second
+			if v := os.Getenv("BALANCE_CHECK_INTERVAL_SEC"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil && n > 0 {
+					balanceCheckInterval = time.Duration(n) * time.Second
+				}
+			}
+			balanceMonitor = webhooks.NewBalanceMonitor(bus, subCache, flowClient, balanceCheckInterval)
+
 			log.Println("[webhooks] notification system initialized")
 		}
 	}
@@ -601,6 +611,11 @@ func main() {
 	// Start webhook orchestrator if configured.
 	if webhookOrchestrator != nil {
 		go webhookOrchestrator.Run(ctx)
+	}
+
+	// Start balance monitor if configured.
+	if balanceMonitor != nil {
+		go balanceMonitor.Run(ctx)
 	}
 
 	// Start live/head derivers (Blockscout-style) if enabled.
