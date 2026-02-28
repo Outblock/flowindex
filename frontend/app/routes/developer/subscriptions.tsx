@@ -24,22 +24,82 @@ const EVENT_TYPES = [
   'ft.transfer',
   'ft.large_transfer',
   'nft.transfer',
-  'contract.event',
+  'transaction.sealed',
+  'block.sealed',
+  'account.created',
+  'account.key.added',
+  'account.key.removed',
+  'account.key_change',
+  'account.contract.added',
+  'account.contract.updated',
+  'account.contract.removed',
   'address.activity',
+  'contract.event',
   'staking.event',
   'defi.swap',
   'defi.liquidity',
-  'account.key_change',
   'evm.transaction',
 ] as const
 
 type EventTypeId = (typeof EVENT_TYPES)[number]
 
+/** Human-readable labels for event types */
+const EVENT_TYPE_LABELS: Record<EventTypeId, string> = {
+  'ft.transfer': 'FT Transfer',
+  'ft.large_transfer': 'FT Whale Transfer',
+  'nft.transfer': 'NFT Transfer',
+  'transaction.sealed': 'Transaction Sealed',
+  'block.sealed': 'Block Sealed',
+  'account.created': 'Account Created',
+  'account.key.added': 'Account Key Added',
+  'account.key.removed': 'Account Key Removed',
+  'account.key_change': 'Account Key Change',
+  'account.contract.added': 'Contract Deployed',
+  'account.contract.updated': 'Contract Updated',
+  'account.contract.removed': 'Contract Removed',
+  'address.activity': 'Address Activity',
+  'contract.event': 'Contract Event',
+  'staking.event': 'Staking Event',
+  'defi.swap': 'DeFi Swap',
+  'defi.liquidity': 'DeFi Liquidity',
+  'evm.transaction': 'EVM Transaction',
+}
+
+// ---------------------------------------------------------------------------
+// Preset token / collection lists
+// ---------------------------------------------------------------------------
+
+const FT_TOKENS = [
+  { value: '', label: 'Any Token' },
+  { value: 'A.1654653399040a61.FlowToken', label: 'FLOW' },
+  { value: 'A.b19436aae4d94622.FiatToken', label: 'USDC' },
+  { value: 'A.cfdd90d4a00f7b5b.TeleportedTetherToken', label: 'USDT (Teleported)' },
+  { value: 'A.d6f80565193ad727.stFlowToken', label: 'stFLOW' },
+  { value: 'A.231cc0dbbcffc4b7.ceWBTC', label: 'BTC (Celer)' },
+  { value: 'A.231cc0dbbcffc4b7.ceWETH', label: 'ETH (Celer)' },
+  { value: 'A.4ea047c3e73ca460.FlowIDTableStaking', label: 'FLOW Staking' },
+  { value: 'A.0f9df91c9121c460.BloctoToken', label: 'BLT' },
+  { value: 'A.7e60df042a9c0868.FlowToken', label: 'DUST' },
+  { value: 'A.3c1c4b041ad18279.PYUSD', label: 'PYUSD' },
+  { value: 'A.d01e482eb680ec9f.REVV', label: 'REVV' },
+]
+
+const NFT_COLLECTIONS = [
+  { value: '', label: 'Any Collection' },
+  { value: 'A.0b2a3299cc857e29.TopShot', label: 'NBA Top Shot' },
+  { value: 'A.e4cf4bdc1751c65d.AllDay', label: 'NFL All Day' },
+  { value: 'A.329feb3ab062d289.UFC_NFT', label: 'UFC Strike' },
+  { value: 'A.87ca73a41bb50ad5.Golazos', label: 'LaLiga Golazos' },
+  { value: 'A.2d4c3caffbeab845.FLOAT', label: 'FLOAT' },
+  { value: 'A.1d7e57aa55817448.MetaverseMarket', label: 'Flovatar' },
+  { value: 'A.f8d6e0586b0a20c7.NonFungibleToken', label: 'Any (NonFungibleToken)' },
+]
+
 interface ConditionFieldDef {
   key: string
   label: string
   type: 'text' | 'number' | 'select'
-  options?: string[]
+  options?: { value: string; label: string }[] | string[]
   placeholder?: string
   required?: boolean
   /** If true the value is split by comma into an array */
@@ -50,28 +110,51 @@ const CONDITION_FIELDS: Record<EventTypeId, ConditionFieldDef[]> = {
   'ft.transfer': [
     { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
     { key: 'direction', label: 'Direction', type: 'select', options: ['in', 'out', 'both'] },
-    { key: 'token_contract', label: 'Token Contract', type: 'text', placeholder: 'A.xxx.FlowToken' },
+    { key: 'token_contract', label: 'Token', type: 'select', options: FT_TOKENS },
     { key: 'min_amount', label: 'Min Amount', type: 'number', placeholder: '0' },
   ],
   'ft.large_transfer': [
-    { key: 'token_contract', label: 'Token Contract', type: 'text', placeholder: 'A.xxx.FlowToken' },
+    { key: 'token_contract', label: 'Token', type: 'select', options: FT_TOKENS },
     { key: 'min_amount', label: 'Min Amount', type: 'number', placeholder: '1000', required: true },
   ],
   'nft.transfer': [
     { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
-    { key: 'collection', label: 'Collection', type: 'text', placeholder: 'A.xxx.TopShot' },
+    { key: 'collection', label: 'Collection', type: 'select', options: NFT_COLLECTIONS },
     { key: 'direction', label: 'Direction', type: 'select', options: ['in', 'out', 'both'] },
+  ],
+  'transaction.sealed': [],
+  'block.sealed': [],
+  'account.created': [
+    { key: 'addresses', label: 'Addresses (optional)', type: 'text', placeholder: '0x1,0x2', isArray: true },
+  ],
+  'account.key.added': [
+    { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
+  ],
+  'account.key.removed': [
+    { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
+  ],
+  'account.key_change': [
+    { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
+  ],
+  'account.contract.added': [
+    { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
+  ],
+  'account.contract.updated': [
+    { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
+  ],
+  'account.contract.removed': [
+    { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
   ],
   'contract.event': [
     { key: 'contract_address', label: 'Contract Address', type: 'text', placeholder: '0x...' },
     { key: 'event_names', label: 'Event Names', type: 'text', placeholder: 'Deposit,Withdraw', isArray: true },
   ],
   'address.activity': [
-    { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
+    { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true, required: true },
     { key: 'roles', label: 'Roles', type: 'text', placeholder: 'PROPOSER,PAYER', isArray: true },
   ],
   'staking.event': [
-    { key: 'event_types', label: 'Event Types', type: 'text', placeholder: 'DelegatorStaked', isArray: true },
+    { key: 'event_types', label: 'Event Types', type: 'text', placeholder: 'DelegatorStaked,TokensCommitted', isArray: true },
     { key: 'node_id', label: 'Node ID', type: 'text', placeholder: '' },
     { key: 'min_amount', label: 'Min Amount', type: 'number', placeholder: '0' },
   ],
@@ -84,13 +167,10 @@ const CONDITION_FIELDS: Record<EventTypeId, ConditionFieldDef[]> = {
     { key: 'pair_id', label: 'Pair ID', type: 'text', placeholder: '' },
     { key: 'event_type', label: 'Event Type', type: 'select', options: ['add', 'remove'] },
   ],
-  'account.key_change': [
-    { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
-  ],
   'evm.transaction': [
     { key: 'from', label: 'From Address', type: 'text', placeholder: '0x...' },
     { key: 'to', label: 'To Address', type: 'text', placeholder: '0x...' },
-    { key: 'min_value', label: 'Min Value', type: 'number', placeholder: '0' },
+    { key: 'min_value', label: 'Min Value (wei)', type: 'number', placeholder: '0' },
   ],
 }
 
@@ -446,11 +526,11 @@ function DeveloperSubscriptions() {
                     setFormEventType(e.target.value as EventTypeId)
                     setFormConditions({})
                   }}
-                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                 >
                   {EVENT_TYPES.map((et) => (
                     <option key={et} value={et}>
-                      {et}
+                      {EVENT_TYPE_LABELS[et]} ({et})
                     </option>
                   ))}
                 </select>
@@ -502,12 +582,20 @@ function DeveloperSubscriptions() {
                           onChange={(e) => setConditionField(field.key, e.target.value)}
                           className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                         >
-                          <option value="">-- Select --</option>
-                          {field.options?.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
+                          {!(field.options?.[0] && typeof field.options[0] === 'object') && (
+                            <option value="">-- Select --</option>
+                          )}
+                          {field.options?.map((opt) =>
+                            typeof opt === 'object' ? (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ) : (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ),
+                          )}
                         </select>
                       ) : (
                         <input

@@ -11,16 +11,31 @@ import (
 
 // SupportedEventTypes lists all event types the webhook system supports.
 var SupportedEventTypes = []string{
+	// Token transfers
 	"ft.transfer",
+	"ft.large_transfer",
 	"nft.transfer",
+	// Transaction & block
 	"transaction.sealed",
 	"block.sealed",
+	// Account lifecycle
 	"account.created",
 	"account.key.added",
 	"account.key.removed",
+	"account.key_change",
 	"account.contract.added",
 	"account.contract.updated",
 	"account.contract.removed",
+	// Address & contract activity
+	"address.activity",
+	"contract.event",
+	// Staking
+	"staking.event",
+	// DeFi
+	"defi.swap",
+	"defi.liquidity",
+	// EVM
+	"evm.transaction",
 }
 
 // Handlers provides HTTP handlers for the webhook API.
