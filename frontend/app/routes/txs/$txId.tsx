@@ -267,6 +267,23 @@ export const Route = createFileRoute('/txs/$txId')({
     },
 })
 
+/** Injects an error annotation below the target line element in SyntaxHighlighter via DOM */
+function ScriptErrorAnnotation({ targetId, message, line, isDark }: { targetId: string; message: string; line: number; isDark: boolean }) {
+    useEffect(() => {
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        // Check if annotation already injected
+        if (el.nextElementSibling?.getAttribute('data-error-annotation') === 'true') return;
+        const annotation = document.createElement('div');
+        annotation.setAttribute('data-error-annotation', 'true');
+        annotation.style.cssText = `display:flex;align-items:center;gap:6px;padding:4px 12px 4px 3.5em;font-size:10px;font-family:ui-monospace,monospace;background:${isDark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)'};border-left:3px solid #ef4444;color:#f87171;`;
+        annotation.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Line ${line}: ${message.replace(/</g, '&lt;')}</span>`;
+        el.parentNode?.insertBefore(annotation, el.nextSibling);
+        return () => { annotation.remove(); };
+    }, [targetId, message, line, isDark]);
+    return null;
+}
+
 function TokenBubble({ logo, symbol, size = 32 }: { logo?: string; symbol?: string; size?: number }) {
     if (logo) {
         return <img src={logo} alt={symbol || ''} style={{ width: size, height: size }} className="rounded-full border border-zinc-200 dark:border-white/10 flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />;
@@ -1093,61 +1110,70 @@ function TransactionDetail() {
                                         </p>
                                     )}
 
-                                    {/* Error Context: show surrounding lines from the actual tx script */}
+                                    {/* Error Context: syntax-highlighted surrounding lines from the tx script */}
                                     {(() => {
                                         const errLine = parsed.scriptErrorLine;
                                         const scriptText = transaction.script;
-                                        // Use script lines if available, fall back to parsed snippet
-                                        const contextLines: { lineNum: number; code: string; isError: boolean }[] = [];
-                                        if (errLine && scriptText) {
-                                            const allLines = scriptText.split('\n');
-                                            const start = Math.max(0, errLine - 6);
-                                            const end = Math.min(allLines.length, errLine + 5);
-                                            for (let i = start; i < end; i++) {
-                                                contextLines.push({ lineNum: i + 1, code: allLines[i], isError: i + 1 === errLine });
-                                            }
-                                        } else if (parsed.codeSnippet && parsed.codeSnippet.length > 0) {
-                                            contextLines.push(...parsed.codeSnippet);
+                                        if (!errLine || !scriptText) {
+                                            // Fall back to parsed snippet if no script
+                                            if (!parsed.codeSnippet || parsed.codeSnippet.length === 0) return null;
+                                            const maxLn = parsed.codeSnippet[parsed.codeSnippet.length - 1]?.lineNum || 0;
+                                            const gw = String(maxLn).length * 8 + 16;
+                                            return (
+                                                <div className="bg-zinc-900 border border-zinc-700 rounded-sm overflow-hidden mb-4">
+                                                    <div className="px-3 py-1.5 border-b border-zinc-700 flex items-center gap-2">
+                                                        <Braces className="h-3 w-3 text-zinc-500" />
+                                                        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Error Context</span>
+                                                    </div>
+                                                    <div className="font-mono text-[11px] leading-[1.7] overflow-x-auto">
+                                                        {parsed.codeSnippet.map((line, i) => (
+                                                            <div key={i} className={`flex ${line.isError ? 'bg-red-500/20 border-l-3 border-red-500' : ''}`}>
+                                                                <span className={`select-none text-right pr-3 pl-2 flex-shrink-0 ${line.isError ? 'bg-red-500/30 text-red-400' : 'text-zinc-600'}`} style={{ minWidth: gw }}>{line.lineNum}</span>
+                                                                <span className={`pl-3 ${line.isError ? 'text-red-200 font-bold' : 'text-zinc-300'}`}>{line.code}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
                                         }
-                                        if (contextLines.length === 0) return null;
-                                        const maxLineNum = contextLines[contextLines.length - 1]?.lineNum || 0;
-                                        const gutterWidth = String(maxLineNum).length * 8 + 16;
+                                        const allLines = scriptText.split('\n');
+                                        const start = Math.max(0, errLine - 6);
+                                        const end = Math.min(allLines.length, errLine + 5);
+                                        const snippet = allLines.slice(start, end).join('\n');
+                                        const startLine = start + 1;
                                         return (
                                             <div className="bg-zinc-900 border border-zinc-700 rounded-sm overflow-hidden mb-4">
                                                 <div className="px-3 py-1.5 border-b border-zinc-700 flex items-center gap-2">
                                                     <Braces className="h-3 w-3 text-zinc-500" />
                                                     <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Error Context</span>
-                                                    {errLine && (
-                                                        <span className="text-[10px] text-zinc-600 font-mono">Line {errLine}</span>
-                                                    )}
+                                                    <span className="text-[10px] text-zinc-600 font-mono">Line {errLine}</span>
                                                 </div>
-                                                <div className="font-mono text-[11px] leading-[1.7] overflow-x-auto">
-                                                    {contextLines.map((line, i) => (
-                                                        <div key={i}>
-                                                            <div className={`flex ${line.isError ? 'bg-red-500/20 border-l-3 border-red-500' : ''}`}>
-                                                                <span
-                                                                    className={`select-none text-right pr-3 pl-2 flex-shrink-0 ${line.isError ? 'bg-red-500/30 text-red-400' : 'text-zinc-600'}`}
-                                                                    style={{ minWidth: gutterWidth }}
-                                                                >
-                                                                    {line.lineNum}
-                                                                </span>
-                                                                <span className={`pl-3 ${line.isError ? 'text-red-200 font-bold' : 'text-zinc-300'}`}>
-                                                                    {line.code}
-                                                                </span>
-                                                            </div>
-                                                            {/* Inline error annotation below the error line */}
-                                                            {line.isError && parsed.summary && (
-                                                                <div className="flex">
-                                                                    <span className="flex-shrink-0 bg-red-500/10" style={{ minWidth: gutterWidth }} />
-                                                                    <div className="pl-3 py-1 flex items-center gap-1.5">
-                                                                        <AlertCircle className="h-3 w-3 text-red-400 flex-shrink-0" />
-                                                                        <span className="text-[10px] text-red-400 italic">{parsed.summary}</span>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                <SyntaxHighlighter
+                                                    language="swift"
+                                                    style={vscDarkPlus}
+                                                    customStyle={{ margin: 0, padding: '0.75rem 0', fontSize: '11px', lineHeight: '1.7', background: 'transparent' }}
+                                                    showLineNumbers={true}
+                                                    startingLineNumber={startLine}
+                                                    wrapLines={true}
+                                                    lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1em', color: '#555', userSelect: 'none' }}
+                                                    lineProps={(lineNumber: number) => {
+                                                        if (lineNumber === errLine) {
+                                                            return {
+                                                                style: { backgroundColor: 'rgba(239,68,68,0.2)', borderLeft: '3px solid #ef4444', display: 'block' },
+                                                            };
+                                                        }
+                                                        return { style: { display: 'block' } };
+                                                    }}
+                                                >
+                                                    {snippet}
+                                                </SyntaxHighlighter>
+                                                {/* Inline error annotation */}
+                                                {parsed.summary && (
+                                                    <div className="border-t border-red-500/20 bg-red-500/10 px-4 py-1.5 flex items-center gap-1.5">
+                                                        <AlertCircle className="h-3 w-3 text-red-400 flex-shrink-0" />
+                                                        <span className="text-[10px] text-red-400 font-mono">{parsed.summary}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })()}
@@ -1695,14 +1721,14 @@ function TransactionDetail() {
                                             >
                                                 {transaction.script}
                                             </SyntaxHighlighter>
-                                            {/* Inline error annotation rendered outside SyntaxHighlighter, positioned after the code */}
+                                            {/* Inject error annotation below the error line via DOM effect */}
                                             {parsedError?.scriptErrorLine && parsedError?.summary && (
-                                                <div className="border-t border-red-500/20 bg-red-500/5 px-4 py-2 flex items-center gap-2">
-                                                    <AlertCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
-                                                    <span className="text-[11px] text-red-500 dark:text-red-400 font-mono">
-                                                        Line {parsedError.scriptErrorLine}: {parsedError.summary}
-                                                    </span>
-                                                </div>
+                                                <ScriptErrorAnnotation
+                                                    targetId="script-error-line"
+                                                    message={parsedError.summary}
+                                                    line={parsedError.scriptErrorLine}
+                                                    isDark={theme === 'dark'}
+                                                />
                                             )}
                                         </div>
                                     ) : (
