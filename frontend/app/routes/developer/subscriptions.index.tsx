@@ -5,6 +5,7 @@ import { Plus, Trash2, Loader2, GitBranch, CheckCircle, Circle } from 'lucide-re
 import DeveloperLayout from '../../components/developer/DeveloperLayout'
 import { listWorkflows, createWorkflow, deleteWorkflow } from '../../lib/webhookApi'
 import type { Workflow } from '../../lib/webhookApi'
+import { WORKFLOW_TEMPLATES, TEMPLATE_CATEGORIES } from '../../components/developer/workflow/templates'
 
 export const Route = createFileRoute('/developer/subscriptions/')({
   component: WorkflowListPage,
@@ -35,6 +36,27 @@ function WorkflowListPage() {
     setCreating(true)
     try {
       const wf = await createWorkflow()
+      navigate({ to: '/developer/subscriptions/$id', params: { id: wf.id } })
+    } catch {
+      setCreating(false)
+    }
+  }
+
+  async function handleUseTemplate(template: typeof WORKFLOW_TEMPLATES[0]) {
+    setCreating(true)
+    try {
+      const layoutedNodes = template.nodes.map((n, i) => ({
+        ...n,
+        position: { x: 100 + i * 280, y: 150 },
+      }))
+      const edges = template.edges.map((e, i) => ({
+        id: `edge_${i}`,
+        ...e,
+        animated: true,
+        style: { stroke: '#525252', strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed', color: '#525252', width: 16, height: 16 },
+      }))
+      const wf = await createWorkflow(template.name, { nodes: layoutedNodes, edges })
       navigate({ to: '/developer/subscriptions/$id', params: { id: wf.id } })
     } catch {
       setCreating(false)
@@ -73,6 +95,37 @@ function WorkflowListPage() {
             {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             New Workflow
           </button>
+        </div>
+
+        {/* Templates */}
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold text-zinc-500 dark:text-neutral-400 uppercase tracking-wider">Templates</h2>
+          {TEMPLATE_CATEGORIES.map((cat) => (
+            <div key={cat.key}>
+              <p className="text-xs text-zinc-500 dark:text-neutral-500 mb-2">{cat.emoji} {cat.label}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {WORKFLOW_TEMPLATES.filter((t) => t.category === cat.key).map((t) => {
+                  const Icon = t.icon
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => handleUseTemplate(t)}
+                      disabled={creating}
+                      className="flex items-start gap-3 p-3 bg-zinc-50 dark:bg-neutral-800/50 border border-zinc-200 dark:border-neutral-800 rounded-lg hover:border-[#00ef8b]/40 hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-colors text-left disabled:opacity-50"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-zinc-200 dark:bg-neutral-700 flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-zinc-600 dark:text-neutral-300" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-zinc-900 dark:text-white">{t.name}</p>
+                        <p className="text-xs text-zinc-500 dark:text-neutral-500 mt-0.5">{t.description}</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
