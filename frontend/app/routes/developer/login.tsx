@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, ArrowRight, Loader2, Sparkles, Wallet } from 'lucide-react'
+import { Mail, Loader2, Sparkles, Wallet } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '../../components/ui/input-otp'
 
 export const Route = createFileRoute('/developer/login')({
   component: DeveloperLoginPage,
@@ -16,9 +17,8 @@ function DeveloperLoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [otpSent, setOtpSent] = useState(false)
-  const [otp, setOtp] = useState(['', '', '', '', '', ''])
+  const [otpValue, setOtpValue] = useState('')
   const [verifying, setVerifying] = useState(false)
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([])
 
   // Redirect if already logged in
   useEffect(() => {
@@ -42,55 +42,23 @@ function DeveloperLoginPage() {
     }
   }
 
-  function handleOtpChange(index: number, value: string) {
-    if (value.length > 1) {
-      // Handle paste of full OTP
-      const digits = value.replace(/\D/g, '').slice(0, 6).split('')
-      const newOtp = [...otp]
-      digits.forEach((d, i) => {
-        if (index + i < 6) newOtp[index + i] = d
-      })
-      setOtp(newOtp)
-      const nextIndex = Math.min(index + digits.length, 5)
-      otpRefs.current[nextIndex]?.focus()
-      // Auto-submit if all filled
-      if (newOtp.every(d => d !== '')) {
-        submitOtp(newOtp.join(''))
-      }
-      return
-    }
-
-    const newOtp = [...otp]
-    newOtp[index] = value.replace(/\D/g, '')
-    setOtp(newOtp)
-
-    if (value && index < 5) {
-      otpRefs.current[index + 1]?.focus()
-    }
-
-    // Auto-submit when all 6 digits entered
-    if (value && newOtp.every(d => d !== '')) {
-      submitOtp(newOtp.join(''))
-    }
-  }
-
-  function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus()
-    }
-  }
-
-  async function submitOtp(code: string) {
+  const submitOtp = useCallback(async (code: string) => {
     setError(null)
     setVerifying(true)
     try {
       await verifyOtp(email, code)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid code. Please try again.')
-      setOtp(['', '', '', '', '', ''])
-      otpRefs.current[0]?.focus()
+      setOtpValue('')
     } finally {
       setVerifying(false)
+    }
+  }, [email, verifyOtp])
+
+  function handleOtpChange(value: string) {
+    setOtpValue(value)
+    if (value.length === 6) {
+      submitOtp(value)
     }
   }
 
@@ -134,22 +102,23 @@ function DeveloperLoginPage() {
               </motion.div>
             )}
 
-            <div className="flex justify-center gap-2 mb-6">
-              {otp.map((digit, i) => (
-                <input
-                  key={i}
-                  ref={el => { otpRefs.current[i] = el }}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={digit}
-                  onChange={e => handleOtpChange(i, e.target.value)}
-                  onKeyDown={e => handleOtpKeyDown(i, e)}
-                  disabled={verifying}
-                  className="w-11 h-13 text-center text-xl font-bold bg-neutral-800 border border-neutral-700 rounded-lg text-[#00ef8b] focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/20 transition-colors disabled:opacity-50"
-                  autoFocus={i === 0}
-                />
-              ))}
+            <div className="flex justify-center mb-6">
+              <InputOTP
+                maxLength={6}
+                value={otpValue}
+                onChange={handleOtpChange}
+                disabled={verifying}
+                autoFocus
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
+                  <InputOTPSlot index={1} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
+                  <InputOTPSlot index={2} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
+                  <InputOTPSlot index={3} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
+                  <InputOTPSlot index={4} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
+                  <InputOTPSlot index={5} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
+                </InputOTPGroup>
+              </InputOTP>
             </div>
 
             {verifying && (
@@ -163,7 +132,7 @@ function DeveloperLoginPage() {
               <p className="text-xs text-neutral-500">Or click the magic link in your email</p>
               <div className="flex items-center justify-center gap-4 text-sm">
                 <button
-                  onClick={() => { setOtpSent(false); setOtp(['', '', '', '', '', '']); setError(null) }}
+                  onClick={() => { setOtpSent(false); setOtpValue(''); setError(null) }}
                   className="text-[#00ef8b] hover:text-[#00ef8b]/80 transition-colors"
                 >
                   Use a different email
@@ -175,7 +144,7 @@ function DeveloperLoginPage() {
                     setLoading(true)
                     try {
                       await sendMagicLink(email)
-                      setOtp(['', '', '', '', '', ''])
+                      setOtpValue('')
                     } catch (err) {
                       setError(err instanceof Error ? err.message : 'Failed to resend')
                     } finally {
