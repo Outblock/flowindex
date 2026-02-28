@@ -190,7 +190,7 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
       </div>
 
       {/* Main content — full width, no padding (children manage their own) */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 flex flex-col min-h-0">
         {children}
       </main>
     </div>

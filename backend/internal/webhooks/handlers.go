@@ -38,6 +38,8 @@ var SupportedEventTypes = []string{
 	"defi.liquidity",
 	// EVM
 	"evm.transaction",
+	// Scheduled
+	"balance.check",
 }
 
 // Handlers provides HTTP handlers for the webhook API.

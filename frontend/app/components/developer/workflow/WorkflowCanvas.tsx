@@ -50,6 +50,7 @@ const nodeTypes = {
   trigger_evm_tx: TriggerNode,
   trigger_contract_event: TriggerNode,
   trigger_balance_change: TriggerNode,
+  trigger_balance_report: TriggerNode,
   trigger_schedule: TriggerNode,
   // Conditions
   condition_if: ConditionNode,
