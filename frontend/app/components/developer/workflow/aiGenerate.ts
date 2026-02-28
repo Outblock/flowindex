@@ -222,16 +222,7 @@ export async function generateWorkflow(
     throw new Error(`AI request failed: ${res.status}`)
   }
 
-  // The AI chat endpoint streams text. We need to collect the full response.
-  const text = await collectStreamedText(res)
-
-  // Extract JSON from the response (may be wrapped in markdown code fences)
-  const jsonStr = extractJSON(text)
-  if (!jsonStr) {
-    throw new Error('AI did not return valid JSON')
-  }
-
-  const parsed: AIWorkflowResult = JSON.parse(jsonStr)
+  const parsed: AIWorkflowResult = await res.json()
 
   // Validate node types
   for (const n of parsed.nodes) {
@@ -264,56 +255,3 @@ export async function generateWorkflow(
   return { nodes: layoutedNodes, edges: styledEdges, name: parsed.name }
 }
 
-/** Collect streamed plain-text response into a single string. */
-async function collectStreamedText(res: Response): Promise<string> {
-  const reader = res.body?.getReader()
-  if (!reader) throw new Error('No response body')
-
-  const decoder = new TextDecoder()
-  let fullText = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    fullText += decoder.decode(value, { stream: true })
-  }
-
-  return fullText
-}
-
-/** Extract JSON object from text that may contain markdown fences or extra text. */
-function extractJSON(text: string): string | null {
-  // Try direct parse first
-  try {
-    JSON.parse(text.trim())
-    return text.trim()
-  } catch {
-    // continue
-  }
-
-  // Try extracting from markdown code fence
-  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
-  if (fenceMatch) {
-    try {
-      JSON.parse(fenceMatch[1].trim())
-      return fenceMatch[1].trim()
-    } catch {
-      // continue
-    }
-  }
-
-  // Try finding first { ... } block
-  const braceStart = text.indexOf('{')
-  const braceEnd = text.lastIndexOf('}')
-  if (braceStart !== -1 && braceEnd > braceStart) {
-    const candidate = text.slice(braceStart, braceEnd + 1)
-    try {
-      JSON.parse(candidate)
-      return candidate
-    } catch {
-      // give up
-    }
-  }
-
-  return null
-}
