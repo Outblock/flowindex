@@ -5,8 +5,7 @@ import type { UIMessage } from 'ai';
 import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuLabel,
-  DropdownMenuSeparator,
+  DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
@@ -1454,20 +1453,26 @@ export default function AIChatWidget() {
                             <ChevronUp size={8} className="ml-0.5 opacity-60" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent side="top" align="start" className="min-w-[180px] z-[80] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10">
-                          <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-zinc-400">Model</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuRadioGroup value={chatMode} onValueChange={(v) => handleModeChange(v as ChatMode)}>
-                            {CHAT_MODES.map(({ key, label, icon: Icon, desc, model }) => (
-                              <DropdownMenuRadioItem key={key} value={key} className="cursor-pointer">
-                                <Icon size={14} className="mr-1" />
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{label}</span>
-                                  <span className="text-[10px] text-zinc-400">{model} · {desc}</span>
-                                </div>
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </DropdownMenuRadioGroup>
+                        <DropdownMenuContent side="top" align="start" className="min-w-[200px] z-[80] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-lg p-1">
+                          <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-zinc-400 px-2 py-1">Model</DropdownMenuLabel>
+                          <DropdownMenuSeparator className="bg-zinc-100 dark:bg-white/10" />
+                          {CHAT_MODES.map(({ key, label, icon: Icon, desc, model }) => (
+                            <DropdownMenuItem
+                              key={key}
+                              onClick={() => handleModeChange(key)}
+                              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-sm cursor-pointer transition-colors ${
+                                chatMode === key
+                                  ? 'bg-nothing-green/10 text-nothing-green'
+                                  : 'text-zinc-700 dark:text-zinc-300'
+                              }`}
+                            >
+                              <Icon size={14} className="shrink-0" />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-medium leading-tight">{label}</span>
+                                <span className={`text-[10px] leading-tight ${chatMode === key ? 'text-nothing-green/60' : 'text-zinc-400 dark:text-zinc-500'}`}>{model} · {desc}</span>
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
                         </DropdownMenuContent>
                       </DropdownMenu>
                       <button
