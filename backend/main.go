@@ -67,17 +67,10 @@ func main() {
 	if os.Getenv("SKIP_MIGRATION") == "true" {
 		log.Println("Database Migration SKIPPED (SKIP_MIGRATION=true)")
 	} else {
-		// Terminate ALL other connections (including active queries stuck on IO)
-		// from previous backend instances that may hold locks and block DDL.
-		terminated, termErr := repo.TerminateOtherConnections(context.Background())
-		if termErr != nil {
-			log.Printf("Warning: failed to terminate other connections: %v", termErr)
-		} else if terminated > 0 {
-			log.Printf("Terminated %d connection(s) before migration", terminated)
-		}
-
-		log.Println("Running Database Migration...")
-		if err := repo.Migrate("schema_v2.sql"); err != nil {
+		// Run migration on a dedicated single connection (not from pool) to avoid
+		// the terminate-other-connections step killing our own pool's connections.
+		log.Println("Running Database Migration (dedicated connection)...")
+		if err := repo.MigrateWithDedicatedConn(context.Background(), dbURL, "schema_v2.sql"); err != nil {
 			log.Fatalf("Migration failed: %v", err)
 		}
 		log.Println("Database Migration Complete.")
