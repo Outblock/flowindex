@@ -135,7 +135,7 @@ services:
       PG_META_DB_PASSWORD: ${SUPABASE_DB_PASSWORD}
 
   supabase-studio:
-    image: supabase/studio:20241029-46e1e55
+    image: supabase/studio:latest
     depends_on:
       - supabase-meta
       - supabase-rest
