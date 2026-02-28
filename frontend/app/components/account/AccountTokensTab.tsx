@@ -366,6 +366,8 @@ export function AccountTokensTab({ address, coaAddress, subtab, onSubTabChange }
                                                 displaySymbol={item.displaySymbol}
                                                 getTokenPrice={getTokenPrice}
                                                 getTokenPriceBySymbol={getTokenPriceBySymbol}
+                                                cadenceAddress={address}
+                                                coaAddress={coaAddress}
                                             />
                                         </motion.div>
                                     );
@@ -527,7 +529,7 @@ function SmallTokenIcon({ logoUrl, fallback }: { logoUrl: string; fallback?: Rea
     );
 }
 
-function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl, displayName, displaySymbol, getTokenPrice, getTokenPriceBySymbol }: {
+function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl, displayName, displaySymbol, getTokenPrice, getTokenPriceBySymbol, cadenceAddress, coaAddress }: {
     cadenceToken: FTVaultInfo;
     evmToken: EVMToken;
     identifier: string;
@@ -537,6 +539,8 @@ function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl,
     displaySymbol: string;
     getTokenPrice: (name: string) => number;
     getTokenPriceBySymbol: (symbol: string) => number;
+    cadenceAddress: string;
+    coaAddress?: string;
 }) {
     const [expanded, setExpanded] = useState(false);
     const cadenceBal = Number(t.balance || 0);
@@ -548,8 +552,10 @@ function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl,
 
     // Use best available logo: complement cadence metadata logo with EVM icon
     const cadenceLogoUrl = logoUrl;
-    const evmLogoUrl = evmToken.icon_url || '';
-    const bestLogo = cadenceLogoUrl || evmLogoUrl;
+    const evmLogoUrl = evmToken.icon_url || cadenceLogoUrl; // fallback to cadence icon
+    const bestLogo = cadenceLogoUrl || evmToken.icon_url || '';
+
+    const truncAddr = (addr: string) => addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : '';
 
     return (
         <GlassCard className="hover:bg-white/40 dark:hover:bg-white/10 transition-colors group relative overflow-hidden p-4">
@@ -595,7 +601,7 @@ function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl,
                 </div>
             </button>
 
-            {/* Collapsible sub-rows: Cadence + EVM breakdowns */}
+            {/* Collapsible sub-rows: Cadence + EVM breakdowns with connector line */}
             <AnimatePresence>
                 {expanded && (
                     <motion.div
@@ -605,35 +611,73 @@ function BridgedTokenRow({ cadenceToken: t, evmToken, identifier, meta, logoUrl,
                         transition={{ duration: 0.2 }}
                         className="overflow-hidden"
                     >
-                        <div className="mt-3 ml-14 border-t border-zinc-100 dark:border-white/5 pt-2 space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-2">
-                                    <SmallTokenIcon logoUrl={cadenceLogoUrl} fallback={<Coins className="w-4 h-4 text-zinc-400" />} />
-                                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Cadence</span>
-                                    <span className="text-[10px] font-mono text-zinc-400">{t.symbol || displaySymbol}</span>
+                        <div className="mt-3 ml-14 border-t border-zinc-100 dark:border-white/5 pt-3">
+                            <div className="relative pl-5">
+                                {/* Vertical connector line */}
+                                <div className="absolute left-1.5 top-1 bottom-1 w-px bg-zinc-200 dark:bg-white/10" />
+
+                                {/* Cadence sub-row */}
+                                <div className="relative flex items-center justify-between py-2">
+                                    {/* Horizontal branch */}
+                                    <div className="absolute -left-3.5 top-1/2 w-3 h-px bg-zinc-200 dark:bg-white/10" />
+                                    <div className="absolute -left-4 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <img
+                                            src={cadenceLogoUrl}
+                                            className="w-6 h-6 rounded-full object-cover bg-white dark:bg-white/10 flex-shrink-0"
+                                            loading="lazy"
+                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold">Cadence</span>
+                                                <span className="text-xs font-mono text-zinc-400">{t.symbol || displaySymbol}</span>
+                                            </div>
+                                            <span className="text-[10px] font-mono text-zinc-400 truncate block">{cadenceAddress}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 flex-shrink-0">
+                                        <span className="text-sm font-mono font-medium text-zinc-700 dark:text-zinc-300">
+                                            {cadenceBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                                        </span>
+                                        {cadenceBal > 0 && cadencePrice > 0 && (
+                                            <UsdValue amount={cadenceBal} price={cadencePrice} className="text-[10px] text-zinc-400" />
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="font-mono text-zinc-700 dark:text-zinc-300">
-                                        {cadenceBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
-                                    </span>
-                                    {cadenceBal > 0 && cadencePrice > 0 && (
-                                        <UsdValue amount={cadenceBal} price={cadencePrice} className="text-[10px] text-zinc-400" />
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-2">
-                                    <SmallTokenIcon logoUrl={evmLogoUrl} fallback={<Box className="w-4 h-4 text-purple-400" />} />
-                                    <span className="text-[10px] font-mono uppercase tracking-wider text-purple-500 dark:text-purple-400">EVM</span>
-                                    <span className="text-[10px] font-mono text-zinc-400">{evmToken.symbol}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="font-mono text-zinc-700 dark:text-zinc-300">
-                                        {evmBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
-                                    </span>
-                                    {evmBal > 0 && evmPrice > 0 && (
-                                        <UsdValue amount={evmBal} price={evmPrice} className="text-[10px] text-zinc-400" />
-                                    )}
+
+                                {/* EVM sub-row */}
+                                <div className="relative flex items-center justify-between py-2">
+                                    {/* Horizontal branch */}
+                                    <div className="absolute -left-3.5 top-1/2 w-3 h-px bg-zinc-200 dark:bg-white/10" />
+                                    <div className="absolute -left-4 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-purple-400 dark:bg-purple-500" />
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <img
+                                            src={evmLogoUrl}
+                                            className="w-6 h-6 rounded-full object-cover bg-white dark:bg-white/10 flex-shrink-0"
+                                            loading="lazy"
+                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-mono uppercase tracking-wider text-purple-500 dark:text-purple-400 font-semibold">EVM</span>
+                                                <span className="text-xs font-mono text-zinc-400">{evmToken.symbol}</span>
+                                            </div>
+                                            {coaAddress && (
+                                                <span className="text-[10px] font-mono text-purple-400/70 truncate block">
+                                                    COA {truncAddr(coaAddress)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 flex-shrink-0">
+                                        <span className="text-sm font-mono font-medium text-zinc-700 dark:text-zinc-300">
+                                            {evmBal.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                                        </span>
+                                        {evmBal > 0 && evmPrice > 0 && (
+                                            <UsdValue amount={evmBal} price={evmPrice} className="text-[10px] text-zinc-400" />
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
