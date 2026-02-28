@@ -555,6 +555,7 @@ func main() {
 			// Rate limiter + API handlers
 			rateLimiter := webhooks.NewRateLimiter(whStore)
 			whHandlers := webhooks.NewHandlers(whStore, whAuth, rateLimiter)
+			whHandlers.SetRegistry(matcherRegistry)
 			webhookHandlersOpt = api.WithWebhookHandlers(whHandlers)
 
 			// Admin handlers

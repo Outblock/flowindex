@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"flowscan-clone/internal/webhooks/matcher"
+
 	"github.com/gorilla/mux"
 )
 
@@ -43,11 +45,17 @@ type Handlers struct {
 	store       *Store
 	auth        *AuthMiddleware
 	rateLimiter *RateLimiter
+	registry    *matcher.Registry
 }
 
 // NewHandlers creates a new Handlers instance.
 func NewHandlers(store *Store, auth *AuthMiddleware, rateLimiter *RateLimiter) *Handlers {
 	return &Handlers{store: store, auth: auth, rateLimiter: rateLimiter}
+}
+
+// SetRegistry sets the matcher registry on the handlers, enabling the test endpoint.
+func (h *Handlers) SetRegistry(reg *matcher.Registry) {
+	h.registry = reg
 }
 
 // RegisterRoutes registers all webhook routes under /api/v1 on the given router.
@@ -86,6 +94,7 @@ func (h *Handlers) RegisterRoutes(r *mux.Router) {
 	authed.HandleFunc("/workflows/{id}", h.handleUpdateWorkflow).Methods("PATCH", "OPTIONS")
 	authed.HandleFunc("/workflows/{id}", h.handleDeleteWorkflow).Methods("DELETE", "OPTIONS")
 	authed.HandleFunc("/workflows/{id}/deploy", h.handleDeployWorkflow).Methods("POST", "OPTIONS")
+	authed.HandleFunc("/workflows/{id}/test", h.handleTestWorkflow).Methods("POST", "OPTIONS")
 
 	// Delivery Logs
 	authed.HandleFunc("/logs", h.handleListDeliveryLogs).Methods("GET", "OPTIONS")
@@ -647,6 +656,64 @@ func (h *Handlers) handleDeployWorkflow(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, wf)
+}
+
+// --- Test Workflow handler ---
+
+func (h *Handlers) handleTestWorkflow(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+	wf, err := h.store.GetWorkflow(r.Context(), id, userID)
+	if err != nil || wf == nil {
+		writeError(w, http.StatusNotFound, "workflow not found")
+		return
+	}
+
+	if h.registry == nil {
+		writeError(w, http.StatusInternalServerError, "test runner not configured")
+		return
+	}
+
+	var req struct {
+		Overrides map[string]interface{} `json:"overrides"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	// Get subscriptions for this user to find event types to test
+	limit := 200
+	offset := 0
+	subs, err := h.store.ListSubscriptions(r.Context(), userID, limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list subscriptions")
+		return
+	}
+
+	type pathResult struct {
+		EventType string         `json:"event_type"`
+		Test      PathTestResult `json:"test"`
+	}
+	var results []pathResult
+
+	for _, sub := range subs {
+		if !sub.IsEnabled {
+			continue
+		}
+		testResult := RunPathTest(h.registry, sub.EventType, sub.Conditions, req.Overrides)
+		results = append(results, pathResult{EventType: sub.EventType, Test: testResult})
+	}
+
+	if results == nil {
+		results = []pathResult{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"paths": results})
 }
 
 // --- Delivery Log handlers ---
