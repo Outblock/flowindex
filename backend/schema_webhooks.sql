@@ -13,10 +13,14 @@ CREATE TABLE IF NOT EXISTS public.rate_limit_tiers (
 );
 
 INSERT INTO public.rate_limit_tiers (id, name, max_subscriptions, max_endpoints, max_events_per_hour, max_api_requests, is_default) VALUES
-    ('free',       'Free',       5,   2,   1000,   100,  true),
-    ('pro',        'Pro',        50,  10,  50000,  1000, false),
+    ('free',       'Free',       10,  10,  5000,   300,  true),
+    ('pro',        'Pro',        50,  50,  50000,  1000, false),
     ('enterprise', 'Enterprise', 500, 100, 500000, 10000, false)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    max_subscriptions = EXCLUDED.max_subscriptions,
+    max_endpoints = EXCLUDED.max_endpoints,
+    max_events_per_hour = EXCLUDED.max_events_per_hour,
+    max_api_requests = EXCLUDED.max_api_requests;
 
 -- User profiles (extends Supabase auth.users)
 CREATE TABLE IF NOT EXISTS public.user_profiles (
