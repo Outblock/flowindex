@@ -728,7 +728,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
 
     return (
       <div className="flex justify-end mb-4">
-        <div className="max-w-[85%] bg-nothing-green/10 border border-nothing-green/20 rounded-sm px-3 py-2">
+        <div className="max-w-[85%] bg-nothing-green/10 border border-nothing-green/20 rounded-sm px-3 py-2 overflow-hidden break-words">
           {(images.length > 0 || pdfs.length > 0) && (
             <div className="flex gap-1.5 mb-2 flex-wrap">
               {images.map((img: any, i: number) => (
@@ -763,7 +763,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
         <div className="shrink-0 mt-0.5 w-5 h-5 rounded-sm bg-nothing-green/10 border border-nothing-green/20 flex items-center justify-center">
           <Bot size={11} className="text-nothing-green" />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden break-words">
           {message.parts.map((part, i) => {
             if (part.type === 'text') {
               if (!(part as any).text?.trim()) return null;
