@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { Home, Box, ArrowRightLeft, Users, FileText, Layers, Globe, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, BarChart3, Code2 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
@@ -10,8 +10,15 @@ export default function Sidebar() {
     const routerState = useRouterState();
     const location = routerState.location;
     const { theme, toggleTheme } = useTheme();
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(() => location.pathname.startsWith('/developer'));
     const { isOpen: isMobileOpen, close: closeMobileMenu } = useMobileMenu();
+
+    // Auto-collapse when entering Developer Portal, auto-expand when leaving
+    useEffect(() => {
+        if (location.pathname.startsWith('/developer')) {
+            setIsCollapsed(true);
+        }
+    }, [location.pathname]);
 
     const isActive = (path: string) => {
         if (path === '/') return location.pathname === '/';

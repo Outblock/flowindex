@@ -42,6 +42,7 @@ import { Route as ContractsIdRouteImport } from './routes/contracts/$id'
 import { Route as BlocksHeightRouteImport } from './routes/blocks/$height'
 import { Route as AccountsAddressRouteImport } from './routes/accounts/$address'
 import { Route as NftsNftTypeIndexRouteImport } from './routes/nfts/$nftType/index'
+import { Route as DeveloperSubscriptionsIndexRouteImport } from './routes/developer/subscriptions.index'
 import { Route as TxsEvmTxIdRouteImport } from './routes/txs/evm/$txId'
 import { Route as DeveloperSubscriptionsIdRouteImport } from './routes/developer/subscriptions.$id'
 import { Route as NftsNftTypeItemIdRouteImport } from './routes/nfts/$nftType/item/$id'
@@ -211,6 +212,12 @@ const NftsNftTypeIndexRoute = NftsNftTypeIndexRouteImport.update({
   path: '/',
   getParentRoute: () => NftsNftTypeRoute,
 } as any)
+const DeveloperSubscriptionsIndexRoute =
+  DeveloperSubscriptionsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DeveloperSubscriptionsRoute,
+  } as any)
 const TxsEvmTxIdRoute = TxsEvmTxIdRouteImport.update({
   id: '/txs/evm/$txId',
   path: '/txs/evm/$txId',
@@ -263,6 +270,7 @@ export interface FileRoutesByFullPath {
   '/txs/': typeof TxsIndexRoute
   '/developer/subscriptions/$id': typeof DeveloperSubscriptionsIdRoute
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
+  '/developer/subscriptions/': typeof DeveloperSubscriptionsIndexRoute
   '/nfts/$nftType/': typeof NftsNftTypeIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
@@ -282,7 +290,6 @@ export interface FileRoutesByTo {
   '/developer/keys': typeof DeveloperKeysRoute
   '/developer/login': typeof DeveloperLoginRoute
   '/developer/logs': typeof DeveloperLogsRoute
-  '/developer/subscriptions': typeof DeveloperSubscriptionsRouteWithChildren
   '/key/$publicKey': typeof KeyPublicKeyRoute
   '/tokens/$token': typeof TokensTokenRoute
   '/transactions/$txId': typeof TransactionsTxIdRoute
@@ -300,6 +307,7 @@ export interface FileRoutesByTo {
   '/txs': typeof TxsIndexRoute
   '/developer/subscriptions/$id': typeof DeveloperSubscriptionsIdRoute
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
+  '/developer/subscriptions': typeof DeveloperSubscriptionsIndexRoute
   '/nfts/$nftType': typeof NftsNftTypeIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
@@ -339,6 +347,7 @@ export interface FileRoutesById {
   '/txs/': typeof TxsIndexRoute
   '/developer/subscriptions/$id': typeof DeveloperSubscriptionsIdRoute
   '/txs/evm/$txId': typeof TxsEvmTxIdRoute
+  '/developer/subscriptions/': typeof DeveloperSubscriptionsIndexRoute
   '/nfts/$nftType/': typeof NftsNftTypeIndexRoute
   '/nfts/$nftType/item/$id': typeof NftsNftTypeItemIdRoute
 }
@@ -379,6 +388,7 @@ export interface FileRouteTypes {
     | '/txs/'
     | '/developer/subscriptions/$id'
     | '/txs/evm/$txId'
+    | '/developer/subscriptions/'
     | '/nfts/$nftType/'
     | '/nfts/$nftType/item/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -398,7 +408,6 @@ export interface FileRouteTypes {
     | '/developer/keys'
     | '/developer/login'
     | '/developer/logs'
-    | '/developer/subscriptions'
     | '/key/$publicKey'
     | '/tokens/$token'
     | '/transactions/$txId'
@@ -416,6 +425,7 @@ export interface FileRouteTypes {
     | '/txs'
     | '/developer/subscriptions/$id'
     | '/txs/evm/$txId'
+    | '/developer/subscriptions'
     | '/nfts/$nftType'
     | '/nfts/$nftType/item/$id'
   id:
@@ -454,6 +464,7 @@ export interface FileRouteTypes {
     | '/txs/'
     | '/developer/subscriptions/$id'
     | '/txs/evm/$txId'
+    | '/developer/subscriptions/'
     | '/nfts/$nftType/'
     | '/nfts/$nftType/item/$id'
   fileRoutesById: FileRoutesById
@@ -727,6 +738,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NftsNftTypeIndexRouteImport
       parentRoute: typeof NftsNftTypeRoute
     }
+    '/developer/subscriptions/': {
+      id: '/developer/subscriptions/'
+      path: '/'
+      fullPath: '/developer/subscriptions/'
+      preLoaderRoute: typeof DeveloperSubscriptionsIndexRouteImport
+      parentRoute: typeof DeveloperSubscriptionsRoute
+    }
     '/txs/evm/$txId': {
       id: '/txs/evm/$txId'
       path: '/txs/evm/$txId'
@@ -753,11 +771,13 @@ declare module '@tanstack/react-router' {
 
 interface DeveloperSubscriptionsRouteChildren {
   DeveloperSubscriptionsIdRoute: typeof DeveloperSubscriptionsIdRoute
+  DeveloperSubscriptionsIndexRoute: typeof DeveloperSubscriptionsIndexRoute
 }
 
 const DeveloperSubscriptionsRouteChildren: DeveloperSubscriptionsRouteChildren =
   {
     DeveloperSubscriptionsIdRoute: DeveloperSubscriptionsIdRoute,
+    DeveloperSubscriptionsIndexRoute: DeveloperSubscriptionsIndexRoute,
   }
 
 const DeveloperSubscriptionsRouteWithChildren =
