@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       services:
-        description: "Services to deploy (comma-separated: backend,frontend,docs,ai-chat or 'all')"
+        description: "Services to deploy (comma-separated: backend,frontend,docs,ai-chat,studio or 'all')"
         required: false
         default: "all"
         type: string
@@ -26,6 +26,7 @@ jobs:
       frontend: ${{ steps.result.outputs.frontend }}
       docs: ${{ steps.result.outputs.docs }}
       ai-chat: ${{ steps.result.outputs.ai-chat }}
+      studio: ${{ steps.result.outputs.studio }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -47,6 +48,9 @@ jobs:
             ai-chat:
               - 'ai/chat/**'
               - '.github/workflows/deploy.yml'
+            studio:
+              - 'studio/**'
+              - '.github/workflows/deploy.yml'
       - name: Resolve outputs
         id: result
         run: |
@@ -57,11 +61,13 @@ jobs:
               echo "frontend=true" >> $GITHUB_OUTPUT
               echo "docs=true" >> $GITHUB_OUTPUT
               echo "ai-chat=true" >> $GITHUB_OUTPUT
+              echo "studio=true" >> $GITHUB_OUTPUT
             else
               echo "backend=false" >> $GITHUB_OUTPUT
               echo "frontend=false" >> $GITHUB_OUTPUT
               echo "docs=false" >> $GITHUB_OUTPUT
               echo "ai-chat=false" >> $GITHUB_OUTPUT
+              echo "studio=false" >> $GITHUB_OUTPUT
               IFS=',' read -ra PARTS <<< "$SERVICES"
               for svc in "${PARTS[@]}"; do
                 svc=$(echo "$svc" | xargs)
@@ -73,6 +79,7 @@ jobs:
             echo "frontend=${{ steps.filter.outputs.frontend }}" >> $GITHUB_OUTPUT
             echo "docs=${{ steps.filter.outputs.docs }}" >> $GITHUB_OUTPUT
             echo "ai-chat=${{ steps.filter.outputs.ai-chat }}" >> $GITHUB_OUTPUT
+            echo "studio=${{ steps.filter.outputs.studio }}" >> $GITHUB_OUTPUT
           fi
 
   build-backend:
@@ -172,6 +179,7 @@ jobs:
               -e BACKEND_API=http://10.128.0.4:8080 \
               -e BACKEND_WS=http://10.128.0.4:8080 \
               -e GOTRUE_URL=http://10.128.0.4:9999 \
+              -e STUDIO_AUTH_URL=http://10.128.0.4:8000 \
               -e VITE_API_URL=https://flowindex.io/api \
               ${{ env.REGISTRY }}/frontend:${{ github.sha }}
           '
@@ -255,4 +263,47 @@ jobs:
               --network=host \
               --env-file /mnt/stateful_partition/pgdata/ai-chat.env \
               ${{ env.REGISTRY }}/ai-chat:${{ github.sha }}
+          '
+
+  build-studio:
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
+    concurrency:
+      group: deploy-studio-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build & push studio
+        run: |
+          docker build -f studio/Dockerfile \
+            -t ${{ env.REGISTRY }}/studio:latest \
+            -t ${{ env.REGISTRY }}/studio:${{ github.sha }} \
+            studio
+          docker push ${{ env.REGISTRY }}/studio --all-tags
+
+      - name: Deploy studio (pull & restart on GCE)
+        run: |
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
+            docker pull ${{ env.REGISTRY }}/studio:${{ github.sha }} && \
+            docker stop studio-auth 2>/dev/null; docker rm studio-auth 2>/dev/null; \
+            docker run -d --restart=always --name studio-auth \
+              --network=host \
+              --env-file /mnt/stateful_partition/pgdata/studio.env \
+              ${{ env.REGISTRY }}/studio:${{ github.sha }}
           '
