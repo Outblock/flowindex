@@ -1378,6 +1378,7 @@ export default function AIChatWidget() {
                       </button>
                     )}
                   </div>
+                </form>
 
                   {/* Bottom row: attach + toggles */}
                   <div className="flex items-center gap-1.5 mt-1.5">
@@ -1490,7 +1491,6 @@ export default function AIChatWidget() {
                         </div>
                       </div>
                     </div>
-                </form>
               </div>
             </motion.div>
           </>

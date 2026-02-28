@@ -50,7 +50,7 @@ const MODE_CONFIG = {
     thinking: false,
   },
   deep: {
-    model: "claude-sonnet-4-6",
+    model: "claude-opus-4-6",
     thinking: true,
   },
 } as const;
