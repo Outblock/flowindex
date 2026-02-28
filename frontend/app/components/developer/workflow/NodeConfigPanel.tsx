@@ -2,6 +2,15 @@ import { X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { NODE_TYPE_MAP } from './nodeTypes'
 import type { ConfigFieldDef } from './nodeTypes'
+import SearchableSelect from './SearchableSelect'
+import { fetchFTTokens, fetchNFTCollections, fetchContracts, fetchContractEvents, fetchEventsByName } from './fetchOptions'
+
+const FETCH_FN_MAP: Record<string, (query: string) => Promise<any[]>> = {
+  ft_tokens: fetchFTTokens,
+  nft_collections: fetchNFTCollections,
+  contracts: fetchContracts,
+  events_search: fetchEventsByName,
+}
 
 interface NodeConfigPanelProps {
   selectedNodeId: string | null
@@ -59,7 +68,18 @@ export default function NodeConfigPanel({
                   >
                     {field.label}
                   </label>
-                  {field.type === 'select' ? (
+                  {field.type === 'searchable' ? (
+                    <SearchableSelect
+                      value={config[field.key] ?? ''}
+                      onChange={(val) => onConfigChange(field.key, val)}
+                      fetchOptions={
+                        field.fetchFn === 'contract_events'
+                          ? () => fetchContractEvents(config[field.linkedField ?? ''] || '')
+                          : FETCH_FN_MAP[field.fetchFn ?? ''] ?? (() => Promise.resolve([]))
+                      }
+                      placeholder={field.placeholder}
+                    />
+                  ) : field.type === 'select' ? (
                     <select
                       id={`cfg-${field.key}`}
                       value={config[field.key] ?? ''}

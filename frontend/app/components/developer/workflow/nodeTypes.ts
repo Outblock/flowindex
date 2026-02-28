@@ -24,16 +24,17 @@ export interface NodeTypeMeta {
 export interface ConfigFieldDef {
   key: string
   label: string
-  type: 'text' | 'number' | 'select'
+  type: 'text' | 'number' | 'select' | 'searchable'
   placeholder?: string
   options?: { value: string; label: string }[] | string[]
   isArray?: boolean
+  fetchFn?: string
+  linkedField?: string
 }
 
 // ---------------------------------------------------------------------------
-// FT_TOKENS and NFT_COLLECTIONS imported from constants.ts
+// Dynamic fetch functions replace static FT_TOKENS / NFT_COLLECTIONS lists
 // ---------------------------------------------------------------------------
-import { FT_TOKENS, NFT_COLLECTIONS } from './constants'
 
 // ---------------------------------------------------------------------------
 // Trigger nodes
@@ -46,7 +47,7 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
     configFields: [
       { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
       { key: 'direction', label: 'Direction', type: 'select', options: ['in', 'out', 'both'] },
-      { key: 'token_contract', label: 'Token', type: 'select', options: FT_TOKENS },
+      { key: 'token_contract', label: 'Token', type: 'searchable', fetchFn: 'ft_tokens', placeholder: 'Search tokens...' },
       { key: 'min_amount', label: 'Min Amount', type: 'number', placeholder: '0' },
     ],
   },
@@ -55,7 +56,7 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
     icon: Image, color: COLORS.trigger, eventType: 'nft.transfer',
     configFields: [
       { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
-      { key: 'collection', label: 'Collection', type: 'select', options: NFT_COLLECTIONS },
+      { key: 'collection', label: 'Collection', type: 'searchable', fetchFn: 'nft_collections', placeholder: 'Search NFT collections...' },
       { key: 'direction', label: 'Direction', type: 'select', options: ['in', 'out', 'both'] },
     ],
   },
@@ -64,7 +65,14 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
     icon: User, color: COLORS.trigger, eventType: 'account.created',
     configFields: [
       { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1,0x2', isArray: true },
-      { key: 'subtypes', label: 'Subtypes', type: 'text', placeholder: 'created,key.added', isArray: true },
+      { key: 'subtypes', label: 'Subtypes', type: 'select', options: [
+        { value: 'account.created', label: 'Account Created' },
+        { value: 'key.added', label: 'Key Added' },
+        { value: 'key.removed', label: 'Key Removed' },
+        { value: 'contract.added', label: 'Contract Deployed' },
+        { value: 'contract.updated', label: 'Contract Updated' },
+        { value: 'contract.removed', label: 'Contract Removed' },
+      ] },
     ],
   },
   {
@@ -93,8 +101,8 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
     type: 'trigger_contract_event', label: 'Contract Event', category: 'trigger',
     icon: ScrollText, color: COLORS.trigger, eventType: 'contract.event',
     configFields: [
-      { key: 'contract_address', label: 'Contract', type: 'text', placeholder: '0x...' },
-      { key: 'event_names', label: 'Events', type: 'text', placeholder: 'Deposit,Withdraw', isArray: true },
+      { key: 'contract_address', label: 'Contract', type: 'searchable', fetchFn: 'contracts', placeholder: 'Search contracts...' },
+      { key: 'event_names', label: 'Events', type: 'searchable', fetchFn: 'contract_events', linkedField: 'contract_address', placeholder: 'Select events...' },
     ],
   },
   {
@@ -102,7 +110,7 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
     icon: Wallet, color: COLORS.trigger, eventType: 'ft.large_transfer',
     configFields: [
       { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1', isArray: true },
-      { key: 'token_contract', label: 'Token', type: 'select', options: FT_TOKENS },
+      { key: 'token_contract', label: 'Token', type: 'searchable', fetchFn: 'ft_tokens', placeholder: 'Search tokens...' },
       { key: 'min_amount', label: 'Threshold', type: 'number', placeholder: '1000' },
     ],
   },
