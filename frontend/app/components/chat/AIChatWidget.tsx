@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -715,7 +715,7 @@ function ChartToolPart({ part }: { part: any }) {
 
 /* ── Chat Message ── */
 
-function ChatMessage({ message }: { message: UIMessage }) {
+function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: boolean }) {
   if (message.role === 'user') {
     const textContent = message.parts
       .filter((p) => p.type === 'text')
@@ -791,6 +791,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
             }
 
             if (part.type === 'tool-invocation' || (part.type as string) === 'dynamic-tool' || (part.type as string).startsWith('tool-')) {
+              if (hideTools) return null;
               const toolPart = part as any;
               const name = toolPart.toolName ?? toolPart.type?.split('-').slice(1).join('-') ?? '';
               if (name === 'run_cadence') return <CadenceToolPart key={i} part={toolPart} />;
@@ -860,6 +861,7 @@ export default function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [thinkMode, setThinkMode] = useState(false);
+  const [hideTools, setHideTools] = useState(false);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [mobileHeight, setMobileHeight] = useState<number | null>(null);
   const isDragging = useRef(false);
@@ -1232,7 +1234,7 @@ export default function AIChatWidget() {
                 ) : (
                   <>
                     {messages.map((msg) => (
-                      <ChatMessage key={msg.id} message={msg} />
+                      <ChatMessage key={msg.id} message={msg} hideTools={hideTools} />
                     ))}
                     {isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
                       <div className="flex items-center gap-2 mb-4">
@@ -1347,22 +1349,38 @@ export default function AIChatWidget() {
                   </div>
                 </form>
 
-                {/* Think mode toggle */}
+                {/* Toggles row */}
                 <div className="flex items-center justify-between mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setThinkMode(v => !v)}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
-                      thinkMode
-                        ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
-                        : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
-                    }`}
-                    title={thinkMode ? 'Extended thinking enabled' : 'Enable extended thinking'}
-                  >
-                    <Sparkles size={10} />
-                    Think
-                    {thinkMode && <span className="text-[8px] opacity-60">ON</span>}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setThinkMode(v => !v)}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
+                        thinkMode
+                          ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
+                          : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
+                      }`}
+                      title={thinkMode ? 'Extended thinking enabled' : 'Enable extended thinking'}
+                    >
+                      <Sparkles size={10} />
+                      Think
+                      {thinkMode && <span className="text-[8px] opacity-60">ON</span>}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHideTools(v => !v)}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
+                        hideTools
+                          ? 'bg-zinc-500/10 border border-zinc-500/30 text-zinc-500'
+                          : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
+                      }`}
+                      title={hideTools ? 'Tool calls hidden' : 'Hide tool calls (SQL, Cadence, etc.)'}
+                    >
+                      <Code size={10} />
+                      Tools
+                      {hideTools && <span className="text-[8px] opacity-60">OFF</span>}
+                    </button>
+                  </div>
                   <span className="text-[9px] text-zinc-400">
                     Shift+Enter for new line
                   </span>
