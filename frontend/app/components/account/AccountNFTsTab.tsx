@@ -456,6 +456,8 @@ export function AccountNFTsTab({ address }: Props) {
             {selectedNft && (
                 <NFTDetailModal
                     nft={selectedNft}
+                    nftType={selectedCollectionId || undefined}
+                    nftId={selectedNft?.tokenId != null ? String(selectedNft.tokenId) : undefined}
                     collectionId={selectedCollectionId || ''}
                     collectionName={selectedCollection ? (getDisplayInfo(selectedCollection).name || getContractName(selectedCollection.id)) : undefined}
                     onClose={() => setSelectedNft(null)}
