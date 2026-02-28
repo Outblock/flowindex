@@ -29,6 +29,37 @@ import (
 var BuildCommit = "dev"
 
 func main() {
+	// Subcommand: ./indexer migrate [--terminate-conns]
+	// Runs schema migration on a dedicated connection and exits immediately.
+	// No pool, no Flow client, no worker pools — just SQL.
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		terminateConns := true
+		for _, arg := range os.Args[2:] {
+			switch arg {
+			case "--terminate-conns":
+				terminateConns = true
+			case "--no-terminate-conns":
+				terminateConns = false
+			case "--help", "-h":
+				fmt.Println("Usage: indexer migrate [--terminate-conns|--no-terminate-conns]")
+				fmt.Println("  Runs schema migration and exits. Default: --terminate-conns")
+				os.Exit(0)
+			default:
+				log.Fatalf("unknown flag: %s", arg)
+			}
+		}
+		dbURL := os.Getenv("DB_URL")
+		if dbURL == "" {
+			dbURL = "postgres://flowscan:secretpassword@localhost:5432/flowscan"
+		}
+		log.Printf("Running migration (terminate-conns=%v)...", terminateConns)
+		if err := repository.RunMigration(context.Background(), dbURL, "schema_v2.sql", terminateConns); err != nil {
+			log.Fatalf("Migration failed: %v", err)
+		}
+		log.Println("Migration complete.")
+		os.Exit(0)
+	}
+
 	// 1. Config
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
