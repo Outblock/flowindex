@@ -133,15 +133,26 @@ function SqlResultTable({ result }: { result: SqlResult }) {
 
 function classifyHex(val: string): { type: 'cadence-addr' | 'evm-addr' | 'cadence-tx' | 'evm-tx' | 'hex'; url: string | null } {
   const hex = val.toLowerCase();
-  // Cadence address: 0x + 16 hex chars
-  if (/^0x[0-9a-f]{16}$/.test(hex))
-    return { type: 'cadence-addr', url: `https://flowindex.io/accounts/${val}` };
-  // EVM address: 0x + 40 hex chars
-  if (/^0x[0-9a-f]{40}$/.test(hex))
-    return { type: 'evm-addr', url: `https://evm.flowindex.io/address/${val}` };
-  // Tx hash: 0x + 64 hex chars — could be Cadence or EVM
-  if (/^0x[0-9a-f]{64}$/.test(hex))
-    return { type: 'cadence-tx', url: `https://flowindex.io/txs/${val}` };
+  const has0x = hex.startsWith('0x');
+  const bare = has0x ? hex.slice(2) : hex;
+
+  // Cadence address: 16 hex chars (with or without 0x)
+  if (bare.length === 16 && /^[0-9a-f]+$/.test(bare)) {
+    const addr = has0x ? val : `0x${val}`;
+    return { type: 'cadence-addr', url: `https://flowindex.io/account/${addr}` };
+  }
+  // EVM address: 40 hex chars (with or without 0x)
+  if (bare.length === 40 && /^[0-9a-f]+$/.test(bare)) {
+    const addr = has0x ? val : `0x${val}`;
+    return { type: 'evm-addr', url: `https://evm.flowindex.io/address/${addr}` };
+  }
+  // 64 hex chars: if 0x-prefixed → EVM tx, otherwise → Cadence tx
+  if (bare.length === 64 && /^[0-9a-f]+$/.test(bare)) {
+    if (has0x) {
+      return { type: 'evm-tx', url: `https://evm.flowindex.io/tx/${val}` };
+    }
+    return { type: 'cadence-tx', url: `https://flowindex.io/tx/${val}` };
+  }
   return { type: 'hex', url: null };
 }
 
@@ -161,8 +172,11 @@ function formatCellValue(val: unknown): React.ReactNode {
     return <span className="text-zinc-300 dark:text-zinc-600 italic">null</span>;
   if (typeof val === 'number') return val.toLocaleString();
   if (typeof val === 'boolean') return val ? 'true' : 'false';
-  if (typeof val === 'string' && val.startsWith('0x'))
-    return <LinkedHex val={val} />;
+  if (typeof val === 'string') {
+    // Check if it's a linkable hex value (0x-prefixed or bare 64-char hash)
+    const { url } = classifyHex(val);
+    if (url) return <LinkedHex val={val} />;
+  }
   return String(val);
 }
 
@@ -265,7 +279,8 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
 
 /* ── Auto-link hex values in text ── */
 
-const HEX_RE = /\b(0x[0-9a-fA-F]{16,64})\b/g;
+// Match 0x-prefixed hex (16/40/64 chars) OR bare hex of exactly 64 chars (Cadence tx hash)
+const HEX_RE = /\b(0x[0-9a-fA-F]{16}|0x[0-9a-fA-F]{40}|0x[0-9a-fA-F]{64}|[0-9a-fA-F]{64})\b/g;
 
 function AutoLinkText({ children }: { children: React.ReactNode }): React.ReactNode {
   return processChildren(children);
