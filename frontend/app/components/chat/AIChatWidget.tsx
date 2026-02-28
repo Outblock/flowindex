@@ -748,9 +748,9 @@ function ChatMessage({ message, hideTools }: { message: UIMessage; hideTools?: b
             </div>
           )}
           {textContent && (
-            <p className="text-[13px] text-zinc-700 dark:text-zinc-200 leading-relaxed">
-              {textContent}
-            </p>
+            <div className="text-[13px] text-zinc-700 dark:text-zinc-200 leading-relaxed">
+              <MarkdownContent text={textContent} />
+            </div>
           )}
         </div>
       </div>

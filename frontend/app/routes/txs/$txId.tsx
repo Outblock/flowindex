@@ -22,6 +22,7 @@ import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import { deriveEnrichments } from '../../lib/deriveFromEvents';
 import { NFTDetailModal } from '../../components/NFTDetailModal';
 import { UsdValue } from '../../components/UsdValue';
+import { parseCadenceError } from '../../lib/parseCadenceError';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -743,6 +744,22 @@ function TransactionDetail() {
     const nowTick = useTimeTicker(20000);
     const { theme } = useTheme();
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
+
+    // Parse error for structured display + script highlighting
+    const parsedError = useMemo(() => {
+        const errMsg = transaction?.errorMessage || transaction?.error_message || transaction?.error;
+        if (!errMsg) return null;
+        return parseCadenceError(errMsg);
+    }, [transaction?.errorMessage, transaction?.error_message, transaction?.error]);
+
+    const errorLines = useMemo(() => {
+        const set = new Set<number>();
+        if (parsedError?.scriptErrorLine) {
+            set.add(parsedError.scriptErrorLine);
+        }
+        return set;
+    }, [parsedError]);
+
     const [expandedPayloads, setExpandedPayloads] = useState<Record<number, boolean>>({});
     const [selectedNft, setSelectedNft] = useState<any | null>(null);
     const [selectedNftCollection, setSelectedNftCollection] = useState<{ id: string; name: string }>({ id: '', name: '' });
@@ -1045,25 +1062,81 @@ function TransactionDetail() {
                 {/* Error Message Section */}
                 {(transaction.errorMessage || transaction.error_message || transaction.error) && (() => {
                     const errMsg = transaction.errorMessage || transaction.error_message || transaction.error;
+                    const parsed = parseCadenceError(errMsg);
                     return (
-                        <div className="border border-red-500/30 bg-red-50 dark:bg-red-900/10 p-6 mb-8 flex items-start gap-4 rounded-sm">
-                            <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-0.5" />
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-3 mb-1">
-                                    <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest">Execution Error</h3>
-                                    <button
-                                        onClick={() => openAIChat(
-                                            `Analyze this failed Flow transaction. Explain what went wrong, why it happened, and how to fix it.\n\n> **Transaction:** \`${transaction.id || transaction.tx_hash}\`\n\n> **Error:**\n> \`\`\`\n> ${errMsg.replace(/\n/g, '\n> ')}\n> \`\`\``
-                                        )}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[10px] uppercase tracking-widest font-bold bg-nothing-green text-black hover:bg-nothing-green/85 shadow-sm shadow-nothing-green/25 transition-colors shrink-0"
-                                    >
-                                        <Sparkles size={10} />
-                                        Analyze with AI
-                                    </button>
+                        <div className="border border-red-500/30 bg-red-50 dark:bg-red-900/10 p-6 mb-8 rounded-sm">
+                            <div className="flex items-start gap-4">
+                                <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-3 mb-3">
+                                        <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest">Execution Error</h3>
+                                        <button
+                                            onClick={() => openAIChat(
+                                                `Analyze this failed Flow transaction. Explain what went wrong, why it happened, and how to fix it.\n\n> **Transaction:** \`${transaction.id || transaction.tx_hash}\`\n\n> **Error:**\n> \`\`\`\n> ${errMsg.replace(/\n/g, '\n> ')}\n> \`\`\``
+                                            )}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[10px] uppercase tracking-widest font-bold bg-nothing-green text-black hover:bg-nothing-green/85 shadow-sm shadow-nothing-green/25 transition-colors shrink-0"
+                                        >
+                                            <Sparkles size={10} />
+                                            Analyze with AI
+                                        </button>
+                                    </div>
+
+                                    {parsed.errorCode && (
+                                        <div className="mb-2">
+                                            <span className="text-[10px] uppercase tracking-widest text-red-400 font-bold">Error Code: {parsed.errorCode}</span>
+                                        </div>
+                                    )}
+
+                                    {parsed.summary && (
+                                        <p className="text-red-600 dark:text-red-300 text-sm font-mono leading-relaxed mb-4">
+                                            {parsed.summary}
+                                        </p>
+                                    )}
+
+                                    {parsed.codeSnippet && parsed.codeSnippet.length > 0 && (
+                                        <div className="bg-zinc-900 border border-zinc-700 rounded-sm overflow-hidden mb-4">
+                                            <div className="px-3 py-1.5 border-b border-zinc-700 flex items-center gap-2">
+                                                <Braces className="h-3 w-3 text-zinc-500" />
+                                                <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Error Context</span>
+                                            </div>
+                                            <div className="p-3 font-mono text-[11px] leading-relaxed overflow-x-auto">
+                                                {parsed.codeSnippet.map((line, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className={`flex ${line.isError ? 'bg-red-500/15 border-l-2 border-red-500 -ml-3 pl-[10px]' : ''}`}
+                                                    >
+                                                        <span className="text-zinc-600 select-none w-10 text-right pr-3 flex-shrink-0">{line.lineNum}</span>
+                                                        <span className={line.isError ? 'text-red-300' : 'text-zinc-300'}>{line.code}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {parsed.callStack.length > 0 && (
+                                        <div className="mb-3">
+                                            <span className="text-[10px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-bold block mb-1.5">Call Stack</span>
+                                            <div className="space-y-0.5">
+                                                {parsed.callStack.map((entry, i) => (
+                                                    <div key={i} className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
+                                                        <span className="text-zinc-400 dark:text-zinc-600">→</span>
+                                                        <span>{entry.location}:{entry.line}:{entry.col}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Collapsed raw error for power users */}
+                                    <details className="group">
+                                        <summary className="text-[10px] uppercase tracking-widest text-zinc-400 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+                                            Raw Error
+                                        </summary>
+                                        <p className="text-red-600/70 dark:text-red-300/50 text-[10px] font-mono break-all leading-relaxed mt-2 max-h-48 overflow-y-auto">
+                                            {errMsg}
+                                        </p>
+                                    </details>
                                 </div>
-                                <p className="text-red-600 dark:text-red-300 text-xs font-mono break-all leading-relaxed">
-                                    {errMsg}
-                                </p>
                             </div>
                         </div>
                     );
@@ -1516,7 +1589,22 @@ function TransactionDetail() {
                                                     lineHeight: '1.6',
                                                 }}
                                                 showLineNumbers={true}
+                                                wrapLines={true}
                                                 lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none" }}
+                                                lineProps={(lineNumber: number) => {
+                                                    if (errorLines.has(lineNumber)) {
+                                                        return {
+                                                            style: {
+                                                                backgroundColor: 'rgba(239,68,68,0.15)',
+                                                                borderLeft: '3px solid #ef4444',
+                                                                marginLeft: '-3px',
+                                                                display: 'block',
+                                                            },
+                                                            title: parsedError?.summary || 'Error on this line',
+                                                        };
+                                                    }
+                                                    return { style: { display: 'block' } };
+                                                }}
                                             >
                                                 {transaction.script}
                                             </SyntaxHighlighter>
