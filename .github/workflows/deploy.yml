@@ -304,10 +304,20 @@ jobs:
             docker pull supabase/postgres-meta:v0.84.2
             docker pull supabase/studio:20241029-46e1e55
 
-            # Source backend.env for SUPABASE_DB_URL, SUPABASE_JWT_SECRET, SUPABASE_ANON_KEY, etc.
+            # Source backend.env for SUPABASE_DB_URL, SUPABASE_JWT_SECRET, etc.
             set -a; source /mnt/stateful_partition/pgdata/backend.env; set +a
-            # Source studio-specific overrides (STUDIO_USER, STUDIO_PASSWORD)
-            [ -f /mnt/stateful_partition/pgdata/studio.env ] && { set -a; source /mnt/stateful_partition/pgdata/studio.env; set +a; }
+
+            # Auto-create studio.env with defaults if it does not exist
+            STUDIO_ENV=/mnt/stateful_partition/pgdata/studio.env
+            if [ ! -f "$STUDIO_ENV" ]; then
+              GENERATED_PW=$(head -c 16 /dev/urandom | base64 | tr -d "/+=" | head -c 20)
+              cat > "$STUDIO_ENV" <<STUDIOEOF
+            STUDIO_USER=admin
+            STUDIO_PASSWORD=${GENERATED_PW}
+            STUDIOEOF
+              echo "Created $STUDIO_ENV with generated password: $GENERATED_PW"
+            fi
+            set -a; source "$STUDIO_ENV"; set +a
 
             # Parse DB credentials from SUPABASE_DB_URL (postgres://user:pass@host:port/dbname)
             DB_USER=$(echo "$SUPABASE_DB_URL" | sed -n "s|postgres://\([^:]*\):.*|\1|p")
