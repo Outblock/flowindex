@@ -1053,7 +1053,7 @@ function TransactionDetail() {
                                     <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest">Execution Error</h3>
                                     <button
                                         onClick={() => openAIChat(
-                                            `Analyze this failed Flow transaction and explain the error. Suggest how to fix it.\n\nTransaction: ${transaction.id || transaction.tx_hash}\nError: ${errMsg}`
+                                            `Briefly explain why this Flow transaction failed and how to fix it. Keep it short — 2-3 sentences max.\n\nTx: ${transaction.id || transaction.tx_hash}\nError: ${errMsg}`
                                         )}
                                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold bg-nothing-green/10 border border-nothing-green/20 text-nothing-green hover:bg-nothing-green/20 transition-colors shrink-0"
                                     >
