@@ -2,7 +2,12 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain } from 'lucide-react';
+import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain, ChevronUp } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -1379,22 +1384,35 @@ export default function AIChatWidget() {
                         </div>
                       </div>
                     </div>
-                      {CHAT_MODES.map(({ key, label, icon: Icon, desc }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => handleModeChange(key)}
-                          className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
-                            chatMode === key
-                              ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
-                              : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
-                          }`}
-                          title={desc}
-                        >
-                          <Icon size={10} />
-                          {label}
-                        </button>
-                      ))}
+                      {/* Mode selector dropdown */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500/20"
+                          >
+                            {(() => {
+                              const current = CHAT_MODES.find(m => m.key === chatMode) || CHAT_MODES[0];
+                              const CurrentIcon = current.icon;
+                              return <><CurrentIcon size={10} />{current.label}</>;
+                            })()}
+                            <ChevronUp size={8} className="ml-0.5 opacity-60" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="top" align="start" className="min-w-[180px]">
+                          <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-zinc-400">Model</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuRadioGroup value={chatMode} onValueChange={(v) => handleModeChange(v as ChatMode)}>
+                            {CHAT_MODES.map(({ key, label, icon: Icon, desc }) => (
+                              <DropdownMenuRadioItem key={key} value={key} className="cursor-pointer">
+                                <Icon size={14} className="mr-1" />
+                                <span className="font-medium">{label}</span>
+                                <span className="ml-auto text-[10px] text-zinc-400">{desc}</span>
+                              </DropdownMenuRadioItem>
+                            ))}
+                          </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       <button
                         type="button"
                         onClick={() => setHideTools(v => !v)}
