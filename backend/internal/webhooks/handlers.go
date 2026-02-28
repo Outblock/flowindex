@@ -71,6 +71,7 @@ func (h *Handlers) RegisterRoutes(r *mux.Router) {
 	// Endpoints
 	authed.HandleFunc("/endpoints", h.handleCreateEndpoint).Methods("POST", "OPTIONS")
 	authed.HandleFunc("/endpoints", h.handleListEndpoints).Methods("GET", "OPTIONS")
+	authed.HandleFunc("/endpoints/{id}", h.handleUpdateEndpoint).Methods("PATCH", "OPTIONS")
 	authed.HandleFunc("/endpoints/{id}", h.handleDeleteEndpoint).Methods("DELETE", "OPTIONS")
 
 	// API Keys
@@ -285,8 +286,10 @@ func (h *Handlers) handleCreateEndpoint(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var body struct {
-		URL         string `json:"url"`
-		Description string `json:"description"`
+		URL          string          `json:"url"`
+		Description  string          `json:"description"`
+		EndpointType string          `json:"endpoint_type"`
+		Metadata     json.RawMessage `json:"metadata"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -297,12 +300,20 @@ func (h *Handlers) handleCreateEndpoint(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Auto-detect endpoint type from URL if not specified
+	epType := body.EndpointType
+	if epType == "" {
+		epType = detectEndpointType(body.URL)
+	}
+
 	ep := &Endpoint{
-		UserID:      userID,
-		SvixEpID:    "pending", // Svix integration comes in Task 11
-		URL:         body.URL,
-		Description: body.Description,
-		IsActive:    true,
+		UserID:       userID,
+		SvixEpID:     "pending",
+		URL:          body.URL,
+		Description:  body.Description,
+		EndpointType: epType,
+		Metadata:     body.Metadata,
+		IsActive:     true,
 	}
 	if err := h.store.CreateEndpoint(r.Context(), ep); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create endpoint")
@@ -348,6 +359,52 @@ func (h *Handlers) handleDeleteEndpoint(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) handleUpdateEndpoint(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+
+	id := mux.Vars(r)["id"]
+
+	var body struct {
+		URL         *string         `json:"url"`
+		Description *string         `json:"description"`
+		Metadata    json.RawMessage `json:"metadata"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.store.UpdateEndpoint(r.Context(), id, userID, body.URL, body.Description, body.Metadata); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update endpoint")
+		return
+	}
+
+	// Return the updated endpoint
+	ep, err := h.store.GetEndpointByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch updated endpoint")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ep)
+}
+
+// detectEndpointType infers the channel type from the URL.
+func detectEndpointType(url string) string {
+	switch {
+	case isDiscordWebhook(url):
+		return "discord"
+	case isSlackWebhook(url):
+		return "slack"
+	default:
+		return "webhook"
+	}
 }
 
 // --- API Key handlers ---

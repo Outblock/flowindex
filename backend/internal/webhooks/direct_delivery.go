@@ -81,6 +81,11 @@ func (d *DirectDelivery) deliverToURL(ctx context.Context, url, eventType string
 	// so that formatDiscordPayload/formatSlackPayload can access fields by string key.
 	normalized := normalizePayload(payload)
 
+	// Check for Telegram delivery (url is "telegram://<bot_token>/<chat_id>")
+	if isTelegramEndpoint(url) {
+		return d.deliverTelegram(ctx, url, eventType, normalized)
+	}
+
 	var body []byte
 	var err error
 
@@ -312,4 +317,102 @@ func truncAddr(addr string) string {
 		return addr
 	}
 	return addr[:8] + "..." + addr[len(addr)-6:]
+}
+
+// --- Telegram delivery ---
+
+func isTelegramEndpoint(url string) bool {
+	return strings.HasPrefix(url, "telegram://")
+}
+
+// parseTelegramURL extracts bot token and chat ID from "telegram://<bot_token>/<chat_id>".
+func parseTelegramURL(url string) (botToken, chatID string, err error) {
+	trimmed := strings.TrimPrefix(url, "telegram://")
+	parts := strings.SplitN(trimmed, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("invalid telegram URL format: expected telegram://<bot_token>/<chat_id>")
+	}
+	return parts[0], parts[1], nil
+}
+
+func (d *DirectDelivery) deliverTelegram(ctx context.Context, url, eventType string, payload map[string]interface{}) error {
+	botToken, chatID, err := parseTelegramURL(url)
+	if err != nil {
+		return err
+	}
+
+	text := formatTelegramPayload(eventType, payload)
+
+	telegramAPI := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
+	body, err := json.Marshal(map[string]interface{}{
+		"chat_id":    chatID,
+		"text":       text,
+		"parse_mode": "Markdown",
+	})
+	if err != nil {
+		return fmt.Errorf("marshal telegram payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, telegramAPI, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create telegram request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("telegram POST: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("telegram API returned %d", resp.StatusCode)
+	}
+
+	log.Printf("[direct_delivery] delivered to telegram chat %s: %d", chatID, resp.StatusCode)
+	return nil
+}
+
+func formatTelegramPayload(eventType string, payload map[string]interface{}) string {
+	title := formatEventTitle(eventType)
+	data, _ := payload["data"].(map[string]interface{})
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("*%s*\n", title))
+
+	if data == nil {
+		sb.WriteString(fmt.Sprintf("Event `%s` at block %v", eventType, payload["block_height"]))
+		return sb.String()
+	}
+
+	switch eventType {
+	case "ft.transfer", "ft.large_transfer":
+		from := strVal(data, "from_address")
+		to := strVal(data, "to_address")
+		amount := strVal(data, "amount")
+		contract := strVal(data, "contract_name")
+		if contract == "" {
+			contract = strVal(data, "token_contract_address")
+		}
+		sb.WriteString(fmt.Sprintf("%s %s\n`%s` → `%s`", amount, contract, truncAddr(from), truncAddr(to)))
+	case "nft.transfer":
+		from := strVal(data, "from_address")
+		to := strVal(data, "to_address")
+		contract := strVal(data, "contract_name")
+		tokenID := strVal(data, "token_id")
+		sb.WriteString(fmt.Sprintf("*%s* #%s\n`%s` → `%s`", contract, tokenID, truncAddr(from), truncAddr(to)))
+	default:
+		j, _ := json.Marshal(data)
+		s := string(j)
+		if len(s) > 300 {
+			s = s[:297] + "..."
+		}
+		sb.WriteString(s)
+	}
+
+	if txID := strVal(data, "transaction_id"); txID != "" {
+		sb.WriteString(fmt.Sprintf("\n[View Tx](https://flowindex.io/tx/%s)", txID))
+	}
+
+	return sb.String()
 }

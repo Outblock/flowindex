@@ -56,13 +56,15 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
 
 -- Webhook endpoints (synced with Svix)
 CREATE TABLE IF NOT EXISTS public.endpoints (
-    id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id     UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    svix_ep_id  TEXT NOT NULL,
-    url         TEXT NOT NULL,
-    description TEXT,
-    is_active   BOOLEAN NOT NULL DEFAULT true,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    id             UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id        UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    svix_ep_id     TEXT NOT NULL,
+    url            TEXT NOT NULL,
+    description    TEXT,
+    endpoint_type  TEXT NOT NULL DEFAULT 'webhook',  -- webhook, discord, slack, telegram, email
+    metadata       JSONB NOT NULL DEFAULT '{}',       -- channel-specific config (e.g. telegram bot_token, chat_id)
+    is_active      BOOLEAN NOT NULL DEFAULT true,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Subscriptions (conditions -> endpoints)
@@ -88,6 +90,10 @@ CREATE TABLE IF NOT EXISTS public.delivery_logs (
     delivered_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     svix_msg_id     TEXT
 );
+
+-- Migration: add endpoint_type and metadata columns
+ALTER TABLE public.endpoints ADD COLUMN IF NOT EXISTS endpoint_type TEXT NOT NULL DEFAULT 'webhook';
+ALTER TABLE public.endpoints ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}';
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_subscriptions_event_type ON public.subscriptions(event_type) WHERE is_enabled = true;

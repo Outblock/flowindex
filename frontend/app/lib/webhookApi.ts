@@ -24,10 +24,14 @@ export interface APIKey {
   created_at: string;
 }
 
+export type EndpointType = 'webhook' | 'discord' | 'slack' | 'telegram' | 'email';
+
 export interface Endpoint {
   id: string;
   url: string;
   description: string;
+  endpoint_type: EndpointType;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -143,10 +147,20 @@ export async function listEndpoints(): Promise<Endpoint[]> {
   return data.items ?? [];
 }
 
-export async function createEndpoint(url: string, description: string): Promise<Endpoint> {
+export async function createEndpoint(
+  url: string,
+  description: string,
+  endpointType?: EndpointType,
+  metadata?: Record<string, unknown>,
+): Promise<Endpoint> {
   return request<Endpoint>('/endpoints', {
     method: 'POST',
-    body: JSON.stringify({ url, description }),
+    body: JSON.stringify({
+      url,
+      description,
+      endpoint_type: endpointType,
+      metadata: metadata ?? {},
+    }),
   });
 }
 

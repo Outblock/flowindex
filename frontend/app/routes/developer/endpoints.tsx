@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Trash2, Edit2, Globe, Loader2, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Edit2, Globe, Loader2, AlertTriangle, Send, MessageSquare, Hash, Mail, Webhook } from 'lucide-react'
 import DeveloperLayout from '../../components/developer/DeveloperLayout'
 import {
   listEndpoints,
@@ -9,11 +9,131 @@ import {
   updateEndpoint,
   deleteEndpoint,
 } from '../../lib/webhookApi'
-import type { Endpoint } from '../../lib/webhookApi'
+import type { Endpoint, EndpointType } from '../../lib/webhookApi'
 
 export const Route = createFileRoute('/developer/endpoints')({
   component: DeveloperEndpoints,
 })
+
+// ---------------------------------------------------------------------------
+// Channel config
+// ---------------------------------------------------------------------------
+
+interface ChannelConfig {
+  label: string
+  icon: typeof Globe
+  color: string
+  bgColor: string
+  borderColor: string
+  placeholder: string
+  helpText: string
+  /** Extra fields needed for this channel */
+  extraFields?: { key: string; label: string; placeholder: string; type?: string }[]
+  /** Builds the URL from form fields */
+  buildUrl?: (fields: Record<string, string>) => string
+  /** Whether URL is auto-generated (hidden) */
+  urlHidden?: boolean
+}
+
+const CHANNELS: Record<EndpointType, ChannelConfig> = {
+  webhook: {
+    label: 'Webhook',
+    icon: Webhook,
+    color: 'text-neutral-300',
+    bgColor: 'bg-neutral-800',
+    borderColor: 'border-neutral-600',
+    placeholder: 'https://example.com/webhooks',
+    helpText: 'HMAC-signed POST requests via Svix with automatic retries',
+  },
+  discord: {
+    label: 'Discord',
+    icon: Hash,
+    color: 'text-[#5865F2]',
+    bgColor: 'bg-[#5865F2]/10',
+    borderColor: 'border-[#5865F2]/30',
+    placeholder: 'https://discord.com/api/webhooks/...',
+    helpText: 'Rich embed messages to your Discord channel',
+  },
+  slack: {
+    label: 'Slack',
+    icon: MessageSquare,
+    color: 'text-[#E01E5A]',
+    bgColor: 'bg-[#E01E5A]/10',
+    borderColor: 'border-[#E01E5A]/30',
+    placeholder: 'https://hooks.slack.com/services/...',
+    helpText: 'Formatted messages to your Slack channel',
+  },
+  telegram: {
+    label: 'Telegram',
+    icon: Send,
+    color: 'text-[#26A5E4]',
+    bgColor: 'bg-[#26A5E4]/10',
+    borderColor: 'border-[#26A5E4]/30',
+    placeholder: '',
+    helpText: 'Markdown messages to your Telegram chat or group',
+    extraFields: [
+      { key: 'bot_token', label: 'Bot Token', placeholder: '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11' },
+      { key: 'chat_id', label: 'Chat ID', placeholder: '-1001234567890 or @channelname' },
+    ],
+    buildUrl: (fields) => `telegram://${fields.bot_token}/${fields.chat_id}`,
+    urlHidden: true,
+  },
+  email: {
+    label: 'Email',
+    icon: Mail,
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-400/10',
+    borderColor: 'border-amber-400/30',
+    placeholder: 'user@example.com',
+    helpText: 'Coming soon — email notifications for events',
+  },
+}
+
+const CHANNEL_ORDER: EndpointType[] = ['webhook', 'discord', 'slack', 'telegram', 'email']
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function detectChannelType(url: string): EndpointType {
+  if (url.includes('discord.com/api/webhooks/') || url.includes('discordapp.com/api/webhooks/')) return 'discord'
+  if (url.includes('hooks.slack.com/')) return 'slack'
+  if (url.startsWith('telegram://')) return 'telegram'
+  return 'webhook'
+}
+
+function channelIcon(ep: Endpoint) {
+  const type_ = ep.endpoint_type || detectChannelType(ep.url)
+  const config = CHANNELS[type_] || CHANNELS.webhook
+  const Icon = config.icon
+  return <Icon className={`w-4 h-4 ${config.color}`} />
+}
+
+function channelBadge(ep: Endpoint) {
+  const type_ = ep.endpoint_type || detectChannelType(ep.url)
+  const config = CHANNELS[type_] || CHANNELS.webhook
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color} border ${config.borderColor}`}>
+      {config.label}
+    </span>
+  )
+}
+
+/** Display-friendly URL (hide telegram:// scheme, truncate long URLs) */
+function displayUrl(ep: Endpoint): string {
+  const type_ = ep.endpoint_type || detectChannelType(ep.url)
+  if (type_ === 'telegram') {
+    // Show "Telegram Bot @chatid" instead of the raw URL
+    const trimmed = ep.url.replace('telegram://', '')
+    const parts = trimmed.split('/')
+    return parts.length >= 2 ? `Chat: ${parts[1]}` : ep.url
+  }
+  return ep.url
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 function DeveloperEndpoints() {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([])
@@ -23,8 +143,10 @@ function DeveloperEndpoints() {
   // Create/Edit modal state
   const [showModal, setShowModal] = useState(false)
   const [editTarget, setEditTarget] = useState<Endpoint | null>(null)
+  const [selectedChannel, setSelectedChannel] = useState<EndpointType>('webhook')
   const [formUrl, setFormUrl] = useState('')
   const [formDescription, setFormDescription] = useState('')
+  const [formExtra, setFormExtra] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
 
   // Delete confirm state
@@ -49,15 +171,31 @@ function DeveloperEndpoints() {
 
   function openCreateModal() {
     setEditTarget(null)
+    setSelectedChannel('webhook')
     setFormUrl('')
     setFormDescription('')
+    setFormExtra({})
     setShowModal(true)
   }
 
   function openEditModal(endpoint: Endpoint) {
     setEditTarget(endpoint)
+    const type_ = endpoint.endpoint_type || detectChannelType(endpoint.url)
+    setSelectedChannel(type_)
     setFormUrl(endpoint.url)
     setFormDescription(endpoint.description)
+
+    // Parse extra fields from URL for telegram
+    if (type_ === 'telegram') {
+      const trimmed = endpoint.url.replace('telegram://', '')
+      const parts = trimmed.split('/')
+      setFormExtra({
+        bot_token: parts[0] || '',
+        chat_id: parts.slice(1).join('/') || '',
+      })
+    } else {
+      setFormExtra({})
+    }
     setShowModal(true)
   }
 
@@ -66,22 +204,37 @@ function DeveloperEndpoints() {
     setEditTarget(null)
     setFormUrl('')
     setFormDescription('')
+    setFormExtra({})
   }
 
   async function handleSave() {
-    if (!formUrl.trim()) return
+    const channelConfig = CHANNELS[selectedChannel]
+
+    // Build URL from extra fields if needed
+    let url = formUrl.trim()
+    if (channelConfig.buildUrl) {
+      url = channelConfig.buildUrl(formExtra)
+    }
+
+    if (!url) return
+
     setSaving(true)
     try {
       if (editTarget) {
         const updated = await updateEndpoint(editTarget.id, {
-          url: formUrl.trim(),
+          url,
           description: formDescription.trim(),
         })
         setEndpoints((prev) =>
           prev.map((ep) => (ep.id === updated.id ? updated : ep)),
         )
       } else {
-        const created = await createEndpoint(formUrl.trim(), formDescription.trim())
+        const created = await createEndpoint(
+          url,
+          formDescription.trim(),
+          selectedChannel,
+          Object.keys(formExtra).length > 0 ? formExtra : undefined,
+        )
         setEndpoints((prev) => [created, ...prev])
       }
       closeModal()
@@ -111,10 +264,22 @@ function DeveloperEndpoints() {
     }
   }
 
-  /** Naive "active" heuristic: endpoints with a URL are active. */
   function isActive(endpoint: Endpoint) {
     return !!endpoint.url
   }
+
+  const channelConfig = CHANNELS[selectedChannel]
+  const isEmailDisabled = selectedChannel === 'email'
+
+  // Check if save is valid
+  const canSave = (() => {
+    if (isEmailDisabled) return false
+    if (channelConfig.buildUrl) {
+      // All extra fields must be filled
+      return (channelConfig.extraFields || []).every((f) => (formExtra[f.key] || '').trim() !== '')
+    }
+    return formUrl.trim() !== ''
+  })()
 
   return (
     <DeveloperLayout>
@@ -122,9 +287,9 @@ function DeveloperEndpoints() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">Webhook Endpoints</h1>
+            <h1 className="text-2xl font-bold text-white">Notification Channels</h1>
             <p className="text-sm text-neutral-400 mt-1">
-              Manage URLs where webhook events will be delivered
+              Configure where webhook events are delivered &mdash; webhooks, Discord, Slack, Telegram, and more
             </p>
           </div>
           <button
@@ -132,7 +297,7 @@ function DeveloperEndpoints() {
             className="flex items-center gap-2 px-4 py-2 bg-[#00ef8b] text-black font-medium text-sm rounded-lg hover:bg-[#00ef8b]/90 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Add Endpoint
+            Add Channel
           </button>
         </div>
 
@@ -160,7 +325,7 @@ function DeveloperEndpoints() {
             <div className="text-center py-16 text-neutral-500">
               <Globe className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="text-sm">
-                No endpoints yet. Add one to start receiving webhooks.
+                No channels configured yet. Add one to start receiving notifications.
               </p>
             </div>
           ) : (
@@ -168,16 +333,16 @@ function DeveloperEndpoints() {
               <thead>
                 <tr className="border-b border-neutral-800 text-left">
                   <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    URL
+                    Channel
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                    Destination
                   </th>
                   <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">
                     Description
                   </th>
                   <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">
                     Status
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Created
                   </th>
                   <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider w-24">
                   </th>
@@ -192,11 +357,17 @@ function DeveloperEndpoints() {
                     className="hover:bg-neutral-800/30 transition-colors"
                   >
                     <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {channelIcon(endpoint)}
+                        {channelBadge(endpoint)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
                       <span
                         className="text-sm font-mono text-neutral-300 block max-w-xs truncate"
                         title={endpoint.url}
                       >
-                        {endpoint.url}
+                        {displayUrl(endpoint)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-400">
@@ -214,9 +385,6 @@ function DeveloperEndpoints() {
                           Inactive
                         </span>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-neutral-400">
-                      {new Date(endpoint.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
@@ -260,30 +428,103 @@ function DeveloperEndpoints() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md mx-4 p-6 space-y-4"
+              className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-lg mx-4 p-6 space-y-5"
             >
               <h2 className="text-lg font-semibold text-white">
-                {editTarget ? 'Edit Endpoint' : 'Add Endpoint'}
+                {editTarget ? 'Edit Channel' : 'Add Notification Channel'}
               </h2>
 
-              <div>
-                <label
-                  htmlFor="endpoint-url"
-                  className="block text-sm text-neutral-400 mb-1.5"
-                >
-                  URL
-                </label>
-                <input
-                  id="endpoint-url"
-                  type="url"
-                  required
-                  value={formUrl}
-                  onChange={(e) => setFormUrl(e.target.value)}
-                  placeholder="https://example.com/webhooks"
-                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
-                  autoFocus
-                />
-              </div>
+              {/* Channel type picker */}
+              {!editTarget && (
+                <div className="space-y-2">
+                  <label className="block text-sm text-neutral-400">Channel Type</label>
+                  <div className="grid grid-cols-5 gap-2">
+                    {CHANNEL_ORDER.map((type_) => {
+                      const config = CHANNELS[type_]
+                      const Icon = config.icon
+                      const isSelected = selectedChannel === type_
+                      const isDisabled = type_ === 'email'
+                      return (
+                        <button
+                          key={type_}
+                          onClick={() => {
+                            if (!isDisabled) {
+                              setSelectedChannel(type_)
+                              setFormUrl('')
+                              setFormExtra({})
+                            }
+                          }}
+                          disabled={isDisabled}
+                          className={`relative flex flex-col items-center gap-1.5 p-3 rounded-lg border text-xs font-medium transition-all ${
+                            isSelected
+                              ? `${config.bgColor} ${config.borderColor} ${config.color}`
+                              : isDisabled
+                              ? 'border-neutral-800 text-neutral-600 cursor-not-allowed opacity-50'
+                              : 'border-neutral-800 text-neutral-500 hover:border-neutral-700 hover:text-neutral-300'
+                          }`}
+                        >
+                          <Icon className="w-5 h-5" />
+                          <span>{config.label}</span>
+                          {isDisabled && (
+                            <span className="absolute -top-1 -right-1 text-[9px] px-1 py-0.5 rounded bg-neutral-800 text-neutral-500 border border-neutral-700">
+                              Soon
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Help text */}
+              <p className="text-xs text-neutral-500">{channelConfig.helpText}</p>
+
+              {/* Dynamic form fields based on channel type */}
+              {channelConfig.extraFields ? (
+                // Custom fields (e.g. Telegram bot_token + chat_id)
+                channelConfig.extraFields.map((field) => (
+                  <div key={field.key}>
+                    <label
+                      htmlFor={`field-${field.key}`}
+                      className="block text-sm text-neutral-400 mb-1.5"
+                    >
+                      {field.label}
+                    </label>
+                    <input
+                      id={`field-${field.key}`}
+                      type={field.type || 'text'}
+                      value={formExtra[field.key] || ''}
+                      onChange={(e) =>
+                        setFormExtra((prev) => ({ ...prev, [field.key]: e.target.value }))
+                      }
+                      placeholder={field.placeholder}
+                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                    />
+                  </div>
+                ))
+              ) : (
+                // Standard URL field
+                <div>
+                  <label
+                    htmlFor="endpoint-url"
+                    className="block text-sm text-neutral-400 mb-1.5"
+                  >
+                    {selectedChannel === 'webhook' ? 'Webhook URL' : `${channelConfig.label} Webhook URL`}
+                  </label>
+                  <input
+                    id="endpoint-url"
+                    type="url"
+                    required
+                    value={formUrl}
+                    onChange={(e) => setFormUrl(e.target.value)}
+                    placeholder={channelConfig.placeholder}
+                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                    autoFocus
+                    disabled={isEmailDisabled}
+                  />
+                </div>
+              )}
 
               <div>
                 <label
@@ -298,9 +539,9 @@ function DeveloperEndpoints() {
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSave()
+                    if (e.key === 'Enter' && canSave) handleSave()
                   }}
-                  placeholder="Optional description"
+                  placeholder="Optional label for this channel"
                   className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                 />
               </div>
@@ -314,11 +555,11 @@ function DeveloperEndpoints() {
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={!formUrl.trim() || saving}
+                  disabled={!canSave || saving}
                   className="flex-1 py-2 bg-[#00ef8b] text-black text-sm font-medium rounded-lg hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editTarget ? 'Save' : 'Add'}
+                  {editTarget ? 'Save' : 'Add Channel'}
                 </button>
               </div>
             </motion.div>
@@ -344,11 +585,11 @@ function DeveloperEndpoints() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-sm mx-4 p-6 space-y-4"
             >
-              <h2 className="text-lg font-semibold text-white">Delete Endpoint</h2>
+              <h2 className="text-lg font-semibold text-white">Delete Channel</h2>
               <p className="text-sm text-neutral-400">
-                Are you sure you want to delete the endpoint{' '}
+                Are you sure you want to delete this {CHANNELS[deleteTarget.endpoint_type || detectChannelType(deleteTarget.url)]?.label || 'webhook'} channel{' '}
                 <span className="text-white font-mono text-xs break-all">
-                  {deleteTarget.url}
+                  {displayUrl(deleteTarget)}
                 </span>
                 ? This action cannot be undone.
               </p>

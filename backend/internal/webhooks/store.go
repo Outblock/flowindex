@@ -24,13 +24,15 @@ type Subscription struct {
 }
 
 type Endpoint struct {
-	ID          string    `json:"id"`
-	UserID      string    `json:"user_id"`
-	SvixEpID    string    `json:"svix_ep_id"`
-	URL         string    `json:"url"`
-	Description string    `json:"description,omitempty"`
-	IsActive    bool      `json:"is_active"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           string          `json:"id"`
+	UserID       string          `json:"user_id"`
+	SvixEpID     string          `json:"svix_ep_id"`
+	URL          string          `json:"url"`
+	Description  string          `json:"description,omitempty"`
+	EndpointType string          `json:"endpoint_type"`
+	Metadata     json.RawMessage `json:"metadata,omitempty"`
+	IsActive     bool            `json:"is_active"`
+	CreatedAt    time.Time       `json:"created_at"`
 }
 
 type APIKeyRecord struct {
@@ -171,17 +173,23 @@ func (s *Store) DeleteSubscription(ctx context.Context, id, userID string) error
 // --- Endpoints ---
 
 func (s *Store) CreateEndpoint(ctx context.Context, ep *Endpoint) error {
+	if ep.EndpointType == "" {
+		ep.EndpointType = "webhook"
+	}
+	if ep.Metadata == nil {
+		ep.Metadata = json.RawMessage(`{}`)
+	}
 	return s.pool.QueryRow(ctx,
-		`INSERT INTO public.endpoints (user_id, svix_ep_id, url, description)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO public.endpoints (user_id, svix_ep_id, url, description, endpoint_type, metadata)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id, created_at`,
-		ep.UserID, ep.SvixEpID, ep.URL, ep.Description,
+		ep.UserID, ep.SvixEpID, ep.URL, ep.Description, ep.EndpointType, ep.Metadata,
 	).Scan(&ep.ID, &ep.CreatedAt)
 }
 
 func (s *Store) ListEndpoints(ctx context.Context, userID string) ([]Endpoint, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, user_id, svix_ep_id, url, description, is_active, created_at
+		`SELECT id, user_id, svix_ep_id, url, description, endpoint_type, metadata, is_active, created_at
 		 FROM public.endpoints WHERE user_id = $1 ORDER BY created_at DESC`, userID,
 	)
 	if err != nil {
@@ -192,7 +200,7 @@ func (s *Store) ListEndpoints(ctx context.Context, userID string) ([]Endpoint, e
 	var eps []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.UserID, &ep.SvixEpID, &ep.URL, &ep.Description, &ep.IsActive, &ep.CreatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.UserID, &ep.SvixEpID, &ep.URL, &ep.Description, &ep.EndpointType, &ep.Metadata, &ep.IsActive, &ep.CreatedAt); err != nil {
 			return nil, err
 		}
 		eps = append(eps, ep)
@@ -203,13 +211,36 @@ func (s *Store) ListEndpoints(ctx context.Context, userID string) ([]Endpoint, e
 func (s *Store) GetEndpointByID(ctx context.Context, id string) (*Endpoint, error) {
 	var ep Endpoint
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, user_id, svix_ep_id, url, description, is_active, created_at
+		`SELECT id, user_id, svix_ep_id, url, description, endpoint_type, metadata, is_active, created_at
 		 FROM public.endpoints WHERE id = $1`, id,
-	).Scan(&ep.ID, &ep.UserID, &ep.SvixEpID, &ep.URL, &ep.Description, &ep.IsActive, &ep.CreatedAt)
+	).Scan(&ep.ID, &ep.UserID, &ep.SvixEpID, &ep.URL, &ep.Description, &ep.EndpointType, &ep.Metadata, &ep.IsActive, &ep.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return &ep, nil
+}
+
+func (s *Store) UpdateEndpoint(ctx context.Context, id, userID string, url, description *string, metadata json.RawMessage) error {
+	// Build dynamic update
+	if url != nil {
+		if _, err := s.pool.Exec(ctx,
+			`UPDATE public.endpoints SET url = $1 WHERE id = $2 AND user_id = $3`, *url, id, userID); err != nil {
+			return err
+		}
+	}
+	if description != nil {
+		if _, err := s.pool.Exec(ctx,
+			`UPDATE public.endpoints SET description = $1 WHERE id = $2 AND user_id = $3`, *description, id, userID); err != nil {
+			return err
+		}
+	}
+	if metadata != nil {
+		if _, err := s.pool.Exec(ctx,
+			`UPDATE public.endpoints SET metadata = $1 WHERE id = $2 AND user_id = $3`, metadata, id, userID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) DeleteEndpoint(ctx context.Context, id, userID string) error {

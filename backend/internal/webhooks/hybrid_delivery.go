@@ -33,8 +33,8 @@ func (h *HybridDelivery) CreateApplication(ctx context.Context, appID, name stri
 }
 
 func (h *HybridDelivery) CreateEndpoint(ctx context.Context, appID, webhookURL string) (string, error) {
-	if isDiscordWebhook(webhookURL) || isSlackWebhook(webhookURL) {
-		// Discord/Slack go through DirectDelivery only — Svix can't format these
+	if isDiscordWebhook(webhookURL) || isSlackWebhook(webhookURL) || isTelegramEndpoint(webhookURL) {
+		// Discord/Slack/Telegram go through DirectDelivery only — Svix can't format these
 		return h.direct.CreateEndpoint(ctx, appID, webhookURL)
 	}
 	// Generic webhooks go through Svix for retries + signing
@@ -54,8 +54,8 @@ func (h *HybridDelivery) SendMessage(ctx context.Context, appID, eventType strin
 			return h.direct.SendMessage(ctx, appID, eventType, payload)
 		}
 
-		if isDiscordWebhook(ep.URL) || isSlackWebhook(ep.URL) {
-			// Discord/Slack → DirectDelivery for rich formatting
+		if isDiscordWebhook(ep.URL) || isSlackWebhook(ep.URL) || isTelegramEndpoint(ep.URL) {
+			// Discord/Slack/Telegram → DirectDelivery for rich formatting
 			return h.direct.SendMessage(ctx, appID, eventType, payload)
 		}
 
