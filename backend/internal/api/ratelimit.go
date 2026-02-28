@@ -30,13 +30,13 @@ type ipLimiter struct {
 var apiIPLimiter = newIPLimiterFromEnv()
 
 func newIPLimiterFromEnv() *ipLimiter {
-	rps := 10.0
+	rps := 30.0
 	if v := strings.TrimSpace(os.Getenv("API_RATE_LIMIT_RPS")); v != "" {
 		if n, err := strconv.ParseFloat(v, 64); err == nil {
 			rps = n
 		}
 	}
-	burst := 20
+	burst := 60
 	if v := strings.TrimSpace(os.Getenv("API_RATE_LIMIT_BURST")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			burst = n
