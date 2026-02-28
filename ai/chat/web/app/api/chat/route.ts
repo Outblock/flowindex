@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       ...evmTools,
 
       // Web search — built-in Anthropic tool
-      web_search: anthropic.tools.webSearch(),
+      web_search: anthropic.tools.webSearch_20250305(),
 
       // Curated API fetch
       fetch_api: tool({
