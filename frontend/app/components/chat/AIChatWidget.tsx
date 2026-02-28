@@ -22,6 +22,11 @@ SyntaxHighlighter.registerLanguage('cadence', swift);
 
 const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io';
 
+/** Open the AI chat widget and optionally send a message. */
+export function openAIChat(message?: string) {
+  window.dispatchEvent(new CustomEvent('ai-chat:open', { detail: { message } }));
+}
+
 /* ── SQL Result Table (compact, inline) ── */
 
 interface SqlResult {
@@ -1003,6 +1008,24 @@ export default function AIChatWidget() {
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
+
+  // Listen for external "open chat with message" events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.message) {
+        setIsOpen(true);
+        // Small delay to let the panel animate open before sending
+        setTimeout(() => {
+          handleSend(detail.message);
+        }, 400);
+      } else {
+        setIsOpen(true);
+      }
+    };
+    window.addEventListener('ai-chat:open', handler);
+    return () => window.removeEventListener('ai-chat:open', handler);
+  }, [handleSend]);
 
   const handleSend = useCallback(async (text: string) => {
     if ((!text.trim() && attachments.length === 0) || isStreaming) return;
