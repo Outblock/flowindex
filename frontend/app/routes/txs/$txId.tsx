@@ -274,9 +274,19 @@ function ScriptErrorAnnotation({ targetId, message, line, isDark }: { targetId: 
         if (!el) return;
         // Check if annotation already injected
         if (el.nextElementSibling?.getAttribute('data-error-annotation') === 'true') return;
+
+        // Measure the line number gutter width from the first <span> child (the line number)
+        const lineNumSpan = el.querySelector('span.react-syntax-highlighter-line-number, span.linenumber, [style*="userSelect"]');
+        let gutterPx = 56; // fallback
+        if (lineNumSpan) {
+            const rect = lineNumSpan.getBoundingClientRect();
+            const elRect = el.getBoundingClientRect();
+            gutterPx = rect.right - elRect.left + 4; // right edge of line number + small gap
+        }
+
         const annotation = document.createElement('div');
         annotation.setAttribute('data-error-annotation', 'true');
-        annotation.style.cssText = `display:flex;align-items:center;gap:6px;padding:4px 12px 4px 3.5em;font-size:10px;font-family:ui-monospace,monospace;background:${isDark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)'};border-left:3px solid #ef4444;color:#f87171;`;
+        annotation.style.cssText = `display:flex;align-items:center;gap:6px;padding:3px 12px 3px ${gutterPx}px;font-size:10px;font-family:ui-monospace,monospace;background:${isDark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)'};border-left:3px solid #ef4444;margin-left:-3px;color:#f87171;`;
         annotation.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Line ${line}: ${message.replace(/</g, '&lt;')}</span>`;
         el.parentNode?.insertBefore(annotation, el.nextSibling);
         return () => { annotation.remove(); };
