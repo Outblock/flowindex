@@ -147,8 +147,20 @@ services:
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       NEXT_PUBLIC_ENABLE_LOGS: "true"
       NEXT_ANALYTICS_BACKEND_PROVIDER: ""
+    # No public port — accessed through studio-auth proxy
+
+  studio-auth:
+    image: nginx:alpine
+    depends_on:
+      - supabase-studio
+    volumes:
+      - ./studio/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    environment:
+      - STUDIO_USER=${STUDIO_USER:-admin}
+      - STUDIO_PASSWORD=${STUDIO_PASSWORD:-changeme}
+    entrypoint: ["/bin/sh", "-c", "htpasswd -bc /etc/nginx/.htpasswd $$STUDIO_USER $$STUDIO_PASSWORD && nginx -g 'daemon off;'"]
     ports:
-      - "8000:3000"
+      - "8000:80"
 
   docs:
     build:
