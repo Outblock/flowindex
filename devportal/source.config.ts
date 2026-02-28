@@ -11,6 +11,9 @@ export const docs = defineDocs({
     // Our repo docs are plain Markdown without required frontmatter.
     // Make the schema permissive so Fumadocs can derive titles from headings.
     schema: frontmatterSchema.partial(),
+    // Exclude plans/ directory – contains implementation plans with code blocks
+    // that use language identifiers unsupported by Shiki syntax highlighter.
+    files: ['!./plans/**'],
     postprocess: {
       includeProcessedMarkdown: true,
     },
