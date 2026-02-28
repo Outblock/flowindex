@@ -19,22 +19,22 @@ function TriggerNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`bg-neutral-800 border rounded-xl px-4 py-3 min-w-[180px] max-w-[220px] transition-shadow ${
-        selected ? 'shadow-lg shadow-[#00ef8b]/20 border-[#00ef8b]/50' : 'border-neutral-700'
+      className={`bg-white dark:bg-neutral-800 border rounded-xl px-4 py-3 min-w-[180px] max-w-[220px] transition-shadow ${
+        selected ? 'shadow-lg shadow-[#00ef8b]/20 border-[#00ef8b]/50' : 'border-zinc-200 dark:border-neutral-700'
       }`}
       style={{ borderLeftWidth: 3, borderLeftColor: COLORS.trigger }}
     >
       <div className="flex items-center gap-2 mb-1">
         <Icon className="w-4 h-4" style={{ color: COLORS.trigger }} />
-        <span className="text-sm font-medium text-white truncate">{meta.label}</span>
+        <span className="text-sm font-medium text-zinc-900 dark:text-white truncate">{meta.label}</span>
       </div>
       {preview && (
-        <p className="text-xs text-neutral-400 truncate">{preview}</p>
+        <p className="text-xs text-zinc-500 dark:text-neutral-400 truncate">{preview}</p>
       )}
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-3 !h-3 !border-2 !border-neutral-700 !bg-[#00ef8b]"
+        className="!w-3 !h-3 !border-2 !border-zinc-300 dark:!border-neutral-700 !bg-[#00ef8b]"
       />
     </div>
   )

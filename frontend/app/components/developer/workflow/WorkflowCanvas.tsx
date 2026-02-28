@@ -7,6 +7,7 @@ import ReactFlow, {
   Controls,
   Background,
   BackgroundVariant,
+  MarkerType,
 } from 'reactflow'
 import type {
   Node,
@@ -115,6 +116,7 @@ export default function WorkflowCanvas({
           ...connection,
           animated: true,
           style: { stroke: '#525252', strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#525252', width: 16, height: 16 },
         },
         eds
       )
@@ -305,10 +307,10 @@ export default function WorkflowCanvas({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-sm shrink-0">
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-zinc-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm shrink-0">
         <Link
           to="/developer/subscriptions"
-          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+          className="p-1.5 rounded-lg text-zinc-500 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
         </Link>
@@ -322,7 +324,7 @@ export default function WorkflowCanvas({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') setEditingName(false)
               }}
-              className="px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:border-[#00ef8b]/50"
+              className="px-2 py-1 bg-zinc-100 dark:bg-neutral-800 border border-zinc-300 dark:border-neutral-700 rounded text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-[#00ef8b]/50"
             />
             <button
               onClick={() => setEditingName(false)}
@@ -334,10 +336,10 @@ export default function WorkflowCanvas({
         ) : (
           <button
             onClick={() => setEditingName(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-white hover:text-[#00ef8b] transition-colors"
+            className="flex items-center gap-1.5 text-sm font-medium text-zinc-900 dark:text-white hover:text-[#00ef8b] transition-colors"
           >
             {name}
-            <Pencil className="w-3 h-3 text-neutral-500" />
+            <Pencil className="w-3 h-3 text-zinc-400 dark:text-neutral-500" />
           </button>
         )}
 
@@ -354,7 +356,7 @@ export default function WorkflowCanvas({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm rounded-lg hover:bg-neutral-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 dark:bg-neutral-800 border border-zinc-300 dark:border-neutral-700 text-zinc-600 dark:text-neutral-300 text-sm rounded-lg hover:bg-zinc-200 dark:hover:bg-neutral-700 transition-colors disabled:opacity-50"
         >
           {saving ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -402,26 +404,29 @@ export default function WorkflowCanvas({
             fitView
             snapToGrid
             snapGrid={[16, 16]}
+            deleteKeyCode={['Backspace', 'Delete']}
             defaultEdgeOptions={{
               animated: true,
               style: { stroke: '#525252', strokeWidth: 2 },
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#525252', width: 16, height: 16 },
             }}
-            className="bg-neutral-950"
+            className="bg-zinc-100 dark:bg-neutral-950"
           >
             <Background
               variant={BackgroundVariant.Dots}
-              color="#333"
+              color="var(--rf-dots, #333)"
               gap={16}
               size={1}
+              className="[--rf-dots:#ccc] dark:[--rf-dots:#333]"
             />
-            <Controls className="!bg-neutral-800 !border-neutral-700 !rounded-lg [&>button]:!bg-neutral-800 [&>button]:!border-neutral-700 [&>button]:!text-neutral-400 [&>button:hover]:!bg-neutral-700" />
+            <Controls className="!bg-white dark:!bg-neutral-800 !border-zinc-300 dark:!border-neutral-700 !rounded-lg [&>button]:!bg-white dark:[&>button]:!bg-neutral-800 [&>button]:!border-zinc-300 dark:[&>button]:!border-neutral-700 [&>button]:!text-zinc-500 dark:[&>button]:!text-neutral-400 [&>button:hover]:!bg-zinc-100 dark:[&>button:hover]:!bg-neutral-700" />
             <MiniMap
               nodeColor={(n: Node) => {
                 const meta = NODE_TYPE_MAP[n.data?.nodeType]
                 return meta?.color ?? '#525252'
               }}
-              className="!bg-neutral-900 !border-neutral-800 !rounded-lg"
-              maskColor="rgba(0,0,0,0.6)"
+              className="!bg-white dark:!bg-neutral-900 !border-zinc-300 dark:!border-neutral-800 !rounded-lg"
+              maskColor="rgba(0,0,0,0.15)"
             />
           </ReactFlow>
         </div>

@@ -17,22 +17,22 @@ function ConditionNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`bg-neutral-800 border rounded-xl px-4 py-3 min-w-[160px] max-w-[200px] transition-shadow ${
-        selected ? 'shadow-lg shadow-amber-500/20 border-amber-500/50' : 'border-neutral-700'
+      className={`bg-white dark:bg-neutral-800 border rounded-xl px-4 py-3 min-w-[160px] max-w-[200px] transition-shadow ${
+        selected ? 'shadow-lg shadow-amber-500/20 border-amber-500/50' : 'border-zinc-200 dark:border-neutral-700'
       }`}
       style={{ borderLeftWidth: 3, borderLeftColor: COLORS.condition }}
     >
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-3 !h-3 !border-2 !border-neutral-700 !bg-amber-500"
+        className="!w-3 !h-3 !border-2 !border-zinc-300 dark:!border-neutral-700 !bg-amber-500"
       />
       <div className="flex items-center gap-2 mb-1">
         <Icon className="w-4 h-4" style={{ color: COLORS.condition }} />
-        <span className="text-sm font-medium text-white">{meta.label}</span>
+        <span className="text-sm font-medium text-zinc-900 dark:text-white">{meta.label}</span>
       </div>
       {preview && (
-        <p className="text-xs text-neutral-400 truncate">{preview}</p>
+        <p className="text-xs text-zinc-500 dark:text-neutral-400 truncate">{preview}</p>
       )}
       {isIF ? (
         <>
@@ -40,14 +40,14 @@ function ConditionNode({ data, selected }: NodeProps) {
             type="source"
             position={Position.Right}
             id="true"
-            className="!w-3 !h-3 !border-2 !border-neutral-700 !bg-emerald-400"
+            className="!w-3 !h-3 !border-2 !border-zinc-300 dark:!border-neutral-700 !bg-emerald-400"
             style={{ top: '35%' }}
           />
           <Handle
             type="source"
             position={Position.Right}
             id="false"
-            className="!w-3 !h-3 !border-2 !border-neutral-700 !bg-red-400"
+            className="!w-3 !h-3 !border-2 !border-zinc-300 dark:!border-neutral-700 !bg-red-400"
             style={{ top: '65%' }}
           />
           <div className="absolute -right-7 text-[10px] text-emerald-400" style={{ top: '28%' }}>T</div>
@@ -57,7 +57,7 @@ function ConditionNode({ data, selected }: NodeProps) {
         <Handle
           type="source"
           position={Position.Right}
-          className="!w-3 !h-3 !border-2 !border-neutral-700 !bg-amber-500"
+          className="!w-3 !h-3 !border-2 !border-zinc-300 dark:!border-neutral-700 !bg-amber-500"
         />
       )}
     </div>
