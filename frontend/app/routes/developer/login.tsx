@@ -1,25 +1,24 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, Lock, ArrowRight, Loader2, Sparkles, UserPlus, LogIn } from 'lucide-react'
+import { Mail, ArrowRight, Loader2, Sparkles } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 export const Route = createFileRoute('/developer/login')({
   component: DeveloperLoginPage,
 })
 
-type AuthMode = 'login' | 'register' | 'magic'
-
 function DeveloperLoginPage() {
-  const { user, loading: authLoading, signIn, signUp, sendMagicLink } = useAuth()
+  const { user, loading: authLoading, sendMagicLink, verifyOtp } = useAuth()
   const navigate = useNavigate()
 
-  const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [magicLinkSent, setMagicLinkSent] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
+  const [otp, setOtp] = useState(['', '', '', '', '', ''])
+  const [verifying, setVerifying] = useState(false)
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([])
 
   // Redirect if already logged in
   useEffect(() => {
@@ -28,31 +27,70 @@ function DeveloperLoginPage() {
     }
   }, [authLoading, user, navigate])
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSendLink(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
     try {
-      if (mode === 'magic') {
-        await sendMagicLink(email)
-        setMagicLinkSent(true)
-      } else if (mode === 'register') {
-        await signUp(email, password)
-        // After signup, try to sign in (if auto-confirmed)
-        try {
-          await signIn(email, password)
-        } catch {
-          // If sign-in fails, user may need to confirm email
-          setError('Account created. Please check your email to confirm, then sign in.')
-        }
-      } else {
-        await signIn(email, password)
-      }
+      await sendMagicLink(email)
+      setOtpSent(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed')
+      setError(err instanceof Error ? err.message : 'Failed to send magic link')
     } finally {
       setLoading(false)
+    }
+  }
+
+  function handleOtpChange(index: number, value: string) {
+    if (value.length > 1) {
+      // Handle paste of full OTP
+      const digits = value.replace(/\D/g, '').slice(0, 6).split('')
+      const newOtp = [...otp]
+      digits.forEach((d, i) => {
+        if (index + i < 6) newOtp[index + i] = d
+      })
+      setOtp(newOtp)
+      const nextIndex = Math.min(index + digits.length, 5)
+      otpRefs.current[nextIndex]?.focus()
+      // Auto-submit if all filled
+      if (newOtp.every(d => d !== '')) {
+        submitOtp(newOtp.join(''))
+      }
+      return
+    }
+
+    const newOtp = [...otp]
+    newOtp[index] = value.replace(/\D/g, '')
+    setOtp(newOtp)
+
+    if (value && index < 5) {
+      otpRefs.current[index + 1]?.focus()
+    }
+
+    // Auto-submit when all 6 digits entered
+    if (value && newOtp.every(d => d !== '')) {
+      submitOtp(newOtp.join(''))
+    }
+  }
+
+  function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus()
+    }
+  }
+
+  async function submitOtp(code: string) {
+    setError(null)
+    setVerifying(true)
+    try {
+      await verifyOtp(email, code)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid code. Please try again.')
+      setOtp(['', '', '', '', '', ''])
+      otpRefs.current[0]?.focus()
+    } finally {
+      setVerifying(false)
     }
   }
 
@@ -64,8 +102,8 @@ function DeveloperLoginPage() {
     )
   }
 
-  // Magic link sent confirmation
-  if (magicLinkSent) {
+  // OTP verification screen
+  if (otpSent) {
     return (
       <div className="flex-1 flex items-center justify-center p-4">
         <motion.div
@@ -78,32 +116,83 @@ function DeveloperLoginPage() {
               <Mail className="w-8 h-8 text-[#00ef8b]" />
             </div>
             <h2 className="text-xl font-semibold text-white mb-2">Check your email</h2>
-            <p className="text-neutral-400 mb-6">
-              We sent a magic link to <span className="text-white font-medium">{email}</span>.
-              Click the link in the email to sign in.
+            <p className="text-neutral-400 mb-2">
+              We sent a sign-in link and code to
             </p>
-            <button
-              onClick={() => { setMagicLinkSent(false); setMode('login') }}
-              className="text-sm text-[#00ef8b] hover:text-[#00ef8b]/80 transition-colors"
-            >
-              Back to sign in
-            </button>
+            <p className="text-white font-medium mb-6">{email}</p>
+
+            {/* OTP Input */}
+            <p className="text-sm text-neutral-400 mb-4">Enter the 6-digit code:</p>
+
+            {error && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+              >
+                {error}
+              </motion.div>
+            )}
+
+            <div className="flex justify-center gap-2 mb-6">
+              {otp.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={el => { otpRefs.current[i] = el }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={digit}
+                  onChange={e => handleOtpChange(i, e.target.value)}
+                  onKeyDown={e => handleOtpKeyDown(i, e)}
+                  disabled={verifying}
+                  className="w-11 h-13 text-center text-xl font-bold bg-neutral-800 border border-neutral-700 rounded-lg text-[#00ef8b] focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/20 transition-colors disabled:opacity-50"
+                  autoFocus={i === 0}
+                />
+              ))}
+            </div>
+
+            {verifying && (
+              <div className="flex items-center justify-center gap-2 text-neutral-400 text-sm mb-4">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Verifying...
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-xs text-neutral-500">Or click the magic link in your email</p>
+              <div className="flex items-center justify-center gap-4 text-sm">
+                <button
+                  onClick={() => { setOtpSent(false); setOtp(['', '', '', '', '', '']); setError(null) }}
+                  className="text-[#00ef8b] hover:text-[#00ef8b]/80 transition-colors"
+                >
+                  Use a different email
+                </button>
+                <span className="text-neutral-700">|</span>
+                <button
+                  onClick={async () => {
+                    setError(null)
+                    setLoading(true)
+                    try {
+                      await sendMagicLink(email)
+                      setOtp(['', '', '', '', '', ''])
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'Failed to resend')
+                    } finally {
+                      setLoading(false)
+                    }
+                  }}
+                  disabled={loading}
+                  className="text-neutral-400 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Sending...' : 'Resend code'}
+                </button>
+              </div>
+            </div>
           </div>
         </motion.div>
       </div>
     )
-  }
-
-  const titles: Record<AuthMode, string> = {
-    login: 'Sign in',
-    register: 'Create account',
-    magic: 'Magic link',
-  }
-
-  const descriptions: Record<AuthMode, string> = {
-    login: 'Sign in to your developer portal',
-    register: 'Create a new developer account',
-    magic: 'Sign in with a link sent to your email',
   }
 
   return (
@@ -119,8 +208,8 @@ function DeveloperLoginPage() {
             <div className="w-12 h-12 rounded-lg bg-[#00ef8b]/10 flex items-center justify-center mx-auto mb-4">
               <Sparkles className="w-6 h-6 text-[#00ef8b]" />
             </div>
-            <h1 className="text-2xl font-bold text-white">{titles[mode]}</h1>
-            <p className="text-sm text-neutral-400 mt-1">{descriptions[mode]}</p>
+            <h1 className="text-2xl font-bold text-white">Developer Portal</h1>
+            <p className="text-sm text-neutral-400 mt-1">Sign in with your email to continue</p>
           </div>
 
           {/* Error */}
@@ -135,8 +224,7 @@ function DeveloperLoginPage() {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
+          <form onSubmit={handleSendLink} className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-neutral-300 mb-1.5">
                 Email
@@ -155,32 +243,6 @@ function DeveloperLoginPage() {
               </div>
             </div>
 
-            {/* Password (hidden in magic link mode) */}
-            {mode !== 'magic' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <label htmlFor="password" className="block text-sm font-medium text-neutral-300 mb-1.5">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                  <input
-                    id="password"
-                    type="password"
-                    required={mode !== 'magic'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="w-full pl-10 pr-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/20 transition-colors text-sm"
-                  />
-                </div>
-              </motion.div>
-            )}
-
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -188,71 +250,18 @@ function DeveloperLoginPage() {
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
-              ) : mode === 'login' ? (
-                <>
-                  <LogIn className="w-4 h-4" />
-                  Sign in
-                </>
-              ) : mode === 'register' ? (
-                <>
-                  <UserPlus className="w-4 h-4" />
-                  Create account
-                </>
               ) : (
                 <>
                   <ArrowRight className="w-4 h-4" />
-                  Send magic link
+                  Continue with email
                 </>
               )}
             </button>
           </form>
 
-          {/* Mode toggles */}
-          <div className="mt-6 pt-6 border-t border-neutral-800 text-center space-y-2 text-sm">
-            {mode === 'login' && (
-              <>
-                <p className="text-neutral-400">
-                  Don&apos;t have an account?{' '}
-                  <button
-                    onClick={() => { setMode('register'); setError(null) }}
-                    className="text-[#00ef8b] hover:text-[#00ef8b]/80 transition-colors font-medium"
-                  >
-                    Register
-                  </button>
-                </p>
-                <p className="text-neutral-500">
-                  or{' '}
-                  <button
-                    onClick={() => { setMode('magic'); setError(null) }}
-                    className="text-neutral-300 hover:text-white transition-colors"
-                  >
-                    sign in with magic link
-                  </button>
-                </p>
-              </>
-            )}
-            {mode === 'register' && (
-              <p className="text-neutral-400">
-                Already have an account?{' '}
-                <button
-                  onClick={() => { setMode('login'); setError(null) }}
-                  className="text-[#00ef8b] hover:text-[#00ef8b]/80 transition-colors font-medium"
-                >
-                  Sign in
-                </button>
-              </p>
-            )}
-            {mode === 'magic' && (
-              <p className="text-neutral-400">
-                <button
-                  onClick={() => { setMode('login'); setError(null) }}
-                  className="text-[#00ef8b] hover:text-[#00ef8b]/80 transition-colors font-medium"
-                >
-                  Back to sign in
-                </button>
-              </p>
-            )}
-          </div>
+          <p className="mt-6 text-center text-xs text-neutral-500">
+            We&apos;ll send you a magic link and verification code
+          </p>
         </div>
       </motion.div>
     </div>

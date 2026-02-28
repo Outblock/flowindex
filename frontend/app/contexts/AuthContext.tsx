@@ -20,6 +20,7 @@ interface AuthContextValue extends AuthState {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   sendMagicLink: (email: string) => Promise<void>;
+  verifyOtp: (email: string, token: string) => Promise<void>;
   handleCallback: (hash: string) => void;
   signOut: () => void;
 }
@@ -231,6 +232,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await gotruePost('/magiclink', { email });
   }, []);
 
+  const verifyOtp = useCallback(
+    async (email: string, token: string) => {
+      const data = await gotruePost('/verify', { type: 'magiclink', token, redirect_to: '', email });
+      applyTokenResponse(data);
+    },
+    [applyTokenResponse],
+  );
+
   const handleCallback = useCallback(
     (hash: string) => {
       const params = new URLSearchParams(hash.replace(/^#/, ''));
@@ -257,6 +266,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signIn,
         sendMagicLink,
+        verifyOtp,
         handleCallback,
         signOut,
       }}
