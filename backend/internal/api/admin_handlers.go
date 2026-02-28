@@ -1372,7 +1372,11 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 			sem <- struct{}{}
 			go func(idx int, ch chunk) {
 				defer func() { <-sem }()
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				chunkTimeout := 2 * time.Minute
+			if req.Worker == "proposer_key_backfill" {
+				chunkTimeout = 10 * time.Minute
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), chunkTimeout)
 				defer cancel()
 				if err := proc.ProcessRange(ctx, ch.from, ch.to); err != nil {
 					mu.Lock()
