@@ -234,7 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifyOtp = useCallback(
     async (email: string, token: string) => {
-      const data = await gotruePost('/verify', { type: 'magiclink', token, redirect_to: '', email });
+      const data = await gotruePost('/verify', { type: 'email', token, email });
       applyTokenResponse(data);
     },
     [applyTokenResponse],
