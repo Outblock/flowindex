@@ -1053,9 +1053,9 @@ function TransactionDetail() {
                                     <h3 className="text-red-500 text-sm font-bold uppercase tracking-widest">Execution Error</h3>
                                     <button
                                         onClick={() => openAIChat(
-                                            `Briefly explain why this Flow transaction failed and how to fix it. Keep it short — 2-3 sentences max.\n\nTx: ${transaction.id || transaction.tx_hash}\nError: ${errMsg}`
+                                            `Analyze this failed Flow transaction. Explain what went wrong, why it happened, and how to fix it.\n\n> **Transaction:** \`${transaction.id || transaction.tx_hash}\`\n\n> **Error:**\n> \`\`\`\n> ${errMsg.replace(/\n/g, '\n> ')}\n> \`\`\``
                                         )}
-                                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold bg-nothing-green/10 border border-nothing-green/20 text-nothing-green hover:bg-nothing-green/20 transition-colors shrink-0"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[10px] uppercase tracking-widest font-bold bg-nothing-green text-black hover:bg-nothing-green/85 shadow-sm shadow-nothing-green/25 transition-colors shrink-0"
                                     >
                                         <Sparkles size={10} />
                                         Analyze with AI

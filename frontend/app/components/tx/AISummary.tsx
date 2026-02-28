@@ -231,7 +231,7 @@ export default function AISummary({ transaction }: { transaction: any }) {
         return (
             <button
                 onClick={handleSummarize}
-                className="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] uppercase tracking-widest border border-purple-300 dark:border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors rounded-sm"
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] uppercase tracking-widest font-bold bg-purple-600 dark:bg-purple-500 text-white hover:bg-purple-700 dark:hover:bg-purple-400 shadow-sm shadow-purple-500/25 transition-colors rounded-sm"
             >
                 <Sparkles className="w-3.5 h-3.5" />
                 Summarize with AI
