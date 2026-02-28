@@ -30,20 +30,26 @@ export async function POST(req: Request) {
   const systemMessage = messages.find((m) => m.role === "system");
   const userMessages = messages.filter((m) => m.role !== "system");
 
-  const { object } = await generateObject({
-    model: anthropic(process.env.LLM_MODEL || "claude-sonnet-4-6"),
-    schema: workflowSchema,
-    system: systemMessage?.content,
-    messages: userMessages.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    })),
-    providerOptions: {
-      anthropic: {
-        structuredOutputMode: "auto",
+  try {
+    const { object } = await generateObject({
+      model: anthropic(process.env.LLM_MODEL || "claude-sonnet-4-6"),
+      schema: workflowSchema,
+      system: systemMessage?.content,
+      messages: userMessages.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      })),
+      providerOptions: {
+        anthropic: {
+          structuredOutputMode: "jsonTool",
+        },
       },
-    },
-  });
+    });
 
-  return Response.json(object);
+    return Response.json(object);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("AI generate error:", message);
+    return Response.json({ error: message }, { status: 500 });
+  }
 }
