@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, ArrowRight, Loader2, Sparkles } from 'lucide-react'
+import { Mail, ArrowRight, Loader2, Sparkles, Wallet } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 export const Route = createFileRoute('/developer/login')({
@@ -209,7 +209,7 @@ function DeveloperLoginPage() {
               <Sparkles className="w-6 h-6 text-[#00ef8b]" />
             </div>
             <h1 className="text-2xl font-bold text-white">Developer Portal</h1>
-            <p className="text-sm text-neutral-400 mt-1">Sign in with your email to continue</p>
+            <p className="text-sm text-neutral-400 mt-1">Sign in to manage your webhooks and API keys</p>
           </div>
 
           {/* Error */}
@@ -252,12 +252,31 @@ function DeveloperLoginPage() {
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>
-                  <ArrowRight className="w-4 h-4" />
-                  Continue with email
+                  <Mail className="w-4 h-4" />
+                  Continue with Email
                 </>
               )}
             </button>
           </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-6">
+            <div className="flex-1 border-t border-neutral-800" />
+            <span className="text-xs text-neutral-500 uppercase tracking-wider">or</span>
+            <div className="flex-1 border-t border-neutral-800" />
+          </div>
+
+          {/* Wallet login - coming soon */}
+          <button
+            disabled
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-500 font-semibold rounded-lg text-sm cursor-not-allowed relative"
+          >
+            <Wallet className="w-4 h-4" />
+            Continue with Wallet
+            <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wider bg-neutral-700 text-neutral-400 px-1.5 py-0.5 rounded">
+              Coming Soon
+            </span>
+          </button>
 
           <p className="mt-6 text-center text-xs text-neutral-500">
             We&apos;ll send you a magic link and verification code
