@@ -296,14 +296,49 @@ jobs:
             studio
           docker push ${{ env.REGISTRY }}/studio --all-tags
 
-      - name: Deploy studio (pull & restart on GCE)
+      - name: Deploy studio stack (pg-meta + studio + studio-auth on GCE)
         run: |
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
-            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
-            docker pull ${{ env.REGISTRY }}/studio:${{ github.sha }} && \
-            docker stop studio-auth 2>/dev/null; docker rm studio-auth 2>/dev/null; \
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true
+            docker pull ${{ env.REGISTRY }}/studio:${{ github.sha }}
+            docker pull supabase/postgres-meta:v0.84.2
+            docker pull supabase/studio:20241029-46e1e55
+
+            # Source env vars
+            set -a; source /mnt/stateful_partition/pgdata/studio.env; set +a
+
+            # 1) pg-meta (port 8085) — schema browser for Studio
+            docker stop supabase-meta 2>/dev/null; docker rm supabase-meta 2>/dev/null
+            docker run -d --restart=always --name supabase-meta \
+              --network=host \
+              -e PG_META_PORT=8085 \
+              -e PG_META_DB_HOST=127.0.0.1 \
+              -e PG_META_DB_PORT=5432 \
+              -e PG_META_DB_NAME=${STUDIO_DB_NAME} \
+              -e PG_META_DB_USER=${STUDIO_DB_USER} \
+              -e PG_META_DB_PASSWORD=${STUDIO_DB_PASSWORD} \
+              supabase/postgres-meta:v0.84.2
+
+            # 2) Studio (port 3100)
+            docker stop supabase-studio 2>/dev/null; docker rm supabase-studio 2>/dev/null
+            docker run -d --restart=always --name supabase-studio \
+              --network=host \
+              -e PORT=3100 \
+              -e STUDIO_PG_META_URL=http://127.0.0.1:8085 \
+              -e SUPABASE_URL=http://127.0.0.1:9999 \
+              -e SUPABASE_REST_URL=http://127.0.0.1:9999 \
+              -e SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY} \
+              -e SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY} \
+              -e NEXT_PUBLIC_ENABLE_LOGS=true \
+              -e NEXT_ANALYTICS_BACKEND_PROVIDER= \
+              supabase/studio:20241029-46e1e55
+
+            # 3) studio-auth (port 8000) — nginx basic auth proxy
+            docker stop studio-auth 2>/dev/null; docker rm studio-auth 2>/dev/null
             docker run -d --restart=always --name studio-auth \
               --network=host \
-              --env-file /mnt/stateful_partition/pgdata/studio.env \
+              -e STUDIO_USER=${STUDIO_USER} \
+              -e STUDIO_PASSWORD=${STUDIO_PASSWORD} \
+              -e STUDIO_UPSTREAM=http://127.0.0.1:3100 \
               ${{ env.REGISTRY }}/studio:${{ github.sha }}
           '
