@@ -410,6 +410,23 @@ func (s *Store) UpdateUserTier(ctx context.Context, userID, tierID string) error
 	return err
 }
 
+// EnsureTiers upserts all known rate limit tiers so that foreign key references succeed.
+func (s *Store) EnsureTiers(ctx context.Context) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO public.rate_limit_tiers (id, name, max_subscriptions, max_endpoints, max_events_per_hour, max_api_requests, is_default) VALUES
+		    ('free',       'Free',       10,  10,  5000,   300,  true),
+		    ('pro',        'Pro',        50,  50,  50000,  1000, false),
+		    ('enterprise', 'Enterprise', 500, 100, 500000, 10000, false),
+		    ('ultimate',   'Ultimate',   999999, 999999, 999999999, 999999999, false)
+		ON CONFLICT (id) DO UPDATE SET
+		    max_subscriptions = EXCLUDED.max_subscriptions,
+		    max_endpoints = EXCLUDED.max_endpoints,
+		    max_events_per_hour = EXCLUDED.max_events_per_hour,
+		    max_api_requests = EXCLUDED.max_api_requests
+	`)
+	return err
+}
+
 func (s *Store) SuspendUser(ctx context.Context, userID string, suspend bool) error {
 	_, err := s.pool.Exec(ctx,
 		`UPDATE public.user_profiles SET is_suspended = $1 WHERE user_id = $2`, suspend, userID)

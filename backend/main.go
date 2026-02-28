@@ -525,6 +525,9 @@ func main() {
 			log.Printf("[webhooks] DB connection failed: %v (webhooks disabled)", whDBErr)
 		} else {
 			whStore := webhooks.NewStore(whDB.Pool)
+			if err := whStore.EnsureTiers(context.Background()); err != nil {
+				log.Printf("[webhooks] warning: failed to ensure tiers: %v", err)
+			}
 			whAuth := webhooks.NewAuthMiddleware(jwtSecret, whStore.LookupAPIKey)
 
 			// Delivery backend: Hybrid (Svix + Direct) when Svix configured,
