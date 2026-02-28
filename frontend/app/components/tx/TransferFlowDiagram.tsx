@@ -155,9 +155,14 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
             return { text: `${amountStr} ${f.token}${usdStr}`, iconUrl };
         });
 
-        // Use React element label for rich rendering (icon + text)
+        // React element label with inline background (foreignObject doesn't work with labelBgStyle)
+        const bgColor = isDark ? '#18181b' : '#ffffff';
         const labelEl = (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: group.length > 1 ? '4px' : '0', alignItems: 'center' }}>
+            <div style={{
+                display: 'flex', flexDirection: 'column', gap: group.length > 1 ? '4px' : '0',
+                alignItems: 'center', background: bgColor, padding: '4px 8px', borderRadius: '4px',
+                border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e4e4e7',
+            }}>
                 {labelLines.map((line, li) => (
                     <div key={li} style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
                         {line.iconUrl && (
@@ -174,8 +179,6 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
             source: from,
             target: to,
             label: labelEl,
-            labelBgStyle: { fill: isDark ? '#18181b' : '#ffffff', fillOpacity: 0.95, rx: 4, ry: 4 },
-            labelBgPadding: [8, 4] as [number, number],
             style: { stroke: color, strokeWidth: 2 },
             markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
             animated: true,
