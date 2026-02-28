@@ -53,11 +53,11 @@ function DeveloperDashboardPage() {
 
   return (
     <DeveloperLayout>
-      <div className="max-w-5xl mx-auto space-y-8">
+      <div className="max-w-5xl mx-auto space-y-6 md:space-y-8">
         {/* Page header */}
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-sm text-neutral-400 mt-1">Overview of your webhook configuration</p>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-xs md:text-sm text-neutral-400 mt-1">Overview of your webhook configuration</p>
         </div>
 
         {/* Stat cards */}
@@ -140,7 +140,7 @@ function DeveloperDashboardPage() {
                       }`}>
                         {log.status_code}
                       </span>
-                      <span className="text-xs text-neutral-500">
+                      <span className="text-xs text-neutral-500 hidden sm:inline">
                         {new Date(log.delivered_at).toLocaleString()}
                       </span>
                     </div>

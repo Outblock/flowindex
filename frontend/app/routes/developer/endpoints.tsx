@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Trash2, Edit2, Globe, Loader2, AlertTriangle, Send, MessageSquare, Hash, Mail, Webhook } from 'lucide-react'
+import { Plus, Trash2, Edit2, Globe, Loader2, AlertTriangle, Send, MessageSquare, Hash, Mail, Link2 } from 'lucide-react'
 import DeveloperLayout from '../../components/developer/DeveloperLayout'
 import {
   listEndpoints,
@@ -27,18 +27,15 @@ interface ChannelConfig {
   borderColor: string
   placeholder: string
   helpText: string
-  /** Extra fields needed for this channel */
   extraFields?: { key: string; label: string; placeholder: string; type?: string }[]
-  /** Builds the URL from form fields */
   buildUrl?: (fields: Record<string, string>) => string
-  /** Whether URL is auto-generated (hidden) */
   urlHidden?: boolean
 }
 
 const CHANNELS: Record<EndpointType, ChannelConfig> = {
   webhook: {
     label: 'Webhook',
-    icon: Webhook,
+    icon: Link2,
     color: 'text-neutral-300',
     bgColor: 'bg-neutral-800',
     borderColor: 'border-neutral-600',
@@ -102,28 +99,25 @@ function detectChannelType(url: string): EndpointType {
   return 'webhook'
 }
 
-function channelIcon(ep: Endpoint) {
+function getChannelConfig(ep: Endpoint) {
   const type_ = ep.endpoint_type || detectChannelType(ep.url)
-  const config = CHANNELS[type_] || CHANNELS.webhook
-  const Icon = config.icon
-  return <Icon className={`w-4 h-4 ${config.color}`} />
+  return CHANNELS[type_] || CHANNELS.webhook
 }
 
 function channelBadge(ep: Endpoint) {
-  const type_ = ep.endpoint_type || detectChannelType(ep.url)
-  const config = CHANNELS[type_] || CHANNELS.webhook
+  const config = getChannelConfig(ep)
+  const Icon = config.icon
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color} border ${config.borderColor}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color} border ${config.borderColor}`}>
+      <Icon className="w-3 h-3" />
       {config.label}
     </span>
   )
 }
 
-/** Display-friendly URL (hide telegram:// scheme, truncate long URLs) */
 function displayUrl(ep: Endpoint): string {
   const type_ = ep.endpoint_type || detectChannelType(ep.url)
   if (type_ === 'telegram') {
-    // Show "Telegram Bot @chatid" instead of the raw URL
     const trimmed = ep.url.replace('telegram://', '')
     const parts = trimmed.split('/')
     return parts.length >= 2 ? `Chat: ${parts[1]}` : ep.url
@@ -140,7 +134,6 @@ function DeveloperEndpoints() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Create/Edit modal state
   const [showModal, setShowModal] = useState(false)
   const [editTarget, setEditTarget] = useState<Endpoint | null>(null)
   const [selectedChannel, setSelectedChannel] = useState<EndpointType>('webhook')
@@ -149,7 +142,6 @@ function DeveloperEndpoints() {
   const [formExtra, setFormExtra] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
 
-  // Delete confirm state
   const [deleteTarget, setDeleteTarget] = useState<Endpoint | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -184,8 +176,6 @@ function DeveloperEndpoints() {
     setSelectedChannel(type_)
     setFormUrl(endpoint.url)
     setFormDescription(endpoint.description)
-
-    // Parse extra fields from URL for telegram
     if (type_ === 'telegram') {
       const trimmed = endpoint.url.replace('telegram://', '')
       const parts = trimmed.split('/')
@@ -209,13 +199,10 @@ function DeveloperEndpoints() {
 
   async function handleSave() {
     const channelConfig = CHANNELS[selectedChannel]
-
-    // Build URL from extra fields if needed
     let url = formUrl.trim()
     if (channelConfig.buildUrl) {
       url = channelConfig.buildUrl(formExtra)
     }
-
     if (!url) return
 
     setSaving(true)
@@ -271,11 +258,9 @@ function DeveloperEndpoints() {
   const channelConfig = CHANNELS[selectedChannel]
   const isEmailDisabled = selectedChannel === 'email'
 
-  // Check if save is valid
   const canSave = (() => {
     if (isEmailDisabled) return false
     if (channelConfig.buildUrl) {
-      // All extra fields must be filled
       return (channelConfig.extraFields || []).every((f) => (formExtra[f.key] || '').trim() !== '')
     }
     return formUrl.trim() !== ''
@@ -285,19 +270,20 @@ function DeveloperEndpoints() {
     <DeveloperLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Notification Channels</h1>
-            <p className="text-sm text-neutral-400 mt-1">
-              Configure where webhook events are delivered &mdash; webhooks, Discord, Slack, Telegram, and more
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl md:text-2xl font-bold text-white">Notification Channels</h1>
+            <p className="text-xs md:text-sm text-neutral-400 mt-1">
+              Configure where events are delivered
             </p>
           </div>
           <button
             onClick={openCreateModal}
-            className="flex items-center gap-2 px-4 py-2 bg-[#00ef8b] text-black font-medium text-sm rounded-lg hover:bg-[#00ef8b]/90 transition-colors"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#00ef8b] text-black font-medium text-sm rounded-lg hover:bg-[#00ef8b]/90 transition-colors shrink-0"
           >
             <Plus className="w-4 h-4" />
-            Add Channel
+            <span className="hidden sm:inline">Add Channel</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
 
@@ -305,11 +291,8 @@ function DeveloperEndpoints() {
         {error && (
           <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            {error}
-            <button
-              onClick={() => setError(null)}
-              className="ml-auto text-red-400/60 hover:text-red-400 transition-colors"
-            >
+            <span className="flex-1 min-w-0 truncate">{error}</span>
+            <button onClick={() => setError(null)} className="ml-auto text-red-400/60 hover:text-red-400 transition-colors shrink-0">
               Dismiss
             </button>
           </div>
@@ -324,90 +307,105 @@ function DeveloperEndpoints() {
           ) : endpoints.length === 0 ? (
             <div className="text-center py-16 text-neutral-500">
               <Globe className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="text-sm">
-                No channels configured yet. Add one to start receiving notifications.
-              </p>
+              <p className="text-sm">No channels configured yet. Add one to start receiving notifications.</p>
             </div>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-neutral-800 text-left">
-                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Channel
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Destination
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Description
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider w-24">
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-800">
+            <>
+              {/* Mobile card list */}
+              <div className="md:hidden divide-y divide-neutral-800">
                 {endpoints.map((endpoint) => (
-                  <motion.tr
+                  <motion.div
                     key={endpoint.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="hover:bg-neutral-800/30 transition-colors"
+                    className="p-4 space-y-2"
                   >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {channelIcon(endpoint)}
-                        {channelBadge(endpoint)}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className="text-sm font-mono text-neutral-300 block max-w-xs truncate"
-                        title={endpoint.url}
-                      >
-                        {displayUrl(endpoint)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-neutral-400">
-                      {endpoint.description || '\u2014'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {isActive(endpoint) ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                          Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                          Inactive
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      {channelBadge(endpoint)}
                       <div className="flex items-center gap-1">
+                        {isActive(endpoint) ? (
+                          <span className="w-2 h-2 rounded-full bg-green-400" />
+                        ) : (
+                          <span className="w-2 h-2 rounded-full bg-red-400" />
+                        )}
                         <button
                           onClick={() => openEditModal(endpoint)}
                           className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors"
-                          title="Edit endpoint"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => setDeleteTarget(endpoint)}
                           className="p-1.5 rounded-md text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Delete endpoint"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    </td>
-                  </motion.tr>
+                    </div>
+                    <p className="text-sm font-mono text-neutral-300 truncate" title={endpoint.url}>
+                      {displayUrl(endpoint)}
+                    </p>
+                    {endpoint.description && (
+                      <p className="text-xs text-neutral-500 truncate">{endpoint.description}</p>
+                    )}
+                  </motion.div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              {/* Desktop table */}
+              <table className="w-full hidden md:table">
+                <thead>
+                  <tr className="border-b border-neutral-800 text-left">
+                    <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">Channel</th>
+                    <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">Destination</th>
+                    <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">Description</th>
+                    <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-xs font-medium text-neutral-500 uppercase tracking-wider w-24"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800">
+                  {endpoints.map((endpoint) => (
+                    <motion.tr
+                      key={endpoint.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="hover:bg-neutral-800/30 transition-colors"
+                    >
+                      <td className="px-4 py-3">{channelBadge(endpoint)}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm font-mono text-neutral-300 block max-w-xs truncate" title={endpoint.url}>
+                          {displayUrl(endpoint)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-neutral-400">{endpoint.description || '\u2014'}</td>
+                      <td className="px-4 py-3">
+                        {isActive(endpoint) ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                            Inactive
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openEditModal(endpoint)} className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors" title="Edit">
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setDeleteTarget(endpoint)} className="p-1.5 rounded-md text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Delete">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
       </div>
@@ -419,16 +417,14 @@ function DeveloperEndpoints() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) closeModal()
-            }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) closeModal() }}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-lg mx-4 p-6 space-y-5"
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-lg mx-0 sm:mx-4 p-5 sm:p-6 space-y-5 max-h-[90vh] overflow-y-auto"
             >
               <h2 className="text-lg font-semibold text-white">
                 {editTarget ? 'Edit Channel' : 'Add Notification Channel'}
@@ -438,7 +434,7 @@ function DeveloperEndpoints() {
               {!editTarget && (
                 <div className="space-y-2">
                   <label className="block text-sm text-neutral-400">Channel Type</label>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                     {CHANNEL_ORDER.map((type_) => {
                       const config = CHANNELS[type_]
                       const Icon = config.icon
@@ -455,7 +451,7 @@ function DeveloperEndpoints() {
                             }
                           }}
                           disabled={isDisabled}
-                          className={`relative flex flex-col items-center gap-1.5 p-3 rounded-lg border text-xs font-medium transition-all ${
+                          className={`relative flex flex-col items-center gap-1 sm:gap-1.5 p-2 sm:p-3 rounded-lg border text-[10px] sm:text-xs font-medium transition-all ${
                             isSelected
                               ? `${config.bgColor} ${config.borderColor} ${config.color}`
                               : isDisabled
@@ -463,10 +459,10 @@ function DeveloperEndpoints() {
                               : 'border-neutral-800 text-neutral-500 hover:border-neutral-700 hover:text-neutral-300'
                           }`}
                         >
-                          <Icon className="w-5 h-5" />
+                          <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                           <span>{config.label}</span>
                           {isDisabled && (
-                            <span className="absolute -top-1 -right-1 text-[9px] px-1 py-0.5 rounded bg-neutral-800 text-neutral-500 border border-neutral-700">
+                            <span className="absolute -top-1 -right-1 text-[8px] sm:text-[9px] px-1 py-0.5 rounded bg-neutral-800 text-neutral-500 border border-neutral-700">
                               Soon
                             </span>
                           )}
@@ -477,39 +473,28 @@ function DeveloperEndpoints() {
                 </div>
               )}
 
-              {/* Help text */}
               <p className="text-xs text-neutral-500">{channelConfig.helpText}</p>
 
-              {/* Dynamic form fields based on channel type */}
+              {/* Dynamic form fields */}
               {channelConfig.extraFields ? (
-                // Custom fields (e.g. Telegram bot_token + chat_id)
                 channelConfig.extraFields.map((field) => (
                   <div key={field.key}>
-                    <label
-                      htmlFor={`field-${field.key}`}
-                      className="block text-sm text-neutral-400 mb-1.5"
-                    >
+                    <label htmlFor={`field-${field.key}`} className="block text-sm text-neutral-400 mb-1.5">
                       {field.label}
                     </label>
                     <input
                       id={`field-${field.key}`}
                       type={field.type || 'text'}
                       value={formExtra[field.key] || ''}
-                      onChange={(e) =>
-                        setFormExtra((prev) => ({ ...prev, [field.key]: e.target.value }))
-                      }
+                      onChange={(e) => setFormExtra((prev) => ({ ...prev, [field.key]: e.target.value }))}
                       placeholder={field.placeholder}
                       className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                     />
                   </div>
                 ))
               ) : (
-                // Standard URL field
                 <div>
-                  <label
-                    htmlFor="endpoint-url"
-                    className="block text-sm text-neutral-400 mb-1.5"
-                  >
+                  <label htmlFor="endpoint-url" className="block text-sm text-neutral-400 mb-1.5">
                     {selectedChannel === 'webhook' ? 'Webhook URL' : `${channelConfig.label} Webhook URL`}
                   </label>
                   <input
@@ -527,10 +512,7 @@ function DeveloperEndpoints() {
               )}
 
               <div>
-                <label
-                  htmlFor="endpoint-description"
-                  className="block text-sm text-neutral-400 mb-1.5"
-                >
+                <label htmlFor="endpoint-description" className="block text-sm text-neutral-400 mb-1.5">
                   Description
                 </label>
                 <input
@@ -538,19 +520,14 @@ function DeveloperEndpoints() {
                   type="text"
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && canSave) handleSave()
-                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && canSave) handleSave() }}
                   placeholder="Optional label for this channel"
                   className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                 />
               </div>
 
               <div className="flex gap-3">
-                <button
-                  onClick={closeModal}
-                  className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors"
-                >
+                <button onClick={closeModal} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors">
                   Cancel
                 </button>
                 <button
@@ -574,30 +551,22 @@ function DeveloperEndpoints() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setDeleteTarget(null)
-            }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null) }}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-sm mx-4 p-6 space-y-4"
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-sm mx-0 sm:mx-4 p-6 space-y-4"
             >
               <h2 className="text-lg font-semibold text-white">Delete Channel</h2>
               <p className="text-sm text-neutral-400">
-                Are you sure you want to delete this {CHANNELS[deleteTarget.endpoint_type || detectChannelType(deleteTarget.url)]?.label || 'webhook'} channel{' '}
-                <span className="text-white font-mono text-xs break-all">
-                  {displayUrl(deleteTarget)}
-                </span>
-                ? This action cannot be undone.
+                Are you sure you want to delete this {getChannelConfig(deleteTarget).label} channel?
+                This action cannot be undone.
               </p>
               <div className="flex gap-3">
-                <button
-                  onClick={() => setDeleteTarget(null)}
-                  className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors"
-                >
+                <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors">
                   Cancel
                 </button>
                 <button

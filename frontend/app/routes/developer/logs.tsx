@@ -91,8 +91,8 @@ function DeveloperLogs() {
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-white">Delivery Logs</h1>
-          <p className="text-sm text-neutral-400 mt-1">
+          <h1 className="text-xl md:text-2xl font-bold text-white">Delivery Logs</h1>
+          <p className="text-xs md:text-sm text-neutral-400 mt-1">
             Inspect webhook delivery attempts and their responses
           </p>
         </div>
