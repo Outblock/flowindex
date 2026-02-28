@@ -38,7 +38,8 @@ function isUrlAllowed(url: string): boolean {
 }
 
 export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
+  const { messages, thinking }: { messages: UIMessage[]; thinking?: boolean } =
+    await req.json();
 
   const [mcpClient, cadenceMcp] = await Promise.all([
     createMCPClient({ transport: { type: "http", url: MCP_URL } }),
@@ -151,6 +152,15 @@ export async function POST(req: Request) {
         },
       }),
     },
+    ...(thinking
+      ? {
+          providerOptions: {
+            anthropic: {
+              thinking: { type: "enabled" as const, budgetTokens: 10000 },
+            },
+          },
+        }
+      : {}),
     stopWhen: stepCountIs(15),
     onFinish: async () => {
       await Promise.all([mcpClient.close(), cadenceMcp.close()]);

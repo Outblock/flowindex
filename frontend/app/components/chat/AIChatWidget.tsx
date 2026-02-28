@@ -774,6 +774,22 @@ function ChatMessage({ message }: { message: UIMessage }) {
               );
             }
 
+            if (part.type === 'reasoning' || (part.type as string) === 'thinking') {
+              const text = (part as any).text || (part as any).reasoning || '';
+              if (!text.trim()) return null;
+              return (
+                <details key={i} className="my-1 group">
+                  <summary className="flex items-center gap-1.5 cursor-pointer text-[10px] text-amber-500/70 uppercase tracking-widest font-bold hover:text-amber-500 select-none">
+                    <Sparkles size={9} />
+                    Thinking
+                  </summary>
+                  <div className="mt-1 pl-3 border-l-2 border-amber-500/20 text-[11px] text-zinc-400 leading-relaxed whitespace-pre-wrap">
+                    {text}
+                  </div>
+                </details>
+              );
+            }
+
             if (part.type === 'tool-invocation' || (part.type as string) === 'dynamic-tool' || (part.type as string).startsWith('tool-')) {
               const toolPart = part as any;
               const name = toolPart.toolName ?? toolPart.type?.split('-').slice(1).join('-') ?? '';
@@ -843,6 +859,7 @@ const DEFAULT_WIDTH = 480;
 export default function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
+  const [thinkMode, setThinkMode] = useState(false);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [mobileHeight, setMobileHeight] = useState<number | null>(null);
   const isDragging = useRef(false);
@@ -934,15 +951,24 @@ export default function AIChatWidget() {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Custom fetch that strips the 'user-agent' header added by ai-sdk.
-  // Safari/WebKit blocks cross-origin requests with custom User-Agent headers
-  // when the server doesn't include 'User-Agent' in Access-Control-Allow-Headers.
+  // Custom fetch: strips user-agent header (Safari CORS workaround) and injects thinking flag.
   // See: https://github.com/vercel/ai/issues/9256
+  const thinkModeRef = useRef(thinkMode);
+  thinkModeRef.current = thinkMode;
+
   const safeFetch = useCallback(async (url: RequestInfo | URL, init?: RequestInit) => {
     if (init?.headers) {
       const headers = new Headers(init.headers);
       headers.delete('user-agent');
       init = { ...init, headers };
+    }
+    // Inject thinking flag into the request body
+    if (init?.body && thinkModeRef.current) {
+      try {
+        const parsed = JSON.parse(init.body as string);
+        parsed.thinking = true;
+        init = { ...init, body: JSON.stringify(parsed) };
+      } catch { /* not JSON, skip */ }
     }
     return globalThis.fetch(url, init);
   }, []);
@@ -1266,10 +1292,10 @@ export default function AIChatWidget() {
                       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
                     }}
                     placeholder={attachments.length > 0 ? "Add a message or send..." : "Ask a question..."}
-                    rows={1}
+                    rows={2}
                     enterKeyHint="send"
                     className="w-full resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm pl-3 pr-[4.5rem] py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
-                    style={{ maxHeight: '80px' }}
+                    style={{ maxHeight: '120px' }}
                   />
 
                   {/* Paperclip + Send buttons */}
@@ -1303,6 +1329,27 @@ export default function AIChatWidget() {
                     )}
                   </div>
                 </form>
+
+                {/* Think mode toggle */}
+                <div className="flex items-center justify-between mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setThinkMode(v => !v)}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
+                      thinkMode
+                        ? 'bg-amber-500/10 border border-amber-500/30 text-amber-500'
+                        : 'text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10'
+                    }`}
+                    title={thinkMode ? 'Extended thinking enabled' : 'Enable extended thinking'}
+                  >
+                    <Sparkles size={10} />
+                    Think
+                    {thinkMode && <span className="text-[8px] opacity-60">ON</span>}
+                  </button>
+                  <span className="text-[9px] text-zinc-400">
+                    Shift+Enter for new line
+                  </span>
+                </div>
               </div>
             </motion.div>
           </>
