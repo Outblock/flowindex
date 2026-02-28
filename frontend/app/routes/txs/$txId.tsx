@@ -1093,36 +1093,107 @@ function TransactionDetail() {
                                         </p>
                                     )}
 
-                                    {parsed.codeSnippet && parsed.codeSnippet.length > 0 && (
-                                        <div className="bg-zinc-900 border border-zinc-700 rounded-sm overflow-hidden mb-4">
-                                            <div className="px-3 py-1.5 border-b border-zinc-700 flex items-center gap-2">
-                                                <Braces className="h-3 w-3 text-zinc-500" />
-                                                <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Error Context</span>
+                                    {/* Error Context: show surrounding lines from the actual tx script */}
+                                    {(() => {
+                                        const errLine = parsed.scriptErrorLine;
+                                        const scriptText = transaction.script;
+                                        // Use script lines if available, fall back to parsed snippet
+                                        const contextLines: { lineNum: number; code: string; isError: boolean }[] = [];
+                                        if (errLine && scriptText) {
+                                            const allLines = scriptText.split('\n');
+                                            const start = Math.max(0, errLine - 6);
+                                            const end = Math.min(allLines.length, errLine + 5);
+                                            for (let i = start; i < end; i++) {
+                                                contextLines.push({ lineNum: i + 1, code: allLines[i], isError: i + 1 === errLine });
+                                            }
+                                        } else if (parsed.codeSnippet && parsed.codeSnippet.length > 0) {
+                                            contextLines.push(...parsed.codeSnippet);
+                                        }
+                                        if (contextLines.length === 0) return null;
+                                        const maxLineNum = contextLines[contextLines.length - 1]?.lineNum || 0;
+                                        const gutterWidth = String(maxLineNum).length * 8 + 16;
+                                        return (
+                                            <div className="bg-zinc-900 border border-zinc-700 rounded-sm overflow-hidden mb-4">
+                                                <div className="px-3 py-1.5 border-b border-zinc-700 flex items-center gap-2">
+                                                    <Braces className="h-3 w-3 text-zinc-500" />
+                                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Error Context</span>
+                                                    {errLine && (
+                                                        <span className="text-[10px] text-zinc-600 font-mono">Line {errLine}</span>
+                                                    )}
+                                                </div>
+                                                <div className="font-mono text-[11px] leading-[1.7] overflow-x-auto">
+                                                    {contextLines.map((line, i) => (
+                                                        <div key={i}>
+                                                            <div className={`flex ${line.isError ? 'bg-red-500/20 border-l-3 border-red-500' : ''}`}>
+                                                                <span
+                                                                    className={`select-none text-right pr-3 pl-2 flex-shrink-0 ${line.isError ? 'bg-red-500/30 text-red-400' : 'text-zinc-600'}`}
+                                                                    style={{ minWidth: gutterWidth }}
+                                                                >
+                                                                    {line.lineNum}
+                                                                </span>
+                                                                <span className={`pl-3 ${line.isError ? 'text-red-200 font-bold' : 'text-zinc-300'}`}>
+                                                                    {line.code}
+                                                                </span>
+                                                            </div>
+                                                            {/* Inline error annotation below the error line */}
+                                                            {line.isError && parsed.summary && (
+                                                                <div className="flex">
+                                                                    <span className="flex-shrink-0 bg-red-500/10" style={{ minWidth: gutterWidth }} />
+                                                                    <div className="pl-3 py-1 flex items-center gap-1.5">
+                                                                        <AlertCircle className="h-3 w-3 text-red-400 flex-shrink-0" />
+                                                                        <span className="text-[10px] text-red-400 italic">{parsed.summary}</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                            <div className="p-3 font-mono text-[11px] leading-relaxed overflow-x-auto">
-                                                {parsed.codeSnippet.map((line, i) => (
-                                                    <div
-                                                        key={i}
-                                                        className={`flex ${line.isError ? 'bg-red-500/15 border-l-2 border-red-500 -ml-3 pl-[10px]' : ''}`}
-                                                    >
-                                                        <span className="text-zinc-600 select-none w-10 text-right pr-3 flex-shrink-0">{line.lineNum}</span>
-                                                        <span className={line.isError ? 'text-red-300' : 'text-zinc-300'}>{line.code}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })()}
 
                                     {parsed.callStack.length > 0 && (
                                         <div className="mb-3">
                                             <span className="text-[10px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-bold block mb-1.5">Call Stack</span>
                                             <div className="space-y-0.5">
-                                                {parsed.callStack.map((entry, i) => (
-                                                    <div key={i} className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
-                                                        <span className="text-zinc-400 dark:text-zinc-600">→</span>
-                                                        <span>{entry.location}:{entry.line}:{entry.col}</span>
-                                                    </div>
-                                                ))}
+                                                {parsed.callStack.map((entry, i) => {
+                                                    const isContract = entry.location.includes('.');
+                                                    const fullText = `${entry.location}:${entry.line}:${entry.col}`;
+                                                    if (isContract) {
+                                                        // Link to contract detail page with line/col
+                                                        const contractId = `A.${entry.location.replace(/\./g, '.')}`;
+                                                        return (
+                                                            <div key={i} className="flex items-center gap-1.5 text-[11px] font-mono">
+                                                                <span className="text-zinc-400 dark:text-zinc-600">→</span>
+                                                                <Link
+                                                                    to={`/contracts/${contractId}` as any}
+                                                                    search={{ line: entry.line, col: entry.col }}
+                                                                    className="text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                                                >
+                                                                    {fullText}
+                                                                </Link>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    // Transaction script reference — scroll to script tab
+                                                    return (
+                                                        <div key={i} className="flex items-center gap-1.5 text-[11px] font-mono">
+                                                            <span className="text-zinc-400 dark:text-zinc-600">→</span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    switchTab('script');
+                                                                    setTimeout(() => {
+                                                                        const el = document.querySelector(`[data-error-line="${entry.line}"]`);
+                                                                        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                    }, 100);
+                                                                }}
+                                                                className="text-nothing-green-dark dark:text-nothing-green hover:underline text-left"
+                                                            >
+                                                                {fullText} <span className="text-zinc-500 text-[9px]">(this script)</span>
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
@@ -1574,9 +1645,23 @@ function TransactionDetail() {
 
                                 {/* Script */}
                                 <div className="font-mono">
-                                    <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <Braces className="h-4 w-4" /> Cadence Script
-                                    </h3>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h3 className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                                            <Braces className="h-4 w-4" /> Cadence Script
+                                        </h3>
+                                        {parsedError?.scriptErrorLine && transaction.script && (
+                                            <button
+                                                onClick={() => {
+                                                    const el = document.getElementById('script-error-line');
+                                                    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }}
+                                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"
+                                            >
+                                                <AlertCircle size={10} />
+                                                Jump to Error (Line {parsedError.scriptErrorLine})
+                                            </button>
+                                        )}
+                                    </div>
                                     {transaction.script ? (
                                         <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden text-[10px]">
                                             <SyntaxHighlighter
@@ -1594,6 +1679,8 @@ function TransactionDetail() {
                                                 lineProps={(lineNumber: number) => {
                                                     if (errorLines.has(lineNumber)) {
                                                         return {
+                                                            id: 'script-error-line',
+                                                            'data-error-line': String(lineNumber),
                                                             style: {
                                                                 backgroundColor: 'rgba(239,68,68,0.15)',
                                                                 borderLeft: '3px solid #ef4444',
@@ -1608,6 +1695,15 @@ function TransactionDetail() {
                                             >
                                                 {transaction.script}
                                             </SyntaxHighlighter>
+                                            {/* Inline error annotation rendered outside SyntaxHighlighter, positioned after the code */}
+                                            {parsedError?.scriptErrorLine && parsedError?.summary && (
+                                                <div className="border-t border-red-500/20 bg-red-500/5 px-4 py-2 flex items-center gap-2">
+                                                    <AlertCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                                                    <span className="text-[11px] text-red-500 dark:text-red-400 font-mono">
+                                                        Line {parsedError.scriptErrorLine}: {parsedError.summary}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-24 text-zinc-600 border border-zinc-200 dark:border-white/5 border-dashed rounded-sm">
