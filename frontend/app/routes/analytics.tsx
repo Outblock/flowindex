@@ -1,4 +1,4 @@
-import { createFileRoute, useSearch, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useSearch, useNavigate, Link } from '@tanstack/react-router'
 import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
 import type { Layout } from 'react-grid-layout'
 import {
@@ -28,8 +28,14 @@ import {
   fetchAnalyticsDailyModule,
   fetchAnalyticsTransfersDaily,
   fetchNetworkStats,
+  fetchBigTransfers,
+  fetchTopContracts,
+  fetchTokenVolume,
   ensureHeyApiConfigured,
   getBaseURL,
+  type BigTransfer,
+  type TopContract,
+  type TokenVolume as TokenVolumeType,
 } from '../api/heyapi'
 import { BigTransfersFull } from '../components/BigTransfersCard'
 import { CARD_DEFS, KPI_DEFS, DEFAULT_KPI_LAYOUTS } from './analytics-layout'
@@ -499,6 +505,12 @@ function AnalyticsPage() {
   const [epochLoading, setEpochLoading] = useState(true)
   const [netStatsLoading, setNetStatsLoading] = useState(true)
   const [totalsLoading, setTotalsLoading] = useState(true)
+  const [whaleTransfers, setWhaleTransfers] = useState<BigTransfer[] | null>(null)
+  const [whaleLoading, setWhaleLoading] = useState(true)
+  const [topContracts, setTopContracts] = useState<TopContract[] | null>(null)
+  const [topContractsLoading, setTopContractsLoading] = useState(true)
+  const [tokenVolume, setTokenVolume] = useState<TokenVolumeType[] | null>(null)
+  const [tokenVolumeLoading, setTokenVolumeLoading] = useState(true)
 
   // Each data source loads independently so fast ones render immediately
   useEffect(() => {
@@ -604,6 +616,24 @@ function AnalyticsPage() {
           const item = Array.isArray(d) ? d[0] : d
           if (item) setTotals(item as Totals)
         }).catch(() => {}).finally(() => { if (!cancelled) setTotalsLoading(false) })
+
+      fetchBigTransfers({ limit: 8 }).then((data) => {
+        if (cancelled) return
+        setWhaleTransfers(data)
+      }).catch(() => { if (!cancelled) setWhaleTransfers([]) })
+        .finally(() => { if (!cancelled) setWhaleLoading(false) })
+
+      fetchTopContracts({ limit: 10 }).then((data) => {
+        if (cancelled) return
+        setTopContracts(data)
+      }).catch(() => { if (!cancelled) setTopContracts([]) })
+        .finally(() => { if (!cancelled) setTopContractsLoading(false) })
+
+      fetchTokenVolume({ limit: 10 }).then((data) => {
+        if (cancelled) return
+        setTokenVolume(data)
+      }).catch(() => { if (!cancelled) setTokenVolume([]) })
+        .finally(() => { if (!cancelled) setTokenVolumeLoading(false) })
     })
     return () => { cancelled = true }
   }, [])
@@ -827,8 +857,27 @@ function AnalyticsPage() {
       }
     })())
 
+    m.set('kpi-whale-txs', {
+      value: whaleTransfers ? fmtComma(whaleTransfers.length) : '--',
+      numericValue: whaleTransfers?.length,
+      kpiFormat: 'comma' as KpiFormat,
+      loading: whaleLoading,
+    })
+    m.set('kpi-total-staked', {
+      value: netStats ? fmtNum(netStats.total_staked) : '--',
+      numericValue: netStats?.total_staked,
+      kpiFormat: 'compact' as KpiFormat,
+      loading: netStatsLoading,
+    })
+    m.set('kpi-node-count', {
+      value: netStats ? fmtComma(netStats.active_nodes) : '--',
+      numericValue: netStats?.active_nodes,
+      kpiFormat: 'comma' as KpiFormat,
+      loading: netStatsLoading,
+    })
+
     return m
-  }, [totals, latest, prev, netStats, totalsLoading, netStatsLoading])
+  }, [totals, latest, prev, netStats, totalsLoading, netStatsLoading, whaleTransfers, whaleLoading])
 
   /* ── chart map — maps card key to chart JSX ── */
 
@@ -1191,8 +1240,109 @@ function AnalyticsPage() {
       ),
     })
 
+    m.set('whale-recent', {
+      loading: whaleLoading,
+      empty: !whaleTransfers || whaleTransfers.length === 0,
+      node: (
+        <div className="flex flex-col h-full overflow-y-auto">
+          {(whaleTransfers ?? []).map((tx, i) => (
+            <Link
+              key={`${tx.tx_id}-${i}`}
+              to={`/tx/0x${tx.tx_id}` as any}
+              className="flex items-center gap-2 px-3 py-2 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors border-b border-zinc-100 dark:border-white/5 last:border-b-0"
+            >
+              {tx.token_logo ? (
+                <img src={tx.token_logo} alt={tx.token_symbol} className="w-5 h-5 rounded-full flex-shrink-0" />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-nothing-green/20 text-nothing-green text-[9px] font-bold font-mono flex items-center justify-center flex-shrink-0">
+                  {(tx.token_symbol || '?').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] font-mono text-zinc-900 dark:text-white font-bold truncate">
+                    {fmtNum(parseFloat(tx.amount) || 0)} {tx.token_symbol}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-nothing-green-dark dark:text-nothing-green">
+                    ${fmtNum(tx.usd_value)}
+                  </span>
+                </div>
+              </div>
+              <span className={`text-[8px] font-mono font-bold uppercase px-1 py-0.5 rounded-sm ${
+                tx.type === 'mint' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                tx.type === 'burn' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                tx.type === 'swap' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                tx.type === 'bridge' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-gray-400'
+              }`}>
+                {tx.type}
+              </span>
+            </Link>
+          ))}
+        </div>
+      ),
+    })
+
+    m.set('top-contracts', {
+      loading: topContractsLoading,
+      empty: !topContracts || topContracts.length === 0,
+      node: (
+        <div className="flex flex-col h-full overflow-y-auto text-[11px] font-mono">
+          <div className="flex items-center gap-2 px-3 py-1.5 text-[9px] uppercase tracking-wider text-zinc-400 dark:text-gray-500 border-b border-zinc-100 dark:border-white/5">
+            <span className="flex-1">Contract</span>
+            <span className="w-16 text-right">Txs</span>
+            <span className="w-16 text-right">Callers</span>
+          </div>
+          {(topContracts ?? []).map((c, i) => (
+            <Link
+              key={c.contract_identifier}
+              to={`/accounts/${c.address.replace(/^0x/, '')}` as any}
+              className="flex items-center gap-2 px-3 py-2 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors border-b border-zinc-100 dark:border-white/5 last:border-b-0"
+            >
+              <span className="w-4 text-zinc-400 dark:text-gray-500 text-[9px]">{i + 1}</span>
+              <span className="flex-1 truncate text-zinc-900 dark:text-white">{c.contract_name}</span>
+              <span className="w-16 text-right text-zinc-600 dark:text-gray-300">{fmtNum(c.tx_count)}</span>
+              <span className="w-16 text-right text-zinc-400 dark:text-gray-500">{fmtNum(c.unique_callers)}</span>
+            </Link>
+          ))}
+        </div>
+      ),
+    })
+
+    m.set('token-volume', {
+      loading: tokenVolumeLoading,
+      empty: !tokenVolume || tokenVolume.length === 0,
+      node: (
+        <div className="flex flex-col h-full overflow-y-auto text-[11px] font-mono">
+          <div className="flex items-center gap-2 px-3 py-1.5 text-[9px] uppercase tracking-wider text-zinc-400 dark:text-gray-500 border-b border-zinc-100 dark:border-white/5">
+            <span className="flex-1">Token</span>
+            <span className="w-20 text-right">Volume</span>
+            <span className="w-16 text-right">Txs</span>
+          </div>
+          {(tokenVolume ?? []).map((tv, i) => (
+            <div
+              key={tv.symbol + tv.contract_name}
+              className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100 dark:border-white/5 last:border-b-0"
+            >
+              <span className="w-4 text-zinc-400 dark:text-gray-500 text-[9px]">{i + 1}</span>
+              {tv.logo ? (
+                <img src={tv.logo} alt={tv.symbol} className="w-4 h-4 rounded-full" />
+              ) : (
+                <div className="w-4 h-4 rounded-full bg-nothing-green/20 text-nothing-green text-[8px] font-bold flex items-center justify-center">
+                  {(tv.symbol || '?').charAt(0)}
+                </div>
+              )}
+              <span className="flex-1 truncate text-zinc-900 dark:text-white font-bold">{tv.symbol}</span>
+              <span className="w-20 text-right text-nothing-green-dark dark:text-nothing-green font-bold">${fmtNum(tv.usd_volume)}</span>
+              <span className="w-16 text-right text-zinc-400 dark:text-gray-500">{fmtNum(tv.transfer_count)}</span>
+            </div>
+          ))}
+        </div>
+      ),
+    })
+
     return m
-  }, [visibleDaily, visibleTransfers, visiblePrice, evmPctData, epochData, dailyLoading, transferLoading, priceLoading, epochLoading, gridStroke])
+  }, [visibleDaily, visibleTransfers, visiblePrice, evmPctData, epochData, dailyLoading, transferLoading, priceLoading, epochLoading, gridStroke, whaleTransfers, whaleLoading, topContracts, topContractsLoading, tokenVolume, tokenVolumeLoading])
 
   /* ── filter visible cards by tab + conditional visibility ── */
 
