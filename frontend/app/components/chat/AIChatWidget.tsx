@@ -1298,10 +1298,9 @@ export default function AIChatWidget() {
 
                 <form
                   onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
-                  className="flex gap-2"
                 >
-                  {/* Left: textarea + toggles */}
-                  <div className="flex-1 min-w-0">
+                  {/* Textarea + send button row */}
+                  <div className="flex gap-2">
                     <textarea
                       ref={inputRef}
                       value={input}
@@ -1314,12 +1313,33 @@ export default function AIChatWidget() {
                       placeholder={attachments.length > 0 ? "Add a message or send..." : "Ask anything..."}
                       rows={2}
                       enterKeyHint="send"
-                      className="w-full resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm px-3 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
+                      className="flex-1 min-w-0 resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm px-3 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
                       style={{ maxHeight: '120px' }}
                     />
+                    {isStreaming ? (
+                      <button
+                        type="button"
+                        onClick={() => stop()}
+                        className="self-stretch w-10 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors shrink-0"
+                        title="Stop"
+                      >
+                        <X size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={!input.trim() && attachments.length === 0}
+                        className="self-stretch w-10 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
+                        title="Send"
+                      >
+                        <Send size={14} />
+                      </button>
+                    )}
+                  </div>
 
-                    {/* Bottom row: attach + toggles */}
-                    <div className="flex items-center gap-1.5 mt-1.5">
+                  {/* Bottom row: attach + toggles */}
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <div className="relative group/attach">
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
@@ -1328,6 +1348,12 @@ export default function AIChatWidget() {
                       >
                         <Plus size={13} />
                       </button>
+                      <div className="absolute bottom-full left-0 mb-1 hidden group-hover/attach:block z-50 pointer-events-none">
+                        <div className="bg-zinc-800 dark:bg-zinc-700 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap">
+                          Upload images or PDFs
+                        </div>
+                      </div>
+                    </div>
                       <button
                         type="button"
                         onClick={() => setThinkMode(v => !v)}
@@ -1406,28 +1432,6 @@ export default function AIChatWidget() {
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Right: tall send/stop button */}
-                  {isStreaming ? (
-                    <button
-                      type="button"
-                      onClick={() => stop()}
-                      className="self-stretch w-11 flex items-center justify-center bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 rounded-sm hover:bg-zinc-300 dark:hover:bg-white/20 transition-colors shrink-0"
-                      title="Stop"
-                    >
-                      <X size={16} />
-                    </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={!input.trim() && attachments.length === 0}
-                      className="self-stretch w-11 flex items-center justify-center bg-nothing-green text-black rounded-sm hover:bg-nothing-green/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
-                      title="Send"
-                    >
-                      <Send size={16} />
-                    </button>
-                  )}
                 </form>
               </div>
             </motion.div>
