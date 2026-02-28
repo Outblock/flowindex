@@ -73,10 +73,19 @@ func (r *Repository) AdminListScriptTemplates(ctx context.Context, search, categ
 	argN := 1
 
 	if search != "" {
-		query += fmt.Sprintf(` AND (g.script_hash ILIKE $%d OR g.label ILIKE $%d OR g.category ILIKE $%d OR EXISTS (
-			SELECT 1 FROM raw.scripts s2 WHERE s2.script_hash = g.script_hash AND s2.script_text ILIKE $%d
-		))`, argN, argN, argN, argN)
-		args = append(args, "%"+search+"%")
+		// If the search looks like a hex hash (64 chars), do exact match on script_hash
+		// or normalized_hash for fast PK/index lookup instead of expensive ILIKE + text scan.
+		trimmed := strings.TrimSpace(search)
+		isHexHash := len(trimmed) == 64 && isHex(trimmed)
+		if isHexHash {
+			query += fmt.Sprintf(` AND (g.script_hash = $%d OR g.normalized_hash = $%d)`, argN, argN)
+			args = append(args, trimmed)
+		} else {
+			query += fmt.Sprintf(` AND (g.script_hash ILIKE $%d OR g.label ILIKE $%d OR g.category ILIKE $%d OR EXISTS (
+				SELECT 1 FROM raw.scripts s2 WHERE s2.script_hash = g.script_hash AND s2.script_text ILIKE $%d
+			))`, argN, argN, argN, argN)
+			args = append(args, "%"+search+"%")
+		}
 		argN++
 	}
 	if category != "" {
@@ -466,6 +475,17 @@ func (r *Repository) GetContractDependentCounts(ctx context.Context, identifiers
 		out[id] = cnt
 	}
 	return out, rows.Err()
+}
+
+// isHex returns true if every character in s is a hex digit [0-9a-fA-F].
+func isHex(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 func nilIfEmpty(s string) interface{} {
