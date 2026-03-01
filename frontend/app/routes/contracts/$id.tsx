@@ -34,7 +34,7 @@ const ContractNode = ({ data }: { data: { label: string; identifier: string; isC
             <div className="text-center min-w-0">
                 <div className="flex items-center justify-center gap-1" style={{ fontSize: 11, fontWeight: data.isCurrent ? 700 : 500 }}>
                     <span className="truncate">{data.label}</span>
-                    {data.isVerified && <Sparkles className="w-2.5 h-2.5 text-green-500 flex-shrink-0" />}
+                    {data.isVerified && <VerifiedBadge size={11} />}
                     {data.kind && <span style={{ fontSize: 7, opacity: 0.5, fontWeight: 600 }}>{data.kind}</span>}
                 </div>
                 <div style={{ fontSize: 8, opacity: 0.5, marginTop: 1, fontFamily: 'monospace' }}>{shortAddr}</div>
