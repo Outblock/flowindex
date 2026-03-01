@@ -343,7 +343,23 @@ jobs:
 
           echo "DB: $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME"
 
-          # 1) pg-meta (port 8085)
+          # Generate Supabase JWT keys from SUPABASE_JWT_SECRET
+          if [ -z "${SUPABASE_ANON_KEY:-}" ] || [ "${SUPABASE_ANON_KEY:-}" = "anon" ]; then
+            eval $(python3 -c "
+import json,hmac,hashlib,base64
+def b64url(d): return base64.urlsafe_b64encode(d).rstrip(b'=').decode()
+s='$SUPABASE_JWT_SECRET'
+h=b64url(json.dumps({'alg':'HS256','typ':'JWT'}).encode())
+for role in ['anon','service_role']:
+  p=b64url(json.dumps({'role':role,'iss':'supabase','iat':1672531200,'exp':1988150400}).encode())
+  sig=hmac.new(s.encode(),(h+'.'+p).encode(),hashlib.sha256).digest()
+  name='SUPABASE_ANON_KEY' if role=='anon' else 'SUPABASE_SERVICE_KEY'
+  print(f'export {name}={h}.{p}.{b64url(sig)}')
+")
+            echo "Generated JWT keys from SUPABASE_JWT_SECRET"
+          fi
+
+          # 1) pg-meta (port 8086)
           docker stop supabase-meta 2>/dev/null || true; docker rm supabase-meta 2>/dev/null || true
           docker run -d --restart=always --name supabase-meta \
             --network=host \
