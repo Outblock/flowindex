@@ -24,6 +24,7 @@ services:
     environment:
       - DB_URL=postgres://flowscan:flowscan-local@db:5432/flowscan?sslmode=disable
       - FLOW_ACCESS_NODE=access-001.mainnet28.nodes.onflow.org:9000
+      - FLOW_ACCESS_NODES=access-001.mainnet28.nodes.onflow.org:9000,access.mainnet.nodes.onflow.org:9000
       - PORT=8080
       - START_BLOCK=140900000
       - LATEST_WORKER_COUNT=1
