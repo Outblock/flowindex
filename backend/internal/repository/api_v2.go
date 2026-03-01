@@ -778,7 +778,7 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 		arg++
 	}
 	if f.NameSearch != "" {
-		clauses = append(clauses, fmt.Sprintf("name ILIKE $%d", arg))
+		clauses = append(clauses, fmt.Sprintf("sc.name ILIKE $%d", arg))
 		args = append(args, "%"+f.NameSearch+"%")
 		arg++
 	}
