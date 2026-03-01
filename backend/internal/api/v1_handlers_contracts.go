@@ -471,19 +471,28 @@ func (s *Server) handleGetScriptText(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseContractImports extracts import statements from Cadence source code.
+// Handles both `import A from 0xADDR` and `import A, B from 0xADDR`.
 func parseContractImports(code string) []struct{ Address, Name string } {
-	re := regexp.MustCompile(`import\s+(\w+)\s+from\s+0x([0-9a-fA-F]+)`)
+	// Match: import <names> from 0x<hex>
+	re := regexp.MustCompile(`import\s+([\w,\s]+)\s+from\s+0x([0-9a-fA-F]+)`)
 	matches := re.FindAllStringSubmatch(code, -1)
 	seen := make(map[string]bool)
 	var out []struct{ Address, Name string }
 	for _, m := range matches {
 		addr := strings.ToLower(m[2])
-		key := addr + "." + m[1]
-		if seen[key] {
-			continue
+		// Split comma-separated names: "A, B" -> ["A", "B"]
+		for _, part := range strings.Split(m[1], ",") {
+			name := strings.TrimSpace(part)
+			if name == "" {
+				continue
+			}
+			key := addr + "." + name
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, struct{ Address, Name string }{addr, name})
 		}
-		seen[key] = true
-		out = append(out, struct{ Address, Name string }{addr, m[1]})
 	}
 	return out
 }
@@ -511,9 +520,14 @@ func (s *Server) handleContractDependencies(w http.ResponseWriter, r *http.Reque
 
 	// ---------- Recursive import graph ----------
 	type graphNode struct {
-		Identifier string `json:"identifier"`
-		Address    string `json:"address"`
-		Name       string `json:"name"`
+		Identifier  string `json:"identifier"`
+		Address     string `json:"address"`
+		Name        string `json:"name"`
+		IsVerified  bool   `json:"is_verified,omitempty"`
+		Kind        string `json:"kind,omitempty"`
+		TokenLogo   string `json:"token_logo,omitempty"`
+		TokenName   string `json:"token_name,omitempty"`
+		TokenSymbol string `json:"token_symbol,omitempty"`
 	}
 	type graphEdge struct {
 		Source string `json:"source"` // identifier of importer
@@ -524,6 +538,16 @@ func (s *Server) handleContractDependencies(w http.ResponseWriter, r *http.Reque
 	nodeSet := map[string]graphNode{rootID: {Identifier: rootID, Address: formatAddressV1(address), Name: name}}
 	var edgeList []graphEdge
 	edgeSet := make(map[string]bool)
+
+	// Helper to enrich a node with contract metadata
+	enrichNode := func(n graphNode, c models.SmartContract) graphNode {
+		n.IsVerified = c.IsVerified
+		n.Kind = c.Kind
+		n.TokenLogo = c.TokenLogo
+		n.TokenName = c.TokenName
+		n.TokenSymbol = c.TokenSymbol
+		return n
+	}
 
 	// BFS to resolve imports recursively
 	queue := []struct {
@@ -546,6 +570,10 @@ func (s *Server) handleContractDependencies(w http.ResponseWriter, r *http.Reque
 		if err != nil || len(contracts) == 0 || contracts[0].Code == "" {
 			continue
 		}
+		// Enrich current node with metadata
+		if n, ok := nodeSet[curID]; ok {
+			nodeSet[curID] = enrichNode(n, contracts[0])
+		}
 		for _, imp := range parseContractImports(contracts[0].Code) {
 			impID := "A." + imp.Address + "." + imp.Name
 			if _, exists := nodeSet[impID]; !exists {
@@ -559,6 +587,23 @@ func (s *Server) handleContractDependencies(w http.ResponseWriter, r *http.Reque
 			if !edgeSet[eKey] {
 				edgeSet[eKey] = true
 				edgeList = append(edgeList, graphEdge{Source: curID, Target: impID})
+			}
+		}
+	}
+
+	// Enrich leaf nodes (depth == maxDepth, not yet enriched) with metadata
+	for id, n := range nodeSet {
+		if n.Kind == "" && !n.IsVerified && id != rootID {
+			parts := strings.SplitN(strings.TrimPrefix(id, "A."), ".", 2)
+			if len(parts) == 2 {
+				cs, err := s.repo.ListContractsFiltered(r.Context(), repository.ContractListFilter{
+					Address: parts[0],
+					Name:    parts[1],
+					Limit:   1,
+				})
+				if err == nil && len(cs) > 0 {
+					nodeSet[id] = enrichNode(n, cs[0])
+				}
 			}
 		}
 	}

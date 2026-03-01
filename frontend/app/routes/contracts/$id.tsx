@@ -16,9 +16,34 @@ import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { formatShort } from '../../components/account/accountUtils';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { diffLines, type Change } from 'diff';
-import ReactFlow, { Background, Controls, useNodesState, useEdgesState, MarkerType, Position } from 'reactflow';
+import ReactFlow, { Background, Controls, useNodesState, useEdgesState, MarkerType, Position, Handle } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
+
+// Custom node that shows name + identifier + metadata
+const ContractNode = ({ data }: { data: { label: string; identifier: string; isCurrent: boolean; isVerified?: boolean; kind?: string; tokenLogo?: string; tokenSymbol?: string } }) => {
+    const parts = data.identifier.split('.');
+    const addr = parts.length >= 2 ? parts[1] : '';
+    const shortAddr = addr.length > 8 ? `0x${addr.slice(0, 4)}...${addr.slice(-4)}` : `0x${addr}`;
+    return (
+        <div className="flex items-center gap-1.5">
+            <Handle type="target" position={Position.Left} style={{ background: 'transparent', border: 'none' }} />
+            {data.tokenLogo && (
+                <img src={data.tokenLogo} alt="" className="w-4 h-4 rounded-full flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            )}
+            <div className="text-center min-w-0">
+                <div className="flex items-center justify-center gap-1" style={{ fontSize: 11, fontWeight: data.isCurrent ? 700 : 500 }}>
+                    <span className="truncate">{data.label}</span>
+                    {data.isVerified && <Sparkles className="w-2.5 h-2.5 text-green-500 flex-shrink-0" />}
+                    {data.kind && <span style={{ fontSize: 7, opacity: 0.5, fontWeight: 600 }}>{data.kind}</span>}
+                </div>
+                <div style={{ fontSize: 8, opacity: 0.5, marginTop: 1, fontFamily: 'monospace' }}>{shortAddr}</div>
+            </div>
+            <Handle type="source" position={Position.Right} style={{ background: 'transparent', border: 'none' }} />
+        </div>
+    );
+};
+const nodeTypes = { contract: ContractNode };
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -1027,7 +1052,7 @@ function DependencyGraph({ contractName, contractIdentifier, imports, dependents
     imports: Array<{ identifier: string; address: string; name: string }>;
     dependents: Array<{ identifier: string; address: string; name: string }>;
     graph?: {
-        nodes: Array<{ identifier: string; address: string; name: string }>;
+        nodes: Array<{ identifier: string; address: string; name: string; is_verified?: boolean; kind?: string; token_logo?: string; token_name?: string; token_symbol?: string }>;
         edges: Array<{ source: string; target: string }>;
         root: string;
     };
@@ -1063,19 +1088,39 @@ function DependencyGraph({ contractName, contractIdentifier, imports, dependents
         g.setGraph({ rankdir: 'LR', nodesep: 40, ranksep: 180, marginx: 40, marginy: 40 });
         g.setDefaultEdgeLabel(() => ({}));
 
-        // Collect all node identifiers
-        const allNodes = new Map<string, { name: string; identifier: string }>();
+        // Collect all node identifiers with metadata
+        type NodeMeta = { name: string; identifier: string; isVerified?: boolean; kind?: string; tokenLogo?: string; tokenSymbol?: string };
+        const allNodes = new Map<string, NodeMeta>();
+
+        // Build a lookup from graph nodes for metadata
+        const graphMeta = new Map<string, typeof graph extends undefined ? never : NonNullable<typeof graph>['nodes'][number]>();
+        if (graph?.nodes) {
+            for (const n of graph.nodes) {
+                graphMeta.set(n.identifier, n);
+            }
+        }
+
+        const metaFor = (id: string, name: string): NodeMeta => {
+            const gn = graphMeta.get(id);
+            return {
+                name,
+                identifier: id,
+                isVerified: gn?.is_verified,
+                kind: gn?.kind,
+                tokenLogo: gn?.token_logo,
+                tokenSymbol: gn?.token_symbol,
+            };
+        };
 
         // Add root node
-        allNodes.set(rootID, { name: contractName, identifier: contractIdentifier });
+        allNodes.set(rootID, metaFor(rootID, contractName));
 
         // Add graph import nodes + edges
         if (graph?.nodes) {
             for (const n of graph.nodes) {
-                allNodes.set(n.identifier, { name: n.name, identifier: n.identifier });
+                allNodes.set(n.identifier, metaFor(n.identifier, n.name));
             }
         } else {
-            // Fallback: flat imports only
             for (const imp of imports) {
                 allNodes.set(imp.identifier, { name: imp.name, identifier: imp.identifier });
             }
@@ -1083,13 +1128,16 @@ function DependencyGraph({ contractName, contractIdentifier, imports, dependents
 
         // Add dependent nodes
         for (const dep of dependents) {
-            allNodes.set(dep.identifier, { name: dep.name, identifier: dep.identifier });
+            if (!allNodes.has(dep.identifier)) {
+                allNodes.set(dep.identifier, { name: dep.name, identifier: dep.identifier });
+            }
         }
 
         // Estimate node widths for dagre
         for (const [id, n] of allNodes) {
-            const w = Math.max(100, n.name.length * 7 + 32);
-            g.setNode(id, { width: w, height: 36 });
+            const hasLogo = n.tokenLogo ? 20 : 0;
+            const w = Math.max(120, n.name.length * 7 + 32 + hasLogo);
+            g.setNode(id, { width: w, height: 46 });
         }
 
         // Add edges: import edges (source imports target, arrow: source -> target means "source uses target")
@@ -1133,20 +1181,17 @@ function DependencyGraph({ contractName, contractIdentifier, imports, dependents
             const isCurrent = id === rootID;
             rfNodes.push({
                 id,
+                type: 'contract',
                 position: { x: pos.x - pos.width / 2, y: pos.y - pos.height / 2 },
-                data: { label: data.name, identifier: data.identifier, isCurrent },
-                sourcePosition: Position.Right,
-                targetPosition: Position.Left,
+                data: { label: data.name, identifier: data.identifier, isCurrent, isVerified: data.isVerified, kind: data.kind, tokenLogo: data.tokenLogo, tokenSymbol: data.tokenSymbol },
                 style: isCurrent ? {
                     background: isDark ? '#1a2e1a' : '#f0fdf4',
                     border: `2px solid ${green}`,
                     borderRadius: 4,
-                    padding: '8px 16px',
-                    fontSize: 11,
+                    padding: '8px 12px',
                     fontFamily: 'monospace',
                     color: isDark ? '#fff' : '#000',
-                    fontWeight: 700,
-                } : baseNodeStyle,
+                } : { ...baseNodeStyle, padding: '6px 12px' },
             });
         }
 
@@ -1218,6 +1263,7 @@ function DependencyGraph({ contractName, contractIdentifier, imports, dependents
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
+                nodeTypes={nodeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={onNodeClick}
