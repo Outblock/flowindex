@@ -187,12 +187,12 @@ jobs:
       - name: Update Caddy config for TLS
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
-            echo '=== Locating Caddy ==='
-            which caddy 2>/dev/null || true
-            pgrep -a caddy 2>/dev/null || true
-            docker ps --filter name=caddy --format '{{.Names}} {{.Status}}' 2>/dev/null || true
-            find /etc/caddy /home -name Caddyfile -o -name '*.Caddyfile' 2>/dev/null || true
-            ls -la /etc/caddy/ 2>/dev/null || echo '/etc/caddy does not exist'
+            cat > /tmp/Caddyfile <<'CADDYEOF'
+          $(cat frontend/Caddyfile)
+          CADDYEOF
+            docker cp /tmp/Caddyfile caddy:/etc/caddy/Caddyfile
+            docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+            rm /tmp/Caddyfile
           "
 
   build-docs:
