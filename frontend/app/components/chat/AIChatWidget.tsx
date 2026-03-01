@@ -977,6 +977,11 @@ function getStoredMode(): ChatMode {
 export default function AIChatWidget() {
   const routerState = useRouterState();
   const hideWidget = routerState.location.pathname === '/playground';
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -1237,6 +1242,8 @@ export default function AIChatWidget() {
 
   // Don't render during SSR
   if (import.meta.env.SSR) return null;
+  // Keep first client render aligned with SSR to avoid hydration mismatch.
+  if (!mounted) return null;
   if (hideWidget) return null;
 
   return (
