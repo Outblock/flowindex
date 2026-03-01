@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Home, Box, ArrowRightLeft, Users, FileText, Layers, Globe, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, BarChart3, Code2 } from 'lucide-react';
+import { Home, Box, ArrowRightLeft, Users, FileText, Layers, Globe, ChevronLeft, ChevronRight, Sun, Moon, Coins, Image, Clock, BarChart3, Code2, Pin, PinOff } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useMobileMenu } from '../contexts/MobileMenuContext';
 import { FlowIndexLogo } from './FlowIndexLogo';
@@ -11,6 +11,8 @@ export default function Sidebar() {
     const location = routerState.location;
     const { theme, toggleTheme } = useTheme();
     const [isCollapsed, setIsCollapsed] = useState(() => location.pathname.startsWith('/developer'));
+    const [autoCollapse, setAutoCollapse] = useState(false);
+    const [hoverExpanded, setHoverExpanded] = useState(false);
     const { isOpen: isMobileOpen, close: closeMobileMenu } = useMobileMenu();
 
     // Auto-collapse when entering Developer Portal, auto-expand when leaving
@@ -19,6 +21,9 @@ export default function Sidebar() {
             setIsCollapsed(true);
         }
     }, [location.pathname]);
+
+    // In auto-collapse mode, sidebar is collapsed unless hovered
+    const effectiveCollapsed = autoCollapse ? !hoverExpanded : isCollapsed;
 
     const isActive = (path: string) => {
         if (path === '/') return location.pathname === '/';
@@ -133,15 +138,17 @@ export default function Sidebar() {
             {/* Desktop Sidebar */}
             <motion.div
                 initial={false}
-                animate={{ width: isCollapsed ? 80 : 260 }}
+                animate={{ width: (autoCollapse ? !hoverExpanded : isCollapsed) ? 80 : 260 }}
+                onMouseEnter={() => autoCollapse && setHoverExpanded(true)}
+                onMouseLeave={() => autoCollapse && setHoverExpanded(false)}
                 className="hidden md:flex h-screen bg-black dark:bg-black bg-white border-r border-zinc-200 dark:border-white/5 flex-col shrink-0 sticky top-0 transition-colors duration-300 z-50"
             >
                 {/* Logo Section */}
-                <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} mb-6 h-[88px]`}>
+                <div className={`p-6 flex items-center ${effectiveCollapsed ? 'justify-center' : 'space-x-3'} mb-6 h-[88px]`}>
                     <Link to="/" className="flex items-center space-x-3">
                         <FlowIndexLogo size={26} className="text-nothing-green shrink-0" />
                         <AnimatePresence>
-                            {!isCollapsed && (
+                            {!effectiveCollapsed && (
                                 <motion.div
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
@@ -163,17 +170,17 @@ export default function Sidebar() {
                         <Link
                             key={item.label}
                             to={item.disabled ? '#' : item.path}
-                            className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-sm transition-all duration-200 group relative
+                            className={`flex items-center ${effectiveCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-sm transition-all duration-200 group relative
                                 ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-white/5'}
                                 ${isActive(item.path) && !item.disabled
                                     ? 'bg-nothing-green/10 text-nothing-green border-r-2 border-nothing-green'
                                     : 'text-zinc-600 dark:text-zinc-400'}`}
                             onClick={(e) => item.disabled && e.preventDefault()}
-                            title={isCollapsed ? item.label : ''}
+                            title={effectiveCollapsed ? item.label : ''}
                         >
                             <item.icon className={`h-5 w-5 shrink-0 ${isActive(item.path) && !item.disabled ? 'text-nothing-green' : 'text-zinc-500 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-300'}`} />
 
-                            {!isCollapsed && (
+                            {!effectiveCollapsed && (
                                 <span className={`text-sm font-medium tracking-wide whitespace-nowrap ${isActive(item.path) && !item.disabled ? 'text-zinc-900 dark:text-white' : ''}`}>
                                     {item.label}
                                 </span>
@@ -182,26 +189,26 @@ export default function Sidebar() {
                     ))}
 
                     {/* Developer Section */}
-                    <div className={`pt-4 mt-2 border-t border-zinc-200 dark:border-white/10 ${isCollapsed ? '' : ''}`}>
-                        {!isCollapsed && (
+                    <div className={`pt-4 mt-2 border-t border-zinc-200 dark:border-white/10`}>
+                        {!effectiveCollapsed && (
                             <span className="px-4 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">Developer</span>
                         )}
-                        <div className={`${isCollapsed ? '' : 'mt-2'} space-y-2`}>
+                        <div className={`${effectiveCollapsed ? '' : 'mt-2'} space-y-2`}>
                             {developerItems.map((item) => (
                                 <Link
                                     key={item.label}
                                     to={item.disabled ? '#' : item.path}
-                                    className={`flex items-center ${isCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-sm transition-all duration-200 group relative
+                                    className={`flex items-center ${effectiveCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-sm transition-all duration-200 group relative
                                         ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-100 dark:hover:bg-white/5'}
                                         ${isActive(item.path) && !item.disabled
                                             ? 'bg-nothing-green/10 text-nothing-green border-r-2 border-nothing-green'
                                             : 'text-zinc-600 dark:text-zinc-400'}`}
                                     onClick={(e) => item.disabled && e.preventDefault()}
-                                    title={isCollapsed ? item.label : ''}
+                                    title={effectiveCollapsed ? item.label : ''}
                                 >
                                     <item.icon className={`h-5 w-5 shrink-0 ${isActive(item.path) && !item.disabled ? 'text-nothing-green' : 'text-zinc-500 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-300'}`} />
 
-                                    {!isCollapsed && (
+                                    {!effectiveCollapsed && (
                                         <span className={`text-sm font-medium tracking-wide whitespace-nowrap ${isActive(item.path) && !item.disabled ? 'text-zinc-900 dark:text-white' : ''}`}>
                                             {item.label}
                                         </span>
@@ -218,32 +225,58 @@ export default function Sidebar() {
                     {/* Theme Toggle */}
                     <button
                         onClick={(e) => toggleTheme(e)}
-                        className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3 px-4'} py-2 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-400 transition-colors`}
+                        className={`flex items-center ${effectiveCollapsed ? 'justify-center' : 'space-x-3 px-4'} py-2 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-400 transition-colors`}
                         title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
                     >
                         {theme === 'dark' ? <Sun className="h-5 w-5 shrink-0" /> : <Moon className="h-5 w-5 shrink-0" />}
-                        {!isCollapsed && (
+                        {!effectiveCollapsed && (
                             <span className="text-sm font-medium">
                                 {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
                             </span>
                         )}
                     </button>
 
-                    {/* Collapse Toggle */}
-                    <button
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                        className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3 px-4'} py-2 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-400 transition-colors`}
-                        title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-                    >
-                        {isCollapsed ? <ChevronRight className="h-5 w-5 shrink-0" /> : <ChevronLeft className="h-5 w-5 shrink-0" />}
-                        {!isCollapsed && (
-                            <span className="text-sm font-medium">
-                                Collapse
-                            </span>
+                    {/* Collapse & Auto-collapse Controls */}
+                    <div className={`flex items-center ${effectiveCollapsed ? 'justify-center' : ''} gap-1`}>
+                        {!autoCollapse && (
+                            <button
+                                onClick={() => setIsCollapsed(!isCollapsed)}
+                                className={`flex-1 flex items-center ${effectiveCollapsed ? 'justify-center' : 'space-x-3 px-4'} py-2 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-400 transition-colors`}
+                                title={effectiveCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                            >
+                                {effectiveCollapsed ? <ChevronRight className="h-5 w-5 shrink-0" /> : <ChevronLeft className="h-5 w-5 shrink-0" />}
+                                {!effectiveCollapsed && (
+                                    <span className="text-sm font-medium">
+                                        Collapse
+                                    </span>
+                                )}
+                            </button>
                         )}
-                    </button>
+                        {autoCollapse && !effectiveCollapsed && (
+                            <div className="flex-1 flex items-center space-x-3 px-4 py-2 text-zinc-500 dark:text-zinc-500">
+                                <span className="text-sm font-medium text-zinc-400 dark:text-zinc-600">Auto-hide on</span>
+                            </div>
+                        )}
+                        <button
+                            onClick={() => {
+                                setAutoCollapse(!autoCollapse);
+                                if (!autoCollapse) {
+                                    // Turning on: collapse immediately
+                                    setIsCollapsed(true);
+                                    setHoverExpanded(false);
+                                }
+                            }}
+                            className={`p-2 rounded-sm transition-colors ${autoCollapse
+                                ? 'text-nothing-green bg-nothing-green/10 hover:bg-nothing-green/20'
+                                : 'text-zinc-500 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5 hover:text-zinc-700 dark:hover:text-zinc-300'
+                            }`}
+                            title={autoCollapse ? "Disable auto-hide (pinned)" : "Enable auto-hide on hover"}
+                        >
+                            {autoCollapse ? <PinOff className="h-4 w-4 shrink-0" /> : <Pin className="h-4 w-4 shrink-0" />}
+                        </button>
+                    </div>
 
-                    {!isCollapsed && (
+                    {!effectiveCollapsed && (
                         <div className="text-[10px] text-zinc-400 dark:text-zinc-600 uppercase tracking-widest text-center">
                             v1.0.0 Beta
                         </div>
