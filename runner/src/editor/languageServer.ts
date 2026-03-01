@@ -94,13 +94,18 @@ export function preloadCacheFromFiles(files: { path: string; content: string }[]
   }
 }
 
-/** Parse Cadence source for `import X from 0xADDR` statements */
+/** Parse Cadence source for `import X from 0xADDR` and `import A, B from 0xADDR` statements */
 function parseImports(code: string): { name: string; address: string }[] {
-  const re = /import\s+(\w+)\s+from\s+(0x[0-9a-fA-F]+)/g;
+  // Match: import <names> from <address>  (names can be comma-separated)
+  const re = /import\s+([\w,\s]+?)\s+from\s+(0x[0-9a-fA-F]+)/g;
   const results: { name: string; address: string }[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(code)) !== null) {
-    results.push({ name: m[1], address: m[2] });
+    const names = m[1].split(',').map((n) => n.trim()).filter(Boolean);
+    const address = m[2];
+    for (const name of names) {
+      results.push({ name, address });
+    }
   }
   return results;
 }
@@ -142,7 +147,7 @@ export async function prefetchDependencies(
   code: string,
   accessNode: string,
   depCallback?: (address: string, contractName: string, code: string) => void,
-  maxDepth = 3
+  maxDepth = 6
 ): Promise<void> {
   const visited = new Set<string>();
   const queue: { name: string; address: string; depth: number }[] = [];
