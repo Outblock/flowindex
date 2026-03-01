@@ -1052,11 +1052,11 @@ func (r *Repository) GetContractDependents(ctx context.Context, address, name st
 	// Find contracts whose code imports from this contract's address+name
 	importPattern := "import " + name + " from 0x" + address
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT address, name
+		SELECT DISTINCT encode(address, 'hex'), name
 		FROM app.smart_contracts
 		WHERE code LIKE '%' || $1 || '%'
 		  AND NOT (address = $2 AND name = $3)
-		LIMIT 50`, importPattern, address, name)
+		LIMIT 50`, importPattern, hexToBytes(address), name)
 	if err != nil {
 		return nil, err
 	}

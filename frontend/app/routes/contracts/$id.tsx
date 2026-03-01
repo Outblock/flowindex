@@ -352,7 +352,7 @@ function ContractDetail() {
         { id: 'source' as const, label: 'Source Code', icon: Code },
         { id: 'transactions' as const, label: 'Transactions', icon: Activity },
         { id: 'versions' as const, label: 'Version History', icon: GitCompare },
-        { id: 'scripts' as const, label: 'Common Scripts', icon: Terminal },
+        { id: 'scripts' as const, label: 'Common Txs', icon: Terminal },
         { id: 'dependencies' as const, label: 'Dependencies', icon: GitBranch },
     ];
 
@@ -808,7 +808,7 @@ function ContractDetail() {
                             {scripts.length === 0 && !scriptsLoading && (
                                 <div className="flex flex-col items-center justify-center flex-1 p-12 text-zinc-500">
                                     <Terminal className="h-8 w-8 mb-3 opacity-30" />
-                                    <p className="text-xs uppercase tracking-widest">No common scripts found</p>
+                                    <p className="text-xs uppercase tracking-widest">No common transactions found</p>
                                     <p className="text-[10px] text-zinc-400 mt-1">Script templates that reference this contract will appear here</p>
                                 </div>
                             )}
