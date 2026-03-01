@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type * as MonacoNS from 'monaco-editor';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import CadenceEditor from './editor/CadenceEditor';
 import { useLsp } from './editor/useLsp';
 import ResultPanel from './components/ResultPanel';
@@ -20,6 +21,25 @@ import {
   type ProjectState, type Template,
 } from './fs/fileSystem';
 import { Play, Loader2, PanelLeftOpen, PanelLeftClose } from 'lucide-react';
+
+/* ── Drag handle between panels ── */
+
+function ResizeHandle({ direction = 'horizontal' }: { direction?: 'horizontal' | 'vertical' }) {
+  const isH = direction === 'horizontal';
+  return (
+    <PanelResizeHandle
+      className={`group relative flex items-center justify-center ${
+        isH ? 'w-1 hover:w-1.5 cursor-col-resize' : 'h-1 hover:h-1.5 cursor-row-resize'
+      } bg-zinc-800 hover:bg-emerald-500/30 active:bg-emerald-500/50 transition-all duration-150`}
+    >
+      <div
+        className={`${
+          isH ? 'w-px h-8' : 'h-px w-8'
+        } bg-zinc-600 group-hover:bg-emerald-400 group-active:bg-emerald-400 transition-colors rounded-full`}
+      />
+    </PanelResizeHandle>
+  );
+}
 
 export default function App() {
   const [project, setProject] = useState<ProjectState>(() => {
@@ -49,6 +69,7 @@ export default function App() {
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
+  const [showAI, setShowAI] = useState(true);
   const [monacoInstance, setMonacoInstance] = useState<typeof MonacoNS | null>(null);
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
 
@@ -134,7 +155,7 @@ export default function App() {
   }, []);
 
   const handleDeleteFile = useCallback((path: string) => {
-    if (project.files.filter((f) => !f.readOnly).length <= 1) return; // Keep at least one file
+    if (project.files.filter((f) => !f.readOnly).length <= 1) return;
     setProject((prev) => deleteFile(prev, path));
   }, [project.files]);
 
@@ -151,104 +172,144 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex h-full bg-zinc-900 text-zinc-100">
-      {/* File Explorer (collapsible) */}
-      {showExplorer && (
-        <div className="w-52 shrink-0 border-r border-zinc-700 bg-zinc-900">
-          <FileExplorer
-            project={project}
-            onOpenFile={handleOpenFile}
-            onCreateFile={handleCreateFile}
-            onDeleteFile={handleDeleteFile}
-            activeFile={project.activeFile}
-          />
+    <div className="flex flex-col h-full bg-zinc-900 text-zinc-100">
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 py-2 border-b border-zinc-700 bg-zinc-900/80 backdrop-blur shrink-0">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowExplorer(!showExplorer)}
+            className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+            title={showExplorer ? 'Hide explorer' : 'Show explorer'}
+          >
+            {showExplorer ? (
+              <PanelLeftClose className="w-4 h-4" />
+            ) : (
+              <PanelLeftOpen className="w-4 h-4" />
+            )}
+          </button>
+          <h1 className="text-sm font-semibold tracking-tight">Cadence Runner</h1>
         </div>
-      )}
+        <div className="flex items-center gap-3">
+          <select
+            value={network}
+            onChange={(e) => setNetwork(e.target.value as FlowNetwork)}
+            className="bg-zinc-800 text-zinc-300 text-xs px-2 py-1 rounded border border-zinc-700 focus:outline-none focus:border-zinc-500"
+          >
+            <option value="mainnet">Mainnet</option>
+            <option value="testnet">Testnet</option>
+          </select>
 
-      {/* Main content */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Header */}
-        <header className="flex items-center justify-between px-4 py-2 border-b border-zinc-700 bg-zinc-900/80 backdrop-blur shrink-0">
-          <div className="flex items-center gap-2">
+          <WalletButton />
+
+          <button
+            onClick={handleRun}
+            disabled={loading || activeFileEntry?.readOnly}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
+          >
+            {loading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Play className="w-3.5 h-3.5" />
+            )}
+            {codeType === 'script' ? 'Run Script' : 'Send Transaction'}
+          </button>
+        </div>
+      </header>
+
+      {/* Main resizable layout */}
+      <PanelGroup orientation="horizontal" className="flex-1 min-h-0">
+        {/* File Explorer (collapsible) */}
+        {showExplorer && (
+          <>
+            <Panel defaultSize={15} minSize={10} maxSize={25}>
+              <div className="h-full bg-zinc-900 overflow-hidden">
+                <FileExplorer
+                  project={project}
+                  onOpenFile={handleOpenFile}
+                  onCreateFile={handleCreateFile}
+                  onDeleteFile={handleDeleteFile}
+                  activeFile={project.activeFile}
+                />
+              </div>
+            </Panel>
+            <ResizeHandle />
+          </>
+        )}
+
+        {/* Editor + Results (vertical split) */}
+        <Panel defaultSize={showAI ? 65 : 85} minSize={30}>
+          <PanelGroup orientation="vertical">
+            {/* Editor area */}
+            <Panel defaultSize={70} minSize={20}>
+              <div className="flex flex-col h-full min-h-0">
+                <TabBar
+                  project={project}
+                  onSelectFile={handleSelectTab}
+                  onCloseFile={handleCloseTab}
+                />
+                <div className="flex-1 min-h-0">
+                  <CadenceEditor
+                    code={activeCode}
+                    onChange={handleCodeChange}
+                    onRun={handleRun}
+                    darkMode={true}
+                    path={project.activeFile}
+                    readOnly={activeFileEntry?.readOnly}
+                    externalEditorRef={editorRef}
+                    onMonacoReady={handleMonacoReady}
+                  />
+                </div>
+              </div>
+            </Panel>
+
+            {/* Results area (params + results) */}
+            {(scriptParams.length > 0 || results.length > 0 || loading) && (
+              <>
+                <ResizeHandle orientation="vertical" />
+                <Panel defaultSize={30} minSize={10} maxSize={60}>
+                  <div className="h-full overflow-y-auto bg-zinc-900">
+                    <ParamPanel
+                      params={scriptParams}
+                      values={paramValues}
+                      onChange={setParamValues}
+                    />
+                    <ResultPanel results={results} loading={loading} />
+                  </div>
+                </Panel>
+              </>
+            )}
+          </PanelGroup>
+        </Panel>
+
+        {/* AI Panel (collapsible) */}
+        {showAI ? (
+          <>
+            <ResizeHandle />
+            <Panel defaultSize={20} minSize={15} maxSize={45}>
+              <AIPanel
+                onInsertCode={handleInsertCode}
+                onLoadTemplate={handleLoadTemplate}
+                editorCode={activeCode}
+                network={network}
+                onClose={() => setShowAI(false)}
+              />
+            </Panel>
+          </>
+        ) : (
+          <Panel defaultSize={0} minSize={0} maxSize={0}>
             <button
-              onClick={() => setShowExplorer(!showExplorer)}
-              className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-              title={showExplorer ? 'Hide explorer' : 'Show explorer'}
+              onClick={() => setShowAI(true)}
+              className="flex flex-col items-center justify-center w-10 h-full bg-zinc-900 border-l border-zinc-700 hover:bg-zinc-800 transition-colors group"
+              title="Open AI Assistant"
             >
-              {showExplorer ? (
-                <PanelLeftClose className="w-4 h-4" />
-              ) : (
-                <PanelLeftOpen className="w-4 h-4" />
-              )}
+              <svg className="w-5 h-5 text-emerald-500 group-hover:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 9h.01" /><path d="M15 9h.01" /><path d="M9 15c.5.5 1.5 1 3 1s2.5-.5 3-1" />
+              </svg>
+              <span className="text-[9px] text-zinc-500 group-hover:text-zinc-400 mt-1 font-medium">AI</span>
             </button>
-            <h1 className="text-sm font-semibold tracking-tight">Cadence Runner</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <select
-              value={network}
-              onChange={(e) => setNetwork(e.target.value as FlowNetwork)}
-              className="bg-zinc-800 text-zinc-300 text-xs px-2 py-1 rounded border border-zinc-700 focus:outline-none focus:border-zinc-500"
-            >
-              <option value="mainnet">Mainnet</option>
-              <option value="testnet">Testnet</option>
-            </select>
-
-            <WalletButton />
-
-            <button
-              onClick={handleRun}
-              disabled={loading || activeFileEntry?.readOnly}
-              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
-            >
-              {loading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Play className="w-3.5 h-3.5" />
-              )}
-              {codeType === 'script' ? 'Run Script' : 'Send Transaction'}
-            </button>
-          </div>
-        </header>
-
-        {/* Tab Bar */}
-        <TabBar
-          project={project}
-          onSelectFile={handleSelectTab}
-          onCloseFile={handleCloseTab}
-        />
-
-        {/* Editor */}
-        <main className="flex-1 min-h-0">
-          <CadenceEditor
-            code={activeCode}
-            onChange={handleCodeChange}
-            onRun={handleRun}
-            darkMode={true}
-            path={project.activeFile}
-            readOnly={activeFileEntry?.readOnly}
-            externalEditorRef={editorRef}
-            onMonacoReady={handleMonacoReady}
-          />
-        </main>
-
-        {/* Parameters */}
-        <ParamPanel
-          params={scriptParams}
-          values={paramValues}
-          onChange={setParamValues}
-        />
-
-        {/* Results */}
-        <ResultPanel results={results} loading={loading} />
-      </div>
-
-      {/* AI Panel (collapsible right sidebar) */}
-      <AIPanel
-        onInsertCode={handleInsertCode}
-        onLoadTemplate={handleLoadTemplate}
-        editorCode={activeCode}
-        network={network}
-      />
+          </Panel>
+        )}
+      </PanelGroup>
     </div>
   );
 }

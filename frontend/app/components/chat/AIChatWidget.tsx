@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
+import { useRouterState } from '@tanstack/react-router';
 import type { UIMessage } from 'ai';
 import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import {
@@ -974,6 +975,9 @@ function getStoredMode(): ChatMode {
 }
 
 export default function AIChatWidget() {
+  const routerState = useRouterState();
+  const hideWidget = routerState.location.pathname === '/playground';
+
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [chatMode, setChatMode] = useState<ChatMode>(getStoredMode);
@@ -1233,6 +1237,7 @@ export default function AIChatWidget() {
 
   // Don't render during SSR
   if (import.meta.env.SSR) return null;
+  if (hideWidget) return null;
 
   return (
     <>
