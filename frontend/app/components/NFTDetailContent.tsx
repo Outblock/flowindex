@@ -186,16 +186,18 @@ export function NFTMetadata({ nft, collectionName, hideHeader = false }: { nft: 
                     return (
                         <div className="space-y-2">
                             <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Traits</h3>
-                            <div className="grid grid-cols-2 gap-1.5">
-                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                {traitsList.map((trait: any, i: number) => (
-                                    <div key={i} className="p-2 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5">
-                                        <div className="text-[10px] uppercase text-zinc-500 truncate">{trait?.name || trait?.display?.name || 'Trait'}</div>
-                                        <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 truncate">
-                                            {String(trait?.value || trait?.display?.value || '\u2014')}
+                            <div className="overflow-x-auto -mx-2 px-2 pb-2">
+                                <div className="grid grid-cols-2 gap-1.5 min-w-0">
+                                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                    {traitsList.map((trait: any, i: number) => (
+                                        <div key={i} className="p-2 bg-zinc-50 dark:bg-white/5 border border-zinc-100 dark:border-white/5 min-w-0">
+                                            <div className="text-[10px] uppercase text-zinc-500 truncate">{trait?.name || trait?.display?.name || 'Trait'}</div>
+                                            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 overflow-x-auto whitespace-nowrap scrollbar-thin">
+                                                {String(trait?.value || trait?.display?.value || '\u2014')}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     );
