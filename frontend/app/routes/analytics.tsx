@@ -1567,10 +1567,10 @@ function AnalyticsPage() {
         </div>
 
         {/* Content renders progressively as each API responds */}
-        {activeTab === 'whales' ? (
-          <BigTransfersFull />
-        ) : (
-        <div ref={containerRef}>
+        {activeTab === 'whales' && <BigTransfersFull />}
+        {/* Always render containerRef div so ResizeObserver stays attached across tab switches.
+            Use visibility:hidden + h-0 + overflow-hidden to hide without losing width measurement. */}
+        <div ref={containerRef} className={activeTab === 'whales' ? 'invisible h-0 overflow-hidden' : ''}>
           {mounted && (
             <>
               {/* KPI cards grid (draggable + resizable, expand to chart) */}
@@ -1648,7 +1648,6 @@ function AnalyticsPage() {
             </>
           )}
         </div>
-        )}
       </div>
     </div>
   )

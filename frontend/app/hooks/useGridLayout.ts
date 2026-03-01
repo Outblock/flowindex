@@ -4,29 +4,13 @@ import { DEFAULT_LAYOUTS } from '../routes/analytics-layout'
 
 const DEFAULT_STORAGE_KEY = 'flowscan-analytics-grid-layout'
 
-function loadLayouts(storageKey: string): ResponsiveLayouts | null {
-  try {
-    const raw = localStorage.getItem(storageKey)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    // Basic validation: must be object with at least one breakpoint array
-    if (typeof parsed !== 'object' || parsed === null) return null
-    for (const key of Object.keys(parsed)) {
-      if (!Array.isArray(parsed[key])) return null
-    }
-    return parsed as ResponsiveLayouts
-  } catch {
-    return null
-  }
-}
-
 export function useGridLayout(
-  storageKey: string = DEFAULT_STORAGE_KEY,
+  _storageKey: string = DEFAULT_STORAGE_KEY,
   defaultLayouts: ResponsiveLayouts = DEFAULT_LAYOUTS,
 ) {
-  const [layouts, setLayouts] = useState<ResponsiveLayouts>(() => {
-    return loadLayouts(storageKey) ?? defaultLayouts
-  })
+  // Always start from default layouts — persisting to localStorage caused layout
+  // corruption when switching tabs (partial layouts saved, then loaded with missing items).
+  const [layouts, setLayouts] = useState<ResponsiveLayouts>(() => defaultLayouts)
 
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -40,23 +24,18 @@ export function useGridLayout(
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  // Clean up any stale layouts from localStorage
+  useEffect(() => {
+    try { localStorage.removeItem(_storageKey) } catch { /* ignore */ }
+  }, [_storageKey])
+
   const onLayoutChange = useCallback((_layout: Layout, allLayouts: ResponsiveLayouts) => {
     setLayouts(allLayouts)
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(allLayouts))
-    } catch {
-      // storage full — silently ignore
-    }
-  }, [storageKey])
+  }, [])
 
   const resetLayout = useCallback(() => {
     setLayouts(defaultLayouts)
-    try {
-      localStorage.removeItem(storageKey)
-    } catch {
-      // ignore
-    }
-  }, [storageKey, defaultLayouts])
+  }, [defaultLayouts])
 
   return { layouts, onLayoutChange, resetLayout, isMobile }
 }
