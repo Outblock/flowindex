@@ -138,7 +138,7 @@ function AdminPage() {
           className="max-w-md bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none space-y-4">
           <p className="text-xs text-zinc-500 dark:text-gray-400 font-mono leading-relaxed">
             Admin access now uses your Developer account JWT.
-            Server will verify role/team claims instead of static admin token.
+            Server verifies table-driven role/team RBAC (with legacy token/claim fallback).
           </p>
           <Link
             to="/developer/login"

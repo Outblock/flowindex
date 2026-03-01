@@ -541,10 +541,10 @@ func main() {
 	}
 
 	// --- Webhook Notification System ---
-	var webhookHandlersOpt func(*api.Server)            // option for server
-	var webhookAdminHandlersOpt func(*api.Server)       // option for admin routes
-	var webhookOrchestrator *webhooks.Orchestrator       // started after ctx is created
-	var balanceMonitor *webhooks.BalanceMonitor           // started after ctx is created
+	var webhookHandlersOpt func(*api.Server)       // option for server
+	var webhookAdminHandlersOpt func(*api.Server)  // option for admin routes
+	var webhookOrchestrator *webhooks.Orchestrator // started after ctx is created
+	var balanceMonitor *webhooks.BalanceMonitor    // started after ctx is created
 
 	if supabaseDBURL := os.Getenv("SUPABASE_DB_URL"); supabaseDBURL != "" {
 		jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
@@ -557,6 +557,9 @@ func main() {
 			log.Printf("[webhooks] DB connection failed: %v (webhooks disabled)", whDBErr)
 		} else {
 			whStore := webhooks.NewStore(whDB.Pool)
+			if err := whStore.EnsureRBACSchema(context.Background()); err != nil {
+				log.Printf("[webhooks] warning: failed to ensure RBAC schema: %v", err)
+			}
 			if err := whStore.EnsureTiers(context.Background()); err != nil {
 				log.Printf("[webhooks] warning: failed to ensure tiers: %v", err)
 			}

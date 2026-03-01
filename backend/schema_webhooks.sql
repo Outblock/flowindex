@@ -32,11 +32,61 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Team model (table-driven RBAC)
+CREATE TABLE IF NOT EXISTS public.teams (
+    id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    slug        TEXT NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    created_by  UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.team_memberships (
+    team_id      UUID REFERENCES public.teams(id) ON DELETE CASCADE NOT NULL,
+    user_id      UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    role         TEXT NOT NULL DEFAULT 'team_member' CHECK (role IN ('team_admin', 'team_member')),
+    status       TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'invited', 'suspended')),
+    invited_by   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (team_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_team_memberships_user ON public.team_memberships(user_id);
+CREATE INDEX IF NOT EXISTS idx_team_memberships_team ON public.team_memberships(team_id);
+
+CREATE TABLE IF NOT EXISTS public.user_platform_roles (
+    user_id      UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    role         TEXT NOT NULL CHECK (role IN ('platform_admin', 'ops_admin', 'admin')),
+    assigned_by  UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, role)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_platform_roles_role ON public.user_platform_roles(role);
+
 -- Auto-create profile on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+    personal_team_id UUID;
+    personal_slug TEXT;
+    personal_name TEXT;
 BEGIN
     INSERT INTO public.user_profiles (user_id) VALUES (NEW.id);
+
+    personal_slug := 'u_' || substr(replace(NEW.id::text, '-', ''), 1, 12);
+    personal_name := coalesce(split_part(NEW.email, '@', 1), 'User') || '''s Team';
+
+    INSERT INTO public.teams (slug, name, created_by)
+    VALUES (personal_slug, personal_name, NEW.id)
+    ON CONFLICT (slug) DO UPDATE SET name = public.teams.name
+    RETURNING id INTO personal_team_id;
+
+    INSERT INTO public.team_memberships (team_id, user_id, role, status, invited_by)
+    VALUES (personal_team_id, NEW.id, 'team_admin', 'active', NEW.id)
+    ON CONFLICT (team_id, user_id) DO NOTHING;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -100,6 +150,31 @@ CREATE TABLE IF NOT EXISTS public.delivery_logs (
 ALTER TABLE public.endpoints ADD COLUMN IF NOT EXISTS endpoint_type TEXT NOT NULL DEFAULT 'webhook';
 ALTER TABLE public.endpoints ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}';
 
+-- Backfill: ensure every existing user has a personal team + active membership.
+WITH users_without_active_team AS (
+    SELECT u.id, u.email
+    FROM auth.users u
+    LEFT JOIN public.team_memberships tm
+      ON tm.user_id = u.id AND tm.status = 'active'
+    WHERE tm.user_id IS NULL
+),
+inserted_teams AS (
+    INSERT INTO public.teams (slug, name, created_by)
+    SELECT
+        'u_' || substr(replace(u.id::text, '-', ''), 1, 12),
+        coalesce(split_part(u.email, '@', 1), 'User') || '''s Team',
+        u.id
+    FROM users_without_active_team u
+    ON CONFLICT (slug) DO NOTHING
+    RETURNING id, slug
+)
+INSERT INTO public.team_memberships (team_id, user_id, role, status, invited_by)
+SELECT t.id, u.id, 'team_admin', 'active', u.id
+FROM users_without_active_team u
+JOIN public.teams t
+  ON t.slug = 'u_' || substr(replace(u.id::text, '-', ''), 1, 12)
+ON CONFLICT (team_id, user_id) DO NOTHING;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_subscriptions_event_type ON public.subscriptions(event_type) WHERE is_enabled = true;
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON public.subscriptions(user_id);
@@ -114,6 +189,9 @@ ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.endpoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.delivery_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.team_memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_platform_roles ENABLE ROW LEVEL SECURITY;
 
 -- Users can only see/modify their own data
 CREATE POLICY users_own_profile ON public.user_profiles FOR ALL USING (auth.uid() = user_id);
@@ -122,4 +200,23 @@ CREATE POLICY users_own_endpoints ON public.endpoints FOR ALL USING (auth.uid() 
 CREATE POLICY users_own_subscriptions ON public.subscriptions FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY users_own_logs ON public.delivery_logs FOR ALL USING (
     endpoint_id IN (SELECT id FROM public.endpoints WHERE user_id = auth.uid())
+);
+
+CREATE POLICY users_own_teams ON public.teams FOR SELECT USING (
+    id IN (
+        SELECT tm.team_id FROM public.team_memberships tm
+        WHERE tm.user_id = auth.uid() AND tm.status = 'active'
+    )
+);
+
+CREATE POLICY users_own_team_memberships ON public.team_memberships FOR SELECT USING (
+    user_id = auth.uid()
+    OR team_id IN (
+        SELECT tm.team_id FROM public.team_memberships tm
+        WHERE tm.user_id = auth.uid() AND tm.status = 'active'
+    )
+);
+
+CREATE POLICY users_own_platform_roles ON public.user_platform_roles FOR SELECT USING (
+    user_id = auth.uid()
 );

@@ -16,6 +16,14 @@ FlowIndex uses two permission layers:
 
 Only platform-level roles are allowed to access `/admin` by default.
 
+Primary source of truth is now **table-driven RBAC** in Supabase:
+
+- `public.user_platform_roles` (platform roles)
+- `public.teams`
+- `public.team_memberships`
+
+JWT claims are only a compatibility fallback for users that do not yet have RBAC rows.
+
 ## Admin Panel Access Policy
 
 Recommended production policy:
@@ -24,89 +32,80 @@ Recommended production policy:
 - `ADMIN_ALLOWED_TEAMS=flowindex`
 
 This means `/admin` requires:
-- user role claim includes `platform_admin` or `ops_admin`
-- and team claim includes `flowindex`
+- user has `platform_admin` or `ops_admin` in `public.user_platform_roles`
+- and is a member of team `flowindex` (when team allowlist is configured)
 
 Legacy fallback:
 - `ADMIN_TOKEN` is still supported as an emergency path.
 
-## JWT Claim Locations
+## DB Tables
 
-Backend checks role/team claims from:
+### Platform Roles
 
-- top-level: `role`, `roles`, `team`, `teams`
-- nested: `app_metadata.role`, `app_metadata.roles`, `app_metadata.team`, `app_metadata.teams`
-- nested: `user_metadata.role`, `user_metadata.roles`, `user_metadata.team`, `user_metadata.teams`
+```sql
+select user_id, role, created_at
+from public.user_platform_roles
+order by created_at desc;
+```
 
-Values are case-insensitive and comma-separated strings are supported.
+### Teams + Memberships
+
+```sql
+select t.slug, tm.user_id, tm.role, tm.status
+from public.team_memberships tm
+join public.teams t on t.id = tm.team_id
+order by t.slug, tm.created_at;
+```
 
 ## Supabase SQL: Grant / Revoke
 
-### 1) Inspect current metadata
+### 1) Grant FlowIndex admin access (table-driven)
 
 ```sql
-select id, email, raw_app_meta_data
-from auth.users
-where email = 'you@example.com';
+with target_user as (
+  select id from auth.users where email = 'you@example.com'
+),
+target_team as (
+  select id from public.teams where slug = 'flowindex'
+)
+insert into public.user_platform_roles (user_id, role)
+select id, 'platform_admin' from target_user
+on conflict (user_id, role) do nothing;
+
+insert into public.team_memberships (team_id, user_id, role, status)
+select tt.id, tu.id, 'team_admin', 'active'
+from target_team tt, target_user tu
+on conflict (team_id, user_id) do update
+set role = excluded.role, status = 'active', updated_at = now();
 ```
 
-### 2) Grant FlowIndex admin access
+### 2) Grant ops admin access
 
 ```sql
-update auth.users
-set raw_app_meta_data =
-  coalesce(raw_app_meta_data, '{}'::jsonb)
-  || jsonb_build_object(
-    'roles', jsonb_build_array('platform_admin'),
-    'teams', jsonb_build_array('flowindex'),
-    'team_role', 'team_admin'
-  )
-where email = 'you@example.com';
+with target_user as (
+  select id from auth.users where email = 'ops@example.com'
+)
+insert into public.user_platform_roles (user_id, role)
+select id, 'ops_admin' from target_user
+on conflict (user_id, role) do nothing;
 ```
 
-### 3) Grant ops admin access
+### 3) Revoke admin access (keep team membership)
 
 ```sql
-update auth.users
-set raw_app_meta_data =
-  coalesce(raw_app_meta_data, '{}'::jsonb)
-  || jsonb_build_object(
-    'roles', jsonb_build_array('ops_admin'),
-    'teams', jsonb_build_array('flowindex'),
-    'team_role', 'team_member'
-  )
-where email = 'ops@example.com';
+delete from public.user_platform_roles upr
+using auth.users u
+where upr.user_id = u.id
+  and u.email = 'you@example.com';
 ```
 
-### 4) Revoke admin access (keep team membership)
+### 4) Revoke all team access for a user
 
 ```sql
-update auth.users
-set raw_app_meta_data =
-  coalesce(raw_app_meta_data, '{}'::jsonb)
-  - 'roles'
-where email = 'you@example.com';
+delete from public.team_memberships tm
+using auth.users u
+where tm.user_id = u.id
+  and u.email = 'you@example.com';
 ```
 
-### 5) Revoke all RBAC metadata
-
-```sql
-update auth.users
-set raw_app_meta_data =
-  (coalesce(raw_app_meta_data, '{}'::jsonb) - 'roles' - 'teams' - 'team_role')
-where email = 'you@example.com';
-```
-
-Users must sign out and sign in again to get a refreshed JWT.
-
-## "Enum" Status
-
-There is no database enum constraint for role/team in `auth.users.raw_app_meta_data`.
-
-Canonical values for FlowIndex should be treated as:
-
-- platform roles: `platform_admin`, `ops_admin`
-- team roles: `team_admin`, `team_member`
-- team id/name: `flowindex` (or your own team keys)
-
-If strict enum enforcement is required later, add a dedicated RBAC table in Postgres and validate claims against it in backend middleware.
+Users should sign out/sign in again if frontend still shows stale auth state.
