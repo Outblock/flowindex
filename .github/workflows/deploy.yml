@@ -191,6 +191,10 @@ jobs:
           $(cat frontend/Caddyfile)
           CADDYEOF
             docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+            echo '=== Caddy network mode ==='
+            docker inspect caddy --format '{{.HostConfig.NetworkMode}}'
+            echo '=== Caddy logs (last 20) ==='
+            docker logs caddy --tail 20 2>&1
           "
 
   build-docs:
