@@ -45,6 +45,11 @@ func NewNetworkPoller(flowClient *flowclient.Client, repo *repository.Repository
 func (p *NetworkPoller) Start(ctx context.Context) {
 	log.Println("[NetworkPoller] Starting (interval:", p.interval, ")")
 
+	// One-time backfill of historical epoch total_staked
+	if err := p.BackfillEpochTotalStaked(ctx); err != nil {
+		log.Printf("[NetworkPoller] epoch backfill error: %v", err)
+	}
+
 	p.poll(ctx)
 
 	ticker := time.NewTicker(p.interval)
@@ -230,6 +235,61 @@ func (p *NetworkPoller) fetchTokenomics(ctx context.Context, epoch uint64) error
 		}
 	}
 
+	return nil
+}
+
+// BackfillEpochTotalStaked queries the chain at each epoch's start_height to get
+// the total staked amount. Only fills epochs where start_height is known but
+// total_staked is 0.
+func (p *NetworkPoller) BackfillEpochTotalStaked(ctx context.Context) error {
+	epochs, err := p.repo.ListEpochsNeedingStakeBackfill(ctx)
+	if err != nil {
+		return fmt.Errorf("list epochs needing backfill: %w", err)
+	}
+	if len(epochs) == 0 {
+		log.Println("[NetworkPoller] No epochs need total_staked backfill")
+		return nil
+	}
+
+	log.Printf("[NetworkPoller] Backfilling total_staked for %d epochs", len(epochs))
+
+	script := []byte(stakingScript())
+	for _, ep := range epochs {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		result, err := p.flowClient.ExecuteScriptAtBlockHeight(fetchCtx, ep.StartHeight, script, nil)
+		cancel()
+		if err != nil {
+			log.Printf("[NetworkPoller] epoch %d (height %d) script error: %v", ep.Epoch, ep.StartHeight, err)
+			continue
+		}
+
+		arr, ok := result.(cadence.Array)
+		if !ok || len(arr.Values) < 2 {
+			log.Printf("[NetworkPoller] epoch %d unexpected result: %v", ep.Epoch, result)
+			continue
+		}
+
+		totalStaked := npCadenceToFloat64(arr.Values[0])
+		if totalStaked <= 0 {
+			continue
+		}
+
+		stakedStr := strconv.FormatFloat(totalStaked, 'f', 8, 64)
+		if err := p.repo.UpdateEpochTotalStaked(ctx, ep.Epoch, stakedStr); err != nil {
+			log.Printf("[NetworkPoller] epoch %d update error: %v", ep.Epoch, err)
+			continue
+		}
+		log.Printf("[NetworkPoller] epoch %d total_staked = %.2f", ep.Epoch, totalStaked)
+
+		// Brief pause to avoid hammering the access node
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	log.Println("[NetworkPoller] Epoch total_staked backfill complete")
 	return nil
 }
 

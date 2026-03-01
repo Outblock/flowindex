@@ -131,6 +131,30 @@ func (r *Repository) UpdateEpochTotalStaked(ctx context.Context, epoch int64, to
 	return err
 }
 
+// ListEpochsNeedingStakeBackfill returns epochs with start_height but no total_staked.
+func (r *Repository) ListEpochsNeedingStakeBackfill(ctx context.Context) ([]models.EpochStats, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT epoch, start_height
+		FROM app.epoch_stats
+		WHERE start_height IS NOT NULL AND start_height > 0
+		  AND (total_staked IS NULL OR total_staked = 0)
+		ORDER BY epoch DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.EpochStats
+	for rows.Next() {
+		var s models.EpochStats
+		if err := rows.Scan(&s.Epoch, &s.StartHeight); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 // ListStakingNodes returns staking nodes for a given epoch, ordered by tokens_staked desc.
 func (r *Repository) ListStakingNodes(ctx context.Context, epoch int64, limit, offset int) ([]models.StakingNode, error) {
 	query := `
