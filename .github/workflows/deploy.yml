@@ -347,7 +347,7 @@ jobs:
           docker stop supabase-meta 2>/dev/null || true; docker rm supabase-meta 2>/dev/null || true
           docker run -d --restart=always --name supabase-meta \
             --network=host \
-            -e PG_META_PORT=8085 \
+            -e PG_META_PORT=8086 \
             -e PG_META_DB_HOST="$DB_HOST" \
             -e PG_META_DB_PORT="$DB_PORT" \
             -e PG_META_DB_NAME="$DB_NAME" \
@@ -361,7 +361,7 @@ jobs:
             --network=host \
             -e PORT=3100 \
             -e HOSTNAME=0.0.0.0 \
-            -e STUDIO_PG_META_URL=http://127.0.0.1:8085 \
+            -e STUDIO_PG_META_URL=http://127.0.0.1:8086 \
             -e SUPABASE_URL=http://127.0.0.1:9999 \
             -e SUPABASE_REST_URL=http://127.0.0.1:9999 \
             -e SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-anon}" \
