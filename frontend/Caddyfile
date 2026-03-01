@@ -5,3 +5,7 @@ flowindex.io {
 supabase.flowindex.io {
 	reverse_proxy localhost:8080
 }
+
+ai.flowindex.io {
+	reverse_proxy 34.170.76.156:80
+}

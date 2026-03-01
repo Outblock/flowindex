@@ -190,6 +190,7 @@ jobs:
             sudo tee /tmp/Caddyfile > /dev/null <<'CADDYEOF'
           $(cat frontend/Caddyfile)
           CADDYEOF
+            docker cp /tmp/Caddyfile caddy:/etc/caddy/Caddyfile
             docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
           "
 
