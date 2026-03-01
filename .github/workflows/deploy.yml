@@ -186,10 +186,12 @@ jobs:
 
       - name: Update Caddy config for TLS
         run: |
-          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
-            docker inspect caddy --format "{{json .Mounts}}" | python3 -m json.tool 2>/dev/null || docker inspect caddy --format "{{json .Mounts}}"
-            docker inspect caddy --format "{{json .HostConfig.Binds}}"
-          '
+          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
+            sudo tee /tmp/Caddyfile > /dev/null <<'CADDYEOF'
+          $(cat frontend/Caddyfile)
+          CADDYEOF
+            docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+          "
 
   build-docs:
     needs: changes
