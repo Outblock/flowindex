@@ -71,8 +71,8 @@ func (p *NetworkPoller) poll(ctx context.Context) {
 		log.Printf("[NetworkPoller] epoch_status error: %v", err)
 	}
 
-	// Fetch tokenomics (total staked + node count)
-	if err := p.fetchTokenomics(fetchCtx); err != nil {
+	// Fetch tokenomics (total staked + node count) and update current epoch
+	if err := p.fetchTokenomics(fetchCtx, epoch); err != nil {
 		log.Printf("[NetworkPoller] tokenomics error: %v", err)
 	}
 
@@ -192,7 +192,7 @@ func (p *NetworkPoller) fetchEpochStatus(ctx context.Context) (uint64, error) {
 	return counter, p.repo.UpsertStatusSnapshot(ctx, "epoch_status", data, now)
 }
 
-func (p *NetworkPoller) fetchTokenomics(ctx context.Context) error {
+func (p *NetworkPoller) fetchTokenomics(ctx context.Context, epoch uint64) error {
 	result, err := p.flowClient.ExecuteScriptAtLatestBlock(ctx, []byte(stakingScript()), nil)
 	if err != nil {
 		return fmt.Errorf("execute staking script: %w", err)
@@ -218,7 +218,19 @@ func (p *NetworkPoller) fetchTokenomics(ctx context.Context) error {
 		return err
 	}
 
-	return p.repo.UpsertStatusSnapshot(ctx, "tokenomics", data, now)
+	if err := p.repo.UpsertStatusSnapshot(ctx, "tokenomics", data, now); err != nil {
+		return err
+	}
+
+	// Also update total_staked in epoch_stats for the current epoch
+	if epoch > 0 && totalStaked > 0 {
+		stakedStr := strconv.FormatFloat(totalStaked, 'f', 8, 64)
+		if err := p.repo.UpdateEpochTotalStaked(ctx, int64(epoch), stakedStr); err != nil {
+			log.Printf("[NetworkPoller] failed to update epoch %d total_staked: %v", epoch, err)
+		}
+	}
+
+	return nil
 }
 
 func (p *NetworkPoller) fetchAndUpsertNodes(ctx context.Context, epoch uint64) error {

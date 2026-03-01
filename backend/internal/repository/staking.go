@@ -120,6 +120,17 @@ func (r *Repository) UpsertEpochStats(ctx context.Context, stats models.EpochSta
 	return err
 }
 
+// UpdateEpochTotalStaked sets total_staked for a given epoch in epoch_stats.
+func (r *Repository) UpdateEpochTotalStaked(ctx context.Context, epoch int64, totalStaked string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE app.epoch_stats
+		SET total_staked = $2, updated_at = NOW()
+		WHERE epoch = $1`,
+		epoch, numericOrZero(totalStaked),
+	)
+	return err
+}
+
 // ListStakingNodes returns staking nodes for a given epoch, ordered by tokens_staked desc.
 func (r *Repository) ListStakingNodes(ctx context.Context, epoch int64, limit, offset int) ([]models.StakingNode, error) {
 	query := `
