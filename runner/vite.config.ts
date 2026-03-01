@@ -16,4 +16,12 @@ export default defineConfig({
     format: 'es',
   },
   assetsInclude: ['**/*.wasm'],
+  server: {
+    proxy: {
+      '/lsp': {
+        target: 'ws://localhost:3001',
+        ws: true,
+      },
+    },
+  },
 });
