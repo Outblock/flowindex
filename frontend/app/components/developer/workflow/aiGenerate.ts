@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// AI Workflow Generator — calls Anthropic to generate nodes + edges from
-// a natural-language description.
+// AI Workflow Generator — calls backend /ai/workflow-generate which proxies
+// to Anthropic. Keeps API key server-side.
 // ---------------------------------------------------------------------------
 
 import type { Node, Edge } from 'reactflow'
+import { MarkerType } from 'reactflow'
 import { ALL_NODE_TYPES, NODE_TYPE_MAP } from './nodeTypes'
-
-const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io'
+import { resolveApiBaseUrl } from '../../../api'
 
 // Build a compact schema description of all node types for the system prompt
 function buildNodeCatalog(): string {
@@ -47,22 +47,6 @@ Your job is to convert natural language workflow descriptions into a structured 
 ## Available Node Types
 ${buildNodeCatalog()}
 
-## Output Format
-Return ONLY a JSON object (no markdown, no explanation) with this exact structure:
-{
-  "nodes": [
-    {
-      "id": "node_1",
-      "type": "<node type from catalog>",
-      "data": { "nodeType": "<same as type>", "config": { "<key>": "<value>", ... } }
-    }
-  ],
-  "edges": [
-    { "source": "node_1", "target": "node_2" }
-  ],
-  "name": "<short workflow name>"
-}
-
 ## Rules
 - Each node needs a unique id (node_1, node_2, etc.)
 - Triggers have no incoming edges; destinations have no outgoing edges.
@@ -75,6 +59,7 @@ Return ONLY a JSON object (no markdown, no explanation) with this exact structur
 - If the user says "USDC", use token_contract: "A.b19436aae4d94622.FiatToken".
 - Keep workflows simple — don't add unnecessary condition nodes unless asked.
 - The "name" field should be a 2-5 word description of the workflow.
+- For destination nodes, populate the message_template field with a useful default using {{variable}} placeholders from the trigger's output schema.
 
 ## Smart Merge
 If the user says "add" or "also" or "connect to existing", the intent is to ADD nodes to an existing workflow.
@@ -87,7 +72,7 @@ User: "Alert me on Slack when address 0x1234 receives FLOW"
 {
   "nodes": [
     { "id": "node_1", "type": "trigger_ft_transfer", "data": { "nodeType": "trigger_ft_transfer", "config": { "addresses": "0x1234", "direction": "in", "token_contract": "A.1654653399040a61.FlowToken" } } },
-    { "id": "node_2", "type": "dest_slack", "data": { "nodeType": "dest_slack", "config": { "webhook_url": "" } } }
+    { "id": "node_2", "type": "dest_slack", "data": { "nodeType": "dest_slack", "config": { "webhook_url": "", "message_template": "💰 {{amount}} FLOW received by 0x1234 from {{from_address}} (tx: {{tx_id}})" } } }
   ],
   "edges": [{ "source": "node_1", "target": "node_2" }],
   "name": "FLOW Receive Alert"
@@ -97,9 +82,9 @@ User: "When any NFT is transferred from 0xabc, send to Discord if it's a TopShot
 {
   "nodes": [
     { "id": "node_1", "type": "trigger_nft_transfer", "data": { "nodeType": "trigger_nft_transfer", "config": { "addresses": "0xabc", "direction": "out" } } },
-    { "id": "node_2", "type": "condition_if", "data": { "nodeType": "condition_if", "config": { "field": "collection", "operator": "==", "value": "TopShot" } } },
-    { "id": "node_3", "type": "dest_discord", "data": { "nodeType": "dest_discord", "config": { "webhook_url": "" } } },
-    { "id": "node_4", "type": "dest_email", "data": { "nodeType": "dest_email", "config": { "to": "", "subject": "NFT Transfer Alert" } } }
+    { "id": "node_2", "type": "condition_if", "data": { "nodeType": "condition_if", "config": { "field": "collection_name", "operator": "==", "value": "TopShot" } } },
+    { "id": "node_3", "type": "dest_discord", "data": { "nodeType": "dest_discord", "config": { "webhook_url": "", "message_template": "🖼️ TopShot NFT #{{nft_id}} transferred from {{from_address}} to {{to_address}}" } } },
+    { "id": "node_4", "type": "dest_email", "data": { "nodeType": "dest_email", "config": { "to": "", "subject": "NFT Transfer Alert", "message_template": "NFT #{{nft_id}} from collection {{collection_name}} was transferred from {{from_address}} to {{to_address}} in tx {{tx_id}}" } } }
   ],
   "edges": [
     { "source": "node_1", "target": "node_2" },
@@ -214,20 +199,20 @@ export async function generateWorkflow(
       )}\n\nUser request: ${prompt}`
     : prompt
 
-  const res = await fetch(`${AI_CHAT_URL}/api/generate`, {
+  const baseUrl = await resolveApiBaseUrl()
+
+  const res = await fetch(`${baseUrl}/ai/workflow-generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'omit',
     body: JSON.stringify({
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userMessage },
-      ],
+      system_prompt: SYSTEM_PROMPT,
+      user_message: userMessage,
     }),
   })
 
   if (!res.ok) {
-    throw new Error(`AI request failed: ${res.status}`)
+    const errBody = await res.json().catch(() => ({}))
+    throw new Error((errBody as any)?.error || `AI request failed: ${res.status}`)
   }
 
   const parsed: AIWorkflowResult = await res.json()
@@ -257,9 +242,8 @@ export async function generateWorkflow(
     sourceHandle: e.sourceHandle,
     animated: true,
     style: { stroke: '#525252', strokeWidth: 2 },
-    markerEnd: { type: 'arrowclosed' as const, color: '#525252', width: 16, height: 16 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#525252', width: 16, height: 16 },
   }))
 
   return { nodes: layoutedNodes, edges: styledEdges, name: parsed.name }
 }
-

@@ -74,6 +74,7 @@ func registerWebhookRoutes(r *mux.Router, s *Server) {
 
 func registerAIRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/ai/tx-summary", s.handleAITxSummary).Methods("POST", "OPTIONS")
+	r.HandleFunc("/ai/workflow-generate", s.handleAIWorkflowGenerate).Methods("POST", "OPTIONS")
 }
 
 func registerFlowRoutes(r *mux.Router, s *Server) {
