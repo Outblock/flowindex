@@ -274,41 +274,20 @@ type TransferDailyRow struct {
 }
 
 // GetTransferDailyStats returns daily FT and NFT transfer counts.
+// Reads pre-aggregated data from app.daily_stats (populated by daily_stats_worker).
 func (r *Repository) GetTransferDailyStats(ctx context.Context, from, to time.Time) ([]TransferDailyRow, error) {
-	// Compute height bounds in Go for partition pruning (no timestamp index on transfers).
-	var latestHeight int64
-	_ = r.db.QueryRow(ctx, `SELECT COALESCE(last_height, 0) FROM app.indexing_checkpoints WHERE service_name = 'main_ingester'`).Scan(&latestHeight)
-	daySpan := to.Sub(from).Hours()/24 + 2
-	heightLo := latestHeight - int64(daySpan*100000)
-	if heightLo < 0 {
-		heightLo = 0
-	}
-
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
-		),
-		ft AS (
-			SELECT date_trunc('day', timestamp)::date AS date, COUNT(*) AS cnt
-			FROM app.ft_transfers
-			WHERE block_height >= $3 AND block_height < $4
-			  AND timestamp >= $1::timestamptz AND timestamp < ($2::date + interval '1 day')
-			GROUP BY 1
-		),
-		nft AS (
-			SELECT date_trunc('day', timestamp)::date AS date, COUNT(*) AS cnt
-			FROM app.nft_transfers
-			WHERE block_height >= $3 AND block_height < $4
-			  AND timestamp >= $1::timestamptz AND timestamp < ($2::date + interval '1 day')
-			GROUP BY 1
 		)
-		SELECT d.date::text, COALESCE(f.cnt, 0), COALESCE(n.cnt, 0)
+		SELECT d.date::text,
+		       COALESCE(s.ft_transfer_count, 0),
+		       COALESCE(s.nft_transfer_count, 0)
 		FROM dates d
-		LEFT JOIN ft f ON f.date = d.date
-		LEFT JOIN nft n ON n.date = d.date
+		LEFT JOIN app.daily_stats s ON s.date = d.date
 		ORDER BY d.date ASC`
 
-	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC(), heightLo, latestHeight+1)
+	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
 		return nil, err
 	}

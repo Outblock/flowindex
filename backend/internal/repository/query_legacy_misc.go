@@ -281,18 +281,41 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 			  AND DATE(t.timestamp) IN (SELECT d FROM affected)
 			  AND t.timestamp IS NOT NULL
 			GROUP BY DATE(t.timestamp)
+		),
+		ft_agg AS (
+			SELECT DATE(ft.timestamp) AS date, COUNT(*) AS cnt
+			FROM app.ft_transfers ft
+			WHERE ft.block_height >= (SELECT lo FROM bounds)
+			  AND ft.block_height < (SELECT hi FROM bounds)
+			  AND DATE(ft.timestamp) IN (SELECT d FROM affected)
+			GROUP BY 1
+		),
+		nft_agg AS (
+			SELECT DATE(nt.timestamp) AS date, COUNT(*) AS cnt
+			FROM app.nft_transfers nt
+			WHERE nt.block_height >= (SELECT lo FROM bounds)
+			  AND nt.block_height < (SELECT hi FROM bounds)
+			  AND DATE(nt.timestamp) IN (SELECT d FROM affected)
+			GROUP BY 1
 		)
-		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, active_accounts, failed_tx_count, updated_at)
+		INSERT INTO app.daily_stats (date, tx_count, evm_tx_count, total_gas_used, active_accounts, failed_tx_count, ft_transfer_count, nft_transfer_count, updated_at)
 		SELECT
 			a.date, a.tx_count, a.evm_tx_count, a.total_gas_used, a.active_accounts,
-			a.failed_tx_count, NOW()
+			a.failed_tx_count,
+			COALESCE(f.cnt, 0),
+			COALESCE(n.cnt, 0),
+			NOW()
 		FROM tx_agg a
+		LEFT JOIN ft_agg f ON f.date = a.date
+		LEFT JOIN nft_agg n ON n.date = a.date
 		ON CONFLICT (date) DO UPDATE SET
 			tx_count = EXCLUDED.tx_count,
 			evm_tx_count = EXCLUDED.evm_tx_count,
 			total_gas_used = EXCLUDED.total_gas_used,
 			active_accounts = EXCLUDED.active_accounts,
 			failed_tx_count = EXCLUDED.failed_tx_count,
+			ft_transfer_count = EXCLUDED.ft_transfer_count,
+			nft_transfer_count = EXCLUDED.nft_transfer_count,
 			updated_at = NOW();
 	`, fromHeight, toHeight)
 	if err != nil {

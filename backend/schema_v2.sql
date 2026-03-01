@@ -526,6 +526,10 @@ ALTER TABLE IF EXISTS app.daily_stats
   ADD COLUMN IF NOT EXISTS total_gas_used BIGINT DEFAULT 0;
 ALTER TABLE IF EXISTS app.daily_stats
   ADD COLUMN IF NOT EXISTS failed_tx_count BIGINT DEFAULT 0;
+ALTER TABLE IF EXISTS app.daily_stats
+  ADD COLUMN IF NOT EXISTS ft_transfer_count BIGINT DEFAULT 0;
+ALTER TABLE IF EXISTS app.daily_stats
+  ADD COLUMN IF NOT EXISTS nft_transfer_count BIGINT DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS analytics.daily_metrics (
     date                 DATE PRIMARY KEY,
