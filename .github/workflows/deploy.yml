@@ -360,6 +360,7 @@ jobs:
           docker run -d --restart=always --name supabase-studio \
             --network=host \
             -e PORT=3100 \
+            -e HOSTNAME=0.0.0.0 \
             -e STUDIO_PG_META_URL=http://127.0.0.1:8085 \
             -e SUPABASE_URL=http://127.0.0.1:9999 \
             -e SUPABASE_REST_URL=http://127.0.0.1:9999 \
