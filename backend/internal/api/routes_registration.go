@@ -123,6 +123,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/contract/{identifier}/events", s.handleContractEventTypes).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/contract/{identifier}/version", s.handleContractVersionList).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/contract/{identifier}/scripts", s.handleContractScripts).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/script/{hash}", s.handleGetScriptText).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/contract/{identifier}/dependencies", s.handleContractDependencies).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/contract/{identifier}/version/{id}", s.handleFlowGetContractVersion).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/contract/{identifier}/{id}", s.handleFlowGetContractVersion).Methods("GET", "OPTIONS")

@@ -167,7 +167,9 @@ function ContractDetail() {
     const [scriptsLoading, setScriptsLoading] = useState(false);
     const [scriptsOffset, setScriptsOffset] = useState(0);
     const [scriptsHasMore, setScriptsHasMore] = useState(false);
-    const [expandedScript, setExpandedScript] = useState<string | null>(null);
+    const [selectedScript, setSelectedScript] = useState<string | null>(null);
+    const [selectedScriptText, setSelectedScriptText] = useState<string>('');
+    const [scriptTextLoading, setScriptTextLoading] = useState(false);
 
     // Dependencies state
     const [deps, setDeps] = useState<ContractDependencyData | null>(null);
@@ -250,6 +252,32 @@ function ContractDetail() {
             setScriptsLoading(false);
         }
     };
+
+    // Fetch full script text by hash
+    const loadScriptText = async (hash: string) => {
+        setScriptTextLoading(true);
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const res = await fetch(`${baseUrl}/flow/script/${encodeURIComponent(hash)}`);
+            const payload = await res.json();
+            const items = payload?.data;
+            if (Array.isArray(items) && items.length > 0) {
+                setSelectedScriptText(items[0].script_text || '');
+            }
+        } catch (err) {
+            console.error('Failed to load script text', err);
+        } finally {
+            setScriptTextLoading(false);
+        }
+    };
+
+    // Auto-select first script when scripts load
+    useEffect(() => {
+        if (scripts.length > 0 && !selectedScript) {
+            setSelectedScript(scripts[0].script_hash);
+            loadScriptText(scripts[0].script_hash);
+        }
+    }, [scripts]);
 
     // Load dependencies
     const loadDeps = async () => {
@@ -684,80 +712,100 @@ function ContractDetail() {
 
                     {/* Common Scripts Tab */}
                     {activeTab === 'scripts' && (
-                        <div className="flex-1 overflow-auto">
+                        <div className="flex-1 flex overflow-hidden">
                             {scriptsLoading && scripts.length === 0 && (
-                                <div className="flex items-center justify-center p-12">
+                                <div className="flex items-center justify-center flex-1 p-12">
                                     <div className="w-8 h-8 border-2 border-dashed border-zinc-400 rounded-full animate-spin" />
                                 </div>
                             )}
                             {scripts.length > 0 && (
-                                <div className="divide-y divide-zinc-100 dark:divide-white/5">
-                                    {scripts.map((sc) => (
-                                        <div key={sc.script_hash}>
-                                            <button
-                                                onClick={() => setExpandedScript(expandedScript === sc.script_hash ? null : sc.script_hash)}
-                                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors text-left"
-                                            >
-                                                {expandedScript === sc.script_hash ? (
-                                                    <ChevronDown className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-                                                ) : (
-                                                    <ChevronRight className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-                                                )}
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-0.5">
-                                                        <span className="text-xs font-mono text-zinc-900 dark:text-white truncate">
-                                                            {sc.label || sc.script_hash.substring(0, 16) + '...'}
+                                <>
+                                    {/* Left sidebar - script list */}
+                                    <div className="w-[280px] shrink-0 border-r border-zinc-200 dark:border-white/10 overflow-y-auto">
+                                        <div className="divide-y divide-zinc-100 dark:divide-white/5">
+                                            {scripts.map((sc) => (
+                                                <button
+                                                    key={sc.script_hash}
+                                                    onClick={() => {
+                                                        setSelectedScript(sc.script_hash);
+                                                        loadScriptText(sc.script_hash);
+                                                    }}
+                                                    className={`w-full text-left px-3 py-2.5 transition-colors ${
+                                                        selectedScript === sc.script_hash
+                                                            ? 'bg-nothing-green/10 border-l-2 border-nothing-green'
+                                                            : 'hover:bg-zinc-50 dark:hover:bg-white/5 border-l-2 border-transparent'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-1.5 mb-0.5">
+                                                        <span className={`text-[11px] font-mono truncate ${
+                                                            selectedScript === sc.script_hash
+                                                                ? 'text-zinc-900 dark:text-white font-semibold'
+                                                                : 'text-zinc-700 dark:text-zinc-300'
+                                                        }`}>
+                                                            {sc.label || sc.script_hash.substring(0, 12) + '...'}
                                                         </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
                                                         {sc.category && (
-                                                            <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-zinc-100 dark:bg-white/10 text-zinc-500 uppercase tracking-wider shrink-0">
+                                                            <span className="text-[8px] px-1 py-0.5 rounded-sm bg-zinc-100 dark:bg-white/10 text-zinc-500 uppercase tracking-wider">
                                                                 {sc.category}
                                                             </span>
                                                         )}
+                                                        <span className="text-[10px] text-zinc-400 font-mono ml-auto">
+                                                            {sc.tx_count?.toLocaleString()} txs
+                                                        </span>
                                                     </div>
                                                     {sc.description && (
-                                                        <p className="text-[10px] text-zinc-500 truncate">{sc.description}</p>
+                                                        <p className="text-[9px] text-zinc-400 mt-0.5 truncate">{sc.description}</p>
                                                     )}
-                                                </div>
-                                                <span className="text-xs font-mono text-zinc-500 shrink-0 tabular-nums">
-                                                    {sc.tx_count?.toLocaleString()} <span className="text-[10px] text-zinc-400">txs</span>
-                                                </span>
-                                            </button>
-                                            {expandedScript === sc.script_hash && sc.script_preview && (
-                                                <div className={`border-t border-zinc-100 dark:border-white/5 ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-zinc-50'}`}>
-                                                    <SyntaxHighlighter
-                                                        language="swift"
-                                                        style={syntaxTheme}
-                                                        customStyle={{
-                                                            margin: 0,
-                                                            padding: '1rem 1.5rem',
-                                                            fontSize: '10px',
-                                                            lineHeight: '1.5',
-                                                            maxHeight: '300px',
-                                                        }}
-                                                        showLineNumbers={true}
-                                                        lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none", textAlign: "right" }}
-                                                    >
-                                                        {sc.script_preview}
-                                                    </SyntaxHighlighter>
-                                                </div>
-                                            )}
+                                                </button>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                            {scriptsHasMore && (
-                                <div className="text-center py-3 border-t border-zinc-100 dark:border-white/5">
-                                    <button
-                                        onClick={() => loadScripts(scriptsOffset, true)}
-                                        disabled={scriptsLoading}
-                                        className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50 uppercase tracking-widest"
-                                    >
-                                        {scriptsLoading ? 'Loading...' : 'Load More'}
-                                    </button>
-                                </div>
+                                        {scriptsHasMore && (
+                                            <div className="text-center py-2 border-t border-zinc-100 dark:border-white/5">
+                                                <button
+                                                    onClick={() => loadScripts(scriptsOffset, true)}
+                                                    disabled={scriptsLoading}
+                                                    className="px-3 py-1.5 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50 uppercase tracking-widest"
+                                                >
+                                                    {scriptsLoading ? 'Loading...' : 'Load More'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Right panel - script code */}
+                                    <div className={`flex-1 overflow-auto ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-zinc-50'}`}>
+                                        {scriptTextLoading ? (
+                                            <div className="flex items-center justify-center h-full">
+                                                <div className="w-6 h-6 border-2 border-dashed border-zinc-400 rounded-full animate-spin" />
+                                            </div>
+                                        ) : selectedScriptText ? (
+                                            <SyntaxHighlighter
+                                                language="swift"
+                                                style={syntaxTheme}
+                                                customStyle={{
+                                                    margin: 0,
+                                                    padding: '1.5rem',
+                                                    fontSize: '11px',
+                                                    lineHeight: '1.6',
+                                                    height: '100%',
+                                                }}
+                                                showLineNumbers={true}
+                                                lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none", textAlign: "right" }}
+                                            >
+                                                {selectedScriptText}
+                                            </SyntaxHighlighter>
+                                        ) : selectedScript ? (
+                                            <div className="flex items-center justify-center h-full text-zinc-500 text-xs uppercase tracking-widest">
+                                                Select a script to view
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                </>
                             )}
                             {scripts.length === 0 && !scriptsLoading && (
-                                <div className="flex flex-col items-center justify-center p-12 text-zinc-500">
+                                <div className="flex flex-col items-center justify-center flex-1 p-12 text-zinc-500">
                                     <Terminal className="h-8 w-8 mb-3 opacity-30" />
                                     <p className="text-xs uppercase tracking-widest">No common scripts found</p>
                                     <p className="text-[10px] text-zinc-400 mt-1">Script templates that reference this contract will appear here</p>

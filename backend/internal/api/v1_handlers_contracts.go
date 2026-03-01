@@ -452,6 +452,24 @@ func (s *Server) handleContractScripts(w http.ResponseWriter, r *http.Request) {
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
 }
 
+func (s *Server) handleGetScriptText(w http.ResponseWriter, r *http.Request) {
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
+	hash := mux.Vars(r)["hash"]
+	if hash == "" {
+		writeAPIError(w, http.StatusBadRequest, "missing script hash")
+		return
+	}
+	text, err := s.repo.GetScriptTextByHash(r.Context(), hash)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, []map[string]interface{}{{"script_hash": hash, "script_text": text}}, nil, nil)
+}
+
 func (s *Server) handleContractDependencies(w http.ResponseWriter, r *http.Request) {
 	if s.repo == nil {
 		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")

@@ -1039,6 +1039,15 @@ type SmartContractRef struct {
 	Name    string `json:"name"`
 }
 
+func (r *Repository) GetScriptTextByHash(ctx context.Context, scriptHash string) (string, error) {
+	var text string
+	err := r.db.QueryRow(ctx, `SELECT COALESCE(script_text, '') FROM raw.scripts WHERE script_hash = $1`, scriptHash).Scan(&text)
+	if err != nil {
+		return "", err
+	}
+	return text, nil
+}
+
 func (r *Repository) GetContractDependents(ctx context.Context, address, name string) ([]SmartContractRef, error) {
 	// Find contracts whose code imports from this contract's address+name
 	importPattern := "import " + name + " from 0x" + address

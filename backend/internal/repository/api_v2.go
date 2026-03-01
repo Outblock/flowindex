@@ -838,11 +838,12 @@ func (r *Repository) ListContractsFiltered(ctx context.Context, f ContractListFi
 		       COALESCE(ft.logo::text, nft.square_image::text, ''),
 		       COALESCE(ft.name, nft.name, ''),
 		       COALESCE(ft.symbol, nft.symbol, ''),
-		       sc.created_at,
+		       COALESCE(bl.timestamp, sc.created_at),
 		       sc.updated_at
 		FROM app.smart_contracts sc
 		LEFT JOIN app.ft_tokens ft ON ft.contract_address = sc.address AND ft.contract_name = sc.name
 		LEFT JOIN app.nft_collections nft ON nft.contract_address = sc.address AND nft.contract_name = sc.name
+		LEFT JOIN raw.block_lookup bl ON bl.height = sc.last_updated_height
 		`+where+`
 		ORDER BY `+orderBy+`
 		LIMIT $`+fmt.Sprint(arg)+` OFFSET $`+fmt.Sprint(arg+1), args...)
@@ -891,9 +892,10 @@ func (r *Repository) GetContractByIdentifier(ctx context.Context, identifier str
 		SELECT encode(sc.address, 'hex') AS address, sc.name, COALESCE(sc.code,''), COALESCE(sc.version,1), COALESCE(sc.last_updated_height,0),
 		       COALESCE(sc.is_verified, false),
 		       COALESCE(sc.dependent_count, 0),
-		       sc.created_at,
+		       COALESCE(bl.timestamp, sc.created_at),
 		       sc.updated_at
 		FROM app.smart_contracts sc
+		LEFT JOIN raw.block_lookup bl ON bl.height = sc.last_updated_height
 		WHERE sc.address = $1 AND ($2 = '' OR sc.name = $2)
 		ORDER BY sc.address ASC, sc.name ASC`, hexToBytes(address), name)
 	if err != nil {
