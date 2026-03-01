@@ -59,9 +59,8 @@ export function useLsp(
         setIsReady(true);
         console.log('[LSP] Cadence Language Server ready');
 
-        // Open existing documents
+        // Open existing documents (including readOnly deps so the LSP can resolve imports)
         for (const file of project.files) {
-          if (file.readOnly) continue;
           const uri = `file:///${file.path}`;
           adapter.openDocument(uri, file.content);
           openDocsRef.current.add(uri);
@@ -78,11 +77,10 @@ export function useLsp(
     const adapter = adapterRef.current;
     if (!adapter) return;
 
-    const currentPaths = new Set(project.files.filter((f) => !f.readOnly).map((f) => f.path));
+    const currentPaths = new Set(project.files.map((f) => f.path));
 
-    // Open new documents
+    // Open new documents (including readOnly deps for import resolution)
     for (const file of project.files) {
-      if (file.readOnly) continue;
       const uri = `file:///${file.path}`;
       if (!openDocsRef.current.has(uri)) {
         adapter.openDocument(uri, file.content);
