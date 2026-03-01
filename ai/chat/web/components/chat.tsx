@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Database,
   BarChart3,
@@ -11,7 +11,9 @@ import {
   Code2,
   Layers,
   Sparkles,
+  ChevronDown,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
 import {
   Conversation,
@@ -174,15 +176,87 @@ export function Chat() {
   );
 }
 
+/** Threshold in characters for collapsing user messages */
+const USER_MSG_COLLAPSE_CHARS = 280;
+/** Threshold in line count for collapsing user messages */
+const USER_MSG_COLLAPSE_LINES = 4;
+/** Collapsed preview height in px */
+const USER_MSG_COLLAPSED_HEIGHT = 96;
+
+function CollapsibleUserMessage({ text }: { text: string }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    const lineCount = text.split("\n").length;
+    const charCount = text.length;
+    setIsOverflowing(
+      charCount > USER_MSG_COLLAPSE_CHARS || lineCount > USER_MSG_COLLAPSE_LINES
+    );
+  }, [text]);
+
+  const needsCollapse = isOverflowing && !expanded;
+
+  return (
+    <div className="relative">
+      <motion.div
+        ref={contentRef}
+        initial={false}
+        animate={{
+          height: needsCollapse ? USER_MSG_COLLAPSED_HEIGHT : "auto",
+        }}
+        transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+        className="overflow-hidden whitespace-pre-wrap break-words"
+      >
+        {text}
+      </motion.div>
+
+      {/* Gradient fade when collapsed */}
+      <AnimatePresence>
+        {needsCollapse && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[var(--bg-element)] to-transparent pointer-events-none rounded-b-2xl"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Expand / Collapse button */}
+      {isOverflowing && (
+        <motion.button
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1.5 flex items-center gap-1 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors cursor-pointer"
+          type="button"
+        >
+          <motion.span
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ duration: 0.25 }}
+            className="inline-flex"
+          >
+            <ChevronDown size={12} />
+          </motion.span>
+          {expanded ? "Show less" : "Show more"}
+        </motion.button>
+      )}
+    </div>
+  );
+}
+
 function ChatMessage({ message }: { message: UIMessage }) {
   if (message.role === "user") {
+    const text = message.parts
+      .filter((p) => p.type === "text")
+      .map((p) => p.text)
+      .join("");
+
     return (
       <Message from="user">
         <MessageContent className="!rounded-2xl !bg-[var(--bg-element)] !px-4 !py-3">
-          {message.parts
-            .filter((p) => p.type === "text")
-            .map((p) => p.text)
-            .join("")}
+          <CollapsibleUserMessage text={text} />
         </MessageContent>
       </Message>
     );

@@ -2,6 +2,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "streamdown/styles.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -71,6 +72,25 @@ body {
 /* Glow */
 .flow-glow {
   box-shadow: 0 0 24px -4px var(--flow-green-glow);
+}
+
+/* Streamdown: colorTransition + blurIn animation */
+@keyframes sd-colorBlurIn {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    color: var(--flow-green);
+  }
+  40% {
+    opacity: 1;
+    filter: blur(1px);
+    color: var(--flow-green-dim);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    color: inherit;
+  }
 }
 
 /* Animations */

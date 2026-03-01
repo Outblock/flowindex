@@ -324,6 +324,13 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
+const streamdownAnimated = {
+  animation: "colorBlurIn" as const,
+  duration: 400,
+  easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+  sep: "word" as const,
+};
+
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
     <Streamdown
@@ -332,6 +339,7 @@ export const MessageResponse = memo(
         className
       )}
       plugins={streamdownPlugins}
+      animated={streamdownAnimated}
       {...props}
     />
   ),
