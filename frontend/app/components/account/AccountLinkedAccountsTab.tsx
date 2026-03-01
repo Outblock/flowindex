@@ -7,6 +7,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { AddressLink } from '../AddressLink';
 import { User, Shield, Loader2, UserCog, KeyRound, ShieldCheck, Coins, Image as ImageIcon, Globe } from 'lucide-react';
+import { ExpandableFlowContainer } from '../ExpandableFlowContainer';
 import { normalizeAddress } from './accountUtils';
 import type { AccountInfo, AccountManagerInfo, AccountOwnedInfo, TokenInfo } from '../../../cadence/cadence.gen';
 
@@ -376,17 +377,12 @@ export function AccountLinkedAccountsTab({ address }: Props) {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-3">
-                <div className="text-[10px] uppercase tracking-widest text-zinc-500">
-                    Linked Accounts
+            {loading && (
+                <div className="flex items-center gap-1 text-[10px] text-zinc-500 mb-3">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading...
                 </div>
-                {loading && (
-                    <div className="flex items-center gap-1 text-[10px] text-zinc-500">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Loading...
-                    </div>
-                )}
-            </div>
+            )}
 
             {error && <div className="text-xs text-red-500 dark:text-red-400 mb-4">{error}</div>}
 
@@ -399,9 +395,11 @@ export function AccountLinkedAccountsTab({ address }: Props) {
             )}
 
             {hasAnyRelationship && nodes.length > 0 && (
-                <div
-                    className="border border-zinc-200 dark:border-white/10 rounded-lg overflow-hidden bg-zinc-50 dark:bg-[#0a0a0a]"
-                    style={{ height: graphHeight }}
+                <ExpandableFlowContainer
+                    label="Linked Accounts"
+                    subtitle={`${nodes.length} account${nodes.length !== 1 ? 's' : ''}`}
+                    icon={<Shield className="w-4 h-4 text-zinc-500" />}
+                    height={graphHeight}
                 >
                     <ReactFlow
                         nodes={nodes}
@@ -425,7 +423,7 @@ export function AccountLinkedAccountsTab({ address }: Props) {
                             className="!bg-white dark:!bg-zinc-900 !border-zinc-200 dark:!border-white/10 !shadow-sm !rounded-lg [&_button]:!bg-white dark:[&_button]:!bg-zinc-900 [&_button]:!border-zinc-200 dark:[&_button]:!border-white/10 [&_button]:!fill-zinc-600 dark:[&_button]:!fill-zinc-400 [&_button]:!rounded-md"
                         />
                     </ReactFlow>
-                </div>
+                </ExpandableFlowContainer>
             )}
 
             {/* Summary info */}

@@ -17,6 +17,7 @@ import 'reactflow/dist/style.css';
 import { formatShort } from '../account/accountUtils';
 import { extractLogoUrl } from '../TransactionRow';
 import { useTheme } from '../../contexts/ThemeContext';
+import { ExpandableFlowContainer } from '../ExpandableFlowContainer';
 
 /* ── Custom edge that reliably renders React element labels ── */
 
@@ -424,14 +425,12 @@ export default function TransferFlowDiagram({ detail }: { detail: any }) {
     const height = Math.max(200, maxY + 160);
 
     return (
-        <div>
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Transfer Flow</div>
-            <div
-                className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden"
-                style={{ height }}
-            >
-                <FlowDiagram initialNodes={nodes} initialEdges={edges} isDark={isDark} />
-            </div>
-        </div>
+        <ExpandableFlowContainer
+            label="Transfer Flow"
+            subtitle={`${nodes.length} address${nodes.length !== 1 ? 'es' : ''} · ${edges.length} transfer${edges.length !== 1 ? 's' : ''}`}
+            height={height}
+        >
+            <FlowDiagram initialNodes={nodes} initialEdges={edges} isDark={isDark} />
+        </ExpandableFlowContainer>
     );
 }

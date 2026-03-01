@@ -19,6 +19,7 @@ import { diffLines, type Change } from 'diff';
 import ReactFlow, { Background, Controls, useNodesState, useEdgesState, MarkerType, Position, Handle } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
+import { ExpandableFlowContainer } from '../../components/ExpandableFlowContainer';
 
 // Custom node that shows name + identifier + metadata
 const ContractNode = ({ data }: { data: { label: string; identifier: string; isCurrent: boolean; isVerified?: boolean; kind?: string; tokenLogo?: string; tokenSymbol?: string } }) => {
@@ -1299,8 +1300,26 @@ function DependencyGraph({ contractName, contractIdentifier, imports, dependents
         );
     }
 
+    const legend = (
+        <div className="flex items-center gap-6 px-4 py-2 border-t border-zinc-100 dark:border-white/5 text-[10px] text-zinc-500">
+            <span className="flex items-center gap-1.5">
+                <span className="w-3 h-0.5 bg-green-500 inline-block" /> Imports
+            </span>
+            <span className="flex items-center gap-1.5">
+                <span className="w-3 h-0.5 bg-purple-500 inline-block" /> Imported by
+            </span>
+            <span className="text-zinc-400">Click a node to navigate</span>
+        </div>
+    );
+
     return (
-        <div style={{ height: 500 }}>
+        <ExpandableFlowContainer
+            label="Dependency Graph"
+            subtitle={`${nodes.length} contract${nodes.length !== 1 ? 's' : ''} · ${edges.length} edge${edges.length !== 1 ? 's' : ''}`}
+            icon={<GitBranch className="w-4 h-4 text-green-500" />}
+            height={500}
+            footer={legend}
+        >
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -1321,16 +1340,6 @@ function DependencyGraph({ contractName, contractIdentifier, imports, dependents
                     }}
                 />
             </ReactFlow>
-            {/* Legend */}
-            <div className="flex items-center gap-6 px-4 py-2 border-t border-zinc-100 dark:border-white/5 text-[10px] text-zinc-500">
-                <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-0.5 bg-green-500 inline-block" /> Imports
-                </span>
-                <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-0.5 bg-purple-500 inline-block" /> Imported by
-                </span>
-                <span className="text-zinc-400">Click a node to navigate</span>
-            </div>
-        </div>
+        </ExpandableFlowContainer>
     );
 }
