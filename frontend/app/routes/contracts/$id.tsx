@@ -7,7 +7,8 @@ import { resolveApiBaseUrl } from '../../api';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { ArrowLeft, Box, Code, FileText, Layers, Activity, GitCompare, ChevronDown, ChevronRight, Clock, Hash } from 'lucide-react';
+import { ArrowLeft, Box, Code, FileText, Layers, Activity, GitCompare, ChevronDown, ChevronRight, Clock, Hash, Sparkles } from 'lucide-react';
+import { openAIChat } from '../../components/chat/openAIChat';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
@@ -359,7 +360,19 @@ function ContractDetail() {
                             </button>
                         ))}
                         {activeTab === 'source' && (
-                            <div className="ml-auto">
+                            <div className="ml-auto flex items-center gap-1">
+                                {code && (
+                                    <button
+                                        onClick={() => openAIChat(
+                                            `Audit this Cadence smart contract for security vulnerabilities, logic errors, and best practice violations.\n\nUse the Cadence MCP tools to fetch all imported dependencies and perform static analysis (cadence_check) on the code. Analyze the full dependency tree, not just the top-level contract.\n\n> **Contract:** \`${contract.name || contract.identifier}\`\n> **Address:** \`${contract.address}\`\n\n\`\`\`cadence\n${code}\n\`\`\``
+                                        )}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[10px] uppercase tracking-widest font-bold bg-nothing-green text-black hover:bg-nothing-green/85 shadow-sm shadow-nothing-green/25 transition-colors"
+                                    >
+                                        <Sparkles className="h-3 w-3" />
+                                        Audit with AI
+                                        <span className="text-black/50 font-normal ml-0.5">Beta</span>
+                                    </button>
+                                )}
                                 <CopyButton
                                     content={code || ''}
                                     variant="ghost"
