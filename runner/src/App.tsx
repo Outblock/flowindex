@@ -1,7 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import CadenceEditor from './editor/CadenceEditor';
+import ResultPanel from './components/ResultPanel';
+import ParamPanel from './components/ParamPanel';
+import WalletButton from './components/WalletButton';
 import { configureFcl } from './flow/fclConfig';
+import { parseMainParams } from './flow/cadenceParams';
+import { detectCodeType, executeScript, executeTransaction } from './flow/execute';
+import type { ExecutionResult } from './flow/execute';
 import type { FlowNetwork } from './flow/networks';
+import { Play, Loader2 } from 'lucide-react';
 
 const DEFAULT_CODE = `// Welcome to Cadence Runner
 // Press Ctrl/Cmd+Enter to execute
@@ -14,23 +21,39 @@ access(all) fun main(): String {
 export default function App() {
   const [code, setCode] = useState(DEFAULT_CODE);
   const [network, setNetwork] = useState<FlowNetwork>('mainnet');
+  const [results, setResults] = useState<ExecutionResult[]>([]);
+  const [paramValues, setParamValues] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     configureFcl(network);
   }, [network]);
 
-  const handleRun = useCallback(() => {
-    // Will be implemented in Task 4
-    console.log('Run triggered for network:', network);
-  }, [network]);
+  const scriptParams = useMemo(() => parseMainParams(code), [code]);
+  const codeType = useMemo(() => detectCodeType(code), [code]);
+
+  const handleRun = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
+    setResults([]);
+
+    if (codeType === 'script') {
+      const result = await executeScript(code, paramValues);
+      setResults([result]);
+    } else {
+      await executeTransaction(code, paramValues, (result) => {
+        setResults((prev) => [...prev, result]);
+      });
+    }
+
+    setLoading(false);
+  }, [code, codeType, paramValues, loading]);
 
   return (
     <div className="flex flex-col h-full bg-zinc-900 text-zinc-100">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-2 border-b border-zinc-700 bg-zinc-900/80 backdrop-blur shrink-0">
-        <h1 className="text-sm font-semibold tracking-tight">
-          Cadence Runner
-        </h1>
+        <h1 className="text-sm font-semibold tracking-tight">Cadence Runner</h1>
         <div className="flex items-center gap-3">
           <select
             value={network}
@@ -40,6 +63,21 @@ export default function App() {
             <option value="mainnet">Mainnet</option>
             <option value="testnet">Testnet</option>
           </select>
+
+          <WalletButton />
+
+          <button
+            onClick={handleRun}
+            disabled={loading}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
+          >
+            {loading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Play className="w-3.5 h-3.5" />
+            )}
+            {codeType === 'script' ? 'Run Script' : 'Send Transaction'}
+          </button>
         </div>
       </header>
 
@@ -52,6 +90,16 @@ export default function App() {
           darkMode={true}
         />
       </main>
+
+      {/* Parameters */}
+      <ParamPanel
+        params={scriptParams}
+        values={paramValues}
+        onChange={setParamValues}
+      />
+
+      {/* Results */}
+      <ResultPanel results={results} loading={loading} />
     </div>
   );
 }
