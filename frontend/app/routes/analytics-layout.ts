@@ -8,6 +8,8 @@ export interface CardDef {
   tabs: readonly string[]
   /** if set, card is only visible when this returns true */
   visibleKey?: string
+  /** true for list/table cards that should NOT be wrapped in Recharts ResponsiveContainer */
+  plain?: boolean
 }
 
 export interface KpiDef {
@@ -53,9 +55,9 @@ export const CARD_DEFS: CardDef[] = [
   { key: 'total-staked', title: 'Total Staked per Epoch', defaultW: 2, tabs: ['network'] },
   { key: 'node-count', title: 'Node Count per Epoch', defaultW: 1, tabs: ['network'] },
   { key: 'contract-activity', title: 'Contract Activity', defaultW: 2, tabs: ['network'] },
-  { key: 'whale-recent', title: 'Recent Whale Transfers', defaultW: 2, tabs: ['tokens'] },
-  { key: 'top-contracts', title: 'Top Contracts (24h)', defaultW: 1, tabs: ['network'] },
-  { key: 'token-volume', title: 'Token Volume (24h)', defaultW: 1, tabs: ['tokens'] },
+  { key: 'whale-recent', title: 'Recent Whale Transfers', defaultW: 2, tabs: ['tokens'], plain: true },
+  { key: 'top-contracts', title: 'Top Contracts (24h)', defaultW: 1, tabs: ['network'], plain: true },
+  { key: 'token-volume', title: 'Token Volume (24h)', defaultW: 1, tabs: ['tokens'], plain: true },
 ]
 
 /** Build a layout array for a given number of columns */

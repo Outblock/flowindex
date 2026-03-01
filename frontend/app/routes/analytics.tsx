@@ -254,6 +254,7 @@ function ChartCard({
   empty = false,
   emptyMessage,
   draggable = false,
+  plain = false,
 }: {
   title: string
   children: React.ReactNode
@@ -262,6 +263,8 @@ function ChartCard({
   empty?: boolean
   emptyMessage?: string
   draggable?: boolean
+  /** When true, render children directly without Recharts ResponsiveContainer (for list/table cards) */
+  plain?: boolean
 }) {
   return (
     <div className={`bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-lg p-5 hover:border-nothing-green/30 transition-colors h-full flex flex-col ${className}`}>
@@ -278,6 +281,8 @@ function ChartCard({
           <ChartSkeleton />
         ) : empty ? (
           <EmptyState message={emptyMessage} />
+        ) : plain ? (
+          children
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             {children as React.ReactElement}
@@ -1562,10 +1567,10 @@ function AnalyticsPage() {
         </div>
 
         {/* Content renders progressively as each API responds */}
-        {activeTab === 'whales' ? (
-          <BigTransfersFull />
-        ) : (
-        <div ref={containerRef}>
+        {activeTab === 'whales' && <BigTransfersFull />}
+        {/* Always render containerRef div so ResizeObserver stays attached across tab switches.
+            Use visibility:hidden + h-0 + overflow-hidden to hide without losing width measurement. */}
+        <div ref={containerRef} className={activeTab === 'whales' ? 'invisible h-0 overflow-hidden' : ''}>
           {mounted && (
             <>
               {/* KPI cards grid (draggable + resizable, expand to chart) */}
@@ -1631,6 +1636,7 @@ function AnalyticsPage() {
                           draggable={!isMobile}
                           loading={chart?.loading ?? false}
                           empty={chart?.empty ?? true}
+                          plain={card.plain}
                         >
                           {chart?.node}
                         </ChartCard>
@@ -1642,7 +1648,6 @@ function AnalyticsPage() {
             </>
           )}
         </div>
-        )}
       </div>
     </div>
   )
