@@ -397,9 +397,16 @@ jobs:
             -e SUPABASE_REST_URL=http://127.0.0.1:3000 \
             -e SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-anon}" \
             -e SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_KEY:-service}" \
+            -e AUTH_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
+            -e POSTGRES_HOST="$DB_HOST" \
+            -e POSTGRES_PORT="$DB_PORT" \
+            -e POSTGRES_DB="$DB_NAME" \
+            -e POSTGRES_PASSWORD="$DB_PASS" \
+            -e DEFAULT_ORGANIZATION_NAME=FlowIndex \
+            -e DEFAULT_PROJECT_NAME=FlowIndex \
             -e NEXT_PUBLIC_ENABLE_LOGS=true \
-            -e NEXT_ANALYTICS_BACKEND_PROVIDER= \
-            supabase/studio:latest
+            -e NEXT_ANALYTICS_BACKEND_PROVIDER=postgres \
+            supabase/studio:2025.05.05-sha-3c3fe9b
 
           # 4) studio-auth (port 8000)
           docker stop studio-auth 2>/dev/null || true; docker rm studio-auth 2>/dev/null || true
@@ -426,7 +433,7 @@ jobs:
             docker pull ${{ env.REGISTRY }}/studio:${{ github.sha }}
             docker pull supabase/postgres-meta:v0.96.0
             docker pull postgrest/postgrest:v12.2.8
-            docker pull supabase/studio:latest
+            docker pull supabase/studio:2025.05.05-sha-3c3fe9b
           '
           gcloud compute scp /tmp/gen_jwt.py flowindex-backend:/tmp/gen_jwt.py --zone=us-central1-a
           gcloud compute scp /tmp/deploy-studio.sh flowindex-backend:/tmp/deploy-studio.sh --zone=us-central1-a
