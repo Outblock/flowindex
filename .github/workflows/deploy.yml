@@ -353,7 +353,7 @@ jobs:
             -e PG_META_DB_NAME="$DB_NAME" \
             -e PG_META_DB_USER="$DB_USER" \
             -e PG_META_DB_PASSWORD="$DB_PASS" \
-            supabase/postgres-meta:v0.84.2
+            supabase/postgres-meta:v0.96.0
 
           # 2) Studio (port 3100)
           docker stop supabase-studio 2>/dev/null || true; docker rm supabase-studio 2>/dev/null || true
@@ -393,7 +393,7 @@ jobs:
             echo "=== Disk usage after prune ==="
             df -h / /var/lib/docker 2>/dev/null || df -h /
             docker pull ${{ env.REGISTRY }}/studio:${{ github.sha }}
-            docker pull supabase/postgres-meta:v0.84.2
+            docker pull supabase/postgres-meta:v0.96.0
             docker pull supabase/studio:latest
           '
           gcloud compute scp /tmp/deploy-studio.sh flowindex-backend:/tmp/deploy-studio.sh --zone=us-central1-a
