@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, Loader2, Sparkles, Wallet } from 'lucide-react'
+import { KeyRound, Mail, Loader2, Sparkles } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '../../components/ui/input-otp'
 
@@ -14,7 +14,7 @@ export const Route = createFileRoute('/developer/login')({
 })
 
 function DeveloperLoginPage() {
-  const { user, loading: authLoading, sendMagicLink, verifyOtp } = useAuth()
+  const { user, loading: authLoading, sendMagicLink, verifyOtp, getPasskeySupport, registerPasskey, signInWithPasskey } = useAuth()
   const { redirect } = Route.useSearch()
   const redirectTo = redirect && redirect.startsWith('/') ? redirect : '/developer'
 
@@ -24,6 +24,10 @@ function DeveloperLoginPage() {
   const [otpSent, setOtpSent] = useState(false)
   const [otpValue, setOtpValue] = useState('')
   const [verifying, setVerifying] = useState(false)
+  const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null)
+  const [passkeyHint, setPasskeyHint] = useState<string | null>(null)
+  const [passkeyLoading, setPasskeyLoading] = useState(false)
+  const [passkeyRegistering, setPasskeyRegistering] = useState(false)
 
   // Redirect if already logged in
   useEffect(() => {
@@ -31,6 +35,27 @@ function DeveloperLoginPage() {
       window.location.assign(redirectTo)
     }
   }, [authLoading, user, redirectTo])
+
+  useEffect(() => {
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const support = await getPasskeySupport()
+        if (cancelled) return
+        setPasskeySupported(support.supported)
+        setPasskeyHint(support.reason || null)
+      } catch (err) {
+        if (cancelled) return
+        setPasskeySupported(false)
+        setPasskeyHint(err instanceof Error ? err.message : 'Passkey is unavailable')
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [getPasskeySupport])
 
   async function handleSendLink(e: React.FormEvent) {
     e.preventDefault()
@@ -69,6 +94,35 @@ function DeveloperLoginPage() {
     setOtpValue(value)
     if (value.length === 6) {
       submitOtp(value)
+    }
+  }
+
+  async function handlePasskeySignIn() {
+    setError(null)
+    setPasskeyLoading(true)
+    try {
+      await signInWithPasskey(email.trim() ? email.trim() : undefined)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Passkey sign in failed')
+    } finally {
+      setPasskeyLoading(false)
+    }
+  }
+
+  async function handlePasskeyRegistration() {
+    if (!email.trim()) {
+      setError('Please enter an email first')
+      return
+    }
+    setError(null)
+    setPasskeyRegistering(true)
+    try {
+      await registerPasskey(email.trim())
+      setPasskeyHint('Passkey registered. You can now sign in with passkey.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Passkey registration failed')
+    } finally {
+      setPasskeyRegistering(false)
     }
   }
 
@@ -250,17 +304,32 @@ function DeveloperLoginPage() {
             <div className="flex-1 border-t border-neutral-800" />
           </div>
 
-          {/* Wallet login - coming soon */}
+          {/* Passkey login */}
           <button
-            disabled
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-500 font-semibold rounded-lg text-sm cursor-not-allowed relative"
+            type="button"
+            onClick={handlePasskeySignIn}
+            disabled={passkeyLoading || passkeyRegistering || !passkeySupported}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-100 hover:bg-white text-neutral-900 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            <Wallet className="w-4 h-4" />
-            Continue with Wallet
-            <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wider bg-neutral-700 text-neutral-400 px-1.5 py-0.5 rounded">
-              Coming Soon
-            </span>
+            {passkeyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+            Continue with Passkey
           </button>
+
+          <button
+            type="button"
+            onClick={handlePasskeyRegistration}
+            disabled={passkeyLoading || passkeyRegistering || !passkeySupported}
+            className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 hover:bg-neutral-700 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          >
+            {passkeyRegistering ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+            Create Passkey for This Email
+          </button>
+
+          {passkeyHint && (
+            <p className="mt-3 text-center text-xs text-neutral-500">
+              {passkeyHint}
+            </p>
+          )}
 
           <p className="mt-6 text-center text-xs text-neutral-500">
             We&apos;ll send you a magic link and verification code

@@ -111,6 +111,31 @@ docker compose up -d --build
 | Backend    | http://localhost:8080     |
 | PostgreSQL | localhost:5432            |
 
+### Passkey Auth (Supabase)
+
+Passkey support is wired through:
+- `supabase/functions/passkey-auth/index.ts` (WebAuthn logic)
+- `supabase/migrations/*_passkey_auth.sql` (credential/challenge/audit tables)
+- `supabase-gateway` (`http://localhost:54321`) for `/auth/v1`, `/rest/v1`, `/functions/v1/passkey-auth`
+
+Before running, provide these env vars (in `.env` or shell):
+- `SUPABASE_JWT_SECRET`
+- `SUPABASE_DB_PASSWORD`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_KEY`
+
+Then start as usual:
+
+```bash
+docker compose up -d --build
+```
+
+If your `supabase_db_data` volume already exists, apply the passkey migration manually once:
+
+```bash
+docker compose exec -T supabase-db psql -U postgres -d supabase -f /docker-entrypoint-initdb.d/migrations/20260301144541_passkey_auth.sql
+```
+
 ### Manual Setup
 
 **Prerequisites:** Go 1.24+, Node.js 20+ (or Bun), PostgreSQL 16+

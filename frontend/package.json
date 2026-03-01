@@ -31,6 +31,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@resvg/resvg-wasm": "^2.6.2",
+    "@supabase/supabase-js": "^2.98.0",
     "@tanstack/react-router": "^1.159.4",
     "@tanstack/react-start": "^1.159.4",
     "@types/dagre": "^0.7.54",
@@ -64,6 +65,7 @@
     "recharts": "^3.7.0",
     "remark-gfm": "^4.0.1",
     "satori": "^0.19.2",
+    "supakeys": "^0.1.7",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.167.1"
