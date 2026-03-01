@@ -47,6 +47,7 @@ func TestAllMatchersRegistered(t *testing.T) {
 	RegisterAll(r)
 
 	expected := []string{
+		"balance.check",
 		"ft.transfer",
 		"ft.large_transfer",
 		"nft.transfer",
