@@ -180,7 +180,7 @@ export default function App() {
     setProject((prev) => addDependencyFile(prev, address, contractName, code));
   }, []);
 
-  const { notifyChange } = useLsp(monacoInstance, project, network, handleDependency);
+  const { notifyChange, loadingDeps } = useLsp(monacoInstance, project, network, handleDependency);
 
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const codeType = useMemo(() => detectCodeType(activeCode), [activeCode]);
@@ -318,6 +318,12 @@ export default function App() {
               onSelectFile={handleSelectTab}
               onCloseFile={handleCloseTab}
             />
+            {loadingDeps && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 shrink-0">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span className="text-[11px] font-medium">Resolving imports...</span>
+              </div>
+            )}
             <div className="flex-1 min-h-0">
               <CadenceEditor
                 code={activeCode}

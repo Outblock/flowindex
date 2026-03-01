@@ -6,8 +6,11 @@ const WASM_URL = new URL(
   import.meta.url
 ).href;
 
-// Cache of resolved contract sources: address -> code
+// Cache of resolved contract sources: "0xADDR.ContractName" -> code
 const addressCodeCache = new Map<string, string>();
+
+// Also cache the "all contracts at address" concatenated form
+const addressAllCodeCache = new Map<string, string>();
 
 /** Synchronously fetch contract source for an address from Flow REST API.
  * The Go WASM LSP calls getAddressCode synchronously — cannot use async/fetch. */
@@ -76,6 +79,116 @@ export function clearAddressCache() {
 let currentAccessNode = 'https://rest-mainnet.onflow.org';
 let currentGetStringCode: ((location: string) => string | undefined) | null = null;
 
+/** Pre-populate the address code cache from project dependency files.
+ * This avoids synchronous XHR when the LSP resolves imports. */
+export function preloadCacheFromFiles(files: { path: string; content: string }[]) {
+  for (const file of files) {
+    // deps/0xADDR/ContractName.cdc -> cache key "0xADDR.ContractName"
+    const match = file.path.match(/^deps\/(0x[0-9a-fA-F]+)\/([^/]+)\.cdc$/);
+    if (match) {
+      const cacheKey = `${match[1]}.${match[2]}`;
+      if (!addressCodeCache.has(cacheKey)) {
+        addressCodeCache.set(cacheKey, file.content);
+      }
+    }
+  }
+}
+
+/** Parse Cadence source for `import X from 0xADDR` statements */
+function parseImports(code: string): { name: string; address: string }[] {
+  const re = /import\s+(\w+)\s+from\s+(0x[0-9a-fA-F]+)/g;
+  const results: { name: string; address: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(code)) !== null) {
+    results.push({ name: m[1], address: m[2] });
+  }
+  return results;
+}
+
+/** Async fetch a specific contract from Flow REST API */
+async function fetchContractAsync(
+  address: string,
+  contractName: string,
+  accessNode: string
+): Promise<string | undefined> {
+  const normalized = address.replace(/^0x/, '').padStart(16, '0');
+  const url = `${accessNode}/v1/accounts/0x${normalized}?expand=contracts`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return undefined;
+    const data = await resp.json();
+    const contracts = data?.contracts;
+    if (!contracts || typeof contracts !== 'object') return undefined;
+    const encoded = contracts[contractName];
+    if (typeof encoded === 'string' && encoded.length > 0) {
+      try { return atob(encoded); } catch { return encoded; }
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Normalize Flow address to 0x + 16 hex chars */
+function normalizeAddress(address: string): string {
+  const bare = address.replace(/^0x/, '').padStart(16, '0');
+  return `0x${bare}`;
+}
+
+/** Pre-fetch all dependencies for the given code (and transitive deps)
+ * asynchronously, populating addressCodeCache so synchronous LSP callbacks
+ * don't need to make blocking XHR calls. */
+export async function prefetchDependencies(
+  code: string,
+  accessNode: string,
+  depCallback?: (address: string, contractName: string, code: string) => void,
+  maxDepth = 3
+): Promise<void> {
+  const visited = new Set<string>();
+  const queue: { name: string; address: string; depth: number }[] = [];
+
+  // Seed with direct imports
+  for (const imp of parseImports(code)) {
+    const addr = normalizeAddress(imp.address);
+    const key = `${addr}.${imp.name}`;
+    if (!addressCodeCache.has(key)) {
+      queue.push({ name: imp.name, address: addr, depth: 0 });
+    }
+  }
+
+  while (queue.length > 0) {
+    // Fetch current batch in parallel
+    const batch = queue.splice(0, queue.length);
+    const fetches = batch
+      .filter((item) => {
+        const key = `${item.address}.${item.name}`;
+        if (visited.has(key) || addressCodeCache.has(key)) return false;
+        visited.add(key);
+        return true;
+      })
+      .map(async (item) => {
+        const contractCode = await fetchContractAsync(item.address, item.name, accessNode);
+        if (!contractCode) return;
+        const key = `${item.address}.${item.name}`;
+        addressCodeCache.set(key, contractCode);
+        depCallback?.(item.address, item.name, contractCode);
+
+        // Parse transitive imports
+        if (item.depth < maxDepth) {
+          for (const sub of parseImports(contractCode)) {
+            const addr = normalizeAddress(sub.address);
+            const subKey = `${addr}.${sub.name}`;
+            if (!visited.has(subKey) && !addressCodeCache.has(subKey)) {
+              queue.push({ name: sub.name, address: addr, depth: item.depth + 1 });
+            }
+          }
+        }
+      });
+
+    await Promise.all(fetches);
+  }
+}
+
 export function setAccessNode(node: string) {
   currentAccessNode = node;
 }
@@ -105,7 +218,6 @@ export async function createLSPBridge(
   const callbacks: Callbacks = {
     toClient: onMessage,
     getAddressCode: (address: string) => {
-      // LSP may pass "address.ContractName" or just "address"
       // LSP may pass "address.ContractName" or just "address"
       const parts = address.split('.');
       const addrPart = parts[0].replace(/^0x/, '').padStart(16, '0');

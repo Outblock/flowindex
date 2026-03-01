@@ -1,12 +1,16 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type * as Monaco from 'monaco-editor';
-import { createLSPBridge, setAccessNode, setStringCodeResolver, onDependencyResolved } from './languageServer';
+import {
+  createLSPBridge, setAccessNode, setStringCodeResolver,
+  onDependencyResolved, preloadCacheFromFiles, prefetchDependencies,
+} from './languageServer';
 import { MonacoLspAdapter } from './monacoLspAdapter';
 import type { ProjectState } from '../fs/fileSystem';
 import type { FlowNetwork } from '../flow/networks';
 
 /** Hook that manages the Cadence WASM LSP lifecycle.
- * Initializes after Monaco is ready, syncs open documents with the LSP. */
+ * Initializes after Monaco is ready, syncs open documents with the LSP.
+ * Pre-fetches dependencies asynchronously to avoid blocking the main thread. */
 export function useLsp(
   monacoInstance: typeof Monaco | null,
   project: ProjectState,
@@ -17,6 +21,7 @@ export function useLsp(
   const initializingRef = useRef(false);
   const openDocsRef = useRef<Set<string>>(new Set());
   const [isReady, setIsReady] = useState(false);
+  const [loadingDeps, setLoadingDeps] = useState(false);
 
   // Update access node when network changes
   useEffect(() => {
@@ -52,6 +57,28 @@ export function useLsp(
     (async () => {
       try {
         console.log('[LSP] Initializing Cadence Language Server...');
+
+        // Pre-populate cache from existing dependency files (e.g. from localStorage)
+        preloadCacheFromFiles(project.files);
+
+        // Async pre-fetch all dependencies for editable files
+        // This populates addressCodeCache BEFORE the LSP starts resolving imports,
+        // so the synchronous getAddressCode callback hits cache instead of doing XHR.
+        const accessNode = network === 'mainnet'
+          ? 'https://rest-mainnet.onflow.org'
+          : 'https://rest-testnet.onflow.org';
+
+        const editableFiles = project.files.filter((f) => !f.readOnly);
+        const allCode = editableFiles.map((f) => f.content).join('\n');
+
+        if (allCode.includes('import ')) {
+          setLoadingDeps(true);
+          console.log('[LSP] Pre-fetching dependencies...');
+          await prefetchDependencies(allCode, accessNode, onDependency);
+          console.log('[LSP] Dependencies pre-fetched');
+          setLoadingDeps(false);
+        }
+
         const bridge = await createLSPBridge(() => {});
         const adapter = new MonacoLspAdapter(bridge, monacoInstance);
         await adapter.initialize();
@@ -108,5 +135,5 @@ export function useLsp(
     }
   }, []);
 
-  return { notifyChange, isReady };
+  return { notifyChange, isReady, loadingDeps };
 }
