@@ -75,19 +75,20 @@ async function safeMcpTools(
 }
 
 export async function POST(req: Request) {
-  const { messages: rawMessages, mode: rawMode }: { messages: UIMessage[]; mode?: string } =
-    await req.json();
+  const { messages: rawMessages, mode: rawMode } =
+    (await req.json()) as { messages: Record<string, unknown>[]; mode?: string };
 
   // Normalize messages: ensure every message has a parts array (handles
   // clients that send plain {role, content} without parts).
-  const messages: UIMessage[] = rawMessages.map((m) => {
-    if (m.parts && Array.isArray(m.parts)) return m;
+  const messages = rawMessages.map((m) => {
+    if (Array.isArray(m.parts)) return m as unknown as UIMessage;
+    const content = m.content;
     return {
       ...m,
-      parts: m.content
-        ? [{ type: "text" as const, text: String(m.content) }]
+      parts: content
+        ? [{ type: "text" as const, text: String(content) }]
         : [],
-    };
+    } as unknown as UIMessage;
   });
 
   const mode: ChatMode =
