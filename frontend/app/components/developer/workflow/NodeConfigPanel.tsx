@@ -151,6 +151,15 @@ export default function NodeConfigPanel({
                         ),
                       )}
                     </select>
+                  ) : field.type === 'textarea' ? (
+                    <textarea
+                      id={`cfg-${field.key}`}
+                      value={config[field.key] ?? ''}
+                      onChange={(e) => onConfigChange(field.key, e.target.value)}
+                      placeholder={field.placeholder}
+                      rows={3}
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-neutral-800 border border-zinc-300 dark:border-neutral-700 rounded-lg text-sm text-zinc-900 dark:text-white font-mono placeholder-zinc-400 dark:placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors resize-y"
+                    />
                   ) : (
                     <input
                       id={`cfg-${field.key}`}

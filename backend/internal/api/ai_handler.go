@@ -116,6 +116,169 @@ var txSummarySchema = map[string]any{
 	"additionalProperties": false,
 }
 
+// ── Workflow Generate ────────────────────────────────────────────────────
+
+type aiWorkflowGenerateRequest struct {
+	SystemPrompt  string `json:"system_prompt"`
+	UserMessage   string `json:"user_message"`
+}
+
+type aiWorkflowNode struct {
+	ID   string         `json:"id"`
+	Type string         `json:"type"`
+	Data map[string]any `json:"data"`
+}
+
+type aiWorkflowEdge struct {
+	Source       string `json:"source"`
+	Target       string `json:"target"`
+	SourceHandle string `json:"sourceHandle,omitempty"`
+}
+
+type aiWorkflowGenerateResponse struct {
+	Nodes []aiWorkflowNode `json:"nodes"`
+	Edges []aiWorkflowEdge `json:"edges"`
+	Name  string           `json:"name"`
+}
+
+var workflowSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"nodes": map[string]any{
+			"type": "array",
+			"items": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"id":   map[string]any{"type": "string"},
+					"type": map[string]any{"type": "string"},
+					"data": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"nodeType": map[string]any{"type": "string"},
+							"config": map[string]any{
+								"type":                 "object",
+								"additionalProperties": map[string]any{"type": "string"},
+							},
+						},
+						"required":             []string{"nodeType", "config"},
+						"additionalProperties": false,
+					},
+				},
+				"required":             []string{"id", "type", "data"},
+				"additionalProperties": false,
+			},
+		},
+		"edges": map[string]any{
+			"type": "array",
+			"items": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"source":       map[string]any{"type": "string"},
+					"target":       map[string]any{"type": "string"},
+					"sourceHandle": map[string]any{"type": "string"},
+				},
+				"required":             []string{"source", "target"},
+				"additionalProperties": false,
+			},
+		},
+		"name": map[string]any{"type": "string"},
+	},
+	"required":             []string{"nodes", "edges", "name"},
+	"additionalProperties": false,
+}
+
+func (s *Server) handleAIWorkflowGenerate(w http.ResponseWriter, r *http.Request) {
+	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	if apiKey == "" {
+		http.Error(w, `{"error":"ANTHROPIC_API_KEY not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	var req aiWorkflowGenerateRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	if req.SystemPrompt == "" || req.UserMessage == "" {
+		http.Error(w, `{"error":"system_prompt and user_message are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	anthropicReq := anthropicRequest{
+		Model:     "claude-sonnet-4-5-20250929",
+		MaxTokens: 2048,
+		System:    req.SystemPrompt,
+		Messages: []anthropicMessage{
+			{Role: "user", Content: req.UserMessage},
+		},
+		OutputConfig: &anthropicOutputConfig{
+			Format: anthropicOutputFormat{
+				Type:   "json_schema",
+				Schema: workflowSchema,
+			},
+		},
+	}
+
+	body, _ := json.Marshal(anthropicReq)
+
+	httpReq, err := http.NewRequestWithContext(r.Context(), "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, `{"error":"failed to create request"}`, http.StatusInternalServerError)
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-api-key", apiKey)
+	httpReq.Header.Set("anthropic-version", "2023-06-01")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"anthropic api error: %s"}`, err.Error()), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		http.Error(w, `{"error":"failed to read response"}`, http.StatusBadGateway)
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, fmt.Sprintf(`{"error":"anthropic returned %d","detail":%s}`, resp.StatusCode, string(respBody)), http.StatusBadGateway)
+		return
+	}
+
+	var anthropicResp anthropicResponse
+	if err := json.Unmarshal(respBody, &anthropicResp); err != nil {
+		http.Error(w, `{"error":"failed to parse anthropic response"}`, http.StatusBadGateway)
+		return
+	}
+
+	if anthropicResp.StopReason == "refusal" {
+		http.Error(w, `{"error":"AI refused to process this request"}`, http.StatusUnprocessableEntity)
+		return
+	}
+
+	if len(anthropicResp.Content) == 0 {
+		http.Error(w, `{"error":"empty response from AI"}`, http.StatusBadGateway)
+		return
+	}
+
+	text := anthropicResp.Content[0].Text
+
+	var result aiWorkflowGenerateResponse
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		http.Error(w, `{"error":"AI returned invalid JSON"}`, http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// ── TX Summary ───────────────────────────────────────────────────────────
+
 func (s *Server) handleAITxSummary(w http.ResponseWriter, r *http.Request) {
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	if apiKey == "" {

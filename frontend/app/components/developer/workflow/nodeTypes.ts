@@ -31,7 +31,7 @@ export interface SchemaField {
 export interface ConfigFieldDef {
   key: string
   label: string
-  type: 'text' | 'number' | 'select' | 'searchable'
+  type: 'text' | 'number' | 'select' | 'searchable' | 'textarea'
   placeholder?: string
   options?: { value: string; label: string }[] | string[]
   isArray?: boolean
@@ -217,7 +217,7 @@ const CONDITION_NODES: NodeTypeMeta[] = [
     icon: GitBranch, color: COLORS.condition, outputs: 2,
     configFields: [
       { key: 'field', label: 'Field', type: 'text', placeholder: 'amount' },
-      { key: 'operator', label: 'Operator', type: 'select', options: ['==', '!=', '>', '<', '>=', '<=', 'contains', 'starts_with'] },
+      { key: 'operator', label: 'Operator', type: 'select', options: ['==', '!=', '>', '<', '>=', '<=', 'contains', 'not_contains', 'starts_with', 'ends_with', 'matches', 'in', 'not_in'] },
       { key: 'value', label: 'Value', type: 'text', placeholder: '' },
     ],
   },
@@ -226,7 +226,7 @@ const CONDITION_NODES: NodeTypeMeta[] = [
     icon: Filter, color: COLORS.condition,
     configFields: [
       { key: 'field', label: 'Field', type: 'text', placeholder: 'token' },
-      { key: 'operator', label: 'Operator', type: 'select', options: ['==', '!=', '>', '<', 'contains'] },
+      { key: 'operator', label: 'Operator', type: 'select', options: ['==', '!=', '>', '<', '>=', '<=', 'contains', 'not_contains', 'starts_with', 'ends_with', 'matches', 'in', 'not_in'] },
       { key: 'value', label: 'Value', type: 'text', placeholder: '' },
     ],
   },
@@ -243,6 +243,8 @@ const DESTINATION_NODES: NodeTypeMeta[] = [
     configFields: [
       { key: 'url', label: 'URL', type: 'text', placeholder: 'https://...' },
       { key: 'method', label: 'Method', type: 'select', options: ['POST', 'PUT', 'PATCH'] },
+      { key: 'headers', label: 'Headers (JSON)', type: 'textarea', placeholder: '{"Authorization": "Bearer ..."}' },
+      { key: 'message_template', label: 'Body Template', type: 'textarea', placeholder: 'Use {{variable}} placeholders from trigger output' },
     ],
   },
   {
@@ -250,6 +252,7 @@ const DESTINATION_NODES: NodeTypeMeta[] = [
     icon: MessageSquare, color: COLORS.destination,
     configFields: [
       { key: 'webhook_url', label: 'Webhook URL', type: 'text', placeholder: 'https://hooks.slack.com/...' },
+      { key: 'message_template', label: 'Message', type: 'textarea', placeholder: '{{amount}} {{contract_name}} transferred from {{from_address}} to {{to_address}}' },
     ],
   },
   {
@@ -257,6 +260,7 @@ const DESTINATION_NODES: NodeTypeMeta[] = [
     icon: Hash, color: COLORS.destination,
     configFields: [
       { key: 'webhook_url', label: 'Webhook URL', type: 'text', placeholder: 'https://discord.com/api/webhooks/...' },
+      { key: 'message_template', label: 'Message', type: 'textarea', placeholder: '{{amount}} {{contract_name}} transferred from {{from_address}} to {{to_address}}' },
     ],
   },
   {
@@ -265,6 +269,7 @@ const DESTINATION_NODES: NodeTypeMeta[] = [
     configFields: [
       { key: 'bot_token', label: 'Bot Token', type: 'text', placeholder: '123456:ABC-DEF...' },
       { key: 'chat_id', label: 'Chat ID', type: 'text', placeholder: '-100...' },
+      { key: 'message_template', label: 'Message', type: 'textarea', placeholder: '{{amount}} {{contract_name}} transferred from {{from_address}} to {{to_address}}' },
     ],
   },
   {
@@ -273,6 +278,7 @@ const DESTINATION_NODES: NodeTypeMeta[] = [
     configFields: [
       { key: 'to', label: 'To', type: 'text', placeholder: 'user@example.com' },
       { key: 'subject', label: 'Subject', type: 'text', placeholder: 'Alert: {{event_type}}' },
+      { key: 'message_template', label: 'Body', type: 'textarea', placeholder: '{{amount}} {{contract_name}} transferred from {{from_address}} to {{to_address}} (tx: {{tx_id}})' },
     ],
   },
 ]
