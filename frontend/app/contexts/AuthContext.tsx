@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { createPasskeyAuth } from 'supakeys';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,6 +27,9 @@ interface AuthContextValue extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   sendMagicLink: (email: string, redirectTo?: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
+  getPasskeySupport: () => Promise<{ supported: boolean; reason?: string }>;
+  registerPasskey: (email: string) => Promise<void>;
+  signInWithPasskey: (email?: string) => Promise<void>;
   handleCallback: (hash: string) => void;
   signOut: () => void;
 }
@@ -35,6 +40,38 @@ interface AuthContextValue extends AuthState {
 
 const STORAGE_KEY = 'flowindex_dev_auth';
 const GOTRUE_URL = import.meta.env.VITE_GOTRUE_URL || 'http://localhost:9999';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'http://localhost:54321';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const PASSKEY_FUNCTION_NAME = import.meta.env.VITE_PASSKEY_FUNCTION_NAME || 'passkey-auth';
+const PASSKEY_RP_ID =
+  import.meta.env.VITE_PASSKEY_RP_ID ||
+  (typeof window !== 'undefined' ? window.location.hostname : 'localhost');
+const PASSKEY_RP_NAME = import.meta.env.VITE_PASSKEY_RP_NAME || 'FlowIndex Developer Portal';
+
+const passkeyClient =
+  SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createPasskeyAuth(
+        createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+          },
+        }),
+        {
+          functionName: PASSKEY_FUNCTION_NAME,
+          rpId: PASSKEY_RP_ID,
+          rpName: PASSKEY_RP_NAME,
+        },
+      )
+    : null;
+
+function requirePasskeyClient() {
+  if (passkeyClient) return passkeyClient;
+  throw new Error(
+    'Passkey is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in frontend env.',
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -310,6 +347,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyTokenResponse],
   );
 
+  const getPasskeySupport = useCallback(async () => {
+    if (!passkeyClient) {
+      return {
+        supported: false,
+        reason: 'Passkey is not configured on this environment.',
+      };
+    }
+
+    const support = await passkeyClient.isSupported();
+    if (support.webauthn) return { supported: true };
+    return {
+      supported: false,
+      reason: 'WebAuthn is not supported by this browser/device.',
+    };
+  }, []);
+
+  const registerPasskey = useCallback(async (email: string) => {
+    const result = await requirePasskeyClient().register({ email });
+    if (!result.success) {
+      throw new Error(result.error?.message || 'Passkey registration failed');
+    }
+  }, []);
+
+  const signInWithPasskey = useCallback(
+    async (email?: string) => {
+      const result = await requirePasskeyClient().signIn(email ? { email } : {});
+      if (!result.success || !result.session?.access_token || !result.session?.refresh_token) {
+        throw new Error(result.error?.message || 'Passkey sign in failed');
+      }
+      applyTokenResponse({
+        access_token: result.session.access_token,
+        refresh_token: result.session.refresh_token,
+      });
+    },
+    [applyTokenResponse],
+  );
+
   const handleCallback = useCallback(
     (hash: string) => {
       const params = new URLSearchParams(hash.replace(/^#/, ''));
@@ -337,6 +411,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         sendMagicLink,
         verifyOtp,
+        getPasskeySupport,
+        registerPasskey,
+        signInWithPasskey,
         handleCallback,
         signOut,
       }}

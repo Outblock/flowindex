@@ -107,10 +107,7 @@ func main() {
 		log.Println("Database Migration Complete.")
 	}
 
-	flowClient, err := flow.NewClientFromEnv("FLOW_ACCESS_NODES", flowURL)
-	if err != nil {
-		log.Fatalf("Failed to connect to Flow: %v", err)
-	}
+	flowClient := connectFlowClientWithRetry("FLOW_ACCESS_NODES", flowURL, "live")
 	defer flowClient.Close()
 
 	// Historic nodes for pre-spork history backfill.
@@ -142,10 +139,7 @@ func main() {
 		}
 	}
 
-	historyClient, err := flow.NewClientFromEnv("FLOW_HISTORIC_ACCESS_NODES_EFFECTIVE", historicNodesRaw)
-	if err != nil {
-		log.Fatalf("Failed to connect to Flow historic nodes: %v", err)
-	}
+	historyClient := connectFlowClientWithRetry("FLOW_HISTORIC_ACCESS_NODES_EFFECTIVE", historicNodesRaw, "historic")
 	defer historyClient.Close()
 
 	// 3. Services
@@ -1265,6 +1259,27 @@ func redactDatabaseURL(raw string) string {
 	}
 	re = regexp.MustCompile(`(?i)(password=)([^\\s]+)`)
 	return re.ReplaceAllString(raw, `$1****`)
+}
+
+func connectFlowClientWithRetry(envKey string, fallback string, label string) *flow.Client {
+	delay := 2 * time.Second
+	const maxDelay = 30 * time.Second
+	attempt := 0
+
+	for {
+		attempt++
+		client, err := flow.NewClientFromEnv(envKey, fallback)
+		if err == nil {
+			if attempt > 1 {
+				log.Printf("[flow] connected to %s client after %d attempts", label, attempt)
+			}
+			return client
+		}
+
+		log.Printf("[flow] failed to connect to %s client (attempt=%d, retry_in=%s): %v", label, attempt, delay, err)
+		time.Sleep(delay)
+		delay = min(delay*2, maxDelay)
+	}
 }
 
 func loadPriceCacheFromDB(ctx context.Context, repo *repository.Repository, cache *market.PriceCache) {
