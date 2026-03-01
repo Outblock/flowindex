@@ -153,20 +153,25 @@ func (r *Repository) GetAnalyticsDailyEpochModule(ctx context.Context, from, to 
 // GetAnalyticsDailyBridgeModule returns daily bridge-to-EVM tx metric only.
 // Uses block_height bounds to enable partition pruning on ft_transfers.
 func (r *Repository) GetAnalyticsDailyBridgeModule(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
+	// Compute height bounds in Go instead of scanning raw.blocks (no timestamp index).
+	var latestHeight int64
+	_ = r.db.QueryRow(ctx, `SELECT COALESCE(last_height, 0) FROM app.indexing_checkpoints WHERE service_name = 'main_ingester'`).Scan(&latestHeight)
+	// Estimate: ~100k blocks per day
+	daySpan := to.Sub(from).Hours()/24 + 2 // +2 for margin
+	heightLo := latestHeight - int64(daySpan*100000)
+	if heightLo < 0 {
+		heightLo = 0
+	}
+
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
 		),
-		height_bounds AS (
-			SELECT
-				COALESCE((SELECT MIN(height) FROM raw.blocks WHERE timestamp >= $1::timestamptz), 0) AS lo,
-				COALESCE((SELECT MAX(height) FROM raw.blocks WHERE timestamp < ($2::date + interval '1 day')), 0) + 1 AS hi
-		),
 		bridge_txs AS (
 			SELECT DATE(ft.timestamp) AS d, COUNT(DISTINCT ft.transaction_id)::bigint AS cnt
 			FROM app.ft_transfers ft
-			WHERE ft.block_height >= (SELECT lo FROM height_bounds)
-			  AND ft.block_height < (SELECT hi FROM height_bounds)
+			WHERE ft.block_height >= $3
+			  AND ft.block_height < $4
 			  AND (ft.from_address IS NULL OR ft.to_address IS NULL)
 			  AND EXISTS (
 			    SELECT 1 FROM raw.transactions rtx
@@ -180,7 +185,7 @@ func (r *Repository) GetAnalyticsDailyBridgeModule(ctx context.Context, from, to
 		FROM dates d
 		LEFT JOIN bridge_txs b ON b.d = d.date
 		ORDER BY d.date ASC`
-	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
+	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC(), heightLo, latestHeight+1)
 	if err != nil {
 		return nil, err
 	}
@@ -335,43 +340,56 @@ func (r *Repository) GetBigTransfers(ctx context.Context, priceMap map[string]fl
 		limit = 200
 	}
 
-	// Build inline price table from priceMap.
+	// Build inline price table from priceMap, including per-token minimum amount
+	// threshold so the DB can filter early without computing amount*price for every row.
 	if len(priceMap) == 0 {
 		return []BigTransfer{}, nil
 	}
 
 	var valuesRows []string
-	args := make([]interface{}, 0, len(priceMap)*2+4)
+	args := make([]interface{}, 0, len(priceMap)*3+4)
 	argIdx := 1
 	for symbol, price := range priceMap {
-		valuesRows = append(valuesRows, fmt.Sprintf("($%d, $%d::numeric)", argIdx, argIdx+1))
-		args = append(args, symbol, price)
-		argIdx += 2
+		minAmount := 0.0
+		if price > 0 {
+			minAmount = minUSD / price
+		}
+		valuesRows = append(valuesRows, fmt.Sprintf("($%d, $%d::numeric, $%d::numeric)", argIdx, argIdx+1, argIdx+2))
+		args = append(args, symbol, price, minAmount)
+		argIdx += 3
 	}
-	pricesCTE := "prices(symbol, usd_price) AS (VALUES " + strings.Join(valuesRows, ", ") + ")"
+	pricesCTE := "prices(symbol, usd_price, min_amount) AS (VALUES " + strings.Join(valuesRows, ", ") + ")"
 
-	// minUSD, limit, offset placeholders
-	minUSDIdx := argIdx
-	limitIdx := argIdx + 1
-	offsetIdx := argIdx + 2
-	args = append(args, minUSD, limit, offset)
+	// height lo/hi, limit, offset placeholders
+	heightLoIdx := argIdx
+	heightHiIdx := argIdx + 1
+	limitIdx := argIdx + 2
+	offsetIdx := argIdx + 3
+
+	// Compute height bounds in Go instead of querying raw.blocks (which has no
+	// timestamp index and causes full-table scans).
+	// ~720k blocks per 7 days (1 block per ~0.84s).
+	var latestHeight int64
+	_ = r.db.QueryRow(ctx, `SELECT COALESCE(last_height, 0) FROM app.indexing_checkpoints WHERE service_name = 'main_ingester'`).Scan(&latestHeight)
+	if latestHeight == 0 {
+		// Fallback: quick max from the latest partition only
+		_ = r.db.QueryRow(ctx, `SELECT COALESCE(MAX(block_height), 0) FROM app.ft_transfers WHERE block_height > 140000000`).Scan(&latestHeight)
+	}
+	heightLo := latestHeight - 750000 // ~7 days with margin
+	if heightLo < 0 {
+		heightLo = 0
+	}
+	args = append(args, heightLo, latestHeight+1, limit, offset)
 
 	// Build optional type filter.
 	var typeFilter string
 	if len(transferTypes) > 0 {
-		typeFilter = fmt.Sprintf(" WHERE combined.type = ANY($%d)", argIdx+3)
+		typeFilter = fmt.Sprintf(" WHERE combined.type = ANY($%d)", argIdx+4)
 		args = append(args, transferTypes)
 	}
 
-	// Use block_height bounds for partition pruning on ft_transfers and defi_events.
-	// Estimate: ~720k blocks per 7 days (1 block/~0.84s).
 	query := fmt.Sprintf(`
-WITH %s,
-height_bounds AS (
-  SELECT
-    COALESCE((SELECT MIN(height) FROM raw.blocks WHERE timestamp > NOW() - INTERVAL '7 days'), 0) AS lo,
-    COALESCE((SELECT MAX(height) FROM raw.blocks), 0) + 1 AS hi
-)
+WITH %s
 SELECT tx_id, block_height, timestamp, type, token_symbol,
        token_contract_address, contract_name, token_logo, amount, usd_value,
        from_address, to_address
@@ -399,10 +417,9 @@ FROM (
     ON tk.contract_address = ft.token_contract_address
    AND tk.contract_name = ft.contract_name
   JOIN prices p ON p.symbol = tk.market_symbol
-  WHERE ft.block_height >= (SELECT lo FROM height_bounds)
-    AND ft.block_height < (SELECT hi FROM height_bounds)
-    AND ft.timestamp > NOW() - INTERVAL '7 days'
-    AND ft.amount * p.usd_price >= $%d
+  WHERE ft.block_height >= $%d
+    AND ft.block_height < $%d
+    AND ft.amount >= p.min_amount
 
   UNION ALL
 
@@ -424,17 +441,18 @@ FROM (
   JOIN app.defi_pairs dp ON dp.id = de.pair_id
   JOIN prices p ON p.symbol = dp.asset0_symbol
   WHERE de.event_type = 'Swap'
-    AND de.block_height >= (SELECT lo FROM height_bounds)
-    AND de.block_height < (SELECT hi FROM height_bounds)
-    AND de.timestamp > NOW() - INTERVAL '7 days'
-    AND GREATEST(de.asset0_in, de.asset0_out) * p.usd_price >= $%d
+    AND de.block_height >= $%d
+    AND de.block_height < $%d
+    AND GREATEST(de.asset0_in, de.asset0_out) >= p.min_amount
 ) combined
 %s
-ORDER BY combined.timestamp DESC
+ORDER BY combined.block_height DESC
 LIMIT $%d OFFSET $%d`,
 		pricesCTE,
-		minUSDIdx,
-		minUSDIdx,
+		heightLoIdx,
+		heightHiIdx,
+		heightLoIdx,
+		heightHiIdx,
 		typeFilter,
 		limitIdx,
 		offsetIdx,
@@ -480,23 +498,30 @@ func (r *Repository) GetTopContracts(ctx context.Context, hours int, limit int) 
 	if limit < 1 || limit > 50 {
 		limit = 10
 	}
+	// Compute height bounds in Go to avoid scanning raw.blocks/tx_lookup by timestamp.
+	var latestHeight int64
+	_ = r.db.QueryRow(ctx, `SELECT COALESCE(last_height, 0) FROM app.indexing_checkpoints WHERE service_name = 'main_ingester'`).Scan(&latestHeight)
+	heightLo := latestHeight - int64(hours)*100000/24
+	if heightLo < 0 {
+		heightLo = 0
+	}
+
 	query := `
 		SELECT tc.contract_identifier,
 		       COALESCE(sc.name, split_part(tc.contract_identifier, '.', 3)) AS contract_name,
 		       COALESCE('0x' || encode(sc.address, 'hex'), split_part(tc.contract_identifier, '.', 2)) AS address,
 		       COUNT(*)::bigint AS tx_count,
-		       COUNT(DISTINCT t.proposer)::bigint AS unique_callers
+		       COUNT(DISTINCT t.proposer_address)::bigint AS unique_callers
 		FROM app.tx_contracts tc
-		JOIN raw.tx_lookup tl ON tl.id = tc.transaction_id
-		JOIN raw.transactions t ON t.id = tc.transaction_id AND t.block_height = tl.block_height
+		JOIN raw.transactions t ON t.id = tc.transaction_id AND t.block_height = tc.block_height
 		LEFT JOIN app.smart_contracts sc
 		       ON sc.address = decode(split_part(tc.contract_identifier, '.', 2), 'hex')
 		      AND sc.name = split_part(tc.contract_identifier, '.', 3)
-		WHERE tl.timestamp > NOW() - make_interval(hours => $1)
+		WHERE tc.block_height >= $1 AND tc.block_height < $2
 		GROUP BY tc.contract_identifier, sc.name, sc.address
 		ORDER BY tx_count DESC
-		LIMIT $2`
-	rows, err := r.db.Query(ctx, query, hours, limit)
+		LIMIT $3`
+	rows, err := r.db.Query(ctx, query, heightLo, latestHeight+1, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +560,7 @@ func (r *Repository) GetTokenVolume(ctx context.Context, hours int, limit int, p
 	}
 
 	var valuesRows []string
-	args := make([]interface{}, 0, len(priceMap)*2+2)
+	args := make([]interface{}, 0, len(priceMap)*2+4)
 	argIdx := 1
 	for symbol, price := range priceMap {
 		valuesRows = append(valuesRows, fmt.Sprintf("($%d, $%d::numeric)", argIdx, argIdx+1))
@@ -544,9 +569,19 @@ func (r *Repository) GetTokenVolume(ctx context.Context, hours int, limit int, p
 	}
 	pricesCTE := "prices(symbol, usd_price) AS (VALUES " + strings.Join(valuesRows, ", ") + ")"
 
-	hoursIdx := argIdx
-	limitIdx := argIdx + 1
-	args = append(args, hours, limit)
+	// Compute height bounds in Go to enable partition pruning.
+	var latestHeight int64
+	_ = r.db.QueryRow(ctx, `SELECT COALESCE(last_height, 0) FROM app.indexing_checkpoints WHERE service_name = 'main_ingester'`).Scan(&latestHeight)
+	heightLo := latestHeight - int64(hours)*100000/24 // ~100k blocks/day
+	if heightLo < 0 {
+		heightLo = 0
+	}
+
+	heightLoIdx := argIdx
+	heightHiIdx := argIdx + 1
+	hoursIdx := argIdx + 2
+	limitIdx := argIdx + 3
+	args = append(args, heightLo, latestHeight+1, hours, limit)
 
 	query := fmt.Sprintf(`
 		WITH %s
@@ -560,11 +595,12 @@ func (r *Repository) GetTokenVolume(ctx context.Context, hours int, limit int, p
 		FROM app.ft_transfers ft
 		JOIN app.ft_tokens tk ON tk.contract_address = ft.token_contract_address AND tk.contract_name = ft.contract_name
 		JOIN prices p ON p.symbol = tk.market_symbol
-		WHERE ft.timestamp > NOW() - make_interval(hours => $%d)
+		WHERE ft.block_height >= $%d AND ft.block_height < $%d
+		  AND ft.timestamp > NOW() - make_interval(hours => $%d)
 		GROUP BY tk.symbol, tk.contract_name, tk.logo, p.usd_price
 		ORDER BY usd_volume DESC
 		LIMIT $%d`,
-		pricesCTE, hoursIdx, limitIdx)
+		pricesCTE, heightLoIdx, heightHiIdx, hoursIdx, limitIdx)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
