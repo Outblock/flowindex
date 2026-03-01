@@ -247,16 +247,27 @@ func (r *Repository) GetContractByAddress(ctx context.Context, address string) (
 	return &c, nil
 }
 
-// RefreshDailyStatsRange incrementally aggregates daily_stats for all dates that
-// have transactions in the half-open block range [fromHeight, toHeight).
+// RefreshDailyStatsRange idempotently refreshes daily_stats for all dates
+// touched by transactions in the half-open block range [fromHeight, toHeight).
 //
-// Uses block_height range for filtering (indexed, fast) instead of DATE(timestamp)
-// which caused full table scans. Accumulates counts additively so sequential
-// non-overlapping ranges produce correct totals. The periodic full scan
-// (ENABLE_DAILY_STATS=true on startup) reconciles any stale values.
+// Finds affected dates from the input range, then does a full-day recount
+// across ALL block heights for those dates. This makes retries/overlapping
+// ranges safe — running the same range twice produces the same result.
+// Height bounds on the full-day scan enable partition pruning.
 func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toHeight uint64) error {
 	_, err := r.db.Exec(ctx, `
-		WITH tx_agg AS (
+		WITH affected AS (
+			SELECT DISTINCT DATE(t.timestamp) AS d
+			FROM raw.transactions t
+			WHERE t.block_height >= $1 AND t.block_height < $2
+			  AND t.timestamp IS NOT NULL
+		),
+		bounds AS (
+			SELECT MIN(b.height) AS lo, MAX(b.height) + 1 AS hi
+			FROM raw.blocks b
+			WHERE DATE(b.timestamp) IN (SELECT d FROM affected)
+		),
+		tx_agg AS (
 			SELECT
 				DATE(t.timestamp) AS date,
 				COUNT(*) AS tx_count,
@@ -265,7 +276,9 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 				COUNT(DISTINCT t.proposer_address) AS active_accounts,
 				COUNT(*) FILTER (WHERE t.error_message IS NOT NULL AND t.error_message != '') AS failed_tx_count
 			FROM raw.transactions t
-			WHERE t.block_height >= $1 AND t.block_height < $2
+			WHERE t.block_height >= (SELECT lo FROM bounds)
+			  AND t.block_height < (SELECT hi FROM bounds)
+			  AND DATE(t.timestamp) IN (SELECT d FROM affected)
 			  AND t.timestamp IS NOT NULL
 			GROUP BY DATE(t.timestamp)
 		)
@@ -275,11 +288,11 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 			a.failed_tx_count, NOW()
 		FROM tx_agg a
 		ON CONFLICT (date) DO UPDATE SET
-			tx_count = daily_stats.tx_count + EXCLUDED.tx_count,
-			evm_tx_count = daily_stats.evm_tx_count + EXCLUDED.evm_tx_count,
-			total_gas_used = daily_stats.total_gas_used + EXCLUDED.total_gas_used,
-			active_accounts = daily_stats.active_accounts + EXCLUDED.active_accounts,
-			failed_tx_count = daily_stats.failed_tx_count + EXCLUDED.failed_tx_count,
+			tx_count = EXCLUDED.tx_count,
+			evm_tx_count = EXCLUDED.evm_tx_count,
+			total_gas_used = EXCLUDED.total_gas_used,
+			active_accounts = EXCLUDED.active_accounts,
+			failed_tx_count = EXCLUDED.failed_tx_count,
 			updated_at = NOW();
 	`, fromHeight, toHeight)
 	if err != nil {
@@ -293,8 +306,11 @@ func (r *Repository) RefreshDailyStatsRange(ctx context.Context, fromHeight, toH
 	return nil
 }
 
-// RefreshAnalyticsDailyMetricsRange re-aggregates analytics.daily_metrics for dates
-// touched by transactions in the half-open block range [fromHeight, toHeight).
+// RefreshAnalyticsDailyMetricsRange idempotently refreshes analytics.daily_metrics
+// for all dates touched by transactions in [fromHeight, toHeight).
+//
+// Finds affected dates, then does a full-day recount across ALL block heights
+// for those dates. Uses height bounds on the full-day scan for partition pruning.
 func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, fromHeight, toHeight uint64) error {
 	_, err := r.db.Exec(ctx, `
 		WITH affected_dates AS (
@@ -303,18 +319,23 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 			WHERE t.block_height >= $1 AND t.block_height < $2
 			  AND t.timestamp IS NOT NULL
 		),
+		bounds AS (
+			SELECT MIN(b.height) AS lo, MAX(b.height) + 1 AS hi
+			FROM raw.blocks b
+			WHERE DATE(b.timestamp) IN (SELECT d FROM affected_dates)
+		),
 		new_accounts AS (
 			SELECT DATE(b.timestamp) AS d, COUNT(*)::bigint AS cnt
 			FROM app.accounts a
 			JOIN raw.blocks b ON b.height = a.first_seen_height
-			WHERE a.first_seen_height >= $1 AND a.first_seen_height < $2
+			WHERE DATE(b.timestamp) IN (SELECT d FROM affected_dates)
 			GROUP BY 1
 		),
 		coa_new AS (
 			SELECT DATE(b.timestamp) AS d, COUNT(*)::bigint AS cnt
 			FROM app.coa_accounts c
 			JOIN raw.blocks b ON b.height = c.block_height
-			WHERE c.block_height >= $1 AND c.block_height < $2
+			WHERE DATE(b.timestamp) IN (SELECT d FROM affected_dates)
 			GROUP BY 1
 		),
 		evm_active AS (
@@ -322,11 +343,17 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 			FROM (
 				SELECT DATE(e.timestamp) AS d, e.from_address AS addr
 				FROM app.evm_transactions e
-				WHERE e.block_height >= $1 AND e.block_height < $2 AND e.from_address IS NOT NULL
+				WHERE e.block_height >= (SELECT lo FROM bounds)
+				  AND e.block_height < (SELECT hi FROM bounds)
+				  AND DATE(e.timestamp) IN (SELECT d FROM affected_dates)
+				  AND e.from_address IS NOT NULL
 				UNION ALL
 				SELECT DATE(e.timestamp) AS d, e.to_address AS addr
 				FROM app.evm_transactions e
-				WHERE e.block_height >= $1 AND e.block_height < $2 AND e.to_address IS NOT NULL
+				WHERE e.block_height >= (SELECT lo FROM bounds)
+				  AND e.block_height < (SELECT hi FROM bounds)
+				  AND DATE(e.timestamp) IN (SELECT d FROM affected_dates)
+				  AND e.to_address IS NOT NULL
 			) x
 			GROUP BY 1
 		),
@@ -335,21 +362,27 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 				COUNT(*) FILTER (WHERE d.event_type = 'Swap')::bigint AS swap_count,
 				COUNT(DISTINCT d.maker) FILTER (WHERE d.event_type = 'Swap' AND d.maker IS NOT NULL)::bigint AS traders
 			FROM app.defi_events d
-			WHERE d.block_height >= $1 AND d.block_height < $2
+			WHERE d.block_height >= (SELECT lo FROM bounds)
+			  AND d.block_height < (SELECT hi FROM bounds)
+			  AND DATE(d.timestamp) IN (SELECT d FROM affected_dates)
 			GROUP BY 1
 		),
 		epoch AS (
 			SELECT DATE(e.payout_time) AS d, COALESCE(SUM(e.payout_total), 0)::numeric(78, 0) AS payout
 			FROM app.epoch_stats e
-			WHERE e.payout_height >= $1 AND e.payout_height < $2
+			WHERE e.payout_height >= (SELECT lo FROM bounds)
+			  AND e.payout_height < (SELECT hi FROM bounds)
+			  AND DATE(e.payout_time) IN (SELECT d FROM affected_dates)
 			GROUP BY 1
 		),
 		bridge AS (
 			SELECT DATE(l.timestamp) AS d, COUNT(*)::bigint AS cnt
 			FROM app.tx_tags t
 			JOIN raw.tx_lookup l ON l.id = t.transaction_id
-			WHERE t.tag = 'EVM_BRIDGE'
-			  AND l.block_height >= $1 AND l.block_height < $2
+			WHERE l.block_height >= (SELECT lo FROM bounds)
+			  AND l.block_height < (SELECT hi FROM bounds)
+			  AND DATE(l.timestamp) IN (SELECT d FROM affected_dates)
+			  AND t.tag = 'EVM_BRIDGE'
 			GROUP BY 1
 		),
 		contract_upd AS (
@@ -357,7 +390,7 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 			FROM app.contract_versions cv
 			JOIN raw.blocks b ON b.height = cv.block_height
 			WHERE cv.version > 1
-			  AND cv.block_height >= $1 AND cv.block_height < $2
+			  AND DATE(b.timestamp) IN (SELECT d FROM affected_dates)
 			GROUP BY 1
 		)
 		INSERT INTO analytics.daily_metrics (
@@ -385,14 +418,14 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 		LEFT JOIN bridge br ON br.d = d.d
 		LEFT JOIN contract_upd cu ON cu.d = d.d
 		ON CONFLICT (date) DO UPDATE SET
-			new_accounts = daily_metrics.new_accounts + EXCLUDED.new_accounts,
-			coa_new_accounts = daily_metrics.coa_new_accounts + EXCLUDED.coa_new_accounts,
-			evm_active_addresses = daily_metrics.evm_active_addresses + EXCLUDED.evm_active_addresses,
-			defi_swap_count = daily_metrics.defi_swap_count + EXCLUDED.defi_swap_count,
-			defi_unique_traders = daily_metrics.defi_unique_traders + EXCLUDED.defi_unique_traders,
-			epoch_payout_total = GREATEST(daily_metrics.epoch_payout_total, EXCLUDED.epoch_payout_total),
-			bridge_to_evm_txs = daily_metrics.bridge_to_evm_txs + EXCLUDED.bridge_to_evm_txs,
-			contract_updates = daily_metrics.contract_updates + EXCLUDED.contract_updates,
+			new_accounts = EXCLUDED.new_accounts,
+			coa_new_accounts = EXCLUDED.coa_new_accounts,
+			evm_active_addresses = EXCLUDED.evm_active_addresses,
+			defi_swap_count = EXCLUDED.defi_swap_count,
+			defi_unique_traders = EXCLUDED.defi_unique_traders,
+			epoch_payout_total = EXCLUDED.epoch_payout_total,
+			bridge_to_evm_txs = EXCLUDED.bridge_to_evm_txs,
+			contract_updates = EXCLUDED.contract_updates,
 			updated_at = NOW();
 	`, fromHeight, toHeight)
 	if err != nil {
@@ -450,19 +483,27 @@ func (r *Repository) RefreshDailyStats(ctx context.Context, fullScan bool) error
 
 func (r *Repository) refreshDailyContractStatsRange(ctx context.Context, fromHeight, toHeight uint64) error {
 	_, err := r.db.Exec(ctx, `
-		WITH contract_agg AS (
-			SELECT DATE(b.timestamp) AS date, COUNT(*) AS new_contracts
+		WITH affected_dates AS (
+			SELECT DISTINCT DATE(b.timestamp) AS date
 			FROM app.smart_contracts sc
 			JOIN raw.blocks b ON b.height = sc.first_seen_height
 			WHERE sc.first_seen_height >= $1 AND sc.first_seen_height < $2
 			  AND sc.first_seen_height IS NOT NULL
+		),
+		contract_agg AS (
+			SELECT DATE(b.timestamp) AS date, COUNT(*) AS new_contracts
+			FROM app.smart_contracts sc
+			JOIN raw.blocks b ON b.height = sc.first_seen_height
+			WHERE sc.first_seen_height IS NOT NULL
+			  AND DATE(b.timestamp) IN (SELECT date FROM affected_dates)
 			GROUP BY 1
 		)
 		UPDATE app.daily_stats d
-		SET new_contracts = d.new_contracts + c.new_contracts,
+		SET new_contracts = COALESCE(c.new_contracts, 0),
 		    updated_at = NOW()
-		FROM contract_agg c
-		WHERE d.date = c.date;
+		FROM affected_dates ad
+		LEFT JOIN contract_agg c ON c.date = ad.date
+		WHERE d.date = ad.date;
 	`, fromHeight, toHeight)
 	return err
 }

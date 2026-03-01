@@ -151,18 +151,29 @@ func (r *Repository) GetAnalyticsDailyEpochModule(ctx context.Context, from, to 
 }
 
 // GetAnalyticsDailyBridgeModule returns daily bridge-to-EVM tx metric only.
+// Uses block_height bounds to enable partition pruning on ft_transfers.
 func (r *Repository) GetAnalyticsDailyBridgeModule(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
 		),
+		height_bounds AS (
+			SELECT
+				COALESCE((SELECT MIN(height) FROM raw.blocks WHERE timestamp >= $1::timestamptz), 0) AS lo,
+				COALESCE((SELECT MAX(height) FROM raw.blocks WHERE timestamp < ($2::date + interval '1 day')), 0) + 1 AS hi
+		),
 		bridge_txs AS (
 			SELECT DATE(ft.timestamp) AS d, COUNT(DISTINCT ft.transaction_id)::bigint AS cnt
 			FROM app.ft_transfers ft
-			JOIN raw.transactions rtx ON rtx.id = ft.transaction_id AND rtx.block_height = ft.block_height
-			WHERE ft.timestamp >= $1::timestamptz AND ft.timestamp < ($2::date + interval '1 day')
+			WHERE ft.block_height >= (SELECT lo FROM height_bounds)
+			  AND ft.block_height < (SELECT hi FROM height_bounds)
 			  AND (ft.from_address IS NULL OR ft.to_address IS NULL)
-			  AND rtx.is_evm = true
+			  AND EXISTS (
+			    SELECT 1 FROM raw.transactions rtx
+			    WHERE rtx.id = ft.transaction_id
+			      AND rtx.block_height = ft.block_height
+			      AND rtx.is_evm = true
+			  )
 			GROUP BY 1
 		)
 		SELECT d.date::text, COALESCE(b.cnt, 0)::bigint
@@ -352,8 +363,15 @@ func (r *Repository) GetBigTransfers(ctx context.Context, priceMap map[string]fl
 		args = append(args, transferTypes)
 	}
 
+	// Use block_height bounds for partition pruning on ft_transfers and defi_events.
+	// Estimate: ~720k blocks per 7 days (1 block/~0.84s).
 	query := fmt.Sprintf(`
-WITH %s
+WITH %s,
+height_bounds AS (
+  SELECT
+    COALESCE((SELECT MIN(height) FROM raw.blocks WHERE timestamp > NOW() - INTERVAL '7 days'), 0) AS lo,
+    COALESCE((SELECT MAX(height) FROM raw.blocks), 0) + 1 AS hi
+)
 SELECT tx_id, block_height, timestamp, type, token_symbol,
        token_contract_address, contract_name, token_logo, amount, usd_value,
        from_address, to_address
@@ -364,12 +382,6 @@ FROM (
     ft.block_height,
     ft.timestamp,
     CASE
-      WHEN (ft.from_address IS NULL OR ft.to_address IS NULL)
-           AND EXISTS (SELECT 1 FROM raw.transactions rtx
-                       WHERE rtx.id = ft.transaction_id
-                         AND rtx.block_height = ft.block_height
-                         AND rtx.is_evm = true)
-        THEN 'bridge'
       WHEN ft.from_address IS NULL THEN 'mint'
       WHEN ft.to_address IS NULL THEN 'burn'
       ELSE 'transfer'
@@ -387,7 +399,9 @@ FROM (
     ON tk.contract_address = ft.token_contract_address
    AND tk.contract_name = ft.contract_name
   JOIN prices p ON p.symbol = tk.market_symbol
-  WHERE ft.timestamp > NOW() - INTERVAL '7 days'
+  WHERE ft.block_height >= (SELECT lo FROM height_bounds)
+    AND ft.block_height < (SELECT hi FROM height_bounds)
+    AND ft.timestamp > NOW() - INTERVAL '7 days'
     AND ft.amount * p.usd_price >= $%d
 
   UNION ALL
@@ -410,6 +424,8 @@ FROM (
   JOIN app.defi_pairs dp ON dp.id = de.pair_id
   JOIN prices p ON p.symbol = dp.asset0_symbol
   WHERE de.event_type = 'Swap'
+    AND de.block_height >= (SELECT lo FROM height_bounds)
+    AND de.block_height < (SELECT hi FROM height_bounds)
     AND de.timestamp > NOW() - INTERVAL '7 days'
     AND GREATEST(de.asset0_in, de.asset0_out) * p.usd_price >= $%d
 ) combined

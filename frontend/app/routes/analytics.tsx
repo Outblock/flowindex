@@ -845,8 +845,13 @@ function AnalyticsPage() {
       delta: delta(latest?.bridge_to_evm_txs, prev?.bridge_to_evm_txs),
     })
     m.set('kpi-epoch-payout', (() => {
-      const epochTotal = latest ? Math.round(toNum(latest.epoch_payout_total)) : null
-      const d = latest && prev ? toNum(latest.epoch_payout_total) - toNum(prev.epoch_payout_total) : null
+      // Show the most recent non-zero payout (payouts are weekly, most days are 0)
+      const recentPayout = [...dailyData].reverse().find((d) => toNum(d.epoch_payout_total) > 0)
+      const epochTotal = recentPayout ? Math.round(toNum(recentPayout.epoch_payout_total)) : null
+      // Find the payout before the most recent one for delta
+      const recentIdx = recentPayout ? dailyData.indexOf(recentPayout) : -1
+      const prevPayout = recentIdx > 0 ? [...dailyData].slice(0, recentIdx).reverse().find((d) => toNum(d.epoch_payout_total) > 0) : null
+      const d = recentPayout && prevPayout ? toNum(recentPayout.epoch_payout_total) - toNum(prevPayout.epoch_payout_total) : null
       const sign = d != null && d > 0 ? '+' : ''
       return {
         value: epochTotal != null ? fmtComma(epochTotal) : '--',
