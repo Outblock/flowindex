@@ -186,11 +186,12 @@ jobs:
 
       - name: Update Caddy config for TLS
         run: |
-          gcloud compute scp frontend/Caddyfile flowindex-frontend:/tmp/Caddyfile --zone=us-central1-a
-          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
-            sudo cp /tmp/Caddyfile /etc/caddy/Caddyfile
+          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
+            sudo tee /etc/caddy/Caddyfile > /dev/null <<'CADDYEOF'
+          $(cat frontend/Caddyfile)
+          CADDYEOF
             sudo systemctl reload caddy
-          '
+          "
 
   build-docs:
     needs: changes
