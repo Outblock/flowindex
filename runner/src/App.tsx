@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type * as MonacoNS from 'monaco-editor';
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import CadenceEditor from './editor/CadenceEditor';
 import { useLsp } from './editor/useLsp';
 import ResultPanel from './components/ResultPanel';
@@ -20,30 +19,103 @@ import {
   TEMPLATES,
   type ProjectState, type Template,
 } from './fs/fileSystem';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft } from 'lucide-react';
 
-/* ── Drag handle between panels ── */
+/* ── Detect if we're in an iframe ── */
+let isIframe = false;
+try { isIframe = window.self !== window.top; } catch { isIframe = true; }
 
-function ResizeHandle({ direction = 'horizontal' }: { direction?: 'horizontal' | 'vertical' }) {
+/* ── Draggable resize handle (horizontal) ── */
+
+function useHorizontalResize(initialWidth: number, minWidth: number, maxWidth: number, side: 'left' | 'right') {
+  const [width, setWidth] = useState(initialWidth);
+  const dragging = useRef(false);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      let w: number;
+      if (side === 'left') {
+        w = ev.clientX;
+      } else {
+        w = window.innerWidth - ev.clientX;
+      }
+      setWidth(Math.min(maxWidth, Math.max(minWidth, w)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [minWidth, maxWidth, side]);
+
+  return { width, onMouseDown };
+}
+
+/* ── Draggable resize handle (vertical) ── */
+
+function useVerticalResize(containerRef: React.RefObject<HTMLDivElement | null>, initialFraction: number, minPx: number) {
+  const [fraction, setFraction] = useState(initialFraction);
+  const dragging = useRef(false);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const y = ev.clientY - rect.top;
+      const f = Math.min(0.85, Math.max(minPx / rect.height, y / rect.height));
+      setFraction(f);
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [containerRef, minPx]);
+
+  return { fraction, onMouseDown };
+}
+
+/* ── Resize bar component ── */
+
+function DragBar({ direction, onMouseDown }: { direction: 'horizontal' | 'vertical'; onMouseDown: (e: React.MouseEvent) => void }) {
   const isH = direction === 'horizontal';
   return (
-    <PanelResizeHandle
-      className={`group relative flex items-center justify-center ${
-        isH ? 'w-1 hover:w-1.5 cursor-col-resize' : 'h-1 hover:h-1.5 cursor-row-resize'
-      } bg-zinc-800 hover:bg-emerald-500/30 active:bg-emerald-500/50 transition-all duration-150`}
+    <div
+      onMouseDown={onMouseDown}
+      className={`group relative flex items-center justify-center shrink-0 ${
+        isH ? 'w-1.5 cursor-col-resize' : 'h-1.5 cursor-row-resize'
+      } bg-zinc-800 hover:bg-emerald-500/30 active:bg-emerald-500/50 transition-colors`}
     >
       <div
         className={`${
           isH ? 'w-px h-8' : 'h-px w-8'
         } bg-zinc-600 group-hover:bg-emerald-400 group-active:bg-emerald-400 transition-colors rounded-full`}
       />
-    </PanelResizeHandle>
+    </div>
   );
 }
 
 export default function App() {
   const [project, setProject] = useState<ProjectState>(() => {
-    // Check URL params for code injection
     const params = new URLSearchParams(window.location.search);
     const codeParam = params.get('code');
     if (codeParam) {
@@ -65,8 +137,6 @@ export default function App() {
     return (localStorage.getItem('runner:network') as FlowNetwork) || 'mainnet';
   });
 
-  const isIframe = window.self !== window.top;
-
   const [results, setResults] = useState<ExecutionResult[]>([]);
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -74,6 +144,12 @@ export default function App() {
   const [showAI, setShowAI] = useState(true);
   const [monacoInstance, setMonacoInstance] = useState<typeof MonacoNS | null>(null);
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+
+  // Resize hooks
+  const explorer = useHorizontalResize(220, 150, 400, 'left');
+  const aiPanel = useHorizontalResize(360, 260, 600, 'right');
+  const vertSplit = useVerticalResize(editorContainerRef, 0.7, 80);
 
   // Current active file content
   const activeCode = useMemo(
@@ -109,13 +185,11 @@ export default function App() {
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const codeType = useMemo(() => detectCodeType(activeCode), [activeCode]);
 
-  // Handle code changes
   const handleCodeChange = useCallback((value: string) => {
     setProject((prev) => updateFileContent(prev, prev.activeFile, value));
     notifyChange(project.activeFile, value);
   }, [project.activeFile, notifyChange]);
 
-  // Handle run
   const handleRun = useCallback(async () => {
     if (loading) return;
     setLoading(true);
@@ -133,12 +207,10 @@ export default function App() {
     setLoading(false);
   }, [activeCode, codeType, paramValues, loading]);
 
-  // AI code insertion
   const handleInsertCode = useCallback((newCode: string) => {
     setProject((prev) => updateFileContent(prev, prev.activeFile, newCode));
   }, []);
 
-  // Load a template
   const handleLoadTemplate = useCallback((template: Template) => {
     setProject({
       files: template.files,
@@ -147,7 +219,6 @@ export default function App() {
     });
   }, []);
 
-  // File explorer actions
   const handleOpenFile = useCallback((path: string) => {
     setProject((prev) => openFile(prev, path));
   }, []);
@@ -172,6 +243,8 @@ export default function App() {
   const handleMonacoReady = useCallback((monaco: typeof MonacoNS) => {
     setMonacoInstance(monaco);
   }, []);
+
+  const hasBottomPanel = scriptParams.length > 0 || results.length > 0 || loading;
 
   return (
     <div className="flex flex-col h-full bg-zinc-900 text-zinc-100">
@@ -218,76 +291,68 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main resizable layout */}
-      <PanelGroup orientation="horizontal" className="flex-1 min-h-0">
-        {/* File Explorer (collapsible) */}
+      {/* Main layout */}
+      <div className="flex flex-1 min-h-0">
+        {/* File Explorer */}
         {showExplorer && (
           <>
-            <Panel defaultSize={18} minSize={12} maxSize={30}>
-              <div className="h-full bg-zinc-900 overflow-hidden">
-                <FileExplorer
-                  project={project}
-                  onOpenFile={handleOpenFile}
-                  onCreateFile={handleCreateFile}
-                  onDeleteFile={handleDeleteFile}
-                  activeFile={project.activeFile}
-                />
-              </div>
-            </Panel>
-            <ResizeHandle />
+            <div className="shrink-0 overflow-hidden bg-zinc-900" style={{ width: explorer.width }}>
+              <FileExplorer
+                project={project}
+                onOpenFile={handleOpenFile}
+                onCreateFile={handleCreateFile}
+                onDeleteFile={handleDeleteFile}
+                activeFile={project.activeFile}
+              />
+            </div>
+            <DragBar direction="horizontal" onMouseDown={explorer.onMouseDown} />
           </>
         )}
 
-        {/* Editor + Results (vertical split) */}
-        <Panel defaultSize={showAI ? 55 : 80} minSize={30}>
-          <PanelGroup orientation="vertical">
-            {/* Editor area */}
-            <Panel defaultSize={70} minSize={20}>
-              <div className="flex flex-col h-full min-h-0">
-                <TabBar
-                  project={project}
-                  onSelectFile={handleSelectTab}
-                  onCloseFile={handleCloseTab}
+        {/* Editor + Results (center) */}
+        <div ref={editorContainerRef} className="flex flex-col flex-1 min-w-0 min-h-0">
+          {/* Editor area */}
+          <div className="flex flex-col min-h-0" style={{ height: hasBottomPanel ? `${vertSplit.fraction * 100}%` : '100%' }}>
+            <TabBar
+              project={project}
+              onSelectFile={handleSelectTab}
+              onCloseFile={handleCloseTab}
+            />
+            <div className="flex-1 min-h-0">
+              <CadenceEditor
+                code={activeCode}
+                onChange={handleCodeChange}
+                onRun={handleRun}
+                darkMode={true}
+                path={project.activeFile}
+                readOnly={activeFileEntry?.readOnly}
+                externalEditorRef={editorRef}
+                onMonacoReady={handleMonacoReady}
+              />
+            </div>
+          </div>
+
+          {/* Results area */}
+          {hasBottomPanel && (
+            <>
+              <DragBar direction="vertical" onMouseDown={vertSplit.onMouseDown} />
+              <div className="overflow-y-auto bg-zinc-900" style={{ height: `${(1 - vertSplit.fraction) * 100}%` }}>
+                <ParamPanel
+                  params={scriptParams}
+                  values={paramValues}
+                  onChange={setParamValues}
                 />
-                <div className="flex-1 min-h-0">
-                  <CadenceEditor
-                    code={activeCode}
-                    onChange={handleCodeChange}
-                    onRun={handleRun}
-                    darkMode={true}
-                    path={project.activeFile}
-                    readOnly={activeFileEntry?.readOnly}
-                    externalEditorRef={editorRef}
-                    onMonacoReady={handleMonacoReady}
-                  />
-                </div>
+                <ResultPanel results={results} loading={loading} />
               </div>
-            </Panel>
+            </>
+          )}
+        </div>
 
-            {/* Results area (params + results) */}
-            {(scriptParams.length > 0 || results.length > 0 || loading) && (
-              <>
-                <ResizeHandle direction="vertical" />
-                <Panel defaultSize={30} minSize={10} maxSize={60}>
-                  <div className="h-full overflow-y-auto bg-zinc-900">
-                    <ParamPanel
-                      params={scriptParams}
-                      values={paramValues}
-                      onChange={setParamValues}
-                    />
-                    <ResultPanel results={results} loading={loading} />
-                  </div>
-                </Panel>
-              </>
-            )}
-          </PanelGroup>
-        </Panel>
-
-        {/* AI Panel (collapsible) */}
+        {/* AI Panel */}
         {showAI ? (
           <>
-            <ResizeHandle />
-            <Panel defaultSize={27} minSize={18} maxSize={50}>
+            <DragBar direction="horizontal" onMouseDown={aiPanel.onMouseDown} />
+            <div className="shrink-0 overflow-hidden" style={{ width: aiPanel.width }}>
               <AIPanel
                 onInsertCode={handleInsertCode}
                 onLoadTemplate={handleLoadTemplate}
@@ -295,23 +360,20 @@ export default function App() {
                 network={network}
                 onClose={() => setShowAI(false)}
               />
-            </Panel>
+            </div>
           </>
         ) : (
-          <Panel defaultSize={0} minSize={0} maxSize={0}>
-            <button
-              onClick={() => setShowAI(true)}
-              className="flex flex-col items-center justify-center w-10 h-full bg-zinc-900 border-l border-zinc-700 hover:bg-zinc-800 transition-colors group"
-              title="Open AI Assistant"
-            >
-              <svg className="w-5 h-5 text-emerald-500 group-hover:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 9h.01" /><path d="M15 9h.01" /><path d="M9 15c.5.5 1.5 1 3 1s2.5-.5 3-1" />
-              </svg>
-              <span className="text-[9px] text-zinc-500 group-hover:text-zinc-400 mt-1 font-medium">AI</span>
-            </button>
-          </Panel>
+          <button
+            onClick={() => setShowAI(true)}
+            className="flex flex-col items-center justify-center w-10 shrink-0 bg-zinc-900 border-l border-zinc-700 hover:bg-zinc-800 transition-colors group"
+            title="Open AI Assistant"
+          >
+            <Bot className="w-5 h-5 text-emerald-500 group-hover:text-emerald-400" />
+            <span className="text-[9px] text-zinc-500 group-hover:text-zinc-400 mt-1 font-medium">AI</span>
+            <ChevronLeft className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 mt-0.5" />
+          </button>
         )}
-      </PanelGroup>
+      </div>
     </div>
   );
 }
