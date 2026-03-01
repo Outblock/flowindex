@@ -1220,11 +1220,12 @@ function AnalyticsPage() {
       ),
     })
 
+    const epochStakedData = epochData.filter((e) => e.total_staked > 0)
     m.set('total-staked', {
       loading: epochLoading,
-      empty: epochData.length === 0,
+      empty: epochStakedData.length === 0,
       node: (
-        <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+        <LineChart data={epochStakedData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
           <YAxis {...yAxisProps()} />
@@ -1234,11 +1235,12 @@ function AnalyticsPage() {
       ),
     })
 
+    const epochNodeData = epochData.filter((e) => e.total_nodes > 0)
     m.set('node-count', {
       loading: epochLoading,
-      empty: epochData.length === 0,
+      empty: epochNodeData.length === 0,
       node: (
-        <LineChart data={epochData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+        <LineChart data={epochNodeData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis dataKey="epoch" stroke="transparent" fontSize={10} tickLine={false} axisLine={false} tick={TICK_PROPS} minTickGap={30} />
           <YAxis {...yAxisProps()} />
