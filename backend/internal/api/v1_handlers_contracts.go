@@ -470,6 +470,24 @@ func (s *Server) handleGetScriptText(w http.ResponseWriter, r *http.Request) {
 	writeAPIResponse(w, []map[string]interface{}{{"script_hash": hash, "script_text": text}}, nil, nil)
 }
 
+// parseContractImports extracts import statements from Cadence source code.
+func parseContractImports(code string) []struct{ Address, Name string } {
+	re := regexp.MustCompile(`import\s+(\w+)\s+from\s+0x([0-9a-fA-F]+)`)
+	matches := re.FindAllStringSubmatch(code, -1)
+	seen := make(map[string]bool)
+	var out []struct{ Address, Name string }
+	for _, m := range matches {
+		addr := strings.ToLower(m[2])
+		key := addr + "." + m[1]
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, struct{ Address, Name string }{addr, m[1]})
+	}
+	return out
+}
+
 func (s *Server) handleContractDependencies(w http.ResponseWriter, r *http.Request) {
 	if s.repo == nil {
 		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
@@ -483,43 +501,78 @@ func (s *Server) handleContractDependencies(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Get contract code to parse imports
-	contracts, err := s.repo.ListContractsFiltered(r.Context(), repository.ContractListFilter{
-		Address: address,
-		Name:    name,
-		Limit:   1,
-	})
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Parse imports from contract code
-	var imports []map[string]interface{}
-	if len(contracts) > 0 && contracts[0].Code != "" {
-		re := regexp.MustCompile(`import\s+(\w+)\s+from\s+0x([0-9a-fA-F]+)`)
-		matches := re.FindAllStringSubmatch(contracts[0].Code, -1)
-		seen := make(map[string]bool)
-		for _, m := range matches {
-			importName := m[1]
-			importAddr := strings.ToLower(m[2])
-			key := importAddr + "." + importName
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			imports = append(imports, map[string]interface{}{
-				"identifier": "A." + importAddr + "." + importName,
-				"address":    formatAddressV1(importAddr),
-				"name":       importName,
-			})
+	// Determine recursion depth (default 1, max 3)
+	maxDepth := 1
+	if d := r.URL.Query().Get("depth"); d != "" {
+		if v, err := strconv.Atoi(d); err == nil && v >= 1 && v <= 3 {
+			maxDepth = v
 		}
 	}
-	if imports == nil {
-		imports = []map[string]interface{}{}
+
+	// ---------- Recursive import graph ----------
+	type graphNode struct {
+		Identifier string `json:"identifier"`
+		Address    string `json:"address"`
+		Name       string `json:"name"`
+	}
+	type graphEdge struct {
+		Source string `json:"source"` // identifier of importer
+		Target string `json:"target"` // identifier of imported contract
 	}
 
-	// Get dependents (contracts that import this one)
+	rootID := "A." + address + "." + name
+	nodeSet := map[string]graphNode{rootID: {Identifier: rootID, Address: formatAddressV1(address), Name: name}}
+	var edgeList []graphEdge
+	edgeSet := make(map[string]bool)
+
+	// BFS to resolve imports recursively
+	queue := []struct {
+		addr, name string
+		depth      int
+	}{{address, name, 0}}
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if cur.depth >= maxDepth {
+			continue
+		}
+		curID := "A." + cur.addr + "." + cur.name
+		contracts, err := s.repo.ListContractsFiltered(r.Context(), repository.ContractListFilter{
+			Address: cur.addr,
+			Name:    cur.name,
+			Limit:   1,
+		})
+		if err != nil || len(contracts) == 0 || contracts[0].Code == "" {
+			continue
+		}
+		for _, imp := range parseContractImports(contracts[0].Code) {
+			impID := "A." + imp.Address + "." + imp.Name
+			if _, exists := nodeSet[impID]; !exists {
+				nodeSet[impID] = graphNode{Identifier: impID, Address: formatAddressV1(imp.Address), Name: imp.Name}
+				queue = append(queue, struct {
+					addr, name string
+					depth      int
+				}{imp.Address, imp.Name, cur.depth + 1})
+			}
+			eKey := curID + "->" + impID
+			if !edgeSet[eKey] {
+				edgeSet[eKey] = true
+				edgeList = append(edgeList, graphEdge{Source: curID, Target: impID})
+			}
+		}
+	}
+
+	// Flatten nodes
+	graphNodes := make([]graphNode, 0, len(nodeSet))
+	for _, n := range nodeSet {
+		graphNodes = append(graphNodes, n)
+	}
+	if edgeList == nil {
+		edgeList = []graphEdge{}
+	}
+
+	// ---------- Direct dependents (not recursive) ----------
 	depRefs, err := s.repo.GetContractDependents(r.Context(), address, name)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
@@ -534,9 +587,27 @@ func (s *Server) handleContractDependencies(w http.ResponseWriter, r *http.Reque
 		})
 	}
 
+	// Backwards-compatible: also include flat imports list
+	imports := make([]map[string]interface{}, 0)
+	for _, e := range edgeList {
+		if e.Source == rootID {
+			n := nodeSet[e.Target]
+			imports = append(imports, map[string]interface{}{
+				"identifier": n.Identifier,
+				"address":    n.Address,
+				"name":       n.Name,
+			})
+		}
+	}
+
 	result := map[string]interface{}{
 		"imports":    imports,
 		"dependents": dependents,
+		"graph": map[string]interface{}{
+			"nodes": graphNodes,
+			"edges": edgeList,
+			"root":  rootID,
+		},
 	}
 	writeAPIResponse(w, []interface{}{result}, nil, nil)
 }

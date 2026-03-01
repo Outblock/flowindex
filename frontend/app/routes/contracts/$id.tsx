@@ -16,8 +16,9 @@ import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { formatShort } from '../../components/account/accountUtils';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { diffLines, type Change } from 'diff';
-import ReactFlow, { Background, Controls, useNodesState, useEdgesState, MarkerType } from 'reactflow';
+import ReactFlow, { Background, Controls, useNodesState, useEdgesState, MarkerType, Position } from 'reactflow';
 import 'reactflow/dist/style.css';
+import dagre from 'dagre';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
@@ -284,7 +285,7 @@ function ContractDetail() {
         setDepsLoading(true);
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/contract/${encodeURIComponent(id)}/dependencies`);
+            const res = await fetch(`${baseUrl}/flow/contract/${encodeURIComponent(id)}/dependencies?depth=3`);
             const payload = await res.json();
             const items = payload?.data;
             if (Array.isArray(items) && items.length > 0) {
@@ -828,6 +829,7 @@ function ContractDetail() {
                                     contractIdentifier={contract.identifier || id}
                                     imports={deps.imports}
                                     dependents={deps.dependents}
+                                    graph={deps.graph}
                                 />
                             )}
                             {!deps && !depsLoading && (
@@ -1019,105 +1021,178 @@ function DiffView({ codeA, codeB }: { codeA: string; codeB: string }) {
     );
 }
 
-function DependencyGraph({ contractName, contractIdentifier, imports, dependents }: {
+function DependencyGraph({ contractName, contractIdentifier, imports, dependents, graph }: {
     contractName: string;
     contractIdentifier: string;
     imports: Array<{ identifier: string; address: string; name: string }>;
     dependents: Array<{ identifier: string; address: string; name: string }>;
+    graph?: {
+        nodes: Array<{ identifier: string; address: string; name: string }>;
+        edges: Array<{ source: string; target: string }>;
+        root: string;
+    };
 }) {
     const navigate = useNavigate();
     const { theme } = useTheme();
 
     const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
-        const nodes: any[] = [];
-        const edges: any[] = [];
-        const centerX = 400;
-        const centerY = 250;
+        const isDark = theme === 'dark';
+        const green = isDark ? '#4ade80' : '#16a34a';
+        const purple = isDark ? '#a78bfa' : '#7c3aed';
+        const nodeBg = isDark ? '#18181b' : '#fff';
+        const nodeBorder = isDark ? 'rgba(255,255,255,0.1)' : '#e4e4e7';
+        const nodeColor = isDark ? '#a1a1aa' : '#52525b';
+        const labelFill = isDark ? '#71717a' : '#a1a1aa';
+        const labelBg = isDark ? '#09090b' : '#fff';
 
-        // Center node (current contract)
-        nodes.push({
-            id: 'center',
-            position: { x: centerX, y: centerY },
-            data: { label: contractName, identifier: contractIdentifier, isCurrent: true },
-            type: 'default',
-            style: {
-                background: theme === 'dark' ? '#1a2e1a' : '#f0fdf4',
-                border: `2px solid ${theme === 'dark' ? '#4ade80' : '#16a34a'}`,
-                borderRadius: 4,
-                padding: '8px 16px',
-                fontSize: 11,
-                fontFamily: 'monospace',
-                color: theme === 'dark' ? '#fff' : '#000',
-                fontWeight: 700,
-            },
-        });
+        const baseNodeStyle = {
+            background: nodeBg,
+            border: `1px solid ${nodeBorder}`,
+            borderRadius: 4,
+            padding: '8px 12px',
+            fontSize: 10,
+            fontFamily: 'monospace',
+            color: nodeColor,
+            cursor: 'pointer',
+        };
 
-        // Import nodes (left side)
-        imports.forEach((imp, i) => {
-            const spacing = Math.max(60, 300 / Math.max(imports.length, 1));
-            const yOffset = centerY - ((imports.length - 1) * spacing) / 2 + i * spacing;
-            nodes.push({
-                id: `import-${i}`,
-                position: { x: centerX - 300, y: yOffset },
-                data: { label: imp.name, identifier: imp.identifier },
-                style: {
-                    background: theme === 'dark' ? '#18181b' : '#fff',
-                    border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e4e4e7'}`,
+        const rootID = graph?.root ?? contractIdentifier;
+
+        // Build the graph using dagre for layout
+        const g = new dagre.graphlib.Graph();
+        g.setGraph({ rankdir: 'LR', nodesep: 40, ranksep: 180, marginx: 40, marginy: 40 });
+        g.setDefaultEdgeLabel(() => ({}));
+
+        // Collect all node identifiers
+        const allNodes = new Map<string, { name: string; identifier: string }>();
+
+        // Add root node
+        allNodes.set(rootID, { name: contractName, identifier: contractIdentifier });
+
+        // Add graph import nodes + edges
+        if (graph?.nodes) {
+            for (const n of graph.nodes) {
+                allNodes.set(n.identifier, { name: n.name, identifier: n.identifier });
+            }
+        } else {
+            // Fallback: flat imports only
+            for (const imp of imports) {
+                allNodes.set(imp.identifier, { name: imp.name, identifier: imp.identifier });
+            }
+        }
+
+        // Add dependent nodes
+        for (const dep of dependents) {
+            allNodes.set(dep.identifier, { name: dep.name, identifier: dep.identifier });
+        }
+
+        // Estimate node widths for dagre
+        for (const [id, n] of allNodes) {
+            const w = Math.max(100, n.name.length * 7 + 32);
+            g.setNode(id, { width: w, height: 36 });
+        }
+
+        // Add edges: import edges (source imports target, arrow: source -> target means "source uses target")
+        // In the graph data, edge.source imports edge.target
+        const edgeKeys = new Set<string>();
+        if (graph?.edges) {
+            for (const e of graph.edges) {
+                const key = `${e.source}->${e.target}`;
+                if (!edgeKeys.has(key)) {
+                    edgeKeys.add(key);
+                    // dagre edge: target (imported) -> source (importer) for LR layout
+                    // Actually we want imports to flow right-to-left: imported libs on left, importer on right
+                    // So edge direction in dagre: target -> source (target is imported, appears left)
+                    g.setEdge(e.target, e.source);
+                }
+            }
+        } else {
+            for (const imp of imports) {
+                g.setEdge(imp.identifier, rootID);
+            }
+        }
+
+        // Dependent edges: root -> dep (dep is on the right)
+        for (const dep of dependents) {
+            const key = `${rootID}->dep:${dep.identifier}`;
+            if (!edgeKeys.has(key)) {
+                edgeKeys.add(key);
+                g.setEdge(rootID, dep.identifier);
+            }
+        }
+
+        dagre.layout(g);
+
+        // Convert to ReactFlow nodes/edges
+        const rfNodes: any[] = [];
+        const rfEdges: any[] = [];
+
+        for (const [id, data] of allNodes) {
+            const pos = g.node(id);
+            if (!pos) continue;
+            const isCurrent = id === rootID;
+            rfNodes.push({
+                id,
+                position: { x: pos.x - pos.width / 2, y: pos.y - pos.height / 2 },
+                data: { label: data.name, identifier: data.identifier, isCurrent },
+                sourcePosition: Position.Right,
+                targetPosition: Position.Left,
+                style: isCurrent ? {
+                    background: isDark ? '#1a2e1a' : '#f0fdf4',
+                    border: `2px solid ${green}`,
                     borderRadius: 4,
-                    padding: '8px 12px',
-                    fontSize: 10,
+                    padding: '8px 16px',
+                    fontSize: 11,
                     fontFamily: 'monospace',
-                    color: theme === 'dark' ? '#a1a1aa' : '#52525b',
-                    cursor: 'pointer',
-                },
+                    color: isDark ? '#fff' : '#000',
+                    fontWeight: 700,
+                } : baseNodeStyle,
             });
-            edges.push({
-                id: `e-import-${i}`,
-                source: `import-${i}`,
-                target: 'center',
-                animated: false,
-                style: { stroke: theme === 'dark' ? '#4ade80' : '#16a34a', strokeWidth: 1.5 },
-                markerEnd: { type: MarkerType.ArrowClosed, color: theme === 'dark' ? '#4ade80' : '#16a34a', width: 16, height: 16 },
-                label: 'imports',
-                labelStyle: { fontSize: 9, fontFamily: 'monospace', fill: theme === 'dark' ? '#71717a' : '#a1a1aa' },
-                labelBgStyle: { fill: theme === 'dark' ? '#09090b' : '#fff', fillOpacity: 0.8 },
-            });
-        });
+        }
 
-        // Dependent nodes (right side)
-        dependents.forEach((dep, i) => {
-            const spacing = Math.max(60, 300 / Math.max(dependents.length, 1));
-            const yOffset = centerY - ((dependents.length - 1) * spacing) / 2 + i * spacing;
-            nodes.push({
-                id: `dep-${i}`,
-                position: { x: centerX + 300, y: yOffset },
-                data: { label: dep.name, identifier: dep.identifier },
-                style: {
-                    background: theme === 'dark' ? '#18181b' : '#fff',
-                    border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e4e4e7'}`,
-                    borderRadius: 4,
-                    padding: '8px 12px',
-                    fontSize: 10,
-                    fontFamily: 'monospace',
-                    color: theme === 'dark' ? '#a1a1aa' : '#52525b',
-                    cursor: 'pointer',
-                },
-            });
-            edges.push({
-                id: `e-dep-${i}`,
-                source: 'center',
-                target: `dep-${i}`,
-                animated: false,
-                style: { stroke: theme === 'dark' ? '#a78bfa' : '#7c3aed', strokeWidth: 1.5 },
-                markerEnd: { type: MarkerType.ArrowClosed, color: theme === 'dark' ? '#a78bfa' : '#7c3aed', width: 16, height: 16 },
-                label: 'imported by',
-                labelStyle: { fontSize: 9, fontFamily: 'monospace', fill: theme === 'dark' ? '#71717a' : '#a1a1aa' },
-                labelBgStyle: { fill: theme === 'dark' ? '#09090b' : '#fff', fillOpacity: 0.8 },
-            });
-        });
+        // Import edges (green)
+        if (graph?.edges) {
+            for (const e of graph.edges) {
+                rfEdges.push({
+                    id: `e-${e.source}-${e.target}`,
+                    source: e.target,   // imported lib (left)
+                    target: e.source,   // importer (right)
+                    animated: false,
+                    style: { stroke: green, strokeWidth: 1.5 },
+                    markerEnd: { type: MarkerType.ArrowClosed, color: green, width: 14, height: 14 },
+                    labelStyle: { fontSize: 9, fontFamily: 'monospace', fill: labelFill },
+                    labelBgStyle: { fill: labelBg, fillOpacity: 0.8 },
+                });
+            }
+        } else {
+            for (const imp of imports) {
+                rfEdges.push({
+                    id: `e-imp-${imp.identifier}`,
+                    source: imp.identifier,
+                    target: rootID,
+                    animated: false,
+                    style: { stroke: green, strokeWidth: 1.5 },
+                    markerEnd: { type: MarkerType.ArrowClosed, color: green, width: 14, height: 14 },
+                });
+            }
+        }
 
-        return { nodes, edges };
-    }, [contractName, contractIdentifier, imports, dependents, theme]);
+        // Dependent edges (purple)
+        for (const dep of dependents) {
+            rfEdges.push({
+                id: `e-dep-${dep.identifier}`,
+                source: rootID,
+                target: dep.identifier,
+                animated: false,
+                style: { stroke: purple, strokeWidth: 1.5 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: purple, width: 14, height: 14 },
+                labelStyle: { fontSize: 9, fontFamily: 'monospace', fill: labelFill },
+                labelBgStyle: { fill: labelBg, fillOpacity: 0.8 },
+            });
+        }
+
+        return { nodes: rfNodes, edges: rfEdges };
+    }, [contractName, contractIdentifier, imports, dependents, graph, theme]);
 
     const [nodes, , onNodesChange] = useNodesState(initialNodes);
     const [edges, , onEdgesChange] = useEdgesState(initialEdges);
@@ -1128,7 +1203,7 @@ function DependencyGraph({ contractName, contractIdentifier, imports, dependents
         }
     };
 
-    if (imports.length === 0 && dependents.length === 0) {
+    if (imports.length === 0 && dependents.length === 0 && (!graph?.edges || graph.edges.length === 0)) {
         return (
             <div className="flex flex-col items-center justify-center p-12 text-zinc-500">
                 <GitBranch className="h-8 w-8 mb-3 opacity-30" />
