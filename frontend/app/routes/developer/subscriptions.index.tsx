@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Trash2, Loader2, GitBranch, CheckCircle, Circle } from 'lucide-react'
 import DeveloperLayout from '../../components/developer/DeveloperLayout'
-import { listWorkflows, createWorkflow, deleteWorkflow } from '../../lib/webhookApi'
+import { listWorkflows, createWorkflow, deleteWorkflow, updateWorkflow } from '../../lib/webhookApi'
 import type { Workflow } from '../../lib/webhookApi'
 import { WORKFLOW_TEMPLATES, TEMPLATE_CATEGORIES } from '../../components/developer/workflow/templates'
 
@@ -18,6 +18,7 @@ function WorkflowListPage() {
   const [creating, setCreating] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Workflow | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   const fetchWorkflows = useCallback(async () => {
     try {
@@ -60,6 +61,18 @@ function WorkflowListPage() {
       navigate({ to: '/developer/subscriptions/$id', params: { id: wf.id } })
     } catch {
       setCreating(false)
+    }
+  }
+
+  async function handleToggle(wf: Workflow) {
+    setTogglingId(wf.id)
+    try {
+      const updated = await updateWorkflow(wf.id, { is_active: !wf.is_active })
+      setWorkflows((prev) => prev.map((w) => (w.id === wf.id ? updated : w)))
+    } catch {
+      // ignore
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -165,15 +178,28 @@ function WorkflowListPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        {wf.is_active ? (
-                          <span className="flex items-center gap-1 text-xs text-emerald-400">
-                            <CheckCircle className="w-3.5 h-3.5" /> Active
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-xs text-neutral-500">
-                            <Circle className="w-3.5 h-3.5" /> Draft
-                          </span>
-                        )}
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleToggle(wf)
+                          }}
+                          disabled={togglingId === wf.id}
+                          className={`flex items-center gap-1 text-xs transition-colors ${
+                            wf.is_active
+                              ? 'text-emerald-400 hover:text-emerald-300'
+                              : 'text-neutral-500 hover:text-neutral-300'
+                          } disabled:opacity-50`}
+                        >
+                          {togglingId === wf.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : wf.is_active ? (
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          ) : (
+                            <Circle className="w-3.5 h-3.5" />
+                          )}
+                          {wf.is_active ? 'Active' : 'Draft'}
+                        </button>
                         <button
                           onClick={(e) => {
                             e.preventDefault()

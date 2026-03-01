@@ -81,7 +81,15 @@ func (o *Orchestrator) processEvent(ctx context.Context, evt eventbus.Event) {
 		return // no subscriptions for this event type
 	}
 
+	// Deduplicate by endpoint_id so the same event is delivered at most once
+	// per endpoint, even if multiple subscriptions match.
+	deliveredEndpoints := make(map[string]bool)
+
 	for _, sub := range subs {
+		if deliveredEndpoints[sub.EndpointID] {
+			continue
+		}
+
 		result := m.Match(evt.Data, sub.Conditions)
 		if !result.Matched {
 			continue
@@ -98,6 +106,7 @@ func (o *Orchestrator) processEvent(ctx context.Context, evt eventbus.Event) {
 		}
 
 		o.deliver(ctx, sub, evt)
+		deliveredEndpoints[sub.EndpointID] = true
 	}
 }
 
