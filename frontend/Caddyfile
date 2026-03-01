@@ -13,3 +13,7 @@ supabase.flowindex.io {
 ai.flowindex.io {
 	reverse_proxy 34.170.76.156:80
 }
+
+analytics.flowindex.io {
+	reverse_proxy localhost:3001
+}
