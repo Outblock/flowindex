@@ -26,6 +26,7 @@ import (
 // and stores them as status_snapshots for the frontend.
 type NetworkPoller struct {
 	flowClient            *flowclient.Client
+	historyClient         *flowclient.Client // for backfill queries at old heights
 	repo                  *repository.Repository
 	interval              time.Duration
 	lastMetadataEnrichAt  time.Time
@@ -40,6 +41,11 @@ func NewNetworkPoller(flowClient *flowclient.Client, repo *repository.Repository
 		repo:       repo,
 		interval:   time.Duration(intervalSec) * time.Second,
 	}
+}
+
+// SetHistoryClient sets an optional historic access node client for epoch backfill.
+func (p *NetworkPoller) SetHistoryClient(c *flowclient.Client) {
+	p.historyClient = c
 }
 
 func (p *NetworkPoller) Start(ctx context.Context) {
@@ -253,6 +259,12 @@ func (p *NetworkPoller) BackfillEpochTotalStaked(ctx context.Context) error {
 
 	log.Printf("[NetworkPoller] Backfilling total_staked for %d epochs", len(epochs))
 
+	// Use history client if available (supports older sporks + pruned state)
+	client := p.flowClient
+	if p.historyClient != nil {
+		client = p.historyClient
+	}
+
 	script := []byte(stakingScript())
 	for _, ep := range epochs {
 		if ctx.Err() != nil {
@@ -260,7 +272,7 @@ func (p *NetworkPoller) BackfillEpochTotalStaked(ctx context.Context) error {
 		}
 
 		fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		result, err := p.flowClient.ExecuteScriptAtBlockHeight(fetchCtx, ep.StartHeight, script, nil)
+		result, err := client.ExecuteScriptAtBlockHeight(fetchCtx, ep.StartHeight, script, nil)
 		cancel()
 		if err != nil {
 			log.Printf("[NetworkPoller] epoch %d (height %d) script error: %v", ep.Epoch, ep.StartHeight, err)

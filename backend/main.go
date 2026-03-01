@@ -1188,6 +1188,7 @@ func main() {
 	if enableNetworkPoller {
 		pollIntervalSec := getEnvInt("NETWORK_POLL_INTERVAL_SEC", 30)
 		poller := ingester.NewNetworkPoller(flowClient, repo, pollIntervalSec)
+		poller.SetHistoryClient(historyClient)
 
 		wg.Add(1)
 		go func() {
