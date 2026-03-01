@@ -1312,6 +1312,11 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 	if req.Concurrency > 16 {
 		req.Concurrency = 16
 	}
+	// proposer_key_backfill hits external RPC nodes that rate-limit aggressively;
+	// cap chunk concurrency to 2 so total in-flight RPCs stay low.
+	if req.Worker == "proposer_key_backfill" && req.Concurrency > 2 {
+		req.Concurrency = 2
+	}
 
 	// Instantiate the worker
 	var proc ingester.Processor

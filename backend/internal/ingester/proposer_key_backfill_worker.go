@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,7 +67,8 @@ func (w *ProposerKeyBackfillWorker) ProcessRange(ctx context.Context, fromHeight
 	log.Printf("[proposer_key_backfill] Range [%d, %d): %d blocks to backfill", fromHeight, toHeight, len(heights))
 
 	// 2. Fetch all txs per block concurrently.
-	const fetchConcurrency = 10
+	// Keep concurrency low (3) to avoid ResourceExhausted on old spork nodes.
+	const fetchConcurrency = 3
 	sem := make(chan struct{}, fetchConcurrency)
 	var mu sync.Mutex
 	var updates []proposerKeyUpdate
@@ -81,10 +83,7 @@ func (w *ProposerKeyBackfillWorker) ProcessRange(ctx context.Context, fromHeight
 		go func(height uint64) {
 			defer func() { <-sem }()
 
-			fetchCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-			txs, err := w.blockFlow.GetTransactionsByBlockHeight(fetchCtx, height)
-			cancel()
-
+			txs, err := w.fetchBlockWithRetry(ctx, height)
 			if err != nil {
 				mu.Lock()
 				fetchErrors++
@@ -133,6 +132,38 @@ func (w *ProposerKeyBackfillWorker) ProcessRange(ctx context.Context, fromHeight
 	log.Printf("[proposer_key_backfill] Range [%d, %d): updated %d txs from %d blocks (fetch_errors=%d)",
 		fromHeight, toHeight, len(updates), len(heights), fetchErrors)
 	return nil
+}
+
+// fetchBlockWithRetry fetches all transactions for a block, retrying with
+// exponential backoff on ResourceExhausted (rate limit) errors.
+func (w *ProposerKeyBackfillWorker) fetchBlockWithRetry(ctx context.Context, height uint64) ([]*flow.Transaction, error) {
+	const maxRetries = 4
+	backoff := 2 * time.Second
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		txs, err := w.blockFlow.GetTransactionsByBlockHeight(fetchCtx, height)
+		cancel()
+
+		if err == nil {
+			return txs, nil
+		}
+
+		// Retry on ResourceExhausted (gRPC rate limit)
+		if strings.Contains(err.Error(), "ResourceExhausted") && attempt < maxRetries {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+				backoff *= 2 // 2s, 4s, 8s, 16s
+				continue
+			}
+		}
+
+		return nil, err
+	}
+
+	return nil, fmt.Errorf("unreachable")
 }
 
 func (w *ProposerKeyBackfillWorker) flushBatch(ctx context.Context, batch []proposerKeyUpdate) error {
