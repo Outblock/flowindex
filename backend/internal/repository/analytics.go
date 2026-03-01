@@ -482,16 +482,18 @@ func (r *Repository) GetTopContracts(ctx context.Context, hours int, limit int) 
 	}
 	query := `
 		SELECT tc.contract_identifier,
-		       COALESCE(sc.contract_name, split_part(tc.contract_identifier, '.', 3)) AS contract_name,
+		       COALESCE(sc.name, split_part(tc.contract_identifier, '.', 3)) AS contract_name,
 		       COALESCE('0x' || encode(sc.address, 'hex'), split_part(tc.contract_identifier, '.', 2)) AS address,
 		       COUNT(*)::bigint AS tx_count,
 		       COUNT(DISTINCT t.proposer)::bigint AS unique_callers
 		FROM app.tx_contracts tc
 		JOIN raw.tx_lookup tl ON tl.id = tc.transaction_id
 		JOIN raw.transactions t ON t.id = tc.transaction_id AND t.block_height = tl.block_height
-		LEFT JOIN app.smart_contracts sc ON sc.identifier = tc.contract_identifier
+		LEFT JOIN app.smart_contracts sc
+		       ON sc.address = decode(split_part(tc.contract_identifier, '.', 2), 'hex')
+		      AND sc.name = split_part(tc.contract_identifier, '.', 3)
 		WHERE tl.timestamp > NOW() - make_interval(hours => $1)
-		GROUP BY tc.contract_identifier, sc.contract_name, sc.address
+		GROUP BY tc.contract_identifier, sc.name, sc.address
 		ORDER BY tx_count DESC
 		LIMIT $2`
 	rows, err := r.db.Query(ctx, query, hours, limit)

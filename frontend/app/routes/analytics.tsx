@@ -1,5 +1,5 @@
 import { createFileRoute, useSearch, useNavigate, Link } from '@tanstack/react-router'
-import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react'
 import type { Layout } from 'react-grid-layout'
 import {
   AreaChart,
@@ -498,28 +498,36 @@ function AnalyticsPage() {
   const [netStats, setNetStats] = useState<NetworkStatsData | null>(null)
   const [totals, setTotals] = useState<Totals | null>(null)
 
-  // Per-source loading flags
+  // Per-source loading flags — tab-specific ones start as false (not loading)
+  // and flip to true only when their tab is first visited
   const [dailyLoading, setDailyLoading] = useState(true)
-  const [transferLoading, setTransferLoading] = useState(true)
-  const [priceLoading, setPriceLoading] = useState(true)
-  const [epochLoading, setEpochLoading] = useState(true)
+  const [transferLoading, setTransferLoading] = useState(false)
+  const [priceLoading, setPriceLoading] = useState(false)
+  const [epochLoading, setEpochLoading] = useState(false)
   const [netStatsLoading, setNetStatsLoading] = useState(true)
   const [totalsLoading, setTotalsLoading] = useState(true)
   const [whaleTransfers, setWhaleTransfers] = useState<BigTransfer[] | null>(null)
-  const [whaleLoading, setWhaleLoading] = useState(true)
+  const [whaleLoading, setWhaleLoading] = useState(false)
   const [topContracts, setTopContracts] = useState<TopContract[] | null>(null)
-  const [topContractsLoading, setTopContractsLoading] = useState(true)
+  const [topContractsLoading, setTopContractsLoading] = useState(false)
   const [tokenVolume, setTokenVolume] = useState<TokenVolumeType[] | null>(null)
-  const [tokenVolumeLoading, setTokenVolumeLoading] = useState(true)
+  const [tokenVolumeLoading, setTokenVolumeLoading] = useState(false)
 
-  // Each data source loads independently so fast ones render immediately
+  // Track which data groups have been loaded (persists across tab switches)
+  const loadedGroups = useRef<Set<string>>(new Set())
+
+  // Shared fromStr for all data fetches
+  const fromStrRef = useRef('')
+
+  // Core data: dailyData (base + modules), netStats, totals — always loaded (powers KPIs)
   useEffect(() => {
     let cancelled = false
     ensureHeyApiConfigured().then(() => {
       if (cancelled) return
       const fromDate = new Date()
       fromDate.setFullYear(fromDate.getFullYear() - 1)
-      const fromStr = fromDate.toISOString().split('T')[0]
+      fromStrRef.current = fromDate.toISOString().split('T')[0]
+      const fromStr = fromStrRef.current
 
       fetchAnalyticsDaily(fromStr).then((data) => {
         if (cancelled || !data) return
@@ -537,43 +545,22 @@ function AnalyticsPage() {
                 const mod = modByDate.get(row.date)
                 if (!mod) return row
                 if (module === 'accounts') {
-                  return {
-                    ...row,
-                    new_accounts: mod.new_accounts,
-                    coa_new_accounts: mod.coa_new_accounts,
-                  }
+                  return { ...row, new_accounts: mod.new_accounts, coa_new_accounts: mod.coa_new_accounts }
                 }
                 if (module === 'evm') {
-                  return {
-                    ...row,
-                    evm_active_addresses: mod.evm_active_addresses,
-                  }
+                  return { ...row, evm_active_addresses: mod.evm_active_addresses }
                 }
                 if (module === 'defi') {
-                  return {
-                    ...row,
-                    defi_swap_count: mod.defi_swap_count,
-                    defi_unique_traders: mod.defi_unique_traders,
-                  }
+                  return { ...row, defi_swap_count: mod.defi_swap_count, defi_unique_traders: mod.defi_unique_traders }
                 }
                 if (module === 'epoch') {
-                  return {
-                    ...row,
-                    epoch_payout_total: mod.epoch_payout_total,
-                    epoch: mod.epoch,
-                  }
+                  return { ...row, epoch_payout_total: mod.epoch_payout_total, epoch: mod.epoch }
                 }
                 if (module === 'bridge') {
-                  return {
-                    ...row,
-                    bridge_to_evm_txs: mod.bridge_to_evm_txs,
-                  }
+                  return { ...row, bridge_to_evm_txs: mod.bridge_to_evm_txs }
                 }
                 if (module === 'contracts') {
-                  return {
-                    ...row,
-                    contract_updates: mod.contract_updates,
-                  }
+                  return { ...row, contract_updates: mod.contract_updates }
                 }
                 return row
               }))
@@ -582,31 +569,10 @@ function AnalyticsPage() {
         }
       }).catch(() => { if (!cancelled) setDailyLoading(false) })
 
-      fetchAnalyticsTransfersDaily(fromStr).then((data) => {
-        if (cancelled || !data) return
-        setTransferData((data as TransferRow[]).sort((a, b) => a.date.localeCompare(b.date)))
-      }).catch(() => {}).finally(() => { if (!cancelled) setTransferLoading(false) })
-
       fetchNetworkStats().then((data) => {
         if (cancelled || !data) return
         setNetStats(data as NetworkStatsData)
       }).catch(() => {}).finally(() => { if (!cancelled) setNetStatsLoading(false) })
-
-      fetch(`${getBaseURL()}/status/price/history?limit=8760`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((json) => {
-          if (cancelled || !json?.data) return
-          setPriceHistory(
-            (json.data as PricePoint[]).slice().sort((a, b) => new Date(a.as_of).getTime() - new Date(b.as_of).getTime()),
-          )
-        }).catch(() => {}).finally(() => { if (!cancelled) setPriceLoading(false) })
-
-      fetch(`${getBaseURL()}/staking/epoch/stats?limit=200`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((json) => {
-          if (cancelled || !json?.data) return
-          setEpochData((json.data as EpochRow[]).slice().sort((a, b) => a.epoch - b.epoch))
-        }).catch(() => {}).finally(() => { if (!cancelled) setEpochLoading(false) })
 
       fetch(`${getBaseURL()}/status/count`)
         .then((r) => (r.ok ? r.json() : null))
@@ -616,27 +582,89 @@ function AnalyticsPage() {
           const item = Array.isArray(d) ? d[0] : d
           if (item) setTotals(item as Totals)
         }).catch(() => {}).finally(() => { if (!cancelled) setTotalsLoading(false) })
-
-      fetchBigTransfers({ limit: 8 }).then((data) => {
-        if (cancelled) return
-        setWhaleTransfers(data)
-      }).catch(() => { if (!cancelled) setWhaleTransfers([]) })
-        .finally(() => { if (!cancelled) setWhaleLoading(false) })
-
-      fetchTopContracts({ limit: 10 }).then((data) => {
-        if (cancelled) return
-        setTopContracts(data)
-      }).catch(() => { if (!cancelled) setTopContracts([]) })
-        .finally(() => { if (!cancelled) setTopContractsLoading(false) })
-
-      fetchTokenVolume({ limit: 10 }).then((data) => {
-        if (cancelled) return
-        setTokenVolume(data)
-      }).catch(() => { if (!cancelled) setTokenVolume([]) })
-        .finally(() => { if (!cancelled) setTokenVolumeLoading(false) })
     })
     return () => { cancelled = true }
   }, [])
+
+  // Lazy-load tab-specific data when a tab is first visited
+  useEffect(() => {
+    const needsTransfers = activeTab === 'all' || activeTab === 'transactions' || activeTab === 'tokens'
+    const needsPrice = activeTab === 'all' || activeTab === 'price'
+    const needsEpoch = activeTab === 'all' || activeTab === 'network'
+    const needsWhales = activeTab === 'all' || activeTab === 'tokens'
+    const needsTopContracts = activeTab === 'all' || activeTab === 'network'
+    const needsTokenVolume = activeTab === 'all' || activeTab === 'tokens'
+
+    let cancelled = false
+    ensureHeyApiConfigured().then(() => {
+      if (cancelled) return
+      const fromStr = fromStrRef.current
+
+      if (needsTransfers && !loadedGroups.current.has('transfers')) {
+        loadedGroups.current.add('transfers')
+        setTransferLoading(true)
+        fetchAnalyticsTransfersDaily(fromStr).then((data) => {
+          if (cancelled || !data) return
+          setTransferData((data as TransferRow[]).sort((a, b) => a.date.localeCompare(b.date)))
+        }).catch(() => {}).finally(() => { if (!cancelled) setTransferLoading(false) })
+      }
+
+      if (needsPrice && !loadedGroups.current.has('price')) {
+        loadedGroups.current.add('price')
+        setPriceLoading(true)
+        fetch(`${getBaseURL()}/status/price/history?limit=8760`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((json) => {
+            if (cancelled || !json?.data) return
+            setPriceHistory(
+              (json.data as PricePoint[]).slice().sort((a, b) => new Date(a.as_of).getTime() - new Date(b.as_of).getTime()),
+            )
+          }).catch(() => {}).finally(() => { if (!cancelled) setPriceLoading(false) })
+      }
+
+      if (needsEpoch && !loadedGroups.current.has('epoch')) {
+        loadedGroups.current.add('epoch')
+        setEpochLoading(true)
+        fetch(`${getBaseURL()}/staking/epoch/stats?limit=200`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((json) => {
+            if (cancelled || !json?.data) return
+            setEpochData((json.data as EpochRow[]).slice().sort((a, b) => a.epoch - b.epoch))
+          }).catch(() => {}).finally(() => { if (!cancelled) setEpochLoading(false) })
+      }
+
+      if (needsWhales && !loadedGroups.current.has('whales')) {
+        loadedGroups.current.add('whales')
+        setWhaleLoading(true)
+        fetchBigTransfers({ limit: 8 }).then((data) => {
+          if (cancelled) return
+          setWhaleTransfers(data)
+        }).catch(() => { if (!cancelled) setWhaleTransfers([]) })
+          .finally(() => { if (!cancelled) setWhaleLoading(false) })
+      }
+
+      if (needsTopContracts && !loadedGroups.current.has('topContracts')) {
+        loadedGroups.current.add('topContracts')
+        setTopContractsLoading(true)
+        fetchTopContracts({ limit: 10 }).then((data) => {
+          if (cancelled) return
+          setTopContracts(data)
+        }).catch(() => { if (!cancelled) setTopContracts([]) })
+          .finally(() => { if (!cancelled) setTopContractsLoading(false) })
+      }
+
+      if (needsTokenVolume && !loadedGroups.current.has('tokenVolume')) {
+        loadedGroups.current.add('tokenVolume')
+        setTokenVolumeLoading(true)
+        fetchTokenVolume({ limit: 10 }).then((data) => {
+          if (cancelled) return
+          setTokenVolume(data)
+        }).catch(() => { if (!cancelled) setTokenVolume([]) })
+          .finally(() => { if (!cancelled) setTokenVolumeLoading(false) })
+      }
+    })
+    return () => { cancelled = true }
+  }, [activeTab])
 
   /* ── derived visible slices ── */
 
