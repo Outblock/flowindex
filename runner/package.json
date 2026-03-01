@@ -11,6 +11,7 @@
   "dependencies": {
     "@ai-sdk/react": "^3.0.103",
     "@monaco-editor/react": "^4.7.0",
+    "@onflow/cadence-language-server": "^1.7.4",
     "@onflow/fcl": "^1.21.9",
     "ai": "^6.0.101",
     "axios": "^1.13.4",
@@ -20,7 +21,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-json-view-lite": "^2.1.0",
-    "tailwind-merge": "^2.2.0"
+    "tailwind-merge": "^2.2.0",
+    "vscode-jsonrpc": "8.2.1"
   },
   "devDependencies": {
     "@types/react": "^19.2.13",

@@ -9,17 +9,25 @@ interface CadenceEditorProps {
   onChange: (value: string) => void;
   onRun?: () => void;
   darkMode?: boolean;
+  /** File path — used as Monaco model key. Switching path preserves cursor/undo per file. */
+  path?: string;
+  readOnly?: boolean;
   externalEditorRef?: React.RefObject<editor.IStandaloneCodeEditor | null>;
+  onMonacoReady?: (monaco: typeof import('monaco-editor')) => void;
 }
 
-export default function CadenceEditor({ code, onChange, onRun, darkMode = true, externalEditorRef }: CadenceEditorProps) {
+export default function CadenceEditor({
+  code, onChange, onRun, darkMode = true, path, readOnly,
+  externalEditorRef, onMonacoReady,
+}: CadenceEditorProps) {
   const internalRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const editorRef = externalEditorRef || internalRef;
 
   const handleBeforeMount: BeforeMount = useCallback((monaco) => {
     registerCadenceLanguage(monaco);
     registerCadenceThemes(monaco);
-  }, []);
+    onMonacoReady?.(monaco);
+  }, [onMonacoReady]);
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -52,6 +60,7 @@ export default function CadenceEditor({ code, onChange, onRun, darkMode = true, 
       language={CADENCE_LANGUAGE_ID}
       theme={darkMode ? CADENCE_DARK_THEME : CADENCE_LIGHT_THEME}
       value={code}
+      path={path}
       onChange={handleChange}
       beforeMount={handleBeforeMount}
       onMount={handleMount}
@@ -68,6 +77,7 @@ export default function CadenceEditor({ code, onChange, onRun, darkMode = true, 
         renderLineHighlight: 'line',
         bracketPairColorization: { enabled: true },
         tabSize: 2,
+        readOnly,
       }}
     />
   );
