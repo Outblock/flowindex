@@ -307,6 +307,18 @@ jobs:
 
       - name: Create deploy script
         run: |
+          cat > /tmp/gen_jwt.py << 'PYSCRIPT'
+          import json, hmac, hashlib, base64, os
+          def b64url(d):
+              return base64.urlsafe_b64encode(d).rstrip(b'=').decode()
+          s = os.environ['SUPABASE_JWT_SECRET']
+          h = b64url(json.dumps({'alg': 'HS256', 'typ': 'JWT'}).encode())
+          for role in ['anon', 'service_role']:
+              p = b64url(json.dumps({'role': role, 'iss': 'supabase', 'iat': 1672531200, 'exp': 1988150400}).encode())
+              sig = hmac.new(s.encode(), (h + '.' + p).encode(), hashlib.sha256).digest()
+              name = 'SUPABASE_ANON_KEY' if role == 'anon' else 'SUPABASE_SERVICE_KEY'
+              print(f'export {name}={h}.{p}.{b64url(sig)}')
+          PYSCRIPT
           cat > /tmp/deploy-studio.sh << 'SCRIPT'
           #!/bin/bash
           set -e
@@ -345,17 +357,8 @@ jobs:
 
           # Generate Supabase JWT keys from SUPABASE_JWT_SECRET
           if [ -z "${SUPABASE_ANON_KEY:-}" ] || [ "${SUPABASE_ANON_KEY:-}" = "anon" ]; then
-            eval $(python3 -c "
-import json,hmac,hashlib,base64
-def b64url(d): return base64.urlsafe_b64encode(d).rstrip(b'=').decode()
-s='$SUPABASE_JWT_SECRET'
-h=b64url(json.dumps({'alg':'HS256','typ':'JWT'}).encode())
-for role in ['anon','service_role']:
-  p=b64url(json.dumps({'role':role,'iss':'supabase','iat':1672531200,'exp':1988150400}).encode())
-  sig=hmac.new(s.encode(),(h+'.'+p).encode(),hashlib.sha256).digest()
-  name='SUPABASE_ANON_KEY' if role=='anon' else 'SUPABASE_SERVICE_KEY'
-  print(f'export {name}={h}.{p}.{b64url(sig)}')
-")
+            python3 /tmp/gen_jwt.py > /tmp/jwt_exports.sh
+            source /tmp/jwt_exports.sh
             echo "Generated JWT keys from SUPABASE_JWT_SECRET"
           fi
 
@@ -412,6 +415,7 @@ for role in ['anon','service_role']:
             docker pull supabase/postgres-meta:v0.96.0
             docker pull supabase/studio:latest
           '
+          gcloud compute scp /tmp/gen_jwt.py flowindex-backend:/tmp/gen_jwt.py --zone=us-central1-a
           gcloud compute scp /tmp/deploy-studio.sh flowindex-backend:/tmp/deploy-studio.sh --zone=us-central1-a
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
             bash /tmp/deploy-studio.sh ${{ env.REGISTRY }}/studio:${{ github.sha }}
