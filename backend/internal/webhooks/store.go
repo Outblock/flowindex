@@ -410,6 +410,105 @@ func (s *Store) UpdateUserTier(ctx context.Context, userID, tierID string) error
 	return err
 }
 
+// EnsureRBACSchema creates team/role RBAC tables and backfills personal teams.
+func (s *Store) EnsureRBACSchema(ctx context.Context) error {
+	const ddl = `
+		CREATE TABLE IF NOT EXISTS public.teams (
+			id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+			slug        TEXT NOT NULL UNIQUE,
+			name        TEXT NOT NULL,
+			created_by  UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+
+		CREATE TABLE IF NOT EXISTS public.team_memberships (
+			team_id      UUID REFERENCES public.teams(id) ON DELETE CASCADE NOT NULL,
+			user_id      UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+			role         TEXT NOT NULL DEFAULT 'team_member' CHECK (role IN ('team_admin', 'team_member')),
+			status       TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'invited', 'suspended')),
+			invited_by   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+			created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+			updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+			PRIMARY KEY (team_id, user_id)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_team_memberships_user ON public.team_memberships(user_id);
+		CREATE INDEX IF NOT EXISTS idx_team_memberships_team ON public.team_memberships(team_id);
+
+		CREATE TABLE IF NOT EXISTS public.user_platform_roles (
+			user_id      UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+			role         TEXT NOT NULL CHECK (role IN ('platform_admin', 'ops_admin', 'admin')),
+			assigned_by  UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+			created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+			PRIMARY KEY (user_id, role)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_user_platform_roles_role ON public.user_platform_roles(role);
+
+		CREATE OR REPLACE FUNCTION public.handle_new_user()
+		RETURNS TRIGGER AS $$
+		DECLARE
+			personal_team_id UUID;
+			personal_slug TEXT;
+			personal_name TEXT;
+		BEGIN
+			INSERT INTO public.user_profiles (user_id) VALUES (NEW.id)
+			ON CONFLICT (user_id) DO NOTHING;
+
+			personal_slug := 'u_' || substr(replace(NEW.id::text, '-', ''), 1, 12);
+			personal_name := coalesce(split_part(NEW.email, '@', 1), 'User') || '''s Team';
+
+			INSERT INTO public.teams (slug, name, created_by)
+			VALUES (personal_slug, personal_name, NEW.id)
+			ON CONFLICT (slug) DO UPDATE SET name = public.teams.name
+			RETURNING id INTO personal_team_id;
+
+			INSERT INTO public.team_memberships (team_id, user_id, role, status, invited_by)
+			VALUES (personal_team_id, NEW.id, 'team_admin', 'active', NEW.id)
+			ON CONFLICT (team_id, user_id) DO NOTHING;
+
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+		DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+		CREATE TRIGGER on_auth_user_created
+			AFTER INSERT ON auth.users
+			FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+		WITH users_without_active_team AS (
+			SELECT u.id, u.email
+			FROM auth.users u
+			LEFT JOIN public.team_memberships tm
+			  ON tm.user_id = u.id AND tm.status = 'active'
+			WHERE tm.user_id IS NULL
+		)
+		INSERT INTO public.teams (slug, name, created_by)
+		SELECT
+			'u_' || substr(replace(u.id::text, '-', ''), 1, 12),
+			coalesce(split_part(u.email, '@', 1), 'User') || '''s Team',
+			u.id
+		FROM users_without_active_team u
+		ON CONFLICT (slug) DO NOTHING;
+
+		WITH users_without_active_team AS (
+			SELECT u.id, u.email
+			FROM auth.users u
+			LEFT JOIN public.team_memberships tm
+			  ON tm.user_id = u.id AND tm.status = 'active'
+			WHERE tm.user_id IS NULL
+		)
+		INSERT INTO public.team_memberships (team_id, user_id, role, status, invited_by)
+		SELECT t.id, u.id, 'team_admin', 'active', u.id
+		FROM users_without_active_team u
+		JOIN public.teams t
+		  ON t.slug = 'u_' || substr(replace(u.id::text, '-', ''), 1, 12)
+		ON CONFLICT (team_id, user_id) DO NOTHING;
+	`
+	_, err := s.pool.Exec(ctx, ddl)
+	return err
+}
+
 // EnsureTiers upserts all known rate limit tiers so that foreign key references succeed.
 func (s *Store) EnsureTiers(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx, `

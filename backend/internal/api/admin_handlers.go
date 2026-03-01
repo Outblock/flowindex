@@ -1384,7 +1384,7 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 				defer func() { <-sem }()
 				chunkTimeout := 2 * time.Minute
 			if req.Worker == "proposer_key_backfill" {
-				chunkTimeout = 10 * time.Minute
+				chunkTimeout = 30 * time.Minute
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), chunkTimeout)
 				defer cancel()

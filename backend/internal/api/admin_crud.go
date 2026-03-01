@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -8,21 +9,36 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 
 	"flowscan-clone/internal/models"
 
 	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+var (
+	adminAuthzDBOnce sync.Once
+	adminAuthzDBPool *pgxpool.Pool
+	adminAuthzDBErr  error
 )
 
 // adminAuthMiddleware supports two auth methods:
 // 1) Legacy static ADMIN_TOKEN (kept for emergency fallback)
 // 2) JWT (ADMIN_JWT_SECRET or SUPABASE_JWT_SECRET) with role/team claims
 //
-// JWT authorization rules:
-// - ADMIN_ALLOWED_ROLES (csv, default: "platform_admin,ops_admin,admin")
-//   must match at least one role claim
-// - ADMIN_ALLOWED_TEAMS (csv, optional) if set, must match at least one team claim
+// JWT authorization rules (table-first):
+// - If SUPABASE_DB_URL is configured, /admin auth checks table-driven RBAC:
+//   - public.user_platform_roles.role
+//   - public.team_memberships(team_id,user_id,role,status) + public.teams.slug
+//
+// - If user has no RBAC rows yet, it falls back to JWT claims for compatibility.
+//
+// JWT claim authorization rules (fallback):
+//   - ADMIN_ALLOWED_ROLES (csv, default: "platform_admin,ops_admin,admin")
+//     must match at least one role claim
+//   - ADMIN_ALLOWED_TEAMS (csv, optional) if set, must match at least one team claim
 //
 // Canonical role names used by FlowIndex:
 // - platform_admin: full platform administration (can access /admin)
@@ -65,6 +81,7 @@ func adminAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		sub, _ := claims["sub"].(string)
 		allowedRoles := parseCSVSet(os.Getenv("ADMIN_ALLOWED_ROLES"))
 		if len(allowedRoles) == 0 {
 			allowedRoles = map[string]struct{}{
@@ -74,13 +91,29 @@ func adminAuthMiddleware(next http.Handler) http.Handler {
 				"admin": {},
 			}
 		}
+		allowedTeams := parseCSVSet(os.Getenv("ADMIN_ALLOWED_TEAMS"))
+
+		// Prefer table-driven RBAC from Supabase DB.
+		if strings.TrimSpace(sub) != "" {
+			dbAllowed, hasAssignments, denyReason, dbErr := authorizeAdminViaDB(r.Context(), sub, allowedRoles, allowedTeams)
+			if dbErr != nil {
+				// Fall through to claims-based fallback for compatibility.
+			} else if hasAssignments {
+				if !dbAllowed {
+					writeAPIError(w, http.StatusForbidden, denyReason)
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// Fallback: JWT claims.
 		roles := extractRoleClaims(claims)
 		if !hasAnyAllowedValue(roles, allowedRoles) {
 			writeAPIError(w, http.StatusForbidden, "admin access denied: missing required role")
 			return
 		}
-
-		allowedTeams := parseCSVSet(os.Getenv("ADMIN_ALLOWED_TEAMS"))
 		if len(allowedTeams) > 0 {
 			teams := extractTeamClaims(claims)
 			if !hasAnyAllowedValue(teams, allowedTeams) {
@@ -91,6 +124,71 @@ func adminAuthMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func getAdminAuthzDBPool() (*pgxpool.Pool, error) {
+	adminAuthzDBOnce.Do(func() {
+		dbURL := strings.TrimSpace(os.Getenv("SUPABASE_DB_URL"))
+		if dbURL == "" {
+			adminAuthzDBErr = fmt.Errorf("SUPABASE_DB_URL is not configured")
+			return
+		}
+		adminAuthzDBPool, adminAuthzDBErr = pgxpool.New(context.Background(), dbURL)
+	})
+	return adminAuthzDBPool, adminAuthzDBErr
+}
+
+func authorizeAdminViaDB(ctx context.Context, userID string, allowedRoles, allowedTeams map[string]struct{}) (allowed bool, hasAssignments bool, denyReason string, err error) {
+	pool, err := getAdminAuthzDBPool()
+	if err != nil {
+		return false, false, "", err
+	}
+
+	var rolesCSV, teamsCSV string
+	err = pool.QueryRow(ctx, `
+		SELECT
+			COALESCE(string_agg(DISTINCT lower(upr.role), ','), '') AS roles_csv,
+			COALESCE(string_agg(DISTINCT lower(t.slug), ','), '') AS teams_csv,
+			(COUNT(DISTINCT upr.role) + COUNT(DISTINCT tm.team_id)) > 0 AS has_assignments
+		FROM (SELECT $1::text AS uid) u
+		LEFT JOIN public.user_platform_roles upr ON upr.user_id::text = u.uid
+		LEFT JOIN public.team_memberships tm ON tm.user_id::text = u.uid AND tm.status = 'active'
+		LEFT JOIN public.teams t ON t.id = tm.team_id
+	`, userID).Scan(&rolesCSV, &teamsCSV, &hasAssignments)
+	if err != nil {
+		return false, false, "", err
+	}
+
+	if !hasAssignments {
+		return false, false, "", nil
+	}
+
+	roles := csvToClaimValues(rolesCSV)
+	if !hasAnyAllowedValue(roles, allowedRoles) {
+		return false, true, "admin access denied: missing required role", nil
+	}
+	if len(allowedTeams) > 0 {
+		teams := csvToClaimValues(teamsCSV)
+		if !hasAnyAllowedValue(teams, allowedTeams) {
+			return false, true, "admin access denied: missing required team", nil
+		}
+	}
+	return true, true, "", nil
+}
+
+func csvToClaimValues(csv string) []string {
+	if strings.TrimSpace(csv) == "" {
+		return nil
+	}
+	parts := strings.Split(csv, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		n := normalizeClaimValue(p)
+		if n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func extractBearerToken(authHeader string) string {
