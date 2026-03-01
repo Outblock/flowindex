@@ -1,0 +1,7 @@
+flowindex.io {
+	reverse_proxy localhost:8080
+}
+
+supabase.flowindex.io {
+	reverse_proxy 10.128.0.4:8000
+}
