@@ -203,8 +203,8 @@ export function setStringCodeResolver(resolver: (location: string) => string | u
 }
 
 export interface LSPBridge {
-  server: CadenceLanguageServer;
   sendToServer: (message: Message) => void;
+  setMessageHandler: (handler: (message: Message) => void) => void;
   dispose: () => void;
 }
 
@@ -216,7 +216,7 @@ export async function createLSPBridge(
 ): Promise<LSPBridge> {
   // Reuse existing if available
   if (bridgeInstance) {
-    bridgeInstance.server.callbacks.toClient = onMessage;
+    bridgeInstance.setMessageHandler(onMessage);
     return bridgeInstance;
   }
 
@@ -264,9 +264,11 @@ export async function createLSPBridge(
   serverInstance = server;
 
   const bridge: LSPBridge = {
-    server,
     sendToServer: (message: Message) => {
       server.callbacks.toServer?.(null, message);
+    },
+    setMessageHandler: (handler: (message: Message) => void) => {
+      server.callbacks.toClient = handler;
     },
     dispose: () => {
       server.close();
@@ -281,4 +283,37 @@ export async function createLSPBridge(
 
 export function getLSPBridge(): LSPBridge | null {
   return bridgeInstance;
+}
+
+/** Create an LSP bridge that communicates via WebSocket to a server-side LSP proxy. */
+export function createWebSocketBridge(url: string): Promise<LSPBridge> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let messageHandler: ((msg: Message) => void) | null = null;
+
+    ws.onopen = () => {
+      resolve({
+        sendToServer: (msg: Message) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(msg));
+          }
+        },
+        setMessageHandler: (handler) => {
+          messageHandler = handler;
+        },
+        dispose: () => ws.close(),
+      });
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data as string);
+        // Skip non-JSON-RPC control messages (type: "ready", "error")
+        if (data.type) return;
+        messageHandler?.(data as Message);
+      } catch { /* ignore parse errors */ }
+    };
+
+    ws.onerror = () => reject(new Error('WebSocket LSP connection failed'));
+  });
 }

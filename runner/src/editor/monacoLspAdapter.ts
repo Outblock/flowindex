@@ -133,7 +133,7 @@ export class MonacoLspAdapter {
     this.monaco = monaco;
 
     // Handle messages from LSP server
-    bridge.server.callbacks.toClient = this.handleServerMessage.bind(this);
+    bridge.setMessageHandler(this.handleServerMessage.bind(this));
   }
 
   private handleServerMessage(message: Message) {

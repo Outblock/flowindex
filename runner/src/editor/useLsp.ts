@@ -1,8 +1,9 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type * as Monaco from 'monaco-editor';
 import {
-  createLSPBridge, setAccessNode, setStringCodeResolver,
+  createLSPBridge, createWebSocketBridge, setAccessNode, setStringCodeResolver,
   onDependencyResolved, preloadCacheFromFiles, prefetchDependencies,
+  type LSPBridge,
 } from './languageServer';
 import { MonacoLspAdapter } from './monacoLspAdapter';
 import type { ProjectState } from '../fs/fileSystem';
@@ -49,51 +50,84 @@ export function useLsp(
     return () => onDependencyResolved(() => {});
   }, [onDependency]);
 
+  // Determine LSP WebSocket URL (auto-detect from current host, or use env override)
+  const lspWsUrl = import.meta.env.VITE_LSP_WS_URL
+    || (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/lsp';
+
   // Initialize LSP when Monaco becomes available
   useEffect(() => {
     if (!monacoInstance || initializingRef.current || adapterRef.current) return;
     initializingRef.current = true;
 
     (async () => {
+      let bridge: LSPBridge;
+      let useServerLsp = false;
+
+      // Try server-side LSP first (via WebSocket)
       try {
-        console.log('[LSP] Initializing Cadence Language Server...');
+        console.log('[LSP] Trying server-side LSP...');
+        bridge = await createWebSocketBridge(lspWsUrl);
+        // Send init message with network
+        bridge.sendToServer({ type: 'init', network } as any);
+        // Wait for "ready" confirmation — the WebSocket bridge skips type messages,
+        // so we just proceed. The server will start handling JSON-RPC after init.
+        useServerLsp = true;
+        console.log('[LSP] Connected to server-side LSP');
+      } catch {
+        // Fall back to WASM LSP
+        console.log('[LSP] Server unavailable, falling back to WASM');
 
-        // Pre-populate cache from existing dependency files (e.g. from localStorage)
-        preloadCacheFromFiles(project.files);
+        try {
+          // Pre-populate cache from existing dependency files
+          preloadCacheFromFiles(project.files);
 
-        // Async pre-fetch all dependencies for editable files
-        // This populates addressCodeCache BEFORE the LSP starts resolving imports,
-        // so the synchronous getAddressCode callback hits cache instead of doing XHR.
-        const accessNode = network === 'mainnet'
-          ? 'https://rest-mainnet.onflow.org'
-          : 'https://rest-testnet.onflow.org';
+          // Async pre-fetch all dependencies for editable files
+          const accessNode = network === 'mainnet'
+            ? 'https://rest-mainnet.onflow.org'
+            : 'https://rest-testnet.onflow.org';
 
-        const editableFiles = project.files.filter((f) => !f.readOnly);
-        const allCode = editableFiles.map((f) => f.content).join('\n');
+          const editableFiles = project.files.filter((f) => !f.readOnly);
+          const allCode = editableFiles.map((f) => f.content).join('\n');
 
-        if (allCode.includes('import ')) {
-          setLoadingDeps(true);
-          console.log('[LSP] Pre-fetching dependencies...');
-          await prefetchDependencies(allCode, accessNode, onDependency);
-          console.log('[LSP] Dependencies pre-fetched');
-          setLoadingDeps(false);
+          if (allCode.includes('import ')) {
+            setLoadingDeps(true);
+            console.log('[LSP] Pre-fetching dependencies...');
+            await prefetchDependencies(allCode, accessNode, onDependency);
+            console.log('[LSP] Dependencies pre-fetched');
+            setLoadingDeps(false);
+          }
+
+          bridge = await createLSPBridge(() => {});
+        } catch (err) {
+          console.error('[LSP] Failed to initialize:', err);
+          initializingRef.current = false;
+          return;
+        }
+      }
+
+      try {
+        const adapter = new MonacoLspAdapter(bridge!, monacoInstance);
+
+        // Server-side LSP already has its own initialize — only send from client for WASM
+        if (!useServerLsp) {
+          await adapter.initialize();
+        } else {
+          // For server LSP, just register providers (server already initialized the LSP)
+          await adapter.initialize();
         }
 
-        const bridge = await createLSPBridge(() => {});
-        const adapter = new MonacoLspAdapter(bridge, monacoInstance);
-        await adapter.initialize();
         adapterRef.current = adapter;
         setIsReady(true);
         console.log('[LSP] Cadence Language Server ready');
 
-        // Open existing documents (including readOnly deps so the LSP can resolve imports)
+        // Open existing documents
         for (const file of project.files) {
           const uri = `file:///${file.path}`;
           adapter.openDocument(uri, file.content);
           openDocsRef.current.add(uri);
         }
       } catch (err) {
-        console.error('[LSP] Failed to initialize:', err);
+        console.error('[LSP] Failed to initialize adapter:', err);
         initializingRef.current = false;
       }
     })();
