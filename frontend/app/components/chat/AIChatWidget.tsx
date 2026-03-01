@@ -386,6 +386,61 @@ const markdownComponents: Components = {
   pre: ({ children }) => <>{children}</>,
 };
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Custom components for AnimatedMarkdown (streaming) — matches markdownComponents styling.
+// flowtoken passes { animateText, node, children, ...props } to each custom component.
+const animatedMarkdownComponents: Record<string, any> = {
+  h1: ({ animateText, children }: any) => <h1 className="text-base font-bold text-zinc-900 dark:text-white mt-3 mb-1">{animateText(children)}</h1>,
+  h2: ({ animateText, children }: any) => <h2 className="text-sm font-bold text-zinc-900 dark:text-white mt-3 mb-1">{animateText(children)}</h2>,
+  h3: ({ animateText, children }: any) => <h3 className="text-[13px] font-bold text-zinc-900 dark:text-white mt-2 mb-1">{animateText(children)}</h3>,
+  h4: ({ animateText, children }: any) => <h4 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 mt-2 mb-0.5">{animateText(children)}</h4>,
+  p: ({ animateText, children }: any) => <p className="mb-2 last:mb-0"><AutoLinkText>{animateText(children)}</AutoLinkText></p>,
+  strong: ({ animateText, children }: any) => <strong className="font-bold text-zinc-900 dark:text-white">{animateText(children)}</strong>,
+  em: ({ animateText, children }: any) => <em className="italic">{animateText(children)}</em>,
+  a: ({ animateText, children, href }: any) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-nothing-green hover:underline">{animateText(children)}</a>
+  ),
+  ul: ({ children }: any) => <ul className="ml-3 mb-2 space-y-0.5">{children}</ul>,
+  ol: ({ children }: any) => <ol className="ml-3 mb-2 space-y-0.5 list-decimal list-inside">{children}</ol>,
+  li: ({ animateText, children }: any) => (
+    <li className="flex gap-1.5">
+      <span className="text-nothing-green shrink-0 mt-[1px]">-</span>
+      <span className="flex-1"><AutoLinkText>{animateText(children)}</AutoLinkText></span>
+    </li>
+  ),
+  blockquote: ({ children }: any) => (
+    <blockquote className="border-l-2 border-nothing-green/40 pl-3 my-2 text-zinc-500 dark:text-zinc-400 italic">{children}</blockquote>
+  ),
+  hr: () => <hr className="my-3 border-zinc-200 dark:border-white/10" />,
+  table: ({ children }: any) => (
+    <div className="overflow-x-auto my-2 rounded-sm border border-zinc-200 dark:border-white/10">
+      <table className="w-full text-left border-collapse text-[12px]">{children}</table>
+    </div>
+  ),
+  thead: ({ children }: any) => <thead className="bg-zinc-50 dark:bg-white/[0.03]">{children}</thead>,
+  th: ({ animateText, children }: any) => (
+    <th className="px-3 py-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-white/10 whitespace-nowrap">{animateText(children)}</th>
+  ),
+  td: ({ animateText, children }: any) => (
+    <td className="px-3 py-1.5 text-zinc-600 dark:text-zinc-400 border-b border-zinc-100 dark:border-white/5 font-mono"><AutoLinkText>{animateText(children)}</AutoLinkText></td>
+  ),
+  code: ({ className, children }: any) => {
+    const match = /language-(\w+)/.exec(className || '');
+    const lang = match ? match[1] : '';
+    const codeString = String(children).replace(/\n$/, '');
+    if (lang || codeString.includes('\n')) {
+      return <CodeBlock code={codeString} language={lang || 'text'} />;
+    }
+    return (
+      <code className="text-[11px] bg-zinc-100 dark:bg-white/10 px-1 py-0.5 rounded font-mono text-purple-600 dark:text-purple-400">
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }: any) => <>{children}</>,
+};
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 function MarkdownContent({ text }: { text: string }) {
   if (!text) return null;
   return (
@@ -774,7 +829,7 @@ function ChatMessage({ message, hideTools, isStreamingMsg }: { message: UIMessag
               return (
                 <div key={i} className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
                   {isStreamingMsg ? (
-                    <AnimatedMarkdown content={(part as any).text} animation="colorTransition" animationDuration="0.6s" animationTimingFunction="ease-out" sep="word" />
+                    <AnimatedMarkdown content={(part as any).text} animation="colorTransition" animationDuration="0.6s" animationTimingFunction="ease-out" sep="word" customComponents={animatedMarkdownComponents} />
                   ) : (
                     <MarkdownContent text={(part as any).text} />
                   )}
