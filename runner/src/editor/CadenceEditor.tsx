@@ -9,10 +9,12 @@ interface CadenceEditorProps {
   onChange: (value: string) => void;
   onRun?: () => void;
   darkMode?: boolean;
+  externalEditorRef?: React.RefObject<editor.IStandaloneCodeEditor | null>;
 }
 
-export default function CadenceEditor({ code, onChange, onRun, darkMode = true }: CadenceEditorProps) {
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+export default function CadenceEditor({ code, onChange, onRun, darkMode = true, externalEditorRef }: CadenceEditorProps) {
+  const internalRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = externalEditorRef || internalRef;
 
   const handleBeforeMount: BeforeMount = useCallback((monaco) => {
     registerCadenceLanguage(monaco);

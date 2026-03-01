@@ -63,7 +63,12 @@ func registerAPIRoutes(r *mux.Router, s *Server) {
 	registerStatusRoutes(r, s)
 	registerDeferredRoutes(r, s)
 	registerAIRoutes(r, s)
+	registerCadenceRoutes(r, s)
 	registerWebhookRoutes(r, s)
+}
+
+func registerCadenceRoutes(r *mux.Router, s *Server) {
+	r.HandleFunc("/api/cadence/check", s.handleCadenceCheck).Methods("POST", "OPTIONS")
 }
 
 func registerWebhookRoutes(r *mux.Router, s *Server) {
