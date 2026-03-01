@@ -506,21 +506,35 @@ func (r *Repository) GetTopContracts(ctx context.Context, hours int, limit int) 
 		heightLo = 0
 	}
 
+	// Two-phase: first get top contracts by tx count (fast, uses idx_tx_contracts_height),
+	// then enrich with unique callers only for the top N.
 	query := `
-		SELECT tc.contract_identifier,
-		       COALESCE(sc.name, split_part(tc.contract_identifier, '.', 3)) AS contract_name,
-		       COALESCE('0x' || encode(sc.address, 'hex'), split_part(tc.contract_identifier, '.', 2)) AS address,
-		       COUNT(*)::bigint AS tx_count,
-		       COUNT(DISTINCT t.proposer_address)::bigint AS unique_callers
-		FROM app.tx_contracts tc
-		JOIN raw.transactions t ON t.id = tc.transaction_id AND t.block_height = tc.block_height
+		WITH top AS (
+			SELECT tc.contract_identifier,
+			       COUNT(*)::bigint AS tx_count
+			FROM app.tx_contracts tc
+			WHERE tc.block_height >= $1 AND tc.block_height < $2
+			GROUP BY tc.contract_identifier
+			ORDER BY tx_count DESC
+			LIMIT $3
+		)
+		SELECT top.contract_identifier,
+		       COALESCE(sc.name, split_part(top.contract_identifier, '.', 3)) AS contract_name,
+		       COALESCE('0x' || encode(sc.address, 'hex'), split_part(top.contract_identifier, '.', 2)) AS address,
+		       top.tx_count,
+		       COALESCE(callers.cnt, 0)::bigint AS unique_callers
+		FROM top
 		LEFT JOIN app.smart_contracts sc
-		       ON sc.address = decode(split_part(tc.contract_identifier, '.', 2), 'hex')
-		      AND sc.name = split_part(tc.contract_identifier, '.', 3)
-		WHERE tc.block_height >= $1 AND tc.block_height < $2
-		GROUP BY tc.contract_identifier, sc.name, sc.address
-		ORDER BY tx_count DESC
-		LIMIT $3`
+		       ON sc.address = decode(split_part(top.contract_identifier, '.', 2), 'hex')
+		      AND sc.name = split_part(top.contract_identifier, '.', 3)
+		LEFT JOIN LATERAL (
+			SELECT COUNT(DISTINCT t.proposer_address)::bigint AS cnt
+			FROM app.tx_contracts tc2
+			JOIN raw.transactions t ON t.id = tc2.transaction_id AND t.block_height = tc2.block_height
+			WHERE tc2.contract_identifier = top.contract_identifier
+			  AND tc2.block_height >= $1 AND tc2.block_height < $2
+		) callers ON true
+		ORDER BY top.tx_count DESC`
 	rows, err := r.db.Query(ctx, query, heightLo, latestHeight+1, limit)
 	if err != nil {
 		return nil, err
