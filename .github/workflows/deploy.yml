@@ -374,22 +374,33 @@ jobs:
             -e PG_META_DB_PASSWORD="$DB_PASS" \
             supabase/postgres-meta:v0.96.0
 
-          # 2) Studio (port 3100)
+          # 2) PostgREST (port 3000) — required for Studio Table Editor
+          docker stop supabase-rest 2>/dev/null || true; docker rm supabase-rest 2>/dev/null || true
+          docker run -d --restart=always --name supabase-rest \
+            --network=host \
+            -e PGRST_DB_URI="postgres://$DB_USER:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME" \
+            -e PGRST_DB_SCHEMAS="public,raw,app" \
+            -e PGRST_DB_ANON_ROLE="$DB_USER" \
+            -e PGRST_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
+            -e PGRST_SERVER_PORT=3000 \
+            postgrest/postgrest:v12.2.8
+
+          # 3) Studio (port 3100)
           docker stop supabase-studio 2>/dev/null || true; docker rm supabase-studio 2>/dev/null || true
           docker run -d --restart=always --name supabase-studio \
             --network=host \
             -e PORT=3100 \
             -e HOSTNAME=0.0.0.0 \
             -e STUDIO_PG_META_URL=http://127.0.0.1:8086 \
-            -e SUPABASE_URL=http://127.0.0.1:9999 \
-            -e SUPABASE_REST_URL=http://127.0.0.1:9999 \
+            -e SUPABASE_URL=http://127.0.0.1:3000 \
+            -e SUPABASE_REST_URL=http://127.0.0.1:3000 \
             -e SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-anon}" \
             -e SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_KEY:-service}" \
             -e NEXT_PUBLIC_ENABLE_LOGS=true \
             -e NEXT_ANALYTICS_BACKEND_PROVIDER= \
             supabase/studio:latest
 
-          # 3) studio-auth (port 8000)
+          # 4) studio-auth (port 8000)
           docker stop studio-auth 2>/dev/null || true; docker rm studio-auth 2>/dev/null || true
           docker run -d --restart=always --name studio-auth \
             --network=host \
@@ -399,7 +410,7 @@ jobs:
             "$REGISTRY_IMAGE"
 
           echo "Studio stack deployed successfully"
-          docker ps --filter name=supabase --filter name=studio --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          docker ps --filter name=supabase --filter name=studio --filter name=postgrest --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
           SCRIPT
 
       - name: Deploy studio stack (pg-meta + studio + studio-auth on GCE)
@@ -413,6 +424,7 @@ jobs:
             df -h / /var/lib/docker 2>/dev/null || df -h /
             docker pull ${{ env.REGISTRY }}/studio:${{ github.sha }}
             docker pull supabase/postgres-meta:v0.96.0
+            docker pull postgrest/postgrest:v12.2.8
             docker pull supabase/studio:latest
           '
           gcloud compute scp /tmp/gen_jwt.py flowindex-backend:/tmp/gen_jwt.py --zone=us-central1-a
