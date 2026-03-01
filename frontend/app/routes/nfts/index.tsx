@@ -1,37 +1,47 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Image, Database, Layers, LayoutGrid, LayoutList, Users } from 'lucide-react';
+import { Image, LayoutGrid, LayoutList, Users, Search, X, Loader2 } from 'lucide-react';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
-import NumberFlow from '@number-flow/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Nft } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 
 interface NFTsSearch {
   page?: number;
+  search?: string;
+}
+
+const LIMIT = 25;
+
+async function fetchCollections(page: number, search: string) {
+  const offset = (page - 1) * LIMIT;
+  await ensureHeyApiConfigured();
+  const query: any = { limit: LIMIT, offset };
+  if (search) query.search = search;
+  const res = await getFlowV1Nft({ query });
+  const payload: any = res.data;
+  return { collections: payload?.data || [], meta: payload?._meta || null };
 }
 
 export const Route = createFileRoute('/nfts/')({
   component: NFTs,
   validateSearch: (search: Record<string, unknown>): NFTsSearch => ({
     page: Number(search.page) || 1,
+    search: (search.search as string) || undefined,
   }),
   loader: async ({ location }) => {
-    const page = Number(new URLSearchParams(location.search).get('page') || '1');
-    const isSSR = import.meta.env.SSR;
-    const limit = 25;
-    const offset = ((page ?? 1) - 1) * limit;
+    const params = new URLSearchParams(location.search);
+    const page = Number(params.get('page') || '1');
+    const search = params.get('search') || '';
     try {
-      await ensureHeyApiConfigured();
-      const res = await getFlowV1Nft({ query: { limit, offset }, timeout: isSSR ? 2500 : 12000 });
-      const payload: any = res.data;
-      return { collections: payload?.data || [], meta: payload?._meta || null, page, deferred: false };
+      const data = await fetchCollections(page, search);
+      return { ...data, page, search };
     } catch (e) {
       console.error('Failed to load NFT collections', e);
-      return { collections: [], meta: null, page, deferred: isSSR };
+      return { collections: [], meta: null, page, search };
     }
   },
 })
@@ -89,57 +99,76 @@ function CollectionLogo({ name, src }: { name: string; src?: string }) {
 }
 
 function NFTs() {
-  const { collections, meta, page: initialPage, deferred } = Route.useLoaderData();
-  const { page: searchPage } = Route.useSearch();
-  const navigate = Route.useNavigate();
+  const loaderData = Route.useLoaderData();
+
+  const [collections, setCollections] = useState<any[]>(loaderData.collections);
+  const [meta, setMeta] = useState<any>(loaderData.meta);
+  const [currentPage, setCurrentPage] = useState(loaderData.page);
+  const [currentSearch, setCurrentSearch] = useState(loaderData.search || '');
+  const [searchInput, setSearchInput] = useState(loaderData.search || '');
+  const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [collectionsData, setCollectionsData] = useState<any[]>(collections);
-  const [collectionsMeta, setCollectionsMeta] = useState<any>(meta);
-  const [collectionsLoading, setCollectionsLoading] = useState(Boolean(deferred));
-  const [collectionsError, setCollectionsError] = useState('');
 
-  const page = searchPage ?? initialPage ?? 1;
-  const limit = 25;
-  const offset = ((page ?? 1) - 1) * limit;
-  const totalCount = Number(collectionsMeta?.count || 0);
-  const hasNext = totalCount > 0 ? offset + limit < totalCount : collectionsData.length === limit;
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Sync loader data on initial mount / hard navigation
   useEffect(() => {
-    setCollectionsData(collections);
-    setCollectionsMeta(meta);
-    setCollectionsError('');
-    setCollectionsLoading(Boolean(deferred));
-  }, [collections, meta, deferred]);
+    setCollections(loaderData.collections);
+    setMeta(loaderData.meta);
+    setCurrentPage(loaderData.page);
+    setCurrentSearch(loaderData.search || '');
+    setSearchInput(loaderData.search || '');
+  }, [loaderData]);
 
-  // Fetch data client-side when page changes (or on deferred SSR fallback)
-  useEffect(() => {
-    if (!deferred && searchPage === initialPage) return;
-    let cancelled = false;
-    const loadCollectionsClientSide = async () => {
-      setCollectionsLoading(true);
-      try {
-        await ensureHeyApiConfigured();
-        const res = await getFlowV1Nft({ query: { limit, offset }, timeout: 12000 });
-        if (cancelled) return;
-        const payload: any = res.data;
-        setCollectionsData(payload?.data || []);
-        setCollectionsMeta(payload?._meta || null);
-        setCollectionsError('');
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Client fallback: failed to load NFT collections', err);
-          setCollectionsError('NFT collection list is temporarily slow. Please retry in a few seconds.');
-        }
-      } finally {
-        if (!cancelled) setCollectionsLoading(false);
-      }
-    };
-    loadCollectionsClientSide();
-    return () => {
-      cancelled = true;
-    };
-  }, [deferred, searchPage, initialPage, limit, offset]);
+  const doFetch = useCallback(async (page: number, search: string) => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setIsLoading(true);
+    try {
+      const data = await fetchCollections(page, search);
+      if (controller.signal.aborted) return;
+      setCollections(data.collections);
+      setMeta(data.meta);
+      setCurrentPage(page);
+      setCurrentSearch(search);
+      const url = `/nfts?page=${page}${search ? `&search=${encodeURIComponent(search)}` : ''}`;
+      window.history.replaceState({}, '', url);
+    } catch (e) {
+      if (controller.signal.aborted) return;
+      console.error('Failed to fetch NFT collections', e);
+    } finally {
+      if (!controller.signal.aborted) setIsLoading(false);
+    }
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doFetch(1, value.trim()), 300);
+  };
+
+  const handleClear = () => {
+    setSearchInput('');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    doFetch(1, '');
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      doFetch(1, searchInput.trim());
+    }
+  };
+
+  const handlePageChange = (newPage: number) => doFetch(newPage, currentSearch);
+
+  const totalCount = Number(meta?.count || 0);
+  const offset = (currentPage - 1) * LIMIT;
+  const hasNext = totalCount > 0 ? offset + LIMIT < totalCount : collections.length === LIMIT;
 
   const normalizeHex = (value: any) => {
     if (!value) return '';
@@ -147,12 +176,8 @@ function NFTs() {
     return lower.startsWith('0x') ? lower : `0x${lower}`;
   };
 
-  const setPage = (newPage: number) => {
-    navigate({ search: { page: newPage } });
-  };
-
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
+    <div className="container mx-auto px-4 py-8 space-y-6">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -164,7 +189,9 @@ function NFTs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tighter">NFTs</h1>
-            <p className="text-sm font-mono text-zinc-500 dark:text-zinc-400">NFT Collections on Flow</p>
+            <p className="text-sm font-mono text-zinc-500 dark:text-zinc-400">
+              {totalCount.toLocaleString()} Collections
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-1 bg-zinc-100 dark:bg-white/10 p-1">
@@ -183,51 +210,40 @@ function NFTs() {
         </div>
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-      >
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 shadow-sm dark:shadow-none">
-          <p className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Total Collections</p>
-          <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-            <NumberFlow value={Number(collectionsMeta?.count || 0)} format={{ useGrouping: true }} />
-          </p>
-        </div>
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 shadow-sm dark:shadow-none">
-          <p className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Indexed Height</p>
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-zinc-400" />
-            <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
-              <NumberFlow value={Number(collectionsMeta?.height || 0)} format={{ useGrouping: true }} />
-            </p>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 shadow-sm dark:shadow-none">
-          <p className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1">Showing</p>
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-zinc-400" />
-            <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
-              <NumberFlow value={collectionsData.length} format={{ useGrouping: true }} />
-              <span className="text-sm font-normal text-zinc-500 ml-2">of {totalCount.toLocaleString()}</span>
-            </p>
-          </div>
-        </div>
-      </motion.div>
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={searchInput}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          placeholder="Search by name, symbol, or address..."
+          className="w-full pl-11 pr-10 py-3 bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green dark:focus:ring-nothing-green/50 transition-shadow"
+        />
+        {searchInput ? (
+          <button
+            onClick={handleClear}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : isLoading ? (
+          <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 animate-spin" />
+        ) : null}
+      </div>
 
-      <div className="space-y-4">
+      <div className={`space-y-4 transition-opacity ${isLoading ? 'opacity-60' : ''}`}>
         {viewMode === 'grid' ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {collectionsLoading ? (
-              <div className="col-span-full p-8 text-center text-zinc-500 text-sm">Loading NFT collections...</div>
-            ) : collectionsError ? (
-              <div className="col-span-full p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{collectionsError}</div>
-            ) : collectionsData.length === 0 ? (
-              <div className="col-span-full p-8 text-center text-zinc-500 text-sm">No NFT collections found</div>
+            {collections.length === 0 && !isLoading ? (
+              <div className="col-span-full p-8 text-center text-zinc-500 text-sm font-mono">
+                {currentSearch ? `No collections matching "${currentSearch}"` : 'No NFT collections found'}
+              </div>
             ) : (
               <AnimatePresence mode="popLayout">
-                {collectionsData.map((c: any, i: number) => {
+                {collections.map((c: any, i: number) => {
                   const id = String(c?.id || '');
                   const displayName = c?.display_name || c?.name || c?.contract_name || id;
                   const contractId = id;
@@ -295,15 +311,15 @@ function NFTs() {
                   </tr>
                 </thead>
                 <tbody>
-                  {collectionsLoading ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">Loading NFT collections...</td></tr>
-                  ) : collectionsError ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-amber-600 dark:text-amber-400 text-sm">{collectionsError}</td></tr>
-                  ) : collectionsData.length === 0 ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-zinc-500 text-sm">No NFT collections found</td></tr>
+                  {collections.length === 0 && !isLoading ? (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-zinc-500 text-sm font-mono">
+                        {currentSearch ? `No collections matching "${currentSearch}"` : 'No NFT collections found'}
+                      </td>
+                    </tr>
                   ) : (
                     <AnimatePresence mode="popLayout">
-                      {collectionsData.map((c: any, i: number) => {
+                      {collections.map((c: any, i: number) => {
                         const id = String(c?.id || '');
                         const displayName = c?.display_name || c?.name || c?.contract_name || id;
                         const addr = normalizeHex(c?.address);
@@ -371,7 +387,7 @@ function NFTs() {
         )}
 
         <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-4">
-          <Pagination currentPage={page ?? 1} onPageChange={setPage} hasNext={hasNext} />
+          <Pagination currentPage={currentPage} onPageChange={handlePageChange} hasNext={hasNext} />
         </div>
       </div>
     </div>

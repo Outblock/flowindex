@@ -55,6 +55,15 @@ export function parseCadenceError(raw: string): ParsedCadenceError {
     }
   }
 
+  // If still nothing, try to extract from "* [Error Code: ...] <message>" pattern
+  // (common for non-runtime errors like insufficient balance)
+  if (!summary) {
+    const bulletMatch = raw.match(/\*\s*(?:\[Error Code:\s*\d+\]\s*)?(.+?)(?:\n|$)/);
+    if (bulletMatch) {
+      summary = bulletMatch[1].trim();
+    }
+  }
+
   // If still nothing, use a cleaned-up version of the raw text
   if (!summary) {
     // Strip the error code prefix and take first meaningful line
@@ -63,6 +72,15 @@ export function parseCadenceError(raw: string): ParsedCadenceError {
       .replace(/error caused by:.*?cadence runtime error:\s*/s, '')
       .split('\n')[0]
       .trim();
+  }
+
+  // If the summary is just boilerplate like "error caused by: N error(s) occurred:",
+  // try harder to find the real message
+  if (/^error caused by:\s*\d+\s*error/i.test(summary)) {
+    const bulletMatch = raw.match(/\*\s*(?:\[Error Code:\s*\d+\]\s*)?(.+?)(?:\n|$)/);
+    if (bulletMatch) {
+      summary = bulletMatch[1].trim();
+    }
   }
 
   // Parse code snippet lines: "| <num> | <code>" or "|   ^^^^"

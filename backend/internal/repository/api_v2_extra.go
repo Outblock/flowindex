@@ -279,6 +279,59 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 	return out, nil
 }
 
+func (r *Repository) SearchNFTCollections(ctx context.Context, query string, limit, offset int) ([]NFTCollectionSummary, int64, error) {
+	pattern := "%" + query + "%"
+	var total int64
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM (
+			SELECT contract_address, contract_name FROM app.nft_collections
+			UNION
+			SELECT contract_address, contract_name FROM app.nft_collection_stats
+		) u
+		LEFT JOIN app.nft_collections c USING (contract_address, contract_name)
+		WHERE COALESCE(c.name,'') ILIKE $1
+		   OR COALESCE(c.contract_name,'') ILIKE $1
+		   OR encode(u.contract_address, 'hex') ILIKE $1`, pattern).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			COALESCE(encode(COALESCE(c.contract_address, s.contract_address), 'hex'), '') AS contract_address,
+			COALESCE(COALESCE(c.contract_name, s.contract_name), '') AS contract_name,
+			COALESCE(c.name, '') AS name,
+			COALESCE(c.symbol, '') AS symbol,
+			COALESCE(c.description, '') AS description,
+			COALESCE(c.external_url, '') AS external_url,
+			COALESCE(c.square_image::text, '') AS square_image,
+			COALESCE(c.banner_image::text, '') AS banner_image,
+			COALESCE(c.socials::text, '') AS socials,
+			COALESCE(s.nft_count, 0) AS cnt,
+			COALESCE(s.holder_count, 0) AS holder_cnt,
+			COALESCE(c.evm_address, '') AS evm_address,
+			COALESCE(c.is_verified, false) AS is_verified,
+			COALESCE(c.updated_at, NOW()) AS updated_at
+		FROM app.nft_collections c
+		FULL OUTER JOIN app.nft_collection_stats s ON s.contract_address = c.contract_address AND s.contract_name = c.contract_name
+		WHERE COALESCE(c.name,'') ILIKE $3
+		   OR COALESCE(c.contract_name,'') ILIKE $3
+		   OR encode(COALESCE(c.contract_address, s.contract_address), 'hex') ILIKE $3
+		ORDER BY COALESCE(s.holder_count, 0) DESC, contract_address ASC
+		LIMIT $1 OFFSET $2`, limit, offset, pattern)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var out []NFTCollectionSummary
+	for rows.Next() {
+		var row NFTCollectionSummary
+		if err := rows.Scan(&row.ContractAddress, &row.ContractName, &row.Name, &row.Symbol, &row.Description, &row.ExternalURL, &row.SquareImage, &row.BannerImage, &row.Socials, &row.Count, &row.HolderCount, &row.EVMAddress, &row.IsVerified, &row.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, row)
+	}
+	return out, total, nil
+}
+
 // ListTrendingNFTCollections returns NFT collections ordered by recent transfer activity.
 func (r *Repository) ListTrendingNFTCollections(ctx context.Context, limit, offset int) ([]NFTCollectionSummary, error) {
 	rows, err := r.db.Query(ctx, `

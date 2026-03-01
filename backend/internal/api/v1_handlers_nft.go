@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
@@ -40,18 +41,25 @@ func (s *Server) handleFlowNFTTransfers(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleFlowListNFTCollections(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
 	sort := r.URL.Query().Get("sort")
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+
 	var collections []repository.NFTCollectionSummary
+	var total int64
 	var err error
-	if sort == "trending" {
+
+	if search != "" {
+		collections, total, err = s.repo.SearchNFTCollections(r.Context(), search, limit, offset)
+	} else if sort == "trending" {
 		collections, err = s.repo.ListTrendingNFTCollections(r.Context(), limit, offset)
+		if err == nil {
+			total, err = s.repo.CountNFTCollectionSummaries(r.Context())
+		}
 	} else {
 		collections, err = s.repo.ListNFTCollectionSummaries(r.Context(), limit, offset)
+		if err == nil {
+			total, err = s.repo.CountNFTCollectionSummaries(r.Context())
+		}
 	}
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	total, err := s.repo.CountNFTCollectionSummaries(r.Context())
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return

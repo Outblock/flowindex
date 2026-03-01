@@ -1252,15 +1252,24 @@ function TransactionDetail() {
                                         </div>
                                     )}
 
-                                    {/* Collapsed raw error for power users */}
-                                    <details className="group">
-                                        <summary className="text-[10px] uppercase tracking-widest text-zinc-400 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
-                                            Raw Error
-                                        </summary>
-                                        <p className="text-red-600/70 dark:text-red-300/50 text-[10px] font-mono break-all leading-relaxed mt-2 max-h-48 overflow-y-auto">
-                                            {errMsg}
-                                        </p>
-                                    </details>
+                                    {/* Raw error: show expanded when no context/callstack, collapsed otherwise */}
+                                    {(!parsed.codeSnippet && parsed.callStack.length === 0 && !parsed.scriptErrorLine) ? (
+                                        <div>
+                                            <span className="text-[10px] uppercase tracking-widest text-zinc-500 dark:text-zinc-400 font-bold block mb-1.5">Raw Error</span>
+                                            <p className="text-red-600/70 dark:text-red-300/50 text-[10px] font-mono break-all leading-relaxed max-h-48 overflow-y-auto">
+                                                {errMsg}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <details className="group">
+                                            <summary className="text-[10px] uppercase tracking-widest text-zinc-400 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+                                                Raw Error
+                                            </summary>
+                                            <p className="text-red-600/70 dark:text-red-300/50 text-[10px] font-mono break-all leading-relaxed mt-2 max-h-48 overflow-y-auto">
+                                                {errMsg}
+                                            </p>
+                                        </details>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -2,10 +2,9 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Coins, Database, Info, Search, X, Loader2 } from 'lucide-react';
+import { Coins, Info, Search, X, Loader2 } from 'lucide-react';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
-import NumberFlow from '@number-flow/react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1Ft } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
@@ -15,11 +14,12 @@ interface TokensSearch {
   search?: string;
 }
 
+const LIMIT = 25;
+
 async function fetchTokens(page: number, search: string) {
-  const limit = 25;
-  const offset = (page - 1) * limit;
+  const offset = (page - 1) * LIMIT;
   await ensureHeyApiConfigured();
-  const query: any = { limit, offset };
+  const query: any = { limit: LIMIT, offset };
   if (search) query.search = search;
   const res = await getFlowV1Ft({ query });
   const payload: any = res.data;
@@ -73,34 +73,29 @@ function TokenLogo({ logo, symbol }: { logo?: string; symbol: string }) {
 function Tokens() {
   const loaderData = Route.useLoaderData();
 
-  // Client-side state for tokens, meta, page, search — initialized from loader
   const [tokens, setTokens] = useState<any[]>(loaderData.tokens);
   const [meta, setMeta] = useState<any>(loaderData.meta);
   const [currentPage, setCurrentPage] = useState(loaderData.page);
-  const [currentSearch, setCurrentSearch] = useState(loaderData.search);
-  const [searchInput, setSearchInput] = useState(loaderData.search);
+  const [currentSearch, setCurrentSearch] = useState(loaderData.search || '');
+  const [searchInput, setSearchInput] = useState(loaderData.search || '');
   const [isLoading, setIsLoading] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Sync from loader when URL changes externally (back/forward)
   useEffect(() => {
     setTokens(loaderData.tokens);
     setMeta(loaderData.meta);
     setCurrentPage(loaderData.page);
-    setCurrentSearch(loaderData.search);
-    setSearchInput(loaderData.search);
+    setCurrentSearch(loaderData.search || '');
+    setSearchInput(loaderData.search || '');
   }, [loaderData]);
 
-  // Client-side fetch that doesn't trigger router navigation
   const doFetch = useCallback(async (page: number, search: string) => {
-    // Cancel any in-flight request
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-
     setIsLoading(true);
     try {
       const data = await fetchTokens(page, search);
@@ -109,12 +104,8 @@ function Tokens() {
       setMeta(data.meta);
       setCurrentPage(page);
       setCurrentSearch(search);
-      // Update URL silently without triggering loader
-      window.history.replaceState(
-        {},
-        '',
-        `/tokens?page=${page}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
-      );
+      const url = `/tokens?page=${page}${search ? `&search=${encodeURIComponent(search)}` : ''}`;
+      window.history.replaceState({}, '', url);
     } catch (e) {
       if (controller.signal.aborted) return;
       console.error('Failed to fetch tokens', e);
@@ -127,9 +118,7 @@ function Tokens() {
     const value = e.target.value;
     setSearchInput(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      doFetch(1, value.trim());
-    }, 300);
+    debounceRef.current = setTimeout(() => doFetch(1, value.trim()), 300);
   };
 
   const handleClear = () => {
@@ -146,14 +135,11 @@ function Tokens() {
     }
   };
 
-  const handlePageChange = (newPage: number) => {
-    doFetch(newPage, currentSearch);
-  };
+  const handlePageChange = (newPage: number) => doFetch(newPage, currentSearch);
 
-  const limit = 25;
-  const offset = (currentPage - 1) * limit;
   const totalCount = Number(meta?.count || 0);
-  const hasNext = totalCount > 0 ? offset + limit < totalCount : tokens.length === limit;
+  const offset = (currentPage - 1) * LIMIT;
+  const hasNext = totalCount > 0 ? offset + LIMIT < totalCount : tokens.length === LIMIT;
 
   const normalizeHex = (value: any) => {
     if (!value) return '';
@@ -162,7 +148,7 @@ function Tokens() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
+    <div className="container mx-auto px-4 py-8 space-y-6">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -174,48 +160,14 @@ function Tokens() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tighter">Tokens</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">Fungible Tokens (FT)</p>
-          </div>
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-      >
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1 font-mono">Total Tokens</p>
-          <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-            <NumberFlow value={totalCount} format={{ useGrouping: true }} />
-          </p>
-        </div>
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1 font-mono">Indexed At Height</p>
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-zinc-400" />
-            <p className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
-              <NumberFlow value={Number(meta?.height || 0)} format={{ useGrouping: true }} />
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono">
+              {totalCount.toLocaleString()} Fungible Tokens
             </p>
           </div>
         </div>
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm shadow-sm dark:shadow-none">
-          <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest mb-1 font-mono">
-            {currentSearch ? 'Results' : 'Page'}
-          </p>
-          <p className="text-3xl font-bold font-mono text-zinc-900 dark:text-white">
-            <NumberFlow value={currentSearch ? totalCount : tokens.length} format={{ useGrouping: true }} />
-            {!currentSearch && (
-              <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400 ml-2">
-                of {totalCount.toLocaleString()}
-              </span>
-            )}
-          </p>
-        </div>
       </motion.div>
 
-      {/* Search bar */}
+      {/* Search */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
         <input
@@ -224,7 +176,7 @@ function Tokens() {
           value={searchInput}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder="Search by token name, symbol, or contract name..."
+          placeholder="Search by name, symbol, or address..."
           className="w-full pl-11 pr-10 py-3 bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green dark:focus:ring-nothing-green/50 transition-shadow"
         />
         {searchInput ? (
