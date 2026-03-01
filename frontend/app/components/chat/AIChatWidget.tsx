@@ -1113,6 +1113,10 @@ export default function AIChatWidget() {
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      if (detail?.mode) {
+        setChatMode(detail.mode);
+        localStorage.setItem(MODE_STORAGE_KEY, detail.mode);
+      }
       if (detail?.message) {
         setIsOpen(true);
         setTimeout(() => {

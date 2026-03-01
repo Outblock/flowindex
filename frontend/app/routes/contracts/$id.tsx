@@ -364,7 +364,8 @@ function ContractDetail() {
                                 {code && (
                                     <button
                                         onClick={() => openAIChat(
-                                            `Audit this Cadence smart contract for security vulnerabilities, logic errors, and best practice violations.\n\nUse the Cadence MCP tools: call \`get_contract_source\` to fetch the full source and all imported dependencies, then run \`cadence_security_scan\` for a comprehensive security audit. Also use \`cadence_check\` for static type/syntax analysis.\n\n> **Contract:** \`${contract.name || contract.identifier}\`\n> **Address:** \`${contract.address}\``
+                                            `Audit this Cadence smart contract for security vulnerabilities, logic errors, and best practice violations.\n\nUse the Cadence MCP tools: call \`get_contract_source\` to fetch the full source and all imported dependencies, then run \`cadence_security_scan\` for a comprehensive security audit. Also use \`cadence_check\` for static type/syntax analysis.\n\n> **Contract:** \`${contract.name || contract.identifier}\`\n> **Address:** \`${contract.address}\``,
+                                            'deep'
                                         )}
                                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[10px] uppercase tracking-widest font-bold bg-nothing-green text-black hover:bg-nothing-green/85 shadow-sm shadow-nothing-green/25 transition-colors"
                                     >
