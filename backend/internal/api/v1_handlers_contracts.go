@@ -474,7 +474,7 @@ func (s *Server) handleGetScriptText(w http.ResponseWriter, r *http.Request) {
 // Handles both `import A from 0xADDR` and `import A, B from 0xADDR`.
 func parseContractImports(code string) []struct{ Address, Name string } {
 	// Match: import <names> from 0x<hex>
-	re := regexp.MustCompile(`import\s+([\w,\s]+)\s+from\s+0x([0-9a-fA-F]+)`)
+	re := regexp.MustCompile(`import\s+(\w+(?:\s*,\s*\w+)*)\s+from\s+0x([0-9a-fA-F]+)`)
 	matches := re.FindAllStringSubmatch(code, -1)
 	seen := make(map[string]bool)
 	var out []struct{ Address, Name string }
