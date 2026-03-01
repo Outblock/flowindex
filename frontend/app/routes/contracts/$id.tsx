@@ -7,7 +7,7 @@ import { resolveApiBaseUrl } from '../../api';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { ArrowLeft, Box, Code, FileText, Layers, Activity, GitCompare, ChevronDown, ChevronRight, Clock, Hash, Sparkles } from 'lucide-react';
+import { ArrowLeft, Box, Code, FileText, Layers, Activity, GitCompare, ChevronDown, ChevronRight, Clock, Hash, Sparkles, Terminal, GitBranch } from 'lucide-react';
 import { openAIChat } from '../../components/chat/openAIChat';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -16,11 +16,13 @@ import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { formatShort } from '../../components/account/accountUtils';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { diffLines, type Change } from 'diff';
+import ReactFlow, { Background, Controls, useNodesState, useEdgesState, MarkerType } from 'reactflow';
+import 'reactflow/dist/style.css';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 
-type ContractTab = 'source' | 'transactions' | 'versions';
-const VALID_TABS: ContractTab[] = ['source', 'transactions', 'versions'];
+type ContractTab = 'source' | 'transactions' | 'versions' | 'scripts' | 'dependencies';
+const VALID_TABS: ContractTab[] = ['source', 'transactions', 'versions', 'scripts', 'dependencies'];
 
 interface ContractVersion {
     version: number;
@@ -28,6 +30,20 @@ interface ContractVersion {
     transaction_id: string;
     created_at: string;
     code?: string;
+}
+
+interface ContractScript {
+    script_hash: string;
+    tx_count: number;
+    category: string;
+    label: string;
+    description: string;
+    script_preview: string;
+}
+
+interface ContractDependencyData {
+    imports: Array<{ identifier: string; address: string; name: string }>;
+    dependents: Array<{ identifier: string; address: string; name: string }>;
 }
 
 interface ContractTransaction {
@@ -146,6 +162,17 @@ function ContractDetail() {
     const [diffCodeB, setDiffCodeB] = useState<string>('');
     const [diffLoading, setDiffLoading] = useState(false);
 
+    // Scripts state
+    const [scripts, setScripts] = useState<ContractScript[]>([]);
+    const [scriptsLoading, setScriptsLoading] = useState(false);
+    const [scriptsOffset, setScriptsOffset] = useState(0);
+    const [scriptsHasMore, setScriptsHasMore] = useState(false);
+    const [expandedScript, setExpandedScript] = useState<string | null>(null);
+
+    // Dependencies state
+    const [deps, setDeps] = useState<ContractDependencyData | null>(null);
+    const [depsLoading, setDepsLoading] = useState(false);
+
     useEffect(() => {
         if (!initialContract && !initialError) {
             setError('Contract not found');
@@ -206,6 +233,42 @@ function ContractDetail() {
         }
     };
 
+    // Load common scripts
+    const loadScripts = async (offset: number, append: boolean) => {
+        setScriptsLoading(true);
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const res = await fetch(`${baseUrl}/flow/contract/${encodeURIComponent(id)}/scripts?limit=20&offset=${offset}`);
+            const payload = await res.json();
+            const items = payload?.data ?? [];
+            setScripts(append ? prev => [...prev, ...items] : items);
+            setScriptsHasMore(items.length >= 20);
+            setScriptsOffset(offset + items.length);
+        } catch (err) {
+            console.error('Failed to load contract scripts', err);
+        } finally {
+            setScriptsLoading(false);
+        }
+    };
+
+    // Load dependencies
+    const loadDeps = async () => {
+        setDepsLoading(true);
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const res = await fetch(`${baseUrl}/flow/contract/${encodeURIComponent(id)}/dependencies`);
+            const payload = await res.json();
+            const items = payload?.data;
+            if (Array.isArray(items) && items.length > 0) {
+                setDeps(items[0]);
+            }
+        } catch (err) {
+            console.error('Failed to load contract dependencies', err);
+        } finally {
+            setDepsLoading(false);
+        }
+    };
+
     // Auto-load on tab switch
     useEffect(() => {
         if (activeTab === 'transactions' && transactions.length === 0 && !txLoading) {
@@ -213,6 +276,12 @@ function ContractDetail() {
         }
         if (activeTab === 'versions' && versions.length === 0 && !versionsLoading) {
             loadVersions();
+        }
+        if (activeTab === 'scripts' && scripts.length === 0 && !scriptsLoading) {
+            loadScripts(0, false);
+        }
+        if (activeTab === 'dependencies' && deps === null && !depsLoading) {
+            loadDeps();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab]);
@@ -254,6 +323,8 @@ function ContractDetail() {
         { id: 'source' as const, label: 'Source Code', icon: Code },
         { id: 'transactions' as const, label: 'Transactions', icon: Activity },
         { id: 'versions' as const, label: 'Version History', icon: GitCompare },
+        { id: 'scripts' as const, label: 'Common Scripts', icon: Terminal },
+        { id: 'dependencies' as const, label: 'Dependencies', icon: GitBranch },
     ];
 
     return (
@@ -610,6 +681,115 @@ function ContractDetail() {
                             )}
                         </div>
                     )}
+
+                    {/* Common Scripts Tab */}
+                    {activeTab === 'scripts' && (
+                        <div className="flex-1 overflow-auto">
+                            {scriptsLoading && scripts.length === 0 && (
+                                <div className="flex items-center justify-center p-12">
+                                    <div className="w-8 h-8 border-2 border-dashed border-zinc-400 rounded-full animate-spin" />
+                                </div>
+                            )}
+                            {scripts.length > 0 && (
+                                <div className="divide-y divide-zinc-100 dark:divide-white/5">
+                                    {scripts.map((sc) => (
+                                        <div key={sc.script_hash}>
+                                            <button
+                                                onClick={() => setExpandedScript(expandedScript === sc.script_hash ? null : sc.script_hash)}
+                                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors text-left"
+                                            >
+                                                {expandedScript === sc.script_hash ? (
+                                                    <ChevronDown className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                                                ) : (
+                                                    <ChevronRight className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                        <span className="text-xs font-mono text-zinc-900 dark:text-white truncate">
+                                                            {sc.label || sc.script_hash.substring(0, 16) + '...'}
+                                                        </span>
+                                                        {sc.category && (
+                                                            <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-zinc-100 dark:bg-white/10 text-zinc-500 uppercase tracking-wider shrink-0">
+                                                                {sc.category}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {sc.description && (
+                                                        <p className="text-[10px] text-zinc-500 truncate">{sc.description}</p>
+                                                    )}
+                                                </div>
+                                                <span className="text-xs font-mono text-zinc-500 shrink-0 tabular-nums">
+                                                    {sc.tx_count?.toLocaleString()} <span className="text-[10px] text-zinc-400">txs</span>
+                                                </span>
+                                            </button>
+                                            {expandedScript === sc.script_hash && sc.script_preview && (
+                                                <div className={`border-t border-zinc-100 dark:border-white/5 ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-zinc-50'}`}>
+                                                    <SyntaxHighlighter
+                                                        language="swift"
+                                                        style={syntaxTheme}
+                                                        customStyle={{
+                                                            margin: 0,
+                                                            padding: '1rem 1.5rem',
+                                                            fontSize: '10px',
+                                                            lineHeight: '1.5',
+                                                            maxHeight: '300px',
+                                                        }}
+                                                        showLineNumbers={true}
+                                                        lineNumberStyle={{ minWidth: "2em", paddingRight: "1em", color: theme === 'dark' ? "#555" : "#999", userSelect: "none", textAlign: "right" }}
+                                                    >
+                                                        {sc.script_preview}
+                                                    </SyntaxHighlighter>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {scriptsHasMore && (
+                                <div className="text-center py-3 border-t border-zinc-100 dark:border-white/5">
+                                    <button
+                                        onClick={() => loadScripts(scriptsOffset, true)}
+                                        disabled={scriptsLoading}
+                                        className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50 uppercase tracking-widest"
+                                    >
+                                        {scriptsLoading ? 'Loading...' : 'Load More'}
+                                    </button>
+                                </div>
+                            )}
+                            {scripts.length === 0 && !scriptsLoading && (
+                                <div className="flex flex-col items-center justify-center p-12 text-zinc-500">
+                                    <Terminal className="h-8 w-8 mb-3 opacity-30" />
+                                    <p className="text-xs uppercase tracking-widest">No common scripts found</p>
+                                    <p className="text-[10px] text-zinc-400 mt-1">Script templates that reference this contract will appear here</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Dependencies Tab */}
+                    {activeTab === 'dependencies' && (
+                        <div className="flex-1 overflow-auto" style={{ minHeight: 500 }}>
+                            {depsLoading && (
+                                <div className="flex items-center justify-center p-12">
+                                    <div className="w-8 h-8 border-2 border-dashed border-zinc-400 rounded-full animate-spin" />
+                                </div>
+                            )}
+                            {deps && !depsLoading && (
+                                <DependencyGraph
+                                    contractName={contract.name || id}
+                                    contractIdentifier={contract.identifier || id}
+                                    imports={deps.imports}
+                                    dependents={deps.dependents}
+                                />
+                            )}
+                            {!deps && !depsLoading && (
+                                <div className="flex flex-col items-center justify-center p-12 text-zinc-500">
+                                    <GitBranch className="h-8 w-8 mb-3 opacity-30" />
+                                    <p className="text-xs uppercase tracking-widest">No dependency data</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
             </div>
@@ -787,6 +967,160 @@ function DiffView({ codeA, codeB }: { codeA: string; codeB: string }) {
                     </div>
                 );
             })}
+        </div>
+    );
+}
+
+function DependencyGraph({ contractName, contractIdentifier, imports, dependents }: {
+    contractName: string;
+    contractIdentifier: string;
+    imports: Array<{ identifier: string; address: string; name: string }>;
+    dependents: Array<{ identifier: string; address: string; name: string }>;
+}) {
+    const navigate = useNavigate();
+    const { theme } = useTheme();
+
+    const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
+        const nodes: any[] = [];
+        const edges: any[] = [];
+        const centerX = 400;
+        const centerY = 250;
+
+        // Center node (current contract)
+        nodes.push({
+            id: 'center',
+            position: { x: centerX, y: centerY },
+            data: { label: contractName, identifier: contractIdentifier, isCurrent: true },
+            type: 'default',
+            style: {
+                background: theme === 'dark' ? '#1a2e1a' : '#f0fdf4',
+                border: `2px solid ${theme === 'dark' ? '#4ade80' : '#16a34a'}`,
+                borderRadius: 4,
+                padding: '8px 16px',
+                fontSize: 11,
+                fontFamily: 'monospace',
+                color: theme === 'dark' ? '#fff' : '#000',
+                fontWeight: 700,
+            },
+        });
+
+        // Import nodes (left side)
+        imports.forEach((imp, i) => {
+            const spacing = Math.max(60, 300 / Math.max(imports.length, 1));
+            const yOffset = centerY - ((imports.length - 1) * spacing) / 2 + i * spacing;
+            nodes.push({
+                id: `import-${i}`,
+                position: { x: centerX - 300, y: yOffset },
+                data: { label: imp.name, identifier: imp.identifier },
+                style: {
+                    background: theme === 'dark' ? '#18181b' : '#fff',
+                    border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e4e4e7'}`,
+                    borderRadius: 4,
+                    padding: '8px 12px',
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                    color: theme === 'dark' ? '#a1a1aa' : '#52525b',
+                    cursor: 'pointer',
+                },
+            });
+            edges.push({
+                id: `e-import-${i}`,
+                source: `import-${i}`,
+                target: 'center',
+                animated: false,
+                style: { stroke: theme === 'dark' ? '#4ade80' : '#16a34a', strokeWidth: 1.5 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: theme === 'dark' ? '#4ade80' : '#16a34a', width: 16, height: 16 },
+                label: 'imports',
+                labelStyle: { fontSize: 9, fontFamily: 'monospace', fill: theme === 'dark' ? '#71717a' : '#a1a1aa' },
+                labelBgStyle: { fill: theme === 'dark' ? '#09090b' : '#fff', fillOpacity: 0.8 },
+            });
+        });
+
+        // Dependent nodes (right side)
+        dependents.forEach((dep, i) => {
+            const spacing = Math.max(60, 300 / Math.max(dependents.length, 1));
+            const yOffset = centerY - ((dependents.length - 1) * spacing) / 2 + i * spacing;
+            nodes.push({
+                id: `dep-${i}`,
+                position: { x: centerX + 300, y: yOffset },
+                data: { label: dep.name, identifier: dep.identifier },
+                style: {
+                    background: theme === 'dark' ? '#18181b' : '#fff',
+                    border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e4e4e7'}`,
+                    borderRadius: 4,
+                    padding: '8px 12px',
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                    color: theme === 'dark' ? '#a1a1aa' : '#52525b',
+                    cursor: 'pointer',
+                },
+            });
+            edges.push({
+                id: `e-dep-${i}`,
+                source: 'center',
+                target: `dep-${i}`,
+                animated: false,
+                style: { stroke: theme === 'dark' ? '#a78bfa' : '#7c3aed', strokeWidth: 1.5 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: theme === 'dark' ? '#a78bfa' : '#7c3aed', width: 16, height: 16 },
+                label: 'imported by',
+                labelStyle: { fontSize: 9, fontFamily: 'monospace', fill: theme === 'dark' ? '#71717a' : '#a1a1aa' },
+                labelBgStyle: { fill: theme === 'dark' ? '#09090b' : '#fff', fillOpacity: 0.8 },
+            });
+        });
+
+        return { nodes, edges };
+    }, [contractName, contractIdentifier, imports, dependents, theme]);
+
+    const [nodes, , onNodesChange] = useNodesState(initialNodes);
+    const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+
+    const onNodeClick = (_: any, node: any) => {
+        if (node.data?.identifier && !node.data?.isCurrent) {
+            navigate({ to: `/contracts/${node.data.identifier}` as any });
+        }
+    };
+
+    if (imports.length === 0 && dependents.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-zinc-500">
+                <GitBranch className="h-8 w-8 mb-3 opacity-30" />
+                <p className="text-xs uppercase tracking-widest">No dependencies found</p>
+                <p className="text-[10px] text-zinc-400 mt-1">This contract has no imports and no known dependents</p>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ height: 500 }}>
+            <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeClick={onNodeClick}
+                fitView
+                fitViewOptions={{ padding: 0.3 }}
+                proOptions={{ hideAttribution: true }}
+            >
+                <Background color={theme === 'dark' ? '#333' : '#ddd'} gap={20} size={1} />
+                <Controls
+                    style={{
+                        background: theme === 'dark' ? '#18181b' : '#fff',
+                        border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e4e4e7'}`,
+                        borderRadius: 4,
+                    }}
+                />
+            </ReactFlow>
+            {/* Legend */}
+            <div className="flex items-center gap-6 px-4 py-2 border-t border-zinc-100 dark:border-white/5 text-[10px] text-zinc-500">
+                <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-0.5 bg-green-500 inline-block" /> Imports
+                </span>
+                <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-0.5 bg-purple-500 inline-block" /> Imported by
+                </span>
+                <span className="text-zinc-400">Click a node to navigate</span>
+            </div>
         </div>
     );
 }

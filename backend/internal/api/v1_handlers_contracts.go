@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -415,4 +416,109 @@ func (s *Server) handleContractVersionList(w http.ResponseWriter, r *http.Reques
 		})
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) handleContractScripts(w http.ResponseWriter, r *http.Request) {
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
+	identifier := mux.Vars(r)["identifier"]
+	limit, offset := parseLimitOffset(r)
+
+	_, _, fullIdentifier := splitContractIdentifier(identifier)
+	if fullIdentifier == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid contract identifier")
+		return
+	}
+
+	scripts, err := s.repo.GetCommonScriptsByContract(r.Context(), fullIdentifier, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	out := make([]map[string]interface{}, 0, len(scripts))
+	for _, sc := range scripts {
+		out = append(out, map[string]interface{}{
+			"script_hash":    sc.ScriptHash,
+			"tx_count":       sc.TxCount,
+			"category":       sc.Category,
+			"label":          sc.Label,
+			"description":    sc.Description,
+			"script_preview": sc.ScriptPreview,
+		})
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out)}, nil)
+}
+
+func (s *Server) handleContractDependencies(w http.ResponseWriter, r *http.Request) {
+	if s.repo == nil {
+		writeAPIError(w, http.StatusInternalServerError, "repository unavailable")
+		return
+	}
+	identifier := mux.Vars(r)["identifier"]
+
+	address, name, _ := splitContractIdentifier(identifier)
+	if address == "" || name == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid contract identifier")
+		return
+	}
+
+	// Get contract code to parse imports
+	contracts, err := s.repo.ListContractsFiltered(r.Context(), repository.ContractListFilter{
+		Address: address,
+		Name:    name,
+		Limit:   1,
+	})
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Parse imports from contract code
+	var imports []map[string]interface{}
+	if len(contracts) > 0 && contracts[0].Code != "" {
+		re := regexp.MustCompile(`import\s+(\w+)\s+from\s+0x([0-9a-fA-F]+)`)
+		matches := re.FindAllStringSubmatch(contracts[0].Code, -1)
+		seen := make(map[string]bool)
+		for _, m := range matches {
+			importName := m[1]
+			importAddr := strings.ToLower(m[2])
+			key := importAddr + "." + importName
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			imports = append(imports, map[string]interface{}{
+				"identifier": "A." + importAddr + "." + importName,
+				"address":    formatAddressV1(importAddr),
+				"name":       importName,
+			})
+		}
+	}
+	if imports == nil {
+		imports = []map[string]interface{}{}
+	}
+
+	// Get dependents (contracts that import this one)
+	depRefs, err := s.repo.GetContractDependents(r.Context(), address, name)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	dependents := make([]map[string]interface{}, 0, len(depRefs))
+	for _, d := range depRefs {
+		dependents = append(dependents, map[string]interface{}{
+			"identifier": "A." + d.Address + "." + d.Name,
+			"address":    formatAddressV1(d.Address),
+			"name":       d.Name,
+		})
+	}
+
+	result := map[string]interface{}{
+		"imports":    imports,
+		"dependents": dependents,
+	}
+	writeAPIResponse(w, []interface{}{result}, nil, nil)
 }

@@ -968,3 +968,97 @@ func (r *Repository) GetNFTTransfersByTransactionID(ctx context.Context, txID st
 	}
 	return out, rows.Err()
 }
+
+// ScriptUsageRow represents a commonly-used script template for a contract.
+type ScriptUsageRow struct {
+	ScriptHash    string `json:"script_hash"`
+	TxCount       int64  `json:"tx_count"`
+	Category      string `json:"category"`
+	Label         string `json:"label"`
+	Description   string `json:"description"`
+	ScriptPreview string `json:"script_preview"`
+}
+
+func (r *Repository) GetCommonScriptsByContract(ctx context.Context, contractIdentifier string, limit, offset int) ([]ScriptUsageRow, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT st.script_hash,
+		       st.tx_count,
+		       COALESCE(st.category, '') AS category,
+		       COALESCE(st.label, '') AS label,
+		       COALESCE(st.description, '') AS description,
+		       COALESCE(SUBSTRING(s.script_text, 1, 500), '') AS script_preview
+		FROM app.script_imports si
+		JOIN app.script_templates st ON st.script_hash = si.script_hash
+		LEFT JOIN raw.scripts s ON s.script_hash = si.script_hash
+		WHERE si.contract_identifier = $1
+		ORDER BY st.tx_count DESC
+		LIMIT $2 OFFSET $3`, contractIdentifier, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ScriptUsageRow
+	for rows.Next() {
+		var row ScriptUsageRow
+		if err := rows.Scan(&row.ScriptHash, &row.TxCount, &row.Category, &row.Label, &row.Description, &row.ScriptPreview); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+func (r *Repository) GetContractsByAddress(ctx context.Context, address string) ([]SmartContractRef, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT address, name
+		FROM app.smart_contracts
+		WHERE address = $1`, address)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SmartContractRef
+	for rows.Next() {
+		var ref SmartContractRef
+		if err := rows.Scan(&ref.Address, &ref.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, ref)
+	}
+	return out, nil
+}
+
+type SmartContractRef struct {
+	Address string `json:"address"`
+	Name    string `json:"name"`
+}
+
+func (r *Repository) GetContractDependents(ctx context.Context, address, name string) ([]SmartContractRef, error) {
+	// Find contracts whose code imports from this contract's address+name
+	importPattern := "import " + name + " from 0x" + address
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT address, name
+		FROM app.smart_contracts
+		WHERE code LIKE '%' || $1 || '%'
+		  AND NOT (address = $2 AND name = $3)
+		LIMIT 50`, importPattern, address, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SmartContractRef
+	for rows.Next() {
+		var ref SmartContractRef
+		if err := rows.Scan(&ref.Address, &ref.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, ref)
+	}
+	return out, nil
+}
