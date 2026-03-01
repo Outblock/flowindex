@@ -201,6 +201,16 @@ function ContractDetail() {
     const [deps, setDeps] = useState<ContractDependencyData | null>(null);
     const [depsLoading, setDepsLoading] = useState(false);
 
+    // Reset tab-loaded data when navigating to a different contract
+    useEffect(() => {
+        setDeps(null);
+        setTransactions([]);
+        setVersions([]);
+        setScripts([]);
+        setSelectedScript(null);
+        setSelectedScriptText('');
+    }, [id]);
+
     useEffect(() => {
         if (!initialContract && !initialError) {
             setError('Contract not found');
@@ -1239,8 +1249,14 @@ function DependencyGraph({ contractName, contractIdentifier, imports, dependents
         return { nodes: rfNodes, edges: rfEdges };
     }, [contractName, contractIdentifier, imports, dependents, graph, theme]);
 
-    const [nodes, , onNodesChange] = useNodesState(initialNodes);
-    const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+    // Sync when data changes (e.g. navigating to a different contract)
+    useEffect(() => {
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+    }, [initialNodes, initialEdges]);
 
     const onNodeClick = (_: any, node: any) => {
         if (node.data?.identifier && !node.data?.isCurrent) {
