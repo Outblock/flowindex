@@ -51,7 +51,7 @@ function NFTItem() {
   return (
     <RouteErrorBoundary title="NFT Item Page Error">
       <div className="min-h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono transition-colors duration-300">
-        <div className="max-w-7xl mx-auto px-4 pt-8 pb-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
           <NFTItemInner />
         </div>
       </div>
@@ -98,7 +98,7 @@ function NFTItemInner() {
           <NFTImage
             nft={nft}
             collectionId={nftType}
-            className="w-full md:w-72 md:h-72 lg:w-96 lg:h-96"
+            className="w-full md:w-80 md:h-80 lg:w-[28rem] lg:h-[28rem] xl:w-[32rem] xl:h-[32rem]"
           />
 
           {/* Name / ID / Collection */}
