@@ -10,6 +10,24 @@ import {
 const CADENCE_MCP_URL =
   process.env.CADENCE_MCP_URL || "https://cadence-mcp.up.railway.app/mcp";
 
+// Mode -> model + thinking config (mirrors main chat)
+const MODE_CONFIG = {
+  fast: {
+    model: "claude-haiku-4-5-20251001",
+    thinking: false,
+  },
+  balanced: {
+    model: "claude-sonnet-4-6",
+    thinking: false,
+  },
+  deep: {
+    model: "claude-opus-4-6",
+    thinking: true,
+  },
+} as const;
+
+type ChatMode = keyof typeof MODE_CONFIG;
+
 async function safeMcpTools(
   url: string
 ): Promise<{
@@ -65,8 +83,17 @@ export async function POST(req: Request) {
     messages,
     editorCode,
     network,
-  }: { messages: UIMessage[]; editorCode?: string; network?: string } =
-    await req.json();
+    mode: rawMode,
+  }: {
+    messages: UIMessage[];
+    editorCode?: string;
+    network?: string;
+    mode?: string;
+  } = await req.json();
+
+  const mode: ChatMode =
+    rawMode && rawMode in MODE_CONFIG ? (rawMode as ChatMode) : "balanced";
+  const cfg = MODE_CONFIG[mode];
 
   // Prepend editor context to the conversation
   const systemWithContext = editorCode
@@ -76,13 +103,20 @@ export async function POST(req: Request) {
   const cadenceMcp = await safeMcpTools(CADENCE_MCP_URL);
 
   const result = streamText({
-    model: anthropic("claude-sonnet-4-6"),
+    model: anthropic(cfg.model),
+    ...(cfg.thinking && {
+      providerOptions: {
+        anthropic: {
+          thinking: { type: "enabled", budgetTokens: 10000 },
+        },
+      },
+    }),
     system: systemWithContext,
     messages: await convertToModelMessages(messages),
     tools: {
       ...cadenceMcp.tools,
     },
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(10),
     onFinish: async () => {
       await cadenceMcp.client?.close();
     },
