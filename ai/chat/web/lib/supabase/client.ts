@@ -11,6 +11,9 @@ export function createClient() {
         sameSite: "lax" as const,
         secure: true,
       },
+      auth: {
+        flowType: "implicit",
+      },
     }
   );
 }

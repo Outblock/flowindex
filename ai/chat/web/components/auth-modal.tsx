@@ -301,7 +301,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
                       onClick={async () => {
                         await supabase.auth.signInWithOAuth({
                           provider: "github",
-                          options: { redirectTo: `${window.location.origin}/auth/callback` },
+                          options: { redirectTo: window.location.origin },
                         });
                       }}
                       className="w-full flex items-center justify-center gap-2.5 py-2.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-lg text-white font-medium transition-colors text-sm"
@@ -316,7 +316,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
                       onClick={async () => {
                         await supabase.auth.signInWithOAuth({
                           provider: "google",
-                          options: { redirectTo: `${window.location.origin}/auth/callback` },
+                          options: { redirectTo: window.location.origin },
                         });
                       }}
                       className="w-full flex items-center justify-center gap-2.5 py-2.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-lg text-white font-medium transition-colors text-sm"
