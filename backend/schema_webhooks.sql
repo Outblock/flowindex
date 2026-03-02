@@ -175,6 +175,10 @@ JOIN public.teams t
   ON t.slug = 'u_' || substr(replace(u.id::text, '-', ''), 1, 12)
 ON CONFLICT (team_id, user_id) DO NOTHING;
 
+-- Link subscriptions to workflows so they can be cleaned up on workflow delete/redeploy
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS workflow_id UUID;
+CREATE INDEX IF NOT EXISTS idx_subscriptions_workflow ON public.subscriptions(workflow_id) WHERE workflow_id IS NOT NULL;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_subscriptions_event_type ON public.subscriptions(event_type) WHERE is_enabled = true;
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON public.subscriptions(user_id);

@@ -163,6 +163,7 @@ func (h *Handlers) handleCreateSubscription(w http.ResponseWriter, r *http.Reque
 		EndpointID string          `json:"endpoint_id"`
 		EventType  string          `json:"event_type"`
 		Conditions json.RawMessage `json:"conditions"`
+		WorkflowID string          `json:"workflow_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -192,6 +193,7 @@ func (h *Handlers) handleCreateSubscription(w http.ResponseWriter, r *http.Reque
 		EventType:  body.EventType,
 		Conditions: body.Conditions,
 		IsEnabled:  true,
+		WorkflowID: body.WorkflowID,
 	}
 	if err := h.store.CreateSubscription(r.Context(), sub); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create subscription")
@@ -674,6 +676,12 @@ func (h *Handlers) handleDeployWorkflow(w http.ResponseWriter, r *http.Request) 
 	}
 
 	id := mux.Vars(r)["id"]
+
+	// Clean up old subscriptions from previous deploy of this workflow
+	if err := h.store.DeleteSubscriptionsByWorkflow(r.Context(), id, userID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to clean up old subscriptions")
+		return
+	}
 
 	isActive := true
 	if err := h.store.UpdateWorkflow(r.Context(), id, userID, nil, nil, &isActive); err != nil {

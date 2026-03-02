@@ -301,10 +301,13 @@ export default function WorkflowCanvas({
         return
       }
 
-      // 3. Get existing endpoints
+      // 3. Deploy first — this cleans up old subscriptions from previous deploy and marks active
+      await deployWorkflow(workflowId)
+
+      // 4. Get existing endpoints
       const existingEndpoints = await listEndpoints()
 
-      // 4. For each compiled path, create endpoint + subscription
+      // 5. For each compiled path, create endpoint + subscription
       let created = 0
       for (const path of result.paths) {
         // Find or create endpoint
@@ -332,13 +335,10 @@ export default function WorkflowCanvas({
           )
         }
 
-        // Create subscription
-        await createSubscription(endpoint.id, path.eventType, path.conditions)
+        // Create subscription linked to this workflow
+        await createSubscription(endpoint.id, path.eventType, path.conditions, workflowId)
         created++
       }
-
-      // 5. Mark workflow as active
-      await deployWorkflow(workflowId)
 
       setDeployResult({
         ok: true,

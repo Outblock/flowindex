@@ -20,6 +20,7 @@ type Subscription struct {
 	EventType  string          `json:"event_type"`
 	Conditions json.RawMessage `json:"conditions"`
 	IsEnabled  bool            `json:"is_enabled"`
+	WorkflowID string          `json:"workflow_id,omitempty"`
 	CreatedAt  time.Time       `json:"created_at"`
 	UpdatedAt  time.Time       `json:"updated_at"`
 }
@@ -112,6 +113,14 @@ func APIKeyPrefix(key string) string {
 // --- Subscriptions ---
 
 func (s *Store) CreateSubscription(ctx context.Context, sub *Subscription) error {
+	if sub.WorkflowID != "" {
+		return s.pool.QueryRow(ctx,
+			`INSERT INTO public.subscriptions (user_id, endpoint_id, event_type, conditions, workflow_id)
+			 VALUES ($1, $2, $3, $4, $5)
+			 RETURNING id, created_at, updated_at`,
+			sub.UserID, sub.EndpointID, sub.EventType, sub.Conditions, sub.WorkflowID,
+		).Scan(&sub.ID, &sub.CreatedAt, &sub.UpdatedAt)
+	}
 	return s.pool.QueryRow(ctx,
 		`INSERT INTO public.subscriptions (user_id, endpoint_id, event_type, conditions)
 		 VALUES ($1, $2, $3, $4)
@@ -616,7 +625,20 @@ func (s *Store) UpdateWorkflow(ctx context.Context, id, userID string, name *str
 }
 
 func (s *Store) DeleteWorkflow(ctx context.Context, id, userID string) error {
+	// Delete subscriptions created by this workflow first
+	if _, err := s.pool.Exec(ctx,
+		`DELETE FROM public.subscriptions WHERE workflow_id = $1 AND user_id = $2`, id, userID); err != nil {
+		return fmt.Errorf("delete workflow subscriptions: %w", err)
+	}
 	_, err := s.pool.Exec(ctx, `DELETE FROM public.workflows WHERE id = $1 AND user_id = $2`, id, userID)
+	return err
+}
+
+// DeleteSubscriptionsByWorkflow removes all subscriptions linked to a workflow.
+// Used before re-deploying a workflow to avoid stale subscriptions.
+func (s *Store) DeleteSubscriptionsByWorkflow(ctx context.Context, workflowID, userID string) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM public.subscriptions WHERE workflow_id = $1 AND user_id = $2`, workflowID, userID)
 	return err
 }
 

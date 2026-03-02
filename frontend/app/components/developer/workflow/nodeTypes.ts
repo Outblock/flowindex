@@ -165,7 +165,7 @@ const TRIGGER_NODES: NodeTypeMeta[] = [
   },
   {
     type: 'trigger_balance_change', label: 'Balance Change', category: 'trigger',
-    icon: Wallet, color: COLORS.trigger, eventType: 'ft.large_transfer',
+    icon: Wallet, color: COLORS.trigger, eventType: 'balance.check',
     configFields: [
       { key: 'addresses', label: 'Addresses', type: 'text', placeholder: '0x1', isArray: true },
       { key: 'token_contract', label: 'Token', type: 'searchable', fetchFn: 'ft_tokens', placeholder: 'Search tokens...' },

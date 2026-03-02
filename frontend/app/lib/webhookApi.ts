@@ -214,14 +214,17 @@ export async function createSubscription(
   endpointId: string,
   eventType: string,
   conditions?: Record<string, unknown> | null,
+  workflowId?: string,
 ): Promise<Subscription> {
+  const payload: Record<string, unknown> = {
+    endpoint_id: endpointId,
+    event_type: eventType,
+    conditions: conditions ?? null,
+  };
+  if (workflowId) payload.workflow_id = workflowId;
   return request<Subscription>('/subscriptions', {
     method: 'POST',
-    body: JSON.stringify({
-      endpoint_id: endpointId,
-      event_type: eventType,
-      conditions: conditions ?? null,
-    }),
+    body: JSON.stringify(payload),
   });
 }
 
