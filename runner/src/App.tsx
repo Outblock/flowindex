@@ -255,19 +255,36 @@ export default function App() {
   }, []);
 
   const handleAutoApplyEdits = useCallback((
-    edits: { path?: string; code: string }[],
+    edits: { path?: string; code: string; patches?: { search: string; replace: string }[] }[],
     meta?: { assistantId?: string; streaming?: boolean },
   ) => {
     if (!Array.isArray(edits) || edits.length === 0) return;
 
-    const sanitized = edits.filter((e) => typeof e?.code === 'string' && e.code.trim().length > 0);
+    const sanitized = edits.filter((e) => {
+      if (e?.patches && e.patches.length > 0) return true;
+      return typeof e?.code === 'string' && e.code.trim().length > 0;
+    });
     if (sanitized.length === 0) return;
 
     setProject((base) => {
       let next = base;
 
       for (const edit of sanitized) {
-        if (edit.path) {
+        if (edit.patches && edit.patches.length > 0) {
+          // Apply search/replace patches to existing file
+          const targetPath = edit.path || next.activeFile;
+          const existing = next.files.find((f) => f.path === targetPath);
+          if (existing && !existing.readOnly) {
+            let patched = existing.content;
+            for (const { search, replace } of edit.patches) {
+              const idx = patched.indexOf(search);
+              if (idx >= 0) {
+                patched = patched.slice(0, idx) + replace + patched.slice(idx + search.length);
+              }
+            }
+            next = updateFileContent(next, targetPath, patched);
+          }
+        } else if (edit.path) {
           next = applyCodeToPath(next, edit.path, edit.code);
         } else {
           next = updateFileContent(next, next.activeFile, edit.code);

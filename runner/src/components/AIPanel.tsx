@@ -26,11 +26,17 @@ const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io
 
 /* ── Types ── */
 
+interface FenceEdit {
+  path?: string;
+  code: string;
+  patches?: { search: string; replace: string }[];
+}
+
 interface AIPanelProps {
   onInsertCode: (code: string) => void;
   onApplyCodeToFile?: (path: string, code: string) => void;
   onAutoApplyEdits?: (
-    edits: { path?: string; code: string }[],
+    edits: FenceEdit[],
     meta?: { assistantId?: string; streaming?: boolean },
   ) => void;
   onLoadTemplate: (template: Template) => void;
@@ -263,6 +269,34 @@ function shortFileName(path: string): string {
   return parts[parts.length - 1] || path;
 }
 
+/* ── Diff rendering for SEARCH/REPLACE blocks ── */
+
+function DiffView({ code }: { code: string }) {
+  const patches = parseSearchReplacePatches(code);
+  if (!patches) return null;
+
+  return (
+    <div className="bg-zinc-950 font-mono text-[11px] leading-[1.6]">
+      {patches.map((patch, i) => (
+        <div key={i} className={i > 0 ? 'border-t border-zinc-800' : ''}>
+          {patch.search.split('\n').map((line, j) => (
+            <div key={`s-${j}`} className="flex bg-red-500/8">
+              <span className="select-none w-6 shrink-0 text-right pr-1.5 text-red-400/50">−</span>
+              <span className="text-red-300/80 whitespace-pre-wrap break-all px-1.5 py-px">{line}</span>
+            </div>
+          ))}
+          {patch.replace.split('\n').map((line, j) => (
+            <div key={`r-${j}`} className="flex bg-emerald-500/8">
+              <span className="select-none w-6 shrink-0 text-right pr-1.5 text-emerald-400/50">+</span>
+              <span className="text-emerald-300/80 whitespace-pre-wrap break-all px-1.5 py-px">{line}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CodeBlock({
   code,
   language,
@@ -290,26 +324,35 @@ function CodeBlock({
   const canApplyToFile = !!targetPath && !!onApplyCodeToFile;
   const canReplaceActive = isCadence && !!onInsertCode;
   const lineCount = code.split('\n').length;
-  const shouldCollapseByDefault = lineCount >= 20;
-  const [expanded, setExpanded] = useState(() => !shouldCollapseByDefault);
+  const isDiff = code.includes('<<<<<<< SEARCH');
+  const patches = isDiff ? parseSearchReplacePatches(code) : null;
+  const patchCount = patches?.length ?? 0;
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div className="rounded border border-zinc-700 overflow-hidden my-2">
       <div className="flex items-center justify-between px-2.5 py-1.5 bg-zinc-800/80 border-b border-zinc-700">
         <div className="min-w-0 flex items-center gap-1.5">
-          {shouldCollapseByDefault && (
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="p-0.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-colors"
-              title={expanded ? 'Collapse code' : 'Expand code'}
-            >
-              <ChevronRight className={`w-3 h-3 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-            </button>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="p-0.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-colors"
+            title={expanded ? 'Collapse' : 'Expand'}
+          >
+            <ChevronRight className={`w-3 h-3 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          </button>
+          {isDiff ? (
+            <span className="text-[10px] text-amber-400/80 uppercase tracking-widest font-bold">diff</span>
+          ) : (
+            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{language || 'code'}</span>
           )}
-          <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{language || 'code'}</span>
           {targetPath && (
             <span className="text-[10px] text-zinc-600 font-mono truncate max-w-[160px]" title={targetPath}>
               {targetPath}
+            </span>
+          )}
+          {isDiff && patchCount > 0 && (
+            <span className="text-[10px] text-zinc-600">
+              {patchCount} change{patchCount !== 1 ? 's' : ''}
             </span>
           )}
         </div>
@@ -324,7 +367,7 @@ function CodeBlock({
               Apply {shortFileName(targetPath)}
             </button>
           )}
-          {canReplaceActive && (
+          {!isDiff && canReplaceActive && (
             <button
               onClick={() => onInsertCode(code)}
               className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded transition-colors font-medium"
@@ -345,17 +388,23 @@ function CodeBlock({
         </div>
       </div>
       {expanded ? (
-        <SyntaxHighlighter
-          language={prismLang}
-          style={vscDarkPlus}
-          customStyle={{ margin: 0, padding: '10px', fontSize: '11px', lineHeight: '1.5', background: '#09090b', borderRadius: 0 }}
-          wrapLongLines
-        >
-          {code}
-        </SyntaxHighlighter>
+        isDiff && patches ? (
+          <DiffView code={code} />
+        ) : (
+          <SyntaxHighlighter
+            language={prismLang}
+            style={vscDarkPlus}
+            customStyle={{ margin: 0, padding: '10px', fontSize: '11px', lineHeight: '1.5', background: '#09090b', borderRadius: 0 }}
+            wrapLongLines
+          >
+            {code}
+          </SyntaxHighlighter>
+        )
       ) : (
         <div className="px-2.5 py-2 bg-zinc-950 text-[11px] text-zinc-500 font-mono">
-          Hidden code ({lineCount} lines). Click arrow to expand.
+          {isDiff
+            ? `${patchCount} change${patchCount !== 1 ? 's' : ''} — click to view diff`
+            : `${lineCount} lines — click to expand`}
         </div>
       )}
     </div>
@@ -1120,8 +1169,42 @@ function parseFenceInfo(infoRaw: string): { language: string; meta?: string } {
   };
 }
 
+/* ── SEARCH/REPLACE patch parsing ── */
+
+function parseSearchReplacePatches(code: string): { search: string; replace: string }[] | null {
+  const marker = '<<<<<<< SEARCH';
+  if (!code.includes(marker)) return null;
+
+  const patches: { search: string; replace: string }[] = [];
+  const blocks = code.split(marker);
+
+  for (let i = 1; i < blocks.length; i++) {
+    const sepIdx = blocks[i].indexOf('\n=======\n');
+    if (sepIdx < 0) continue;
+    const endIdx = blocks[i].indexOf('\n>>>>>>> REPLACE', sepIdx);
+    if (endIdx < 0) continue;
+
+    const search = blocks[i].slice(0, sepIdx);
+    const replace = blocks[i].slice(sepIdx + '\n=======\n'.length, endIdx);
+    patches.push({ search, replace });
+  }
+
+  return patches.length > 0 ? patches : null;
+}
+
+function applySearchReplacePatches(existingCode: string, patches: { search: string; replace: string }[]): string {
+  let result = existingCode;
+  for (const { search, replace } of patches) {
+    const idx = result.indexOf(search);
+    if (idx >= 0) {
+      result = result.slice(0, idx) + replace + result.slice(idx + search.length);
+    }
+  }
+  return result;
+}
+
 function pushFenceEdit(
-  edits: { path?: string; code: string }[],
+  edits: { path?: string; code: string; patches?: { search: string; replace: string }[] }[],
   infoRaw: string,
   codeRaw: string,
 ) {
@@ -1131,18 +1214,21 @@ function pushFenceEdit(
 
   const maybePath = resolveTargetPath(meta, language, code);
   const path = normalizePathCandidate(maybePath);
+
+  const patches = parseSearchReplacePatches(code);
+
   if (path) {
-    edits.push({ path, code });
+    edits.push({ path, code: patches ? '' : code, ...(patches && { patches }) });
     return;
   }
 
   if (language === 'cadence' || language === 'cdc') {
-    edits.push({ code });
+    edits.push({ code: patches ? '' : code, ...(patches && { patches }) });
   }
 }
 
-function extractEditsFromText(text: string, allowPartialFence = false): { path?: string; code: string }[] {
-  const edits: { path?: string; code: string }[] = [];
+function extractEditsFromText(text: string, allowPartialFence = false): FenceEdit[] {
+  const edits: FenceEdit[] = [];
   const fenceRe = /```([^\n`]*)\n([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
 
@@ -1170,8 +1256,8 @@ function extractEditsFromText(text: string, allowPartialFence = false): { path?:
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function extractEditsFromAssistantMessage(message: UIMessage, allowPartialFence = false): { path?: string; code: string }[] {
-  const raw: { path?: string; code: string }[] = [];
+function extractEditsFromAssistantMessage(message: UIMessage, allowPartialFence = false): FenceEdit[] {
+  const raw: FenceEdit[] = [];
 
   for (const part of message.parts as any[]) {
     if (part.type === 'text') {
@@ -1202,17 +1288,17 @@ function extractEditsFromAssistantMessage(message: UIMessage, allowPartialFence 
   }
 
   // Keep only the latest edit per target (file path or active file)
-  const deduped = new Map<string, { path?: string; code: string }>();
+  const deduped = new Map<string, FenceEdit>();
   for (const edit of raw) {
     deduped.set(edit.path || '__active__', edit);
   }
   return Array.from(deduped.values());
 }
 
-function editsSignature(edits: { path?: string; code: string }[]): string {
+function editsSignature(edits: FenceEdit[]): string {
   if (edits.length === 0) return '';
   return edits
-    .map((edit) => `${edit.path || '__active__'}\n${edit.code}`)
+    .map((edit) => `${edit.path || '__active__'}\n${edit.patches ? JSON.stringify(edit.patches) : edit.code}`)
     .join('\n---\n');
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
