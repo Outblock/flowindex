@@ -14,7 +14,7 @@ import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/
 import { useTheme } from '../../contexts/ThemeContext';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import DecryptedText from '../../components/ui/DecryptedText';
-import { deriveActivityType, TokenIcon, formatTokenName, buildSummaryLine, NFTTransferImage, fetchNFTFullDetail, useNFTLazyDetail } from '../../components/TransactionRow';
+import { deriveActivityType, deriveAllActivityBadges, TokenIcon, formatTokenName, buildSummaryLine, NFTTransferImage, fetchNFTFullDetail, useNFTLazyDetail } from '../../components/TransactionRow';
 import { formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
 import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
@@ -353,7 +353,6 @@ function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, fromTag, toT
 }
 
 function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, onNftClick, isAdmin }: { transaction: any; formatAddress: (addr: string) => string; onNftClick?: (nt: any) => void; isAdmin?: boolean }) {
-    const activity = deriveActivityType(transaction);
     const summaryLine = buildSummaryLine(transaction);
     const hasFT = transaction.ft_transfers?.length > 0;
     const hasDefi = transaction.defi_events?.length > 0;
@@ -389,9 +388,13 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
                 <h2 className="text-sm uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
                     Transaction Summary
                 </h2>
-                <span className={`inline-flex items-center gap-1 px-2.5 py-1 border rounded-sm text-[10px] font-bold uppercase tracking-wider ${activity.bgColor} ${activity.color}`}>
-                    {activity.label}
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                    {deriveAllActivityBadges(transaction).map((b, i) => (
+                        <span key={i} className={`inline-flex items-center gap-1 px-2.5 py-1 border rounded-sm text-[10px] font-bold uppercase tracking-wider ${b.bgColor} ${b.color}`}>
+                            {b.label}
+                        </span>
+                    ))}
+                </div>
             </div>
 
             {/* Summary line */}
@@ -940,15 +943,15 @@ function TransactionDetail() {
                     </div>
 
                     <div className="relative z-10">
-                        {/* Badges */}
-                        <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4">
+                        {/* Badges — show all tags from backend, deduplicated */}
+                        <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4 flex-wrap">
                             {(() => {
-                                const activity = deriveActivityType(transaction);
-                                return (
-                                    <span className={`text-xs uppercase tracking-[0.2em] border px-2 py-1 rounded-sm w-fit font-bold ${activity.bgColor} ${activity.color}`}>
-                                        {activity.label}
+                                const tagBadges = deriveAllActivityBadges(transaction);
+                                return tagBadges.map((b, i) => (
+                                    <span key={i} className={`text-xs uppercase tracking-[0.2em] border px-2 py-1 rounded-sm w-fit font-bold ${b.bgColor} ${b.color}`}>
+                                        {b.label}
                                     </span>
-                                );
+                                ));
                             })()}
                             <span className={`text-xs uppercase tracking-[0.2em] border px-2 py-1 rounded-sm w-fit ${transaction.status === 'SEALED'
                                 ? 'text-zinc-500 dark:text-white border-zinc-300 dark:border-white/30'
