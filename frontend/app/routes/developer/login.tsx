@@ -115,8 +115,7 @@ function DeveloperLoginPage() {
       <div className="absolute inset-0 z-0">
         <Suspense fallback={null}>
           <GridScan
-            scanColor="#00ef8b"
-            linesColor="#1a3a2a"
+            scanColor="#9effe2"
             scanOpacity={0.3}
             gridScale={0.1}
             scanDuration={3}
