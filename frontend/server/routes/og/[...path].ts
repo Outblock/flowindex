@@ -32,7 +32,9 @@ const MAX_CACHE_SIZE = 200;
 
 // WASM + font initialization (once)
 let initialized = false;
-let fontData: ArrayBuffer;
+let fontRegular: ArrayBuffer;
+let fontSemiBold: ArrayBuffer;
+let fontBold: ArrayBuffer;
 
 async function ensureInit() {
   if (initialized) return;
@@ -51,11 +53,17 @@ async function ensureInit() {
   }
   if (!wasmBinary) throw new Error('resvg.wasm not found in any candidate path');
   await initWasm(wasmBinary);
-  // Load Inter font from Google Fonts CDN
-  const fontRes = await fetch(
-    'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf'
-  );
-  fontData = await fontRes.arrayBuffer();
+  // Load Inter font files for each weight from Google Fonts CDN
+  const [regularRes, semiBoldRes, boldRes] = await Promise.all([
+    fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf'),
+    fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYMZg.ttf'),
+    fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf'),
+  ]);
+  [fontRegular, fontSemiBold, fontBold] = await Promise.all([
+    regularRes.arrayBuffer(),
+    semiBoldRes.arrayBuffer(),
+    boldRes.arrayBuffer(),
+  ]);
   initialized = true;
 }
 
@@ -108,9 +116,9 @@ export default defineEventHandler(async (event) => {
       width: 1200,
       height: 630,
       fonts: [
-        { name: 'Inter', data: fontData, weight: 400, style: 'normal' as const },
-        { name: 'Inter', data: fontData, weight: 600, style: 'normal' as const },
-        { name: 'Inter', data: fontData, weight: 700, style: 'normal' as const },
+        { name: 'Inter', data: fontRegular, weight: 400, style: 'normal' as const },
+        { name: 'Inter', data: fontSemiBold, weight: 600, style: 'normal' as const },
+        { name: 'Inter', data: fontBold, weight: 700, style: 'normal' as const },
       ],
     });
 
