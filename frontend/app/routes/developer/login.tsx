@@ -114,19 +114,7 @@ function DeveloperLoginPage() {
       {/* GridScan background */}
       <div className="absolute inset-0 z-0">
         <Suspense fallback={null}>
-          <GridScan
-            scanColor="#9effe2"
-            scanOpacity={0.3}
-            gridScale={0.1}
-            scanDuration={3}
-            scanDelay={1.5}
-            scanDirection="pingpong"
-            noiseIntensity={0.008}
-            scanGlow={0.4}
-            scanSoftness={2.5}
-            enablePost={false}
-            className="w-full h-full"
-          />
+          <GridScan scanColor="#9effe2" className="w-full h-full" />
         </Suspense>
       </div>
 
