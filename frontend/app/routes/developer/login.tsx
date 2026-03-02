@@ -139,7 +139,7 @@ function DeveloperLoginPage() {
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             className="w-full max-w-[420px] relative z-10"
           >
-            <div className="border border-neutral-800 bg-black/90 backdrop-blur-sm p-8">
+            <div className="border border-neutral-800 bg-black/60 backdrop-blur-xl border-white/[0.06] p-8">
               {/* Back button */}
               <button
                 onClick={() => { setOtpSent(false); setOtpValue(''); setError(null) }}
@@ -229,7 +229,7 @@ function DeveloperLoginPage() {
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="w-full max-w-[420px] relative z-10"
           >
-            <div className="border border-neutral-800 bg-black/90 backdrop-blur-sm overflow-hidden">
+            <div className="border border-neutral-800 bg-black/60 backdrop-blur-xl border-white/[0.06] overflow-hidden">
               {/* Header */}
               <div className="px-8 pt-10 pb-6 text-center">
                 <motion.div

@@ -133,7 +133,7 @@ function DeveloperLogs() {
                 if (e.key === 'Enter') applyFilters()
               }}
               placeholder="e.g. ft.transfer"
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
             />
           </div>
           <div className="min-w-[160px]">
@@ -149,7 +149,7 @@ function DeveloperLogs() {
               onChange={(e) =>
                 setFilterStatus(e.target.value as 'all' | '2xx' | 'error')
               }
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-sm text-white focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
             >
               <option value="all">All</option>
               <option value="2xx">2xx Success</option>
@@ -158,7 +158,7 @@ function DeveloperLogs() {
           </div>
           <button
             onClick={applyFilters}
-            className="flex items-center gap-2 px-4 py-2 bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm font-medium hover:bg-neutral-700 transition-colors"
           >
             <Filter className="w-4 h-4" />
             Filter
@@ -166,7 +166,7 @@ function DeveloperLogs() {
         </div>
 
         {/* Table */}
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+        <div className="bg-neutral-900 border border-neutral-800 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />
@@ -226,7 +226,7 @@ function DeveloperLogs() {
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(log.status_code)}`}
+                            className={`inline-block px-2 py-0.5 text-xs font-medium ${statusBadgeClass(log.status_code)}`}
                           >
                             {log.status_code != null ? log.status_code : '--'}
                           </span>
@@ -257,7 +257,7 @@ function DeveloperLogs() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded-lg hover:bg-neutral-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Prev
@@ -268,7 +268,7 @@ function DeveloperLogs() {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
-                className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded-lg hover:bg-neutral-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Next
                 <ChevronRight className="w-4 h-4" />
@@ -300,7 +300,7 @@ function DeveloperLogs() {
                 <h2 className="text-base font-semibold text-white">Delivery Detail</h2>
                 <button
                   onClick={() => setSelectedLog(null)}
-                  className="p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                  className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -318,7 +318,7 @@ function DeveloperLogs() {
                   <div>
                     <p className="text-xs text-neutral-500 mb-1">Status Code</p>
                     <span
-                      className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(selectedLog.status_code)}`}
+                      className={`inline-block px-2 py-0.5 text-xs font-medium ${statusBadgeClass(selectedLog.status_code)}`}
                     >
                       {selectedLog.status_code != null ? selectedLog.status_code : '--'}
                     </span>
@@ -357,13 +357,13 @@ function DeveloperLogs() {
                     <p className="text-xs text-neutral-500 uppercase tracking-wider font-medium">Payload</p>
                     <button
                       onClick={handleCopyPayload}
-                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-700 rounded-md transition-colors"
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-700 transition-colors"
                     >
                       {copied ? <Check className="w-3 h-3 text-[#00ef8b]" /> : <Copy className="w-3 h-3" />}
                       {copied ? 'Copied' : 'Copy'}
                     </button>
                   </div>
-                  <pre className="p-4 bg-neutral-950 border border-neutral-800 rounded-lg text-xs font-mono text-neutral-300 overflow-x-auto whitespace-pre-wrap break-all max-h-[60vh]">
+                  <pre className="p-4 bg-neutral-950 border border-neutral-800 text-xs font-mono text-neutral-300 overflow-x-auto whitespace-pre-wrap break-all max-h-[60vh]">
                     {formatPayload(selectedLog.payload)}
                   </pre>
                 </div>

@@ -108,7 +108,7 @@ function channelBadge(ep: Endpoint) {
   const config = getChannelConfig(ep)
   const Icon = config.icon
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color} border ${config.borderColor}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium ${config.bgColor} ${config.color} border ${config.borderColor}`}>
       <Icon className="w-3 h-3" />
       {config.label}
     </span>
@@ -279,7 +279,7 @@ function DeveloperEndpoints() {
           </div>
           <button
             onClick={openCreateModal}
-            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#00ef8b] text-black font-medium text-sm rounded-lg hover:bg-[#00ef8b]/90 transition-colors shrink-0"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#00ef8b] text-black font-medium text-sm hover:bg-[#00ef8b]/90 transition-colors shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Add Channel</span>
@@ -289,7 +289,7 @@ function DeveloperEndpoints() {
 
         {/* Error banner */}
         {error && (
-          <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+          <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span className="flex-1 min-w-0 truncate">{error}</span>
             <button onClick={() => setError(null)} className="ml-auto text-red-400/60 hover:text-red-400 transition-colors shrink-0">
@@ -299,7 +299,7 @@ function DeveloperEndpoints() {
         )}
 
         {/* Content */}
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+        <div className="bg-neutral-900 border border-neutral-800 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />
@@ -330,13 +330,13 @@ function DeveloperEndpoints() {
                         )}
                         <button
                           onClick={() => openEditModal(endpoint)}
-                          className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors"
+                          className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => setDeleteTarget(endpoint)}
-                          className="p-1.5 rounded-md text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -380,12 +380,12 @@ function DeveloperEndpoints() {
                       <td className="px-4 py-3 text-sm text-neutral-400">{endpoint.description || '\u2014'}</td>
                       <td className="px-4 py-3">
                         {isActive(endpoint) ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                             Active
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
                             Inactive
                           </span>
@@ -393,10 +393,10 @@ function DeveloperEndpoints() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => openEditModal(endpoint)} className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors" title="Edit">
+                          <button onClick={() => openEditModal(endpoint)} className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors" title="Edit">
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          <button onClick={() => setDeleteTarget(endpoint)} className="p-1.5 rounded-md text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Delete">
+                          <button onClick={() => setDeleteTarget(endpoint)} className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Delete">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -424,7 +424,7 @@ function DeveloperEndpoints() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 40 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-lg mx-0 sm:mx-4 p-5 sm:p-6 space-y-5 max-h-[90vh] overflow-y-auto"
+              className="bg-neutral-900 border border-neutral-800  w-full max-w-lg mx-0 sm:mx-4 p-5 sm:p-6 space-y-5 max-h-[90vh] overflow-y-auto"
             >
               <h2 className="text-lg font-semibold text-white">
                 {editTarget ? 'Edit Channel' : 'Add Notification Channel'}
@@ -451,7 +451,7 @@ function DeveloperEndpoints() {
                             }
                           }}
                           disabled={isDisabled}
-                          className={`relative flex flex-col items-center gap-1 sm:gap-1.5 p-2 sm:p-3 rounded-lg border text-[10px] sm:text-xs font-medium transition-all ${
+                          className={`relative flex flex-col items-center gap-1 sm:gap-1.5 p-2 sm:p-3 border text-[10px] sm:text-xs font-medium transition-all ${
                             isSelected
                               ? `${config.bgColor} ${config.borderColor} ${config.color}`
                               : isDisabled
@@ -462,7 +462,7 @@ function DeveloperEndpoints() {
                           <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                           <span>{config.label}</span>
                           {isDisabled && (
-                            <span className="absolute -top-1 -right-1 text-[8px] sm:text-[9px] px-1 py-0.5 rounded bg-neutral-800 text-neutral-500 border border-neutral-700">
+                            <span className="absolute -top-1 -right-1 text-[8px] sm:text-[9px] px-1 py-0.5 bg-neutral-800 text-neutral-500 border border-neutral-700">
                               Soon
                             </span>
                           )}
@@ -488,7 +488,7 @@ function DeveloperEndpoints() {
                       value={formExtra[field.key] || ''}
                       onChange={(e) => setFormExtra((prev) => ({ ...prev, [field.key]: e.target.value }))}
                       placeholder={field.placeholder}
-                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                     />
                   </div>
                 ))
@@ -504,7 +504,7 @@ function DeveloperEndpoints() {
                     value={formUrl}
                     onChange={(e) => setFormUrl(e.target.value)}
                     placeholder={channelConfig.placeholder}
-                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                     autoFocus
                     disabled={isEmailDisabled}
                   />
@@ -522,18 +522,18 @@ function DeveloperEndpoints() {
                   onChange={(e) => setFormDescription(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && canSave) handleSave() }}
                   placeholder="Optional label for this channel"
-                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                 />
               </div>
 
               <div className="flex gap-3">
-                <button onClick={closeModal} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors">
+                <button onClick={closeModal} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium hover:bg-neutral-700 transition-colors">
                   Cancel
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={!canSave || saving}
-                  className="flex-1 py-2 bg-[#00ef8b] text-black text-sm font-medium rounded-lg hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 py-2 bg-[#00ef8b] text-black text-sm font-medium hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   {editTarget ? 'Save' : 'Add Channel'}
@@ -558,7 +558,7 @@ function DeveloperEndpoints() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 40 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-sm mx-0 sm:mx-4 p-6 space-y-4"
+              className="bg-neutral-900 border border-neutral-800  w-full max-w-sm mx-0 sm:mx-4 p-6 space-y-4"
             >
               <h2 className="text-lg font-semibold text-white">Delete Channel</h2>
               <p className="text-sm text-neutral-400">
@@ -566,13 +566,13 @@ function DeveloperEndpoints() {
                 This action cannot be undone.
               </p>
               <div className="flex gap-3">
-                <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors">
+                <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium hover:bg-neutral-700 transition-colors">
                   Cancel
                 </button>
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="flex-1 py-2 bg-red-500/20 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 py-2 bg-red-500/20 text-red-400 text-sm font-medium hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                   Delete

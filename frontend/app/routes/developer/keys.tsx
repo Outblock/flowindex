@@ -175,7 +175,7 @@ function DeveloperKeys() {
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#00ef8b] text-black font-medium text-sm rounded-lg hover:bg-[#00ef8b]/90 transition-colors shrink-0"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#00ef8b] text-black font-medium text-sm hover:bg-[#00ef8b]/90 transition-colors shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Create Key</span>
@@ -185,13 +185,13 @@ function DeveloperKeys() {
 
         {/* Rate Limit / Usage Card */}
         {usage && (
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 md:p-5">
+          <div className="bg-neutral-900 border border-neutral-800 p-4 md:p-5">
             <div className="flex items-center gap-2 mb-3">
               <Zap className="w-4 h-4 text-[#00ef8b]" />
               <span className="text-sm font-medium text-white">
                 {usage.tier.name} Plan
               </span>
-              <span className="text-xs px-2 py-0.5 rounded bg-neutral-800 text-neutral-400">
+              <span className="text-xs px-2 py-0.5 bg-neutral-800 text-neutral-400">
                 {usage.tier.id}
               </span>
             </div>
@@ -220,7 +220,7 @@ function DeveloperKeys() {
 
         {/* Error banner */}
         {error && (
-          <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+          <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span className="flex-1 min-w-0 truncate">{error}</span>
             <button onClick={() => setError(null)} className="ml-auto text-red-400/60 hover:text-red-400 transition-colors shrink-0">
@@ -230,7 +230,7 @@ function DeveloperKeys() {
         )}
 
         {/* Content */}
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+        <div className="bg-neutral-900 border border-neutral-800 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />
@@ -259,34 +259,34 @@ function DeveloperKeys() {
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => openEditModal(apiKey)}
-                            className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors"
+                            className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors"
                             title="Edit name"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => setDeleteTarget(apiKey)}
-                            className="p-1.5 rounded-md text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                             title="Delete key"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-800 rounded-lg">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-800">
                         <code className="flex-1 text-xs font-mono text-neutral-400 truncate select-all">
                           {isRevealed ? (apiKey.key_prefix ? `${apiKey.key_prefix}...` : '***') : maskKey(apiKey.key_prefix)}
                         </code>
                         <button
                           onClick={() => toggleReveal(apiKey.id)}
-                          className="p-1 rounded text-neutral-500 hover:text-white transition-colors shrink-0"
+                          className="p-1 text-neutral-500 hover:text-white transition-colors shrink-0"
                           title={isRevealed ? 'Hide' : 'Reveal'}
                         >
                           {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         </button>
                         <button
                           onClick={() => handleCopyPrefix(apiKey)}
-                          className="p-1 rounded text-neutral-500 hover:text-white transition-colors shrink-0"
+                          className="p-1 text-neutral-500 hover:text-white transition-colors shrink-0"
                           title="Copy key prefix"
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5 text-[#00ef8b]" /> : <Copy className="w-3.5 h-3.5" />}
@@ -331,14 +331,14 @@ function DeveloperKeys() {
                             </code>
                             <button
                               onClick={() => toggleReveal(apiKey.id)}
-                              className="p-1 rounded text-neutral-500 hover:text-white transition-colors"
+                              className="p-1 text-neutral-500 hover:text-white transition-colors"
                               title={isRevealed ? 'Hide' : 'Reveal'}
                             >
                               {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </button>
                             <button
                               onClick={() => handleCopyPrefix(apiKey)}
-                              className="p-1 rounded text-neutral-500 hover:text-white transition-colors"
+                              className="p-1 text-neutral-500 hover:text-white transition-colors"
                               title="Copy key prefix"
                             >
                               {isCopied ? <Check className="w-3.5 h-3.5 text-[#00ef8b]" /> : <Copy className="w-3.5 h-3.5" />}
@@ -355,14 +355,14 @@ function DeveloperKeys() {
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => openEditModal(apiKey)}
-                              className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors"
+                              className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-700 transition-colors"
                               title="Edit name"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => setDeleteTarget(apiKey)}
-                              className="p-1.5 rounded-md text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                              className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                               title="Delete key"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -400,7 +400,7 @@ function DeveloperKeys() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 40 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-md mx-0 sm:mx-4 p-6"
+              className="bg-neutral-900 border border-neutral-800  w-full max-w-md mx-0 sm:mx-4 p-6"
             >
               {createdKey ? (
                 <div className="space-y-4">
@@ -408,13 +408,13 @@ function DeveloperKeys() {
                   <p className="text-sm text-neutral-400">
                     Copy this key now. You will not be able to see it again.
                   </p>
-                  <div className="flex items-center gap-2 p-3 bg-neutral-800 rounded-lg border border-neutral-700">
+                  <div className="flex items-center gap-2 p-3 bg-neutral-800 border border-neutral-700">
                     <code className="flex-1 text-xs sm:text-sm font-mono text-[#00ef8b] break-all select-all">
                       {createdKey}
                     </code>
                     <button
                       onClick={handleCopy}
-                      className="shrink-0 p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors"
+                      className="shrink-0 p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors"
                       title="Copy to clipboard"
                     >
                       {copied ? <Check className="w-4 h-4 text-[#00ef8b]" /> : <Copy className="w-4 h-4" />}
@@ -422,7 +422,7 @@ function DeveloperKeys() {
                   </div>
                   <button
                     onClick={closeCreateModal}
-                    className="w-full py-2 bg-neutral-800 text-white text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors"
+                    className="w-full py-2 bg-neutral-800 text-white text-sm font-medium hover:bg-neutral-700 transition-colors"
                   >
                     Done
                   </button>
@@ -441,18 +441,18 @@ function DeveloperKeys() {
                       onChange={(e) => setCreateName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }}
                       placeholder="e.g. Production, Staging"
-                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                       autoFocus
                     />
                   </div>
                   <div className="flex gap-3">
-                    <button onClick={closeCreateModal} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors">
+                    <button onClick={closeCreateModal} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium hover:bg-neutral-700 transition-colors">
                       Cancel
                     </button>
                     <button
                       onClick={handleCreate}
                       disabled={!createName.trim() || creating}
-                      className="flex-1 py-2 bg-[#00ef8b] text-black text-sm font-medium rounded-lg hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="flex-1 py-2 bg-[#00ef8b] text-black text-sm font-medium hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {creating && <Loader2 className="w-4 h-4 animate-spin" />}
                       Create
@@ -479,7 +479,7 @@ function DeveloperKeys() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 40 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-sm mx-0 sm:mx-4 p-6 space-y-4"
+              className="bg-neutral-900 border border-neutral-800  w-full max-w-sm mx-0 sm:mx-4 p-6 space-y-4"
             >
               <h2 className="text-lg font-semibold text-white">Rename API Key</h2>
               <div>
@@ -492,18 +492,18 @@ function DeveloperKeys() {
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleEditSave() }}
-                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/25 transition-colors"
                   autoFocus
                 />
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setEditTarget(null)} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors">
+                <button onClick={() => setEditTarget(null)} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium hover:bg-neutral-700 transition-colors">
                   Cancel
                 </button>
                 <button
                   onClick={handleEditSave}
                   disabled={!editName.trim() || saving}
-                  className="flex-1 py-2 bg-[#00ef8b] text-black text-sm font-medium rounded-lg hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 py-2 bg-[#00ef8b] text-black text-sm font-medium hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Save
@@ -528,7 +528,7 @@ function DeveloperKeys() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 40 }}
-              className="bg-neutral-900 border border-neutral-800 rounded-t-xl sm:rounded-xl w-full max-w-sm mx-0 sm:mx-4 p-6 space-y-4"
+              className="bg-neutral-900 border border-neutral-800  w-full max-w-sm mx-0 sm:mx-4 p-6 space-y-4"
             >
               <h2 className="text-lg font-semibold text-white">Delete API Key</h2>
               <p className="text-sm text-neutral-400">
@@ -537,13 +537,13 @@ function DeveloperKeys() {
                 action cannot be undone.
               </p>
               <div className="flex gap-3">
-                <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors">
+                <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium hover:bg-neutral-700 transition-colors">
                   Cancel
                 </button>
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="flex-1 py-2 bg-red-500/20 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 py-2 bg-red-500/20 text-red-400 text-sm font-medium hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                   Delete
@@ -566,9 +566,9 @@ function UsageMeter({ label, used, max }: { label: string; used: number; max: nu
       <p className="text-sm text-neutral-200 font-mono mb-1.5">
         {used} <span className="text-neutral-500">/ {max}</span>
       </p>
-      <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-neutral-800 overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all ${isHigh ? 'bg-amber-500' : 'bg-[#00ef8b]'}`}
+          className={`h-full transition-all ${isHigh ? 'bg-amber-500' : 'bg-[#00ef8b]'}`}
           style={{ width: `${pct}%` }}
         />
       </div>

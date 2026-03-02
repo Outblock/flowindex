@@ -103,7 +103,7 @@ function WorkflowListPage() {
           <button
             onClick={handleCreate}
             disabled={creating}
-            className="flex items-center gap-2 px-4 py-2 bg-[#00ef8b] text-black font-medium text-sm rounded-lg hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-[#00ef8b] text-black font-medium text-sm hover:bg-[#00ef8b]/90 transition-colors disabled:opacity-50"
           >
             {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             New Workflow
@@ -124,9 +124,9 @@ function WorkflowListPage() {
                       key={t.id}
                       onClick={() => handleUseTemplate(t)}
                       disabled={creating}
-                      className="flex items-start gap-3 p-3 bg-zinc-50 dark:bg-neutral-800/50 border border-zinc-200 dark:border-neutral-800 rounded-lg hover:border-[#00ef8b]/40 hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-colors text-left disabled:opacity-50"
+                      className="flex items-start gap-3 p-3 bg-zinc-50 dark:bg-neutral-800/50 border border-zinc-200 dark:border-neutral-800 hover:border-[#00ef8b]/40 hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-colors text-left disabled:opacity-50"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-zinc-200 dark:bg-neutral-700 flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 bg-zinc-200 dark:bg-neutral-700 flex items-center justify-center shrink-0">
                         <Icon className="w-4 h-4 text-zinc-600 dark:text-neutral-300" />
                       </div>
                       <div className="min-w-0">
@@ -141,7 +141,7 @@ function WorkflowListPage() {
           ))}
         </div>
 
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+        <div className="bg-neutral-900 border border-neutral-800 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />
@@ -168,7 +168,7 @@ function WorkflowListPage() {
                       params={{ id: wf.id }}
                       className="flex items-center gap-4 px-4 py-4 hover:bg-neutral-800/30 transition-colors group"
                     >
-                      <div className="w-9 h-9 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0">
+                      <div className="w-9 h-9 bg-neutral-800 flex items-center justify-center shrink-0">
                         <GitBranch className="w-4 h-4 text-[#00ef8b]" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -206,7 +206,7 @@ function WorkflowListPage() {
                             e.stopPropagation()
                             setDeleteTarget(wf)
                           }}
-                          className="p-1.5 rounded-md text-neutral-600 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                          className="p-1.5 text-neutral-600 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -226,7 +226,7 @@ function WorkflowListPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null) }}
         >
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-sm mx-4 p-6 space-y-4">
             <h2 className="text-lg font-semibold text-white">Delete Workflow</h2>
             <p className="text-sm text-neutral-400">
               Delete &ldquo;<span className="text-white">{deleteTarget.name}</span>&rdquo;? This cannot be undone.
@@ -234,14 +234,14 @@ function WorkflowListPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium rounded-lg hover:bg-neutral-700 transition-colors"
+                className="flex-1 py-2 bg-neutral-800 text-neutral-300 text-sm font-medium hover:bg-neutral-700 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 py-2 bg-red-500/20 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-2 bg-red-500/20 text-red-400 text-sm font-medium hover:bg-red-500/30 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Delete

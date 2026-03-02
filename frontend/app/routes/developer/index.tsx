@@ -73,10 +73,10 @@ function DeveloperDashboardPage() {
               >
                 <Link
                   to={card.path}
-                  className="block bg-neutral-900 border border-neutral-800 rounded-xl p-5 hover:border-neutral-700 transition-colors group"
+                  className="block bg-neutral-900 border border-neutral-800 p-5 hover:border-neutral-700 transition-colors group"
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <div className={`w-10 h-10 rounded-lg bg-neutral-800 flex items-center justify-center ${card.color}`}>
+                    <div className={`w-10 h-10 bg-neutral-800 flex items-center justify-center ${card.color}`}>
                       <Icon className="w-5 h-5" />
                     </div>
                     <ArrowRight className="w-4 h-4 text-neutral-600 group-hover:text-neutral-400 transition-colors" />
@@ -107,7 +107,7 @@ function DeveloperDashboardPage() {
             </Link>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+          <div className="bg-neutral-900 border border-neutral-800 overflow-hidden">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />
@@ -135,7 +135,7 @@ function DeveloperDashboardPage() {
                       <div className="flex-1 min-w-0">
                         <span className="text-sm text-white font-mono">{log.event_type}</span>
                       </div>
-                      <span className={`text-xs font-mono px-2 py-0.5 rounded ${
+                      <span className={`text-xs font-mono px-2 py-0.5 ${
                         isSuccess ? 'bg-[#00ef8b]/10 text-[#00ef8b]' : 'bg-red-500/10 text-red-400'
                       }`}>
                         {log.status_code}
@@ -170,7 +170,7 @@ function DeveloperDashboardPage() {
                 <Link
                   key={action.label}
                   to={action.path}
-                  className="flex items-center gap-3 px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-lg hover:border-neutral-700 transition-colors text-sm text-neutral-300 hover:text-white"
+                  className="flex items-center gap-3 px-4 py-3 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-colors text-sm text-neutral-300 hover:text-white"
                 >
                   <Icon className="w-4 h-4 text-neutral-500" />
                   {action.label}

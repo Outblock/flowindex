@@ -73,8 +73,8 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
               Dev Portal
             </span>
 
-            {/* Desktop tabs */}
-            <nav className="hidden md:flex items-center gap-0.5">
+            {/* Desktop tabs — account-detail style with animated indicator */}
+            <nav className="hidden md:flex items-center gap-0.5 p-1 relative">
               {navItems.map((item) => {
                 const isActive = currentPath === item.path || (item.path !== '/developer' && currentPath.startsWith(item.path))
                 const Icon = item.icon
@@ -82,12 +82,19 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors z-10 ${
                       isActive
-                        ? 'text-[#00ef8b] bg-[#00ef8b]/10'
-                        : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                        ? 'text-black dark:text-white'
+                        : 'text-neutral-400 hover:text-white'
                     }`}
                   >
+                    {isActive && (
+                      <motion.div
+                        layoutId="devActiveTab"
+                        className="absolute inset-0 bg-[#00ef8b] dark:bg-white -z-10"
+                        transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                      />
+                    )}
                     <Icon className="w-3.5 h-3.5 shrink-0" />
                     {item.label}
                   </Link>
@@ -98,7 +105,7 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
             {/* Mobile: current page + dropdown trigger */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-white hover:bg-neutral-800 transition-colors"
+              className="md:hidden flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 transition-colors"
             >
               {(() => {
                 const active = navItems.find((item) =>
@@ -120,7 +127,7 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
           <div className="relative shrink-0">
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+              className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
             >
               <span className="truncate max-w-[120px]">{user.email}</span>
               <ChevronDown className={`w-3 h-3 text-neutral-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
@@ -134,7 +141,7 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.12 }}
-                    className="absolute right-0 top-full mt-1 z-50 w-44 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl overflow-hidden"
+                    className="absolute right-0 top-full mt-1 z-50 w-44 bg-neutral-900 border border-neutral-800 shadow-xl overflow-hidden"
                   >
                     <div className="px-3 py-2 border-b border-neutral-800">
                       <p className="text-xs text-neutral-500 truncate">{user.email}</p>
@@ -174,7 +181,7 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      className={`flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
                         isActive
                           ? 'text-[#00ef8b] bg-[#00ef8b]/10'
                           : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
