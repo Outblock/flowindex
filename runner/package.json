@@ -13,6 +13,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@onflow/cadence-language-server": "^1.7.4",
     "@onflow/fcl": "^1.21.9",
+    "@supabase/supabase-js": "^2.98.0",
     "ai": "^6.0.101",
     "axios": "^1.13.4",
     "clsx": "^2.1.0",
