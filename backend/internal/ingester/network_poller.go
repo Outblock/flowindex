@@ -272,7 +272,7 @@ func (p *NetworkPoller) BackfillEpochTotalStaked(ctx context.Context) error {
 		}
 
 		fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		result, err := client.ExecuteScriptAtBlockHeight(fetchCtx, ep.StartHeight, script, nil)
+		result, err := client.ExecuteScriptAtBlockHeightAllNodes(fetchCtx, ep.StartHeight, script, nil)
 		cancel()
 		if err != nil {
 			log.Printf("[NetworkPoller] epoch %d (height %d) script error: %v", ep.Epoch, ep.StartHeight, err)

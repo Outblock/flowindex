@@ -240,6 +240,33 @@ func (c *Client) ExecuteScriptAtBlockHeight(ctx context.Context, height uint64, 
 	return out, err
 }
 
+// ExecuteScriptAtBlockHeightAllNodes tries every node in the pool until one succeeds.
+// Used for historical queries where only some nodes have execution state for a given height.
+func (c *Client) ExecuteScriptAtBlockHeightAllNodes(ctx context.Context, height uint64, script []byte, args []cadence.Value) (cadence.Value, error) {
+	if len(c.grpcClients) == 0 {
+		return nil, fmt.Errorf("no flow access clients configured")
+	}
+	var lastErr error
+	for i, cli := range c.grpcClients {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		// Skip nodes with known min heights above this height
+		if c.minHeights != nil && atomic.LoadUint64(&c.minHeights[i]) > 0 && height < atomic.LoadUint64(&c.minHeights[i]) {
+			continue
+		}
+		v, err := cli.ExecuteScriptAtBlockHeight(ctx, height, script, args)
+		if err == nil {
+			return v, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		return nil, fmt.Errorf("no nodes available for height %d", height)
+	}
+	return nil, lastErr
+}
+
 func (c *Client) withRetry(ctx context.Context, fn func() error) error {
 	maxRetries := 5
 	backoff := 500 * time.Millisecond
