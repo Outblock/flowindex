@@ -12,6 +12,7 @@ export interface ProjectState {
   files: FileEntry[];
   activeFile: string;
   openFiles: string[];
+  folders: string[]; // e.g. "contracts", "contracts/interfaces"
 }
 
 const STORAGE_KEY = 'runner:project';
@@ -30,6 +31,7 @@ export interface Template {
   icon: string;
   files: FileEntry[];
   activeFile: string;
+  folders?: string[];
 }
 
 export const TEMPLATES: Template[] = [
@@ -277,6 +279,75 @@ function defaultProject(): ProjectState {
     files: [{ path: 'main.cdc', content: DEFAULT_CODE }],
     activeFile: 'main.cdc',
     openFiles: ['main.cdc'],
+    folders: [],
+  };
+}
+
+function normalizeBasePath(path: string): string {
+  return path
+    .trim()
+    .replace(/^\.\//, '')
+    .replace(/\\/g, '/')
+    .replace(/\/{2,}/g, '/');
+}
+
+function isInvalidUserPath(path: string): boolean {
+  return !path || path.startsWith('/') || path.includes('..') || path.startsWith('deps/');
+}
+
+function normalizeFilePath(path: string): string | null {
+  const normalized = normalizeBasePath(path).replace(/\/+$/, '');
+  if (isInvalidUserPath(normalized)) return null;
+  return normalized;
+}
+
+function normalizeFolderPath(path: string): string | null {
+  const normalized = normalizeBasePath(path).replace(/\/+$/, '');
+  if (isInvalidUserPath(normalized)) return null;
+  return normalized;
+}
+
+function getParentFolders(path: string): string[] {
+  const parts = path.split('/');
+  const parents: string[] = [];
+  for (let i = 1; i < parts.length; i += 1) {
+    parents.push(parts.slice(0, i).join('/'));
+  }
+  return parents;
+}
+
+function sanitizeProject(parsed: Partial<ProjectState>): ProjectState {
+  const files = Array.isArray(parsed.files)
+    ? parsed.files.filter((f): f is FileEntry => {
+        return !!f && typeof f.path === 'string' && typeof f.content === 'string';
+      })
+    : [];
+
+  if (files.length === 0) return defaultProject();
+
+  const validPaths = new Set(files.map((f) => f.path));
+  const activeFile = typeof parsed.activeFile === 'string' && validPaths.has(parsed.activeFile)
+    ? parsed.activeFile
+    : files[0].path;
+
+  const openFilesRaw = Array.isArray(parsed.openFiles)
+    ? parsed.openFiles.filter((p): p is string => typeof p === 'string' && validPaths.has(p))
+    : [];
+  const openFiles = openFilesRaw.length > 0
+    ? Array.from(new Set(openFilesRaw))
+    : [activeFile];
+
+  const persistedFolders = Array.isArray(parsed.folders)
+    ? parsed.folders
+        .map((folder) => normalizeFolderPath(String(folder)))
+        .filter((folder): folder is string => !!folder)
+    : [];
+
+  return {
+    files,
+    activeFile,
+    openFiles: openFiles.includes(activeFile) ? openFiles : [...openFiles, activeFile],
+    folders: Array.from(new Set(persistedFolders)).sort(),
   };
 }
 
@@ -284,8 +355,8 @@ export function loadProject(): ProjectState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as ProjectState;
-      if (parsed.files && parsed.files.length > 0) return parsed;
+      const parsed = JSON.parse(raw) as Partial<ProjectState>;
+      return sanitizeProject(parsed);
     }
   } catch { /* ignore */ }
   return defaultProject();
@@ -296,6 +367,9 @@ export function saveProject(state: ProjectState) {
   const toSave: ProjectState = {
     ...state,
     files: state.files.filter((f) => !f.readOnly),
+    folders: (state.folders || [])
+      .map((folder) => normalizeFolderPath(folder))
+      .filter((folder): folder is string => !!folder),
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
@@ -314,12 +388,38 @@ export function updateFileContent(state: ProjectState, path: string, content: st
 }
 
 export function createFile(state: ProjectState, path: string, content = ''): ProjectState {
-  if (state.files.some((f) => f.path === path)) return state;
+  const normalizedPath = normalizeFilePath(path);
+  if (!normalizedPath) return state;
+  if (state.files.some((f) => f.path === normalizedPath)) return state;
+
+  const folderSet = new Set(state.folders || []);
+  for (const folder of getParentFolders(normalizedPath)) {
+    folderSet.add(folder);
+  }
+
   return {
     ...state,
-    files: [...state.files, { path, content }],
-    openFiles: [...state.openFiles, path],
-    activeFile: path,
+    files: [...state.files, { path: normalizedPath, content }],
+    openFiles: [...state.openFiles, normalizedPath],
+    activeFile: normalizedPath,
+    folders: Array.from(folderSet).sort(),
+  };
+}
+
+export function createFolder(state: ProjectState, path: string): ProjectState {
+  const normalizedFolder = normalizeFolderPath(path);
+  if (!normalizedFolder) return state;
+
+  const folderSet = new Set(state.folders || []);
+  for (const folder of getParentFolders(`${normalizedFolder}/__placeholder__`)) {
+    if (folder.endsWith('/__placeholder__')) continue;
+    folderSet.add(folder);
+  }
+  folderSet.add(normalizedFolder);
+
+  return {
+    ...state,
+    folders: Array.from(folderSet).sort(),
   };
 }
 
@@ -395,28 +495,54 @@ export interface TreeNode {
   children: TreeNode[];
 }
 
-export function buildTree(files: FileEntry[]): TreeNode[] {
+function ensureFolderPath(root: TreeNode[], folderPath: string, readOnly = false): void {
+  const parts = folderPath.split('/').filter(Boolean);
+  let current = root;
+
+  for (let i = 0; i < parts.length; i += 1) {
+    const name = parts[i];
+    const path = parts.slice(0, i + 1).join('/');
+    let folder = current.find((node) => node.isFolder && node.path === path);
+    if (!folder) {
+      folder = { name, path, isFolder: true, readOnly, children: [] };
+      current.push(folder);
+    } else if (!readOnly) {
+      folder.readOnly = false;
+    }
+    current = folder.children;
+  }
+}
+
+export function buildTree(files: FileEntry[], folders: string[] = []): TreeNode[] {
   const root: TreeNode[] = [];
 
+  for (const folderPath of folders) {
+    const normalized = normalizeFolderPath(folderPath);
+    if (!normalized) continue;
+    ensureFolderPath(root, normalized, false);
+  }
+
   for (const file of files) {
-    const parts = file.path.split('/');
+    const parts = file.path.split('/').filter(Boolean);
+    if (parts.length === 0) continue;
+
+    const parent = parts.slice(0, -1).join('/');
+    if (parent) {
+      ensureFolderPath(root, parent, !!file.readOnly);
+    }
+
     let current = root;
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      const folderPath = parts.slice(0, i + 1).join('/');
+      const folder = current.find((node) => node.isFolder && node.path === folderPath);
+      if (!folder) break;
+      current = folder.children;
+    }
 
-    for (let i = 0; i < parts.length; i++) {
-      const name = parts[i];
-      const isFile = i === parts.length - 1;
-      const path = parts.slice(0, i + 1).join('/');
-
-      if (isFile) {
-        current.push({ name, path, isFolder: false, readOnly: file.readOnly, children: [] });
-      } else {
-        let folder = current.find((n) => n.name === name && n.isFolder);
-        if (!folder) {
-          folder = { name, path, isFolder: true, readOnly: file.readOnly, children: [] };
-          current.push(folder);
-        }
-        current = folder.children;
-      }
+    const fileName = parts[parts.length - 1];
+    const existingFile = current.find((node) => !node.isFolder && node.path === file.path);
+    if (!existingFile) {
+      current.push({ name: fileName, path: file.path, isFolder: false, readOnly: file.readOnly, children: [] });
     }
   }
 

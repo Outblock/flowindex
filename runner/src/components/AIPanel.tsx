@@ -29,7 +29,10 @@ const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io
 interface AIPanelProps {
   onInsertCode: (code: string) => void;
   onApplyCodeToFile?: (path: string, code: string) => void;
-  onAutoApplyEdits?: (edits: { path?: string; code: string }[]) => void;
+  onAutoApplyEdits?: (
+    edits: { path?: string; code: string }[],
+    meta?: { assistantId?: string; streaming?: boolean },
+  ) => void;
   onLoadTemplate: (template: Template) => void;
   editorCode?: string;
   projectFiles?: { path: string; content: string; readOnly?: boolean }[];
@@ -286,11 +289,23 @@ function CodeBlock({
   const targetPath = resolveTargetPath(meta, language, code);
   const canApplyToFile = !!targetPath && !!onApplyCodeToFile;
   const canReplaceActive = isCadence && !!onInsertCode;
+  const lineCount = code.split('\n').length;
+  const shouldCollapseByDefault = lineCount >= 20;
+  const [expanded, setExpanded] = useState(() => !shouldCollapseByDefault);
 
   return (
     <div className="rounded border border-zinc-700 overflow-hidden my-2">
       <div className="flex items-center justify-between px-2.5 py-1.5 bg-zinc-800/80 border-b border-zinc-700">
         <div className="min-w-0 flex items-center gap-1.5">
+          {shouldCollapseByDefault && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="p-0.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-colors"
+              title={expanded ? 'Collapse code' : 'Expand code'}
+            >
+              <ChevronRight className={`w-3 h-3 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+            </button>
+          )}
           <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{language || 'code'}</span>
           {targetPath && (
             <span className="text-[10px] text-zinc-600 font-mono truncate max-w-[160px]" title={targetPath}>
@@ -329,14 +344,20 @@ function CodeBlock({
           </button>
         </div>
       </div>
-      <SyntaxHighlighter
-        language={prismLang}
-        style={vscDarkPlus}
-        customStyle={{ margin: 0, padding: '10px', fontSize: '11px', lineHeight: '1.5', background: '#09090b', borderRadius: 0 }}
-        wrapLongLines
-      >
-        {code}
-      </SyntaxHighlighter>
+      {expanded ? (
+        <SyntaxHighlighter
+          language={prismLang}
+          style={vscDarkPlus}
+          customStyle={{ margin: 0, padding: '10px', fontSize: '11px', lineHeight: '1.5', background: '#09090b', borderRadius: 0 }}
+          wrapLongLines
+        >
+          {code}
+        </SyntaxHighlighter>
+      ) : (
+        <div className="px-2.5 py-2 bg-zinc-950 text-[11px] text-zinc-500 font-mono">
+          Hidden code ({lineCount} lines). Click arrow to expand.
+        </div>
+      )}
     </div>
   );
 }
@@ -1099,25 +1120,49 @@ function parseFenceInfo(infoRaw: string): { language: string; meta?: string } {
   };
 }
 
-function extractEditsFromText(text: string): { path?: string; code: string }[] {
+function pushFenceEdit(
+  edits: { path?: string; code: string }[],
+  infoRaw: string,
+  codeRaw: string,
+) {
+  const { language, meta } = parseFenceInfo(infoRaw || '');
+  const code = (codeRaw || '').replace(/\n$/, '');
+  if (!code.trim()) return;
+
+  const maybePath = resolveTargetPath(meta, language, code);
+  const path = normalizePathCandidate(maybePath);
+  if (path) {
+    edits.push({ path, code });
+    return;
+  }
+
+  if (language === 'cadence' || language === 'cdc') {
+    edits.push({ code });
+  }
+}
+
+function extractEditsFromText(text: string, allowPartialFence = false): { path?: string; code: string }[] {
   const edits: { path?: string; code: string }[] = [];
   const fenceRe = /```([^\n`]*)\n([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
 
   while ((match = fenceRe.exec(text)) !== null) {
-    const { language, meta } = parseFenceInfo(match[1] || '');
-    const code = (match[2] || '').replace(/\n$/, '');
-    if (!code.trim()) continue;
+    pushFenceEdit(edits, match[1] || '', match[2] || '');
+  }
 
-    const maybePath = resolveTargetPath(meta, language, code);
-    const path = normalizePathCandidate(maybePath);
-    if (path) {
-      edits.push({ path, code });
-      continue;
-    }
-
-    if (language === 'cadence' || language === 'cdc') {
-      edits.push({ code });
+  if (allowPartialFence) {
+    const fenceCount = (text.match(/```/g) || []).length;
+    if (fenceCount % 2 === 1) {
+      const start = text.lastIndexOf('```');
+      if (start >= 0) {
+        const afterFence = text.slice(start + 3);
+        const newline = afterFence.indexOf('\n');
+        if (newline >= 0) {
+          const infoRaw = afterFence.slice(0, newline);
+          const partialCode = afterFence.slice(newline + 1);
+          pushFenceEdit(edits, infoRaw, partialCode);
+        }
+      }
     }
   }
 
@@ -1125,12 +1170,12 @@ function extractEditsFromText(text: string): { path?: string; code: string }[] {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function extractEditsFromAssistantMessage(message: UIMessage): { path?: string; code: string }[] {
+function extractEditsFromAssistantMessage(message: UIMessage, allowPartialFence = false): { path?: string; code: string }[] {
   const raw: { path?: string; code: string }[] = [];
 
   for (const part of message.parts as any[]) {
     if (part.type === 'text') {
-      raw.push(...extractEditsFromText(part.text || ''));
+      raw.push(...extractEditsFromText(part.text || '', allowPartialFence));
       continue;
     }
 
@@ -1162,6 +1207,13 @@ function extractEditsFromAssistantMessage(message: UIMessage): { path?: string; 
     deduped.set(edit.path || '__active__', edit);
   }
   return Array.from(deduped.values());
+}
+
+function editsSignature(edits: { path?: string; code: string }[]): string {
+  if (edits.length === 0) return '';
+  return edits
+    .map((edit) => `${edit.path || '__active__'}\n${edit.code}`)
+    .join('\n---\n');
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -1248,7 +1300,7 @@ export default function AIPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stoppedAtRef = useRef(0);
-  const processedAssistantIdsRef = useRef<Set<string>>(new Set());
+  const appliedAssistantSignaturesRef = useRef<Map<string, string>>(new Map());
 
   const handleModeChange = useCallback((m: ChatMode) => {
     setChatMode(m);
@@ -1328,18 +1380,25 @@ export default function AIPanel({
 
   useEffect(() => {
     if (!autoApply) return;
-    if (status !== 'ready') return;
     if (!onAutoApplyEdits) return;
+    if (status !== 'ready' && status !== 'streaming') return;
 
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant') return;
-    if (processedAssistantIdsRef.current.has(last.id)) return;
-    processedAssistantIdsRef.current.add(last.id);
+    const allowPartialFence = status !== 'ready';
+    const edits = extractEditsFromAssistantMessage(last, allowPartialFence);
+    if (edits.length === 0) return;
 
-    const edits = extractEditsFromAssistantMessage(last);
-    if (edits.length > 0) {
-      onAutoApplyEdits(edits);
-    }
+    const signature = editsSignature(edits);
+    if (!signature) return;
+    const prevSignature = appliedAssistantSignaturesRef.current.get(last.id);
+    if (prevSignature === signature) return;
+    appliedAssistantSignaturesRef.current.set(last.id, signature);
+
+    onAutoApplyEdits(edits, {
+      assistantId: last.id,
+      streaming: status !== 'ready',
+    });
   }, [messages, status, autoApply, onAutoApplyEdits]);
 
   const handleSend = useCallback(async (text: string) => {
@@ -1358,7 +1417,7 @@ export default function AIPanel({
   };
 
   const handleClear = () => {
-    processedAssistantIdsRef.current.clear();
+    appliedAssistantSignaturesRef.current.clear();
     setMessages([]);
   };
 

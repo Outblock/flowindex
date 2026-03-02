@@ -14,7 +14,7 @@ import { detectCodeType, executeScript, executeTransaction } from './flow/execut
 import type { ExecutionResult } from './flow/execute';
 import type { FlowNetwork } from './flow/networks';
 import {
-  loadProject, saveProject, updateFileContent, createFile, deleteFile,
+  loadProject, saveProject, updateFileContent, createFile, createFolder, deleteFile,
   openFile, closeFile, getFileContent, addDependencyFile, getUserFiles,
   TEMPLATES,
   type ProjectState, type Template,
@@ -157,6 +157,7 @@ export default function App() {
         files: [{ path: 'main.cdc', content: code }],
         activeFile: 'main.cdc',
         openFiles: ['main.cdc'],
+        folders: [],
       };
     }
     return loadProject();
@@ -177,16 +178,12 @@ export default function App() {
   const [pendingAiRevert, setPendingAiRevert] = useState<{
     previous: ProjectState;
     editCount: number;
+    assistantId?: string;
   } | null>(null);
   const [monacoInstance, setMonacoInstance] = useState<typeof MonacoNS | null>(null);
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const pendingDefinitionRef = useRef<{ path: string; line: number; column: number } | null>(null);
-  const projectRef = useRef(project);
-
-  useEffect(() => {
-    projectRef.current = project;
-  }, [project]);
 
   // Resize hooks
   const explorer = useHorizontalResize(220, 150, 400, 'left');
@@ -257,30 +254,41 @@ export default function App() {
     setProject((prev) => applyCodeToPath(prev, path, newCode));
   }, []);
 
-  const handleAutoApplyEdits = useCallback((edits: { path?: string; code: string }[]) => {
+  const handleAutoApplyEdits = useCallback((
+    edits: { path?: string; code: string }[],
+    meta?: { assistantId?: string; streaming?: boolean },
+  ) => {
     if (!Array.isArray(edits) || edits.length === 0) return;
 
     const sanitized = edits.filter((e) => typeof e?.code === 'string' && e.code.trim().length > 0);
     if (sanitized.length === 0) return;
 
-    const base = projectRef.current;
-    let next = base;
+    setProject((base) => {
+      let next = base;
 
-    for (const edit of sanitized) {
-      if (edit.path) {
-        next = applyCodeToPath(next, edit.path, edit.code);
-      } else {
-        next = updateFileContent(next, next.activeFile, edit.code);
+      for (const edit of sanitized) {
+        if (edit.path) {
+          next = applyCodeToPath(next, edit.path, edit.code);
+        } else {
+          next = updateFileContent(next, next.activeFile, edit.code);
+        }
       }
-    }
 
-    if (next === base) return;
+      if (next === base) return base;
 
-    setPendingAiRevert({
-      previous: base,
-      editCount: sanitized.length,
+      setPendingAiRevert((prev) => {
+        if (meta?.assistantId && prev?.assistantId === meta.assistantId) {
+          return { ...prev, editCount: prev.editCount + sanitized.length };
+        }
+        return {
+          previous: base,
+          editCount: sanitized.length,
+          assistantId: meta?.assistantId,
+        };
+      });
+
+      return next;
     });
-    setProject(next);
   }, []);
 
   const handleKeepAiEdits = useCallback(() => {
@@ -298,6 +306,7 @@ export default function App() {
       files: template.files,
       activeFile: template.activeFile,
       openFiles: [template.activeFile],
+      folders: template.folders || [],
     });
   }, []);
 
@@ -307,6 +316,10 @@ export default function App() {
 
   const handleCreateFile = useCallback((path: string) => {
     setProject((prev) => createFile(prev, path));
+  }, []);
+
+  const handleCreateFolder = useCallback((path: string) => {
+    setProject((prev) => createFolder(prev, path));
   }, []);
 
   const handleDeleteFile = useCallback((path: string) => {
@@ -510,6 +523,7 @@ export default function App() {
                 project={project}
                 onOpenFile={handleOpenFile}
                 onCreateFile={handleCreateFile}
+                onCreateFolder={handleCreateFolder}
                 onDeleteFile={handleDeleteFile}
                 activeFile={project.activeFile}
               />

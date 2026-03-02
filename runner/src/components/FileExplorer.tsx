@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import {
   ChevronRight, ChevronDown, File, Folder, FolderOpen,
-  Plus, Trash2, Package, Lock,
+  Plus, FolderPlus, Trash2, Package, Lock,
 } from 'lucide-react';
 import type { TreeNode, ProjectState } from '../fs/fileSystem';
 import { buildTree, getUserFiles, getDependencyFiles } from '../fs/fileSystem';
@@ -10,6 +10,7 @@ interface FileExplorerProps {
   project: ProjectState;
   onOpenFile: (path: string) => void;
   onCreateFile: (path: string) => void;
+  onCreateFolder: (path: string) => void;
   onDeleteFile: (path: string) => void;
   activeFile: string;
 }
@@ -89,52 +90,81 @@ function TreeItem({
   );
 }
 
-export default function FileExplorer({ project, onOpenFile, onCreateFile, onDeleteFile, activeFile }: FileExplorerProps) {
-  const [newFileName, setNewFileName] = useState('');
+export default function FileExplorer({
+  project,
+  onOpenFile,
+  onCreateFile,
+  onCreateFolder,
+  onDeleteFile,
+  activeFile,
+}: FileExplorerProps) {
+  const [newPath, setNewPath] = useState('');
   const [showInput, setShowInput] = useState(false);
+  const [createMode, setCreateMode] = useState<'file' | 'folder'>('file');
 
   const userFiles = getUserFiles(project);
   const depFiles = getDependencyFiles(project);
 
-  const userTree = buildTree(userFiles);
+  const userTree = buildTree(userFiles, project.folders);
   const depTree = buildTree(depFiles);
 
   const handleCreate = useCallback(() => {
-    const name = newFileName.trim();
+    const name = newPath.trim();
     if (!name) return;
-    const path = name.endsWith('.cdc') ? name : `${name}.cdc`;
-    onCreateFile(path);
-    setNewFileName('');
+
+    if (createMode === 'folder') {
+      onCreateFolder(name);
+    } else {
+      const path = name.endsWith('.cdc') ? name : `${name}.cdc`;
+      onCreateFile(path);
+    }
+
+    setNewPath('');
     setShowInput(false);
-  }, [newFileName, onCreateFile]);
+  }, [newPath, createMode, onCreateFile, onCreateFolder]);
 
   return (
     <div className="flex flex-col h-full text-xs">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Explorer</span>
-        <button
-          onClick={() => setShowInput(true)}
-          className="text-zinc-500 hover:text-zinc-300 transition-colors"
-          title="New file"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              setCreateMode('folder');
+              setShowInput(true);
+            }}
+            className="text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="New folder"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => {
+              setCreateMode('file');
+              setShowInput(true);
+            }}
+            className="text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="New file"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* New file input */}
+      {/* New item input */}
       {showInput && (
         <div className="px-2 py-1 border-b border-zinc-800">
           <input
             autoFocus
-            value={newFileName}
-            onChange={(e) => setNewFileName(e.target.value)}
+            value={newPath}
+            onChange={(e) => setNewPath(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleCreate();
-              if (e.key === 'Escape') { setShowInput(false); setNewFileName(''); }
+              if (e.key === 'Escape') { setShowInput(false); setNewPath(''); }
             }}
-            onBlur={() => { if (!newFileName.trim()) setShowInput(false); }}
-            placeholder="filename.cdc"
+            onBlur={() => { if (!newPath.trim()) setShowInput(false); }}
+            placeholder={createMode === 'folder' ? 'folder/name' : 'filename.cdc'}
             className="w-full bg-zinc-800 text-zinc-200 text-xs rounded px-2 py-1 border border-zinc-600 focus:outline-none focus:border-zinc-500"
           />
         </div>
