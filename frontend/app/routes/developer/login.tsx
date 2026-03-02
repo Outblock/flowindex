@@ -1,10 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { KeyRound, Mail, Loader2, Wallet, ArrowLeft, ArrowRight } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { FlowIndexLogo } from '../../components/FlowIndexLogo'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '../../components/ui/input-otp'
+
+const GridScan = lazy(() => import('../../components/GridScan'))
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -22,26 +24,6 @@ function GoogleIcon({ className }: { className?: string }) {
       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
       <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
     </svg>
-  )
-}
-
-/* Subtle animated grid background */
-function GridBackground() {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Grid pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage: `linear-gradient(#00ef8b 1px, transparent 1px), linear-gradient(90deg, #00ef8b 1px, transparent 1px)`,
-          backgroundSize: '60px 60px',
-        }}
-      />
-      {/* Radial glow behind the card */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-[#00ef8b]/[0.04] blur-[120px]" />
-      {/* Top-right accent */}
-      <div className="absolute -top-32 -right-32 w-64 h-64 rounded-full bg-[#00ef8b]/[0.03] blur-[80px]" />
-    </div>
   )
 }
 
@@ -121,18 +103,36 @@ function DeveloperLoginPage() {
 
   if (authLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center bg-black">
         <Loader2 className="w-5 h-5 animate-spin text-neutral-600" />
       </div>
     )
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center p-4 relative min-h-0">
-      <GridBackground />
+    <div className="flex-1 flex items-center justify-center p-4 relative min-h-0 bg-black overflow-hidden isolate">
+      {/* GridScan background */}
+      <div className="absolute inset-0 z-0">
+        <Suspense fallback={null}>
+          <GridScan
+            scanColor="#00ef8b"
+            linesColor="#1a3a2a"
+            scanOpacity={0.3}
+            gridScale={0.1}
+            scanDuration={3}
+            scanDelay={1.5}
+            scanDirection="pingpong"
+            noiseIntensity={0.008}
+            scanGlow={0.4}
+            scanSoftness={2.5}
+            enablePost={false}
+            className="w-full h-full"
+          />
+        </Suspense>
+      </div>
 
       <AnimatePresence mode="wait">
-        {/* ─── OTP verification screen ─── */}
+        {/* OTP verification screen */}
         {otpSent ? (
           <motion.div
             key="otp"
@@ -140,25 +140,18 @@ function DeveloperLoginPage() {
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             className="w-full max-w-[420px] relative z-10"
           >
-            <div className="rounded-2xl border border-neutral-800/80 bg-neutral-950/80 backdrop-blur-xl shadow-2xl shadow-black/40 p-8">
+            <div className="border border-neutral-800 bg-black/90 backdrop-blur-sm p-8">
               {/* Back button */}
               <button
                 onClick={() => { setOtpSent(false); setOtpValue(''); setError(null) }}
-                className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors mb-6 group"
+                className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors mb-6 group font-mono uppercase tracking-wider"
               >
                 <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
                 Back
               </button>
 
               <div className="text-center">
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.1, type: 'spring', stiffness: 200, damping: 20 }}
-                  className="w-14 h-14 rounded-2xl bg-[#00ef8b]/10 border border-[#00ef8b]/20 flex items-center justify-center mx-auto mb-5"
-                >
-                  <Mail className="w-6 h-6 text-[#00ef8b]" />
-                </motion.div>
+                <Mail className="w-6 h-6 text-[#00ef8b] mx-auto mb-5" />
                 <h2 className="text-lg font-semibold text-white mb-1 tracking-tight">Check your email</h2>
                 <p className="text-sm text-neutral-500 mb-1">We sent a 6-digit code to</p>
                 <p className="text-sm text-white font-medium font-mono mb-6">{email}</p>
@@ -168,7 +161,7 @@ function DeveloperLoginPage() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="mb-4 px-3 py-2.5 rounded-lg bg-red-500/8 border border-red-500/15 text-red-400 text-xs"
+                  className="mb-4 px-3 py-2.5 bg-red-500/8 border border-red-500/15 text-red-400 text-xs font-mono"
                 >
                   {error}
                 </motion.div>
@@ -187,7 +180,7 @@ function DeveloperLoginPage() {
                       <InputOTPSlot
                         key={i}
                         index={i}
-                        className="h-12 w-11 text-lg font-bold font-mono bg-neutral-900 border-neutral-800 text-[#00ef8b] ring-[#00ef8b]/20 rounded-lg"
+                        className="h-12 w-11 text-lg font-bold font-mono bg-neutral-950 border-neutral-800 text-[#00ef8b] ring-[#00ef8b]/20 rounded-none"
                       />
                     ))}
                   </InputOTPGroup>
@@ -195,14 +188,14 @@ function DeveloperLoginPage() {
               </div>
 
               {verifying && (
-                <div className="flex items-center justify-center gap-2 text-neutral-400 text-xs mb-4">
+                <div className="flex items-center justify-center gap-2 text-neutral-400 text-xs mb-4 font-mono">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Verifying...
                 </div>
               )}
 
               <div className="text-center space-y-3">
-                <p className="text-[11px] text-neutral-600">Or click the magic link in your email</p>
+                <p className="text-[11px] text-neutral-600 font-mono">Or click the magic link in your email</p>
                 <button
                   onClick={async () => {
                     setError(null)
@@ -222,7 +215,7 @@ function DeveloperLoginPage() {
                     }
                   }}
                   disabled={loading}
-                  className="text-xs text-neutral-500 hover:text-[#00ef8b] transition-colors disabled:opacity-50"
+                  className="text-xs text-neutral-500 hover:text-[#00ef8b] transition-colors disabled:opacity-50 font-mono uppercase tracking-wider"
                 >
                   {loading ? 'Sending...' : 'Resend code'}
                 </button>
@@ -230,23 +223,23 @@ function DeveloperLoginPage() {
             </div>
           </motion.div>
         ) : (
-          /* ─── Main login screen ─── */
+          /* Main login screen */
           <motion.div
             key="main"
             {...fadeUp}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="w-full max-w-[420px] relative z-10"
           >
-            <div className="rounded-2xl border border-neutral-800/80 bg-neutral-950/80 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden">
+            <div className="border border-neutral-800 bg-black/90 backdrop-blur-sm overflow-hidden">
               {/* Header */}
               <div className="px-8 pt-10 pb-6 text-center">
                 <motion.div
                   initial={{ scale: 0.5, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.05, type: 'spring', stiffness: 200, damping: 20 }}
-                  className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#00ef8b]/10 border border-[#00ef8b]/20 mb-5"
+                  className="mb-5"
                 >
-                  <FlowIndexLogo size={28} className="text-[#00ef8b]" />
+                  <FlowIndexLogo size={36} className="text-[#00ef8b] mx-auto" />
                 </motion.div>
                 <motion.h1
                   initial={{ opacity: 0, y: 8 }}
@@ -260,7 +253,7 @@ function DeveloperLoginPage() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.15 }}
-                  className="text-sm text-neutral-500 mt-1.5"
+                  className="text-sm text-neutral-500 mt-1.5 font-mono"
                 >
                   Webhooks, API keys, and developer tools
                 </motion.p>
@@ -275,7 +268,7 @@ function DeveloperLoginPage() {
                     exit={{ opacity: 0, height: 0 }}
                     className="px-8"
                   >
-                    <div className="px-3 py-2.5 rounded-lg bg-red-500/8 border border-red-500/15 text-red-400 text-xs mb-4">
+                    <div className="px-3 py-2.5 bg-red-500/8 border border-red-500/15 text-red-400 text-xs font-mono mb-4">
                       {error}
                     </div>
                   </motion.div>
@@ -285,7 +278,7 @@ function DeveloperLoginPage() {
               <div className="px-8 pb-8">
                 <AnimatePresence mode="wait">
                   {!showEmailForm ? (
-                    /* ─── Provider buttons ─── */
+                    /* Provider buttons */
                     <motion.div
                       key="providers"
                       initial={{ opacity: 0 }}
@@ -298,7 +291,7 @@ function DeveloperLoginPage() {
                       <button
                         type="button"
                         onClick={() => signInWithProvider('github', redirectTo)}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white hover:bg-neutral-100 text-neutral-900 font-medium transition-all text-sm group active:scale-[0.98]"
+                        className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-neutral-100 text-neutral-900 font-medium transition-all text-sm group active:scale-[0.98]"
                       >
                         <GitHubIcon className="w-5 h-5 shrink-0" />
                         <span className="flex-1 text-left">Continue with GitHub</span>
@@ -309,7 +302,7 @@ function DeveloperLoginPage() {
                       <button
                         type="button"
                         onClick={() => signInWithProvider('google', redirectTo)}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-neutral-200 font-medium transition-all text-sm group active:scale-[0.98]"
+                        className="w-full flex items-center gap-3 px-4 py-3 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-200 font-medium transition-all text-sm group active:scale-[0.98]"
                       >
                         <GoogleIcon className="w-5 h-5 shrink-0" />
                         <span className="flex-1 text-left">Continue with Google</span>
@@ -320,7 +313,7 @@ function DeveloperLoginPage() {
                       <button
                         type="button"
                         onClick={() => { setShowEmailForm(true); setError(null) }}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-neutral-200 font-medium transition-all text-sm group active:scale-[0.98]"
+                        className="w-full flex items-center gap-3 px-4 py-3 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-200 font-medium transition-all text-sm group active:scale-[0.98]"
                       >
                         <Mail className="w-5 h-5 shrink-0 text-neutral-400" />
                         <span className="flex-1 text-left">Continue with Email</span>
@@ -330,24 +323,24 @@ function DeveloperLoginPage() {
                       {/* Divider */}
                       <div className="flex items-center gap-3 py-2">
                         <div className="flex-1 border-t border-neutral-800/60" />
-                        <span className="text-[10px] text-neutral-600 uppercase tracking-[0.15em]">coming soon</span>
+                        <span className="text-[10px] text-neutral-600 uppercase tracking-[0.15em] font-mono">coming soon</span>
                         <div className="flex-1 border-t border-neutral-800/60" />
                       </div>
 
                       {/* Coming soon — Passkey */}
-                      <div className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-neutral-800/60 text-neutral-600 text-sm cursor-default select-none">
+                      <div className="w-full flex items-center gap-3 px-4 py-3 border border-dashed border-neutral-800/60 text-neutral-600 text-sm cursor-default select-none">
                         <KeyRound className="w-5 h-5 shrink-0 opacity-50" />
                         <span className="flex-1 text-left">Passkey</span>
                       </div>
 
                       {/* Coming soon — Wallet */}
-                      <div className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-neutral-800/60 text-neutral-600 text-sm cursor-default select-none">
+                      <div className="w-full flex items-center gap-3 px-4 py-3 border border-dashed border-neutral-800/60 text-neutral-600 text-sm cursor-default select-none">
                         <Wallet className="w-5 h-5 shrink-0 opacity-50" />
                         <span className="flex-1 text-left">Flow Wallet</span>
                       </div>
                     </motion.div>
                   ) : (
-                    /* ─── Email form ─── */
+                    /* Email form */
                     <motion.div
                       key="email"
                       initial={{ opacity: 0, x: 20 }}
@@ -357,7 +350,7 @@ function DeveloperLoginPage() {
                     >
                       <button
                         onClick={() => { setShowEmailForm(false); setError(null) }}
-                        className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors mb-5 group"
+                        className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors mb-5 group font-mono uppercase tracking-wider"
                       >
                         <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
                         All sign-in options
@@ -365,7 +358,7 @@ function DeveloperLoginPage() {
 
                       <form onSubmit={handleSendLink} className="space-y-4">
                         <div>
-                          <label htmlFor="email" className="block text-xs font-medium text-neutral-400 mb-2 uppercase tracking-wider">
+                          <label htmlFor="email" className="block text-xs font-medium text-neutral-400 mb-2 uppercase tracking-wider font-mono">
                             Email address
                           </label>
                           <input
@@ -376,14 +369,14 @@ function DeveloperLoginPage() {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="you@example.com"
-                            className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#00ef8b]/40 focus:ring-1 focus:ring-[#00ef8b]/10 transition-all text-sm font-mono"
+                            className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#00ef8b]/40 focus:ring-1 focus:ring-[#00ef8b]/10 transition-all text-sm font-mono"
                           />
                         </div>
 
                         <button
                           type="submit"
                           disabled={loading}
-                          className="w-full flex items-center justify-center gap-2 py-3 bg-[#00ef8b] hover:bg-[#00ef8b]/90 text-black font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm active:scale-[0.98]"
+                          className="w-full flex items-center justify-center gap-2 py-3 bg-[#00ef8b] hover:bg-[#00ef8b]/90 text-black font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm active:scale-[0.98]"
                         >
                           {loading ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -396,7 +389,7 @@ function DeveloperLoginPage() {
                         </button>
                       </form>
 
-                      <p className="mt-4 text-center text-[11px] text-neutral-600">
+                      <p className="mt-4 text-center text-[11px] text-neutral-600 font-mono">
                         We&apos;ll send a 6-digit code and magic link to your inbox
                       </p>
                     </motion.div>
@@ -410,7 +403,7 @@ function DeveloperLoginPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
-              className="text-center text-[11px] text-neutral-700 mt-6"
+              className="text-center text-[11px] text-neutral-700 mt-6 font-mono"
             >
               By signing in, you agree to the FlowIndex Terms of Service
             </motion.p>
