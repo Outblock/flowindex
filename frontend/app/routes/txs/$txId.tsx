@@ -14,7 +14,7 @@ import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/
 import { useTheme } from '../../contexts/ThemeContext';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import DecryptedText from '../../components/ui/DecryptedText';
-import { deriveActivityType, deriveAllActivityBadges, TokenIcon, formatTokenName, buildSummaryLine, NFTTransferImage, fetchNFTFullDetail, useNFTLazyDetail } from '../../components/TransactionRow';
+import { deriveAllActivityBadges, TokenIcon, formatTokenName, buildSummaryLine, NFTTransferImage, fetchNFTFullDetail, useNFTLazyDetail } from '../../components/TransactionRow';
 import { formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
 import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
