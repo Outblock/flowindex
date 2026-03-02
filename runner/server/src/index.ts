@@ -44,10 +44,12 @@ interface ConnectionState {
   client: CadenceLSPClient;
   workspace: DepsWorkspace;
   openDocs: Map<string, string>; // Server-side URI -> current document text
+  docVersions: Map<string, number>;
   clientToServerUri: Map<string, string>;
   serverToClientUri: Map<string, string>;
   emittedDeps: Set<string>;
   pendingDeps: Set<string>;
+  recheckTimer: ReturnType<typeof setTimeout> | null;
   importAddressByName: Map<string, string>;
   notificationHandler: (method: string, params: any) => void;
 }
@@ -193,6 +195,7 @@ function queueDependencyInstall(
       if (!depCode) return;
       state.emittedDeps.add(depKey);
       sendDependencyResolved(socket, dep, depCode);
+      scheduleOpenDocumentRecheck(state);
     })
     .catch((error) => {
       console.error(`[LSP Server] Failed to resolve dependency ${depKey}:`, error);
@@ -200,6 +203,21 @@ function queueDependencyInstall(
     .finally(() => {
       state.pendingDeps.delete(depKey);
     });
+}
+
+function scheduleOpenDocumentRecheck(state: ConnectionState): void {
+  if (state.recheckTimer) return;
+  state.recheckTimer = setTimeout(() => {
+    state.recheckTimer = null;
+    for (const [uri, text] of state.openDocs.entries()) {
+      const nextVersion = (state.docVersions.get(uri) ?? 1) + 1;
+      state.docVersions.set(uri, nextVersion);
+      state.client.notify('textDocument/didChange', {
+        textDocument: { uri, version: nextVersion },
+        contentChanges: [{ text }],
+      });
+    }
+  }, 80);
 }
 
 async function loadDependencySource(
@@ -403,10 +421,12 @@ wss.on('connection', (socket: WebSocket) => {
           client,
           workspace,
           openDocs: new Map(),
+          docVersions: new Map(),
           clientToServerUri: new Map(),
           serverToClientUri: new Map(),
           emittedDeps: new Set(),
           pendingDeps: new Set(),
+          recheckTimer: null,
           importAddressByName: new Map(),
           notificationHandler: () => {},
         };
@@ -468,6 +488,7 @@ wss.on('connection', (socket: WebSocket) => {
 
       if (msg.method === 'textDocument/didOpen' && doc?.uri) {
         state.openDocs.set(doc.uri, msg.params?.textDocument?.text ?? '');
+        state.docVersions.set(doc.uri, Number(msg.params?.textDocument?.version ?? 1));
       }
     }
 
@@ -476,12 +497,19 @@ wss.on('connection', (socket: WebSocket) => {
       const nextText = msg.params?.contentChanges?.[0]?.text;
       if (uri && typeof nextText === 'string') {
         state.openDocs.set(uri, nextText);
+        const incomingVersion = Number(msg.params?.textDocument?.version);
+        if (Number.isFinite(incomingVersion)) {
+          state.docVersions.set(uri, incomingVersion);
+        }
       }
     }
 
     if (msg.method === 'textDocument/didClose') {
       const uri = msg.params?.textDocument?.uri;
-      if (uri) state.openDocs.delete(uri);
+      if (uri) {
+        state.openDocs.delete(uri);
+        state.docVersions.delete(uri);
+      }
     }
 
     if (msg.method === 'initialize') {
@@ -531,6 +559,9 @@ wss.on('connection', (socket: WebSocket) => {
       // Close documents opened by this connection
       for (const uri of state.openDocs.keys()) {
         state.client.notify('textDocument/didClose', { textDocument: { uri } });
+      }
+      if (state.recheckTimer) {
+        clearTimeout(state.recheckTimer);
       }
       // Remove notification listener
       state.client.removeListener('notification', state.notificationHandler);
