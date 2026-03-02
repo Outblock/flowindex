@@ -21,10 +21,13 @@ interface AuthState {
   user: AuthUser | null;
 }
 
+type OAuthProvider = 'github' | 'google';
+
 interface AuthContextValue extends AuthState {
   loading: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithProvider: (provider: OAuthProvider, redirectTo?: string) => void;
   sendMagicLink: (email: string, redirectTo?: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
   getPasskeySupport: () => Promise<{ supported: boolean; reason?: string }>;
@@ -175,17 +178,37 @@ interface StoredTokens {
   refreshToken: string;
 }
 
-function loadStoredTokens(): StoredTokens | null {
-  if (typeof window === 'undefined') return null;
+function loadTokensFromCookie(): StoredTokens | null {
+  if (typeof document === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed?.accessToken && parsed?.refreshToken) return parsed as StoredTokens;
+    const match = document.cookie.match(/(?:^|;\s*)fi_auth=([^;]*)/);
+    if (!match) return null;
+    const parsed = JSON.parse(decodeURIComponent(match[1]));
+    if (parsed?.access_token && parsed?.refresh_token) {
+      return { accessToken: parsed.access_token, refreshToken: parsed.refresh_token };
+    }
     return null;
   } catch {
     return null;
   }
+}
+
+function loadStoredTokens(): StoredTokens | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.accessToken && parsed?.refreshToken) return parsed as StoredTokens;
+    }
+  } catch { /* ignore */ }
+  // Fall back to cross-subdomain cookie (e.g. set by ai.flowindex.io)
+  const fromCookie = loadTokensFromCookie();
+  if (fromCookie) {
+    // Sync into localStorage so future loads are fast
+    persistTokens(fromCookie.accessToken, fromCookie.refreshToken);
+  }
+  return fromCookie;
 }
 
 function persistTokens(accessToken: string, refreshToken: string) {
@@ -340,6 +363,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyTokenResponse],
   );
 
+  const signInWithProvider = useCallback((provider: OAuthProvider, redirectTo?: string) => {
+    const callbackUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}/developer/callback${redirectTo ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`
+      : '/developer/callback';
+    window.location.href = `${GOTRUE_URL}/authorize?provider=${provider}&redirect_to=${encodeURIComponent(callbackUrl)}`;
+  }, []);
+
   const sendMagicLink = useCallback(async (email: string, redirectTo?: string) => {
     const payload: Record<string, unknown> = { email };
     if (redirectTo) {
@@ -418,6 +448,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         signUp,
         signIn,
+        signInWithProvider,
         sendMagicLink,
         verifyOtp,
         getPasskeySupport,
