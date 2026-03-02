@@ -80,15 +80,42 @@ export async function POST(req: Request) {
 
   // Normalize messages: ensure every message has a parts array (handles
   // clients that send plain {role, content} without parts).
+  // Also patch incomplete tool invocations so the API doesn't reject the
+  // conversation with "Tool result is missing for tool call ...".
   const messages = rawMessages.map((m) => {
-    if (Array.isArray(m.parts)) return m as unknown as UIMessage;
-    const content = m.content;
-    return {
-      ...m,
-      parts: content
-        ? [{ type: "text" as const, text: String(content) }]
-        : [],
-    } as unknown as UIMessage;
+    if (!Array.isArray(m.parts)) {
+      const content = m.content;
+      return {
+        ...m,
+        parts: content
+          ? [{ type: "text" as const, text: String(content) }]
+          : [],
+      } as unknown as UIMessage;
+    }
+
+    // Patch assistant messages: any tool-invocation that isn't completed
+    // gets marked as an error so convertToModelMessages produces a valid
+    // tool_result block instead of leaving it dangling.
+    if (m.role === "assistant") {
+      const parts = (m.parts as any[]).map((part: any) => {
+        if (
+          part.type === "tool-invocation" &&
+          part.state !== "output-available" &&
+          part.state !== "result"
+        ) {
+          return {
+            ...part,
+            state: "output-error",
+            errorText:
+              part.errorText || "Tool call did not complete (timeout or connection lost).",
+          };
+        }
+        return part;
+      });
+      return { ...m, parts } as unknown as UIMessage;
+    }
+
+    return m as unknown as UIMessage;
   });
 
   const mode: ChatMode =
