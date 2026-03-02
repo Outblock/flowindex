@@ -153,10 +153,19 @@ function loadStoredTokens(): StoredTokens | null {
 
 function persistTokens(accessToken: string, refreshToken: string) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ accessToken, refreshToken }));
+  // Set cross-subdomain cookie so ai.flowindex.io can share the session
+  try {
+    const value = JSON.stringify({ access_token: accessToken, refresh_token: refreshToken });
+    document.cookie = `fi_auth=${encodeURIComponent(value)}; domain=.flowindex.io; path=/; max-age=${60 * 60 * 24 * 30}; secure; samesite=lax`;
+  } catch { /* ignore */ }
 }
 
 function clearTokens() {
   localStorage.removeItem(STORAGE_KEY);
+  // Clear cross-subdomain cookie
+  try {
+    document.cookie = 'fi_auth=; domain=.flowindex.io; path=/; max-age=0; secure; samesite=lax';
+  } catch { /* ignore */ }
 }
 
 // ---------------------------------------------------------------------------

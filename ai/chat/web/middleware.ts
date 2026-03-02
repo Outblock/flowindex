@@ -18,15 +18,36 @@ export async function middleware(request: NextRequest) {
           );
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              domain: ".flowindex.io",
+            })
           );
         },
       },
     }
   );
 
-  // Refresh session if expired
-  await supabase.auth.getUser();
+  // Check existing Supabase session
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // If no Supabase session, try to pick up session from flowindex.io shared cookie
+  if (!user) {
+    const fiAuth = request.cookies.get("fi_auth");
+    if (fiAuth?.value) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(fiAuth.value));
+        if (parsed?.access_token && parsed?.refresh_token) {
+          await supabase.auth.setSession({
+            access_token: parsed.access_token,
+            refresh_token: parsed.refresh_token,
+          });
+        }
+      } catch {
+        // Invalid cookie — ignore
+      }
+    }
+  }
 
   return supabaseResponse;
 }

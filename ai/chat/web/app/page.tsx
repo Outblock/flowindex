@@ -23,6 +23,18 @@ export default function Home() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      // Sync shared cross-subdomain cookie for flowindex.io SSO
+      try {
+        if (session?.access_token && session?.refresh_token) {
+          const value = JSON.stringify({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+          });
+          document.cookie = `fi_auth=${encodeURIComponent(value)}; domain=.flowindex.io; path=/; max-age=${60 * 60 * 24 * 30}; secure; samesite=lax`;
+        } else {
+          document.cookie = "fi_auth=; domain=.flowindex.io; path=/; max-age=0; secure; samesite=lax";
+        }
+      } catch { /* ignore */ }
     });
     return () => subscription.unsubscribe();
   }, []);
