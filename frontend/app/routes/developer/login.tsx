@@ -1,9 +1,49 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { KeyRound, Mail, Loader2, Sparkles } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { KeyRound, Mail, Loader2, Wallet, ArrowLeft, ArrowRight } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { FlowIndexLogo } from '../../components/FlowIndexLogo'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '../../components/ui/input-otp'
+
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+    </svg>
+  )
+}
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+    </svg>
+  )
+}
+
+/* Subtle animated grid background */
+function GridBackground() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Grid pattern */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `linear-gradient(#00ef8b 1px, transparent 1px), linear-gradient(90deg, #00ef8b 1px, transparent 1px)`,
+          backgroundSize: '60px 60px',
+        }}
+      />
+      {/* Radial glow behind the card */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-[#00ef8b]/[0.04] blur-[120px]" />
+      {/* Top-right accent */}
+      <div className="absolute -top-32 -right-32 w-64 h-64 rounded-full bg-[#00ef8b]/[0.03] blur-[80px]" />
+    </div>
+  )
+}
 
 export const Route = createFileRoute('/developer/login')({
   validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
@@ -13,8 +53,14 @@ export const Route = createFileRoute('/developer/login')({
   component: DeveloperLoginPage,
 })
 
+const fadeUp = {
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -12 },
+}
+
 function DeveloperLoginPage() {
-  const { user, loading: authLoading, sendMagicLink, verifyOtp, getPasskeySupport, registerPasskey, signInWithPasskey } = useAuth()
+  const { user, loading: authLoading, sendMagicLink, verifyOtp, signInWithProvider } = useAuth()
   const { redirect } = Route.useSearch()
   const redirectTo = redirect && redirect.startsWith('/') ? redirect : '/developer'
 
@@ -24,10 +70,7 @@ function DeveloperLoginPage() {
   const [otpSent, setOtpSent] = useState(false)
   const [otpValue, setOtpValue] = useState('')
   const [verifying, setVerifying] = useState(false)
-  const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null)
-  const [passkeyHint, setPasskeyHint] = useState<string | null>(null)
-  const [passkeyLoading, setPasskeyLoading] = useState(false)
-  const [passkeyRegistering, setPasskeyRegistering] = useState(false)
+  const [showEmailForm, setShowEmailForm] = useState(false)
 
   // Redirect if already logged in
   useEffect(() => {
@@ -35,27 +78,6 @@ function DeveloperLoginPage() {
       window.location.assign(redirectTo)
     }
   }, [authLoading, user, redirectTo])
-
-  useEffect(() => {
-    let cancelled = false
-
-    ;(async () => {
-      try {
-        const support = await getPasskeySupport()
-        if (cancelled) return
-        setPasskeySupported(support.supported)
-        setPasskeyHint(support.reason || null)
-      } catch (err) {
-        if (cancelled) return
-        setPasskeySupported(false)
-        setPasskeyHint(err instanceof Error ? err.message : 'Passkey is unavailable')
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [getPasskeySupport])
 
   async function handleSendLink(e: React.FormEvent) {
     e.preventDefault()
@@ -97,111 +119,90 @@ function DeveloperLoginPage() {
     }
   }
 
-  async function handlePasskeySignIn() {
-    setError(null)
-    setPasskeyLoading(true)
-    try {
-      await signInWithPasskey(email.trim() ? email.trim() : undefined)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Passkey sign in failed')
-    } finally {
-      setPasskeyLoading(false)
-    }
-  }
-
-  async function handlePasskeyRegistration() {
-    if (!email.trim()) {
-      setError('Please enter an email first')
-      return
-    }
-    setError(null)
-    setPasskeyRegistering(true)
-    try {
-      await registerPasskey(email.trim())
-      setPasskeyHint('Passkey registered. You can now sign in with passkey.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Passkey registration failed')
-    } finally {
-      setPasskeyRegistering(false)
-    }
-  }
-
   if (authLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-neutral-500" />
+        <Loader2 className="w-5 h-5 animate-spin text-neutral-600" />
       </div>
     )
   }
 
-  // OTP verification screen
-  if (otpSent) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md"
-        >
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-[#00ef8b]/10 flex items-center justify-center mx-auto mb-6">
-              <Mail className="w-8 h-8 text-[#00ef8b]" />
-            </div>
-            <h2 className="text-xl font-semibold text-white mb-2">Check your email</h2>
-            <p className="text-neutral-400 mb-2">
-              We sent a sign-in link and code to
-            </p>
-            <p className="text-white font-medium mb-6">{email}</p>
+  return (
+    <div className="flex-1 flex items-center justify-center p-4 relative min-h-0">
+      <GridBackground />
 
-            {/* OTP Input */}
-            <p className="text-sm text-neutral-400 mb-4">Enter the 6-digit code:</p>
-
-            {error && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+      <AnimatePresence mode="wait">
+        {/* ─── OTP verification screen ─── */}
+        {otpSent ? (
+          <motion.div
+            key="otp"
+            {...fadeUp}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-[420px] relative z-10"
+          >
+            <div className="rounded-2xl border border-neutral-800/80 bg-neutral-950/80 backdrop-blur-xl shadow-2xl shadow-black/40 p-8">
+              {/* Back button */}
+              <button
+                onClick={() => { setOtpSent(false); setOtpValue(''); setError(null) }}
+                className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors mb-6 group"
               >
-                {error}
-              </motion.div>
-            )}
+                <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                Back
+              </button>
 
-            <div className="flex justify-center mb-6">
-              <InputOTP
-                maxLength={6}
-                value={otpValue}
-                onChange={handleOtpChange}
-                disabled={verifying}
-                autoFocus
-              >
-                <InputOTPGroup>
-                  <InputOTPSlot index={0} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
-                  <InputOTPSlot index={1} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
-                  <InputOTPSlot index={2} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
-                  <InputOTPSlot index={3} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
-                  <InputOTPSlot index={4} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
-                  <InputOTPSlot index={5} className="h-12 w-11 text-lg font-bold bg-neutral-800 border-neutral-700 text-[#00ef8b] ring-[#00ef8b]/20" />
-                </InputOTPGroup>
-              </InputOTP>
-            </div>
-
-            {verifying && (
-              <div className="flex items-center justify-center gap-2 text-neutral-400 text-sm mb-4">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Verifying...
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <p className="text-xs text-neutral-500">Or click the magic link in your email</p>
-              <div className="flex items-center justify-center gap-4 text-sm">
-                <button
-                  onClick={() => { setOtpSent(false); setOtpValue(''); setError(null) }}
-                  className="text-[#00ef8b] hover:text-[#00ef8b]/80 transition-colors"
+              <div className="text-center">
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.1, type: 'spring', stiffness: 200, damping: 20 }}
+                  className="w-14 h-14 rounded-2xl bg-[#00ef8b]/10 border border-[#00ef8b]/20 flex items-center justify-center mx-auto mb-5"
                 >
-                  Use a different email
-                </button>
-                <span className="text-neutral-700">|</span>
+                  <Mail className="w-6 h-6 text-[#00ef8b]" />
+                </motion.div>
+                <h2 className="text-lg font-semibold text-white mb-1 tracking-tight">Check your email</h2>
+                <p className="text-sm text-neutral-500 mb-1">We sent a 6-digit code to</p>
+                <p className="text-sm text-white font-medium font-mono mb-6">{email}</p>
+              </div>
+
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mb-4 px-3 py-2.5 rounded-lg bg-red-500/8 border border-red-500/15 text-red-400 text-xs"
+                >
+                  {error}
+                </motion.div>
+              )}
+
+              <div className="flex justify-center mb-6">
+                <InputOTP
+                  maxLength={6}
+                  value={otpValue}
+                  onChange={handleOtpChange}
+                  disabled={verifying}
+                  autoFocus
+                >
+                  <InputOTPGroup>
+                    {[0, 1, 2, 3, 4, 5].map(i => (
+                      <InputOTPSlot
+                        key={i}
+                        index={i}
+                        className="h-12 w-11 text-lg font-bold font-mono bg-neutral-900 border-neutral-800 text-[#00ef8b] ring-[#00ef8b]/20 rounded-lg"
+                      />
+                    ))}
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              {verifying && (
+                <div className="flex items-center justify-center gap-2 text-neutral-400 text-xs mb-4">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Verifying...
+                </div>
+              )}
+
+              <div className="text-center space-y-3">
+                <p className="text-[11px] text-neutral-600">Or click the magic link in your email</p>
                 <button
                   onClick={async () => {
                     setError(null)
@@ -221,121 +222,201 @@ function DeveloperLoginPage() {
                     }
                   }}
                   disabled={loading}
-                  className="text-neutral-400 hover:text-white transition-colors disabled:opacity-50"
+                  className="text-xs text-neutral-500 hover:text-[#00ef8b] transition-colors disabled:opacity-50"
                 >
                   {loading ? 'Sending...' : 'Resend code'}
                 </button>
               </div>
             </div>
-          </div>
-        </motion.div>
-      </div>
-    )
-  }
+          </motion.div>
+        ) : (
+          /* ─── Main login screen ─── */
+          <motion.div
+            key="main"
+            {...fadeUp}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-[420px] relative z-10"
+          >
+            <div className="rounded-2xl border border-neutral-800/80 bg-neutral-950/80 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden">
+              {/* Header */}
+              <div className="px-8 pt-10 pb-6 text-center">
+                <motion.div
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.05, type: 'spring', stiffness: 200, damping: 20 }}
+                  className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#00ef8b]/10 border border-[#00ef8b]/20 mb-5"
+                >
+                  <FlowIndexLogo size={28} className="text-[#00ef8b]" />
+                </motion.div>
+                <motion.h1
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="text-xl font-semibold text-white tracking-tight"
+                >
+                  Sign in to FlowIndex
+                </motion.h1>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.15 }}
+                  className="text-sm text-neutral-500 mt-1.5"
+                >
+                  Webhooks, API keys, and developer tools
+                </motion.p>
+              </div>
 
-  return (
-    <div className="flex-1 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="w-12 h-12 rounded-lg bg-[#00ef8b]/10 flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-6 h-6 text-[#00ef8b]" />
-            </div>
-            <h1 className="text-2xl font-bold text-white">Developer Portal</h1>
-            <p className="text-sm text-neutral-400 mt-1">Sign in to manage your webhooks and API keys</p>
-          </div>
+              {/* Error */}
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="px-8"
+                  >
+                    <div className="px-3 py-2.5 rounded-lg bg-red-500/8 border border-red-500/15 text-red-400 text-xs mb-4">
+                      {error}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-          {/* Error */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
-            >
-              {error}
-            </motion.div>
-          )}
+              <div className="px-8 pb-8">
+                <AnimatePresence mode="wait">
+                  {!showEmailForm ? (
+                    /* ─── Provider buttons ─── */
+                    <motion.div
+                      key="providers"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-2.5"
+                    >
+                      {/* GitHub */}
+                      <button
+                        type="button"
+                        onClick={() => signInWithProvider('github', redirectTo)}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white hover:bg-neutral-100 text-neutral-900 font-medium transition-all text-sm group active:scale-[0.98]"
+                      >
+                        <GitHubIcon className="w-5 h-5 shrink-0" />
+                        <span className="flex-1 text-left">Continue with GitHub</span>
+                        <ArrowRight className="w-4 h-4 text-neutral-400 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                      </button>
 
-          {/* Form */}
-          <form onSubmit={handleSendLink} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-neutral-300 mb-1.5">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full pl-10 pr-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#00ef8b]/50 focus:ring-1 focus:ring-[#00ef8b]/20 transition-colors text-sm"
-                />
+                      {/* Google */}
+                      <button
+                        type="button"
+                        onClick={() => signInWithProvider('google', redirectTo)}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-neutral-200 font-medium transition-all text-sm group active:scale-[0.98]"
+                      >
+                        <GoogleIcon className="w-5 h-5 shrink-0" />
+                        <span className="flex-1 text-left">Continue with Google</span>
+                        <ArrowRight className="w-4 h-4 text-neutral-600 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                      </button>
+
+                      {/* Email */}
+                      <button
+                        type="button"
+                        onClick={() => { setShowEmailForm(true); setError(null) }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-neutral-200 font-medium transition-all text-sm group active:scale-[0.98]"
+                      >
+                        <Mail className="w-5 h-5 shrink-0 text-neutral-400" />
+                        <span className="flex-1 text-left">Continue with Email</span>
+                        <ArrowRight className="w-4 h-4 text-neutral-600 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                      </button>
+
+                      {/* Divider */}
+                      <div className="flex items-center gap-3 py-2">
+                        <div className="flex-1 border-t border-neutral-800/60" />
+                        <span className="text-[10px] text-neutral-600 uppercase tracking-[0.15em]">coming soon</span>
+                        <div className="flex-1 border-t border-neutral-800/60" />
+                      </div>
+
+                      {/* Coming soon — Passkey */}
+                      <div className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-neutral-800/60 text-neutral-600 text-sm cursor-default select-none">
+                        <KeyRound className="w-5 h-5 shrink-0 opacity-50" />
+                        <span className="flex-1 text-left">Passkey</span>
+                      </div>
+
+                      {/* Coming soon — Wallet */}
+                      <div className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-neutral-800/60 text-neutral-600 text-sm cursor-default select-none">
+                        <Wallet className="w-5 h-5 shrink-0 opacity-50" />
+                        <span className="flex-1 text-left">Flow Wallet</span>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    /* ─── Email form ─── */
+                    <motion.div
+                      key="email"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <button
+                        onClick={() => { setShowEmailForm(false); setError(null) }}
+                        className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-300 transition-colors mb-5 group"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                        All sign-in options
+                      </button>
+
+                      <form onSubmit={handleSendLink} className="space-y-4">
+                        <div>
+                          <label htmlFor="email" className="block text-xs font-medium text-neutral-400 mb-2 uppercase tracking-wider">
+                            Email address
+                          </label>
+                          <input
+                            id="email"
+                            type="email"
+                            required
+                            autoFocus
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="you@example.com"
+                            className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#00ef8b]/40 focus:ring-1 focus:ring-[#00ef8b]/10 transition-all text-sm font-mono"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="w-full flex items-center justify-center gap-2 py-3 bg-[#00ef8b] hover:bg-[#00ef8b]/90 text-black font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm active:scale-[0.98]"
+                        >
+                          {loading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              Send magic link
+                              <ArrowRight className="w-4 h-4" />
+                            </>
+                          )}
+                        </button>
+                      </form>
+
+                      <p className="mt-4 text-center text-[11px] text-neutral-600">
+                        We&apos;ll send a 6-digit code and magic link to your inbox
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#00ef8b] hover:bg-[#00ef8b]/90 text-black font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            {/* Footer */}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-center text-[11px] text-neutral-700 mt-6"
             >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <Mail className="w-4 h-4" />
-                  Continue with Email
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 border-t border-neutral-800" />
-            <span className="text-xs text-neutral-500 uppercase tracking-wider">or</span>
-            <div className="flex-1 border-t border-neutral-800" />
-          </div>
-
-          {/* Passkey login */}
-          <button
-            type="button"
-            onClick={handlePasskeySignIn}
-            disabled={passkeyLoading || passkeyRegistering || !passkeySupported}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-100 hover:bg-white text-neutral-900 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          >
-            {passkeyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-            Continue with Passkey
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePasskeyRegistration}
-            disabled={passkeyLoading || passkeyRegistering || !passkeySupported}
-            className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 hover:bg-neutral-700 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          >
-            {passkeyRegistering ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-            Create Passkey for This Email
-          </button>
-
-          {passkeyHint && (
-            <p className="mt-3 text-center text-xs text-neutral-500">
-              {passkeyHint}
-            </p>
-          )}
-
-          <p className="mt-6 text-center text-xs text-neutral-500">
-            We&apos;ll send you a magic link and verification code
-          </p>
-        </div>
-      </motion.div>
+              By signing in, you agree to the FlowIndex Terms of Service
+            </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
