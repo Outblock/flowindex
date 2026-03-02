@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { ExecutionResult } from '../flow/execute';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Code2, List } from 'lucide-react';
+import { JsonView, darkStyles } from 'react-json-view-lite';
+import 'react-json-view-lite/dist/index.css';
 
 interface ResultPanelProps {
   results: ExecutionResult[];
@@ -8,6 +10,7 @@ interface ResultPanelProps {
 }
 
 type Tab = 'result' | 'events' | 'logs';
+type ViewMode = 'tree' | 'raw';
 
 function Badge({ children, variant }: { children: React.ReactNode; variant: 'success' | 'error' | 'info' }) {
   const colors = {
@@ -36,6 +39,159 @@ function formatData(data: any): string {
   } catch {
     return String(data);
   }
+}
+
+/** Try to parse data into a JSON-viewable object */
+function toJsonObject(data: any): object | any[] | null {
+  if (data === null || data === undefined) return null;
+  if (typeof data === 'object') return data;
+  if (typeof data === 'string') {
+    try {
+      const parsed = JSON.parse(data);
+      if (typeof parsed === 'object' && parsed !== null) return parsed;
+    } catch { /* not JSON */ }
+  }
+  return null;
+}
+
+/** Custom dark theme for the JSON tree viewer matching the editor aesthetic */
+const jsonTreeStyles = {
+  ...darkStyles,
+  container: 'json-tree-container',
+  basicChildStyle: 'json-tree-child',
+  label: 'json-tree-label',
+  nullValue: 'json-tree-null',
+  undefinedValue: 'json-tree-null',
+  stringValue: 'json-tree-string',
+  booleanValue: 'json-tree-boolean',
+  numberValue: 'json-tree-number',
+  otherValue: 'json-tree-other',
+  punctuation: 'json-tree-punctuation',
+  expandIcon: 'json-tree-expand',
+  collapseIcon: 'json-tree-collapse',
+  collapsedContent: 'json-tree-collapsed-content',
+  noQuotesForStringValues: false,
+};
+
+/** Syntax-highlighted raw JSON */
+function RawJsonView({ data, isError }: { data: any; isError?: boolean }) {
+  const formatted = useMemo(() => formatData(data), [data]);
+  const highlighted = useMemo(() => highlightJson(formatted), [formatted]);
+
+  if (isError) {
+    return (
+      <pre className="whitespace-pre-wrap break-all text-red-400">{formatted}</pre>
+    );
+  }
+
+  return (
+    <pre
+      className="whitespace-pre-wrap break-all leading-relaxed"
+      dangerouslySetInnerHTML={{ __html: highlighted }}
+    />
+  );
+}
+
+/** Simple JSON syntax highlighter */
+function highlightJson(text: string): string {
+  // Escape HTML first
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  return escaped
+    // String values (keys and values)
+    .replace(
+      /("(?:[^"\\]|\\.)*")\s*:/g,
+      '<span class="json-hl-key">$1</span>:'
+    )
+    .replace(
+      /:\s*("(?:[^"\\]|\\.)*")/g,
+      ': <span class="json-hl-string">$1</span>'
+    )
+    // Standalone strings (in arrays, top-level)
+    .replace(
+      /(?<=[\[,\n]\s*)("(?:[^"\\]|\\.)*")(?=\s*[,\]\n])/g,
+      '<span class="json-hl-string">$1</span>'
+    )
+    // Numbers
+    .replace(
+      /(?<=:\s*)(-?\d+\.?\d*(?:[eE][+-]?\d+)?)(?=\s*[,}\]\n])/g,
+      '<span class="json-hl-number">$1</span>'
+    )
+    // Booleans
+    .replace(
+      /(?<=:\s*)(true|false)(?=\s*[,}\]\n])/g,
+      '<span class="json-hl-boolean">$1</span>'
+    )
+    // Null
+    .replace(
+      /(?<=:\s*)(null)(?=\s*[,}\]\n])/g,
+      '<span class="json-hl-null">$1</span>'
+    );
+}
+
+/** Toggle button group for switching between tree and raw views */
+function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode) => void }) {
+  return (
+    <div className="flex items-center bg-zinc-800 rounded overflow-hidden border border-zinc-700">
+      <button
+        onClick={() => onChange('tree')}
+        className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium transition-colors ${
+          mode === 'tree'
+            ? 'bg-zinc-700 text-zinc-100'
+            : 'text-zinc-500 hover:text-zinc-300'
+        }`}
+        title="Tree view"
+      >
+        <List className="w-3 h-3" />
+        Tree
+      </button>
+      <button
+        onClick={() => onChange('raw')}
+        className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium transition-colors ${
+          mode === 'raw'
+            ? 'bg-zinc-700 text-zinc-100'
+            : 'text-zinc-500 hover:text-zinc-300'
+        }`}
+        title="Raw JSON"
+      >
+        <Code2 className="w-3 h-3" />
+        Raw
+      </button>
+    </div>
+  );
+}
+
+/** Render data with view mode toggle */
+function DataDisplay({ data, isError }: { data: any; isError?: boolean }) {
+  const [viewMode, setViewMode] = useState<ViewMode>('tree');
+  const jsonObj = useMemo(() => toJsonObject(data), [data]);
+  const hasTreeView = jsonObj !== null && !isError;
+
+  return (
+    <div>
+      {hasTreeView && (
+        <div className="flex justify-end mb-2">
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
+        </div>
+      )}
+
+      {hasTreeView && viewMode === 'tree' ? (
+        <div className="json-tree-wrapper">
+          <JsonView
+            data={jsonObj}
+            style={jsonTreeStyles}
+            shouldExpandNode={(level) => level < 2}
+            clickToExpandNode
+          />
+        </div>
+      ) : (
+        <RawJsonView data={data} isError={isError} />
+      )}
+    </div>
+  );
 }
 
 export default function ResultPanel({ results, loading }: ResultPanelProps) {
@@ -93,13 +249,12 @@ export default function ResultPanel({ results, loading }: ResultPanelProps) {
               {lastResult.txId && (
                 <span className="ml-2 text-zinc-500">tx: {lastResult.txId}</span>
               )}
-              <pre
-                className={`mt-2 whitespace-pre-wrap break-all ${
-                  lastResult.type === 'error' ? 'text-red-400' : 'text-emerald-400'
-                }`}
-              >
-                {formatData(lastResult.data)}
-              </pre>
+              <div className="mt-2">
+                <DataDisplay
+                  data={lastResult.data}
+                  isError={lastResult.type === 'error'}
+                />
+              </div>
             </div>
           )
         ) : tab === 'events' ? (
@@ -112,9 +267,7 @@ export default function ResultPanel({ results, loading }: ResultPanelProps) {
                   <div className="text-emerald-400 text-[11px] font-semibold mb-1">
                     {evt.type || 'Event'}
                   </div>
-                  <pre className="text-zinc-300 whitespace-pre-wrap break-all">
-                    {formatData(evt.data || evt)}
-                  </pre>
+                  <DataDisplay data={evt.data || evt} />
                 </div>
               ))}
             </div>
@@ -139,6 +292,38 @@ export default function ResultPanel({ results, loading }: ResultPanelProps) {
           </div>
         )}
       </div>
+
+      {/* Inline styles for JSON highlighting */}
+      <style>{`
+        /* Raw JSON syntax highlighting */
+        .json-hl-key { color: #9cdcfe; }
+        .json-hl-string { color: #ce9178; }
+        .json-hl-number { color: #b5cea8; }
+        .json-hl-boolean { color: #569cd6; }
+        .json-hl-null { color: #569cd6; font-style: italic; }
+
+        /* JSON tree viewer overrides */
+        .json-tree-wrapper {
+          font-family: 'GeistMono', 'SF Mono', 'Fira Code', monospace;
+          font-size: 12px;
+          line-height: 1.6;
+        }
+        .json-tree-container { background: transparent !important; }
+        .json-tree-child { padding-left: 16px; border-left: 1px solid rgba(255,255,255,0.06); }
+        .json-tree-label { color: #9cdcfe; }
+        .json-tree-string { color: #ce9178; }
+        .json-tree-number { color: #b5cea8; }
+        .json-tree-boolean { color: #569cd6; }
+        .json-tree-null { color: #569cd6; font-style: italic; }
+        .json-tree-other { color: #d4d4d4; }
+        .json-tree-punctuation { color: #808080; }
+        .json-tree-expand,
+        .json-tree-collapse { cursor: pointer; color: #808080; user-select: none; }
+        .json-tree-expand:hover,
+        .json-tree-collapse:hover { color: #d4d4d4; }
+        .json-tree-collapsed-content { color: #808080; cursor: pointer; }
+        .json-tree-collapsed-content:hover { color: #d4d4d4; }
+      `}</style>
     </div>
   );
 }
