@@ -12,6 +12,11 @@ export async function GET(request: Request) {
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
     }
+    console.error("[auth/callback] exchangeCodeForSession failed:", error.message, error);
+  } else {
+    // No code — could be an error redirect from GoTrue
+    const errorDesc = searchParams.get("error_description") || searchParams.get("error");
+    console.error("[auth/callback] No code param. error:", errorDesc);
   }
 
   return NextResponse.redirect(`${origin}/?auth_error=true`);
