@@ -5,6 +5,7 @@ import Footer from '../components/Footer';
 import Sidebar from '../components/Sidebar';
 import { WebSocketProvider } from '../components/WebSocketProvider';
 import { ThemeProvider } from '../contexts/ThemeContext';
+import { FontProvider } from '../contexts/FontContext';
 import { AuthProvider } from '../contexts/AuthContext';
 import { MobileMenuProvider } from '../contexts/MobileMenuContext';
 import { Toaster } from 'react-hot-toast';
@@ -43,10 +44,11 @@ function RootComponent() {
     return (
         <RootDocument>
             <ThemeProvider>
+              <FontProvider>
               <AuthProvider>
                 <WebSocketProvider>
                     <MobileMenuProvider>
-                    <div className="bg-gray-50 dark:bg-black min-h-screen text-zinc-700 dark:text-zinc-300 font-mono antialiased selection:bg-nothing-green selection:text-black flex transition-colors duration-300">
+                    <div className="bg-gray-50 dark:bg-black min-h-screen text-zinc-700 dark:text-zinc-300 antialiased selection:bg-nothing-green selection:text-black flex transition-colors duration-300">
                         {/* Sidebar */}
                         <Sidebar />
 
@@ -66,6 +68,7 @@ function RootComponent() {
                     </MobileMenuProvider>
                 </WebSocketProvider>
               </AuthProvider>
+              </FontProvider>
             </ThemeProvider>
             <ScrollRestoration />
         </RootDocument>
