@@ -1464,27 +1464,38 @@ export default function AIPanel({
     try { localStorage.setItem(AUTO_APPLY_STORAGE_KEY, String(autoApply)); } catch { /* noop */ }
   }, [autoApply]);
 
+  const autoApplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!autoApply) return;
-    if (!onAutoApplyEdits) return;
+    if (!autoApply || !onAutoApplyEdits) return;
     if (status !== 'ready' && status !== 'streaming') return;
 
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant') return;
-    const allowPartialFence = status !== 'ready';
-    const edits = extractEditsFromAssistantMessage(last, allowPartialFence);
-    if (edits.length === 0) return;
 
-    const signature = editsSignature(edits);
-    if (!signature) return;
-    const prevSignature = appliedAssistantSignaturesRef.current.get(last.id);
-    if (prevSignature === signature) return;
-    appliedAssistantSignaturesRef.current.set(last.id, signature);
+    // Debounce during streaming to avoid cascading re-renders on every token
+    const delay = status === 'streaming' ? 300 : 0;
 
-    onAutoApplyEdits(edits, {
-      assistantId: last.id,
-      streaming: status !== 'ready',
-    });
+    if (autoApplyTimerRef.current) clearTimeout(autoApplyTimerRef.current);
+    autoApplyTimerRef.current = setTimeout(() => {
+      const allowPartialFence = status !== 'ready';
+      const edits = extractEditsFromAssistantMessage(last, allowPartialFence);
+      if (edits.length === 0) return;
+
+      const signature = editsSignature(edits);
+      if (!signature) return;
+      const prevSignature = appliedAssistantSignaturesRef.current.get(last.id);
+      if (prevSignature === signature) return;
+      appliedAssistantSignaturesRef.current.set(last.id, signature);
+
+      onAutoApplyEdits(edits, {
+        assistantId: last.id,
+        streaming: status !== 'ready',
+      });
+    }, delay);
+
+    return () => {
+      if (autoApplyTimerRef.current) clearTimeout(autoApplyTimerRef.current);
+    };
   }, [messages, status, autoApply, onAutoApplyEdits]);
 
   const handleSend = useCallback(async (text: string) => {
