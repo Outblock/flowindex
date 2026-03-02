@@ -139,27 +139,47 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
         cursor: 'grab',
     };
 
+    const isSynthetic = (addr: string) => addr.startsWith('MINT:') || addr.startsWith('BURN:') || addr.startsWith('DEX:');
+
     const placeColumn = (addrs: string[], col: number): Node[] =>
-        addrs.map((addr, row) => ({
-            id: addr,
-            data: {
-                label: (
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontWeight: 700, fontSize: '11px', color: isDark ? '#e4e4e7' : '#27272a' }}>
-                            {seen.get(addr)!.label}
+        addrs.map((addr, row) => {
+            const synthetic = isSynthetic(addr);
+            const info = seen.get(addr)!;
+            return {
+                id: addr,
+                data: {
+                    label: synthetic ? (
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontWeight: 700, fontSize: '11px', color: addr.startsWith('MINT:') ? (isDark ? '#4ade80' : '#16a34a') : addr.startsWith('BURN:') ? (isDark ? '#f87171' : '#dc2626') : (isDark ? '#e4e4e7' : '#27272a') }}>
+                                {info.label}
+                            </div>
                         </div>
-                        <div style={{ fontSize: '9px', color: isDark ? '#71717a' : '#a1a1aa', fontFamily: 'ui-monospace, monospace', marginTop: '2px' }}>
-                            {formatShort(addr, 8, 4)}
+                    ) : (
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontWeight: 700, fontSize: '11px', color: isDark ? '#e4e4e7' : '#27272a' }}>
+                                {info.label}
+                            </div>
+                            <div style={{ fontSize: '9px', color: isDark ? '#71717a' : '#a1a1aa', fontFamily: 'ui-monospace, monospace', marginTop: '2px' }}>
+                                {formatShort(addr, 8, 4)}
+                            </div>
                         </div>
-                    </div>
-                ),
-            },
-            position: { x: col * colWidth, y: row * rowHeight },
-            sourcePosition: Position.Right,
-            targetPosition: Position.Left,
-            draggable: true,
-            style: nodeStyle,
-        }));
+                    ),
+                },
+                position: { x: col * colWidth, y: row * rowHeight },
+                sourcePosition: Position.Right,
+                targetPosition: Position.Left,
+                draggable: true,
+                style: synthetic ? {
+                    ...nodeStyle,
+                    border: addr.startsWith('MINT:')
+                        ? (isDark ? '1px solid rgba(74,222,128,0.3)' : '1px solid rgba(22,163,74,0.3)')
+                        : addr.startsWith('BURN:')
+                            ? (isDark ? '1px solid rgba(248,113,113,0.3)' : '1px solid rgba(220,38,38,0.3)')
+                            : nodeStyle.border,
+                    minWidth: 100,
+                } : nodeStyle,
+            };
+        });
 
     const nodes: Node[] = [
         ...placeColumn(sources, 0),
@@ -185,7 +205,11 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
         const from = group[0].from;
         const to = group[0].to;
         const hasNft = group.some(f => !f.usdValue && (f.token.includes('#') || f.token.includes('x')));
-        const color = hasNft && group.length === 1 ? nftColor : accentColor;
+        const hasBurn = to.startsWith('BURN:');
+        const hasMint = from.startsWith('MINT:');
+        const burnColor = isDark ? '#f87171' : '#dc2626';
+        const mintColor = isDark ? '#4ade80' : '#16a34a';
+        const color = hasBurn ? burnColor : hasMint ? mintColor : hasNft && group.length === 1 ? nftColor : accentColor;
 
         // Build label lines — each flow becomes one line with optional icon
         const labelLines = group.map(f => {
@@ -286,20 +310,26 @@ function transfersToFlows(detail: any): Flow[] {
     const ftAgg = new Map<string, { from: string; to: string; amount: number; symbol: string; usdValue: number }>();
     const directFlows: Flow[] = [];
     for (const ft of ftTransfers) {
-        const from = ft.from_address;
-        const to = ft.to_address;
-        if (!from || !to) continue;
+        const rawFrom = ft.from_address || '';
+        const rawTo = ft.to_address || '';
+        if (!rawFrom && !rawTo) continue;
         const sym = ft.token_symbol || ft.token?.split('.').pop() || 'FT';
         const amount = parseFloat(ft.amount) || 0;
         const usdValue = parseFloat(ft.usd_value) || 0;
         const evmTo = ft.evm_to_address;
         const evmFrom = ft.evm_from_address;
 
+        // Use synthetic nodes for mint (no from) and burn (no to)
+        const from = rawFrom || `MINT:${sym}`;
+        const to = rawTo || `BURN:${sym}`;
+        const fromLabel = rawFrom ? formatShort(rawFrom, 8, 4) : 'Mint';
+        const toLabel = rawTo ? formatShort(rawTo, 8, 4) : 'Burn';
+
         if (evmTo || evmFrom) {
             // Leg 1: Cadence transfer (from → COA)
             directFlows.push({
-                from, fromLabel: formatShort(from, 8, 4),
-                to, toLabel: evmTo ? 'COA' : formatShort(to, 8, 4),
+                from, fromLabel,
+                to, toLabel: evmTo ? 'COA' : toLabel,
                 token: sym, amount: amount.toString(), usdValue,
             });
             // Leg 2: EVM execution (COA → EVM dest)
@@ -313,7 +343,7 @@ function transfersToFlows(detail: any): Flow[] {
             if (evmFrom) {
                 directFlows.push({
                     from: evmFrom, fromLabel: formatShort(evmFrom, 8, 4),
-                    to: from, toLabel: formatShort(from, 8, 4),
+                    to: from, toLabel: fromLabel,
                     token: sym, amount: amount.toString(), usdValue,
                 });
             }
@@ -331,11 +361,13 @@ function transfersToFlows(detail: any): Flow[] {
     }
     flows.push(...directFlows);
     for (const agg of ftAgg.values()) {
+        const isMint = agg.from.startsWith('MINT:');
+        const isBurn = agg.to.startsWith('BURN:');
         flows.push({
             from: agg.from,
-            fromLabel: formatShort(agg.from, 8, 4),
+            fromLabel: isMint ? 'Mint' : formatShort(agg.from, 8, 4),
             to: agg.to,
-            toLabel: formatShort(agg.to, 8, 4),
+            toLabel: isBurn ? 'Burn' : formatShort(agg.to, 8, 4),
             token: agg.symbol,
             amount: agg.amount.toString(),
             usdValue: agg.usdValue,

@@ -56,13 +56,13 @@ function Container({ children }: { children: any }) {
       <div
         style={{
           position: 'absolute',
-          top: 40,
-          right: 40,
+          top: 20,
+          right: 30,
           display: 'flex',
-          opacity: 0.06,
+          opacity: 0.08,
         }}
       >
-        <img src={LOGO_SVG} width={220} height={256} />
+        <img src={LOGO_SVG} width={300} height={348} />
       </div>
       {/* Green accent line at top */}
       <div
@@ -71,7 +71,7 @@ function Container({ children }: { children: any }) {
           top: 0,
           left: 0,
           right: 0,
-          height: 3,
+          height: 4,
           display: 'flex',
           background: `linear-gradient(90deg, ${COLORS.green}, transparent)`,
         }}
@@ -98,13 +98,13 @@ function Container({ children }: { children: any }) {
           borderTop: `1px solid ${COLORS.border}`,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src={LOGO_SVG} width={22} height={26} />
-          <span style={{ fontSize: 16, color: COLORS.gray, letterSpacing: '0.05em' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img src={LOGO_SVG} width={28} height={32} />
+          <span style={{ fontSize: 18, fontWeight: 600, color: COLORS.white, letterSpacing: '0.04em' }}>
             flowindex.io
           </span>
         </div>
-        <span style={{ fontSize: 14, color: COLORS.grayDim }}>Flow Blockchain Explorer</span>
+        <span style={{ fontSize: 15, fontWeight: 400, color: COLORS.gray }}>Flow Blockchain Explorer</span>
       </div>
     </div>
   );
@@ -115,11 +115,11 @@ function Label({ text }: { text: string }) {
     <div
       style={{
         display: 'flex',
-        fontSize: 13,
+        fontSize: 14,
         color: COLORS.green,
         textTransform: 'uppercase',
         letterSpacing: '0.2em',
-        fontWeight: 600,
+        fontWeight: 700,
         marginBottom: 16,
       }}
     >
@@ -181,10 +181,10 @@ function StatRow({ items }: { items: { label: string; value: string }[] }) {
             background: COLORS.bgCard,
           }}
         >
-          <span style={{ fontSize: 11, color: COLORS.grayDim, textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 6 }}>
+          <span style={{ fontSize: 12, color: COLORS.grayDim, textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 400, marginBottom: 6 }}>
             {item.label}
           </span>
-          <span style={{ fontSize: 22, fontWeight: 600, color: COLORS.white }}>
+          <span style={{ fontSize: 22, fontWeight: 700, color: COLORS.white }}>
             {item.value}
           </span>
         </div>
