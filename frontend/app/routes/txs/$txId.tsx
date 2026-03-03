@@ -1554,9 +1554,50 @@ function TransactionDetail() {
                             <div className="space-y-8">
                                 {/* Arguments */}
                                 <div className="font-mono">
-                                    <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <FileText className="h-4 w-4" /> Script Arguments
-                                    </h3>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <h3 className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                                            <FileText className="h-4 w-4" /> Script Arguments
+                                        </h3>
+                                        {transaction.arguments && (() => {
+                                            try {
+                                                const raw = typeof transaction.arguments === 'string' ? JSON.parse(transaction.arguments) : transaction.arguments;
+                                                if (!Array.isArray(raw)) return null;
+                                                const decoded = raw.map((a: any) => {
+                                                    const dec = (v: any): any => {
+                                                        if (!v || typeof v !== 'object') return v;
+                                                        if (v.value !== undefined) {
+                                                            if (v.type === 'Optional') return v.value ? dec(v.value) : null;
+                                                            if (v.type === 'Array') return v.value.map(dec);
+                                                            if (v.type === 'Dictionary') { const d: Record<string, any> = {}; v.value.forEach((i: any) => { d[String(dec(i.key))] = dec(i.value); }); return d; }
+                                                            if (v.type === 'Struct' || v.type === 'Resource' || v.type === 'Event') { const o: Record<string, any> = {}; v.value?.fields?.forEach((f: any) => { o[f.name] = dec(f.value); }); return o; }
+                                                            if (v.type === 'Path') return `${v.value.domain}/${v.value.identifier}`;
+                                                            if (v.type === 'Type') return v.value.staticType;
+                                                            return v.value;
+                                                        }
+                                                        return v;
+                                                    };
+                                                    return dec(a);
+                                                });
+                                                return (
+                                                    <div className="flex items-center gap-1 ml-auto">
+                                                        <span className="text-[10px] text-zinc-400 mr-0.5">Copy:</span>
+                                                        <button
+                                                            type="button"
+                                                            title="Copy as JSON array"
+                                                            onClick={() => navigator.clipboard.writeText(JSON.stringify(decoded, null, 2))}
+                                                            className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                                                        >JSON</button>
+                                                        <button
+                                                            type="button"
+                                                            title="Copy as Cadence JSON (raw)"
+                                                            onClick={() => navigator.clipboard.writeText(JSON.stringify(raw, null, 2))}
+                                                            className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                                                        >Cadence</button>
+                                                    </div>
+                                                );
+                                            } catch { return null; }
+                                        })()}
+                                    </div>
                                     {transaction.arguments ? (
                                         <div className="bg-zinc-50 dark:bg-black/50 border border-zinc-200 dark:border-white/5 p-4 rounded-sm">
                                             {(() => {
@@ -1683,16 +1724,21 @@ function TransactionDetail() {
                                                                 const paramName = param?.name || `arg${idx}`;
                                                                 const paramType = param?.type || cadenceType;
 
+                                                                const decodedStr = typeof decoded === 'object' && decoded !== null
+                                                                    ? JSON.stringify(decoded, null, 2)
+                                                                    : String(decoded);
+
                                                                 return (
                                                                     <div key={idx} className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
-                                                                        {/* Header: name + type */}
+                                                                        {/* Header: name + type + copy */}
                                                                         <div className="flex items-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-white/5 border-b border-zinc-200 dark:border-white/5">
                                                                             <span className="text-[10px] text-zinc-400 font-mono tabular-nums">{idx}</span>
                                                                             <span className="text-[11px] text-zinc-800 dark:text-zinc-200 font-medium font-mono">{paramName}</span>
                                                                             <span className="text-[10px] text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-500/10 px-1.5 py-0.5 rounded">{paramType}</span>
+                                                                            <CopyButton content={decodedStr} className="ml-auto" />
                                                                         </div>
-                                                                        {/* Value */}
-                                                                        <div className="px-3 py-2.5 text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all leading-relaxed">
+                                                                        {/* Value — scrollable if tall */}
+                                                                        <div className="px-3 py-2.5 text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all leading-relaxed max-h-48 overflow-y-auto">
                                                                             {renderArgValue(decoded)}
                                                                         </div>
                                                                     </div>
