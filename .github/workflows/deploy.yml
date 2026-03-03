@@ -734,9 +734,16 @@ jobs:
             # Run Realtime/WebSocket service (port 3202)
             docker run -d --restart=always --name sim-studio-realtime \
               --network=host \
+              -e NODE_ENV=production \
               -e DATABASE_URL="$SIM_DB_URL" \
+              -e BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET}" \
+              -e BETTER_AUTH_URL="https://studio.flowindex.io" \
               -e PORT=3202 \
               -e INTERNAL_API_SECRET="${INTERNAL_API_SECRET}" \
+              -e FLOWINDEX_AUTH_MODE="${FLOWINDEX_AUTH_MODE}" \
+              -e SUPABASE_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
+              -e NEXT_PUBLIC_APP_URL="https://studio.flowindex.io" \
+              -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
               "$SIM_STUDIO_REALTIME_IMAGE"
 
             echo "Sim Studio deployed (web: 3200, realtime: 3202)"
