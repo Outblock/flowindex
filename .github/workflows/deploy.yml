@@ -627,22 +627,22 @@ jobs:
             # If route returns { data: session }, client sees { data: { data: session } }
             # and treats session.user as undefined, causing /workspace <-> /login loop/blank screen.
             docker exec sim-studio sh -lc "python3 - <<PY
-from pathlib import Path
-import time
-old = \"NextResponse.json((0,P.createAnonymousGetSessionResponse)())\"
-new = \"NextResponse.json((0,P.createAnonymousGetSessionResponse)().data)\"
-patched = 0
-for p in Path(\"/app/apps/sim/.next/server/chunks\").glob(\"[root-of-the-server]__*.js\"):
-    s = p.read_text()
-    if old in s:
-        backup = p.with_suffix(p.suffix + \".bak.\" + str(int(time.time())))
-        backup.write_text(s)
-        p.write_text(s.replace(old, new))
-        patched += 1
-print(f\"Patched files: {patched}\")
-if patched == 0:
-    raise SystemExit(\"Sim get-session hotfix pattern not found\")
-PY"
+            from pathlib import Path
+            import time
+            old = \"NextResponse.json((0,P.createAnonymousGetSessionResponse)())\"
+            new = \"NextResponse.json((0,P.createAnonymousGetSessionResponse)().data)\"
+            patched = 0
+            for p in Path(\"/app/apps/sim/.next/server/chunks\").glob(\"[root-of-the-server]__*.js\"):
+                s = p.read_text()
+                if old in s:
+                    backup = p.with_suffix(p.suffix + \".bak.\" + str(int(time.time())))
+                    backup.write_text(s)
+                    p.write_text(s.replace(old, new))
+                    patched += 1
+            print(f\"Patched files: {patched}\")
+            if patched == 0:
+                raise SystemExit(\"Sim get-session hotfix pattern not found\")
+            PY"
             docker restart sim-studio >/dev/null
 
             # Run Realtime/WebSocket service (port 3202)
