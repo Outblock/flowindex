@@ -226,103 +226,47 @@ function TokenDetailInner() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-start justify-between gap-6"
+        className="flex items-center space-x-4"
       >
-        <div className="flex items-center space-x-4">
-          {token?.logo && !logoError ? (
-            <img
-              src={token.logo}
-              alt={tokenName}
-              className="h-10 w-10 rounded-full object-cover bg-zinc-100 dark:bg-white/10"
-              onError={() => setLogoError(true)}
-            />
-          ) : (
-            <div className="p-3 bg-nothing-green/10 rounded-lg">
-              <Coins className="h-8 w-8 text-nothing-green-dark dark:text-nothing-green" />
-            </div>
-          )}
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white tracking-tighter">
-                {tokenName}
-              </h1>
-              {symbol && (
-                <span className="text-lg text-zinc-400 dark:text-zinc-500 font-mono">
-                  {symbol}
-                </span>
-              )}
-              {token?.evm_address && <EVMBridgeBadge evmAddress={String(token.evm_address)} />}
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                to={`/contracts/${encodeURIComponent(id)}` as any}
-                className="text-sm text-nothing-green-dark dark:text-nothing-green font-mono break-all hover:underline"
-              >
-                {id}
-              </Link>
-              <CopyButton
-                content={id}
-                variant="ghost"
-                size="xs"
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Price chart */}
-        {priceHistory.length >= 2 && currentPrice != null && (
-          <div className="shrink-0 w-56 md:w-72">
-            <div className="flex items-baseline gap-2 mb-1 justify-end">
-              <span className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
-                {currentPrice >= 1
-                  ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : currentPrice >= 0.01
-                    ? `$${currentPrice.toFixed(4)}`
-                    : `$${currentPrice.toFixed(6)}`}
-              </span>
-              {priceHistory.length >= 2 && (() => {
-                const first = priceHistory[0].price;
-                const last = priceHistory[priceHistory.length - 1].price;
-                const pct = first > 0 ? ((last - first) / first) * 100 : 0;
-                const isUp = pct >= 0;
-                return (
-                  <span className={`text-xs font-mono ${isUp ? 'text-green-500' : 'text-red-500'}`}>
-                    {isUp ? '+' : ''}{pct.toFixed(1)}%
-                  </span>
-                );
-              })()}
-            </div>
-            <div className="h-16">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={priceHistory} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={priceHistory[priceHistory.length - 1].price >= priceHistory[0].price ? '#22c55e' : '#ef4444'} stopOpacity={0.3} />
-                      <stop offset="100%" stopColor={priceHistory[priceHistory.length - 1].price >= priceHistory[0].price ? '#22c55e' : '#ef4444'} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <YAxis domain={['dataMin', 'dataMax']} hide />
-                  <Tooltip
-                    contentStyle={{ background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, fontSize: 11, fontFamily: 'monospace' }}
-                    labelStyle={{ color: '#a1a1aa', fontSize: 10 }}
-                    itemStyle={{ color: '#fff' }}
-                    formatter={(value: number) => [`$${value.toFixed(value >= 1 ? 2 : 6)}`, 'Price']}
-                    labelFormatter={(label: string) => label}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="price"
-                    stroke={priceHistory[priceHistory.length - 1].price >= priceHistory[0].price ? '#22c55e' : '#ef4444'}
-                    strokeWidth={1.5}
-                    fill="url(#priceGrad)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-500 font-mono text-right mt-1">90 day price</p>
+        {token?.logo && !logoError ? (
+          <img
+            src={token.logo}
+            alt={tokenName}
+            className="h-10 w-10 rounded-full object-cover bg-zinc-100 dark:bg-white/10"
+            onError={() => setLogoError(true)}
+          />
+        ) : (
+          <div className="p-3 bg-nothing-green/10 rounded-lg">
+            <Coins className="h-8 w-8 text-nothing-green-dark dark:text-nothing-green" />
           </div>
         )}
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white tracking-tighter">
+              {tokenName}
+            </h1>
+            {symbol && (
+              <span className="text-lg text-zinc-400 dark:text-zinc-500 font-mono">
+                {symbol}
+              </span>
+            )}
+            {token?.evm_address && <EVMBridgeBadge evmAddress={String(token.evm_address)} />}
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/contracts/${encodeURIComponent(id)}` as any}
+              className="text-sm text-nothing-green-dark dark:text-nothing-green font-mono break-all hover:underline"
+            >
+              {id}
+            </Link>
+            <CopyButton
+              content={id}
+              variant="ghost"
+              size="xs"
+              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            />
+          </div>
+        </div>
       </motion.div>
 
       <motion.div
@@ -331,35 +275,91 @@ function TokenDetailInner() {
         transition={{ delay: 0.1 }}
         className="space-y-6"
       >
-        {/* Info table */}
-        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm shadow-sm dark:shadow-none overflow-hidden">
-          <div className="grid grid-cols-[auto_1fr] text-sm">
-            <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">Contract</div>
-            <div className="px-4 py-3 font-mono text-zinc-900 dark:text-white break-all border-b border-zinc-100 dark:border-white/5 flex items-center gap-1">
-              {addr ? <AddressLink address={addr} prefixLen={20} suffixLen={0} /> : 'N/A'}
-              {addr && <CopyButton content={addr} variant="ghost" size="xs" className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />}
-            </div>
-            {token?.evm_address && (<>
-              <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">EVM Address</div>
+        {/* Info table + Price chart side by side */}
+        <div className={`grid gap-6 ${priceHistory.length >= 2 && currentPrice != null ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+          {/* Info table */}
+          <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm shadow-sm dark:shadow-none overflow-hidden">
+            <div className="grid grid-cols-[auto_1fr] text-sm">
+              <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">Contract</div>
               <div className="px-4 py-3 font-mono text-zinc-900 dark:text-white break-all border-b border-zinc-100 dark:border-white/5 flex items-center gap-1">
-                <a href={`https://evm.flowindex.io/address/${String(token.evm_address)}`} target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 hover:underline">
-                  {String(token.evm_address).slice(0, 10)}...{String(token.evm_address).slice(-8)}
-                </a>
-                <CopyButton content={String(token.evm_address)} variant="ghost" size="xs" className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />
+                {addr ? <AddressLink address={addr} prefixLen={20} suffixLen={0} /> : 'N/A'}
+                {addr && <CopyButton content={addr} variant="ghost" size="xs" className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />}
               </div>
-            </>)}
-            <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">Holders</div>
-            <div className="px-4 py-3 font-mono font-bold text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-white/5">
-              <SafeNumberFlow value={Number.isFinite(holdersCount) ? holdersCount : 0} format={{ useGrouping: true }} />
-              <span className="ml-2 text-[10px] font-normal text-amber-500 dark:text-amber-400">May be inaccurate during indexing</span>
+              {token?.evm_address && (<>
+                <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">EVM Address</div>
+                <div className="px-4 py-3 font-mono text-zinc-900 dark:text-white break-all border-b border-zinc-100 dark:border-white/5 flex items-center gap-1">
+                  <a href={`https://evm.flowindex.io/address/${String(token.evm_address)}`} target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 hover:underline">
+                    {String(token.evm_address).slice(0, 10)}...{String(token.evm_address).slice(-8)}
+                  </a>
+                  <CopyButton content={String(token.evm_address)} variant="ghost" size="xs" className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />
+                </div>
+              </>)}
+              <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">Holders</div>
+              <div className="px-4 py-3 font-mono font-bold text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-white/5">
+                <SafeNumberFlow value={Number.isFinite(holdersCount) ? holdersCount : 0} format={{ useGrouping: true }} />
+                <span className="ml-2 text-[10px] font-normal text-amber-500 dark:text-amber-400">May be inaccurate during indexing</span>
+              </div>
+              {token?.total_supply != null && (<>
+                <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">Total Supply</div>
+                <div className="px-4 py-3 font-mono font-bold text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-white/5">{formatBalance(token.total_supply)}</div>
+              </>)}
+              <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Decimals</div>
+              <div className="px-4 py-3 font-mono font-bold text-zinc-900 dark:text-white">{decimals}</div>
             </div>
-            {token?.total_supply != null && (<>
-              <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest border-b border-zinc-100 dark:border-white/5">Total Supply</div>
-              <div className="px-4 py-3 font-mono font-bold text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-white/5">{formatBalance(token.total_supply)}</div>
-            </>)}
-            <div className="px-4 py-3 text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Decimals</div>
-            <div className="px-4 py-3 font-mono font-bold text-zinc-900 dark:text-white">{decimals}</div>
           </div>
+
+          {/* Price chart — large panel */}
+          {priceHistory.length >= 2 && currentPrice != null && (() => {
+            const first = priceHistory[0].price;
+            const last = priceHistory[priceHistory.length - 1].price;
+            const pct = first > 0 ? ((last - first) / first) * 100 : 0;
+            const isUp = pct >= 0;
+            const color = isUp ? '#22c55e' : '#ef4444';
+            return (
+              <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm shadow-sm dark:shadow-none overflow-hidden p-5 flex flex-col">
+                <div className="flex items-baseline gap-3 mb-4">
+                  <span className="text-2xl md:text-3xl font-bold font-mono text-zinc-900 dark:text-white">
+                    {currentPrice >= 1
+                      ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : currentPrice >= 0.01
+                        ? `$${currentPrice.toFixed(4)}`
+                        : `$${currentPrice.toFixed(6)}`}
+                  </span>
+                  <span className={`text-sm font-mono font-semibold ${isUp ? 'text-green-500' : 'text-red-500'}`}>
+                    {isUp ? '+' : ''}{pct.toFixed(2)}%
+                  </span>
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono ml-auto">90d</span>
+                </div>
+                <div className="flex-1 min-h-[200px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={priceHistory} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+                      <defs>
+                        <linearGradient id="priceGradLg" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={color} stopOpacity={0.2} />
+                          <stop offset="100%" stopColor={color} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <YAxis domain={['dataMin', 'dataMax']} hide />
+                      <Tooltip
+                        contentStyle={{ background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', padding: '8px 12px' }}
+                        labelStyle={{ color: '#a1a1aa', fontSize: 11 }}
+                        itemStyle={{ color: '#fff' }}
+                        formatter={(value: number) => [`$${value.toFixed(value >= 1 ? 2 : 6)}`, 'Price']}
+                        labelFormatter={(label: string) => label}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="price"
+                        stroke={color}
+                        strokeWidth={2}
+                        fill="url(#priceGradLg)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Description + External URL + Socials */}
