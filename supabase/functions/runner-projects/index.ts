@@ -210,7 +210,7 @@ serve(async (req: Request) => {
           is_public: boolean;
           active_file: string;
           open_files: string[];
-          folders: Record<string, unknown>;
+          folders: string[];
           files: { path: string; content: string }[];
         };
 
@@ -235,18 +235,20 @@ serve(async (req: Request) => {
             break;
           }
 
-          // Update project metadata
+          // Update project metadata (only set fields that are provided)
+          const updateFields: Record<string, unknown> = {
+            updated_at: new Date().toISOString(),
+          };
+          if (name !== undefined) updateFields.name = name;
+          if (network !== undefined) updateFields.network = network;
+          if (is_public !== undefined) updateFields.is_public = is_public;
+          if (active_file !== undefined) updateFields.active_file = active_file;
+          if (open_files !== undefined) updateFields.open_files = open_files;
+          if (folders !== undefined) updateFields.folders = folders;
+
           const { error: updateError } = await supabaseAdmin
             .from('user_projects')
-            .update({
-              name,
-              network,
-              is_public,
-              active_file,
-              open_files,
-              folders,
-              updated_at: new Date().toISOString(),
-            })
+            .update(updateFields)
             .eq('id', id);
 
           if (updateError) {
@@ -309,9 +311,9 @@ serve(async (req: Request) => {
               slug: projectSlug,
               network,
               is_public: is_public ?? false,
-              active_file,
-              open_files: open_files || [],
-              folders: folders || {},
+              active_file: active_file || 'main.cdc',
+              open_files: open_files || ['main.cdc'],
+              folders: folders || [],
             })
             .select('id, slug')
             .single();
