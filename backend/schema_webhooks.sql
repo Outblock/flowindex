@@ -9,19 +9,21 @@ CREATE TABLE IF NOT EXISTS public.rate_limit_tiers (
     max_endpoints       INT NOT NULL DEFAULT 2,
     max_events_per_hour INT NOT NULL DEFAULT 1000,
     max_api_requests    INT NOT NULL DEFAULT 100,
+    api_rps             INT NOT NULL DEFAULT 20,
     is_default          BOOLEAN NOT NULL DEFAULT false
 );
 
-INSERT INTO public.rate_limit_tiers (id, name, max_subscriptions, max_endpoints, max_events_per_hour, max_api_requests, is_default) VALUES
-    ('free',       'Free',       10,  10,  5000,   300,  true),
-    ('pro',        'Pro',        50,  50,  50000,  1000, false),
-    ('enterprise', 'Enterprise', 500, 100, 500000, 10000, false),
-    ('ultimate',   'Ultimate',   999999, 999999, 999999999, 999999999, false)
+INSERT INTO public.rate_limit_tiers (id, name, max_subscriptions, max_endpoints, max_events_per_hour, max_api_requests, api_rps, is_default) VALUES
+    ('free',       'Free',       10,  10,  5000,   300,  20,     true),
+    ('pro',        'Pro',        50,  50,  50000,  1000, 50,     false),
+    ('enterprise', 'Enterprise', 500, 100, 500000, 10000, 200,   false),
+    ('ultimate',   'Ultimate',   999999, 999999, 999999999, 999999999, 999999, false)
 ON CONFLICT (id) DO UPDATE SET
     max_subscriptions = EXCLUDED.max_subscriptions,
     max_endpoints = EXCLUDED.max_endpoints,
     max_events_per_hour = EXCLUDED.max_events_per_hour,
-    max_api_requests = EXCLUDED.max_api_requests;
+    max_api_requests = EXCLUDED.max_api_requests,
+    api_rps = EXCLUDED.api_rps;
 
 -- User profiles (extends Supabase auth.users)
 CREATE TABLE IF NOT EXISTS public.user_profiles (

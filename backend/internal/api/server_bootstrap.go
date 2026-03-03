@@ -113,6 +113,9 @@ type WebhookAdminRegistrar interface {
 // Returns ("", error) if the key is invalid or not found.
 type APIKeyResolver func(ctx context.Context, keyHash string) (userID string, err error)
 
+// TierRPSResolver returns the per-second rate limit for a user based on their tier.
+type TierRPSResolver func(ctx context.Context, userID string) (rps int, err error)
+
 type Server struct {
 	repo               *repository.Repository
 	client             FlowClient
@@ -125,6 +128,7 @@ type Server struct {
 	webhookHandlers      WebhookRouteRegistrar
 	webhookAdminHandlers WebhookAdminRegistrar
 	apiKeyResolver       APIKeyResolver
+	tierRPSResolver      TierRPSResolver
 	statusCache      struct {
 		mu        sync.Mutex
 		payload   []byte
@@ -208,6 +212,13 @@ func WithWebhookAdminHandlers(wh WebhookAdminRegistrar) func(*Server) {
 func WithAPIKeyResolver(r APIKeyResolver) func(*Server) {
 	return func(s *Server) {
 		s.apiKeyResolver = r
+	}
+}
+
+// WithTierRPSResolver returns a Server option that provides tier-based RPS lookup.
+func WithTierRPSResolver(r TierRPSResolver) func(*Server) {
+	return func(s *Server) {
+		s.tierRPSResolver = r
 	}
 }
 

@@ -538,6 +538,7 @@ func main() {
 	var webhookHandlersOpt func(*api.Server)       // option for server
 	var webhookAdminHandlersOpt func(*api.Server)  // option for admin routes
 	var apiKeyResolverOpt func(*api.Server)        // option for API-key-aware rate limiting
+	var tierRPSResolverOpt func(*api.Server)       // option for tier-based RPS lookup
 	var webhookOrchestrator *webhooks.Orchestrator // started after ctx is created
 	var balanceMonitor *webhooks.BalanceMonitor    // started after ctx is created
 
@@ -560,6 +561,7 @@ func main() {
 			}
 			// Enable API-key-aware rate limiting on all public routes.
 			apiKeyResolverOpt = api.WithAPIKeyResolver(whStore.LookupAPIKey)
+			tierRPSResolverOpt = api.WithTierRPSResolver(whStore.GetUserAPIRPS)
 
 			whAuth := webhooks.NewAuthMiddleware(jwtSecret, whStore.LookupAPIKey)
 
@@ -636,6 +638,9 @@ func main() {
 	}
 	if apiKeyResolverOpt != nil {
 		serverOpts = append(serverOpts, apiKeyResolverOpt)
+	}
+	if tierRPSResolverOpt != nil {
+		serverOpts = append(serverOpts, tierRPSResolverOpt)
 	}
 	apiServer := api.NewServer(repo, flowClient, apiPort, startBlock, serverOpts...)
 

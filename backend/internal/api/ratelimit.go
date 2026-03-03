@@ -14,76 +14,152 @@ import (
 	"golang.org/x/time/rate"
 )
 
-type ipLimiterEntry struct {
+// ---------------------------------------------------------------------------
+// Shared token-bucket map (keyed by IP or userID)
+// ---------------------------------------------------------------------------
+
+type limiterEntry struct {
 	limiter  *rate.Limiter
 	lastSeen time.Time
 }
 
-type ipLimiter struct {
+type bucketMap struct {
 	mu          sync.Mutex
-	entries     map[string]*ipLimiterEntry
+	entries     map[string]*limiterEntry
 	lastCleanup time.Time
-
-	rps   rate.Limit
-	burst int
-	ttl   time.Duration
+	ttl         time.Duration
 }
 
-// Package-level limiters initialised once from env vars.
+func newBucketMap(ttl time.Duration) *bucketMap {
+	return &bucketMap{entries: make(map[string]*limiterEntry), ttl: ttl}
+}
+
+// allow checks the token bucket for key, creating or updating it with the given rps/burst.
+func (bm *bucketMap) allow(key string, rps rate.Limit, burst int) bool {
+	now := time.Now()
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+
+	// Periodic cleanup.
+	if bm.lastCleanup.IsZero() || now.Sub(bm.lastCleanup) > time.Minute {
+		for k, v := range bm.entries {
+			if now.Sub(v.lastSeen) > bm.ttl {
+				delete(bm.entries, k)
+			}
+		}
+		bm.lastCleanup = now
+	}
+
+	ent := bm.entries[key]
+	if ent == nil {
+		ent = &limiterEntry{limiter: rate.NewLimiter(rps, burst), lastSeen: now}
+		bm.entries[key] = ent
+	} else {
+		ent.lastSeen = now
+		// Adjust rate if tier changed.
+		if ent.limiter.Limit() != rps {
+			ent.limiter.SetLimit(rps)
+			ent.limiter.SetBurst(burst)
+		}
+	}
+	return ent.limiter.Allow()
+}
+
+// ---------------------------------------------------------------------------
+// Package-level state
+// ---------------------------------------------------------------------------
+
 var (
-	apiIPLimiter    = newIPLimiterFromEnv("API_RATE_LIMIT_RPS", 30, "API_RATE_LIMIT_BURST", 60)
-	apiAuthedLimiter = newIPLimiterFromEnv("API_RATE_LIMIT_AUTHED_RPS", 300, "API_RATE_LIMIT_AUTHED_BURST", 600)
+	ipBuckets    = newBucketMap(15 * time.Minute)
+	userBuckets  = newBucketMap(15 * time.Minute)
+	anonRPS      rate.Limit
+	anonBurst    int
 )
 
-func newIPLimiterFromEnv(rpsEnv string, rpsDefault float64, burstEnv string, burstDefault int) *ipLimiter {
-	rps := rpsDefault
-	if v := strings.TrimSpace(os.Getenv(rpsEnv)); v != "" {
+func init() {
+	rps := 5.0
+	if v := strings.TrimSpace(os.Getenv("API_RATE_LIMIT_RPS")); v != "" {
 		if n, err := strconv.ParseFloat(v, 64); err == nil {
 			rps = n
 		}
 	}
-	burst := burstDefault
-	if v := strings.TrimSpace(os.Getenv(burstEnv)); v != "" {
+	burst := int(rps * 2)
+	if burst < 1 {
+		burst = 1
+	}
+	if v := strings.TrimSpace(os.Getenv("API_RATE_LIMIT_BURST")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			burst = n
 		}
 	}
-	ttl := 15 * time.Minute
 	if v := strings.TrimSpace(os.Getenv("API_RATE_LIMIT_TTL_MIN")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			ttl = time.Duration(n) * time.Minute
+			ttl := time.Duration(n) * time.Minute
+			ipBuckets.ttl = ttl
+			userBuckets.ttl = ttl
 		}
 	}
-	return &ipLimiter{
-		entries: make(map[string]*ipLimiterEntry),
-		rps:     rate.Limit(rps),
-		burst:   burst,
-		ttl:     ttl,
-	}
+	anonRPS = rate.Limit(rps)
+	anonBurst = burst
 }
 
-// rateLimitMiddleware is a method on Server so it can access apiKeyResolver.
+// ---------------------------------------------------------------------------
+// Tier RPS cache (avoids DB hit on every authenticated request)
+// ---------------------------------------------------------------------------
+
+const (
+	tierCacheTTL    = 5 * time.Minute
+	defaultAuthedRPS = 20
+)
+
+type rpsCache struct {
+	mu      sync.Mutex
+	entries map[string]rpsCacheEntry
+}
+
+type rpsCacheEntry struct {
+	rps       int
+	fetchedAt time.Time
+}
+
+var tierRPSCache = &rpsCache{entries: make(map[string]rpsCacheEntry)}
+
+func (c *rpsCache) get(userID string) (int, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ent, ok := c.entries[userID]
+	if !ok || time.Since(ent.fetchedAt) > tierCacheTTL {
+		return 0, false
+	}
+	return ent.rps, true
+}
+
+func (c *rpsCache) set(userID string, rps int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[userID] = rpsCacheEntry{rps: rps, fetchedAt: time.Now()}
+}
+
+// ---------------------------------------------------------------------------
+// Middleware
+// ---------------------------------------------------------------------------
+
 func (s *Server) rateLimitMiddleware(next http.Handler) http.Handler {
-	// Disable if rps <= 0
-	if apiIPLimiter == nil || apiIPLimiter.rps <= 0 {
+	if anonRPS <= 0 {
 		return next
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Exempt lightweight endpoints.
 		switch {
-		case r.URL.Path == "/health":
-			next.ServeHTTP(w, r)
-			return
-		case strings.HasPrefix(r.URL.Path, "/openapi."):
-			next.ServeHTTP(w, r)
-			return
-		case r.URL.Path == "/ws":
+		case r.URL.Path == "/health",
+			strings.HasPrefix(r.URL.Path, "/openapi."),
+			r.URL.Path == "/ws":
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// Check for API key — authenticated requests get higher limits.
+		// --- Authenticated path (X-API-Key) ---
 		if apiKey := strings.TrimSpace(r.Header.Get("X-API-Key")); apiKey != "" && s.apiKeyResolver != nil {
 			hash := sha256Hash(apiKey)
 			userID, err := s.apiKeyResolver(r.Context(), hash)
@@ -94,74 +170,59 @@ func (s *Server) rateLimitMiddleware(next http.Handler) http.Handler {
 				return
 			}
 
-			// Rate-limit by userID with higher limits.
-			if !apiAuthedLimiter.allow(userID) {
+			// Resolve tier RPS (cached for 5 min).
+			rps := defaultAuthedRPS
+			if cached, ok := tierRPSCache.get(userID); ok {
+				rps = cached
+			} else if s.tierRPSResolver != nil {
+				if tierRPS, err := s.tierRPSResolver(r.Context(), userID); err == nil && tierRPS > 0 {
+					rps = tierRPS
+				}
+				tierRPSCache.set(userID, rps)
+			}
+
+			limit := rate.Limit(rps)
+			burst := rps * 2
+			if burst < 1 {
+				burst = 1
+			}
+			if !userBuckets.allow(userID, limit, burst) {
 				w.Header().Set("Content-Type", "application/json")
-				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(int(apiAuthedLimiter.rps)))
+				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rps))
 				w.WriteHeader(http.StatusTooManyRequests)
 				w.Write([]byte(`{"error":"rate_limited","message":"too many requests"}`))
 				return
 			}
-
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// Unauthenticated — IP-based low rate limit.
+		// --- Unauthenticated path (IP-based) ---
 		ip := clientIP(r)
 		if ip == "" {
 			ip = "unknown"
 		}
-
-		if !apiIPLimiter.allow(ip) {
+		if !ipBuckets.allow(ip, anonRPS, anonBurst) {
 			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(int(apiIPLimiter.rps)))
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(int(anonRPS)))
 			w.WriteHeader(http.StatusTooManyRequests)
 			w.Write([]byte(`{"error":"rate_limited","message":"too many requests"}`))
 			return
 		}
-
 		next.ServeHTTP(w, r)
 	})
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 func sha256Hash(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
 }
 
-func (l *ipLimiter) allow(key string) bool {
-	now := time.Now()
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	// Periodic cleanup (amortized).
-	if l.lastCleanup.IsZero() || now.Sub(l.lastCleanup) > time.Minute {
-		for k, v := range l.entries {
-			if now.Sub(v.lastSeen) > l.ttl {
-				delete(l.entries, k)
-			}
-		}
-		l.lastCleanup = now
-	}
-
-	ent := l.entries[key]
-	if ent == nil {
-		ent = &ipLimiterEntry{
-			limiter:  rate.NewLimiter(l.rps, l.burst),
-			lastSeen: now,
-		}
-		l.entries[key] = ent
-	} else {
-		ent.lastSeen = now
-	}
-
-	return ent.limiter.Allow()
-}
-
 func clientIP(r *http.Request) string {
-	// Prefer X-Forwarded-For, set by our nginx proxy.
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
 		if len(parts) > 0 {
@@ -171,11 +232,9 @@ func clientIP(r *http.Request) string {
 			}
 		}
 	}
-
 	if xr := strings.TrimSpace(r.Header.Get("X-Real-IP")); xr != "" {
 		return xr
 	}
-
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
 	if err == nil && host != "" {
 		return host

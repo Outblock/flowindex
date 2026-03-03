@@ -62,6 +62,7 @@ type RateLimitTier struct {
 	MaxEndpoints     int    `json:"max_endpoints"`
 	MaxEventsPerHour int    `json:"max_events_per_hour"`
 	MaxAPIRequests   int    `json:"max_api_requests"`
+	APIRPS           int    `json:"api_rps"`
 }
 
 type Workflow struct {
@@ -402,15 +403,31 @@ func (s *Store) GetUserProfile(ctx context.Context, userID string) (*UserProfile
 func (s *Store) GetUserTier(ctx context.Context, userID string) (*RateLimitTier, error) {
 	var t RateLimitTier
 	err := s.pool.QueryRow(ctx,
-		`SELECT r.id, r.name, r.max_subscriptions, r.max_endpoints, r.max_events_per_hour, r.max_api_requests
+		`SELECT r.id, r.name, r.max_subscriptions, r.max_endpoints, r.max_events_per_hour, r.max_api_requests,
+		        COALESCE(r.api_rps, 20)
 		 FROM public.rate_limit_tiers r
 		 JOIN public.user_profiles p ON p.tier_id = r.id
 		 WHERE p.user_id = $1`, userID,
-	).Scan(&t.ID, &t.Name, &t.MaxSubscriptions, &t.MaxEndpoints, &t.MaxEventsPerHour, &t.MaxAPIRequests)
+	).Scan(&t.ID, &t.Name, &t.MaxSubscriptions, &t.MaxEndpoints, &t.MaxEventsPerHour, &t.MaxAPIRequests, &t.APIRPS)
 	if err != nil {
 		return nil, err
 	}
 	return &t, nil
+}
+
+// GetUserAPIRPS returns the per-second rate limit for public API access based on the user's tier.
+func (s *Store) GetUserAPIRPS(ctx context.Context, userID string) (int, error) {
+	var rps int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(r.api_rps, 20)
+		 FROM public.rate_limit_tiers r
+		 JOIN public.user_profiles p ON p.tier_id = r.id
+		 WHERE p.user_id = $1`, userID,
+	).Scan(&rps)
+	if err != nil {
+		return 20, err // fallback to free tier
+	}
+	return rps, nil
 }
 
 func (s *Store) UpdateUserTier(ctx context.Context, userID, tierID string) error {
@@ -521,16 +538,17 @@ func (s *Store) EnsureRBACSchema(ctx context.Context) error {
 // EnsureTiers upserts all known rate limit tiers so that foreign key references succeed.
 func (s *Store) EnsureTiers(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO public.rate_limit_tiers (id, name, max_subscriptions, max_endpoints, max_events_per_hour, max_api_requests, is_default) VALUES
-		    ('free',       'Free',       10,  10,  5000,   300,  true),
-		    ('pro',        'Pro',        50,  50,  50000,  1000, false),
-		    ('enterprise', 'Enterprise', 500, 100, 500000, 10000, false),
-		    ('ultimate',   'Ultimate',   999999, 999999, 999999999, 999999999, false)
+		INSERT INTO public.rate_limit_tiers (id, name, max_subscriptions, max_endpoints, max_events_per_hour, max_api_requests, api_rps, is_default) VALUES
+		    ('free',       'Free',       10,  10,  5000,   300,  20,     true),
+		    ('pro',        'Pro',        50,  50,  50000,  1000, 50,     false),
+		    ('enterprise', 'Enterprise', 500, 100, 500000, 10000, 200,   false),
+		    ('ultimate',   'Ultimate',   999999, 999999, 999999999, 999999999, 999999, false)
 		ON CONFLICT (id) DO UPDATE SET
 		    max_subscriptions = EXCLUDED.max_subscriptions,
 		    max_endpoints = EXCLUDED.max_endpoints,
 		    max_events_per_hour = EXCLUDED.max_events_per_hour,
-		    max_api_requests = EXCLUDED.max_api_requests
+		    max_api_requests = EXCLUDED.max_api_requests,
+		    api_rps = EXCLUDED.api_rps
 	`)
 	return err
 }

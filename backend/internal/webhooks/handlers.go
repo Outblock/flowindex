@@ -529,6 +529,7 @@ func (h *Handlers) handleGetAccountUsage(w http.ResponseWriter, r *http.Request)
 			ID: "free", Name: "Free",
 			MaxSubscriptions: 10, MaxEndpoints: 10,
 			MaxEventsPerHour: 5000, MaxAPIRequests: 300,
+			APIRPS: 20,
 		}
 	}
 
