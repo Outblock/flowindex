@@ -184,7 +184,7 @@ export default function App() {
     editCount: number;
     assistantId?: string;
   } | null>(null);
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { keys, signMessage } = useKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'fcl' });
@@ -536,20 +536,6 @@ export default function App() {
             </button>
           )}
 
-          {/* Auth hint for unauthenticated users */}
-          {!user && !authLoading && (
-            <a
-              href="https://developer.flowindex.io/developer/login"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-zinc-500 hover:text-zinc-300 text-[10px] transition-colors"
-              title="Sign in to manage custodial keys"
-            >
-              <LogIn className="w-3 h-3" />
-              <span>Sign in</span>
-            </a>
-          )}
-
           <button
             onClick={handleRun}
             disabled={loading || activeFileEntry?.readOnly}
@@ -600,15 +586,43 @@ export default function App() {
         {/* File Explorer */}
         {showExplorer && (
           <>
-            <div className="shrink-0 overflow-hidden bg-zinc-900" style={{ width: explorer.width }}>
-              <FileExplorer
-                project={project}
-                onOpenFile={handleOpenFile}
-                onCreateFile={handleCreateFile}
-                onCreateFolder={handleCreateFolder}
-                onDeleteFile={handleDeleteFile}
-                activeFile={project.activeFile}
-              />
+            <div className="shrink-0 overflow-hidden bg-zinc-900 flex flex-col" style={{ width: explorer.width }}>
+              <div className="flex-1 overflow-y-auto">
+                <FileExplorer
+                  project={project}
+                  onOpenFile={handleOpenFile}
+                  onCreateFile={handleCreateFile}
+                  onCreateFolder={handleCreateFolder}
+                  onDeleteFile={handleDeleteFile}
+                  activeFile={project.activeFile}
+                />
+              </div>
+              {/* Sign in / user info at sidebar bottom */}
+              {!authLoading && (
+                <div className="shrink-0 border-t border-zinc-700 px-3 py-2">
+                  {user ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-zinc-500 truncate">{user.email}</span>
+                      <button
+                        onClick={() => signOut()}
+                        className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  ) : (
+                    <a
+                      href="https://flowindex.io/developer/login"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors"
+                    >
+                      <LogIn className="w-3 h-3" />
+                      <span>Sign in</span>
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
             <DragBar direction="horizontal" onMouseDown={explorer.onMouseDown} />
           </>
