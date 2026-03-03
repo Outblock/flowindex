@@ -38,10 +38,20 @@ func (s *Server) handleFlowNFTTransfers(w http.ResponseWriter, r *http.Request) 
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
 
+func (s *Server) handleFlowNFTCollectionStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := s.repo.GetNFTCollectionStatsKPI(r.Context())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeAPIResponse(w, stats, nil, nil)
+}
+
 func (s *Server) handleFlowListNFTCollections(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
 	sort := r.URL.Query().Get("sort")
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	filter := strings.TrimSpace(r.URL.Query().Get("filter"))
 
 	var collections []repository.NFTCollectionSummary
 	var total int64
@@ -55,7 +65,7 @@ func (s *Server) handleFlowListNFTCollections(w http.ResponseWriter, r *http.Req
 			total, err = s.repo.CountNFTCollectionSummaries(r.Context())
 		}
 	} else {
-		collections, err = s.repo.ListNFTCollectionSummaries(r.Context(), limit, offset)
+		collections, err = s.repo.ListNFTCollectionSummaries(r.Context(), limit, offset, filter)
 		if err == nil {
 			total, err = s.repo.CountNFTCollectionSummaries(r.Context())
 		}
