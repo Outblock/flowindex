@@ -59,11 +59,10 @@ jobs:
               - '.github/workflows/deploy.yml'
             studio:
               - 'studio/**'
-              - '.github/workflows/deploy.yml'
+              - '!studio/seed/simstudio_seed.sql'
             sim-studio:
-              - 'studio/**'
+              - 'studio/seed/simstudio_seed.sql'
               - 'sim-workflow/**'
-              - '.github/workflows/deploy.yml'
       - name: Resolve outputs
         id: result
         run: |
