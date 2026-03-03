@@ -955,7 +955,6 @@ jobs:
               exit 1
             fi
             SIM_DB_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${SIM_DB_NAME}"
-            SIM_MIGRATION_DB_URL="${SIM_DB_URL}?options=-csearch_path%3Dpublic%2Cextensions"
 
             # Helper: run psql via docker (no psql binary on the VM)
             run_psql() {
@@ -976,19 +975,32 @@ jobs:
               echo "pgvector type 'vector' is unavailable in database $SIM_DB_NAME"
               exit 1
             fi
-            # Keep public first (for Sim Studio tables) and include extensions (for pgvector type).
+            if ! echo "$VECTOR_SCHEMA" | grep -Eq "^[A-Za-z_][A-Za-z0-9_]*$"; then
+              echo "Unsafe vector schema name: $VECTOR_SCHEMA"
+              exit 1
+            fi
+            # Keep public first (for Sim Studio tables) and include the actual pgvector schema.
+            if [ "$VECTOR_SCHEMA" = "public" ]; then
+              SIM_SEARCH_PATH="public"
+            else
+              SIM_SEARCH_PATH="public,${VECTOR_SCHEMA}"
+            fi
+            ENCODED_SIM_SEARCH_PATH=$(printf "%s" "$SIM_SEARCH_PATH" | sed "s/,/%2C/g")
+            SIM_MIGRATION_DB_URL="${SIM_DB_URL}?options=-csearch_path%3D${ENCODED_SIM_SEARCH_PATH}"
+
+            # Keep public first (for Sim Studio tables) and include vector schema.
             # Configure both database-level and role-level defaults so non-libpq clients
             # (e.g. postgres-js used by drizzle-kit) still resolve `vector` consistently.
             run_psql -d postgres \
-              -c "ALTER DATABASE \"$SIM_DB_NAME\" SET search_path TO public,extensions"
+              -c "ALTER DATABASE \"$SIM_DB_NAME\" SET search_path TO ${SIM_SEARCH_PATH}"
             run_psql -d "$SIM_DB_NAME" \
-              -c "ALTER ROLE \"$DB_USER\" IN DATABASE \"$SIM_DB_NAME\" SET search_path TO public,extensions"
+              -c "ALTER ROLE \"$DB_USER\" IN DATABASE \"$SIM_DB_NAME\" SET search_path TO ${SIM_SEARCH_PATH}"
             SEARCH_PATH=$(run_psql -d "$SIM_DB_NAME" -tAc "SHOW search_path;" | tr -d '\r')
             echo "DB search_path: ${SEARCH_PATH:-unknown}"
             echo "vector type schema: $VECTOR_SCHEMA"
             # Hard probe before running migrations: ensure unqualified vector type resolves.
             run_psql -d "$SIM_DB_NAME" -v ON_ERROR_STOP=1 \
-              -c "SELECT NULL::vector;"
+              -c "SET search_path TO ${SIM_SEARCH_PATH}; SELECT NULL::vector;"
             echo "Database $SIM_DB_NAME ready"
 
             # Pull images
@@ -1000,7 +1012,7 @@ jobs:
             echo "Running Sim Studio Drizzle migrations..."
             docker run --rm --network=host \
               -e DATABASE_URL="$SIM_MIGRATION_DB_URL" \
-              -e PGOPTIONS="-c search_path=public,extensions" \
+              -e PGOPTIONS="-c search_path=${SIM_SEARCH_PATH}" \
               "$SIM_STUDIO_MIGRATIONS_IMAGE" \
               run db:migrate
             echo "Migrations applied"
