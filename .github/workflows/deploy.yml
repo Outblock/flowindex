@@ -58,6 +58,7 @@ jobs:
               - '.github/workflows/deploy.yml'
             sim-studio:
               - 'studio/**'
+              - 'sim-workflow/**'
               - '.github/workflows/deploy.yml'
       - name: Resolve outputs
         id: result
@@ -560,23 +561,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          UPSTREAM_REF="$(tr -d '\n' < studio/fork/upstream.ref)"
-          if [ -z "$UPSTREAM_REF" ]; then
-            echo "studio/fork/upstream.ref is empty"
+          SRC_DIR="$GITHUB_WORKSPACE/sim-workflow"
+          if [ ! -d "$SRC_DIR" ]; then
+            echo "sim-workflow directory is missing"
             exit 1
           fi
-
-          SRC_DIR="$RUNNER_TEMP/simstudio-src"
-          git clone --filter=blob:none https://github.com/simstudioai/sim.git "$SRC_DIR"
           cd "$SRC_DIR"
-          git checkout "$UPSTREAM_REF"
-
-          for patch in "$GITHUB_WORKSPACE"/studio/fork/patches/*.patch; do
-            if [ -f "$patch" ]; then
-              echo "Applying patch: $patch"
-              git am "$patch"
-            fi
-          done
 
           APP_IMAGE="${{ env.REGISTRY }}/simstudio-fork"
           REALTIME_IMAGE="${{ env.REGISTRY }}/simstudio-fork-realtime"
