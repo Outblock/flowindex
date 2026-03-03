@@ -575,8 +575,7 @@ jobs:
             }
 
             # Ensure simstudio database exists with pgvector
-            run_psql -d postgres -c "SELECT datname FROM pg_database WHERE datname = $$simstudio$$" | grep -q simstudio || \
-              run_psql -d postgres -c "CREATE DATABASE simstudio" || true
+            run_psql -d postgres -c "CREATE DATABASE simstudio" 2>/dev/null || true
             run_psql -d simstudio \
               -c "CREATE EXTENSION IF NOT EXISTS vector" 2>/dev/null || true
             echo "Database simstudio ready"
@@ -623,38 +622,41 @@ jobs:
               -e INTERNAL_API_SECRET="${INTERNAL_API_SECRET}" \
               ghcr.io/simstudioai/realtime:latest
 
-            # Run sim-studio-auth proxy (port 8001)
-            # Checks fi_auth cookie (shared Supabase session on .flowindex.io)
-            cat > /tmp/sim-studio-auth.conf << 'NGINXEOF'
-            server {
-                listen 8001;
-                absolute_redirect off;
+            echo "Sim Studio deployed (web: 3200, realtime: 3202)"
+            docker ps --filter name=sim-studio --format "table {{.Names}}\t{{.Status}}"
+          '
 
-                location / {
-                    # Require fi_auth cookie (Supabase session, shared across .flowindex.io)
-                    if ($cookie_fi_auth = "") {
-                        return 302 https://flowindex.io/developer/login?redirect=https://studio.flowindex.io$request_uri;
-                    }
+      - name: Deploy sim-studio-auth proxy
+        run: |
+          cat > /tmp/sim-studio-auth.conf << 'NGINXEOF'
+          server {
+              listen 8001;
+              absolute_redirect off;
 
-                    proxy_pass http://127.0.0.1:3200;
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                    proxy_http_version 1.1;
-                    proxy_set_header Upgrade $http_upgrade;
-                    proxy_set_header Connection "upgrade";
-                }
-            }
-            NGINXEOF
+              location / {
+                  if ($cookie_fi_auth = "") {
+                      return 302 https://flowindex.io/developer/login?redirect=https://studio.flowindex.io$request_uri;
+                  }
+
+                  proxy_pass http://127.0.0.1:3200;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "upgrade";
+              }
+          }
+          NGINXEOF
+          gcloud compute scp /tmp/sim-studio-auth.conf flowindex-backend:/tmp/sim-studio-auth.conf --zone=us-central1-a
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
             docker stop sim-studio-auth 2>/dev/null || true; docker rm sim-studio-auth 2>/dev/null || true
             docker run -d --restart=always --name sim-studio-auth \
               --network=host \
               -v /tmp/sim-studio-auth.conf:/etc/nginx/conf.d/default.conf:ro \
               nginx:alpine
-
-            echo "Sim Studio deployed (web: 3200, realtime: 3202, auth: 8001)"
-            docker ps --filter name=sim-studio --format "table {{.Names}}\t{{.Status}}"
+            echo "sim-studio-auth deployed on port 8001"
           '
 
       - name: Update Caddy config for studio.flowindex.io TLS
