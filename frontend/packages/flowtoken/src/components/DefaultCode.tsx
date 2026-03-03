@@ -74,7 +74,7 @@ const DefaultCode: React.FC<DefaultCodeProps> = ({
       <Prism
         style={codeStyle}
         language={className?.substring(9).trim() || ''}
-        renderer={customCodeRenderer({ animation, animationDuration, animationTimingFunction })}
+        renderer={customCodeRenderer({ animation, animationDuration, animationTimingFunction }) as never}
       >
         {String(children)}
       </Prism>

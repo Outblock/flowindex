@@ -90,7 +90,7 @@ code, pre, .font-mono, .mono-font {
   box-shadow: 0 0 24px -4px var(--flow-green-glow);
 }
 
-/* Streamdown: colorTransition + blurIn animation */
+/* Streamdown: colorTransition + blurIn animation (kept for reasoning blocks) */
 @keyframes sd-colorBlurIn {
   from {
     opacity: 0;
@@ -106,6 +106,16 @@ code, pre, .font-mono, .mono-font {
     opacity: 1;
     filter: blur(0);
     color: inherit;
+  }
+}
+
+/* flowtoken: override colorTransition green → currentColor */
+@keyframes ft-colorTransition {
+  from {
+    color: var(--flow-green);
+  }
+  to {
+    color: currentColor;
   }
 }
 

@@ -4,7 +4,6 @@ import React, { useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-// @ts-expect-error no types for this subpath export
 import doccoStyle from 'react-syntax-highlighter/dist/esm/styles/hljs/docco';
 import SplitText from './SplitText';
 import AnimatedImage from './AnimatedImage';
@@ -86,7 +85,7 @@ const MarkdownAnimateText: React.FC<MarkdownAnimateTextProps> = ({
     return animations[animationProp] || animationProp;
   }, [animationProp]);
 
-  const resolvedCodeStyle = codeStyle || doccoStyle.docco || doccoStyle;
+  const resolvedCodeStyle = (codeStyle || doccoStyle.docco || doccoStyle) as Record<string, React.CSSProperties>;
 
   const animationStyle = useMemo(
     () => createAnimationStyle(animation, animationDuration, animationTimingFunction),
