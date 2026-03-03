@@ -35,6 +35,7 @@ let initialized = false;
 let fontRegular: ArrayBuffer;
 let fontSemiBold: ArrayBuffer;
 let fontBold: ArrayBuffer;
+let fontBoldItalic: ArrayBuffer;
 
 async function ensureInit() {
   if (initialized) return;
@@ -54,15 +55,17 @@ async function ensureInit() {
   if (!wasmBinary) throw new Error('resvg.wasm not found in any candidate path');
   await initWasm(wasmBinary);
   // Load Inter font files for each weight from Google Fonts CDN
-  const [regularRes, semiBoldRes, boldRes] = await Promise.all([
+  const [regularRes, semiBoldRes, boldRes, boldItalicRes] = await Promise.all([
     fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf'),
     fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYMZg.ttf'),
     fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf'),
+    fetch('https://fonts.gstatic.com/s/inter/v20/UcCM3FwrK3iLTcvneQg7Ca725JhhKnNqk4j1ebLhAm8SrXTcPtxhjQ.ttf'),
   ]);
-  [fontRegular, fontSemiBold, fontBold] = await Promise.all([
+  [fontRegular, fontSemiBold, fontBold, fontBoldItalic] = await Promise.all([
     regularRes.arrayBuffer(),
     semiBoldRes.arrayBuffer(),
     boldRes.arrayBuffer(),
+    boldItalicRes.arrayBuffer(),
   ]);
   initialized = true;
 }
@@ -119,6 +122,7 @@ export default defineEventHandler(async (event) => {
         { name: 'Inter', data: fontRegular, weight: 400, style: 'normal' as const },
         { name: 'Inter', data: fontSemiBold, weight: 600, style: 'normal' as const },
         { name: 'Inter', data: fontBold, weight: 700, style: 'normal' as const },
+        { name: 'Inter', data: fontBoldItalic, weight: 700, style: 'italic' as const },
       ],
     });
 

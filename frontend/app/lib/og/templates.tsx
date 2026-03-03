@@ -100,8 +100,10 @@ function Container({ children }: { children: any }) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <img src={LOGO_SVG} width={28} height={32} />
-          <span style={{ fontSize: 18, fontWeight: 600, color: COLORS.white, letterSpacing: '0.04em' }}>
-            flowindex.io
+          <span style={{ fontSize: 18, fontWeight: 700, fontStyle: 'italic', letterSpacing: '0.04em', display: 'flex' }}>
+            <span style={{ color: COLORS.white }}>flow</span>
+            <span style={{ color: COLORS.green }}>index</span>
+            <span style={{ color: COLORS.gray, fontStyle: 'normal', fontWeight: 400 }}>.io</span>
           </span>
         </div>
         <span style={{ fontSize: 15, fontWeight: 400, color: COLORS.gray }}>Flow Blockchain Explorer</span>
@@ -199,7 +201,20 @@ export function homeTemplate() {
   return (
     <Container>
       <Label text="Flow Blockchain Explorer" />
-      <Title text="FlowIndex" />
+      {/* Bold italic logo text with color split */}
+      <div
+        style={{
+          display: 'flex',
+          fontSize: 64,
+          fontWeight: 700,
+          fontStyle: 'italic',
+          lineHeight: 1.2,
+          marginBottom: 16,
+        }}
+      >
+        <span style={{ color: COLORS.white }}>Flow</span>
+        <span style={{ color: COLORS.green }}>Index</span>
+      </div>
       <Subtitle text="Real-time blocks, transactions, accounts, tokens, and NFTs on the Flow network" />
       <StatRow
         items={[
