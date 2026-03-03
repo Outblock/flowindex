@@ -925,23 +925,26 @@ jobs:
             FLOWINDEX_AUTH_MODE="${FLOWINDEX_AUTH_MODE:-supabase_cookie}"
 
             # Use a single shared DB with Supabase by default.
-            # Optional override: define SIM_DB_URL in sim-studio.env.
-            SIM_DB_URL="${SIM_DB_URL:-$SUPABASE_DB_URL}"
+            # Optional override: define SOURCE_SIM_DB_URL in sim-studio.env.
+            SOURCE_SIM_DB_URL="${SOURCE_SIM_DB_URL:-$SUPABASE_DB_URL}"
 
-            # Parse DB connection from selected SIM_DB_URL
-            DB_USER=$(echo "$SIM_DB_URL" | sed -n "s|.*://\([^:]*\):.*|\1|p")
-            DB_PASS=$(echo "$SIM_DB_URL" | sed -n "s|.*://[^:]*:\([^@]*\)@.*|\1|p")
-            DB_HOST=$(echo "$SIM_DB_URL" | sed -n "s|.*://[^:]*:[^@]*@\([^:/?]*\).*|\1|p")
-            DB_PORT=$(echo "$SIM_DB_URL" | sed -n "s|.*://[^:]*:[^@]*@[^:/?]*:\([0-9]*\).*|\1|p")
-            SIM_DB_NAME=$(echo "$SIM_DB_URL" | sed -n "s|.*/\([^?]*\).*|\1|p")
+            # Parse DB connection from selected source URL.
+            # We intentionally rebuild a clean URL (no query params like search_path)
+            # to keep Sim Studio migrations on public schema.
+            DB_USER=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://\([^:]*\):.*|\1|p")
+            DB_PASS=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://[^:]*:\([^@]*\)@.*|\1|p")
+            DB_HOST=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://[^:]*:[^@]*@\([^:/?]*\).*|\1|p")
+            DB_PORT=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://[^:]*:[^@]*@[^:/?]*:\([0-9]*\).*|\1|p")
+            SIM_DB_NAME=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*/\([^?]*\).*|\1|p")
 
             if [ -z "$DB_PORT" ]; then
               DB_PORT=5432
             fi
             if [ -z "$SIM_DB_NAME" ]; then
-              echo "Failed to parse database name from SIM_DB_URL"
+              echo "Failed to parse database name from SOURCE_SIM_DB_URL"
               exit 1
             fi
+            SIM_DB_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${SIM_DB_NAME}"
 
             # Helper: run psql via docker (no psql binary on the VM)
             run_psql() {
