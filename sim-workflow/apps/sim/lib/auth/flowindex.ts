@@ -9,13 +9,9 @@ import {
   type FlowIndexJwtPayload,
   verifyFlowIndexAccessToken,
 } from './flowindex-cookie'
+import { ensurePersonalWorkspace } from './flowindex-workspace'
 
 const logger = createLogger('FlowIndexAuth')
-
-const DEFAULT_WORKSPACE_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
-
-let checkedDefaultWorkspace = false
-let hasDefaultWorkspace = false
 
 export interface FlowIndexSession {
   user: {
@@ -106,47 +102,6 @@ function resolveExpiry(payload: FlowIndexJwtPayload): Date {
   return new Date(Date.now() + 60 * 60 * 1000)
 }
 
-async function ensureDefaultWorkspacePermission(userId: string): Promise<void> {
-  const workspaceId = env.FLOWINDEX_DEFAULT_WORKSPACE_ID || DEFAULT_WORKSPACE_ID
-  if (!workspaceId) return
-
-  if (!checkedDefaultWorkspace) {
-    const workspace = await db.query.workspace.findFirst({
-      where: eq(schema.workspace.id, workspaceId),
-      columns: { id: true },
-    })
-    hasDefaultWorkspace = !!workspace
-    checkedDefaultWorkspace = true
-  }
-
-  if (!hasDefaultWorkspace) return
-
-  const now = new Date()
-
-  await db
-    .insert(schema.permissions)
-    .values({
-      id: crypto.randomUUID(),
-      userId,
-      entityType: 'workspace',
-      entityId: workspaceId,
-      permissionType: 'admin',
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [
-        schema.permissions.userId,
-        schema.permissions.entityType,
-        schema.permissions.entityId,
-      ],
-      set: {
-        permissionType: 'admin',
-        updatedAt: now,
-      },
-    })
-}
-
 async function buildSessionFromPayload(
   payload: FlowIndexJwtPayload,
   accessToken: string
@@ -192,9 +147,9 @@ async function buildSessionFromPayload(
     })
 
   try {
-    await ensureDefaultWorkspacePermission(userId)
+    await ensurePersonalWorkspace(userId, name)
   } catch (error) {
-    logger.warn('Failed to ensure default workspace permission for FlowIndex user', {
+    logger.warn('Failed to ensure personal workspace for FlowIndex user', {
       userId,
       error,
     })
