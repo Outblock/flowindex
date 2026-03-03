@@ -562,10 +562,10 @@ export default function App() {
             )}
             {codeType === 'script' ? 'Run Script' : 'Send Transaction'}
             <span className="ml-1.5 flex items-center gap-0.5 opacity-60">
-              <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
+              <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 shadow-[0_1px_0_rgba(0,0,0,0.3)]">
                 {navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}
               </kbd>
-              <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
+              <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 shadow-[0_1px_0_rgba(0,0,0,0.3)]">
                 ↵
               </kbd>
             </span>
