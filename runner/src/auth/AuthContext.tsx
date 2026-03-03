@@ -199,6 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  // Restore session from cookie/localStorage on mount
   useEffect(() => {
     let cancelled = false;
 
@@ -246,6 +247,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
   }, [scheduleRefresh]);
+
+  // Detect logout from main site: when user switches back to this tab,
+  // check if the fi_auth cookie was cleared (main site sign-out).
+  useEffect(() => {
+    const checkCookieSync = () => {
+      // Only act if we think we're logged in
+      if (!refreshTokenRef.current) return;
+      const cookieTokens = loadTokensFromCookie();
+      if (!cookieTokens) {
+        // Cookie gone — main site logged out. Clear Runner session.
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        clearTokens();
+        setUser(null);
+        setAccessToken(null);
+        refreshTokenRef.current = null;
+      }
+    };
+
+    // Check when tab becomes visible (user switches back from main site)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') checkCookieSync();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    // Also poll every 30s as fallback (e.g. side-by-side windows)
+    const interval = setInterval(checkCookieSync, 30_000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearInterval(interval);
+    };
+  }, []);
 
   const signOut = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
