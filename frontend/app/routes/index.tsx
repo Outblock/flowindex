@@ -724,7 +724,7 @@ function Home() {
                                             </div>
                                             <div className="flex flex-col min-w-0 flex-1">
                                                 <div className="flex items-center space-x-2">
-                                                    <span className="text-xs font-mono text-zinc-900 dark:text-white truncate">{token.name || 'Unknown'}</span>
+                                                    <span className="text-xs font-mono text-zinc-900 dark:text-white truncate">{token.name || token.contract_name || 'Unknown'}</span>
                                                     {token.symbol && (
                                                         <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500 uppercase">{token.symbol}</span>
                                                     )}
