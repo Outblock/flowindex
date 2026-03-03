@@ -5,7 +5,7 @@ export const Route = createFileRoute('/developer/studio')({
   component: StudioPage,
 })
 
-const SIM_STUDIO_URL = import.meta.env.VITE_SIM_STUDIO_URL || 'http://localhost:3000'
+const SIM_STUDIO_URL = import.meta.env.VITE_SIM_STUDIO_URL || 'https://studio.flowindex.io'
 const WORKSPACE_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 
 function StudioPage() {

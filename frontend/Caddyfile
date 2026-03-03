@@ -18,6 +18,15 @@ ai.flowindex.io {
 	reverse_proxy 34.170.76.156:80
 }
 
+studio.flowindex.io {
+	handle /socket.io/* {
+		reverse_proxy 10.128.0.4:3202
+	}
+	handle {
+		reverse_proxy 10.128.0.4:3200
+	}
+}
+
 analytics.flowindex.io {
 	reverse_proxy localhost:3001
 }
