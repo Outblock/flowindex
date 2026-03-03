@@ -114,46 +114,52 @@ export default function CadenceDiffEditor({
         const domNode = document.createElement('div');
         domNode.style.display = 'flex';
         domNode.style.alignItems = 'center';
-        domNode.style.gap = '4px';
-        domNode.style.padding = '2px 8px';
-        domNode.style.background = darkMode ? 'rgba(39, 39, 42, 0.6)' : 'rgba(244, 244, 245, 0.8)';
-        domNode.style.borderTop = `1px solid ${darkMode ? '#3f3f46' : '#e4e4e7'}`;
-        domNode.style.borderBottom = `1px solid ${darkMode ? '#3f3f46' : '#e4e4e7'}`;
+        domNode.style.gap = '12px';
+        domNode.style.padding = '6px 16px 6px 52px';
+        domNode.style.background = darkMode ? 'rgba(24, 24, 27, 0.95)' : 'rgba(250, 250, 250, 0.95)';
+        domNode.style.borderTop = `1px solid ${darkMode ? 'rgba(63, 63, 70, 0.5)' : '#e4e4e7'}`;
+        domNode.style.borderBottom = `1px solid ${darkMode ? 'rgba(63, 63, 70, 0.5)' : '#e4e4e7'}`;
 
-        const acceptBtn = document.createElement('button');
-        acceptBtn.textContent = 'Accept';
-        acceptBtn.style.fontSize = '11px';
-        acceptBtn.style.padding = '1px 8px';
-        acceptBtn.style.borderRadius = '4px';
-        acceptBtn.style.border = '1px solid #22c55e';
-        acceptBtn.style.color = '#22c55e';
-        acceptBtn.style.background = 'transparent';
-        acceptBtn.style.cursor = 'pointer';
-        acceptBtn.style.fontFamily = 'inherit';
-        acceptBtn.style.lineHeight = '18px';
-        acceptBtn.onmouseenter = () => { acceptBtn.style.background = 'rgba(34, 197, 94, 0.15)'; };
-        acceptBtn.onmouseleave = () => { acceptBtn.style.background = 'transparent'; };
         // Capture hunk values at creation time
         const hunkOrig = hunk.originalText;
         const hunkMod = hunk.modifiedText;
+
+        const acceptBtn = document.createElement('button');
+        acceptBtn.innerHTML = '&#x2713;&ensp;Accept';
+        acceptBtn.style.cssText = `
+          font-size: 12px; padding: 3px 14px; border-radius: 6px;
+          border: none; color: #fff; background: #22c55e;
+          cursor: pointer; font-family: system-ui, sans-serif;
+          font-weight: 500; line-height: 20px; letter-spacing: 0.01em;
+          transition: background 0.15s ease;
+        `;
+        acceptBtn.onmouseenter = () => { acceptBtn.style.background = '#16a34a'; };
+        acceptBtn.onmouseleave = () => { acceptBtn.style.background = '#22c55e'; };
         acceptBtn.onclick = (e) => {
           e.stopPropagation();
           onAcceptHunkRef.current(hunkOrig, hunkMod);
         };
 
         const rejectBtn = document.createElement('button');
-        rejectBtn.textContent = 'Reject';
-        rejectBtn.style.fontSize = '11px';
-        rejectBtn.style.padding = '1px 8px';
-        rejectBtn.style.borderRadius = '4px';
-        rejectBtn.style.border = '1px solid #ef4444';
-        rejectBtn.style.color = '#ef4444';
-        rejectBtn.style.background = 'transparent';
-        rejectBtn.style.cursor = 'pointer';
-        rejectBtn.style.fontFamily = 'inherit';
-        rejectBtn.style.lineHeight = '18px';
-        rejectBtn.onmouseenter = () => { rejectBtn.style.background = 'rgba(239, 68, 68, 0.15)'; };
-        rejectBtn.onmouseleave = () => { rejectBtn.style.background = 'transparent'; };
+        rejectBtn.innerHTML = '&#x2717;&ensp;Reject';
+        rejectBtn.style.cssText = `
+          font-size: 12px; padding: 3px 14px; border-radius: 6px;
+          border: 1px solid ${darkMode ? 'rgba(113, 113, 122, 0.4)' : '#d4d4d8'};
+          color: ${darkMode ? '#a1a1aa' : '#71717a'}; background: transparent;
+          cursor: pointer; font-family: system-ui, sans-serif;
+          font-weight: 500; line-height: 20px; letter-spacing: 0.01em;
+          transition: all 0.15s ease;
+        `;
+        rejectBtn.onmouseenter = () => {
+          rejectBtn.style.background = 'rgba(239, 68, 68, 0.1)';
+          rejectBtn.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+          rejectBtn.style.color = '#fca5a5';
+        };
+        rejectBtn.onmouseleave = () => {
+          rejectBtn.style.background = 'transparent';
+          rejectBtn.style.borderColor = darkMode ? 'rgba(113, 113, 122, 0.4)' : '#d4d4d8';
+          rejectBtn.style.color = darkMode ? '#a1a1aa' : '#71717a';
+        };
         rejectBtn.onclick = (e) => {
           e.stopPropagation();
           onRejectHunkRef.current(hunkOrig, hunkMod);
@@ -164,7 +170,7 @@ export default function CadenceDiffEditor({
 
         const id = accessor.addZone({
           afterLineNumber: afterLine,
-          heightInLines: 1,
+          heightInLines: 1.6,
           domNode,
         });
         zoneIdsRef.current.push(id);
@@ -258,28 +264,34 @@ export default function CadenceDiffEditor({
   return (
     <div className="flex flex-col h-full w-full">
       {/* Diff toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800/80 border-b border-zinc-700 shrink-0">
-        <div className="flex items-center gap-2 text-xs text-zinc-300">
-          <span className="font-medium">
-            {changeCount} {changeCount === 1 ? 'change' : 'changes'} suggested
-          </span>
+      <div className="flex items-center justify-between px-4 py-2 bg-zinc-800/90 border-b border-zinc-700 shrink-0">
+        <div className="flex items-center gap-3 text-[13px] text-zinc-200">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
+            <span className="font-semibold">
+              {changeCount} {changeCount === 1 ? 'change' : 'changes'}
+            </span>
+          </div>
           {path && (
-            <span className="text-zinc-500 truncate max-w-[300px]">{path}</span>
+            <span className="text-zinc-500 text-xs truncate max-w-[300px]">{path}</span>
           )}
+          <span className="text-zinc-600 text-[11px]">
+            Esc to reject · ⌘⇧↵ to accept
+          </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={onRejectAll}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-400 border border-red-500/50 rounded hover:bg-red-500/10 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-zinc-400 border border-zinc-600 rounded-md hover:text-red-300 hover:border-red-500/50 hover:bg-red-500/10 transition-all"
           >
-            <X className="w-3 h-3" />
+            <X className="w-3.5 h-3.5" />
             Reject All
           </button>
           <button
             onClick={onAcceptAll}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-green-400 border border-green-500/50 rounded hover:bg-green-500/10 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-500 transition-all"
           >
-            <Check className="w-3 h-3" />
+            <Check className="w-3.5 h-3.5" />
             Accept All
           </button>
         </div>
