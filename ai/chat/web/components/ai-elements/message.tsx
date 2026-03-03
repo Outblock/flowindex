@@ -15,6 +15,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { AnimatedMarkdown } from "@flowindex/flowtoken";
+import "@flowindex/flowtoken/styles.css";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
@@ -320,28 +322,27 @@ export const MessageBranchPage = ({
   );
 };
 
-export type MessageResponseProps = ComponentProps<typeof Streamdown>;
-
-const streamdownPlugins = { cjk, code, math, mermaid };
-
-const streamdownAnimated = {
-  animation: "colorBlurIn" as const,
-  duration: 400,
-  easing: "cubic-bezier(0.16, 1, 0.3, 1)",
-  sep: "word" as const,
+export type MessageResponseProps = HTMLAttributes<HTMLDivElement> & {
+  children: string;
 };
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
+  ({ className, children, ...props }: MessageResponseProps) => (
+    <div
       className={cn(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
-      plugins={streamdownPlugins}
-      animated={streamdownAnimated}
       {...props}
-    />
+    >
+      <AnimatedMarkdown
+        content={children}
+        animation={["colorTransition", "blurIn"]}
+        animationDuration="0.6s"
+        animationTimingFunction="ease-out"
+        sep="word"
+      />
+    </div>
   ),
   (prevProps, nextProps) => prevProps.children === nextProps.children
 );
