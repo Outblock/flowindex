@@ -421,6 +421,7 @@ import {
   exaSearchTool,
 } from '@/tools/exa'
 import { fileParserV2Tool, fileParserV3Tool, fileParseTool } from '@/tools/file'
+import { flowGetAccountTool } from '@/tools/flow'
 import {
   firecrawlAgentTool,
   firecrawlCrawlTool,
@@ -2309,6 +2310,7 @@ export const tools: Record<string, ToolConfig> = {
   webhook_request: webhookRequestTool,
   huggingface_chat: huggingfaceChatTool,
   llm_chat: llmChatTool,
+  flow_get_account: flowGetAccountTool,
   function_execute: functionExecuteTool,
   gamma_generate: gammaGenerateTool,
   gamma_generate_from_template: gammaGenerateFromTemplateTool,
