@@ -416,7 +416,7 @@ jobs:
             rm -rf ~/supabase
           '
 
-      - name: Deploy edge functions & gateway on GCE
+      - name: Deploy edge functions, gateway & auth on GCE
         env:
           SUPABASE_ANON_KEY: ${{ steps.jwt-keys.outputs.anon_key }}
           SUPABASE_SERVICE_KEY: ${{ steps.jwt-keys.outputs.service_key }}
@@ -425,7 +425,7 @@ jobs:
             set -e
             docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true
 
-            # Load env for ENCRYPTION_KEY and LILICO_API_KEY
+            # Load env for ENCRYPTION_KEY, LILICO_API_KEY, SUPABASE_DB_URL, SUPABASE_JWT_SECRET
             load_env() {
               while IFS= read -r line || [ -n "$line" ]; do
                 [[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -440,16 +440,44 @@ jobs:
             ANON_KEY="${{ steps.jwt-keys.outputs.anon_key }}"
             SERVICE_KEY="${{ steps.jwt-keys.outputs.service_key }}"
 
-            # Pull all images
+            # Pull all edge function images
             for IMG in edge-passkey-auth edge-flow-keys edge-runner-projects supabase-gateway; do
               docker pull "$REGISTRY/$IMG:$SHA"
             done
+            # Pull GoTrue auth image
+            docker pull supabase/gotrue:v2.170.0
 
             # Stop existing containers
-            for C in edge-passkey-auth edge-flow-keys edge-runner-projects supabase-gateway; do
+            for C in edge-passkey-auth edge-flow-keys edge-runner-projects supabase-gateway supabase-auth; do
               docker stop "$C" 2>/dev/null || true
               docker rm "$C" 2>/dev/null || true
             done
+
+            # GoTrue auth (port 9999)
+            GOTRUE_DB_URL="${SUPABASE_DB_URL}?search_path=auth"
+            docker run -d --restart=always --name supabase-auth \
+              --network=host \
+              -e GOTRUE_API_HOST=0.0.0.0 \
+              -e GOTRUE_API_PORT=9999 \
+              -e API_EXTERNAL_URL=https://flowindex.io/auth \
+              -e GOTRUE_DB_DRIVER=postgres \
+              -e GOTRUE_DB_DATABASE_URL="$GOTRUE_DB_URL" \
+              -e GOTRUE_SITE_URL=https://flowindex.io \
+              -e GOTRUE_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
+              -e GOTRUE_JWT_EXP=3600 \
+              -e GOTRUE_DISABLE_SIGNUP=false \
+              -e GOTRUE_EXTERNAL_EMAIL_ENABLED=true \
+              -e GOTRUE_MAILER_AUTOCONFIRM=true \
+              -e GOTRUE_MAILER_URLPATHS_CONFIRMATION=/developer/callback \
+              -e GOTRUE_EXTERNAL_GITHUB_ENABLED=true \
+              -e GOTRUE_EXTERNAL_GITHUB_CLIENT_ID="${{ secrets.OAUTH_GITHUB_CLIENT_ID }}" \
+              -e GOTRUE_EXTERNAL_GITHUB_SECRET="${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}" \
+              -e GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI=https://flowindex.io/auth/callback \
+              -e GOTRUE_EXTERNAL_GOOGLE_ENABLED=true \
+              -e GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID="${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}" \
+              -e GOTRUE_EXTERNAL_GOOGLE_SECRET="${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}" \
+              -e GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://flowindex.io/auth/callback \
+              supabase/gotrue:v2.170.0
 
             # Edge function: passkey-auth (port 8101)
             docker run -d --restart=always --name edge-passkey-auth \
@@ -492,8 +520,8 @@ jobs:
               -e POSTGREST_PORT=3000 \
               "$REGISTRY/supabase-gateway:$SHA"
 
-            echo "Supabase edge functions & gateway deployed"
-            docker ps --filter name=edge- --filter name=supabase-gateway --format "table {{.Names}}\t{{.Status}}"
+            echo "Supabase edge functions, gateway & auth deployed"
+            docker ps --filter name=edge- --filter name=supabase- --format "table {{.Names}}\t{{.Status}}"
           '
 
   build-docs:

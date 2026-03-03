@@ -7,11 +7,22 @@ www.flowindex.io {
 }
 
 run.flowindex.io {
-	reverse_proxy localhost:8081
+	handle /functions/v1/* {
+		reverse_proxy 10.128.0.4:54321
+	}
+	handle /auth/v1/* {
+		reverse_proxy 10.128.0.4:54321
+	}
+	handle /rest/v1/* {
+		reverse_proxy 10.128.0.4:54321
+	}
+	handle {
+		reverse_proxy localhost:8081
+	}
 }
 
 supabase.flowindex.io {
-	reverse_proxy localhost:8080
+	reverse_proxy 10.128.0.4:54321
 }
 
 ai.flowindex.io {
