@@ -2,6 +2,7 @@ import { createLogger } from '@sim/logger'
 import { getSessionCookie } from 'better-auth/cookies'
 import { type NextRequest, NextResponse } from 'next/server'
 import { hasValidFlowIndexAccessTokenFromCookieHeader } from './lib/auth/flowindex-cookie'
+import { env } from './lib/core/config/env'
 import {
   isAuthDisabled,
   isFlowIndexSupabaseCookieAuth,
@@ -37,6 +38,9 @@ function handleRootPathRedirects(
     if (hasActiveSession) {
       return NextResponse.redirect(new URL('/workspace', request.url))
     }
+    if (isFlowIndexSupabaseCookieAuth) {
+      return buildFlowIndexLoginRedirect(request)
+    }
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -70,6 +74,10 @@ function handleInvitationRedirects(
     !request.nextUrl.pathname.endsWith('/signup') &&
     !request.nextUrl.search.includes('callbackUrl')
   ) {
+    if (isFlowIndexSupabaseCookieAuth) {
+      return buildFlowIndexLoginRedirect(request)
+    }
+
     const token = request.nextUrl.searchParams.get('token')
     const inviteId = request.nextUrl.pathname.split('/').pop()
     const callbackParam = encodeURIComponent(`/invite/${inviteId}${token ? `?token=${token}` : ''}`)
@@ -146,6 +154,14 @@ const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'] as 
 const UTM_COOKIE_NAME = 'sim_utm'
 const UTM_COOKIE_MAX_AGE = 3600
 
+function buildFlowIndexLoginRedirect(request: NextRequest): NextResponse {
+  const loginUrl = new URL(env.FLOWINDEX_LOGIN_URL || 'https://flowindex.io/developer/login')
+  const appBaseUrl = env.FLOWINDEX_APP_URL || 'https://studio.flowindex.io'
+  const redirectUrl = `${appBaseUrl}${request.nextUrl.pathname}${request.nextUrl.search}`
+  loginUrl.searchParams.set('redirect', redirectUrl)
+  return NextResponse.redirect(loginUrl)
+}
+
 /**
  * Sets a `sim_utm` cookie when UTM params are present on auth pages.
  * Captures UTM values, the HTTP Referer, landing page, and a timestamp.
@@ -185,6 +201,13 @@ export async function proxy(request: NextRequest) {
   if (redirect) return redirect
 
   if (url.pathname === '/login' || url.pathname === '/signup') {
+    if (isFlowIndexSupabaseCookieAuth) {
+      if (hasActiveSession) {
+        return NextResponse.redirect(new URL('/workspace', request.url))
+      }
+      return buildFlowIndexLoginRedirect(request)
+    }
+
     if (hasActiveSession) {
       const redirect = NextResponse.redirect(new URL('/workspace', request.url))
       setUtmCookie(request, redirect)
@@ -212,6 +235,9 @@ export async function proxy(request: NextRequest) {
     }
 
     if (!hasActiveSession) {
+      if (isFlowIndexSupabaseCookieAuth) {
+        return buildFlowIndexLoginRedirect(request)
+      }
       return NextResponse.redirect(new URL('/login', request.url))
     }
     return NextResponse.next()

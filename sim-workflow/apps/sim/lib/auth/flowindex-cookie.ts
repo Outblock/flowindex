@@ -1,4 +1,4 @@
-import { jwtVerify, type JWTPayload } from 'jose'
+import { type JWTPayload, jwtVerify } from 'jose'
 
 export interface FlowIndexJwtPayload extends JWTPayload {
   email?: string
@@ -16,7 +16,9 @@ function decodeCookieValue(value: string): string {
 }
 
 function normalizeJwtCandidate(value: string): string | null {
-  const trimmed = decodeCookieValue(value).trim().replace(/^"(.*)"$/, '$1')
+  const trimmed = decodeCookieValue(value)
+    .trim()
+    .replace(/^"(.*)"$/, '$1')
   if (!trimmed) return null
 
   if (trimmed.startsWith('{')) {

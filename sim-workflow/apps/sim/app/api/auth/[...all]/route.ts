@@ -26,7 +26,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(createFlowIndexGetSessionResponse(session))
   }
 
+  if (isFlowIndexSupabaseCookieAuth) {
+    return NextResponse.json({ error: 'FlowIndex auth mode is enabled' }, { status: 404 })
+  }
+
   return betterAuthGET(request)
 }
 
-export const POST = betterAuthPOST
+export async function POST(request: NextRequest) {
+  if (isFlowIndexSupabaseCookieAuth) {
+    return NextResponse.json({ error: 'FlowIndex auth mode is enabled' }, { status: 404 })
+  }
+  return betterAuthPOST(request)
+}
