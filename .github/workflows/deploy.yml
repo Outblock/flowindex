@@ -575,9 +575,8 @@ jobs:
             }
 
             # Ensure simstudio database exists with pgvector
-            run_psql -d postgres \
-              -tc "SELECT 1 FROM pg_database WHERE datname = 'simstudio'" | grep -q 1 || \
-              run_psql -d postgres -c "CREATE DATABASE simstudio"
+            run_psql -d postgres -c "SELECT datname FROM pg_database WHERE datname = $$simstudio$$" | grep -q simstudio || \
+              run_psql -d postgres -c "CREATE DATABASE simstudio" || true
             run_psql -d simstudio \
               -c "CREATE EXTENSION IF NOT EXISTS vector" 2>/dev/null || true
             echo "Database simstudio ready"
