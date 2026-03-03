@@ -1,10 +1,10 @@
-# Sim Studio Fork Integration
+# Sim Workflow Integration
 
-This project now deploys Sim Studio assuming a fork-maintained image and in-app auth integration.
+This project now deploys Sim Studio from in-repo source (`sim-workflow/`) with in-app auth integration.
 
 ## Goals
 
-- Use a team-maintained Sim Studio image instead of `ghcr.io/simstudioai/simstudio:latest`.
+- Use team-maintained Sim Studio images built from repository source instead of `ghcr.io/simstudioai/simstudio:latest`.
 - Trust FlowIndex Supabase auth (`fi_auth` JWT) inside Sim Studio app code.
 - Remove `DISABLE_AUTH=true` and remove external `sim-studio-auth` nginx proxy.
 - Seed workspace/MCP/default workflow at startup from SQL.
@@ -12,13 +12,13 @@ This project now deploys Sim Studio assuming a fork-maintained image and in-app 
 
 ## Source layout
 
-Forked Sim Studio source now lives in-repo at `sim-workflow/`.
+Sim Studio source now lives in-repo at `sim-workflow/`.
 
 CI builds images directly from that directory (no runtime upstream clone or patch apply).
 
-## Required fork changes
+## Required source changes
 
-The deployment is ready for these fork-side env vars:
+The deployment is ready for these app-side env vars:
 
 - `FLOWINDEX_AUTH_MODE=supabase_cookie`
 - `SUPABASE_URL`
@@ -37,9 +37,9 @@ Set these in `/mnt/stateful_partition/pgdata/sim-studio.env` on `flowindex-backe
 
 Deploy flow now does:
 
-1. Build/push forked Sim Studio images from `sim-workflow/`.
+1. Build/push Sim Studio images from `sim-workflow/`.
 2. Upload/apply [`studio/seed/simstudio_seed.sql`](./seed/simstudio_seed.sql) (idempotent).
-3. Deploy app + realtime containers from fork images.
+3. Deploy app + realtime containers from repository-built images.
 
 ## Notes
 

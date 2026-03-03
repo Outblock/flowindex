@@ -704,11 +704,11 @@ jobs:
             bash /tmp/deploy-studio.sh ${{ env.REGISTRY }}/studio:${{ github.sha }}
           '
 
-  build-simstudio-fork-image:
+  build-sim-workflow-images:
     needs: changes
     if: needs.changes.outputs.sim-studio == 'true'
     concurrency:
-      group: build-simstudio-fork-image-${{ github.ref }}
+      group: build-sim-workflow-images-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
@@ -727,7 +727,7 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-      - name: Build & push Sim Studio fork images
+      - name: Build & push Sim Workflow images (from /sim-workflow)
         run: |
           set -euo pipefail
 
@@ -765,11 +765,11 @@ jobs:
           docker push "${MIGRATIONS_IMAGE}:latest"
 
   build-sim-studio:
-    needs: [changes, build-simstudio-fork-image]
+    needs: [changes, build-sim-workflow-images]
     if: |
       always() &&
       needs.changes.outputs.sim-studio == 'true' &&
-      (needs.build-simstudio-fork-image.result == 'success' || needs.build-simstudio-fork-image.result == 'skipped')
+      (needs.build-sim-workflow-images.result == 'success' || needs.build-sim-workflow-images.result == 'skipped')
     concurrency:
       group: deploy-sim-studio-${{ github.ref }}
       cancel-in-progress: true

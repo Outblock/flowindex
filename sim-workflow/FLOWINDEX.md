@@ -1,6 +1,6 @@
-# FlowIndex Sim Workflow Fork
+# FlowIndex Sim Workflow
 
-This directory vendors the Sim Studio fork source used by `studio.flowindex.io`.
+This directory vendors the Sim Studio source used by `studio.flowindex.io`.
 
 ## Build path
 
@@ -22,4 +22,4 @@ FlowIndex auth is integrated in app code and uses:
 
 Deployment workflow is in:
 
-- `.github/workflows/deploy.yml` (`build-simstudio-fork-image` + `build-sim-studio`)
+- `.github/workflows/deploy.yml` (`build-sim-workflow-images` + `build-sim-studio`)
