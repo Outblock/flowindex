@@ -152,6 +152,26 @@ function normalizeEditablePath(path: string): string | null {
   return normalized;
 }
 
+interface PendingDiffEntry {
+  original: string;
+  modified: string;
+  assistantId?: string;
+}
+
+type PendingDiffMap = Record<string, PendingDiffEntry>;
+
+function findSubarray(lines: string[], sub: string[]): number {
+  if (sub.length === 0) return -1;
+  outer:
+  for (let i = 0; i <= lines.length - sub.length; i++) {
+    for (let j = 0; j < sub.length; j++) {
+      if (lines[i + j] !== sub[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
+
 function applyCodeToPath(state: ProjectState, path: string, newCode: string): ProjectState {
   const normalizedPath = normalizeEditablePath(path);
   if (!normalizedPath) return state;
@@ -245,11 +265,7 @@ export default function App() {
   const [showExplorer, setShowExplorer] = useState(!isIframe);
   const [showAI, setShowAI] = useState(true);
   const [showMobileAI, setShowMobileAI] = useState(false);
-  const [pendingAiRevert, setPendingAiRevert] = useState<{
-    previous: ProjectState;
-    editCount: number;
-    assistantId?: string;
-  } | null>(null);
+  const [pendingDiffs, setPendingDiffs] = useState<PendingDiffMap>({});
   const { user, loading: authLoading, signOut } = useAuth();
   const { keys, signMessage } = useKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
@@ -292,6 +308,8 @@ export default function App() {
     () => project.files.find((f) => f.path === project.activeFile),
     [project]
   );
+
+  const activePendingDiff = pendingDiffs[project.activeFile] ?? null;
 
   // Configure FCL when network changes
   useEffect(() => {
@@ -480,57 +498,120 @@ export default function App() {
     });
     if (sanitized.length === 0) return;
 
-    setProject((base) => {
-      let next = base;
+    setPendingDiffs((prev) => {
+      const next = { ...prev };
 
       for (const edit of sanitized) {
+        const targetPath = edit.path || project.activeFile;
+        const currentContent = getFileContent(project, targetPath) || '';
+        const original = next[targetPath]?.original ?? currentContent;
+
+        let modified: string;
         if (edit.patches && edit.patches.length > 0) {
-          // Apply search/replace patches to existing file
-          const targetPath = edit.path || next.activeFile;
-          const existing = next.files.find((f) => f.path === targetPath);
-          if (existing && !existing.readOnly) {
-            let patched = existing.content;
-            for (const { search, replace } of edit.patches) {
-              const idx = patched.indexOf(search);
-              if (idx >= 0) {
-                patched = patched.slice(0, idx) + replace + patched.slice(idx + search.length);
-              }
+          modified = next[targetPath]?.modified ?? currentContent;
+          for (const { search, replace } of edit.patches) {
+            const idx = modified.indexOf(search);
+            if (idx >= 0) {
+              modified = modified.slice(0, idx) + replace + modified.slice(idx + search.length);
             }
-            next = updateFileContent(next, targetPath, patched);
           }
-        } else if (edit.path) {
-          next = applyCodeToPath(next, edit.path, edit.code);
         } else {
-          next = updateFileContent(next, next.activeFile, edit.code);
+          modified = edit.code;
         }
+
+        next[targetPath] = { original, modified, assistantId: meta?.assistantId };
       }
-
-      if (next === base) return base;
-
-      setPendingAiRevert((prev) => {
-        if (meta?.assistantId && prev?.assistantId === meta.assistantId) {
-          return { ...prev, editCount: prev.editCount + sanitized.length };
-        }
-        return {
-          previous: base,
-          editCount: sanitized.length,
-          assistantId: meta?.assistantId,
-        };
-      });
 
       return next;
     });
+  }, [project]);
+
+  const handleAcceptAllDiffs = useCallback(() => {
+    setProject((prev) => {
+      let next = prev;
+      for (const [path, entry] of Object.entries(pendingDiffs)) {
+        next = updateFileContent(next, path, entry.modified);
+      }
+      return next;
+    });
+    setPendingDiffs({});
+  }, [pendingDiffs]);
+
+  const handleRejectAllDiffs = useCallback(() => {
+    setPendingDiffs({});
   }, []);
 
-  const handleKeepAiEdits = useCallback(() => {
-    setPendingAiRevert(null);
+  const handleAcceptHunk = useCallback((filePath: string, hunkOriginal: string, hunkModified: string) => {
+    setPendingDiffs((prev) => {
+      const entry = prev[filePath];
+      if (!entry) return prev;
+
+      const origLines = entry.original.split('\n');
+      const hunkOrigLines = hunkOriginal.split('\n');
+      const hunkModLines = hunkModified.split('\n');
+
+      const origIdx = findSubarray(origLines, hunkOrigLines);
+      if (origIdx < 0) return prev;
+
+      const newOrigLines = [
+        ...origLines.slice(0, origIdx),
+        ...hunkModLines,
+        ...origLines.slice(origIdx + hunkOrigLines.length),
+      ];
+
+      const newOriginal = newOrigLines.join('\n');
+      const newModified = entry.modified;
+
+      if (newOriginal === newModified) {
+        const next = { ...prev };
+        delete next[filePath];
+        return next;
+      }
+
+      return { ...prev, [filePath]: { ...entry, original: newOriginal } };
+    });
+
+    setProject((prev) => {
+      const current = getFileContent(prev, filePath) || '';
+      const lines = current.split('\n');
+      const hunkLines = hunkOriginal.split('\n');
+      const idx = findSubarray(lines, hunkLines);
+      if (idx < 0) return prev;
+      const newLines = [
+        ...lines.slice(0, idx),
+        ...hunkModified.split('\n'),
+        ...lines.slice(idx + hunkLines.length),
+      ];
+      return updateFileContent(prev, filePath, newLines.join('\n'));
+    });
   }, []);
 
-  const handleRevertAiEdits = useCallback(() => {
-    if (!pendingAiRevert) return;
-    setProject(pendingAiRevert.previous);
-    setPendingAiRevert(null);
-  }, [pendingAiRevert]);
+  const handleRejectHunk = useCallback((filePath: string, hunkOriginal: string, hunkModified: string) => {
+    setPendingDiffs((prev) => {
+      const entry = prev[filePath];
+      if (!entry) return prev;
+
+      const modLines = entry.modified.split('\n');
+      const hunkModLines = hunkModified.split('\n');
+      const modIdx = findSubarray(modLines, hunkModLines);
+      if (modIdx < 0) return prev;
+
+      const newModLines = [
+        ...modLines.slice(0, modIdx),
+        ...hunkOriginal.split('\n'),
+        ...modLines.slice(modIdx + hunkModLines.length),
+      ];
+      const newModified = newModLines.join('\n');
+
+      if (newModified === entry.original) {
+        const next = { ...prev };
+        delete next[filePath];
+        return next;
+      }
+
+      return { ...prev, [filePath]: { ...entry, modified: newModified } };
+    });
+  }, []);
 
   const handleLoadTemplate = useCallback((template: Template) => {
     setProject({
@@ -769,28 +850,6 @@ export default function App() {
           )}
         </div>
       </header>
-
-      {pendingAiRevert && (
-        <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-amber-500/30 bg-amber-500/10">
-          <span className="text-[11px] text-amber-200">
-            AI 已自动应用 {pendingAiRevert.editCount} 处修改。确认保留还是回滚？
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRevertAiEdits}
-              className="px-2.5 py-1 text-[11px] rounded border border-red-500/40 text-red-300 hover:bg-red-500/10 transition-colors"
-            >
-              Revert
-            </button>
-            <button
-              onClick={handleKeepAiEdits}
-              className="px-2.5 py-1 text-[11px] rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-colors"
-            >
-              Keep
-            </button>
-          </div>
-        </div>
-      )}
 
       {viewingShared && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-blue-500/20 bg-blue-500/10 shrink-0">
