@@ -3,6 +3,7 @@ import type * as MonacoNS from 'monaco-editor';
 import JSZip from 'jszip';
 import axios from 'axios';
 import CadenceEditor from './editor/CadenceEditor';
+import CadenceDiffEditor from './editor/CadenceDiffEditor';
 import { useLsp } from './editor/useLsp';
 import ResultPanel from './components/ResultPanel';
 import ParamPanel from './components/ParamPanel';
@@ -1017,17 +1018,34 @@ export default function App() {
               </div>
             )}
             <div className="flex-1 min-h-0">
-              <CadenceEditor
-                code={activeCode}
-                onChange={handleCodeChange}
-                onRun={handleRun}
-                darkMode={true}
-                path={project.activeFile}
-                readOnly={activeFileEntry?.readOnly}
-                externalEditorRef={editorRef}
-                onMonacoReady={handleMonacoReady}
-                onGoToDefinition={handleGoToDefinition}
-              />
+              {activePendingDiff ? (
+                <CadenceDiffEditor
+                  original={activePendingDiff.original}
+                  modified={activePendingDiff.modified}
+                  path={project.activeFile}
+                  darkMode={true}
+                  onAcceptAll={handleAcceptAllDiffs}
+                  onRejectAll={handleRejectAllDiffs}
+                  onAcceptHunk={(hunkOrig, hunkMod) =>
+                    handleAcceptHunk(project.activeFile, hunkOrig, hunkMod)
+                  }
+                  onRejectHunk={(hunkOrig, hunkMod) =>
+                    handleRejectHunk(project.activeFile, hunkOrig, hunkMod)
+                  }
+                />
+              ) : (
+                <CadenceEditor
+                  code={activeCode}
+                  onChange={handleCodeChange}
+                  onRun={handleRun}
+                  darkMode={true}
+                  path={project.activeFile}
+                  readOnly={activeFileEntry?.readOnly}
+                  externalEditorRef={editorRef}
+                  onMonacoReady={handleMonacoReady}
+                  onGoToDefinition={handleGoToDefinition}
+                />
+              )}
             </div>
           </div>
 
