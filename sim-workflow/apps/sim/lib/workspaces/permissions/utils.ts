@@ -1,5 +1,6 @@
 import { db } from '@sim/db'
 import { permissions, type permissionTypeEnum, user, workspace } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
 import { and, eq } from 'drizzle-orm'
 
 export type PermissionType = (typeof permissionTypeEnum.enumValues)[number]
@@ -17,6 +18,62 @@ export interface WorkspaceAccess {
   hasAccess: boolean
   canWrite: boolean
   workspace: WorkspaceWithOwner | null
+}
+
+const logger = createLogger('WorkspacePermissions')
+
+function isFlowIndexSupabaseCookieAuthEnabled(): boolean {
+  return (process.env.FLOWINDEX_AUTH_MODE || '').toLowerCase() === 'supabase_cookie'
+}
+
+async function autoGrantFlowIndexWorkspacePermission(
+  userId: string,
+  workspaceId: string
+): Promise<PermissionType | null> {
+  if (!isFlowIndexSupabaseCookieAuthEnabled()) {
+    return null
+  }
+
+  const ws = await getWorkspaceWithOwner(workspaceId)
+  if (!ws) {
+    return null
+  }
+
+  if (ws.ownerId === userId) {
+    return 'admin'
+  }
+
+  const now = new Date()
+
+  try {
+    await db
+      .insert(permissions)
+      .values({
+        id: crypto.randomUUID(),
+        userId,
+        entityType: 'workspace',
+        entityId: workspaceId,
+        permissionType: 'admin',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [permissions.userId, permissions.entityType, permissions.entityId],
+        set: {
+          permissionType: 'admin',
+          updatedAt: now,
+        },
+      })
+
+    return 'admin'
+  } catch (error) {
+    logger.warn('Failed to auto-grant FlowIndex workspace permission', {
+      userId,
+      workspaceId,
+      error,
+    })
+    return null
+  }
 }
 
 /**
@@ -88,24 +145,13 @@ export async function checkWorkspaceAccess(
     return { exists: true, hasAccess: true, canWrite: true, workspace: ws }
   }
 
-  const [permissionRow] = await db
-    .select({ permissionType: permissions.permissionType })
-    .from(permissions)
-    .where(
-      and(
-        eq(permissions.userId, userId),
-        eq(permissions.entityType, 'workspace'),
-        eq(permissions.entityId, workspaceId)
-      )
-    )
-    .limit(1)
+  const permission = await getUserEntityPermissions(userId, 'workspace', workspaceId)
 
-  if (!permissionRow) {
+  if (!permission) {
     return { exists: true, hasAccess: false, canWrite: false, workspace: ws }
   }
 
-  const canWrite =
-    permissionRow.permissionType === 'write' || permissionRow.permissionType === 'admin'
+  const canWrite = permission === 'write' || permission === 'admin'
 
   return { exists: true, hasAccess: true, canWrite, workspace: ws }
 }
@@ -135,6 +181,9 @@ export async function getUserEntityPermissions(
     )
 
   if (result.length === 0) {
+    if (entityType === 'workspace') {
+      return autoGrantFlowIndexWorkspacePermission(userId, entityId)
+    }
     return null
   }
 
@@ -156,20 +205,8 @@ export async function getUserEntityPermissions(
  * @returns Promise<boolean> - True if the user has admin permission for the workspace, false otherwise
  */
 export async function hasAdminPermission(userId: string, workspaceId: string): Promise<boolean> {
-  const result = await db
-    .select({ id: permissions.id })
-    .from(permissions)
-    .where(
-      and(
-        eq(permissions.userId, userId),
-        eq(permissions.entityType, 'workspace'),
-        eq(permissions.entityId, workspaceId),
-        eq(permissions.permissionType, 'admin')
-      )
-    )
-    .limit(1)
-
-  return result.length > 0
+  const permission = await getUserEntityPermissions(userId, 'workspace', workspaceId)
+  return permission === 'admin'
 }
 
 /**
