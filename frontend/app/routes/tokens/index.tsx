@@ -2,29 +2,36 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Coins, Info, Search, X, Loader2, DollarSign, ArrowLeftRight, AlertTriangle } from 'lucide-react';
+import { Coins, Info, Search, X, Loader2, DollarSign, ArrowLeftRight, AlertTriangle, SlidersHorizontal, Check } from 'lucide-react';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import { ensureHeyApiConfigured, getBaseURL } from '../../api/heyapi';
-import { getFlowV1Ft } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 
 interface TokensSearch {
   page?: number;
   search?: string;
+  filter?: string;
 }
 
 const LIMIT = 25;
 
-async function fetchTokens(page: number, search: string, filter?: string) {
+const FT_FILTERS = [
+  { key: 'has_price', label: 'With Market Price' },
+  { key: 'evm_bridged', label: 'EVM Bridged' },
+] as const;
+type FTFilterKey = typeof FT_FILTERS[number]['key'];
+
+async function fetchTokens(page: number, search: string, filters: FTFilterKey[]) {
   const offset = (page - 1) * LIMIT;
   await ensureHeyApiConfigured();
-  const query: any = { limit: LIMIT, offset };
-  if (search) query.search = search;
-  if (filter) query.filter = filter;
-  const res = await getFlowV1Ft({ query });
-  const payload: any = res.data;
-  return { tokens: payload?.data || [], meta: payload?._meta || null };
+  const params = new URLSearchParams({ limit: String(LIMIT), offset: String(offset) });
+  if (search) params.set('search', search);
+  for (const f of filters) params.append('filter', f);
+  const res = await fetch(`${getBaseURL()}/flow/ft?${params}`);
+  if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+  const json = await res.json();
+  return { tokens: json?.data || [], meta: json?._meta || null };
 }
 
 async function fetchFTStats(): Promise<{ total: number; with_price: number; evm_bridged: number } | null> {
@@ -44,20 +51,22 @@ export const Route = createFileRoute('/tokens/')({
   validateSearch: (search: Record<string, unknown>): TokensSearch => ({
     page: Number(search.page) || 1,
     search: (search.search as string) || undefined,
+    filter: (search.filter as string) || undefined,
   }),
   loader: async ({ location }) => {
     const params = new URLSearchParams(location.search);
     const page = Number(params.get('page') || '1');
     const search = params.get('search') || '';
+    const filters = params.getAll('filter').filter(f => FT_FILTERS.some(ff => ff.key === f)) as FTFilterKey[];
     try {
       const [data, stats] = await Promise.all([
-        fetchTokens(page, search),
+        fetchTokens(page, search, filters),
         fetchFTStats(),
       ]);
-      return { ...data, stats, page, search };
+      return { ...data, stats, page, search, filters };
     } catch (e) {
       console.error('Failed to load tokens', e);
-      return { tokens: [], meta: null, stats: null, page, search };
+      return { tokens: [], meta: null, stats: null, page, search, filters };
     }
   },
 })
@@ -97,6 +106,14 @@ function formatDate(dateStr: string | undefined | null): string {
   }
 }
 
+function buildURL(base: string, page: number, search: string, filters: FTFilterKey[]) {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  if (search) params.set('search', search);
+  for (const f of filters) params.append('filter', f);
+  return `${base}?${params}`;
+}
+
 function Tokens() {
   const loaderData = Route.useLoaderData();
 
@@ -106,12 +123,14 @@ function Tokens() {
   const [currentPage, setCurrentPage] = useState(loaderData.page);
   const [currentSearch, setCurrentSearch] = useState(loaderData.search || '');
   const [searchInput, setSearchInput] = useState(loaderData.search || '');
+  const [activeFilters, setActiveFilters] = useState<FTFilterKey[]>(loaderData.filters || []);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'' | 'has_price' | 'evm_bridged'>('');
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setTokens(loaderData.tokens);
@@ -120,22 +139,33 @@ function Tokens() {
     setCurrentPage(loaderData.page);
     setCurrentSearch(loaderData.search || '');
     setSearchInput(loaderData.search || '');
+    setActiveFilters(loaderData.filters || []);
   }, [loaderData]);
 
-  const doFetch = useCallback(async (page: number, search: string, filter?: string) => {
+  // Close filter dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    };
+    if (filterOpen) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [filterOpen]);
+
+  const doFetch = useCallback(async (page: number, search: string, filters: FTFilterKey[]) => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setIsLoading(true);
     try {
-      const data = await fetchTokens(page, search, filter);
+      const data = await fetchTokens(page, search, filters);
       if (controller.signal.aborted) return;
       setTokens(data.tokens);
       setMeta(data.meta);
       setCurrentPage(page);
       setCurrentSearch(search);
-      const url = `/tokens?page=${page}${search ? `&search=${encodeURIComponent(search)}` : ''}`;
-      window.history.replaceState({}, '', url);
+      window.history.replaceState({}, '', buildURL('/tokens', page, search, filters));
     } catch (e) {
       if (controller.signal.aborted) return;
       console.error('Failed to fetch tokens', e);
@@ -148,29 +178,37 @@ function Tokens() {
     const value = e.target.value;
     setSearchInput(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doFetch(1, value.trim(), activeFilter), 300);
+    debounceRef.current = setTimeout(() => doFetch(1, value.trim(), activeFilters), 300);
   };
 
   const handleClear = () => {
     setSearchInput('');
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    doFetch(1, '', activeFilter);
+    doFetch(1, '', activeFilters);
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      doFetch(1, searchInput.trim(), activeFilter);
+      doFetch(1, searchInput.trim(), activeFilters);
     }
   };
 
-  const handlePageChange = (newPage: number) => doFetch(newPage, currentSearch, activeFilter);
+  const handlePageChange = (newPage: number) => doFetch(newPage, currentSearch, activeFilters);
 
-  const handleFilterToggle = (filter: '' | 'has_price' | 'evm_bridged') => {
-    const next = activeFilter === filter ? '' : filter;
-    setActiveFilter(next);
+  const handleFilterToggle = (key: FTFilterKey) => {
+    const next = activeFilters.includes(key)
+      ? activeFilters.filter(f => f !== key)
+      : [...activeFilters, key];
+    setActiveFilters(next);
     doFetch(1, currentSearch, next);
+  };
+
+  const handleClearFilters = () => {
+    setActiveFilters([]);
+    setFilterOpen(false);
+    doFetch(1, currentSearch, []);
   };
 
   const totalCount = Number(meta?.count || 0);
@@ -247,54 +285,99 @@ function Tokens() {
         <span>Historical indexing is still in progress. Holder counts, deploy dates, and transfer data may be incomplete or inaccurate until indexing completes.</span>
       </div>
 
-      {/* Filter chips */}
+      {/* Search + Filter */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono uppercase tracking-widest">Filter:</span>
-        <button
-          onClick={() => handleFilterToggle('has_price')}
-          className={`px-3 py-1 text-xs font-mono rounded-sm border transition-colors ${
-            activeFilter === 'has_price'
-              ? 'bg-nothing-green/20 border-nothing-green/40 text-nothing-green-dark dark:text-nothing-green'
-              : 'bg-white dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-white/20'
-          }`}
-        >
-          With Market Price
-        </button>
-        <button
-          onClick={() => handleFilterToggle('evm_bridged')}
-          className={`px-3 py-1 text-xs font-mono rounded-sm border transition-colors ${
-            activeFilter === 'evm_bridged'
-              ? 'bg-nothing-green/20 border-nothing-green/40 text-nothing-green-dark dark:text-nothing-green'
-              : 'bg-white dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-white/20'
-          }`}
-        >
-          EVM Bridged
-        </button>
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={searchInput}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Search by name, symbol, or address..."
+            className="w-full pl-11 pr-10 py-3 bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green dark:focus:ring-nothing-green/50 transition-shadow"
+          />
+          {searchInput ? (
+            <button
+              onClick={handleClear}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : isLoading ? (
+            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 animate-spin" />
+          ) : null}
+        </div>
+
+        {/* Filter dropdown */}
+        <div className="relative" ref={filterRef}>
+          <button
+            onClick={() => setFilterOpen(!filterOpen)}
+            className={`relative p-3 border rounded-sm transition-colors ${
+              activeFilters.length > 0
+                ? 'bg-nothing-green/10 border-nothing-green/30 text-nothing-green-dark dark:text-nothing-green'
+                : 'bg-white dark:bg-nothing-dark border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:border-zinc-300 dark:hover:border-white/20'
+            }`}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            {activeFilters.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-nothing-green text-[10px] font-bold text-black flex items-center justify-center">
+                {activeFilters.length}
+              </span>
+            )}
+          </button>
+
+          {filterOpen && (
+            <div className="absolute right-0 top-full mt-2 z-50 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-sm shadow-lg overflow-hidden">
+              <div className="px-3 py-2 border-b border-zinc-100 dark:border-white/5 flex items-center justify-between">
+                <span className="text-xs font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Filters</span>
+                {activeFilters.length > 0 && (
+                  <button onClick={handleClearFilters} className="text-[10px] font-mono text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+                    Clear all
+                  </button>
+                )}
+              </div>
+              {FT_FILTERS.map(({ key, label }) => {
+                const active = activeFilters.includes(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleFilterToggle(key)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-mono text-left hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
+                  >
+                    <span className={`w-4 h-4 rounded-sm border flex items-center justify-center shrink-0 transition-colors ${
+                      active
+                        ? 'bg-nothing-green border-nothing-green text-black'
+                        : 'border-zinc-300 dark:border-zinc-600'
+                    }`}>
+                      {active && <Check className="w-3 h-3" />}
+                    </span>
+                    <span className={active ? 'text-zinc-900 dark:text-white' : 'text-zinc-600 dark:text-zinc-400'}>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={searchInput}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Search by name, symbol, or address..."
-          className="w-full pl-11 pr-10 py-3 bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm text-sm font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-nothing-green dark:focus:ring-nothing-green/50 transition-shadow"
-        />
-        {searchInput ? (
-          <button
-            onClick={handleClear}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        ) : isLoading ? (
-          <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 animate-spin" />
-        ) : null}
-      </div>
+      {/* Active filter tags */}
+      {activeFilters.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {activeFilters.map(key => {
+            const label = FT_FILTERS.find(f => f.key === key)?.label || key;
+            return (
+              <span key={key} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-mono bg-nothing-green/10 border border-nothing-green/30 text-nothing-green-dark dark:text-nothing-green rounded-sm">
+                {label}
+                <button onClick={() => handleFilterToggle(key)} className="hover:text-red-400 transition-colors">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       <div className={`bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden shadow-sm dark:shadow-none transition-opacity ${isLoading ? 'opacity-60' : ''}`}>
         <div className="overflow-x-auto">
