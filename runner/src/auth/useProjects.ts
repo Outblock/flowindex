@@ -15,6 +15,7 @@ export interface CloudProject {
 }
 
 export interface CloudProjectFull extends CloudProject {
+  user_id: string;
   files: { path: string; content: string }[];
 }
 

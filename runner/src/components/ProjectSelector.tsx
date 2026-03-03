@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Plus, Globe, Lock, Trash2, Pencil, Copy, Check } from 'lucide-react';
+import { ChevronDown, Plus, Globe, Lock, Trash2, Pencil, Copy, Check, Download } from 'lucide-react';
 import type { CloudProject } from '../auth/useProjects';
 
 interface ProjectSelectorProps {
@@ -12,6 +12,7 @@ interface ProjectSelectorProps {
   onDelete: (id: string) => void;
   saving: boolean;
   lastSaved: Date | null;
+  onExport: () => void;
 }
 
 export default function ProjectSelector({
@@ -24,6 +25,7 @@ export default function ProjectSelector({
   onDelete,
   saving,
   lastSaved,
+  onExport,
 }: ProjectSelectorProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -114,6 +116,13 @@ export default function ProjectSelector({
                       {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                     </button>
                   )}
+                  <button
+                    onClick={() => { onExport(); setOpen(false); }}
+                    className="text-zinc-500 hover:text-zinc-300 p-0.5"
+                    title="Export as ZIP"
+                  >
+                    <Download className="w-3 h-3" />
+                  </button>
                   <div className="flex-1" />
                   <button
                     onClick={() => {

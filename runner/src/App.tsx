@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type * as MonacoNS from 'monaco-editor';
+import JSZip from 'jszip';
 import CadenceEditor from './editor/CadenceEditor';
 import { useLsp } from './editor/useLsp';
 import ResultPanel from './components/ResultPanel';
@@ -198,12 +199,15 @@ export default function App() {
     getProject,
     saveProject: cloudSave,
     deleteProject: cloudDelete,
+    forkProject,
     fetchProjects,
   } = useProjects();
 
   const [cloudMeta, setCloudMeta] = useState<{
     id?: string; name: string; slug?: string; is_public?: boolean;
   }>({ name: 'Untitled' });
+  const autoCreatingRef = useRef(false);
+  const [viewingShared, setViewingShared] = useState<string | null>(null);
 
   const [monacoInstance, setMonacoInstance] = useState<typeof MonacoNS | null>(null);
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
@@ -239,24 +243,36 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [project, network]);
 
-  // Cloud auto-save (debounced 2s)
+  // Cloud auto-save (debounced 2s) — auto-creates if no cloud project yet
   useEffect(() => {
-    if (!user || !cloudMeta.id) return;
+    if (!user) return;
+    if (viewingShared) return;
+    if (cloudMeta.id === '_dismissed') return;
+
     const timer = setTimeout(async () => {
+      if (autoCreatingRef.current) return;
       try {
-        await cloudSave(project, {
-          id: cloudMeta.id,
-          name: cloudMeta.name,
-          slug: cloudMeta.slug,
-          network,
-          is_public: cloudMeta.is_public,
-        });
+        if (cloudMeta.id) {
+          await cloudSave(project, {
+            id: cloudMeta.id,
+            name: cloudMeta.name,
+            slug: cloudMeta.slug,
+            network,
+            is_public: cloudMeta.is_public,
+          });
+        } else {
+          autoCreatingRef.current = true;
+          const result = await cloudSave(project, { name: 'Untitled', network });
+          setCloudMeta({ id: result.id, name: 'Untitled', slug: result.slug });
+          await fetchProjects();
+          autoCreatingRef.current = false;
+        }
       } catch {
-        // Silently fail — localStorage is the fallback
+        autoCreatingRef.current = false;
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [project, network, user, cloudMeta, cloudSave]);
+  }, [project, network, user, cloudMeta, cloudSave, viewingShared, fetchProjects]);
 
   // Load shared project from URL ?project=slug
   useEffect(() => {
@@ -267,7 +283,12 @@ export default function App() {
     (async () => {
       const full = await getProject(projectSlug);
       if (!full) return;
-      const files = full.files.map((f: { path: string; content: string }) => ({ path: f.path, content: f.content }));
+      const isOwner = user && full.user_id === user.id;
+      const files = full.files.map((f: { path: string; content: string }) => ({
+        path: f.path,
+        content: f.content,
+        ...(isOwner ? {} : { readOnly: true }),
+      }));
       if (files.length === 0) return;
       setProject({
         files,
@@ -275,12 +296,15 @@ export default function App() {
         openFiles: full.open_files || [files[0].path],
         folders: full.folders || [],
       });
-      setCloudMeta({
-        id: full.id,
-        name: full.name,
-        slug: full.slug,
-        is_public: full.is_public,
-      });
+      if (isOwner) {
+        setCloudMeta({
+          id: full.id, name: full.name, slug: full.slug, is_public: full.is_public,
+        });
+        setViewingShared(null);
+      } else {
+        setCloudMeta({ name: full.name });
+        setViewingShared(projectSlug);
+      }
       setNetwork(full.network as FlowNetwork);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -546,6 +570,22 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, [project.activeFile, activeCode]);
 
+  const handleExportZip = useCallback(async () => {
+    const zip = new JSZip();
+    const userFiles = project.files.filter(f => !f.readOnly && !f.path.startsWith('deps/'));
+    for (const f of userFiles) {
+      zip.file(f.path, f.content);
+    }
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const name = (cloudMeta.name || 'project').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [project, cloudMeta.name]);
+
   const hasBottomPanel = scriptParams.length > 0 || results.length > 0 || loading;
 
   return (
@@ -632,25 +672,46 @@ export default function App() {
         </div>
       )}
 
-      {user && !cloudMeta.id && project.files.some(f => !f.readOnly && f.content.trim() && f.content !== DEFAULT_CODE) && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-emerald-500/20 bg-emerald-500/10 shrink-0">
-          <span className="text-[11px] text-emerald-300 flex-1">Save your project to the cloud?</span>
-          <button
-            onClick={async () => {
-              const result = await cloudSave(project, { name: 'My Project', network });
-              setCloudMeta({ id: result.id, name: 'My Project', slug: result.slug });
-              await fetchProjects();
-            }}
-            className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-medium transition-colors"
-          >
-            Save
-          </button>
-          <button
-            onClick={() => setCloudMeta({ name: 'Untitled', id: '_dismissed' })}
-            className="text-[11px] text-zinc-500 hover:text-zinc-400"
-          >
-            Dismiss
-          </button>
+      {viewingShared && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-blue-500/20 bg-blue-500/10 shrink-0">
+          <span className="text-[11px] text-blue-300 flex-1">
+            Viewing a shared project (read-only).
+          </span>
+          {user ? (
+            <button
+              onClick={async () => {
+                try {
+                  const result = await forkProject(viewingShared);
+                  const full = await getProject(result.slug);
+                  if (!full) return;
+                  const files = full.files.map((f: { path: string; content: string }) => ({
+                    path: f.path, content: f.content,
+                  }));
+                  setProject({
+                    files: files.length > 0 ? files : [{ path: 'main.cdc', content: '' }],
+                    activeFile: full.active_file || files[0]?.path || 'main.cdc',
+                    openFiles: full.open_files || [files[0]?.path || 'main.cdc'],
+                    folders: full.folders || [],
+                  });
+                  setCloudMeta({ id: full.id, name: full.name, slug: full.slug, is_public: full.is_public });
+                  setViewingShared(null);
+                  history.replaceState(null, '', `?project=${result.slug}`);
+                } catch {
+                  // fork failed
+                }
+              }}
+              className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors"
+            >
+              Fork
+            </button>
+          ) : (
+            <a
+              href={`https://flowindex.io/developer/login?redirect=${encodeURIComponent(window.location.href)}`}
+              className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors"
+            >
+              Sign in to fork
+            </a>
+          )}
         </div>
       )}
 
@@ -706,6 +767,7 @@ export default function App() {
                     }}
                     saving={projectSaving}
                     lastSaved={lastSaved}
+                    onExport={handleExportZip}
                   />
                 </div>
               )}
