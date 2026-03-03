@@ -10,6 +10,12 @@ This project now deploys Sim Studio assuming a fork-maintained image and in-app 
 - Seed workspace/MCP/default workflow at startup from SQL.
 - Ship Flow/Cadence onchain event nodes as versioned seeded custom tools.
 
+## Source layout
+
+Forked Sim Studio source now lives in-repo at `sim-workflow/`.
+
+CI builds images directly from that directory (no runtime upstream clone or patch apply).
+
 ## Required fork changes
 
 The deployment is ready for these fork-side env vars:
@@ -18,9 +24,7 @@ The deployment is ready for these fork-side env vars:
 - `SUPABASE_URL`
 - `SUPABASE_JWT_SECRET`
 
-Your fork should read `fi_auth` cookie, verify JWT with `SUPABASE_JWT_SECRET`, and map user identity to Sim session.
-
-Fork patches are managed in [`studio/fork`](./fork/README.md).
+`sim-workflow` should read `fi_auth` cookie, verify JWT with `SUPABASE_JWT_SECRET`, and map user identity to Sim session.
 
 ## Deploy configuration
 
@@ -33,7 +37,7 @@ Set these in `/mnt/stateful_partition/pgdata/sim-studio.env` on `flowindex-backe
 
 Deploy flow now does:
 
-1. Build/push forked Sim Studio images from pinned upstream commit + local patches.
+1. Build/push forked Sim Studio images from `sim-workflow/`.
 2. Upload/apply [`studio/seed/simstudio_seed.sql`](./seed/simstudio_seed.sql) (idempotent).
 3. Deploy app + realtime containers from fork images.
 
