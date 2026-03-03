@@ -140,16 +140,16 @@ function signMessage(privateKeyHex: string, messageHex: string): string {
 
 async function createFlowAccount(
   publicKeyHex: string,
+  network: 'mainnet' | 'testnet' = 'mainnet',
 ): Promise<{ address: string }> {
-  const apiUrl = Deno.env.get('FLOW_ACCOUNT_CREATION_API_URL')!;
-  const apiKey = Deno.env.get('FLOW_ACCOUNT_CREATION_API_KEY')!;
+  const lilicoBase = 'https://openapi.lilico.app';
+  const endpoint = network === 'testnet'
+    ? `${lilicoBase}/v1/address/testnet`
+    : `${lilicoBase}/v1/address`;
 
-  const res = await fetch(`${apiUrl}/v1/address`, {
+  const res = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       publicKey: publicKeyHex,
       signatureAlgorithm: 'ECDSA_P256',
@@ -160,22 +160,58 @@ async function createFlowAccount(
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Flow account creation failed (${res.status}): ${body}`);
+    throw new Error(`Lilico API error (${res.status}): ${body}`);
   }
 
   const json = await res.json();
 
-  // The API may return { address } directly or { txId }. Handle both.
-  // Assumption: the API returns the address synchronously. If it only returns
-  // a txId, a polling mechanism would be needed here (not yet implemented).
-  const address = json.address || json.data?.address;
-  if (!address) {
-    throw new Error(
-      `Flow account creation API did not return an address. Response: ${JSON.stringify(json)}`,
-    );
+  // Lilico returns { txId } — need to poll for sealed result
+  const txId = json.txId || json.data?.txId;
+  if (!txId) {
+    // Some responses may include address directly
+    const address = json.address || json.data?.address;
+    if (address) return { address };
+    throw new Error(`Lilico API: no txId or address in response: ${JSON.stringify(json)}`);
   }
 
-  return { address };
+  // Poll Flow Access Node REST API for sealed transaction
+  const accessNode = network === 'testnet'
+    ? 'https://rest-testnet.onflow.org'
+    : 'https://rest-mainnet.onflow.org';
+
+  const maxAttempts = 30;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+
+    const txRes = await fetch(`${accessNode}/v1/transaction_results/${txId}`);
+    if (!txRes.ok) continue;
+
+    const txResult = await txRes.json();
+    if (txResult.status !== 'SEALED') continue;
+
+    if (txResult.error_message) {
+      throw new Error(`Account creation tx failed: ${txResult.error_message}`);
+    }
+
+    // Extract address from flow.AccountCreated event
+    for (const event of txResult.events || []) {
+      if (event.type === 'flow.AccountCreated') {
+        try {
+          const payload = JSON.parse(atob(event.payload));
+          const address = payload?.value?.fields?.find(
+            (f: { name: string }) => f.name === 'address',
+          )?.value?.value;
+          if (address) return { address: address.replace(/^0x/, '') };
+        } catch {
+          // Try next event
+        }
+      }
+    }
+
+    throw new Error('Account created but could not extract address from events');
+  }
+
+  throw new Error('Account creation timed out — transaction not sealed within 60s');
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +292,7 @@ serve(async (req: Request) => {
         // 2. Create Flow account via API
         let flowAddress: string;
         try {
-          const account = await createFlowAccount(publicKeyHex);
+          const account = await createFlowAccount(publicKeyHex, network || 'mainnet');
           flowAddress = account.address;
         } catch (e) {
           result = error(
