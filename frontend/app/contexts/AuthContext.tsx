@@ -195,20 +195,32 @@ function loadTokensFromCookie(): StoredTokens | null {
 
 function loadStoredTokens(): StoredTokens | null {
   if (typeof window === 'undefined') return null;
+  // Use cross-subdomain cookie as the source of truth.
+  // Studio access relies on fi_auth being present on .flowindex.io.
+  const fromCookie = loadTokensFromCookie();
+  if (fromCookie) {
+    // Sync into localStorage so future loads are fast.
+    persistTokens(fromCookie.accessToken, fromCookie.refreshToken);
+    return fromCookie;
+  }
+
+  // Backward-compat: if old localStorage tokens exist, attempt to restore cookie once.
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed?.accessToken && parsed?.refreshToken) return parsed as StoredTokens;
+      if (parsed?.accessToken && parsed?.refreshToken) {
+        const fromStorage = parsed as StoredTokens;
+        persistTokens(fromStorage.accessToken, fromStorage.refreshToken);
+        const restoredCookie = loadTokensFromCookie();
+        if (restoredCookie) return restoredCookie;
+
+        // If cookie still cannot be restored, avoid local-only pseudo-login loops.
+        localStorage.removeItem(STORAGE_KEY);
+      }
     }
   } catch { /* ignore */ }
-  // Fall back to cross-subdomain cookie (e.g. set by ai.flowindex.io)
-  const fromCookie = loadTokensFromCookie();
-  if (fromCookie) {
-    // Sync into localStorage so future loads are fast
-    persistTokens(fromCookie.accessToken, fromCookie.refreshToken);
-  }
-  return fromCookie;
+  return null;
 }
 
 function persistTokens(accessToken: string, refreshToken: string) {
