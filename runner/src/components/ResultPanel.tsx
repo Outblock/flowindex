@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import type { ExecutionResult } from '../flow/execute';
-import { Loader2, Code2, List } from 'lucide-react';
+import { Loader2, Code2, List, Copy, Check } from 'lucide-react';
 import { JsonView, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
 
@@ -132,6 +132,33 @@ function highlightJson(text: string): string {
     );
 }
 
+/** Copy-to-clipboard button */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [text]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded border transition-colors ${
+        copied
+          ? 'bg-emerald-900/50 text-emerald-400 border-emerald-700'
+          : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300 hover:border-zinc-600'
+      }`}
+      title="Copy to clipboard"
+    >
+      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
 /** Toggle button group for switching between tree and raw views */
 function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode) => void }) {
   return (
@@ -164,19 +191,21 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
   );
 }
 
-/** Render data with view mode toggle */
+/** Render data with view mode toggle and copy button */
 function DataDisplay({ data, isError }: { data: any; isError?: boolean }) {
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
   const jsonObj = useMemo(() => toJsonObject(data), [data]);
   const hasTreeView = jsonObj !== null && !isError;
+  const copyText = useMemo(() => formatData(data), [data]);
 
   return (
     <div>
-      {hasTreeView && (
-        <div className="flex justify-end mb-2">
+      <div className="flex items-center justify-end gap-2 mb-2">
+        <CopyButton text={copyText} />
+        {hasTreeView && (
           <ViewToggle mode={viewMode} onChange={setViewMode} />
-        </div>
-      )}
+        )}
+      </div>
 
       {hasTreeView && viewMode === 'tree' ? (
         <div className="json-tree-wrapper">
@@ -207,7 +236,7 @@ export default function ResultPanel({ results, loading }: ResultPanelProps) {
   ];
 
   return (
-    <div className="flex flex-col h-64 border-t border-zinc-700 bg-zinc-900">
+    <div className="flex flex-col h-full min-h-0 border-t border-zinc-700 bg-zinc-900">
       {/* Tab bar */}
       <div className="flex items-center gap-1 px-3 pt-1 border-b border-zinc-800 shrink-0">
         {tabs.map((t) => (
@@ -318,7 +347,7 @@ export default function ResultPanel({ results, loading }: ResultPanelProps) {
         .json-tree-other { color: #d4d4d4; }
         .json-tree-punctuation { color: #808080; }
         .json-tree-expand,
-        .json-tree-collapse { cursor: pointer; color: #808080; user-select: none; }
+        .json-tree-collapse { cursor: pointer; color: #808080; user-select: none; display: inline-block; min-width: 14px; text-align: center; margin-right: 2px; }
         .json-tree-expand:hover,
         .json-tree-collapse:hover { color: #d4d4d4; }
         .json-tree-collapsed-content { color: #808080; cursor: pointer; }
