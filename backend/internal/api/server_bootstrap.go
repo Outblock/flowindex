@@ -109,6 +109,10 @@ type WebhookAdminRegistrar interface {
 	RegisterRoutes(r *mux.Router)
 }
 
+// APIKeyResolver looks up an API key hash and returns the owning user ID.
+// Returns ("", error) if the key is invalid or not found.
+type APIKeyResolver func(ctx context.Context, keyHash string) (userID string, err error)
+
 type Server struct {
 	repo               *repository.Repository
 	client             FlowClient
@@ -120,6 +124,7 @@ type Server struct {
 	priceCache         *market.PriceCache
 	webhookHandlers      WebhookRouteRegistrar
 	webhookAdminHandlers WebhookAdminRegistrar
+	apiKeyResolver       APIKeyResolver
 	statusCache      struct {
 		mu        sync.Mutex
 		payload   []byte
@@ -160,7 +165,7 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 	}
 
 	r.Use(commonMiddleware)
-	r.Use(rateLimitMiddleware)
+	r.Use(s.rateLimitMiddleware)
 
 	registerBaseRoutes(r, s)
 	registerAdminRoutes(r, s)
@@ -199,6 +204,13 @@ func WithWebhookAdminHandlers(wh WebhookAdminRegistrar) func(*Server) {
 	}
 }
 
+// WithAPIKeyResolver returns a Server option that enables API-key-aware rate limiting.
+func WithAPIKeyResolver(r APIKeyResolver) func(*Server) {
+	return func(s *Server) {
+		s.apiKeyResolver = r
+	}
+}
+
 func (s *Server) PriceCache() *market.PriceCache {
 	return s.priceCache
 }
@@ -234,7 +246,7 @@ func commonMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

@@ -537,6 +537,7 @@ func main() {
 	// --- Webhook Notification System ---
 	var webhookHandlersOpt func(*api.Server)       // option for server
 	var webhookAdminHandlersOpt func(*api.Server)  // option for admin routes
+	var apiKeyResolverOpt func(*api.Server)        // option for API-key-aware rate limiting
 	var webhookOrchestrator *webhooks.Orchestrator // started after ctx is created
 	var balanceMonitor *webhooks.BalanceMonitor    // started after ctx is created
 
@@ -557,6 +558,9 @@ func main() {
 			if err := whStore.EnsureTiers(context.Background()); err != nil {
 				log.Printf("[webhooks] warning: failed to ensure tiers: %v", err)
 			}
+			// Enable API-key-aware rate limiting on all public routes.
+			apiKeyResolverOpt = api.WithAPIKeyResolver(whStore.LookupAPIKey)
+
 			whAuth := webhooks.NewAuthMiddleware(jwtSecret, whStore.LookupAPIKey)
 
 			// Delivery backend: Hybrid (Svix + Direct) when Svix configured,
@@ -629,6 +633,9 @@ func main() {
 	}
 	if webhookAdminHandlersOpt != nil {
 		serverOpts = append(serverOpts, webhookAdminHandlersOpt)
+	}
+	if apiKeyResolverOpt != nil {
+		serverOpts = append(serverOpts, apiKeyResolverOpt)
 	}
 	apiServer := api.NewServer(repo, flowClient, apiPort, startBlock, serverOpts...)
 
