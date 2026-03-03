@@ -7,10 +7,11 @@ import { Coins, Users, ArrowRightLeft, ArrowLeft, ExternalLink, Globe, ChevronDo
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { SafeNumberFlow } from '../../components/SafeNumberFlow';
-import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { ensureHeyApiConfigured, getBaseURL } from '../../api/heyapi';
 import { getFlowV1FtByToken, getFlowV1FtByTokenHolding, getFlowV1FtTransfer } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 import { RouteErrorBoundary } from '../../components/RouteErrorBoundary';
+import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
 
 interface TokenSearch {
   holdersPage?: number;
@@ -41,6 +42,25 @@ export const Route = createFileRoute('/tokens/$token')({
       const holdersPayload: any = holdersRes?.data;
       const transfersPayload: any = transfersRes?.data;
       const tokenRow = (tokenPayload?.data && tokenPayload.data[0]) || null;
+
+      // Fetch price history if token has market_symbol
+      let priceHistory: { date: string; price: number }[] = [];
+      let currentPrice: number | null = null;
+      const marketSymbol = tokenRow?.market_symbol;
+      if (marketSymbol) {
+        try {
+          const priceRes = await fetch(`${getBaseURL()}/flow/ft/prices?days=90`);
+          if (priceRes.ok) {
+            const priceJson = await priceRes.json();
+            const symbolData = priceJson?.data?.[marketSymbol.toUpperCase()];
+            if (symbolData) {
+              priceHistory = symbolData.history || [];
+              currentPrice = symbolData.current ?? null;
+            }
+          }
+        } catch { /* ignore */ }
+      }
+
       return {
         token: tokenRow,
         holders: holdersPayload?.data || [],
@@ -50,6 +70,8 @@ export const Route = createFileRoute('/tokens/$token')({
         tokenParam: token,
         holdersPage,
         transfersPage,
+        priceHistory,
+        currentPrice,
       };
     } catch (e) {
       console.error('Failed to load token detail', e);
@@ -62,6 +84,8 @@ export const Route = createFileRoute('/tokens/$token')({
         tokenParam: token,
         holdersPage,
         transfersPage,
+        priceHistory: [],
+        currentPrice: null,
       };
     }
   },
@@ -83,7 +107,7 @@ function TokenDetail() {
 }
 
 function TokenDetailInner() {
-  const { token, holders, holdersMeta, transfers, transfersMeta, tokenParam, holdersPage, transfersPage } =
+  const { token, holders, holdersMeta, transfers, transfersMeta, tokenParam, holdersPage, transfersPage, priceHistory, currentPrice } =
     Route.useLoaderData();
   const navigate = Route.useNavigate();
   const location = useRouterState({ select: (s) => s.location });
@@ -202,7 +226,7 @@ function TokenDetailInner() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex items-start justify-between gap-6"
       >
         <div className="flex items-center space-x-4">
           {token?.logo && !logoError ? (
@@ -230,7 +254,12 @@ function TokenDetailInner() {
               {token?.evm_address && <EVMBridgeBadge evmAddress={String(token.evm_address)} />}
             </div>
             <div className="flex items-center gap-2">
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 font-mono break-all">{id}</p>
+              <Link
+                to={`/contracts/${encodeURIComponent(id)}` as any}
+                className="text-sm text-nothing-green-dark dark:text-nothing-green font-mono break-all hover:underline"
+              >
+                {id}
+              </Link>
               <CopyButton
                 content={id}
                 variant="ghost"
@@ -240,6 +269,60 @@ function TokenDetailInner() {
             </div>
           </div>
         </div>
+
+        {/* Price chart */}
+        {priceHistory.length >= 2 && currentPrice != null && (
+          <div className="shrink-0 w-56 md:w-72">
+            <div className="flex items-baseline gap-2 mb-1 justify-end">
+              <span className="text-xl font-bold font-mono text-zinc-900 dark:text-white">
+                {currentPrice >= 1
+                  ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : currentPrice >= 0.01
+                    ? `$${currentPrice.toFixed(4)}`
+                    : `$${currentPrice.toFixed(6)}`}
+              </span>
+              {priceHistory.length >= 2 && (() => {
+                const first = priceHistory[0].price;
+                const last = priceHistory[priceHistory.length - 1].price;
+                const pct = first > 0 ? ((last - first) / first) * 100 : 0;
+                const isUp = pct >= 0;
+                return (
+                  <span className={`text-xs font-mono ${isUp ? 'text-green-500' : 'text-red-500'}`}>
+                    {isUp ? '+' : ''}{pct.toFixed(1)}%
+                  </span>
+                );
+              })()}
+            </div>
+            <div className="h-16">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={priceHistory} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={priceHistory[priceHistory.length - 1].price >= priceHistory[0].price ? '#22c55e' : '#ef4444'} stopOpacity={0.3} />
+                      <stop offset="100%" stopColor={priceHistory[priceHistory.length - 1].price >= priceHistory[0].price ? '#22c55e' : '#ef4444'} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <YAxis domain={['dataMin', 'dataMax']} hide />
+                  <Tooltip
+                    contentStyle={{ background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, fontSize: 11, fontFamily: 'monospace' }}
+                    labelStyle={{ color: '#a1a1aa', fontSize: 10 }}
+                    itemStyle={{ color: '#fff' }}
+                    formatter={(value: number) => [`$${value.toFixed(value >= 1 ? 2 : 6)}`, 'Price']}
+                    labelFormatter={(label: string) => label}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    stroke={priceHistory[priceHistory.length - 1].price >= priceHistory[0].price ? '#22c55e' : '#ef4444'}
+                    strokeWidth={1.5}
+                    fill="url(#priceGrad)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-500 font-mono text-right mt-1">90 day price</p>
+          </div>
+        )}
       </motion.div>
 
       <motion.div
