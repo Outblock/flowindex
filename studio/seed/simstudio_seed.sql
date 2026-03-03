@@ -3,6 +3,23 @@ BEGIN;
 -- Stable IDs for seeded workspace, workflows, tools, and skills.
 -- Keep these constants so deploys are idempotent.
 
+-- Ensure deterministic seed owner exists (required by FK on permissions/workspace/mcp/workflow).
+INSERT INTO public."user" (
+  id, name, email, email_verified, created_at, updated_at
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
+  'FlowIndex Seed Owner',
+  'simstudio-owner-00000000-0000-0000-0000-000000000000',
+  true,
+  now(),
+  now()
+)
+ON CONFLICT (id) DO UPDATE
+SET
+  name = EXCLUDED.name,
+  email_verified = EXCLUDED.email_verified,
+  updated_at = now();
+
 -- Ensure owner has admin permission on seeded workspace.
 DELETE FROM public.permissions
 WHERE user_id = '00000000-0000-0000-0000-000000000000'
