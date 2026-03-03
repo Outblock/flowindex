@@ -9,6 +9,17 @@ export interface DefaultWorkflowArtifacts {
   startBlockId: string
 }
 
+export interface StartInputFormatField {
+  name: string
+  type: string
+  value: string | number | boolean
+  collapsed?: boolean
+}
+
+export interface BuildDefaultWorkflowArtifactsOptions {
+  startInputFormatFields?: StartInputFormatField[]
+}
+
 const START_BLOCK_TYPE = 'start_trigger'
 const DEFAULT_START_POSITION = { x: 0, y: 0 }
 
@@ -68,13 +79,25 @@ function buildStartBlockConfig(): BlockConfig {
 
 function buildStartBlockState(
   blockConfig: BlockConfig,
-  blockId: string
+  blockId: string,
+  options?: BuildDefaultWorkflowArtifactsOptions
 ): { blockState: BlockState; subBlockValues: Record<string, unknown> } {
   const subBlocks: Record<string, SubBlockState> = {}
   const subBlockValues: Record<string, unknown> = {}
 
   blockConfig.subBlocks.forEach((config) => {
-    const initialValue = resolveInitialValue(config)
+    const customInputFormat =
+      config.type === 'input-format' && options?.startInputFormatFields?.length
+        ? options.startInputFormatFields.map((field) => ({
+            id: crypto.randomUUID(),
+            name: field.name,
+            type: field.type,
+            value: field.value,
+            collapsed: field.collapsed ?? false,
+          }))
+        : null
+
+    const initialValue = customInputFormat ?? resolveInitialValue(config)
 
     subBlocks[config.id] = {
       id: config.id,
@@ -109,11 +132,13 @@ function buildStartBlockState(
   return { blockState, subBlockValues }
 }
 
-export function buildDefaultWorkflowArtifacts(): DefaultWorkflowArtifacts {
+export function buildDefaultWorkflowArtifacts(
+  options?: BuildDefaultWorkflowArtifactsOptions
+): DefaultWorkflowArtifacts {
   const blockConfig = buildStartBlockConfig()
   const startBlockId = crypto.randomUUID()
 
-  const { blockState, subBlockValues } = buildStartBlockState(blockConfig, startBlockId)
+  const { blockState, subBlockValues } = buildStartBlockState(blockConfig, startBlockId, options)
 
   const workflowState: WorkflowState = {
     blocks: {

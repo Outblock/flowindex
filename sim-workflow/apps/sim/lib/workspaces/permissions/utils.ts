@@ -2,6 +2,7 @@ import { db } from '@sim/db'
 import { permissions, type permissionTypeEnum, user, workspace } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
 import { and, eq } from 'drizzle-orm'
+import { ensureFlowIndexWorkspaceSeedPack } from '@/lib/flowindex/workspace-seed'
 
 export type PermissionType = (typeof permissionTypeEnum.enumValues)[number]
 export interface WorkspaceBasic {
@@ -76,6 +77,22 @@ async function autoGrantFlowIndexWorkspacePermission(
   }
 }
 
+async function maybeSeedFlowIndexWorkspace(userId: string, workspaceId: string): Promise<void> {
+  if (!isFlowIndexSupabaseCookieAuthEnabled()) {
+    return
+  }
+
+  try {
+    await ensureFlowIndexWorkspaceSeedPack({ workspaceId, userId })
+  } catch (error) {
+    logger.warn('Failed to seed FlowIndex workspace pack during access check', {
+      userId,
+      workspaceId,
+      error,
+    })
+  }
+}
+
 /**
  * Check if a workspace exists
  *
@@ -142,6 +159,7 @@ export async function checkWorkspaceAccess(
   }
 
   if (ws.ownerId === userId) {
+    await maybeSeedFlowIndexWorkspace(userId, workspaceId)
     return { exists: true, hasAccess: true, canWrite: true, workspace: ws }
   }
 
@@ -152,6 +170,8 @@ export async function checkWorkspaceAccess(
   }
 
   const canWrite = permission === 'write' || permission === 'admin'
+
+  await maybeSeedFlowIndexWorkspace(userId, workspaceId)
 
   return { exists: true, hasAccess: true, canWrite, workspace: ws }
 }
