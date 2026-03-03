@@ -376,16 +376,25 @@ jobs:
               DB_PORT=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*:\([0-9]*\)/.*|\1|p")
               DB_NAME=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*/\([^?]*\).*|\1|p")
 
-              # Create migrations tracking table if it does not exist
-              docker run --rm --network=host \
-                -e PGPASSWORD="$DB_PASS" \
-                postgres:16-alpine \
-                psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
-                  CREATE TABLE IF NOT EXISTS public.schema_migrations (
-                    version TEXT PRIMARY KEY,
-                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                  );
-                "
+              # Helper to run psql
+              run_psql() {
+                docker run --rm --network=host \
+                  -e PGPASSWORD="$DB_PASS" \
+                  postgres:16-alpine \
+                  psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" "$@"
+              }
+
+              # Ensure service_role exists (Supabase migrations reference it)
+              run_psql -c "DO \$\$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
+
+              # Create/fix migrations tracking table
+              run_psql -c "
+                CREATE TABLE IF NOT EXISTS public.edge_migrations (
+                  version TEXT PRIMARY KEY,
+                  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                );
+                ALTER TABLE public.edge_migrations ALTER COLUMN version TYPE TEXT;
+              "
 
               # Apply each migration in order if not already applied
               for f in ~/supabase-migrations/*.sql; do
@@ -394,7 +403,7 @@ jobs:
                   -e PGPASSWORD="$DB_PASS" \
                   postgres:16-alpine \
                   psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tAc \
-                    "SELECT 1 FROM public.schema_migrations WHERE version = '"'"'$VERSION'"'"';" || echo "")
+                    "SELECT 1 FROM public.edge_migrations WHERE version = '"'"'$VERSION'"'"';" || echo "")
                 if [ "$ALREADY" = "1" ]; then
                   echo "Skip (already applied): $VERSION"
                 else
@@ -403,12 +412,9 @@ jobs:
                     -e PGPASSWORD="$DB_PASS" \
                     -v "$f:/tmp/migration.sql:ro" \
                     postgres:16-alpine \
-                    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f /tmp/migration.sql
-                  docker run --rm --network=host \
-                    -e PGPASSWORD="$DB_PASS" \
-                    postgres:16-alpine \
-                    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c \
-                      "INSERT INTO public.schema_migrations (version) VALUES ('"'"'$VERSION'"'"');"
+                    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+                      -v ON_ERROR_STOP=0 -f /tmp/migration.sql
+                  run_psql -c "INSERT INTO public.edge_migrations (version) VALUES ('"'"'$VERSION'"'"') ON CONFLICT DO NOTHING;"
                   echo "Applied: $VERSION"
                 fi
               done
