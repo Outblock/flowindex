@@ -583,13 +583,17 @@ export default function App() {
           {hasBottomPanel && (
             <>
               <DragBar direction="vertical" onMouseDown={vertSplit.onMouseDown} />
-              <div className="overflow-y-auto bg-zinc-900" style={{ height: `${(1 - vertSplit.fraction) * 100}%` }}>
-                <ParamPanel
-                  params={scriptParams}
-                  values={paramValues}
-                  onChange={setParamValues}
-                />
-                <ResultPanel results={results} loading={loading} />
+              <div className="flex flex-col min-h-0 bg-zinc-900" style={{ height: `${(1 - vertSplit.fraction) * 100}%` }}>
+                <div className="shrink-0 overflow-y-auto">
+                  <ParamPanel
+                    params={scriptParams}
+                    values={paramValues}
+                    onChange={setParamValues}
+                  />
+                </div>
+                <div className="flex-1 min-h-0">
+                  <ResultPanel results={results} loading={loading} />
+                </div>
               </div>
             </>
           )}
