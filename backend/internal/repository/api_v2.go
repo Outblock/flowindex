@@ -430,7 +430,18 @@ func (r *Repository) ListFTHoldingsByToken(ctx context.Context, contract, contra
 	return out, nil
 }
 
-func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]models.FTToken, error) {
+func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int, filters ...string) ([]models.FTToken, error) {
+	filter := ""
+	if len(filters) > 0 {
+		filter = filters[0]
+	}
+	where := ""
+	switch filter {
+	case "has_price":
+		where = "WHERE COALESCE(ft.market_symbol, '') != ''"
+	case "evm_bridged":
+		where = "WHERE COALESCE(ft.evm_address, '') != ''"
+	}
 	rows, err := r.db.Query(ctx, `
 		SELECT `+ftTokenSelectCols+`, COALESCE(h.holder_count, 0), b.timestamp
 		FROM app.ft_tokens ft
@@ -445,6 +456,7 @@ func (r *Repository) ListFTTokens(ctx context.Context, limit, offset int) ([]mod
 			ORDER BY cv.version DESC LIMIT 1
 		) latest_ver ON true
 		LEFT JOIN raw.blocks b ON b.height = latest_ver.block_height
+		`+where+`
 		ORDER BY COALESCE(h.holder_count, 0) DESC, ft.contract_address ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {

@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Image, LayoutGrid, LayoutList, Users, Search, X, Loader2 } from 'lucide-react';
+import { Image, LayoutGrid, LayoutList, Users, Search, X, Loader2, ArrowLeftRight, AlertTriangle } from 'lucide-react';
 import { VerifiedBadge } from '../../components/ui/VerifiedBadge';
 import { EVMBridgeBadge } from '../../components/ui/EVMBridgeBadge';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ensureHeyApiConfigured } from '../../api/heyapi';
+import { ensureHeyApiConfigured, getBaseURL } from '../../api/heyapi';
 import { getFlowV1Nft } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 
@@ -16,14 +16,27 @@ interface NFTsSearch {
 
 const LIMIT = 25;
 
-async function fetchCollections(page: number, search: string) {
+async function fetchCollections(page: number, search: string, filter?: string) {
   const offset = (page - 1) * LIMIT;
   await ensureHeyApiConfigured();
   const query: any = { limit: LIMIT, offset };
   if (search) query.search = search;
+  if (filter) query.filter = filter;
   const res = await getFlowV1Nft({ query });
   const payload: any = res.data;
   return { collections: payload?.data || [], meta: payload?._meta || null };
+}
+
+async function fetchNFTStats(): Promise<{ total: number; total_nfts: number; evm_bridged: number } | null> {
+  try {
+    await ensureHeyApiConfigured();
+    const res = await fetch(`${getBaseURL()}/flow/nft/stats`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.data || null;
+  } catch {
+    return null;
+  }
 }
 
 export const Route = createFileRoute('/nfts/')({
@@ -37,11 +50,14 @@ export const Route = createFileRoute('/nfts/')({
     const page = Number(params.get('page') || '1');
     const search = params.get('search') || '';
     try {
-      const data = await fetchCollections(page, search);
-      return { ...data, page, search };
+      const [data, stats] = await Promise.all([
+        fetchCollections(page, search),
+        fetchNFTStats(),
+      ]);
+      return { ...data, stats, page, search };
     } catch (e) {
       console.error('Failed to load NFT collections', e);
-      return { collections: [], meta: null, page, search };
+      return { collections: [], meta: null, stats: null, page, search };
     }
   },
 })
@@ -103,11 +119,13 @@ function NFTs() {
 
   const [collections, setCollections] = useState<any[]>(loaderData.collections);
   const [meta, setMeta] = useState<any>(loaderData.meta);
+  const [stats, setStats] = useState<any>(loaderData.stats);
   const [currentPage, setCurrentPage] = useState(loaderData.page);
   const [currentSearch, setCurrentSearch] = useState(loaderData.search || '');
   const [searchInput, setSearchInput] = useState(loaderData.search || '');
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [activeFilter, setActiveFilter] = useState<'' | 'evm_bridged'>('');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -116,18 +134,19 @@ function NFTs() {
   useEffect(() => {
     setCollections(loaderData.collections);
     setMeta(loaderData.meta);
+    setStats(loaderData.stats);
     setCurrentPage(loaderData.page);
     setCurrentSearch(loaderData.search || '');
     setSearchInput(loaderData.search || '');
   }, [loaderData]);
 
-  const doFetch = useCallback(async (page: number, search: string) => {
+  const doFetch = useCallback(async (page: number, search: string, filter?: string) => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setIsLoading(true);
     try {
-      const data = await fetchCollections(page, search);
+      const data = await fetchCollections(page, search, filter);
       if (controller.signal.aborted) return;
       setCollections(data.collections);
       setMeta(data.meta);
@@ -147,24 +166,30 @@ function NFTs() {
     const value = e.target.value;
     setSearchInput(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doFetch(1, value.trim()), 300);
+    debounceRef.current = setTimeout(() => doFetch(1, value.trim(), activeFilter), 300);
   };
 
   const handleClear = () => {
     setSearchInput('');
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    doFetch(1, '');
+    doFetch(1, '', activeFilter);
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      doFetch(1, searchInput.trim());
+      doFetch(1, searchInput.trim(), activeFilter);
     }
   };
 
-  const handlePageChange = (newPage: number) => doFetch(newPage, currentSearch);
+  const handlePageChange = (newPage: number) => doFetch(newPage, currentSearch, activeFilter);
+
+  const handleFilterToggle = (filter: '' | 'evm_bridged') => {
+    const next = activeFilter === filter ? '' : filter;
+    setActiveFilter(next);
+    doFetch(1, currentSearch, next);
+  };
 
   const totalCount = Number(meta?.count || 0);
   const offset = (currentPage - 1) * LIMIT;
@@ -190,7 +215,7 @@ function NFTs() {
           <div>
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tighter">NFTs</h1>
             <p className="text-sm font-mono text-zinc-500 dark:text-zinc-400">
-              {totalCount.toLocaleString()} Collections
+              Non-Fungible Tokens on Flow
             </p>
           </div>
         </div>
@@ -209,6 +234,65 @@ function NFTs() {
           </button>
         </div>
       </motion.div>
+
+      {/* Stats Cards */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="grid grid-cols-1 md:grid-cols-3 gap-4"
+      >
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-5 rounded-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <Image className="h-4 w-4 text-zinc-400" />
+            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Total Collections</p>
+          </div>
+          <p className="text-2xl font-bold font-mono text-zinc-900 dark:text-white">
+            {stats?.total != null ? stats.total.toLocaleString() : '-'}
+          </p>
+        </div>
+
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-5 rounded-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <Users className="h-4 w-4 text-zinc-400" />
+            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">Total NFTs</p>
+          </div>
+          <p className="text-2xl font-bold font-mono text-zinc-900 dark:text-white">
+            {stats?.total_nfts != null ? stats.total_nfts.toLocaleString() : '-'}
+          </p>
+        </div>
+
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-5 rounded-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <ArrowLeftRight className="h-4 w-4 text-zinc-400" />
+            <p className="text-xs text-zinc-500 dark:text-gray-400 uppercase tracking-widest">EVM Bridged</p>
+          </div>
+          <p className="text-2xl font-bold font-mono text-zinc-900 dark:text-white">
+            {stats?.evm_bridged != null ? stats.evm_bridged.toLocaleString() : '-'}
+          </p>
+        </div>
+      </motion.div>
+
+      {/* Indexing disclaimer */}
+      <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/30 rounded-sm text-xs text-amber-700 dark:text-amber-400">
+        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+        <span>Historical indexing is still in progress. Holder counts, item counts, and transfer data may be incomplete or inaccurate until indexing completes.</span>
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono uppercase tracking-widest">Filter:</span>
+        <button
+          onClick={() => handleFilterToggle('evm_bridged')}
+          className={`px-3 py-1 text-xs font-mono rounded-sm border transition-colors ${
+            activeFilter === 'evm_bridged'
+              ? 'bg-nothing-green/20 border-nothing-green/40 text-nothing-green-dark dark:text-nothing-green'
+              : 'bg-white dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-white/20'
+          }`}
+        >
+          EVM Bridged
+        </button>
+      </div>
 
       {/* Search */}
       <div className="relative">

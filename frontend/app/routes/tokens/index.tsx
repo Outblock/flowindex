@@ -16,11 +16,12 @@ interface TokensSearch {
 
 const LIMIT = 25;
 
-async function fetchTokens(page: number, search: string) {
+async function fetchTokens(page: number, search: string, filter?: string) {
   const offset = (page - 1) * LIMIT;
   await ensureHeyApiConfigured();
   const query: any = { limit: LIMIT, offset };
   if (search) query.search = search;
+  if (filter) query.filter = filter;
   const res = await getFlowV1Ft({ query });
   const payload: any = res.data;
   return { tokens: payload?.data || [], meta: payload?._meta || null };
@@ -106,6 +107,7 @@ function Tokens() {
   const [currentSearch, setCurrentSearch] = useState(loaderData.search || '');
   const [searchInput, setSearchInput] = useState(loaderData.search || '');
   const [isLoading, setIsLoading] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'' | 'has_price' | 'evm_bridged'>('');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -120,13 +122,13 @@ function Tokens() {
     setSearchInput(loaderData.search || '');
   }, [loaderData]);
 
-  const doFetch = useCallback(async (page: number, search: string) => {
+  const doFetch = useCallback(async (page: number, search: string, filter?: string) => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setIsLoading(true);
     try {
-      const data = await fetchTokens(page, search);
+      const data = await fetchTokens(page, search, filter);
       if (controller.signal.aborted) return;
       setTokens(data.tokens);
       setMeta(data.meta);
@@ -146,24 +148,30 @@ function Tokens() {
     const value = e.target.value;
     setSearchInput(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doFetch(1, value.trim()), 300);
+    debounceRef.current = setTimeout(() => doFetch(1, value.trim(), activeFilter), 300);
   };
 
   const handleClear = () => {
     setSearchInput('');
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    doFetch(1, '');
+    doFetch(1, '', activeFilter);
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      doFetch(1, searchInput.trim());
+      doFetch(1, searchInput.trim(), activeFilter);
     }
   };
 
-  const handlePageChange = (newPage: number) => doFetch(newPage, currentSearch);
+  const handlePageChange = (newPage: number) => doFetch(newPage, currentSearch, activeFilter);
+
+  const handleFilterToggle = (filter: '' | 'has_price' | 'evm_bridged') => {
+    const next = activeFilter === filter ? '' : filter;
+    setActiveFilter(next);
+    doFetch(1, currentSearch, next);
+  };
 
   const totalCount = Number(meta?.count || 0);
   const offset = (currentPage - 1) * LIMIT;
@@ -237,6 +245,31 @@ function Tokens() {
       <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/30 rounded-sm text-xs text-amber-700 dark:text-amber-400">
         <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
         <span>Historical indexing is still in progress. Holder counts, deploy dates, and transfer data may be incomplete or inaccurate until indexing completes.</span>
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono uppercase tracking-widest">Filter:</span>
+        <button
+          onClick={() => handleFilterToggle('has_price')}
+          className={`px-3 py-1 text-xs font-mono rounded-sm border transition-colors ${
+            activeFilter === 'has_price'
+              ? 'bg-nothing-green/20 border-nothing-green/40 text-nothing-green-dark dark:text-nothing-green'
+              : 'bg-white dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-white/20'
+          }`}
+        >
+          With Market Price
+        </button>
+        <button
+          onClick={() => handleFilterToggle('evm_bridged')}
+          className={`px-3 py-1 text-xs font-mono rounded-sm border transition-colors ${
+            activeFilter === 'evm_bridged'
+              ? 'bg-nothing-green/20 border-nothing-green/40 text-nothing-green-dark dark:text-nothing-green'
+              : 'bg-white dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-white/20'
+          }`}
+        >
+          EVM Bridged
+        </button>
       </div>
 
       {/* Search */}

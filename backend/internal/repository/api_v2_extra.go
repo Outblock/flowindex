@@ -110,6 +110,29 @@ func (r *Repository) CountFTTokenContracts(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
+// NFTCollectionStatsKPI holds aggregate statistics about NFT collections.
+type NFTCollectionStatsKPI struct {
+	Total      int64 `json:"total"`
+	TotalNFTs  int64 `json:"total_nfts"`
+	EVMBridged int64 `json:"evm_bridged"`
+}
+
+// GetNFTCollectionStatsKPI returns summary counts for NFT collections.
+func (r *Repository) GetNFTCollectionStatsKPI(ctx context.Context) (NFTCollectionStatsKPI, error) {
+	var s NFTCollectionStatsKPI
+	err := r.db.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM (
+				SELECT contract_address, contract_name FROM app.nft_collections
+				UNION
+				SELECT contract_address, contract_name FROM app.nft_collection_stats
+			) u) AS total,
+			(SELECT COALESCE(SUM(nft_count), 0) FROM app.nft_collection_stats) AS total_nfts,
+			(SELECT COUNT(*) FROM app.nft_collections WHERE evm_address IS NOT NULL AND length(evm_address) > 0) AS evm_bridged
+	`).Scan(&s.Total, &s.TotalNFTs, &s.EVMBridged)
+	return s, err
+}
+
 func (r *Repository) CountNFTCollectionSummaries(ctx context.Context) (int64, error) {
 	var total int64
 	if err := r.db.QueryRow(ctx, `
@@ -263,7 +286,15 @@ func (r *Repository) ListNFTCollectionContracts(ctx context.Context, limit, offs
 	return out, nil
 }
 
-func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offset int) ([]NFTCollectionSummary, error) {
+func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offset int, filters ...string) ([]NFTCollectionSummary, error) {
+	filter := ""
+	if len(filters) > 0 {
+		filter = filters[0]
+	}
+	where := ""
+	if filter == "evm_bridged" {
+		where = "WHERE COALESCE(c.evm_address, '') != ''"
+	}
 	rows, err := r.db.Query(ctx, `
 		SELECT
 			COALESCE(encode(COALESCE(c.contract_address, s.contract_address), 'hex'), '') AS contract_address,
@@ -282,6 +313,7 @@ func (r *Repository) ListNFTCollectionSummaries(ctx context.Context, limit, offs
 			COALESCE(c.updated_at, NOW()) AS updated_at
 		FROM app.nft_collections c
 		FULL OUTER JOIN app.nft_collection_stats s ON s.contract_address = c.contract_address AND s.contract_name = c.contract_name
+		`+where+`
 		ORDER BY COALESCE(s.holder_count, 0) DESC, contract_address ASC
 		LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
