@@ -1,5 +1,5 @@
 import { env, getEnv } from '../config/env'
-import { isDev, isReactGrabEnabled } from '../config/feature-flags'
+import { isDev, isFlowIndexSupabaseCookieAuth, isReactGrabEnabled } from '../config/feature-flags'
 
 /**
  * Content Security Policy (CSP) configuration builder
@@ -9,6 +9,15 @@ function getHostnameFromUrl(url: string | undefined): string[] {
   if (!url) return []
   try {
     return [`https://${new URL(url).hostname}`]
+  } catch {
+    return []
+  }
+}
+
+function getOriginFromUrl(url: string | undefined): string[] {
+  if (!url) return []
+  try {
+    return [new URL(url).origin]
   } catch {
     return []
   }
@@ -115,7 +124,14 @@ export const buildTimeCSPDirectives: CSPDirectives = {
     'https://*.google.com',
   ],
 
-  'frame-ancestors': ["'self'"],
+  'frame-ancestors': [
+    "'self'",
+    ...getOriginFromUrl(
+      isFlowIndexSupabaseCookieAuth
+        ? (env.FLOWINDEX_LOGIN_URL || 'https://flowindex.io/developer/login')
+        : undefined
+    ),
+  ],
   'form-action': ["'self'"],
   'base-uri': ["'self'"],
   'object-src': ["'none'"],
@@ -156,6 +172,11 @@ export function generateRuntimeCSP(): string {
   const brandFaviconDomains = getHostnameFromUrl(getEnv('NEXT_PUBLIC_BRAND_FAVICON_URL'))
   const privacyDomains = getHostnameFromUrl(getEnv('NEXT_PUBLIC_PRIVACY_URL'))
   const termsDomains = getHostnameFromUrl(getEnv('NEXT_PUBLIC_TERMS_URL'))
+  const flowIndexMode = (getEnv('FLOWINDEX_AUTH_MODE') || '').toLowerCase() === 'supabase_cookie'
+  const flowIndexLoginUrl = flowIndexMode
+    ? (getEnv('FLOWINDEX_LOGIN_URL') || 'https://flowindex.io/developer/login')
+    : undefined
+  const frameAncestors = Array.from(new Set(["'self'", ...getOriginFromUrl(flowIndexLoginUrl)]))
 
   const allDynamicDomains = [
     ...brandLogoDomains,
@@ -178,7 +199,7 @@ export function generateRuntimeCSP(): string {
     font-src 'self' https://fonts.gstatic.com;
     connect-src 'self' ${appUrl} ${ollamaUrl} ${socketUrl} ${socketWsUrl} https://api.browser-use.com https://api.exa.ai https://api.firecrawl.dev https://*.googleapis.com https://*.amazonaws.com https://*.s3.amazonaws.com https://*.blob.core.windows.net https://api.github.com https://github.com/* https://*.atlassian.com https://*.supabase.co https://collector.onedollarstats.com ${dynamicDomainsStr};
     frame-src 'self' https://drive.google.com https://docs.google.com https://*.google.com;
-    frame-ancestors 'self';
+    frame-ancestors ${frameAncestors.join(' ')};
     form-action 'self';
     base-uri 'self';
     object-src 'none';
