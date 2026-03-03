@@ -9,6 +9,7 @@ import { AuditAction, AuditResourceType, recordAudit } from '@/lib/audit/log'
 import { getSession } from '@/lib/auth'
 import { syncWorkspaceEnvCredentials } from '@/lib/credentials/environment'
 import {
+  getUserEntityPermissions,
   getUsersWithPermissions,
   hasWorkspaceAdminAccess,
 } from '@/lib/workspaces/permissions/utils'
@@ -42,20 +43,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
-    const userPermission = await db
-      .select()
-      .from(permissions)
-      .where(
-        and(
-          eq(permissions.entityId, workspaceId),
-          eq(permissions.entityType, 'workspace'),
-          eq(permissions.userId, session.user.id)
-        )
-      )
-      .limit(1)
-
-    if (userPermission.length === 0) {
-      return NextResponse.json({ error: 'Workspace not found or access denied' }, { status: 404 })
+    const userPermission = await getUserEntityPermissions(session.user.id, 'workspace', workspaceId)
+    if (!userPermission) {
+      return NextResponse.json({ error: 'Workspace access denied' }, { status: 403 })
     }
 
     const result = await getUsersWithPermissions(workspaceId)

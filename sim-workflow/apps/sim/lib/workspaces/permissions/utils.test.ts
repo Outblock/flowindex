@@ -167,7 +167,7 @@ describe('Permission Utils', () => {
 
   describe('hasAdminPermission', () => {
     it('should return true when user has admin permission for workspace', async () => {
-      const chain = createMockChain([{ id: 'perm1' }])
+      const chain = createMockChain([{ permissionType: 'admin' as PermissionType }])
       mockDb.select.mockReturnValue(chain)
 
       const result = await hasAdminPermission('admin-user', 'workspace123')
@@ -185,7 +185,7 @@ describe('Permission Utils', () => {
     })
 
     it('should return false when user has write permission but not admin', async () => {
-      const chain = createMockChain([])
+      const chain = createMockChain([{ permissionType: 'write' as PermissionType }])
       mockDb.select.mockReturnValue(chain)
 
       const result = await hasAdminPermission('write-user', 'workspace123')
@@ -194,7 +194,7 @@ describe('Permission Utils', () => {
     })
 
     it('should return false when user has read permission but not admin', async () => {
-      const chain = createMockChain([])
+      const chain = createMockChain([{ permissionType: 'read' as PermissionType }])
       mockDb.select.mockReturnValue(chain)
 
       const result = await hasAdminPermission('read-user', 'workspace123')
@@ -325,7 +325,7 @@ describe('Permission Utils', () => {
         if (callCount === 1) {
           return createMockChain([{ ownerId: 'other-user' }])
         }
-        return createMockChain([{ id: 'perm1' }])
+        return createMockChain([{ permissionType: 'admin' as PermissionType }])
       })
 
       const result = await hasWorkspaceAdminAccess('user123', 'workspace456')
