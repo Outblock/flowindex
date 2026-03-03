@@ -248,8 +248,12 @@ export async function resolveFlowIndexSessionFromRequest(
   return resolveFlowIndexSessionFromAccessToken(accessToken)
 }
 
-export function createFlowIndexGetSessionResponse(session: FlowIndexSession | null): {
-  data: FlowIndexSession | null
-} {
-  return { data: session }
+export function createFlowIndexGetSessionResponse(
+  session: FlowIndexSession | null
+): FlowIndexSession | null {
+  // Return the session object directly (NOT wrapped in {data: ...}).
+  // The better-auth client adds its own {data: ...} wrapper, so wrapping here
+  // would cause double-wrapping: {data: {data: {user, session}}}, which breaks
+  // extractSessionDataFromAuthClientResult.
+  return session
 }

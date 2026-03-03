@@ -103,6 +103,8 @@ export function createAnonymousSession(): AnonymousSession {
   }
 }
 
-export function createAnonymousGetSessionResponse(): { data: AnonymousSession } {
-  return { data: createAnonymousSession() }
+export function createAnonymousGetSessionResponse(): AnonymousSession {
+  // Return the session directly (NOT wrapped in {data: ...}).
+  // The better-auth client adds its own {data: ...} wrapper.
+  return createAnonymousSession()
 }

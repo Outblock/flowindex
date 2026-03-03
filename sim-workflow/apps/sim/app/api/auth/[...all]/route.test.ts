@@ -9,15 +9,13 @@ const handlerMocks = vi.hoisted(() => ({
   betterAuthPOST: vi.fn(),
   ensureAnonymousUserExists: vi.fn(),
   createAnonymousGetSessionResponse: vi.fn(() => ({
-    data: {
-      user: { id: 'anon' },
-      session: { id: 'anon-session' },
-    },
+    user: { id: 'anon' },
+    session: { id: 'anon-session' },
   })),
   isAuthDisabled: false,
   isFlowIndexSupabaseCookieAuth: false,
   resolveFlowIndexSessionFromRequest: vi.fn(),
-  createFlowIndexGetSessionResponse: vi.fn((session) => ({ data: session })),
+  createFlowIndexGetSessionResponse: vi.fn((session) => session),
 }))
 
 vi.mock('better-auth/next-js', () => ({
@@ -75,10 +73,8 @@ describe('auth catch-all route (DISABLE_AUTH get-session)', () => {
     expect(handlerMocks.ensureAnonymousUserExists).toHaveBeenCalledTimes(1)
     expect(handlerMocks.betterAuthGET).not.toHaveBeenCalled()
     expect(json).toEqual({
-      data: {
-        user: { id: 'anon' },
-        session: { id: 'anon-session' },
-      },
+      user: { id: 'anon' },
+      session: { id: 'anon-session' },
     })
   })
 
@@ -127,10 +123,8 @@ describe('auth catch-all route (DISABLE_AUTH get-session)', () => {
     expect(handlerMocks.resolveFlowIndexSessionFromRequest).toHaveBeenCalledTimes(1)
     expect(handlerMocks.betterAuthGET).not.toHaveBeenCalled()
     expect(json).toEqual({
-      data: {
-        user: { id: 'flow-user' },
-        session: { id: 'flow-session' },
-      },
+      user: { id: 'flow-user' },
+      session: { id: 'flow-session' },
     })
   })
 })
