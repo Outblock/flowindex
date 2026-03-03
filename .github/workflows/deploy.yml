@@ -531,6 +531,10 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Upload Sim Studio seed SQL
+        run: |
+          gcloud compute scp studio/seed/simstudio_seed.sql flowindex-backend:~/simstudio_seed.sql --zone=us-central1-a
+
       - name: Deploy Sim Studio on GCE
         run: |
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
@@ -553,10 +557,19 @@ jobs:
           BETTER_AUTH_SECRET=$(openssl rand -hex 32)
           ENCRYPTION_KEY=$(openssl rand -hex 32)
           INTERNAL_API_SECRET=$(openssl rand -hex 32)
+          SIM_STUDIO_IMAGE=us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-fork:latest
+          SIM_STUDIO_REALTIME_IMAGE=ghcr.io/simstudioai/realtime:latest
+          SIM_STUDIO_MIGRATIONS_IMAGE=ghcr.io/simstudioai/migrations:latest
+          FLOWINDEX_AUTH_MODE=supabase_cookie
           ENVEOF
               echo "Created $SIM_ENV with generated secrets"
             fi
             load_env "$SIM_ENV"
+
+            SIM_STUDIO_IMAGE="${SIM_STUDIO_IMAGE:-us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-fork:latest}"
+            SIM_STUDIO_REALTIME_IMAGE="${SIM_STUDIO_REALTIME_IMAGE:-ghcr.io/simstudioai/realtime:latest}"
+            SIM_STUDIO_MIGRATIONS_IMAGE="${SIM_STUDIO_MIGRATIONS_IMAGE:-ghcr.io/simstudioai/migrations:latest}"
+            FLOWINDEX_AUTH_MODE="${FLOWINDEX_AUTH_MODE:-supabase_cookie}"
 
             # Parse DB connection from SUPABASE_DB_URL
             DB_USER=$(echo "$SUPABASE_DB_URL" | sed -n "s|postgres://\([^:]*\):.*|\1|p")
@@ -581,17 +594,25 @@ jobs:
             echo "Database simstudio ready"
 
             # Pull images
-            docker pull ghcr.io/simstudioai/simstudio:latest
-            docker pull ghcr.io/simstudioai/realtime:latest
-            docker pull ghcr.io/simstudioai/migrations:latest
+            docker pull "$SIM_STUDIO_IMAGE"
+            docker pull "$SIM_STUDIO_REALTIME_IMAGE"
+            docker pull "$SIM_STUDIO_MIGRATIONS_IMAGE"
 
             # Run Drizzle migrations (Sim Studio uses Drizzle, not Prisma)
             echo "Running Sim Studio Drizzle migrations..."
             docker run --rm --network=host \
               -e DATABASE_URL="$SIM_DB_URL" \
-              ghcr.io/simstudioai/migrations:latest \
+              "$SIM_STUDIO_MIGRATIONS_IMAGE" \
               run db:migrate
             echo "Migrations applied"
+
+            echo "Applying Sim Studio startup seed..."
+            docker run --rm --network=host -i \
+              -e PGPASSWORD="$DB_PASS" \
+              postgres:16-alpine \
+              psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d simstudio \
+              < ~/simstudio_seed.sql
+            echo "Seed applied"
 
             # Verify critical auth tables exist before starting app containers
             USER_TABLE_OK=$(run_psql -d simstudio -tAc "SELECT to_regclass(\$\$public.\"user\"\$\$) IS NOT NULL;" | tr -d "[:space:]")
@@ -603,8 +624,8 @@ jobs:
             fi
 
             # Stop existing containers
-            docker stop sim-studio sim-studio-realtime 2>/dev/null || true
-            docker rm sim-studio sim-studio-realtime 2>/dev/null || true
+            docker stop sim-studio sim-studio-realtime sim-studio-auth 2>/dev/null || true
+            docker rm sim-studio sim-studio-realtime sim-studio-auth 2>/dev/null || true
 
             # Run Sim Studio (port 3200)
             docker run -d --restart=always --name sim-studio \
@@ -615,108 +636,25 @@ jobs:
               -e BETTER_AUTH_URL="https://studio.flowindex.io" \
               -e ENCRYPTION_KEY="${ENCRYPTION_KEY}" \
               -e INTERNAL_API_SECRET="${INTERNAL_API_SECRET}" \
+              -e SUPABASE_URL="${VITE_SUPABASE_URL}" \
+              -e SUPABASE_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
+              -e FLOWINDEX_AUTH_MODE="${FLOWINDEX_AUTH_MODE}" \
               -e NEXT_PUBLIC_APP_URL="https://studio.flowindex.io" \
               -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
               -e SOCKET_SERVER_URL="http://127.0.0.1:3202" \
-              -e DISABLE_AUTH=true \
               -e PORT=3200 \
-              ghcr.io/simstudioai/simstudio:latest
-
-            # Hotfix: DISABLE_AUTH anonymous get-session payload shape.
-            # Better Auth client already wraps payload in { data: ... }.
-            # If route returns { data: session }, client sees { data: { data: session } }
-            # and treats session.user as undefined, causing /workspace <-> /login loop/blank screen.
-            docker exec sim-studio sh -lc "python3 - <<PY
-            from pathlib import Path
-            import time
-            old = \"NextResponse.json((0,P.createAnonymousGetSessionResponse)())\"
-            new = \"NextResponse.json((0,P.createAnonymousGetSessionResponse)().data)\"
-            patched = 0
-            for p in Path(\"/app/apps/sim/.next/server/chunks\").glob(\"[root-of-the-server]__*.js\"):
-                s = p.read_text()
-                if old in s:
-                    backup = p.with_suffix(p.suffix + \".bak.\" + str(int(time.time())))
-                    backup.write_text(s)
-                    p.write_text(s.replace(old, new))
-                    patched += 1
-            print(f\"Patched files: {patched}\")
-            if patched == 0:
-                raise SystemExit(\"Sim get-session hotfix pattern not found\")
-            PY"
-            docker restart sim-studio >/dev/null
+              "$SIM_STUDIO_IMAGE"
 
             # Run Realtime/WebSocket service (port 3202)
             docker run -d --restart=always --name sim-studio-realtime \
               --network=host \
+              -e DATABASE_URL="$SIM_DB_URL" \
               -e PORT=3202 \
               -e INTERNAL_API_SECRET="${INTERNAL_API_SECRET}" \
-              ghcr.io/simstudioai/realtime:latest
+              "$SIM_STUDIO_REALTIME_IMAGE"
 
             echo "Sim Studio deployed (web: 3200, realtime: 3202)"
             docker ps --filter name=sim-studio --format "table {{.Names}}\t{{.Status}}"
-          '
-
-      - name: Deploy sim-studio-auth proxy
-        run: |
-          cat > /tmp/sim-studio-auth.conf << 'NGINXEOF'
-          server {
-              listen 8001;
-              absolute_redirect off;
-
-              # Static assets — no auth required (prevents CORS issues)
-              location ~* \.(webmanifest|ico|png|jpg|jpeg|gif|svg|css|js|woff2?|ttf|eot|map)$ {
-                  proxy_pass http://127.0.0.1:3200;
-                  proxy_http_version 1.1;
-                  proxy_set_header Accept-Encoding "";
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-                  proxy_set_header Connection "";
-              }
-
-              # Next.js internals — no auth required
-              location /_next/ {
-                  proxy_pass http://127.0.0.1:3200;
-                  proxy_http_version 1.1;
-                  proxy_set_header Accept-Encoding "";
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-                  proxy_set_header Connection "";
-              }
-
-              # All other requests require fi_auth cookie
-              location / {
-                  if ($cookie_fi_auth = "") {
-                      return 302 https://flowindex.io/developer/login?redirect=https://studio.flowindex.io$request_uri;
-                  }
-
-                  proxy_pass http://127.0.0.1:3200;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-                  proxy_http_version 1.1;
-                  proxy_set_header Accept-Encoding "";
-                  set $connection_upgrade close;
-                  if ($http_upgrade != "") {
-                      set $connection_upgrade upgrade;
-                  }
-                  proxy_set_header Upgrade $http_upgrade;
-                  proxy_set_header Connection $connection_upgrade;
-              }
-          }
-          NGINXEOF
-          gcloud compute scp /tmp/sim-studio-auth.conf flowindex-backend:~/sim-studio-auth.conf --zone=us-central1-a
-          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
-            docker stop sim-studio-auth 2>/dev/null || true; docker rm sim-studio-auth 2>/dev/null || true
-            docker run -d --restart=always --name sim-studio-auth \
-              --network=host \
-              -v ~/sim-studio-auth.conf:/etc/nginx/conf.d/default.conf:ro \
-              nginx:alpine
-            echo "sim-studio-auth deployed on port 8001"
           '
 
       - name: Update Caddy config for studio.flowindex.io TLS

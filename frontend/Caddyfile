@@ -19,7 +19,7 @@ ai.flowindex.io {
 }
 
 studio.flowindex.io {
-	reverse_proxy 10.128.0.4:8001
+	reverse_proxy 10.128.0.4:3200
 }
 
 analytics.flowindex.io {
