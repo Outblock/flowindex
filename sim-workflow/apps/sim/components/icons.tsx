@@ -6050,6 +6050,14 @@ export function RedisIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function FlowIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M12.8 5.6H17.6V10.4H12.8V5.6ZM8 10.4H12.8V15.2H17.6V10.4H12.8V5.6H8V10.4ZM8 15.2V20H12.8V15.2H8ZM3.2 10.4H8V15.2H3.2V10.4Z" />
+    </svg>
+  )
+}
+
 export function HexIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...props} xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1450.3 600'>

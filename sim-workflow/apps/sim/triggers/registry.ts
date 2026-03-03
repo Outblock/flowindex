@@ -60,6 +60,22 @@ import {
   confluenceWebhookTrigger,
 } from '@/triggers/confluence'
 import { firefliesTranscriptionCompleteTrigger } from '@/triggers/fireflies'
+import {
+  flowFtTransferTrigger,
+  flowNftTransferTrigger,
+  flowTxSealedTrigger,
+  flowContractEventTrigger,
+  flowAccountEventTrigger,
+  flowBalanceChangeTrigger,
+  flowStakingEventTrigger,
+  flowEvmTxTrigger,
+  flowDefiEventTrigger,
+  flowScheduleTrigger,
+  flowLargeTransferTrigger,
+  flowWhaleActivityTrigger,
+  flowContractDeployTrigger,
+  flowNewAccountTrigger,
+} from '@/triggers/flow'
 import { genericWebhookTrigger } from '@/triggers/generic'
 import {
   githubIssueClosedTrigger,
@@ -226,6 +242,20 @@ export const TRIGGER_REGISTRY: TriggerRegistry = {
   github_release_published: githubReleasePublishedTrigger,
   github_workflow_run: githubWorkflowRunTrigger,
   fireflies_transcription_complete: firefliesTranscriptionCompleteTrigger,
+  flow_ft_transfer: flowFtTransferTrigger,
+  flow_nft_transfer: flowNftTransferTrigger,
+  flow_tx_sealed: flowTxSealedTrigger,
+  flow_contract_event: flowContractEventTrigger,
+  flow_account_event: flowAccountEventTrigger,
+  flow_balance_change: flowBalanceChangeTrigger,
+  flow_staking_event: flowStakingEventTrigger,
+  flow_evm_tx: flowEvmTxTrigger,
+  flow_defi_event: flowDefiEventTrigger,
+  flow_schedule: flowScheduleTrigger,
+  flow_large_transfer: flowLargeTransferTrigger,
+  flow_whale_activity: flowWhaleActivityTrigger,
+  flow_contract_deploy: flowContractDeployTrigger,
+  flow_new_account: flowNewAccountTrigger,
   gmail_poller: gmailPollingTrigger,
   grain_webhook: grainWebhookTrigger,
   grain_recording_created: grainRecordingCreatedTrigger,
