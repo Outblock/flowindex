@@ -347,10 +347,13 @@ export default function ResultPanel({ results, loading }: ResultPanelProps) {
         .json-tree-other { color: #d4d4d4; }
         .json-tree-punctuation { color: #808080; }
         .json-tree-expand,
-        .json-tree-collapse { cursor: pointer; color: #808080; user-select: none; display: inline-block; min-width: 14px; text-align: center; margin-right: 2px; }
+        .json-tree-collapse { cursor: pointer; color: #808080; user-select: none; display: inline-block; min-width: 14px; text-align: center; margin-right: 4px; font-size: 1.2em; }
+        .json-tree-expand::after { content: '\25B8'; }
+        .json-tree-collapse::after { content: '\25BE'; }
         .json-tree-expand:hover,
         .json-tree-collapse:hover { color: #d4d4d4; }
-        .json-tree-collapsed-content { color: #808080; cursor: pointer; }
+        .json-tree-collapsed-content { color: #808080; cursor: pointer; margin-right: 4px; }
+        .json-tree-collapsed-content::after { content: '...'; font-size: 0.8em; }
         .json-tree-collapsed-content:hover { color: #d4d4d4; }
       `}</style>
     </div>
