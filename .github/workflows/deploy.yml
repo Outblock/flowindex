@@ -232,12 +232,28 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
+      - name: Generate Supabase anon key
+        id: supabase-keys
+        env:
+          SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+        run: |
+          ANON_KEY=$(python3 -c "
+          import json,hmac,hashlib,base64,os
+          def b(d): return base64.urlsafe_b64encode(d).rstrip(b'=').decode()
+          s=os.environ['SUPABASE_JWT_SECRET']
+          h=b(json.dumps({'alg':'HS256','typ':'JWT'}).encode())
+          p=b(json.dumps({'role':'anon','iss':'supabase','iat':1672531200,'exp':1988150400}).encode())
+          print(h+'.'+p+'.'+b(hmac.new(s.encode(),(h+'.'+p).encode(),hashlib.sha256).digest()))
+          ")
+          echo "::add-mask::$ANON_KEY"
+          echo "anon_key=$ANON_KEY" >> "$GITHUB_OUTPUT"
+
       - name: Build & push runner
         run: |
           docker build -f runner/Dockerfile \
             --build-arg VITE_AI_CHAT_URL=https://ai.flowindex.io \
             --build-arg VITE_SUPABASE_URL=https://run.flowindex.io \
-            --build-arg VITE_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --build-arg VITE_SUPABASE_ANON_KEY=${{ steps.supabase-keys.outputs.anon_key }} \
             --build-arg VITE_GOTRUE_URL=/auth \
             -t ${{ env.REGISTRY }}/runner:latest \
             -t ${{ env.REGISTRY }}/runner:${{ github.sha }} \
