@@ -672,13 +672,12 @@ jobs:
               }
           }
           NGINXEOF
-          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='rm -f /tmp/sim-studio-auth.conf'
-          gcloud compute scp /tmp/sim-studio-auth.conf flowindex-backend:/tmp/sim-studio-auth.conf --zone=us-central1-a
+          gcloud compute scp /tmp/sim-studio-auth.conf flowindex-backend:~/sim-studio-auth.conf --zone=us-central1-a
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
             docker stop sim-studio-auth 2>/dev/null || true; docker rm sim-studio-auth 2>/dev/null || true
             docker run -d --restart=always --name sim-studio-auth \
               --network=host \
-              -v /tmp/sim-studio-auth.conf:/etc/nginx/conf.d/default.conf:ro \
+              -v ~/sim-studio-auth.conf:/etc/nginx/conf.d/default.conf:ro \
               nginx:alpine
             echo "sim-studio-auth deployed on port 8001"
           '
