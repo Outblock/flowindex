@@ -515,19 +515,19 @@ func (r *Repository) SearchFTTokens(ctx context.Context, query string, limit, of
 }
 
 const ftTokenSelectCols = `encode(ft.contract_address, 'hex') AS contract_address, COALESCE(ft.contract_name,''), COALESCE(ft.name,''), COALESCE(ft.symbol,''), COALESCE(ft.decimals,0),
-		       COALESCE(ft.description,''), COALESCE(ft.external_url,''), COALESCE(ft.logo::text, ''), COALESCE(ft.vault_path,''), COALESCE(ft.receiver_path,''), COALESCE(ft.balance_path,''), COALESCE(ft.socials::text, ''), COALESCE(ft.evm_address, ''), COALESCE(ft.total_supply,0)::text, COALESCE(ft.is_verified, false), ft.updated_at`
+		       COALESCE(ft.description,''), COALESCE(ft.external_url,''), COALESCE(ft.logo::text, ''), COALESCE(ft.vault_path,''), COALESCE(ft.receiver_path,''), COALESCE(ft.balance_path,''), COALESCE(ft.socials::text, ''), COALESCE(ft.evm_address, ''), COALESCE(ft.total_supply,0)::text, COALESCE(ft.is_verified, false), COALESCE(ft.market_symbol, ''), ft.updated_at`
 
 func scanFTToken(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.UpdatedAt)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.MarketSymbol, &t.UpdatedAt)
 	return t, err
 }
 
 func scanFTTokenWithHolders(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.UpdatedAt, &t.HolderCount)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.MarketSymbol, &t.UpdatedAt, &t.HolderCount)
 	return t, err
 }
 
@@ -535,7 +535,7 @@ func scanFTTokenWithHoldersAndDeploy(scan func(dest ...interface{}) error) (mode
 	var t models.FTToken
 	var deployedAt *time.Time
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.UpdatedAt, &t.HolderCount, &deployedAt)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.MarketSymbol, &t.UpdatedAt, &t.HolderCount, &deployedAt)
 	t.DeployedAt = deployedAt
 	return t, err
 }
@@ -543,7 +543,7 @@ func scanFTTokenWithHoldersAndDeploy(scan func(dest ...interface{}) error) (mode
 func scanFTTokenTrending(scan func(dest ...interface{}) error) (models.FTToken, error) {
 	var t models.FTToken
 	err := scan(&t.ContractAddress, &t.ContractName, &t.Name, &t.Symbol, &t.Decimals,
-		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.UpdatedAt, &t.HolderCount, &t.TransferCount)
+		&t.Description, &t.ExternalURL, &t.Logo, &t.VaultPath, &t.ReceiverPath, &t.BalancePath, &t.Socials, &t.EVMAddress, &t.TotalSupply, &t.IsVerified, &t.MarketSymbol, &t.UpdatedAt, &t.HolderCount, &t.TransferCount)
 	return t, err
 }
 

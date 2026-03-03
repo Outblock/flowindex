@@ -276,6 +276,7 @@ type FTToken struct {
 	HolderCount     int64      `json:"holder_count,omitempty"`
 	TransferCount   int64      `json:"transfer_count,omitempty"`
 	IsVerified      bool       `json:"is_verified"`
+	MarketSymbol    string     `json:"market_symbol,omitempty"`
 	DeployedAt      *time.Time `json:"deployed_at,omitempty"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }

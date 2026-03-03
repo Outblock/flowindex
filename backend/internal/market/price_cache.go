@@ -92,6 +92,23 @@ func (c *PriceCache) GetLatestPrice(asset string) (float64, bool) {
 	return ps[len(ps)-1].Price, true
 }
 
+// GetRecentPrices returns up to `days` most recent daily prices for an asset.
+func (c *PriceCache) GetRecentPrices(asset string, days int) []DailyPrice {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	ps := c.prices[strings.ToUpper(asset)]
+	if len(ps) == 0 {
+		return nil
+	}
+	if days <= 0 || days > len(ps) {
+		days = len(ps)
+	}
+	start := len(ps) - days
+	out := make([]DailyPrice, days)
+	copy(out, ps[start:])
+	return out
+}
+
 // GetAllLatestPrices returns the most recent price for every asset in the cache.
 func (c *PriceCache) GetAllLatestPrices() map[string]float64 {
 	c.mu.RLock()

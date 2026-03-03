@@ -34,6 +34,57 @@ async function fetchTokens(page: number, search: string, filters: FTFilterKey[])
   return { tokens: json?.data || [], meta: json?._meta || null };
 }
 
+type PriceData = {
+  current: number;
+  history: { date: string; price: number }[];
+};
+type PriceMap = Record<string, PriceData>;
+
+async function fetchPrices(): Promise<PriceMap> {
+  try {
+    await ensureHeyApiConfigured();
+    const res = await fetch(`${getBaseURL()}/flow/ft/prices?days=30`);
+    if (!res.ok) return {};
+    const json = await res.json();
+    return json?.data || {};
+  } catch {
+    return {};
+  }
+}
+
+function formatPrice(price: number): string {
+  if (price >= 1) return `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (price >= 0.01) return `$${price.toFixed(4)}`;
+  if (price >= 0.0001) return `$${price.toFixed(6)}`;
+  return `$${price.toExponential(2)}`;
+}
+
+function Sparkline({ data, width = 80, height = 28 }: { data: { price: number }[]; width?: number; height?: number }) {
+  if (!data || data.length < 2) return null;
+  const prices = data.map(d => d.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const isUp = prices[prices.length - 1] >= prices[0];
+
+  const points = prices.map((p, i) => {
+    const x = (i / (prices.length - 1)) * width;
+    const y = height - ((p - min) / range) * (height - 4) - 2;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg width={width} height={height} className="shrink-0">
+      <polyline
+        fill="none"
+        stroke={isUp ? '#22c55e' : '#ef4444'}
+        strokeWidth={1.5}
+        points={points}
+      />
+    </svg>
+  );
+}
+
 async function fetchFTStats(): Promise<{ total: number; with_price: number; evm_bridged: number } | null> {
   try {
     await ensureHeyApiConfigured();
@@ -59,14 +110,15 @@ export const Route = createFileRoute('/tokens/')({
     const search = params.get('search') || '';
     const filters = params.getAll('filter').filter(f => FT_FILTERS.some(ff => ff.key === f)) as FTFilterKey[];
     try {
-      const [data, stats] = await Promise.all([
+      const [data, stats, prices] = await Promise.all([
         fetchTokens(page, search, filters),
         fetchFTStats(),
+        fetchPrices(),
       ]);
-      return { ...data, stats, page, search, filters };
+      return { ...data, stats, prices, page, search, filters };
     } catch (e) {
       console.error('Failed to load tokens', e);
-      return { tokens: [], meta: null, stats: null, page, search, filters };
+      return { tokens: [], meta: null, stats: null, prices: {} as PriceMap, page, search, filters };
     }
   },
 })
@@ -120,6 +172,7 @@ function Tokens() {
   const [tokens, setTokens] = useState<any[]>(loaderData.tokens);
   const [meta, setMeta] = useState<any>(loaderData.meta);
   const [stats, setStats] = useState<any>(loaderData.stats);
+  const [prices, setPrices] = useState<PriceMap>(loaderData.prices || {});
   const [currentPage, setCurrentPage] = useState(loaderData.page);
   const [currentSearch, setCurrentSearch] = useState(loaderData.search || '');
   const [searchInput, setSearchInput] = useState(loaderData.search || '');
@@ -136,6 +189,7 @@ function Tokens() {
     setTokens(loaderData.tokens);
     setMeta(loaderData.meta);
     setStats(loaderData.stats);
+    setPrices(loaderData.prices || {});
     setCurrentPage(loaderData.page);
     setCurrentSearch(loaderData.search || '');
     setSearchInput(loaderData.search || '');
@@ -385,7 +439,8 @@ function Tokens() {
             <thead>
               <tr className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Token</th>
-                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono">Address</th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-right">Price</th>
+                <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-center">30d</th>
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-right">Deployed</th>
                 <th className="p-4 text-xs font-semibold text-zinc-500 dark:text-gray-400 uppercase tracking-wider font-mono text-right">
                   <span className="inline-flex items-center gap-1.5 group relative">
@@ -402,7 +457,7 @@ function Tokens() {
               <AnimatePresence mode="popLayout">
                 {tokens.length === 0 && !isLoading && (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-sm text-zinc-500 dark:text-zinc-400 font-mono">
+                    <td colSpan={5} className="p-8 text-center text-sm text-zinc-500 dark:text-zinc-400 font-mono">
                       {currentSearch ? `No tokens matching "${currentSearch}"` : 'No tokens found'}
                     </td>
                   </tr>
@@ -418,6 +473,9 @@ function Tokens() {
                   const evmAddress = String(t?.evm_address || '');
                   const isVerified = Boolean(t?.is_verified);
                   const deployedAt = t?.deployed_at;
+                  const marketSymbol = String(t?.market_symbol || '');
+                  const currentPrice = t?.current_price as number | undefined;
+                  const priceData = marketSymbol ? prices[marketSymbol.toUpperCase()] : undefined;
 
                   return (
                     <motion.tr
@@ -455,11 +513,22 @@ function Tokens() {
                           </div>
                         </div>
                       </td>
-                      <td className="p-4">
-                        {addr ? (
-                          <AddressLink address={addr} prefixLen={20} suffixLen={0} />
+                      <td className="p-4 text-right">
+                        {currentPrice ? (
+                          <span className="font-mono text-sm text-zinc-900 dark:text-white">
+                            {formatPrice(currentPrice)}
+                          </span>
                         ) : (
-                          <span className="text-zinc-500 font-mono text-sm">-</span>
+                          <span className="font-mono text-xs text-zinc-400">-</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-center">
+                        {priceData?.history && priceData.history.length >= 2 ? (
+                          <div className="flex justify-center">
+                            <Sparkline data={priceData.history} />
+                          </div>
+                        ) : (
+                          <span className="font-mono text-xs text-zinc-400">-</span>
                         )}
                       </td>
                       <td className="p-4 text-right">

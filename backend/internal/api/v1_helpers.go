@@ -395,6 +395,7 @@ func toFTListOutput(token models.FTToken) map[string]interface{} {
 		"evm_address":    token.EVMAddress,
 		"evm_bridged":    token.EVMAddress != "",
 		"is_verified":    token.IsVerified,
+		"market_symbol":  token.MarketSymbol,
 	}
 	if token.Description != "" {
 		out["description"] = token.Description

@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"flowscan-clone/internal/models"
@@ -105,7 +106,13 @@ func (s *Server) handleFlowListFTTokens(w http.ResponseWriter, r *http.Request) 
 
 	out := make([]map[string]interface{}, 0, len(tokens))
 	for _, t := range tokens {
-		out = append(out, toFTListOutput(t))
+		m := toFTListOutput(t)
+		if t.MarketSymbol != "" {
+			if price, ok := s.priceCache.GetLatestPrice(t.MarketSymbol); ok {
+				m["current_price"] = price
+			}
+		}
+		out = append(out, m)
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
 }
@@ -163,6 +170,35 @@ func (s *Server) handleFlowTopFTAccounts(w http.ResponseWriter, r *http.Request)
 		out = append(out, toFTHoldingOutput(h, 0))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": total}, nil)
+}
+
+func (s *Server) handleFlowFTTokenPrices(w http.ResponseWriter, r *http.Request) {
+	days := 30
+	if d := r.URL.Query().Get("days"); d != "" {
+		if v, err := strconv.Atoi(d); err == nil && v > 0 && v <= 365 {
+			days = v
+		}
+	}
+	allPrices := s.priceCache.GetAllLatestPrices()
+	out := make(map[string]interface{}, len(allPrices))
+	for symbol := range allPrices {
+		history := s.priceCache.GetRecentPrices(symbol, days)
+		if len(history) == 0 {
+			continue
+		}
+		points := make([]map[string]interface{}, 0, len(history))
+		for _, p := range history {
+			points = append(points, map[string]interface{}{
+				"date":  p.Date.Format("2006-01-02"),
+				"price": p.Price,
+			})
+		}
+		out[symbol] = map[string]interface{}{
+			"current": history[len(history)-1].Price,
+			"history": points,
+		}
+	}
+	writeAPIResponse(w, out, nil, nil)
 }
 
 func (s *Server) handleFlowAccountFTHoldingByToken(w http.ResponseWriter, r *http.Request) {
