@@ -55,6 +55,27 @@ import { FlowGetDefiPositionsBlock } from '@/blocks/blocks/flow_get_defi_positio
 import { FlowGetStakingInfoBlock } from '@/blocks/blocks/flow_get_staking_info'
 import { FlowExecuteScriptBlock } from '@/blocks/blocks/flow_execute_script'
 import { FlowSendTransactionBlock } from '@/blocks/blocks/flow_send_transaction'
+import { FlowTransferFlowBlock } from '@/blocks/blocks/flow_transfer_flow'
+import { FlowTransferFtBlock } from '@/blocks/blocks/flow_transfer_ft'
+import { FlowTransferNftBlock } from '@/blocks/blocks/flow_transfer_nft'
+import { FlowStakeBlock } from '@/blocks/blocks/flow_stake'
+import { FlowUnstakeBlock } from '@/blocks/blocks/flow_unstake'
+import { FlowWithdrawRewardsBlock } from '@/blocks/blocks/flow_withdraw_rewards'
+import { FlowEvmCallBlock } from '@/blocks/blocks/flow_evm_call'
+import { FlowEvmSendBlock } from '@/blocks/blocks/flow_evm_send'
+import { FlowCreateAccountBlock } from '@/blocks/blocks/flow_create_account'
+import { FlowAddKeyBlock } from '@/blocks/blocks/flow_add_key'
+import { FlowRemoveKeyBlock } from '@/blocks/blocks/flow_remove_key'
+import { FlowBatchTransferBlock } from '@/blocks/blocks/flow_batch_transfer'
+import { FlowMultiSignBlock } from '@/blocks/blocks/flow_multi_sign'
+import { FlowFormatAddressBlock } from '@/blocks/blocks/flow_format_address'
+import { FlowDecodeEventBlock } from '@/blocks/blocks/flow_decode_event'
+import { FlowEncodeArgumentsBlock } from '@/blocks/blocks/flow_encode_arguments'
+import { FlowNftCatalogLookupBlock } from '@/blocks/blocks/flow_nft_catalog_lookup'
+import { FlowTokenListLookupBlock } from '@/blocks/blocks/flow_token_list_lookup'
+import { FlowIncrementFiBlock } from '@/blocks/blocks/flow_increment_fi'
+import { FlowFlowIndexApiBlock } from '@/blocks/blocks/flow_flowindex_api'
+import { FlowFindProfileBlock } from '@/blocks/blocks/flow_find_profile'
 import { FunctionBlock } from '@/blocks/blocks/function'
 import { GammaBlock } from '@/blocks/blocks/gamma'
 import { GenericWebhookBlock } from '@/blocks/blocks/generic_webhook'
@@ -267,6 +288,27 @@ export const registry: Record<string, BlockConfig> = {
   flow_get_transaction: FlowGetTransactionBlock,
   flow_resolve_name: FlowResolveNameBlock,
   flow_send_transaction: FlowSendTransactionBlock,
+  flow_transfer_flow: FlowTransferFlowBlock,
+  flow_transfer_ft: FlowTransferFtBlock,
+  flow_transfer_nft: FlowTransferNftBlock,
+  flow_stake: FlowStakeBlock,
+  flow_unstake: FlowUnstakeBlock,
+  flow_withdraw_rewards: FlowWithdrawRewardsBlock,
+  flow_evm_call: FlowEvmCallBlock,
+  flow_evm_send: FlowEvmSendBlock,
+  flow_create_account: FlowCreateAccountBlock,
+  flow_add_key: FlowAddKeyBlock,
+  flow_remove_key: FlowRemoveKeyBlock,
+  flow_batch_transfer: FlowBatchTransferBlock,
+  flow_multi_sign: FlowMultiSignBlock,
+  flow_format_address: FlowFormatAddressBlock,
+  flow_decode_event: FlowDecodeEventBlock,
+  flow_encode_arguments: FlowEncodeArgumentsBlock,
+  flow_nft_catalog_lookup: FlowNftCatalogLookupBlock,
+  flow_token_list_lookup: FlowTokenListLookupBlock,
+  flow_increment_fi: FlowIncrementFiBlock,
+  flow_flowindex_api: FlowFlowIndexApiBlock,
+  flow_find_profile: FlowFindProfileBlock,
   function: FunctionBlock,
   gamma: GammaBlock,
   generic_webhook: GenericWebhookBlock,
