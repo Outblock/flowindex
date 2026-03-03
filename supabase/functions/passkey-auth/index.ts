@@ -436,4 +436,4 @@ serve(async (req: Request) => {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
-});
+}, { port: Number(Deno.env.get('PORT')) || 8000 });

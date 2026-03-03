@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       services:
-        description: "Services to deploy (comma-separated: backend,frontend,runner,docs,ai-chat,studio,sim-studio or 'all')"
+        description: "Services to deploy (comma-separated: backend,frontend,runner,supabase,docs,ai-chat,studio,sim-studio or 'all')"
         required: false
         default: "all"
         type: string
@@ -25,6 +25,7 @@ jobs:
       backend: ${{ steps.result.outputs.backend }}
       frontend: ${{ steps.result.outputs.frontend }}
       runner: ${{ steps.result.outputs.runner }}
+      supabase: ${{ steps.result.outputs.supabase }}
       docs: ${{ steps.result.outputs.docs }}
       ai-chat: ${{ steps.result.outputs.ai-chat }}
       studio: ${{ steps.result.outputs.studio }}
@@ -53,6 +54,9 @@ jobs:
             ai-chat:
               - 'ai/chat/**'
               - '.github/workflows/deploy.yml'
+            supabase:
+              - 'supabase/**'
+              - '.github/workflows/deploy.yml'
             studio:
               - 'studio/**'
               - '.github/workflows/deploy.yml'
@@ -69,6 +73,7 @@ jobs:
               echo "backend=true" >> $GITHUB_OUTPUT
               echo "frontend=true" >> $GITHUB_OUTPUT
               echo "runner=true" >> $GITHUB_OUTPUT
+              echo "supabase=true" >> $GITHUB_OUTPUT
               echo "docs=true" >> $GITHUB_OUTPUT
               echo "ai-chat=true" >> $GITHUB_OUTPUT
               echo "studio=true" >> $GITHUB_OUTPUT
@@ -77,6 +82,7 @@ jobs:
               echo "backend=false" >> $GITHUB_OUTPUT
               echo "frontend=false" >> $GITHUB_OUTPUT
               echo "runner=false" >> $GITHUB_OUTPUT
+              echo "supabase=false" >> $GITHUB_OUTPUT
               echo "docs=false" >> $GITHUB_OUTPUT
               echo "ai-chat=false" >> $GITHUB_OUTPUT
               echo "studio=false" >> $GITHUB_OUTPUT
@@ -91,6 +97,7 @@ jobs:
             echo "backend=${{ steps.filter.outputs.backend }}" >> $GITHUB_OUTPUT
             echo "frontend=${{ steps.filter.outputs.frontend }}" >> $GITHUB_OUTPUT
             echo "runner=${{ steps.filter.outputs.runner }}" >> $GITHUB_OUTPUT
+            echo "supabase=${{ steps.filter.outputs.supabase }}" >> $GITHUB_OUTPUT
             echo "docs=${{ steps.filter.outputs.docs }}" >> $GITHUB_OUTPUT
             echo "ai-chat=${{ steps.filter.outputs.ai-chat }}" >> $GITHUB_OUTPUT
             echo "studio=${{ steps.filter.outputs.studio }}" >> $GITHUB_OUTPUT
@@ -283,6 +290,214 @@ jobs:
           CADDYEOF
             docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
           "
+
+  build-supabase:
+    needs: changes
+    if: needs.changes.outputs.supabase == 'true'
+    concurrency:
+      group: deploy-supabase-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build & push edge function images
+        run: |
+          for FUNC in passkey-auth flow-keys runner-projects; do
+            docker build -f supabase/functions/Dockerfile \
+              --build-arg FUNCTION_NAME=$FUNC \
+              -t ${{ env.REGISTRY }}/edge-$FUNC:latest \
+              -t ${{ env.REGISTRY }}/edge-$FUNC:${{ github.sha }} \
+              supabase/functions
+            docker push ${{ env.REGISTRY }}/edge-$FUNC --all-tags
+          done
+
+      - name: Build & push gateway image
+        run: |
+          docker build -f supabase/gateway/Dockerfile \
+            -t ${{ env.REGISTRY }}/supabase-gateway:latest \
+            -t ${{ env.REGISTRY }}/supabase-gateway:${{ github.sha }} \
+            supabase/gateway
+          docker push ${{ env.REGISTRY }}/supabase-gateway --all-tags
+
+      - name: Generate Supabase JWT keys
+        id: jwt-keys
+        env:
+          SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+        run: |
+          python3 -c "
+          import json,hmac,hashlib,base64,os
+          def b(d): return base64.urlsafe_b64encode(d).rstrip(b'=').decode()
+          s=os.environ['SUPABASE_JWT_SECRET']
+          h=b(json.dumps({'alg':'HS256','typ':'JWT'}).encode())
+          for role in ['anon','service_role']:
+            p=b(json.dumps({'role':role,'iss':'supabase','iat':1672531200,'exp':1988150400}).encode())
+            sig=b(hmac.new(s.encode(),(h+'.'+p).encode(),hashlib.sha256).digest())
+            name='anon_key' if role=='anon' else 'service_key'
+            token=h+'.'+p+'.'+sig
+            print(f'::add-mask::{token}')
+            print(f'{name}={token}',file=open(os.environ['GITHUB_OUTPUT'],'a'))
+          "
+
+      - name: Run Supabase migrations
+        run: |
+          MIGRATION_DIR="supabase/migrations"
+          if [ -d "$MIGRATION_DIR" ] && ls "$MIGRATION_DIR"/*.sql 1>/dev/null 2>&1; then
+            # Copy migration files to VM
+            gcloud compute scp --recurse "$MIGRATION_DIR" flowindex-backend:~/supabase-migrations --zone=us-central1-a
+            gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+              set -e
+              # Load env for DB credentials
+              load_env() {
+                while IFS= read -r line || [ -n "$line" ]; do
+                  [[ "$line" =~ ^[[:space:]]*# ]] && continue
+                  [[ -z "$line" ]] && continue
+                  export "$line" 2>/dev/null || true
+                done < "$1"
+              }
+              load_env /mnt/stateful_partition/pgdata/backend.env
+
+              DB_USER=$(echo "$SUPABASE_DB_URL" | sed -n "s|postgres://\([^:]*\):.*|\1|p")
+              DB_PASS=$(echo "$SUPABASE_DB_URL" | sed -n "s|postgres://[^:]*:\([^@]*\)@.*|\1|p")
+              DB_HOST=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*@\([^:/]*\)[:/].*|\1|p")
+              DB_PORT=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*:\([0-9]*\)/.*|\1|p")
+              DB_NAME=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*/\([^?]*\).*|\1|p")
+
+              # Create migrations tracking table if it does not exist
+              docker run --rm --network=host \
+                -e PGPASSWORD="$DB_PASS" \
+                postgres:16-alpine \
+                psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
+                  CREATE TABLE IF NOT EXISTS public.schema_migrations (
+                    version TEXT PRIMARY KEY,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                  );
+                "
+
+              # Apply each migration in order if not already applied
+              for f in ~/supabase-migrations/*.sql; do
+                VERSION=$(basename "$f" .sql)
+                ALREADY=$(docker run --rm --network=host \
+                  -e PGPASSWORD="$DB_PASS" \
+                  postgres:16-alpine \
+                  psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tAc \
+                    "SELECT 1 FROM public.schema_migrations WHERE version = '"'"'$VERSION'"'"';" || echo "")
+                if [ "$ALREADY" = "1" ]; then
+                  echo "Skip (already applied): $VERSION"
+                else
+                  echo "Applying: $VERSION"
+                  docker run --rm --network=host \
+                    -e PGPASSWORD="$DB_PASS" \
+                    -v "$f:/tmp/migration.sql:ro" \
+                    postgres:16-alpine \
+                    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f /tmp/migration.sql
+                  docker run --rm --network=host \
+                    -e PGPASSWORD="$DB_PASS" \
+                    postgres:16-alpine \
+                    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c \
+                      "INSERT INTO public.schema_migrations (version) VALUES ('"'"'$VERSION'"'"');"
+                  echo "Applied: $VERSION"
+                fi
+              done
+              rm -rf ~/supabase-migrations
+              echo "All migrations complete"
+            '
+          else
+            echo "No migration files found, skipping"
+          fi
+
+      - name: Deploy edge functions & gateway on GCE
+        env:
+          SUPABASE_ANON_KEY: ${{ steps.jwt-keys.outputs.anon_key }}
+          SUPABASE_SERVICE_KEY: ${{ steps.jwt-keys.outputs.service_key }}
+        run: |
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+            set -e
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true
+
+            # Load env for ENCRYPTION_KEY and LILICO_API_KEY
+            load_env() {
+              while IFS= read -r line || [ -n "$line" ]; do
+                [[ "$line" =~ ^[[:space:]]*# ]] && continue
+                [[ -z "$line" ]] && continue
+                export "$line" 2>/dev/null || true
+              done < "$1"
+            }
+            load_env /mnt/stateful_partition/pgdata/backend.env
+
+            REGISTRY="${{ env.REGISTRY }}"
+            SHA="${{ github.sha }}"
+            ANON_KEY="${{ steps.jwt-keys.outputs.anon_key }}"
+            SERVICE_KEY="${{ steps.jwt-keys.outputs.service_key }}"
+
+            # Pull all images
+            for IMG in edge-passkey-auth edge-flow-keys edge-runner-projects supabase-gateway; do
+              docker pull "$REGISTRY/$IMG:$SHA"
+            done
+
+            # Stop existing containers
+            for C in edge-passkey-auth edge-flow-keys edge-runner-projects supabase-gateway; do
+              docker stop "$C" 2>/dev/null || true
+              docker rm "$C" 2>/dev/null || true
+            done
+
+            # Edge function: passkey-auth (port 8101)
+            docker run -d --restart=always --name edge-passkey-auth \
+              --network=host \
+              -e PORT=8101 \
+              -e SUPABASE_URL=http://127.0.0.1:54321 \
+              -e SUPABASE_ANON_KEY="$ANON_KEY" \
+              -e SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY" \
+              -e SUPABASE_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
+              "$REGISTRY/edge-passkey-auth:$SHA"
+
+            # Edge function: flow-keys (port 8102)
+            docker run -d --restart=always --name edge-flow-keys \
+              --network=host \
+              -e PORT=8102 \
+              -e SUPABASE_URL=http://127.0.0.1:54321 \
+              -e SUPABASE_ANON_KEY="$ANON_KEY" \
+              -e SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY" \
+              -e ENCRYPTION_KEY="${ENCRYPTION_KEY}" \
+              -e LILICO_API_KEY="${LILICO_API_KEY:-}" \
+              "$REGISTRY/edge-flow-keys:$SHA"
+
+            # Edge function: runner-projects (port 8103)
+            docker run -d --restart=always --name edge-runner-projects \
+              --network=host \
+              -e PORT=8103 \
+              -e SUPABASE_URL=http://127.0.0.1:54321 \
+              -e SUPABASE_ANON_KEY="$ANON_KEY" \
+              -e SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY" \
+              "$REGISTRY/edge-runner-projects:$SHA"
+
+            # Gateway (port 54321) — routes to edge functions, auth, and REST
+            docker run -d --restart=always --name supabase-gateway \
+              --network=host \
+              -e GATEWAY_PORT=54321 \
+              -e PASSKEY_AUTH_PORT=8101 \
+              -e FLOW_KEYS_PORT=8102 \
+              -e RUNNER_PROJECTS_PORT=8103 \
+              -e GOTRUE_PORT=9999 \
+              -e POSTGREST_PORT=3000 \
+              "$REGISTRY/supabase-gateway:$SHA"
+
+            echo "Supabase edge functions & gateway deployed"
+            docker ps --filter name=edge- --filter name=supabase-gateway --format "table {{.Names}}\t{{.Status}}"
+          '
 
   build-docs:
     needs: changes
