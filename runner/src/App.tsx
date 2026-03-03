@@ -1010,6 +1010,7 @@ export default function App() {
               project={project}
               onSelectFile={handleSelectTab}
               onCloseFile={handleCloseTab}
+              pendingDiffPaths={Object.keys(pendingDiffs)}
             />
             {loadingDeps && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 shrink-0">

@@ -5,13 +5,14 @@ interface TabBarProps {
   project: ProjectState;
   onSelectFile: (path: string) => void;
   onCloseFile: (path: string) => void;
+  pendingDiffPaths?: string[];
 }
 
 function fileName(path: string): string {
   return path.split('/').pop() || path;
 }
 
-export default function TabBar({ project, onSelectFile, onCloseFile }: TabBarProps) {
+export default function TabBar({ project, onSelectFile, onCloseFile, pendingDiffPaths = [] }: TabBarProps) {
   if (project.openFiles.length <= 1) return null;
 
   return (
@@ -20,6 +21,7 @@ export default function TabBar({ project, onSelectFile, onCloseFile }: TabBarPro
         const isActive = path === project.activeFile;
         const file = project.files.find((f) => f.path === path);
         const isReadOnly = file?.readOnly;
+        const hasDiff = pendingDiffPaths.includes(path);
 
         return (
           <div
@@ -32,6 +34,7 @@ export default function TabBar({ project, onSelectFile, onCloseFile }: TabBarPro
             onClick={() => onSelectFile(path)}
           >
             {isReadOnly && <Lock className="w-2.5 h-2.5 text-zinc-600" />}
+            {hasDiff && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
             <span className="truncate max-w-[120px]" title={path}>
               {fileName(path)}
             </span>
