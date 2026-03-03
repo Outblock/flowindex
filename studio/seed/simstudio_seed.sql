@@ -4,7 +4,7 @@ BEGIN;
 -- Keep these constants so deploys are idempotent.
 
 -- Ensure deterministic seed owner exists (required by FK on permissions/workspace/mcp/workflow).
-INSERT INTO public."user" (
+INSERT INTO simstudio."user" (
   id, name, email, email_verified, created_at, updated_at
 ) VALUES (
   '00000000-0000-0000-0000-000000000000',
@@ -21,12 +21,12 @@ SET
   updated_at = now();
 
 -- Ensure owner has admin permission on seeded workspace.
-DELETE FROM public.permissions
+DELETE FROM simstudio.permissions
 WHERE user_id = '00000000-0000-0000-0000-000000000000'
   AND entity_type = 'workspace'
   AND entity_id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-INSERT INTO public.permissions (
+INSERT INTO simstudio.permissions (
   id, user_id, entity_type, entity_id, permission_type, created_at, updated_at
 ) VALUES (
   'da4a8c5e-0dfd-41f6-8e39-0f66e5e2d602',
@@ -38,7 +38,7 @@ INSERT INTO public.permissions (
   '2026-03-02 07:32:13.869'
 );
 
-DELETE FROM public.workflow_mcp_tool
+DELETE FROM simstudio.workflow_mcp_tool
 WHERE workflow_id IN (
   'c8bb0215-cf73-4919-a452-e5a11728fb59',
   'e0a4f27e-45d4-4c21-b67b-0eb2e2e36f31',
@@ -47,10 +47,10 @@ WHERE workflow_id IN (
 )
 OR server_id IN ('mcp-70866f58', 'mcp-911eec0e');
 
-DELETE FROM public.workflow_mcp_server
+DELETE FROM simstudio.workflow_mcp_server
 WHERE workspace_id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-DELETE FROM public.workflow_edges
+DELETE FROM simstudio.workflow_edges
 WHERE workflow_id IN (
   'c8bb0215-cf73-4919-a452-e5a11728fb59',
   'e0a4f27e-45d4-4c21-b67b-0eb2e2e36f31',
@@ -58,7 +58,7 @@ WHERE workflow_id IN (
   '88d2c28d-86ab-4b67-9f89-07c39fead9d6'
 );
 
-DELETE FROM public.workflow_blocks
+DELETE FROM simstudio.workflow_blocks
 WHERE workflow_id IN (
   'c8bb0215-cf73-4919-a452-e5a11728fb59',
   'e0a4f27e-45d4-4c21-b67b-0eb2e2e36f31',
@@ -66,7 +66,7 @@ WHERE workflow_id IN (
   '88d2c28d-86ab-4b67-9f89-07c39fead9d6'
 );
 
-DELETE FROM public.workflow
+DELETE FROM simstudio.workflow
 WHERE id IN (
   'c8bb0215-cf73-4919-a452-e5a11728fb59',
   'e0a4f27e-45d4-4c21-b67b-0eb2e2e36f31',
@@ -74,10 +74,10 @@ WHERE id IN (
   '88d2c28d-86ab-4b67-9f89-07c39fead9d6'
 );
 
-DELETE FROM public.mcp_servers
+DELETE FROM simstudio.mcp_servers
 WHERE id IN ('mcp-70866f58', 'mcp-911eec0e');
 
-DELETE FROM public.custom_tools
+DELETE FROM simstudio.custom_tools
 WHERE id IN (
   'ct-flow-onchain-events',
   'ct-cadence-onchain-events',
@@ -86,20 +86,20 @@ WHERE id IN (
   'ct-cadence-tx-events'
 );
 
-DELETE FROM public.skill
+DELETE FROM simstudio.skill
 WHERE id IN (
   'sk-cadence-mcp-operator',
   'sk-cadence-trigger-playbook',
   'sk-cadence-event-investigation'
 );
 
-DELETE FROM public.workspace_environment
+DELETE FROM simstudio.workspace_environment
 WHERE workspace_id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-DELETE FROM public.workspace
+DELETE FROM simstudio.workspace
 WHERE id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-INSERT INTO public.workspace (
+INSERT INTO simstudio.workspace (
   id, name, owner_id, created_at, updated_at, billed_account_user_id, allow_personal_api_keys
 ) VALUES (
   'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
@@ -111,7 +111,7 @@ INSERT INTO public.workspace (
   true
 );
 
-INSERT INTO public.mcp_servers (
+INSERT INTO simstudio.mcp_servers (
   id, workspace_id, created_by, name, description, transport, url, headers, timeout, retries,
   enabled, last_connected, connection_status, last_error, tool_count, last_tools_refresh,
   total_requests, last_used, deleted_at, created_at, updated_at, status_config
@@ -163,7 +163,7 @@ INSERT INTO public.mcp_servers (
   '{"consecutiveFailures": 0, "lastSuccessfulDiscovery": "2026-03-03T00:39:20.682Z"}'
 );
 
-INSERT INTO public.workflow (
+INSERT INTO simstudio.workflow (
   id, user_id, name, description, last_synced, created_at, updated_at, is_deployed, deployed_at,
   color, run_count, last_run_at, variables, workspace_id, folder_id, sort_order, is_public_api
 ) VALUES (
@@ -240,7 +240,7 @@ INSERT INTO public.workflow (
   false
 );
 
-INSERT INTO public.workflow_blocks (
+INSERT INTO simstudio.workflow_blocks (
   id, workflow_id, type, name, position_x, position_y, enabled, horizontal_handles, is_wide, height,
   sub_blocks, outputs, data, created_at, updated_at, advanced_mode, trigger_mode, locked
 ) VALUES (
@@ -322,7 +322,7 @@ INSERT INTO public.workflow_blocks (
 );
 
 -- Versioned custom tools that act as packaged Flow/Cadence event nodes.
-INSERT INTO public.custom_tools (
+INSERT INTO simstudio.custom_tools (
   id, user_id, title, schema, code, created_at, updated_at, workspace_id
 ) VALUES (
   'ct-flow-onchain-events',
@@ -432,7 +432,7 @@ INSERT INTO public.custom_tools (
 );
 
 -- Seed Cadence-focused skills for Copilot and team onboarding.
-INSERT INTO public.skill (
+INSERT INTO simstudio.skill (
   id, workspace_id, user_id, name, description, content, created_at, updated_at
 ) VALUES (
   'sk-cadence-mcp-operator',
