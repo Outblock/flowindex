@@ -20,9 +20,11 @@ import SignerSelector, { type SignerOption } from './components/SignerSelector';
 import {
   loadProject, saveProject, updateFileContent, createFile, createFolder, deleteFile,
   openFile, closeFile, getFileContent, addDependencyFile, getUserFiles,
-  TEMPLATES,
+  TEMPLATES, DEFAULT_CODE,
   type ProjectState, type Template,
 } from './fs/fileSystem';
+import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';
+import ProjectSelector from './components/ProjectSelector';
 import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn } from 'lucide-react';
 
 /* ── Detect if we're in an iframe ── */
@@ -188,6 +190,21 @@ export default function App() {
   const { keys, signMessage } = useKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'fcl' });
+
+  const {
+    projects: cloudProjects,
+    saving: projectSaving,
+    lastSaved,
+    getProject,
+    saveProject: cloudSave,
+    deleteProject: cloudDelete,
+    fetchProjects,
+  } = useProjects();
+
+  const [cloudMeta, setCloudMeta] = useState<{
+    id?: string; name: string; slug?: string; is_public?: boolean;
+  }>({ name: 'Untitled' });
+
   const [monacoInstance, setMonacoInstance] = useState<typeof MonacoNS | null>(null);
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -221,6 +238,53 @@ export default function App() {
     }, 1000);
     return () => clearTimeout(timer);
   }, [project, network]);
+
+  // Cloud auto-save (debounced 2s)
+  useEffect(() => {
+    if (!user || !cloudMeta.id) return;
+    const timer = setTimeout(async () => {
+      try {
+        await cloudSave(project, {
+          id: cloudMeta.id,
+          name: cloudMeta.name,
+          slug: cloudMeta.slug,
+          network,
+          is_public: cloudMeta.is_public,
+        });
+      } catch {
+        // Silently fail — localStorage is the fallback
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [project, network, user, cloudMeta, cloudSave]);
+
+  // Load shared project from URL ?project=slug
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const projectSlug = params.get('project');
+    if (!projectSlug) return;
+
+    (async () => {
+      const full = await getProject(projectSlug);
+      if (!full) return;
+      const files = full.files.map((f: { path: string; content: string }) => ({ path: f.path, content: f.content }));
+      if (files.length === 0) return;
+      setProject({
+        files,
+        activeFile: full.active_file || files[0].path,
+        openFiles: full.open_files || [files[0].path],
+        folders: full.folders || [],
+      });
+      setCloudMeta({
+        id: full.id,
+        name: full.name,
+        slug: full.slug,
+        is_public: full.is_public,
+      });
+      setNetwork(full.network as FlowNetwork);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // LSP integration
   const handleDependency = useCallback((address: string, contractName: string, code: string) => {
@@ -568,12 +632,83 @@ export default function App() {
         </div>
       )}
 
+      {user && !cloudMeta.id && project.files.some(f => !f.readOnly && f.content.trim() && f.content !== DEFAULT_CODE) && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-emerald-500/20 bg-emerald-500/10 shrink-0">
+          <span className="text-[11px] text-emerald-300 flex-1">Save your project to the cloud?</span>
+          <button
+            onClick={async () => {
+              const result = await cloudSave(project, { name: 'My Project', network });
+              setCloudMeta({ id: result.id, name: 'My Project', slug: result.slug });
+              await fetchProjects();
+            }}
+            className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-medium transition-colors"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setCloudMeta({ name: 'Untitled', id: '_dismissed' })}
+            className="text-[11px] text-zinc-500 hover:text-zinc-400"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Main layout */}
       <div className="flex flex-1 min-h-0">
         {/* File Explorer */}
         {showExplorer && (
           <>
             <div className="shrink-0 overflow-hidden bg-zinc-900 flex flex-col" style={{ width: explorer.width }}>
+              {/* Cloud project selector */}
+              {user && (
+                <div className="shrink-0 border-b border-zinc-700">
+                  <ProjectSelector
+                    projects={cloudProjects}
+                    currentProject={cloudMeta.id ? cloudMeta : null}
+                    onSelectProject={async (slug) => {
+                      const full = await getProject(slug);
+                      if (!full) return;
+                      const files = full.files.map((f: { path: string; content: string }) => ({ path: f.path, content: f.content }));
+                      setProject({
+                        files: files.length > 0 ? files : [{ path: 'main.cdc', content: '' }],
+                        activeFile: full.active_file || files[0]?.path || 'main.cdc',
+                        openFiles: full.open_files || [files[0]?.path || 'main.cdc'],
+                        folders: full.folders || [],
+                      });
+                      setCloudMeta({
+                        id: full.id, name: full.name, slug: full.slug, is_public: full.is_public,
+                      });
+                      setNetwork(full.network as FlowNetwork);
+                    }}
+                    onNewProject={async () => {
+                      const defaultFiles = [{ path: 'main.cdc', content: DEFAULT_CODE }];
+                      const defaultState = { files: defaultFiles, activeFile: 'main.cdc', openFiles: ['main.cdc'], folders: [] as string[] };
+                      const result = await cloudSave(defaultState, { name: 'Untitled', network });
+                      setProject(defaultState);
+                      setCloudMeta({ id: result.id, name: 'Untitled', slug: result.slug });
+                      await fetchProjects();
+                    }}
+                    onRename={async (id, name) => {
+                      setCloudMeta(prev => ({ ...prev, name }));
+                      await cloudSave(project, { ...cloudMeta, id, name });
+                      await fetchProjects();
+                    }}
+                    onTogglePublic={async (id, isPublic) => {
+                      setCloudMeta(prev => ({ ...prev, is_public: isPublic }));
+                      await cloudSave(project, { ...cloudMeta, id, is_public: isPublic });
+                      await fetchProjects();
+                    }}
+                    onDelete={async (id) => {
+                      await cloudDelete(id);
+                      setCloudMeta({ name: 'Untitled' });
+                      setProject(loadProject());
+                    }}
+                    saving={projectSaving}
+                    lastSaved={lastSaved}
+                  />
+                </div>
+              )}
               <div className="flex-1 overflow-y-auto">
                 <FileExplorer
                   project={project}
