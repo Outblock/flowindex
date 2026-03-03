@@ -149,11 +149,14 @@ async function createFlowAccount(
 
   const res = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: Deno.env.get('LILICO_API_KEY') || '',
+    },
     body: JSON.stringify({
       publicKey: publicKeyHex,
       signatureAlgorithm: 'ECDSA_P256',
-      hashAlgorithm: 'SHA3_256',
+      hashAlgorithm: 'SHA2_256',
       weight: 1000,
     }),
   });
@@ -316,7 +319,7 @@ serve(async (req: Request) => {
             encrypted_private_key: encryptedKey,
             key_index: 0,
             sig_algo: 'ECDSA_P256',
-            hash_algo: 'SHA3_256',
+            hash_algo: 'SHA2_256',
             source: 'created',
           })
           .select(
