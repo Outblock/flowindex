@@ -84,14 +84,14 @@ export default function DeveloperLayout({ children }: { children: React.ReactNod
                     to={item.path}
                     className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors z-10 ${
                       isActive
-                        ? 'text-black dark:text-white'
+                        ? 'text-white dark:text-zinc-900'
                         : 'text-neutral-400 hover:text-white'
                     }`}
                   >
                     {isActive && (
                       <motion.div
                         layoutId="devActiveTab"
-                        className="absolute inset-0 bg-[#00ef8b] dark:bg-white -z-10"
+                        className="absolute inset-0 bg-zinc-900 dark:bg-white -z-10 shadow-md"
                         transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
                       />
                     )}
