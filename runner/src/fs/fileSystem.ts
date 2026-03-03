@@ -17,7 +17,7 @@ export interface ProjectState {
 
 const STORAGE_KEY = 'runner:project';
 
-const DEFAULT_CODE = `// Welcome to Cadence Runner
+export const DEFAULT_CODE = `// Welcome to Cadence Runner
 // Press Ctrl/Cmd+Enter to execute
 
 access(all) fun main(): String {
