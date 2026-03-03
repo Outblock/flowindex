@@ -354,76 +354,21 @@ jobs:
 
       - name: Run Supabase migrations
         run: |
-          MIGRATION_DIR="supabase/migrations"
-          if [ -d "$MIGRATION_DIR" ] && ls "$MIGRATION_DIR"/*.sql 1>/dev/null 2>&1; then
-            # Copy migration files to VM
-            gcloud compute scp --recurse "$MIGRATION_DIR" flowindex-backend:~/supabase-migrations --zone=us-central1-a
-            gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
-              set -e
-              # Load env for DB credentials
-              load_env() {
-                while IFS= read -r line || [ -n "$line" ]; do
-                  [[ "$line" =~ ^[[:space:]]*# ]] && continue
-                  [[ -z "$line" ]] && continue
-                  export "$line" 2>/dev/null || true
-                done < "$1"
-              }
-              load_env /mnt/stateful_partition/pgdata/backend.env
-
-              DB_USER=$(echo "$SUPABASE_DB_URL" | sed -n "s|postgres://\([^:]*\):.*|\1|p")
-              DB_PASS=$(echo "$SUPABASE_DB_URL" | sed -n "s|postgres://[^:]*:\([^@]*\)@.*|\1|p")
-              DB_HOST=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*@\([^:/]*\)[:/].*|\1|p")
-              DB_PORT=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*:\([0-9]*\)/.*|\1|p")
-              DB_NAME=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*/\([^?]*\).*|\1|p")
-
-              # Helper to run psql
-              run_psql() {
-                docker run --rm --network=host \
-                  -e PGPASSWORD="$DB_PASS" \
-                  postgres:16-alpine \
-                  psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" "$@"
-              }
-
-              # Ensure service_role exists (Supabase migrations reference it)
-              run_psql -c "DO \$\$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
-
-              # Create/fix migrations tracking table
-              run_psql -c "
-                CREATE TABLE IF NOT EXISTS public.edge_migrations (
-                  version TEXT PRIMARY KEY,
-                  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                );
-                ALTER TABLE public.edge_migrations ALTER COLUMN version TYPE TEXT;
-              "
-
-              # Apply each migration in order if not already applied
-              for f in ~/supabase-migrations/*.sql; do
-                VERSION=$(basename "$f" .sql)
-                ALREADY=$(docker run --rm --network=host \
-                  -e PGPASSWORD="$DB_PASS" \
-                  postgres:16-alpine \
-                  psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tAc \
-                    "SELECT 1 FROM public.edge_migrations WHERE version = '"'"'$VERSION'"'"';" || echo "")
-                if [ "$ALREADY" = "1" ]; then
-                  echo "Skip (already applied): $VERSION"
-                else
-                  echo "Applying: $VERSION"
-                  docker run --rm --network=host \
-                    -e PGPASSWORD="$DB_PASS" \
-                    -v "$f:/tmp/migration.sql:ro" \
-                    postgres:16-alpine \
-                    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
-                      -v ON_ERROR_STOP=0 -f /tmp/migration.sql
-                  run_psql -c "INSERT INTO public.edge_migrations (version) VALUES ('"'"'$VERSION'"'"') ON CONFLICT DO NOTHING;"
-                  echo "Applied: $VERSION"
-                fi
-              done
-              rm -rf ~/supabase-migrations
-              echo "All migrations complete"
-            '
-          else
-            echo "No migration files found, skipping"
-          fi
+          gcloud compute scp --recurse supabase/migrations supabase/run-migrations.sh flowindex-backend:~/supabase/ --zone=us-central1-a
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+            set -e
+            load_env() {
+              while IFS= read -r line || [ -n "$line" ]; do
+                [[ "$line" =~ ^[[:space:]]*# ]] && continue
+                [[ -z "$line" ]] && continue
+                export "$line" 2>/dev/null || true
+              done < "$1"
+            }
+            load_env /mnt/stateful_partition/pgdata/backend.env
+            chmod +x ~/supabase/run-migrations.sh
+            ~/supabase/run-migrations.sh ~/supabase/migrations
+            rm -rf ~/supabase
+          '
 
       - name: Deploy edge functions & gateway on GCE
         env:
