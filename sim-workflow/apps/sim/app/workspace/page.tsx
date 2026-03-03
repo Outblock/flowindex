@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createLogger } from '@sim/logger'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/auth/auth-client'
@@ -12,6 +12,13 @@ export default function WorkspacePage() {
   const router = useRouter()
   const { data: session, isPending } = useSession()
   useReferralAttribution()
+  const [redirectState, setRedirectState] = useState<'idle' | 'working' | 'failed'>('idle')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const isWorkspaceRootPath = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    return /^\/workspace\/?$/.test(window.location.pathname)
+  }, [])
 
   useEffect(() => {
     const redirectToFirstWorkspace = async () => {
@@ -19,6 +26,9 @@ export default function WorkspacePage() {
       if (isPending) {
         return
       }
+
+      setRedirectState('working')
+      setErrorMessage(null)
 
       // If user is not authenticated, redirect to login
       if (!session?.user) {
@@ -91,32 +101,38 @@ export default function WorkspacePage() {
             logger.error('Error creating default workspace:', createError)
           }
 
-          // If we can't create a workspace, redirect to login to reset state
-          router.replace('/login')
+          setRedirectState('failed')
+          setErrorMessage('无法创建默认 workspace，请稍后重试。')
           return
         }
 
         // Get the first workspace (they should be ordered by most recent)
         const firstWorkspace = workspaces[0]
+        if (!firstWorkspace?.id) {
+          throw new Error('Workspace list is empty or invalid')
+        }
         logger.info(`Redirecting to first workspace: ${firstWorkspace.id}`)
 
         // Redirect to the first workspace
         router.replace(`/workspace/${firstWorkspace.id}/w`)
       } catch (error) {
         logger.error('Error fetching workspaces for redirect:', error)
-        // Don't redirect if there's an error - let the user stay on the page
+        setRedirectState('failed')
+        setErrorMessage('获取 workspace 失败，请刷新重试。')
       }
     }
 
     // Only run this logic when we're at the root /workspace path
     // If we're already in a specific workspace, the children components will handle it
-    if (typeof window !== 'undefined' && window.location.pathname === '/workspace') {
+    if (isWorkspaceRootPath) {
       redirectToFirstWorkspace()
     }
-  }, [session, isPending, router])
+  }, [session, isPending, router, isWorkspaceRootPath])
+
+  const showLoading = isPending || redirectState === 'working'
 
   // Show loading state while we determine where to redirect
-  if (isPending) {
+  if (showLoading) {
     return (
       <div className='flex h-screen w-full items-center justify-center'>
         <div
@@ -138,5 +154,38 @@ export default function WorkspacePage() {
     return null
   }
 
-  return null
+  if (redirectState === 'failed') {
+    return (
+      <div className='flex h-screen w-full items-center justify-center p-6'>
+        <div className='max-w-md rounded-lg border border-border bg-card p-6 text-center'>
+          <h1 className='mb-2 text-lg font-semibold'>Workspace 加载失败</h1>
+          <p className='mb-4 text-sm text-muted-foreground'>
+            {errorMessage || '页面未能自动跳转到可用 workspace。'}
+          </p>
+          <div className='flex items-center justify-center gap-2'>
+            <button
+              type='button'
+              className='rounded-md border border-border px-3 py-2 text-sm'
+              onClick={() => window.location.reload()}
+            >
+              刷新重试
+            </button>
+            <button
+              type='button'
+              className='rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground'
+              onClick={() => router.replace('/login')}
+            >
+              返回登录
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className='flex h-screen w-full items-center justify-center'>
+      <span className='text-sm text-muted-foreground'>正在跳转到你的 workspace...</span>
+    </div>
+  )
 }
