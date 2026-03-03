@@ -100,21 +100,22 @@ function loadTokensFromCookie(): StoredTokens | null {
 
 function loadStoredTokens(): StoredTokens | null {
   if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.accessToken && parsed?.refreshToken) return parsed as StoredTokens;
-    }
-  } catch {
-    /* ignore */
-  }
-  // Fall back to cross-subdomain cookie set by main site
+
+  // Cookie is the cross-subdomain source of truth.
+  // If the cookie is gone (main site logged out), clear localStorage too.
   const fromCookie = loadTokensFromCookie();
+
   if (fromCookie) {
+    // Cookie present — sync to localStorage and use it
     persistTokens(fromCookie.accessToken, fromCookie.refreshToken);
+    return fromCookie;
   }
-  return fromCookie;
+
+  // No cookie — main site is logged out. Clear any stale localStorage tokens.
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch { /* ignore */ }
+  return null;
 }
 
 function persistTokens(accessToken: string, refreshToken: string) {
