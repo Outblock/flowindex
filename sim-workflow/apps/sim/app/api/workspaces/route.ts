@@ -6,6 +6,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { AuditAction, AuditResourceType, recordAudit } from '@/lib/audit/log'
 import { getSession } from '@/lib/auth'
+import { isFlowIndexSupabaseCookieAuth } from '@/lib/core/config/feature-flags'
+import { ensureFlowIndexWorkspaceSeedPack } from '@/lib/flowindex/workspace-seed'
 import { PlatformEvents } from '@/lib/core/telemetry'
 import { buildDefaultWorkflowArtifacts } from '@/lib/workflows/defaults'
 import { saveWorkflowToNormalizedTables } from '@/lib/workflows/persistence/utils'
@@ -99,6 +101,7 @@ async function createDefaultWorkspace(userId: string, userName?: string | null) 
 async function createWorkspace(userId: string, name: string, skipDefaultWorkflow = false) {
   const workspaceId = crypto.randomUUID()
   const workflowId = crypto.randomUUID()
+  const shouldSeedFlowIndexPack = !skipDefaultWorkflow && isFlowIndexSupabaseCookieAuth
   const now = new Date()
 
   try {
@@ -123,7 +126,7 @@ async function createWorkspace(userId: string, name: string, skipDefaultWorkflow
         updatedAt: now,
       })
 
-      if (!skipDefaultWorkflow) {
+      if (!skipDefaultWorkflow && !shouldSeedFlowIndexPack) {
         await tx.insert(workflow).values({
           id: workflowId,
           userId,
@@ -144,16 +147,22 @@ async function createWorkspace(userId: string, name: string, skipDefaultWorkflow
       logger.info(
         skipDefaultWorkflow
           ? `Created workspace ${workspaceId} for user ${userId}`
-          : `Created workspace ${workspaceId} with initial workflow ${workflowId} for user ${userId}`
+          : shouldSeedFlowIndexPack
+            ? `Created workspace ${workspaceId} for user ${userId}; FlowIndex seed pack scheduled`
+            : `Created workspace ${workspaceId} with initial workflow ${workflowId} for user ${userId}`
       )
     })
 
     if (!skipDefaultWorkflow) {
-      const { workflowState } = buildDefaultWorkflowArtifacts()
-      const seedResult = await saveWorkflowToNormalizedTables(workflowId, workflowState)
+      if (shouldSeedFlowIndexPack) {
+        await ensureFlowIndexWorkspaceSeedPack({ workspaceId, userId, force: true })
+      } else {
+        const { workflowState } = buildDefaultWorkflowArtifacts()
+        const seedResult = await saveWorkflowToNormalizedTables(workflowId, workflowState)
 
-      if (!seedResult.success) {
-        throw new Error(seedResult.error || 'Failed to seed default workflow state')
+        if (!seedResult.success) {
+          throw new Error(seedResult.error || 'Failed to seed default workflow state')
+        }
       }
     }
   } catch (error) {
