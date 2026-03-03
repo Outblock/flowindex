@@ -58,8 +58,10 @@ jobs:
               - 'supabase/**'
               - '.github/workflows/deploy.yml'
             studio:
-              - 'studio/**'
-              - '!studio/seed/simstudio_seed.sql'
+              - 'studio/Dockerfile'
+              - 'studio/entrypoint.sh'
+              - 'studio/login.html'
+              - 'studio/nginx.conf'
             sim-studio:
               - 'studio/seed/simstudio_seed.sql'
               - 'sim-workflow/**'
