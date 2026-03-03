@@ -939,8 +939,8 @@ jobs:
             SOURCE_SIM_DB_URL="${SOURCE_SIM_DB_URL:-$SUPABASE_DB_URL}"
 
             # Parse DB connection from selected source URL.
-            # We intentionally rebuild a clean URL (no query params like search_path)
-            # to keep Sim Studio migrations on public schema.
+            # We intentionally rebuild a clean URL (no inherited query params like search_path)
+            # and force public-first search_path for Sim Studio.
             DB_USER=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://\([^:]*\):.*|\1|p")
             DB_PASS=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://[^:]*:\([^@]*\)@.*|\1|p")
             DB_HOST=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://[^:]*:[^@]*@\([^:/?]*\).*|\1|p")
@@ -955,7 +955,7 @@ jobs:
               exit 1
             fi
             SIM_DB_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${SIM_DB_NAME}"
-            SIM_MIGRATION_DB_URL="${SIM_DB_URL}?options=-csearch_path%3Dpublic"
+            SIM_MIGRATION_DB_URL="${SIM_DB_URL}?options=-csearch_path%3Dpublic%2Cextensions"
 
             # Helper: run psql via docker (no psql binary on the VM)
             run_psql() {
@@ -965,15 +965,23 @@ jobs:
                 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$@"
             }
 
-            # Ensure pgvector extension exists on the target database
+            # Ensure pgvector is available and visible for migrations.
+            VECTOR_SCHEMA=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT n.nspname FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE t.typname='vector' LIMIT 1;" | tr -d '[:space:]')
+            if [ -z "$VECTOR_SCHEMA" ]; then
+              run_psql -d "$SIM_DB_NAME" -c "CREATE SCHEMA IF NOT EXISTS extensions;"
+              run_psql -d "$SIM_DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;"
+              VECTOR_SCHEMA=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT n.nspname FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE t.typname='vector' LIMIT 1;" | tr -d '[:space:]')
+            fi
+            if [ -z "$VECTOR_SCHEMA" ]; then
+              echo "pgvector type 'vector' is unavailable in database $SIM_DB_NAME"
+              exit 1
+            fi
+            # Keep public first (for Sim Studio tables) and include extensions (for pgvector type).
             run_psql -d "$SIM_DB_NAME" \
-              -c "CREATE EXTENSION IF NOT EXISTS vector" 2>/dev/null || true
-            # Best-effort: keep this DB user default search_path on public to avoid
-            # creating Sim Studio tables under auth/custom schemas.
-            run_psql -d "$SIM_DB_NAME" \
-              -c "ALTER ROLE \"$DB_USER\" IN DATABASE \"$SIM_DB_NAME\" SET search_path TO public" 2>/dev/null || true
+              -c "ALTER ROLE \"$DB_USER\" IN DATABASE \"$SIM_DB_NAME\" SET search_path TO public, extensions" 2>/dev/null || true
             SEARCH_PATH=$(run_psql -d "$SIM_DB_NAME" -tAc "SHOW search_path;" | tr -d '\r')
             echo "DB search_path: ${SEARCH_PATH:-unknown}"
+            echo "vector type schema: $VECTOR_SCHEMA"
             echo "Database $SIM_DB_NAME ready"
 
             # Pull images
@@ -985,7 +993,7 @@ jobs:
             echo "Running Sim Studio Drizzle migrations..."
             docker run --rm --network=host \
               -e DATABASE_URL="$SIM_MIGRATION_DB_URL" \
-              -e PGOPTIONS="-c search_path=public" \
+              -e PGOPTIONS="-c search_path=public,extensions" \
               "$SIM_STUDIO_MIGRATIONS_IMAGE" \
               run db:migrate
             echo "Migrations applied"
