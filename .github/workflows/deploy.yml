@@ -6,11 +6,42 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      services:
-        description: "Services to deploy (comma-separated: backend,frontend,runner,supabase,docs,ai-chat,studio,sim-studio or 'all')"
-        required: false
-        default: "all"
-        type: string
+      all:
+        description: "Deploy ALL services"
+        type: boolean
+        default: false
+      backend:
+        description: "Backend"
+        type: boolean
+        default: false
+      frontend:
+        description: "Frontend"
+        type: boolean
+        default: false
+      runner:
+        description: "Runner"
+        type: boolean
+        default: false
+      supabase:
+        description: "Supabase"
+        type: boolean
+        default: false
+      docs:
+        description: "Docs"
+        type: boolean
+        default: false
+      ai-chat:
+        description: "AI Chat"
+        type: boolean
+        default: false
+      studio:
+        description: "Studio"
+        type: boolean
+        default: false
+      sim-studio:
+        description: "Sim Studio"
+        type: boolean
+        default: false
 
 env:
   PROJECT_ID: flowindex-mainnet
@@ -75,39 +106,18 @@ jobs:
         id: result
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            SERVICES="${{ inputs.services }}"
-            if [ "$SERVICES" = "all" ] || [ -z "$SERVICES" ]; then
-              echo "backend=true" >> $GITHUB_OUTPUT
-              echo "frontend=true" >> $GITHUB_OUTPUT
-              echo "runner=true" >> $GITHUB_OUTPUT
-              echo "supabase=true" >> $GITHUB_OUTPUT
-              echo "docs=true" >> $GITHUB_OUTPUT
-              echo "ai-chat=true" >> $GITHUB_OUTPUT
-              echo "studio=true" >> $GITHUB_OUTPUT
-              echo "sim-studio=true" >> $GITHUB_OUTPUT
-              echo "sim-studio-images=true" >> $GITHUB_OUTPUT
-              echo "sim-studio-seed=true" >> $GITHUB_OUTPUT
-            else
-              echo "backend=false" >> $GITHUB_OUTPUT
-              echo "frontend=false" >> $GITHUB_OUTPUT
-              echo "runner=false" >> $GITHUB_OUTPUT
-              echo "supabase=false" >> $GITHUB_OUTPUT
-              echo "docs=false" >> $GITHUB_OUTPUT
-              echo "ai-chat=false" >> $GITHUB_OUTPUT
-              echo "studio=false" >> $GITHUB_OUTPUT
-              echo "sim-studio=false" >> $GITHUB_OUTPUT
-              echo "sim-studio-images=false" >> $GITHUB_OUTPUT
-              echo "sim-studio-seed=false" >> $GITHUB_OUTPUT
-              IFS=',' read -ra PARTS <<< "$SERVICES"
-              for svc in "${PARTS[@]}"; do
-                svc=$(echo "$svc" | xargs)
-                echo "${svc}=true" >> $GITHUB_OUTPUT
-                if [ "$svc" = "sim-studio" ]; then
-                  echo "sim-studio-images=true" >> $GITHUB_OUTPUT
-                  echo "sim-studio-seed=true" >> $GITHUB_OUTPUT
-                fi
-              done
-            fi
+            ALL="${{ inputs.all }}"
+            echo "backend=${{ inputs.all == true || inputs.backend == true }}" >> $GITHUB_OUTPUT
+            echo "frontend=${{ inputs.all == true || inputs.frontend == true }}" >> $GITHUB_OUTPUT
+            echo "runner=${{ inputs.all == true || inputs.runner == true }}" >> $GITHUB_OUTPUT
+            echo "supabase=${{ inputs.all == true || inputs.supabase == true }}" >> $GITHUB_OUTPUT
+            echo "docs=${{ inputs.all == true || inputs.docs == true }}" >> $GITHUB_OUTPUT
+            echo "ai-chat=${{ inputs.all == true || inputs.ai-chat == true }}" >> $GITHUB_OUTPUT
+            echo "studio=${{ inputs.all == true || inputs.studio == true }}" >> $GITHUB_OUTPUT
+            SIM=${{ inputs.all == true || inputs.sim-studio == true }}
+            echo "sim-studio=${SIM}" >> $GITHUB_OUTPUT
+            echo "sim-studio-images=${SIM}" >> $GITHUB_OUTPUT
+            echo "sim-studio-seed=${SIM}" >> $GITHUB_OUTPUT
           else
             echo "backend=${{ steps.filter.outputs.backend }}" >> $GITHUB_OUTPUT
             echo "frontend=${{ steps.filter.outputs.frontend }}" >> $GITHUB_OUTPUT
