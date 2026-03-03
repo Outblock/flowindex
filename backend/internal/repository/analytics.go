@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -231,20 +232,26 @@ func (r *Repository) GetAnalyticsDailyContractsModule(ctx context.Context, from,
 // This is used as a graceful fallback when enrichment queries are slow/unavailable.
 func (r *Repository) GetAnalyticsDailyBaseStats(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
 	query := `
-		SELECT date::text, tx_count, COALESCE(evm_tx_count, 0) AS evm_tx_count,
-			(tx_count - COALESCE(evm_tx_count, 0)) AS cadence_tx_count,
-			COALESCE(total_gas_used, 0) AS total_gas_used,
-			COALESCE(active_accounts, 0), COALESCE(new_contracts, 0),
-			COALESCE(failed_tx_count, 0) AS failed_tx_count,
-			CASE WHEN tx_count > 0
-				THEN ROUND(COALESCE(failed_tx_count, 0)::numeric / tx_count * 100, 2)
+		WITH dates AS (
+			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
+		)
+		SELECT d.date::text,
+			COALESCE(s.tx_count, 0)::bigint AS tx_count,
+			COALESCE(s.evm_tx_count, 0)::bigint AS evm_tx_count,
+			(COALESCE(s.tx_count, 0) - COALESCE(s.evm_tx_count, 0))::bigint AS cadence_tx_count,
+			COALESCE(s.total_gas_used, 0)::bigint AS total_gas_used,
+			COALESCE(s.active_accounts, 0)::bigint AS active_accounts,
+			COALESCE(s.new_contracts, 0)::int AS new_contracts,
+			COALESCE(s.failed_tx_count, 0)::bigint AS failed_tx_count,
+			CASE WHEN COALESCE(s.tx_count, 0) > 0
+				THEN ROUND(COALESCE(s.failed_tx_count, 0)::numeric / NULLIF(s.tx_count, 0) * 100, 2)
 				ELSE 0 END AS error_rate,
-			CASE WHEN tx_count > 0 AND COALESCE(total_gas_used, 0) > 0
-				THEN ROUND((COALESCE(total_gas_used, 0)::numeric / tx_count), 2)
+			CASE WHEN COALESCE(s.tx_count, 0) > 0
+				THEN ROUND(COALESCE(s.total_gas_used, 0)::numeric / NULLIF(s.tx_count, 0), 2)
 				ELSE 0 END AS avg_gas_per_tx
-		FROM app.daily_stats
-		WHERE date >= $1::date AND date <= $2::date
-		ORDER BY date ASC`
+		FROM dates d
+		LEFT JOIN app.daily_stats s ON s.date = d.date
+		ORDER BY d.date ASC`
 
 	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
@@ -264,7 +271,83 @@ func (r *Repository) GetAnalyticsDailyBaseStats(ctx context.Context, from, to ti
 		}
 		out = append(out, row)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(out) == 0 {
+		return out, nil
+	}
+
+	// Overlay recent days from raw.transactions so the dashboard stays fresh even
+	// when app.daily_stats is slightly behind.
+	overlayFrom := maxDate(from.UTC(), to.UTC().AddDate(0, 0, -14))
+	if !overlayFrom.After(to.UTC()) {
+		heightLo, heightHi := r.estimateRecentHeightBounds(ctx, overlayFrom, to.UTC())
+		rows2, err := r.db.Query(ctx, `
+			SELECT
+				DATE(t.timestamp)::text AS date,
+				COUNT(*)::bigint AS tx_count,
+				COUNT(*) FILTER (WHERE t.is_evm = TRUE)::bigint AS evm_tx_count,
+				COALESCE(SUM(t.gas_used), 0)::bigint AS total_gas_used,
+				COUNT(DISTINCT t.proposer_address)::bigint AS active_accounts,
+				COUNT(*) FILTER (WHERE t.error_message IS NOT NULL AND t.error_message != '')::bigint AS failed_tx_count
+			FROM raw.transactions t
+			WHERE t.block_height >= $1
+			  AND t.block_height < $2
+			  AND t.timestamp IS NOT NULL
+			  AND DATE(t.timestamp) >= $3::date
+			  AND DATE(t.timestamp) <= $4::date
+			GROUP BY 1
+		`, heightLo, heightHi, overlayFrom, to.UTC())
+		if err == nil {
+			type txAgg struct {
+				TxCount        int64
+				EVMTxCount     int64
+				TotalGasUsed   int64
+				ActiveAccounts int64
+				FailedTxCount  int64
+			}
+			byDate := make(map[string]txAgg)
+			for rows2.Next() {
+				var (
+					date string
+					a    txAgg
+				)
+				if scanErr := rows2.Scan(
+					&date,
+					&a.TxCount,
+					&a.EVMTxCount,
+					&a.TotalGasUsed,
+					&a.ActiveAccounts,
+					&a.FailedTxCount,
+				); scanErr == nil {
+					byDate[date] = a
+				}
+			}
+			rows2.Close()
+
+			for i := range out {
+				if a, ok := byDate[out[i].Date]; ok {
+					out[i].TxCount = a.TxCount
+					out[i].EVMTxCount = a.EVMTxCount
+					out[i].CadenceTxCount = a.TxCount - a.EVMTxCount
+					out[i].TotalGasUsed = a.TotalGasUsed
+					out[i].ActiveAccounts = a.ActiveAccounts
+					out[i].FailedTxCount = a.FailedTxCount
+					if out[i].TxCount > 0 {
+						out[i].ErrorRate = round2((float64(out[i].FailedTxCount) / float64(out[i].TxCount)) * 100)
+						out[i].AvgGasPerTx = round2(float64(out[i].TotalGasUsed) / float64(out[i].TxCount))
+					} else {
+						out[i].ErrorRate = 0
+						out[i].AvgGasPerTx = 0
+					}
+				}
+			}
+		}
+	}
+
+	return out, nil
 }
 
 type TransferDailyRow struct {
@@ -301,7 +384,104 @@ func (r *Repository) GetTransferDailyStats(ctx context.Context, from, to time.Ti
 		}
 		out = append(out, row)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(out) == 0 {
+		return out, nil
+	}
+
+	// Overlay recent transfer counts from source tables to avoid stale zeros when
+	// daily_stats lags behind token workers.
+	overlayFrom := maxDate(from.UTC(), to.UTC().AddDate(0, 0, -14))
+	if !overlayFrom.After(to.UTC()) {
+		heightLo, heightHi := r.estimateRecentHeightBounds(ctx, overlayFrom, to.UTC())
+		rows2, err := r.db.Query(ctx, `
+			WITH recent AS (
+				SELECT 'ft'::text AS kind, DATE(ft.timestamp)::text AS date, COUNT(*)::bigint AS cnt
+				FROM app.ft_transfers ft
+				WHERE ft.block_height >= $1
+				  AND ft.block_height < $2
+				  AND DATE(ft.timestamp) >= $3::date
+				  AND DATE(ft.timestamp) <= $4::date
+				GROUP BY 1, 2
+				UNION ALL
+				SELECT 'nft'::text AS kind, DATE(nt.timestamp)::text AS date, COUNT(*)::bigint AS cnt
+				FROM app.nft_transfers nt
+				WHERE nt.block_height >= $1
+				  AND nt.block_height < $2
+				  AND DATE(nt.timestamp) >= $3::date
+				  AND DATE(nt.timestamp) <= $4::date
+				GROUP BY 1, 2
+			)
+			SELECT kind, date, cnt
+			FROM recent
+		`, heightLo, heightHi, overlayFrom, to.UTC())
+		if err == nil {
+			type transferAgg struct {
+				FT  int64
+				NFT int64
+			}
+			byDate := make(map[string]transferAgg)
+			for rows2.Next() {
+				var (
+					kind string
+					date string
+					cnt  int64
+				)
+				if scanErr := rows2.Scan(&kind, &date, &cnt); scanErr == nil {
+					cur := byDate[date]
+					if kind == "ft" {
+						cur.FT = cnt
+					} else if kind == "nft" {
+						cur.NFT = cnt
+					}
+					byDate[date] = cur
+				}
+			}
+			rows2.Close()
+
+			for i := range out {
+				if a, ok := byDate[out[i].Date]; ok {
+					out[i].FTTransfers = a.FT
+					out[i].NFTTransfers = a.NFT
+				}
+			}
+		}
+	}
+
+	return out, nil
+}
+
+func (r *Repository) estimateRecentHeightBounds(ctx context.Context, from, to time.Time) (int64, int64) {
+	var latestHeight int64
+	_ = r.db.QueryRow(ctx, `SELECT COALESCE(last_height, 0) FROM app.indexing_checkpoints WHERE service_name = 'main_ingester'`).Scan(&latestHeight)
+	if latestHeight < 0 {
+		latestHeight = 0
+	}
+
+	// Conservative estimate to avoid clipping recent dates when block cadence spikes.
+	daySpan := to.Sub(from).Hours()/24 + 2
+	if daySpan < 2 {
+		daySpan = 2
+	}
+	heightLo := latestHeight - int64(daySpan*200000)
+	if heightLo < 0 {
+		heightLo = 0
+	}
+	return heightLo, latestHeight + 1
+}
+
+func maxDate(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
+}
+
+func round2(v float64) float64 {
+	return math.Round(v*100) / 100
 }
 
 // BigTransfer represents a large-value fungible token transfer or DeFi swap.
