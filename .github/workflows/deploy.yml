@@ -919,13 +919,24 @@ jobs:
             SIM_STUDIO_MIGRATIONS_IMAGE="${SIM_STUDIO_MIGRATIONS_IMAGE:-us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-fork-migrations:latest}"
             FLOWINDEX_AUTH_MODE="${FLOWINDEX_AUTH_MODE:-supabase_cookie}"
 
-            # Parse DB connection from SUPABASE_DB_URL
-            DB_USER=$(echo "$SUPABASE_DB_URL" | sed -n "s|postgres://\([^:]*\):.*|\1|p")
-            DB_PASS=$(echo "$SUPABASE_DB_URL" | sed -n "s|postgres://[^:]*:\([^@]*\)@.*|\1|p")
-            DB_HOST=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*@\([^:/]*\)[:/].*|\1|p")
-            DB_PORT=$(echo "$SUPABASE_DB_URL" | sed -n "s|.*:\([0-9]*\)/.*|\1|p")
+            # Use a single shared DB with Supabase by default.
+            # Optional override: define SIM_DB_URL in sim-studio.env.
+            SIM_DB_URL="${SIM_DB_URL:-$SUPABASE_DB_URL}"
 
-            SIM_DB_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/simstudio"
+            # Parse DB connection from selected SIM_DB_URL
+            DB_USER=$(echo "$SIM_DB_URL" | sed -n "s|.*://\([^:]*\):.*|\1|p")
+            DB_PASS=$(echo "$SIM_DB_URL" | sed -n "s|.*://[^:]*:\([^@]*\)@.*|\1|p")
+            DB_HOST=$(echo "$SIM_DB_URL" | sed -n "s|.*://[^:]*:[^@]*@\([^:/?]*\).*|\1|p")
+            DB_PORT=$(echo "$SIM_DB_URL" | sed -n "s|.*://[^:]*:[^@]*@[^:/?]*:\([0-9]*\).*|\1|p")
+            SIM_DB_NAME=$(echo "$SIM_DB_URL" | sed -n "s|.*/\([^?]*\).*|\1|p")
+
+            if [ -z "$DB_PORT" ]; then
+              DB_PORT=5432
+            fi
+            if [ -z "$SIM_DB_NAME" ]; then
+              echo "Failed to parse database name from SIM_DB_URL"
+              exit 1
+            fi
 
             # Helper: run psql via docker (no psql binary on the VM)
             run_psql() {
@@ -935,11 +946,10 @@ jobs:
                 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$@"
             }
 
-            # Ensure simstudio database exists with pgvector
-            run_psql -d postgres -c "CREATE DATABASE simstudio" 2>/dev/null || true
-            run_psql -d simstudio \
+            # Ensure pgvector extension exists on the target database
+            run_psql -d "$SIM_DB_NAME" \
               -c "CREATE EXTENSION IF NOT EXISTS vector" 2>/dev/null || true
-            echo "Database simstudio ready"
+            echo "Database $SIM_DB_NAME ready"
 
             # Pull images
             docker pull "$SIM_STUDIO_IMAGE"
@@ -958,14 +968,14 @@ jobs:
             docker run --rm --network=host -i \
               -e PGPASSWORD="$DB_PASS" \
               postgres:16-alpine \
-              psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d simstudio \
+              psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$SIM_DB_NAME" \
               < ~/simstudio_seed.sql
             echo "Seed applied"
 
             # Verify critical auth tables exist before starting app containers
-            USER_TABLE_OK=$(run_psql -d simstudio -tAc "SELECT to_regclass(\$\$public.\"user\"\$\$) IS NOT NULL;" | tr -d "[:space:]")
-            SESSION_TABLE_OK=$(run_psql -d simstudio -tAc "SELECT to_regclass(\$\$public.session\$\$) IS NOT NULL;" | tr -d "[:space:]")
-            USER_STATS_TABLE_OK=$(run_psql -d simstudio -tAc "SELECT to_regclass(\$\$public.user_stats\$\$) IS NOT NULL;" | tr -d "[:space:]")
+            USER_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$public.\"user\"\$\$) IS NOT NULL;" | tr -d "[:space:]")
+            SESSION_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$public.session\$\$) IS NOT NULL;" | tr -d "[:space:]")
+            USER_STATS_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$public.user_stats\$\$) IS NOT NULL;" | tr -d "[:space:]")
             if [ "$USER_TABLE_OK" != "t" ] || [ "$SESSION_TABLE_OK" != "t" ] || [ "$USER_STATS_TABLE_OK" != "t" ]; then
               echo "Required Sim Studio auth tables missing (user/session/user_stats); aborting deploy"
               exit 1

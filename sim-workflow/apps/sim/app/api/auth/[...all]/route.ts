@@ -27,6 +27,14 @@ export async function GET(request: NextRequest) {
   }
 
   if (isFlowIndexSupabaseCookieAuth) {
+    // In FlowIndex mode, organization APIs are not used for auth.
+    // Return safe empty payloads to prevent frontend query hard-fail loops.
+    if (path === 'organization/list') {
+      return NextResponse.json({ data: [] })
+    }
+    if (path === 'organization/get-full-organization') {
+      return NextResponse.json({ data: null })
+    }
     return NextResponse.json({ error: 'FlowIndex auth mode is enabled' }, { status: 404 })
   }
 

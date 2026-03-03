@@ -1,6 +1,7 @@
 import { createLogger } from '@sim/logger'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { client } from '@/lib/auth/auth-client'
+import { isFlowIndexSupabaseCookieAuth } from '@/lib/core/config/feature-flags'
 
 const logger = createLogger('OrganizationQueries')
 
@@ -39,9 +40,17 @@ async function fetchOrganizations() {
  * Hook to fetch all organizations
  */
 export function useOrganizations() {
+  const flowIndexMode = isFlowIndexSupabaseCookieAuth
   return useQuery({
     queryKey: organizationKeys.lists(),
     queryFn: fetchOrganizations,
+    enabled: !flowIndexMode,
+    initialData: flowIndexMode
+      ? {
+          organizations: [],
+          activeOrganization: null,
+        }
+      : undefined,
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
   })
@@ -59,10 +68,12 @@ async function fetchOrganization() {
  * Hook to fetch a specific organization
  */
 export function useOrganization(orgId: string) {
+  const flowIndexMode = isFlowIndexSupabaseCookieAuth
   return useQuery({
     queryKey: organizationKeys.detail(orgId),
     queryFn: fetchOrganization,
-    enabled: !!orgId,
+    enabled: !!orgId && !flowIndexMode,
+    initialData: flowIndexMode ? null : undefined,
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
   })

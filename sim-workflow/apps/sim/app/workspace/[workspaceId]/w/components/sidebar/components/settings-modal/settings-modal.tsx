@@ -37,7 +37,7 @@ import { AgentSkillsIcon, McpIcon } from '@/components/icons'
 import { useSession } from '@/lib/auth/auth-client'
 import { getSubscriptionStatus } from '@/lib/billing/client'
 import { getEnv, isTruthy } from '@/lib/core/config/env'
-import { isHosted } from '@/lib/core/config/feature-flags'
+import { isFlowIndexSupabaseCookieAuth, isHosted } from '@/lib/core/config/feature-flags'
 import { getUserRole } from '@/lib/workspaces/organization'
 import {
   ApiKeys,
@@ -66,7 +66,8 @@ import { useSuperUserStatus } from '@/hooks/queries/user-profile'
 import { usePermissionConfig } from '@/hooks/use-permission-config'
 import { useSettingsModalStore } from '@/stores/modals/settings/store'
 
-const isBillingEnabled = isTruthy(getEnv('NEXT_PUBLIC_BILLING_ENABLED'))
+const isBillingEnabled =
+  isTruthy(getEnv('NEXT_PUBLIC_BILLING_ENABLED')) && !isFlowIndexSupabaseCookieAuth
 const isSSOEnabled = isTruthy(getEnv('NEXT_PUBLIC_SSO_ENABLED'))
 const isCredentialSetsEnabled = isTruthy(getEnv('NEXT_PUBLIC_CREDENTIAL_SETS_ENABLED'))
 const isAccessControlEnabled = isTruthy(getEnv('NEXT_PUBLIC_ACCESS_CONTROL_ENABLED'))
@@ -398,6 +399,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   }
 
   const prefetchOrganization = () => {
+    if (isFlowIndexSupabaseCookieAuth) {
+      return
+    }
+
     queryClient.prefetchQuery({
       queryKey: organizationKeys.lists(),
       queryFn: async () => {

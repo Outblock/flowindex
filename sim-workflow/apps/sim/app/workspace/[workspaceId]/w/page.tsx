@@ -12,10 +12,12 @@ const logger = createLogger('WorkflowsPage')
 
 export default function WorkflowsPage() {
   const router = useRouter()
-  const { workflows, setActiveWorkflow } = useWorkflowRegistry()
+  const { workflows } = useWorkflowRegistry()
   const params = useParams()
   const workspaceId = params.workspaceId as string
   const [isMounted, setIsMounted] = useState(false)
+  const [isCreatingDefaultWorkflow, setIsCreatingDefaultWorkflow] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // Fetch workflows using React Query
   const { isLoading, isError } = useWorkflows(workspaceId)
@@ -34,7 +36,10 @@ export default function WorkflowsPage() {
     if (isLoading) return
 
     if (isError) {
-      logger.error('Failed to load workflows for workspace')
+      logger.error('Failed to load workflows for workspace, fallback to /workspace', { workspaceId })
+      setLoadError('无法加载该 workspace，正在返回工作区列表。')
+      // Prevent permanent blank/spinner on stale or unauthorized workspace links.
+      router.replace('/workspace')
       return
     }
 
@@ -50,11 +55,71 @@ export default function WorkflowsPage() {
     if (workspaceWorkflows.length > 0) {
       const firstWorkflowId = workspaceWorkflows[0]
       router.replace(`/workspace/${workspaceId}/w/${firstWorkflowId}`)
+      return
     }
-  }, [isMounted, isLoading, workflows, workspaceId, router, setActiveWorkflow, isError])
 
-  // Always show loading state until redirect happens
-  // There should always be a default workflow, so we never show "no workflows found"
+    if (isCreatingDefaultWorkflow) return
+
+    const ensureDefaultWorkflow = async () => {
+      setIsCreatingDefaultWorkflow(true)
+      try {
+        const response = await fetch('/api/workflows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'default-agent',
+            description: 'Auto-created default workflow',
+            color: '#3972F6',
+            workspaceId,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to create default workflow (${response.status})`)
+        }
+
+        const created = await response.json()
+        const workflowId = created?.id
+
+        if (!workflowId) {
+          throw new Error('Default workflow creation succeeded but workflow id is missing')
+        }
+
+        router.replace(`/workspace/${workspaceId}/w/${workflowId}`)
+      } catch (error) {
+        logger.error('Failed to create default workflow', { workspaceId, error })
+        setLoadError('该 workspace 当前没有可用 workflow，且自动创建失败。请刷新后重试。')
+      } finally {
+        setIsCreatingDefaultWorkflow(false)
+      }
+    }
+
+    void ensureDefaultWorkflow()
+  }, [
+    isMounted,
+    isLoading,
+    workflows,
+    workspaceId,
+    router,
+    isError,
+    isCreatingDefaultWorkflow,
+  ])
+
+  if (loadError) {
+    return (
+      <div className='flex h-full w-full flex-col items-center justify-center gap-3 bg-[var(--bg)] p-6'>
+        <p className='text-sm text-muted-foreground'>{loadError}</p>
+        <button
+          type='button'
+          className='rounded-md border border-border px-3 py-2 text-sm'
+          onClick={() => router.replace('/workspace')}
+        >
+          返回 Workspace
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className='flex h-full w-full flex-col overflow-hidden bg-[var(--bg)]'>
       <div className='relative h-full w-full flex-1 bg-[var(--bg)]'>
