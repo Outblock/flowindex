@@ -523,19 +523,6 @@ export default function App() {
 
           <WalletButton />
 
-          {/* Key manager toggle - show when authenticated */}
-          {user && (
-            <button
-              onClick={() => setShowKeyManager(!showKeyManager)}
-              className={`p-1.5 rounded transition-colors ${
-                showKeyManager ? 'bg-emerald-600/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
-              }`}
-              title="Manage Keys"
-            >
-              <KeyIcon className="w-4 h-4" />
-            </button>
-          )}
-
           <button
             onClick={handleRun}
             disabled={loading || activeFileEntry?.readOnly}
@@ -599,23 +586,37 @@ export default function App() {
               </div>
               {/* Sign in / user info at sidebar bottom */}
               {!authLoading && (
-                <div className="shrink-0 border-t border-zinc-700 px-3 py-2">
+                <div className="shrink-0 border-t border-zinc-700">
                   {user ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-zinc-500 truncate">{user.email}</span>
-                      <button
-                        onClick={() => signOut()}
-                        className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                      >
-                        Sign out
-                      </button>
+                    <div className="group">
+                      <div className="flex items-center justify-between px-3 py-2">
+                        <span className="text-[10px] text-zinc-500 truncate">{user.email}</span>
+                        <button
+                          onClick={() => signOut()}
+                          className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                        >
+                          Sign out
+                        </button>
+                      </div>
+                      {/* Key management - appears on hover */}
+                      <div className="max-h-0 overflow-hidden group-hover:max-h-10 transition-all duration-200 ease-in-out">
+                        <button
+                          onClick={() => setShowKeyManager(!showKeyManager)}
+                          className={`flex items-center gap-1.5 w-full px-3 py-1.5 text-[11px] transition-colors ${
+                            showKeyManager ? 'text-emerald-400 bg-emerald-600/10' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+                          }`}
+                        >
+                          <KeyIcon className="w-3 h-3" />
+                          <span>Manage Keys</span>
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <a
-                      href="https://flowindex.io/developer/login"
+                      href={`https://flowindex.io/developer/login?redirect=${encodeURIComponent(window.location.origin)}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors"
+                      className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors px-3 py-2"
                     >
                       <LogIn className="w-3 h-3" />
                       <span>Sign in</span>

@@ -26,7 +26,10 @@ function normalizeRedirectTarget(redirect?: string): string {
 
   try {
     const url = new URL(redirect)
-    if (url.origin === window.location.origin || url.origin === SIM_STUDIO_ORIGIN) {
+    const isSameOrigin = url.origin === window.location.origin
+    const isStudio = url.origin === SIM_STUDIO_ORIGIN
+    const isFlowIndexSubdomain = url.hostname.endsWith('.flowindex.io')
+    if (isSameOrigin || isStudio || isFlowIndexSubdomain) {
       return url.toString()
     }
   } catch {
