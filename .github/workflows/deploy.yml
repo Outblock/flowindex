@@ -584,16 +584,20 @@ jobs:
             docker pull ghcr.io/simstudioai/simstudio:latest
             docker pull ghcr.io/simstudioai/realtime:latest
 
-            # Run migrations
+            # Run migrations — use sh -c to run inside the container workdir
+            # where prisma schema files exist
+            echo "Running Prisma migrations..."
             docker run --rm --network=host \
               -e DATABASE_URL="$SIM_DB_URL" \
+              --entrypoint sh \
               ghcr.io/simstudioai/simstudio:latest \
-              npx prisma migrate deploy 2>/dev/null || \
+              -c "cd /app && npx prisma db push --accept-data-loss" || \
             docker run --rm --network=host \
               -e DATABASE_URL="$SIM_DB_URL" \
+              --entrypoint sh \
               ghcr.io/simstudioai/simstudio:latest \
-              npx prisma db push --accept-data-loss 2>/dev/null || true
-            echo "Migrations applied"
+              -c "cd /app && npx prisma migrate deploy" || true
+            echo "Migrations step complete"
 
             # Stop existing containers
             docker stop sim-studio sim-studio-realtime 2>/dev/null || true
@@ -633,6 +637,25 @@ jobs:
               listen 8001;
               absolute_redirect off;
 
+              # Static assets — no auth required (prevents CORS issues)
+              location ~* \.(webmanifest|ico|png|jpg|jpeg|gif|svg|css|js|woff2?|ttf|eot|map)$ {
+                  proxy_pass http://127.0.0.1:3200;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+
+              # Next.js internals — no auth required
+              location /_next/ {
+                  proxy_pass http://127.0.0.1:3200;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+
+              # All other requests require fi_auth cookie
               location / {
                   if ($cookie_fi_auth = "") {
                       return 302 https://flowindex.io/developer/login?redirect=https://studio.flowindex.io$request_uri;
