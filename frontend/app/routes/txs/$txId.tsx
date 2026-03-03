@@ -1579,7 +1579,7 @@ function TransactionDetail() {
                                                     return dec(a);
                                                 });
                                                 const CopyLabel = ({ label, content }: { label: string; content: string }) => {
-                                                    const [copied, setCopied] = React.useState(false);
+                                                    const [copied, setCopied] = useState(false);
                                                     return (
                                                         <button
                                                             type="button"
