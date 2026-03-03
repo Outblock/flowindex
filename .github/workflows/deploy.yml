@@ -945,6 +945,7 @@ jobs:
               exit 1
             fi
             SIM_DB_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${SIM_DB_NAME}"
+            SIM_MIGRATION_DB_URL="${SIM_DB_URL}?options=-csearch_path%3Dpublic"
 
             # Helper: run psql via docker (no psql binary on the VM)
             run_psql() {
@@ -957,6 +958,12 @@ jobs:
             # Ensure pgvector extension exists on the target database
             run_psql -d "$SIM_DB_NAME" \
               -c "CREATE EXTENSION IF NOT EXISTS vector" 2>/dev/null || true
+            # Best-effort: keep this DB user default search_path on public to avoid
+            # creating Sim Studio tables under auth/custom schemas.
+            run_psql -d "$SIM_DB_NAME" \
+              -c "ALTER ROLE \"$DB_USER\" IN DATABASE \"$SIM_DB_NAME\" SET search_path TO public" 2>/dev/null || true
+            SEARCH_PATH=$(run_psql -d "$SIM_DB_NAME" -tAc "SHOW search_path;" | tr -d '\r')
+            echo "DB search_path: ${SEARCH_PATH:-unknown}"
             echo "Database $SIM_DB_NAME ready"
 
             # Pull images
@@ -967,7 +974,8 @@ jobs:
             # Run Drizzle migrations (Sim Studio uses Drizzle, not Prisma)
             echo "Running Sim Studio Drizzle migrations..."
             docker run --rm --network=host \
-              -e DATABASE_URL="$SIM_DB_URL" \
+              -e DATABASE_URL="$SIM_MIGRATION_DB_URL" \
+              -e PGOPTIONS="-c search_path=public" \
               "$SIM_STUDIO_MIGRATIONS_IMAGE" \
               run db:migrate
             echo "Migrations applied"
