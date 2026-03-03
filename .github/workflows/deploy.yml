@@ -454,7 +454,12 @@ jobs:
             done
 
             # GoTrue auth (port 9999)
-            GOTRUE_DB_URL="${SUPABASE_DB_URL}?search_path=auth"
+            # Append search_path — use & if URL already has query params, else ?
+            if [[ "$SUPABASE_DB_URL" == *"?"* ]]; then
+              GOTRUE_DB_URL="${SUPABASE_DB_URL}&search_path=auth"
+            else
+              GOTRUE_DB_URL="${SUPABASE_DB_URL}?search_path=auth"
+            fi
             docker run -d --restart=always --name supabase-auth \
               --network=host \
               -e GOTRUE_API_HOST=0.0.0.0 \
