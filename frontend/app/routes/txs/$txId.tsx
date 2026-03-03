@@ -1578,21 +1578,22 @@ function TransactionDetail() {
                                                     };
                                                     return dec(a);
                                                 });
+                                                const CopyLabel = ({ label, content }: { label: string; content: string }) => {
+                                                    const [copied, setCopied] = React.useState(false);
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            title={`Copy as ${label}`}
+                                                            onClick={() => { navigator.clipboard.writeText(content); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+                                                            className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${copied ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                                        >{copied ? 'Copied!' : label}</button>
+                                                    );
+                                                };
                                                 return (
                                                     <div className="flex items-center gap-1 ml-auto">
                                                         <span className="text-[10px] text-zinc-400 mr-0.5">Copy:</span>
-                                                        <button
-                                                            type="button"
-                                                            title="Copy as JSON array"
-                                                            onClick={() => navigator.clipboard.writeText(JSON.stringify(decoded, null, 2))}
-                                                            className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                                                        >JSON</button>
-                                                        <button
-                                                            type="button"
-                                                            title="Copy as Cadence JSON (raw)"
-                                                            onClick={() => navigator.clipboard.writeText(JSON.stringify(raw, null, 2))}
-                                                            className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                                                        >Cadence</button>
+                                                        <CopyLabel label="JSON" content={JSON.stringify(decoded, null, 2)} />
+                                                        <CopyLabel label="Cadence" content={JSON.stringify(raw, null, 2)} />
                                                     </div>
                                                 );
                                             } catch { return null; }
