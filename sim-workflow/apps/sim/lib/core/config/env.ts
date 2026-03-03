@@ -25,6 +25,8 @@ export const env = createEnv({
     FLOWINDEX_AUTH_MODE:                   z.string().optional(),                  // FlowIndex auth mode (supabase_cookie)
     SUPABASE_JWT_SECRET:                   z.string().optional(),                  // Shared Supabase JWT secret used to verify fi_auth access tokens
     FLOWINDEX_DEFAULT_WORKSPACE_ID:        z.string().optional(),                  // Default workspace ID to grant on login for FlowIndex users
+    FLOWINDEX_LOGIN_URL:                   z.string().url().optional(),            // External FlowIndex login URL used when auth is delegated
+    FLOWINDEX_APP_URL:                     z.string().url().optional(),            // Public app URL used for login redirect callback generation
     ALLOWED_LOGIN_EMAILS:                  z.string().optional(),                  // Comma-separated list of allowed email addresses for login
     ALLOWED_LOGIN_DOMAINS:                 z.string().optional(),                  // Comma-separated list of allowed email domains for login
     ENCRYPTION_KEY:                        z.string().min(32),                     // Key for encrypting sensitive data

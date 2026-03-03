@@ -135,7 +135,11 @@ async function ensureDefaultWorkspacePermission(userId: string): Promise<void> {
       updatedAt: now,
     })
     .onConflictDoUpdate({
-      target: [schema.permissions.userId, schema.permissions.entityType, schema.permissions.entityId],
+      target: [
+        schema.permissions.userId,
+        schema.permissions.entityType,
+        schema.permissions.entityId,
+      ],
       set: {
         permissionType: 'admin',
         updatedAt: now,
