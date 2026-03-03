@@ -236,6 +236,9 @@ jobs:
         run: |
           docker build -f runner/Dockerfile \
             --build-arg VITE_AI_CHAT_URL=https://ai.flowindex.io \
+            --build-arg VITE_SUPABASE_URL=https://run.flowindex.io \
+            --build-arg VITE_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --build-arg VITE_GOTRUE_URL=/auth \
             -t ${{ env.REGISTRY }}/runner:latest \
             -t ${{ env.REGISTRY }}/runner:${{ github.sha }} \
             runner
@@ -248,7 +251,10 @@ jobs:
             docker pull ${{ env.REGISTRY }}/runner:${{ github.sha }} && \
             docker stop runner 2>/dev/null; docker rm runner 2>/dev/null; \
             docker run -d --restart=always --name runner \
-              -p 8081:80 \
+              --network=host \
+              -e PORT=8081 \
+              -e GOTRUE_URL=http://10.128.0.4:9999 \
+              -e SUPABASE_GATEWAY_URL=http://10.128.0.4:54321 \
               ${{ env.REGISTRY }}/runner:${{ github.sha }}
           '
 

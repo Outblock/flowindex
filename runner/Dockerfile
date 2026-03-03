@@ -4,7 +4,13 @@ COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
 COPY . .
 ARG VITE_AI_CHAT_URL=https://ai.flowindex.io
+ARG VITE_SUPABASE_URL=
+ARG VITE_SUPABASE_ANON_KEY=
+ARG VITE_GOTRUE_URL=
 ENV VITE_AI_CHAT_URL=$VITE_AI_CHAT_URL
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+ENV VITE_GOTRUE_URL=$VITE_GOTRUE_URL
 RUN bun run build
 
 FROM oven/bun:1 AS server-builder
@@ -32,8 +38,12 @@ COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 # Copy server
 COPY --from=server-builder /app/server/dist /app/server
 COPY --from=server-builder /app/server/node_modules /app/server/node_modules
-# Copy configs
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy configs — nginx.conf is a template, resolved at runtime by entrypoint
+RUN mkdir -p /etc/nginx/templates
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY supervisord.conf /etc/supervisord.conf
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 EXPOSE 80
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["supervisord", "-c", "/etc/supervisord.conf"]
