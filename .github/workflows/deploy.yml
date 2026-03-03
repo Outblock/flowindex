@@ -977,11 +977,18 @@ jobs:
               exit 1
             fi
             # Keep public first (for Sim Studio tables) and include extensions (for pgvector type).
+            # Configure both database-level and role-level defaults so non-libpq clients
+            # (e.g. postgres-js used by drizzle-kit) still resolve `vector` consistently.
+            run_psql -d postgres \
+              -c "ALTER DATABASE \"$SIM_DB_NAME\" SET search_path TO public,extensions"
             run_psql -d "$SIM_DB_NAME" \
-              -c "ALTER ROLE \"$DB_USER\" IN DATABASE \"$SIM_DB_NAME\" SET search_path TO public, extensions" 2>/dev/null || true
+              -c "ALTER ROLE \"$DB_USER\" IN DATABASE \"$SIM_DB_NAME\" SET search_path TO public,extensions"
             SEARCH_PATH=$(run_psql -d "$SIM_DB_NAME" -tAc "SHOW search_path;" | tr -d '\r')
             echo "DB search_path: ${SEARCH_PATH:-unknown}"
             echo "vector type schema: $VECTOR_SCHEMA"
+            # Hard probe before running migrations: ensure unqualified vector type resolves.
+            run_psql -d "$SIM_DB_NAME" -v ON_ERROR_STOP=1 \
+              -c "SELECT NULL::vector;"
             echo "Database $SIM_DB_NAME ready"
 
             # Pull images
