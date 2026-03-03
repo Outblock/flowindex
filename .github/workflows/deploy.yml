@@ -30,6 +30,8 @@ jobs:
       ai-chat: ${{ steps.result.outputs.ai-chat }}
       studio: ${{ steps.result.outputs.studio }}
       sim-studio: ${{ steps.result.outputs.sim-studio }}
+      sim-studio-images: ${{ steps.result.outputs.sim-studio-images }}
+      sim-studio-seed: ${{ steps.result.outputs.sim-studio-seed }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -65,6 +67,10 @@ jobs:
             sim-studio:
               - 'studio/seed/simstudio_seed.sql'
               - 'sim-workflow/**'
+            sim-studio-images:
+              - 'sim-workflow/**'
+            sim-studio-seed:
+              - 'studio/seed/simstudio_seed.sql'
       - name: Resolve outputs
         id: result
         run: |
@@ -79,6 +85,8 @@ jobs:
               echo "ai-chat=true" >> $GITHUB_OUTPUT
               echo "studio=true" >> $GITHUB_OUTPUT
               echo "sim-studio=true" >> $GITHUB_OUTPUT
+              echo "sim-studio-images=true" >> $GITHUB_OUTPUT
+              echo "sim-studio-seed=true" >> $GITHUB_OUTPUT
             else
               echo "backend=false" >> $GITHUB_OUTPUT
               echo "frontend=false" >> $GITHUB_OUTPUT
@@ -88,10 +96,16 @@ jobs:
               echo "ai-chat=false" >> $GITHUB_OUTPUT
               echo "studio=false" >> $GITHUB_OUTPUT
               echo "sim-studio=false" >> $GITHUB_OUTPUT
+              echo "sim-studio-images=false" >> $GITHUB_OUTPUT
+              echo "sim-studio-seed=false" >> $GITHUB_OUTPUT
               IFS=',' read -ra PARTS <<< "$SERVICES"
               for svc in "${PARTS[@]}"; do
                 svc=$(echo "$svc" | xargs)
                 echo "${svc}=true" >> $GITHUB_OUTPUT
+                if [ "$svc" = "sim-studio" ]; then
+                  echo "sim-studio-images=true" >> $GITHUB_OUTPUT
+                  echo "sim-studio-seed=true" >> $GITHUB_OUTPUT
+                fi
               done
             fi
           else
@@ -103,6 +117,8 @@ jobs:
             echo "ai-chat=${{ steps.filter.outputs.ai-chat }}" >> $GITHUB_OUTPUT
             echo "studio=${{ steps.filter.outputs.studio }}" >> $GITHUB_OUTPUT
             echo "sim-studio=${{ steps.filter.outputs.sim-studio }}" >> $GITHUB_OUTPUT
+            echo "sim-studio-images=${{ steps.filter.outputs.sim-studio-images }}" >> $GITHUB_OUTPUT
+            echo "sim-studio-seed=${{ steps.filter.outputs.sim-studio-seed }}" >> $GITHUB_OUTPUT
           fi
 
   build-backend:
@@ -706,7 +722,7 @@ jobs:
 
   build-sim-workflow-images:
     needs: changes
-    if: needs.changes.outputs.sim-studio == 'true'
+    if: needs.changes.outputs.sim-studio-images == 'true'
     concurrency:
       group: build-sim-workflow-images-${{ github.ref }}-${{ matrix.name }}
       cancel-in-progress: true
