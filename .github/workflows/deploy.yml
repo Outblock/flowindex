@@ -940,7 +940,7 @@ jobs:
 
             # Parse DB connection from selected source URL.
             # We intentionally rebuild a clean URL (no inherited query params like search_path)
-            # and force public-first search_path for Sim Studio.
+            # and force simstudio-first search_path for Sim Studio.
             DB_USER=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://\([^:]*\):.*|\1|p")
             DB_PASS=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://[^:]*:\([^@]*\)@.*|\1|p")
             DB_HOST=$(echo "$SOURCE_SIM_DB_URL" | sed -n "s|.*://[^:]*:[^@]*@\([^:/?]*\).*|\1|p")
@@ -979,16 +979,16 @@ jobs:
               echo "Unsafe vector schema name: $VECTOR_SCHEMA"
               exit 1
             fi
-            # Keep public first (for Sim Studio tables) and include the actual pgvector schema.
-            if [ "$VECTOR_SCHEMA" = "public" ]; then
-              SIM_SEARCH_PATH="public"
+            # Keep simstudio first (for Sim Studio tables) and include the actual pgvector schema.
+            if [ "$VECTOR_SCHEMA" = "simstudio" ] || [ "$VECTOR_SCHEMA" = "public" ]; then
+              SIM_SEARCH_PATH="simstudio,public"
             else
-              SIM_SEARCH_PATH="public,${VECTOR_SCHEMA}"
+              SIM_SEARCH_PATH="simstudio,public,${VECTOR_SCHEMA}"
             fi
             ENCODED_SIM_SEARCH_PATH=$(printf "%s" "$SIM_SEARCH_PATH" | sed "s/,/%2C/g")
             SIM_MIGRATION_DB_URL="${SIM_DB_URL}?options=-csearch_path%3D${ENCODED_SIM_SEARCH_PATH}"
 
-            # Keep public first (for Sim Studio tables) and include vector schema.
+            # Keep simstudio first (for Sim Studio tables) and include vector schema.
             # Configure both database-level and role-level defaults so non-libpq clients
             # (e.g. postgres-js used by drizzle-kit) still resolve `vector` consistently.
             run_psql -d postgres \
@@ -1026,9 +1026,9 @@ jobs:
             echo "Seed applied"
 
             # Verify critical auth tables exist before starting app containers
-            USER_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$public.\"user\"\$\$) IS NOT NULL;" | tr -d "[:space:]")
-            SESSION_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$public.session\$\$) IS NOT NULL;" | tr -d "[:space:]")
-            USER_STATS_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$public.user_stats\$\$) IS NOT NULL;" | tr -d "[:space:]")
+            USER_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$simstudio.\"user\"\$\$) IS NOT NULL;" | tr -d "[:space:]")
+            SESSION_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$simstudio.session\$\$) IS NOT NULL;" | tr -d "[:space:]")
+            USER_STATS_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$simstudio.user_stats\$\$) IS NOT NULL;" | tr -d "[:space:]")
             if [ "$USER_TABLE_OK" != "t" ] || [ "$SESSION_TABLE_OK" != "t" ] || [ "$USER_STATS_TABLE_OK" != "t" ]; then
               echo "Required Sim Studio auth tables missing (user/session/user_stats); aborting deploy"
               exit 1

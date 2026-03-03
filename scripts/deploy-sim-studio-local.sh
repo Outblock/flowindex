@@ -179,10 +179,10 @@ if ! echo "$VECTOR_SCHEMA" | grep -Eq "^[A-Za-z_][A-Za-z0-9_]*$"; then
   exit 1
 fi
 
-if [ "$VECTOR_SCHEMA" = "public" ]; then
-  SIM_SEARCH_PATH="public"
+if [ "$VECTOR_SCHEMA" = "simstudio" ] || [ "$VECTOR_SCHEMA" = "public" ]; then
+  SIM_SEARCH_PATH="simstudio,public"
 else
-  SIM_SEARCH_PATH="public,${VECTOR_SCHEMA}"
+  SIM_SEARCH_PATH="simstudio,public,${VECTOR_SCHEMA}"
 fi
 ENCODED_SIM_SEARCH_PATH=$(printf "%s" "$SIM_SEARCH_PATH" | sed "s/,/%2C/g")
 SIM_MIGRATION_DB_URL="${SIM_DB_URL}?options=-csearch_path%3D${ENCODED_SIM_SEARCH_PATH}"
@@ -216,9 +216,9 @@ docker run --rm --network=host -i \
   < ~/simstudio_seed.sql
 echo "Seed applied"
 
-USER_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$public.\"user\"\$\$) IS NOT NULL;" | tr -d "[:space:]")
-SESSION_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$public.session\$\$) IS NOT NULL;" | tr -d "[:space:]")
-USER_STATS_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$public.user_stats\$\$) IS NOT NULL;" | tr -d "[:space:]")
+USER_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$simstudio.\"user\"\$\$) IS NOT NULL;" | tr -d "[:space:]")
+SESSION_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$simstudio.session\$\$) IS NOT NULL;" | tr -d "[:space:]")
+USER_STATS_TABLE_OK=$(run_psql -d "$SIM_DB_NAME" -tAc "SELECT to_regclass(\$\$simstudio.user_stats\$\$) IS NOT NULL;" | tr -d "[:space:]")
 if [ "$USER_TABLE_OK" != "t" ] || [ "$SESSION_TABLE_OK" != "t" ] || [ "$USER_STATS_TABLE_OK" != "t" ]; then
   echo "Required Sim Studio auth tables missing (user/session/user_stats); aborting deploy"
   exit 1
