@@ -142,6 +142,7 @@ jobs:
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
             IMAGE=${{ env.REGISTRY }}/backend:${{ github.sha }}
             docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true
+            docker image prune -af --filter "until=1h" 2>/dev/null || true
             docker pull $IMAGE
             docker stop backend 2>/dev/null; docker rm backend 2>/dev/null
             docker run --rm --network=host \
@@ -196,6 +197,7 @@ jobs:
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
             docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
+            docker image prune -af --filter "until=1h" 2>/dev/null || true; \
             docker pull ${{ env.REGISTRY }}/frontend:${{ github.sha }} && \
             docker stop frontend 2>/dev/null; docker rm frontend 2>/dev/null; \
             docker run -d --restart=always --name frontend \
@@ -273,6 +275,7 @@ jobs:
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
             docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
+            docker image prune -af --filter "until=1h" 2>/dev/null || true; \
             docker pull ${{ env.REGISTRY }}/runner:${{ github.sha }} && \
             docker stop runner 2>/dev/null; docker rm runner 2>/dev/null; \
             docker run -d --restart=always --name runner \
@@ -526,6 +529,7 @@ jobs:
         run: |
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
             docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
+            docker image prune -af --filter "until=1h" 2>/dev/null || true; \
             docker pull ${{ env.REGISTRY }}/ai-chat:${{ github.sha }} && \
             docker stop ai-chat 2>/dev/null; docker rm ai-chat 2>/dev/null; \
             docker run -d --restart=always --name ai-chat \
