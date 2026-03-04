@@ -152,6 +152,9 @@ CREATE TABLE IF NOT EXISTS public.delivery_logs (
 ALTER TABLE public.endpoints ADD COLUMN IF NOT EXISTS endpoint_type TEXT NOT NULL DEFAULT 'webhook';
 ALTER TABLE public.endpoints ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}';
 
+-- Migration: add signing_secret for HMAC webhook verification
+ALTER TABLE public.endpoints ADD COLUMN IF NOT EXISTS signing_secret TEXT;
+
 -- Backfill: ensure every existing user has a personal team + active membership.
 WITH users_without_active_team AS (
     SELECT u.id, u.email

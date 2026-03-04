@@ -26,15 +26,16 @@ type Subscription struct {
 }
 
 type Endpoint struct {
-	ID           string          `json:"id"`
-	UserID       string          `json:"user_id"`
-	SvixEpID     string          `json:"svix_ep_id"`
-	URL          string          `json:"url"`
-	Description  string          `json:"description,omitempty"`
-	EndpointType string          `json:"endpoint_type"`
-	Metadata     json.RawMessage `json:"metadata,omitempty"`
-	IsActive     bool            `json:"is_active"`
-	CreatedAt    time.Time       `json:"created_at"`
+	ID            string          `json:"id"`
+	UserID        string          `json:"user_id"`
+	SvixEpID      string          `json:"svix_ep_id"`
+	URL           string          `json:"url"`
+	Description   string          `json:"description,omitempty"`
+	EndpointType  string          `json:"endpoint_type"`
+	Metadata      json.RawMessage `json:"metadata,omitempty"`
+	SigningSecret string          `json:"signing_secret,omitempty"`
+	IsActive      bool            `json:"is_active"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
 
 type APIKeyRecord struct {
@@ -200,17 +201,24 @@ func (s *Store) CreateEndpoint(ctx context.Context, ep *Endpoint) error {
 	if ep.Metadata == nil {
 		ep.Metadata = json.RawMessage(`{}`)
 	}
+	if ep.SigningSecret == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return fmt.Errorf("generate signing secret: %w", err)
+		}
+		ep.SigningSecret = hex.EncodeToString(b)
+	}
 	return s.pool.QueryRow(ctx,
-		`INSERT INTO public.endpoints (user_id, svix_ep_id, url, description, endpoint_type, metadata)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO public.endpoints (user_id, svix_ep_id, url, description, endpoint_type, metadata, signing_secret)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 RETURNING id, created_at`,
-		ep.UserID, ep.SvixEpID, ep.URL, ep.Description, ep.EndpointType, ep.Metadata,
+		ep.UserID, ep.SvixEpID, ep.URL, ep.Description, ep.EndpointType, ep.Metadata, ep.SigningSecret,
 	).Scan(&ep.ID, &ep.CreatedAt)
 }
 
 func (s *Store) ListEndpoints(ctx context.Context, userID string) ([]Endpoint, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, user_id, svix_ep_id, url, description, endpoint_type, metadata, is_active, created_at
+		`SELECT id, user_id, svix_ep_id, url, description, endpoint_type, metadata, COALESCE(signing_secret, ''), is_active, created_at
 		 FROM public.endpoints WHERE user_id = $1 ORDER BY created_at DESC`, userID,
 	)
 	if err != nil {
@@ -221,7 +229,7 @@ func (s *Store) ListEndpoints(ctx context.Context, userID string) ([]Endpoint, e
 	var eps []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.UserID, &ep.SvixEpID, &ep.URL, &ep.Description, &ep.EndpointType, &ep.Metadata, &ep.IsActive, &ep.CreatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.UserID, &ep.SvixEpID, &ep.URL, &ep.Description, &ep.EndpointType, &ep.Metadata, &ep.SigningSecret, &ep.IsActive, &ep.CreatedAt); err != nil {
 			return nil, err
 		}
 		eps = append(eps, ep)
@@ -232,9 +240,9 @@ func (s *Store) ListEndpoints(ctx context.Context, userID string) ([]Endpoint, e
 func (s *Store) GetEndpointByID(ctx context.Context, id string) (*Endpoint, error) {
 	var ep Endpoint
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, user_id, svix_ep_id, url, description, endpoint_type, metadata, is_active, created_at
+		`SELECT id, user_id, svix_ep_id, url, description, endpoint_type, metadata, COALESCE(signing_secret, ''), is_active, created_at
 		 FROM public.endpoints WHERE id = $1`, id,
-	).Scan(&ep.ID, &ep.UserID, &ep.SvixEpID, &ep.URL, &ep.Description, &ep.EndpointType, &ep.Metadata, &ep.IsActive, &ep.CreatedAt)
+	).Scan(&ep.ID, &ep.UserID, &ep.SvixEpID, &ep.URL, &ep.Description, &ep.EndpointType, &ep.Metadata, &ep.SigningSecret, &ep.IsActive, &ep.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
