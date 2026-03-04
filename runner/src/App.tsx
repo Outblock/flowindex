@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type * as MonacoNS from 'monaco-editor';
 import JSZip from 'jszip';
+import axios from 'axios';
 import CadenceEditor from './editor/CadenceEditor';
 import { useLsp } from './editor/useLsp';
 import ResultPanel from './components/ResultPanel';
@@ -171,8 +172,41 @@ export default function App() {
     return loadProject();
   });
 
-  // Pre-fill args from URL ?args=base64 (JSON array or Cadence JSON array)
+  // Pre-fill args from URL ?args=base64 or ?tx= fetch
   const [initialArgsApplied, setInitialArgsApplied] = useState(false);
+  const pendingTxArgsRef = useRef<unknown[] | null>(null);
+  const [txArgsReady, setTxArgsReady] = useState(() => !new URLSearchParams(window.location.search).get('tx'));
+
+  // Load transaction from API when ?tx= param is present
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const txId = params.get('tx');
+    if (!txId) return;
+
+    const API_URL = import.meta.env.VITE_API_URL || 'https://api.flowindex.io';
+    (async () => {
+      try {
+        const { data } = await axios.get(`${API_URL}/flow/v1/transactions/${txId}`);
+        const tx = data.data || data;
+        if (tx.script) {
+          setProject({
+            files: [{ path: 'main.cdc', content: tx.script }],
+            activeFile: 'main.cdc',
+            openFiles: ['main.cdc'],
+            folders: [],
+          });
+        }
+        if (tx.arguments) {
+          const args = typeof tx.arguments === 'string' ? JSON.parse(tx.arguments) : tx.arguments;
+          if (Array.isArray(args) && args.length > 0) {
+            pendingTxArgsRef.current = args;
+          }
+        }
+      } catch { /* tx fetch failed, ignore */ }
+      setTxArgsReady(true);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [network, setNetwork] = useState<FlowNetwork>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -325,34 +359,44 @@ export default function App() {
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const codeType = useMemo(() => detectCodeType(activeCode), [activeCode]);
 
-  // Apply args from URL once params are available
+  // Apply args from URL (?args= or ?tx= fetch) once params are available
   useEffect(() => {
     if (initialArgsApplied || scriptParams.length === 0) return;
+    // If tx fetch is still pending, wait for it
+    if (!txArgsReady) return;
+
+    // Determine the args source: URL ?args= param or fetched tx args
+    let parsed: unknown[] | null = null;
     const params = new URLSearchParams(window.location.search);
     const argsParam = params.get('args');
-    if (!argsParam) { setInitialArgsApplied(true); return; }
+    if (argsParam) {
+      try {
+        let argsStr: string;
+        try { argsStr = atob(argsParam); } catch { argsStr = argsParam; }
+        const p = JSON.parse(argsStr);
+        if (Array.isArray(p)) parsed = p;
+      } catch { /* ignore */ }
+    } else if (pendingTxArgsRef.current) {
+      parsed = pendingTxArgsRef.current;
+      pendingTxArgsRef.current = null;
+    }
 
-    try {
-      let argsStr: string;
-      try { argsStr = atob(argsParam); } catch { argsStr = argsParam; }
-      const parsed = JSON.parse(argsStr);
-      if (!Array.isArray(parsed)) { setInitialArgsApplied(true); return; }
+    if (!parsed) { setInitialArgsApplied(true); return; }
 
-      const vals: Record<string, string> = {};
-      for (let i = 0; i < scriptParams.length && i < parsed.length; i++) {
-        const item = parsed[i];
-        // Support Cadence JSON ({type, value}) or plain values
-        if (item !== null && typeof item === 'object' && 'type' in item && 'value' in item) {
-          const v = item.value;
-          vals[scriptParams[i].name] = typeof v === 'string' ? v : JSON.stringify(v);
-        } else {
-          vals[scriptParams[i].name] = typeof item === 'string' ? item : JSON.stringify(item);
-        }
+    const vals: Record<string, string> = {};
+    for (let i = 0; i < scriptParams.length && i < parsed.length; i++) {
+      const item = parsed[i];
+      // Support Cadence JSON ({type, value}) or plain values
+      if (item !== null && typeof item === 'object' && 'type' in item && 'value' in item) {
+        const v = (item as { value: unknown }).value;
+        vals[scriptParams[i].name] = typeof v === 'string' ? v : JSON.stringify(v);
+      } else {
+        vals[scriptParams[i].name] = typeof item === 'string' ? item : JSON.stringify(item);
       }
-      setParamValues(vals);
-    } catch { /* ignore parse errors */ }
+    }
+    setParamValues(vals);
     setInitialArgsApplied(true);
-  }, [scriptParams, initialArgsApplied]);
+  }, [scriptParams, initialArgsApplied, txArgsReady]);
 
   const handleCodeChange = useCallback((value: string) => {
     setProject((prev) => updateFileContent(prev, prev.activeFile, value));

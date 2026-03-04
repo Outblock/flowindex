@@ -5,6 +5,7 @@ export const Route = createFileRoute('/playground')({
         code: (search.code as string) || undefined,
         args: (search.args as string) || undefined,
         network: (search.network as string) || undefined,
+        tx: (search.tx as string) || undefined,
     }),
     component: PlaygroundPage,
 })
@@ -15,6 +16,7 @@ function PlaygroundPage() {
 
     // Forward query params to the runner iframe
     const params = new URLSearchParams()
+    if (search.tx) params.set('tx', search.tx)
     if (search.code) params.set('code', search.code)
     if (search.args) params.set('args', search.args)
     if (search.network) params.set('network', search.network)

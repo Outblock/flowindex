@@ -1768,22 +1768,7 @@ function TransactionDetail() {
                                         {transaction.script && (
                                             <Link
                                                 to="/playground"
-                                                search={() => {
-                                                    const params: Record<string, string> = {
-                                                        code: btoa(unescape(encodeURIComponent(transaction.script))),
-                                                    };
-                                                    if (transaction.arguments) {
-                                                        try {
-                                                            const args = typeof transaction.arguments === 'string'
-                                                                ? JSON.parse(transaction.arguments)
-                                                                : transaction.arguments;
-                                                            if (Array.isArray(args)) {
-                                                                params.args = btoa(unescape(encodeURIComponent(JSON.stringify(args))));
-                                                            }
-                                                        } catch { /* skip args if unparseable */ }
-                                                    }
-                                                    return params;
-                                                }}
+                                                search={{ tx: transaction.id }}
                                                 target="_blank"
                                                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 transition-colors"
                                             >
