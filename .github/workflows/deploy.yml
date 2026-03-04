@@ -913,13 +913,16 @@ jobs:
       - name: Deploy Sim Studio on GCE
         env:
           SIM_COPILOT_API_KEY: ${{ secrets.SIM_COPILOT_API_KEY }}
+          SIM_CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command="
             SIM_ENV=/mnt/stateful_partition/pgdata/sim-studio.env
             if [ -f \"\$SIM_ENV\" ]; then
               sed -i '/^COPILOT_API_KEY=/d' \"\$SIM_ENV\"
+              sed -i '/^CRON_SECRET=/d' \"\$SIM_ENV\"
             fi
             echo 'COPILOT_API_KEY=${SIM_COPILOT_API_KEY}' >> \"\$SIM_ENV\"
+            echo 'CRON_SECRET=${SIM_CRON_SECRET}' >> \"\$SIM_ENV\"
           "
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
             set -e
@@ -944,6 +947,7 @@ jobs:
           SIM_STUDIO_IMAGE=us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-fork:latest
           SIM_STUDIO_REALTIME_IMAGE=us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-fork-realtime:latest
           SIM_STUDIO_MIGRATIONS_IMAGE=us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-fork-migrations:latest
+          CRON_SECRET=$(openssl rand -hex 32)
           FLOWINDEX_AUTH_MODE=supabase_cookie
           ENVEOF
               echo "Created $SIM_ENV with generated secrets"
@@ -1075,6 +1079,7 @@ jobs:
               -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
               -e SOCKET_SERVER_URL="http://127.0.0.1:3202" \
               -e COPILOT_API_KEY="${COPILOT_API_KEY:-}" \
+              -e CRON_SECRET="${CRON_SECRET}" \
               -e PORT=3200 \
               "$SIM_STUDIO_IMAGE"
 
@@ -1095,6 +1100,29 @@ jobs:
 
             echo "Sim Studio deployed (web: 3200, realtime: 3202)"
             docker ps --filter name=sim-studio --format "table {{.Names}}\t{{.Status}}"
+
+            # Set up systemd timer to poll schedule execution endpoint every minute
+            sudo tee /etc/systemd/system/sim-schedule.service > /dev/null <<SVCEOF
+[Unit]
+Description=Sim Studio Schedule Executor
+After=network.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -sf -H "Authorization: Bearer ${CRON_SECRET}" http://localhost:3200/api/schedules/execute
+TimeoutStartSec=30
+SVCEOF
+            sudo tee /etc/systemd/system/sim-schedule.timer > /dev/null <<TMREOF
+[Unit]
+Description=Run Sim Studio schedule check every minute
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+TMREOF
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now sim-schedule.timer
+            echo "Schedule timer installed"
           '
 
       - name: Update Caddy config for studio.flowindex.io TLS

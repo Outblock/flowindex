@@ -241,6 +241,7 @@ docker run -d --restart=always --name sim-studio \
   -e NEXT_PUBLIC_APP_URL="https://studio.flowindex.io" \
   -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
   -e SOCKET_SERVER_URL="http://127.0.0.1:3202" \
+  -e CRON_SECRET="${CRON_SECRET}" \
   -e PORT=3200 \
   "$SIM_STUDIO_IMAGE"
 
