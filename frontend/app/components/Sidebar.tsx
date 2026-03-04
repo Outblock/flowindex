@@ -14,12 +14,15 @@ export default function Sidebar() {
     const { fontFamily, pixelVariant, setFontFamily, setPixelVariant } = useFont();
     const [fontMenuOpen, setFontMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(() => {
-        const saved = localStorage.getItem('sidebarCollapsed');
-        if (saved !== null) return saved === 'true';
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('sidebarCollapsed');
+            if (saved !== null) return saved === 'true';
+        }
         return location.pathname.startsWith('/developer') || location.pathname.startsWith('/playground');
     });
     const [autoCollapse, setAutoCollapse] = useState(() => {
-        return localStorage.getItem('sidebarAutoCollapse') === 'true';
+        if (typeof window !== 'undefined') return localStorage.getItem('sidebarAutoCollapse') === 'true';
+        return false;
     });
     const [hoverExpanded, setHoverExpanded] = useState(false);
 
