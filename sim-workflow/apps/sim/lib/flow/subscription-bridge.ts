@@ -126,12 +126,32 @@ export async function getOrCreateFlowIndexApiKey(
 
   const encrypted = await encryptApiKeyForStorage(data.key)
 
-  await db.insert(flowindexApiKey).values({
-    id: crypto.randomUUID(),
-    userId,
-    encryptedKey: encrypted,
-    keyPrefix: data.prefix ?? data.key.slice(0, 8),
-  })
+  try {
+    await db.insert(flowindexApiKey).values({
+      id: crypto.randomUUID(),
+      userId,
+      encryptedKey: encrypted,
+      keyPrefix: data.prefix ?? data.key.slice(0, 8),
+    })
+  } catch (error: unknown) {
+    // Race condition: another request created the key first
+    const msg = error instanceof Error ? error.message : ''
+    if (msg.includes('unique') || msg.includes('duplicate') || msg.includes('constraint')) {
+      const [existing] = await db
+        .select()
+        .from(flowindexApiKey)
+        .where(eq(flowindexApiKey.userId, userId))
+        .limit(1)
+      if (existing) {
+        return {
+          apiKey: await decryptApiKeyFromStorage(existing.encryptedKey),
+          endpointId: existing.endpointId ?? undefined,
+          signingSecret: existing.signingSecret ?? undefined,
+        }
+      }
+    }
+    throw error
+  }
 
   logger.info('Provisioned FlowIndex API key for user', {
     userId,
@@ -186,15 +206,15 @@ async function ensureEndpoint(
   }
 
   // Try to find existing endpoint for this callback URL
-  const endpoints = await flowIndexFetch<{ data: Array<{ id: string; url: string }> }>(
+  const endpoints = await flowIndexFetch<{ data: Array<{ id: string; url: string; signing_secret?: string }> }>(
     '/api/v1/endpoints',
     apiKey
   )
 
   const existing = endpoints.data?.find((ep) => ep.url === callbackUrl)
   if (existing) {
-    await updateEndpointInfo(userId, existing.id)
-    return { endpointId: existing.id }
+    await updateEndpointInfo(userId, existing.id, existing.signing_secret)
+    return { endpointId: existing.id, signingSecret: existing.signing_secret }
   }
 
   // Create new endpoint

@@ -2001,7 +2001,7 @@ export async function cleanupExternalWebhook(
     const config = getProviderConfig(webhook)
     const subId = config.flowIndexSubscriptionId as string
     if (subId) {
-      await deleteFlowSubscription(subId, webhook)
+      await deleteFlowSubscription(subId, workflow)
     }
   }
 }

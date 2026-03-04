@@ -81,6 +81,7 @@ func (h *Handlers) RegisterRoutes(r *mux.Router) {
 	// Endpoints
 	authed.HandleFunc("/endpoints", h.handleCreateEndpoint).Methods("POST", "OPTIONS")
 	authed.HandleFunc("/endpoints", h.handleListEndpoints).Methods("GET", "OPTIONS")
+	authed.HandleFunc("/endpoints/{id}", h.handleGetEndpoint).Methods("GET", "OPTIONS")
 	authed.HandleFunc("/endpoints/{id}", h.handleUpdateEndpoint).Methods("PATCH", "OPTIONS")
 	authed.HandleFunc("/endpoints/{id}", h.handleDeleteEndpoint).Methods("DELETE", "OPTIONS")
 
@@ -344,7 +345,34 @@ func (h *Handlers) handleCreateEndpoint(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, ep)
+	// Return signing secret only on creation
+	resp := struct {
+		*Endpoint
+		SigningSecret string `json:"signing_secret"`
+	}{
+		Endpoint:     ep,
+		SigningSecret: ep.SigningSecret,
+	}
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+func (h *Handlers) handleGetEndpoint(w http.ResponseWriter, r *http.Request) {
+	userID := UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "missing user identity")
+		return
+	}
+	id := mux.Vars(r)["id"]
+	ep, err := h.store.GetEndpointByID(r.Context(), id)
+	if err != nil || ep == nil {
+		writeError(w, http.StatusNotFound, "endpoint not found")
+		return
+	}
+	if ep.UserID != userID {
+		writeError(w, http.StatusNotFound, "endpoint not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, ep)
 }
 
 func (h *Handlers) handleListEndpoints(w http.ResponseWriter, r *http.Request) {

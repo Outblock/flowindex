@@ -33,7 +33,7 @@ type Endpoint struct {
 	Description   string          `json:"description,omitempty"`
 	EndpointType  string          `json:"endpoint_type"`
 	Metadata      json.RawMessage `json:"metadata,omitempty"`
-	SigningSecret string          `json:"signing_secret,omitempty"`
+	SigningSecret string          `json:"-"`
 	IsActive      bool            `json:"is_active"`
 	CreatedAt     time.Time       `json:"created_at"`
 }
