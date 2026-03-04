@@ -1,13 +1,18 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type * as Monaco from 'monaco-editor';
 import {
-  createLSPBridge, createWebSocketBridge, setAccessNode, setStringCodeResolver,
-  onDependencyResolved, preloadCacheFromFiles, prefetchDependencies,
+  createWebSocketBridge, setAccessNode, setStringCodeResolver,
+  onDependencyResolved, prefetchDependencies,
   type LSPBridge,
 } from './languageServer';
+import {
+  createV2LSPBridge, setV2AccessNode, setV2StringCodeResolver, preloadV2Cache,
+} from './languageServerV2';
 import { MonacoLspAdapter, type DefinitionTarget } from './monacoLspAdapter';
 import type { ProjectState } from '../fs/fileSystem';
 import type { FlowNetwork } from '../flow/networks';
+
+export type LspMode = 'wasm' | 'server';
 
 function buildDependencyKey(code: string): string {
   const re = /import\s+([\w,\s]+?)\s+from\s+(0x[0-9a-fA-F]+)/g;
@@ -26,13 +31,16 @@ function buildDependencyKey(code: string): string {
   return Array.from(keys).sort().join('|');
 }
 
-/** Hook that manages the Cadence WASM LSP lifecycle.
- * Initializes after Monaco is ready, syncs open documents with the LSP.
- * Pre-fetches dependencies asynchronously to avoid blocking the main thread. */
+/** Hook that manages the Cadence LSP lifecycle.
+ * Supports two modes:
+ * - 'wasm': WASM v2 running in Web Worker (default, zero latency)
+ * - 'server': Server-side LSP via WebSocket (more powerful)
+ */
 export function useLsp(
   monacoInstance: typeof Monaco | null,
   project: ProjectState,
   network: FlowNetwork,
+  lspMode: LspMode,
   onDependency?: (address: string, contractName: string, code: string) => void
 ) {
   const adapterRef = useRef<MonacoLspAdapter | null>(null);
@@ -41,8 +49,10 @@ export function useLsp(
   const projectRef = useRef(project);
   const prefetchedDepsKeyRef = useRef('');
   const prefetchPromiseRef = useRef<Promise<void> | null>(null);
+  const currentModeRef = useRef<LspMode | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [loadingDeps, setLoadingDeps] = useState(false);
+  const [activeMode, setActiveMode] = useState<LspMode | null>(null);
 
   const prefetchForCode = useCallback(async (code: string) => {
     const depKey = buildDependencyKey(code);
@@ -51,7 +61,6 @@ export function useLsp(
     const scopedKey = `${network}:${depKey}`;
     if (prefetchedDepsKeyRef.current === scopedKey) return;
 
-    // Serialize prefetch calls to avoid duplicate REST requests during rapid edits.
     if (prefetchPromiseRef.current) {
       await prefetchPromiseRef.current;
       if (prefetchedDepsKeyRef.current === scopedKey) return;
@@ -86,16 +95,19 @@ export function useLsp(
       ? 'https://rest-mainnet.onflow.org'
       : 'https://rest-testnet.onflow.org';
     setAccessNode(restNode);
+    setV2AccessNode(restNode);
   }, [network]);
 
   // Set up string code resolver for local file imports
   useEffect(() => {
-    setStringCodeResolver((location: string) => {
+    const resolver = (location: string) => {
       const file = project.files.find(
         (f) => f.path === location || f.path === `${location}.cdc`
       );
       return file?.content;
-    });
+    };
+    setStringCodeResolver(resolver);
+    setV2StringCodeResolver(resolver);
   }, [project.files]);
 
   // Set up dependency listener
@@ -106,45 +118,74 @@ export function useLsp(
     return () => onDependencyResolved(() => {});
   }, [onDependency]);
 
-  // Determine LSP WebSocket URL (auto-detect from current host, or use env override)
+  // Determine LSP WebSocket URL
   const lspWsUrl = import.meta.env.VITE_LSP_WS_URL
     || (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/lsp';
 
-  // Initialize LSP when Monaco becomes available
+  // Teardown current LSP adapter
+  const teardown = useCallback(() => {
+    const adapter = adapterRef.current;
+    if (adapter) {
+      // Close all open documents
+      for (const uri of openDocsRef.current) {
+        adapter.closeDocument(uri);
+      }
+      openDocsRef.current.clear();
+      adapter.dispose();
+      adapterRef.current = null;
+    }
+    initializingRef.current = false;
+    currentModeRef.current = null;
+    setIsReady(false);
+    setActiveMode(null);
+  }, []);
+
+  // Initialize LSP when Monaco becomes available or mode changes
   useEffect(() => {
-    if (!monacoInstance || initializingRef.current || adapterRef.current) return;
+    if (!monacoInstance) return;
+
+    // If mode changed, teardown and reinitialize
+    if (currentModeRef.current !== null && currentModeRef.current !== lspMode) {
+      teardown();
+    }
+
+    if (initializingRef.current || adapterRef.current) return;
     initializingRef.current = true;
 
     (async () => {
       let bridge: LSPBridge;
       let useServerLsp = false;
 
-      // Try server-side LSP first (via WebSocket)
-      try {
-        console.log('[LSP] Trying server-side LSP...');
-        bridge = await createWebSocketBridge(lspWsUrl, network);
-        useServerLsp = true;
-        console.log('[LSP] Connected to server-side LSP');
-      } catch {
-        // Fall back to WASM LSP
-        console.log('[LSP] Server unavailable, falling back to WASM');
-
+      if (lspMode === 'server') {
+        // Server-side LSP via WebSocket
         try {
-          // Pre-populate cache from existing dependency files
-          preloadCacheFromFiles(project.files);
+          console.log('[LSP] Connecting to server-side LSP...');
+          bridge = await createWebSocketBridge(lspWsUrl, network);
+          useServerLsp = true;
+          console.log('[LSP] Connected to server-side LSP');
+        } catch (err) {
+          console.error('[LSP] Server LSP unavailable:', err);
+          initializingRef.current = false;
+          return;
+        }
+      } else {
+        // WASM v2 (Web Worker)
+        try {
+          console.log('[LSP] Initializing WASM v2...');
+          preloadV2Cache(project.files);
 
           const editableFiles = project.files.filter((f) => !f.readOnly);
           const allCode = editableFiles.map((f) => f.content).join('\n');
-
           if (allCode.includes('import ')) {
-            console.log('[LSP] Pre-fetching dependencies...');
+            console.log('[LSP v2] Pre-fetching dependencies...');
             await prefetchForCode(allCode);
-            console.log('[LSP] Dependencies pre-fetched');
+            console.log('[LSP v2] Dependencies pre-fetched');
           }
 
-          bridge = await createLSPBridge(() => {});
+          bridge = await createV2LSPBridge(() => {});
+          console.log('[LSP] WASM v2 initialized');
         } catch (err) {
-          console.error('[LSP] Failed to initialize:', err);
+          console.error('[LSP] WASM v2 failed:', err);
           initializingRef.current = false;
           return;
         }
@@ -162,8 +203,10 @@ export function useLsp(
         await adapter.initialize();
 
         adapterRef.current = adapter;
+        currentModeRef.current = lspMode;
         setIsReady(true);
-        console.log('[LSP] Cadence Language Server ready');
+        setActiveMode(lspMode);
+        console.log(`[LSP] Cadence Language Server ready (${lspMode})`);
 
         // Open existing documents
         for (const file of project.files) {
@@ -176,9 +219,9 @@ export function useLsp(
         initializingRef.current = false;
       }
     })();
-  }, [monacoInstance, network, onDependency, prefetchForCode, project.files, lspWsUrl]);
+  }, [monacoInstance, lspMode, network, prefetchForCode, project.files, lspWsUrl, teardown]);
 
-  // Pre-fetch dependencies in server-side mode as well, so fallback definition can use deps models quickly.
+  // Pre-fetch dependencies so fallback definition can use deps models quickly.
   useEffect(() => {
     if (!isReady) return;
     const editableFiles = project.files.filter((f) => !f.readOnly);
@@ -194,7 +237,7 @@ export function useLsp(
 
     const currentPaths = new Set(project.files.map((f) => f.path));
 
-    // Open new documents (including readOnly deps for import resolution)
+    // Open new documents
     for (const file of project.files) {
       const uri = `file:///${file.path}`;
       if (!openDocsRef.current.has(uri)) {
@@ -238,5 +281,5 @@ export function useLsp(
     return null;
   }, []);
 
-  return { notifyChange, goToDefinition, isReady, loadingDeps };
+  return { notifyChange, goToDefinition, isReady, loadingDeps, activeMode };
 }

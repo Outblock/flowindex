@@ -4,16 +4,17 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "postinstall": "node -e \"const fs=require('fs'),p='node_modules/@outblock/cadence-language-server/dist/';['cadence-language-server.wasm','worker.js','wasm_exec.js'].forEach(f=>{const t=f==='worker.js'?'public/cadence-lsp-worker.js':'public/'+f;try{fs.mkdirSync('public',{recursive:true});fs.copyFileSync(p+f,t)}catch(e){console.warn('copy',f,e.message)}})\"",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.103",
-    "@outblock/flowtoken": "^1.0.0",
     "@monaco-editor/react": "^4.7.0",
-    "@onflow/cadence-language-server": "^1.7.4",
-    "@onflow/fcl": "^1.21.9",
+"@onflow/fcl": "^1.21.9",
+    "@outblock/cadence-language-server": "^2.0.0",
+    "@outblock/flowtoken": "^1.0.0",
     "@supabase/supabase-js": "^2.98.0",
     "ai": "^6.0.101",
     "axios": "^1.13.4",
