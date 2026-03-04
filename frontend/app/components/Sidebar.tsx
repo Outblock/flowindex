@@ -13,9 +13,19 @@ export default function Sidebar() {
     const { theme, toggleTheme } = useTheme();
     const { fontFamily, pixelVariant, setFontFamily, setPixelVariant } = useFont();
     const [fontMenuOpen, setFontMenuOpen] = useState(false);
-    const [isCollapsed, setIsCollapsed] = useState(() => location.pathname.startsWith('/developer') || location.pathname.startsWith('/playground'));
-    const [autoCollapse, setAutoCollapse] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        const saved = localStorage.getItem('sidebarCollapsed');
+        if (saved !== null) return saved === 'true';
+        return location.pathname.startsWith('/developer') || location.pathname.startsWith('/playground');
+    });
+    const [autoCollapse, setAutoCollapse] = useState(() => {
+        return localStorage.getItem('sidebarAutoCollapse') === 'true';
+    });
     const [hoverExpanded, setHoverExpanded] = useState(false);
+
+    // Persist sidebar state to localStorage
+    useEffect(() => { localStorage.setItem('sidebarCollapsed', String(isCollapsed)); }, [isCollapsed]);
+    useEffect(() => { localStorage.setItem('sidebarAutoCollapse', String(autoCollapse)); }, [autoCollapse]);
     const { isOpen: isMobileOpen, close: closeMobileMenu } = useMobileMenu();
 
     // Auto-collapse when entering Developer Portal or Playground, auto-expand when leaving
