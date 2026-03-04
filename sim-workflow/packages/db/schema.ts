@@ -2505,6 +2505,23 @@ export const oauthConsent = pgTable(
   })
 )
 
+export const flowindexApiKey = pgTable(
+  'flowindex_api_key',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    encryptedKey: text('encrypted_key').notNull(),
+    keyPrefix: text('key_prefix').notNull(),
+    endpointId: text('endpoint_id'),
+    signingSecret: text('signing_secret'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('flowindex_api_key_user_idx').on(table.userId)]
+)
+
 export const jwks = pgTable('jwks', {
   id: text('id').primaryKey(),
   publicKey: text('public_key').notNull(),
