@@ -1,9 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { Link } from '@tanstack/react-router';
 import Avatar from 'boring-avatars';
-import { Fish, ArrowRight } from 'lucide-react';
+import { Fish, ArrowRight, List, CalendarDays } from 'lucide-react';
 import { fetchBigTransfers, type BigTransfer } from '../api/heyapi';
 import { colorsFromAddress } from './AddressLink';
+
+type ViewMode = 'pages' | 'timeline';
+
+function getTimeSection(timestamp: string, now: Date): string {
+  const d = new Date(timestamp);
+  if (isNaN(d.getTime())) return 'Unknown';
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (d >= today) return 'Today';
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 6);
+  if (d >= weekAgo) return 'This Week';
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (d >= monthStart) return 'Earlier This Month';
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
 
 function formatCompact(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -93,39 +108,72 @@ function AddressWithAvatar({ address }: { address: string }) {
 }
 
 function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boolean }) {
+  if (compact) {
+    return (
+      <Link
+        to={`/tx/0x${tx.tx_id}` as any}
+        className="flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors border-b border-zinc-100 dark:border-white/5 last:border-b-0"
+      >
+        <TokenIcon logo={tx.token_logo} symbol={tx.token_symbol} size={20} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-mono text-zinc-900 dark:text-white font-bold">{formatAmount(tx.amount)}</span>
+            <span className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase">{tx.token_symbol}</span>
+            <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500">≈</span>
+            <span className="text-xs font-mono font-bold text-nothing-green-dark dark:text-nothing-green">{formatUSD(tx.usd_value)}</span>
+          </div>
+          <div className="flex items-center gap-1 mt-0.5 text-[10px] font-mono text-zinc-400 dark:text-gray-500">
+            <AddressWithAvatar address={tx.from_address} />
+            <ArrowRight className="h-2.5 w-2.5 mx-0.5" />
+            <AddressWithAvatar address={tx.to_address} />
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+          <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-sm ${TYPE_TAG_CLASSES[tx.type] || TYPE_TAG_CLASSES.transfer}`}>{tx.type}</span>
+          <span className="text-[9px] font-mono text-zinc-400 dark:text-gray-500">{timeAgo(tx.timestamp)}</span>
+        </div>
+      </Link>
+    );
+  }
+
+  // Full row with separate from/to columns
   return (
     <Link
       to={`/tx/0x${tx.tx_id}` as any}
-      className="flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors border-b border-zinc-100 dark:border-white/5 last:border-b-0"
+      className="grid grid-cols-[auto_1fr_minmax(0,120px)_auto_minmax(0,120px)_auto_auto] items-center gap-3 px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors border-b border-zinc-100 dark:border-white/5 last:border-b-0"
     >
-      <TokenIcon logo={tx.token_logo} symbol={tx.token_symbol} size={compact ? 20 : 24} />
-      <div className="flex-1 min-w-0">
+      {/* Token icon + amount */}
+      <TokenIcon logo={tx.token_logo} symbol={tx.token_symbol} size={24} />
+      <div className="min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-mono text-zinc-900 dark:text-white font-bold">
-            {formatAmount(tx.amount)}
-          </span>
-          <span className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase">
-            {tx.token_symbol}
-          </span>
+          <span className="text-xs font-mono text-zinc-900 dark:text-white font-bold">{formatAmount(tx.amount)}</span>
+          <span className="text-xs font-mono text-zinc-500 dark:text-gray-400 uppercase">{tx.token_symbol}</span>
           <span className="text-[10px] font-mono text-zinc-400 dark:text-gray-500">≈</span>
-          <span className="text-xs font-mono font-bold text-nothing-green-dark dark:text-nothing-green">
-            {formatUSD(tx.usd_value)}
-          </span>
-        </div>
-        <div className="flex items-center gap-1 mt-0.5 text-[10px] font-mono text-zinc-400 dark:text-gray-500">
-          <AddressWithAvatar address={tx.from_address} />
-          <ArrowRight className="h-2.5 w-2.5 mx-0.5" />
-          <AddressWithAvatar address={tx.to_address} />
+          <span className="text-xs font-mono font-bold text-nothing-green-dark dark:text-nothing-green">{formatUSD(tx.usd_value)}</span>
         </div>
       </div>
-      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-        <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-sm ${TYPE_TAG_CLASSES[tx.type] || TYPE_TAG_CLASSES.transfer}`}>
-          {tx.type}
-        </span>
-        <span className="text-[9px] font-mono text-zinc-400 dark:text-gray-500">
-          {timeAgo(tx.timestamp)}
-        </span>
+
+      {/* From */}
+      <div className="text-[10px] font-mono text-zinc-500 dark:text-gray-400 truncate">
+        <AddressWithAvatar address={tx.from_address} />
       </div>
+
+      <ArrowRight className="h-3 w-3 text-zinc-300 dark:text-gray-600 flex-shrink-0" />
+
+      {/* To */}
+      <div className="text-[10px] font-mono text-zinc-500 dark:text-gray-400 truncate">
+        <AddressWithAvatar address={tx.to_address} />
+      </div>
+
+      {/* Type tag */}
+      <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-sm flex-shrink-0 ${TYPE_TAG_CLASSES[tx.type] || TYPE_TAG_CLASSES.transfer}`}>
+        {tx.type}
+      </span>
+
+      {/* Time */}
+      <span className="text-[9px] font-mono text-zinc-400 dark:text-gray-500 flex-shrink-0 text-right min-w-[3.5rem]">
+        {timeAgo(tx.timestamp)}
+      </span>
     </Link>
   );
 }
@@ -198,69 +246,227 @@ const TYPE_FILTERS = [
 ];
 
 export function BigTransfersFull() {
-  const [transfers, setTransfers] = useState<BigTransfer[] | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('timeline');
   const [typeFilter, setTypeFilter] = useState('');
+
+  // Pages mode state
+  const [transfers, setTransfers] = useState<BigTransfer[] | null>(null);
   const [page, setPage] = useState(0);
   const pageSize = 25;
 
+  // Timeline mode state
+  const [timelineTxs, setTimelineTxs] = useState<BigTransfer[]>([]);
+  const [timelineOffset, setTimelineOffset] = useState(0);
+  const [timelineHasMore, setTimelineHasMore] = useState(true);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const timelineInitRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const timelineBatchSize = 30;
+
+  // Reset everything when filter changes
   useEffect(() => {
+    setPage(0);
+    setTimelineTxs([]);
+    setTimelineOffset(0);
+    setTimelineHasMore(true);
+    timelineInitRef.current = false;
+  }, [typeFilter]);
+
+  // Pages mode fetch
+  useEffect(() => {
+    if (viewMode !== 'pages') return;
     setTransfers(null);
     fetchBigTransfers({
       limit: pageSize + 1,
       offset: page * pageSize,
       type: typeFilter || undefined,
     }).then(setTransfers).catch(() => setTransfers([]));
-  }, [typeFilter, page]);
+  }, [typeFilter, page, viewMode]);
+
+  // Timeline initial load
+  useEffect(() => {
+    if (viewMode !== 'timeline') return;
+    if (timelineInitRef.current && timelineTxs.length > 0) return;
+    timelineInitRef.current = true;
+    setTimelineLoading(true);
+    fetchBigTransfers({
+      limit: timelineBatchSize + 1,
+      offset: 0,
+      type: typeFilter || undefined,
+    }).then(data => {
+      const items = data ?? [];
+      const hasMore = items.length > timelineBatchSize;
+      setTimelineTxs(items.slice(0, timelineBatchSize));
+      setTimelineOffset(timelineBatchSize);
+      setTimelineHasMore(hasMore);
+    }).catch(() => {
+      setTimelineTxs([]);
+      setTimelineHasMore(false);
+    }).finally(() => setTimelineLoading(false));
+  }, [viewMode, typeFilter]);
+
+  // Timeline infinite scroll
+  const loadMoreTimeline = useCallback(() => {
+    if (timelineLoading || !timelineHasMore) return;
+    setTimelineLoading(true);
+    fetchBigTransfers({
+      limit: timelineBatchSize + 1,
+      offset: timelineOffset,
+      type: typeFilter || undefined,
+    }).then(data => {
+      const items = data ?? [];
+      const hasMore = items.length > timelineBatchSize;
+      setTimelineTxs(prev => [...prev, ...items.slice(0, timelineBatchSize)]);
+      setTimelineOffset(prev => prev + timelineBatchSize);
+      setTimelineHasMore(hasMore);
+    }).catch(() => setTimelineHasMore(false))
+      .finally(() => setTimelineLoading(false));
+  }, [timelineLoading, timelineHasMore, timelineOffset, typeFilter]);
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    if (viewMode !== 'timeline' || !sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      entries => { if (entries[0]?.isIntersecting) loadMoreTimeline(); },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [viewMode, loadMoreTimeline]);
 
   const hasMore = (transfers?.length ?? 0) > pageSize;
   const displayTransfers = transfers?.slice(0, pageSize) ?? [];
 
+  // Group timeline transfers by time section
+  const now = new Date();
+  const timelineSections: { label: string; items: BigTransfer[] }[] = [];
+  if (viewMode === 'timeline') {
+    let currentSection = '';
+    for (const tx of timelineTxs) {
+      const section = getTimeSection(tx.timestamp, now);
+      if (section !== currentSection) {
+        timelineSections.push({ label: section, items: [] });
+        currentSection = section;
+      }
+      timelineSections[timelineSections.length - 1].items.push(tx);
+    }
+  }
+
+  const handleFilterChange = (value: string) => {
+    setTypeFilter(value);
+    setPage(0);
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 flex-wrap">
-        {TYPE_FILTERS.map(f => (
+      {/* Type filters + view mode toggle */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
+          {TYPE_FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => handleFilterChange(f.value)}
+              className={`px-3 py-1 text-xs font-mono uppercase tracking-wider border transition-colors ${
+                typeFilter === f.value
+                  ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white'
+                  : 'bg-transparent text-zinc-600 dark:text-gray-400 border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/30'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-0.5 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
           <button
-            key={f.value}
-            onClick={() => { setTypeFilter(f.value); setPage(0); }}
-            className={`px-3 py-1 text-xs font-mono uppercase tracking-wider border transition-colors ${
-              typeFilter === f.value
-                ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white'
-                : 'bg-transparent text-zinc-600 dark:text-gray-400 border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/30'
-            }`}
+            onClick={() => setViewMode('timeline')}
+            className={`px-2.5 py-1 text-[10px] uppercase tracking-widest flex items-center gap-1.5 transition-colors ${viewMode === 'timeline' ? 'bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'}`}
           >
-            {f.label}
+            <CalendarDays className="h-3 w-3" />Timeline
           </button>
-        ))}
+          <button
+            onClick={() => setViewMode('pages')}
+            className={`px-2.5 py-1 text-[10px] uppercase tracking-widest flex items-center gap-1.5 transition-colors ${viewMode === 'pages' ? 'bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'}`}
+          >
+            <List className="h-3 w-3" />Pages
+          </button>
+        </div>
       </div>
 
+      {/* Content */}
       <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10">
-        {transfers === null ? (
-          <div className="p-6">
-            {[...Array(10)].map((_, i) => (
-              <div key={i} className="flex items-center gap-3 py-2.5 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
-                <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-white/10 animate-pulse" />
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-3 w-40 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
-                  <div className="h-2.5 w-56 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+        {viewMode === 'timeline' ? (
+          /* ---- Timeline mode ---- */
+          timelineTxs.length === 0 && timelineLoading ? (
+            <div className="p-6">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 py-2.5 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
+                  <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-white/10 animate-pulse" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-40 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                    <div className="h-2.5 w-56 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                  </div>
+                  <div className="h-3 w-12 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
                 </div>
-                <div className="h-3 w-12 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
-              </div>
-            ))}
-          </div>
-        ) : displayTransfers.length === 0 ? (
-          <div className="p-6">
-            <p className="text-xs text-zinc-400 dark:text-gray-500 font-mono">No large transfers found.</p>
-          </div>
+              ))}
+            </div>
+          ) : timelineTxs.length === 0 ? (
+            <div className="p-6">
+              <p className="text-xs text-zinc-400 dark:text-gray-500 font-mono">No large transfers found.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {timelineSections.map(section => (
+                <Fragment key={section.label}>
+                  <div className="sticky top-0 z-10 px-3 py-1.5 bg-zinc-50 dark:bg-white/5 border-b border-zinc-100 dark:border-white/5">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 dark:text-gray-400 font-bold">
+                      {section.label}
+                    </span>
+                  </div>
+                  {section.items.map((tx, i) => (
+                    <TransferRow key={`${tx.tx_id}-${i}`} tx={tx} />
+                  ))}
+                </Fragment>
+              ))}
+              <div ref={sentinelRef} className="h-1" />
+              {timelineLoading && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="h-4 w-4 border-2 border-zinc-300 dark:border-white/20 border-t-zinc-600 dark:border-t-white/60 rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+          )
         ) : (
-          <div className="flex flex-col">
-            {displayTransfers.map((tx, i) => (
-              <TransferRow key={`${tx.tx_id}-${i}`} tx={tx} />
-            ))}
-          </div>
+          /* ---- Pages mode ---- */
+          transfers === null ? (
+            <div className="p-6">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 py-2.5 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
+                  <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-white/10 animate-pulse" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-40 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                    <div className="h-2.5 w-56 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                  </div>
+                  <div className="h-3 w-12 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : displayTransfers.length === 0 ? (
+            <div className="p-6">
+              <p className="text-xs text-zinc-400 dark:text-gray-500 font-mono">No large transfers found.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {displayTransfers.map((tx, i) => (
+                <TransferRow key={`${tx.tx_id}-${i}`} tx={tx} />
+              ))}
+            </div>
+          )
         )}
       </div>
 
-      {(page > 0 || hasMore) && (
+      {/* Pagination (pages mode only) */}
+      {viewMode === 'pages' && (page > 0 || hasMore) && (
         <div className="flex items-center justify-between">
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
