@@ -9,8 +9,11 @@ WORKDIR /app/web
 COPY ai/chat/web/package.json ai/chat/web/bun.lock ./
 RUN bun install
 COPY ai/chat/web/ .
-# Re-copy flowtoken (real dir) after COPY ai/chat/web/ to overwrite any symlink
+# Re-copy flowtoken (real dir) and fix symlink (Docker Buildx cache can break it)
 COPY frontend/packages/flowtoken /frontend/packages/flowtoken
+RUN rm -rf node_modules/@flowindex/flowtoken && \
+    mkdir -p node_modules/@flowindex && \
+    ln -s /frontend/packages/flowtoken node_modules/@flowindex/flowtoken
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
@@ -35,6 +38,8 @@ COPY ai/chat/ .
 COPY --from=frontend /app/web/.next ./web/.next
 COPY --from=frontend /app/web/node_modules ./web/node_modules
 COPY --from=frontend /app/web/package.json ./web/package.json
+# Copy flowtoken package so the symlink in node_modules resolves at runtime
+COPY --from=frontend /frontend/packages/flowtoken /frontend/packages/flowtoken
 
 # Train on startup data (DDL + queries + docs baked into the image)
 RUN python train.py
