@@ -22,3 +22,16 @@ export const NETWORK_CONFIG: Record<FlowNetwork, Record<string, string>> = {
     '0xEVM': '0x8c5303eaa26202d6',
   },
 };
+
+export const EVM_NETWORKS: Record<FlowNetwork, { rpcUrl: string; chainId: number; name: string }> = {
+  mainnet: {
+    rpcUrl: 'https://mainnet.evm.nodes.onflow.org',
+    chainId: 747,
+    name: 'Flow EVM Mainnet',
+  },
+  testnet: {
+    rpcUrl: 'https://testnet.evm.nodes.onflow.org',
+    chainId: 545,
+    name: 'Flow EVM Testnet',
+  },
+};

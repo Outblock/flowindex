@@ -9,6 +9,8 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@nomicfoundation/solidity-language-server": "^0.8.25",
+    "solc": "^0.8.34",
     "ws": "^8.18.0"
   },
   "devDependencies": {

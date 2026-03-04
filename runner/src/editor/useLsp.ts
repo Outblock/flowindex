@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import type * as Monaco from 'monaco-editor';
 import {
   createLSPBridge, createWebSocketBridge, setAccessNode, setStringCodeResolver,
-  onDependencyResolved, preloadCacheFromFiles, prefetchDependencies,
+  onDependencyResolved, preloadCacheFromFiles, prefetchDependencies, prefetchImports,
   type LSPBridge,
 } from './languageServer';
 import { MonacoLspAdapter, type DefinitionTarget } from './monacoLspAdapter';
@@ -153,6 +153,10 @@ export function useLsp(
       try {
         const adapter = new MonacoLspAdapter(bridge!, monacoInstance, {
           skipInitialize: useServerLsp,
+          languageId: 'cadence',
+          markerOwner: 'cadence-lsp',
+          beforeOpen: (code) => prefetchImports(code),
+          beforeChange: (code) => prefetchImports(code),
           resolveDocumentContent: (uri: string) => {
             if (!uri.startsWith('file:///')) return undefined;
             const path = decodeURIComponent(uri.slice('file:///'.length));

@@ -6,7 +6,6 @@
 import type * as Monaco from 'monaco-editor';
 import type { Message } from 'vscode-jsonrpc';
 import type { LSPBridge } from './languageServer';
-import { prefetchImports } from './languageServer';
 import { CADENCE_LANGUAGE_ID } from './cadenceLanguage';
 
 interface LSPDiagnostic {
@@ -35,6 +34,10 @@ interface LSPHoverResult {
 
 interface MonacoLspAdapterOptions {
   skipInitialize?: boolean;
+  languageId?: string;
+  markerOwner?: string;
+  beforeOpen?: (code: string) => Promise<void>;
+  beforeChange?: (code: string) => Promise<void>;
   resolveDocumentContent?: (uri: string) => string | undefined;
 }
 
@@ -189,7 +192,7 @@ export class MonacoLspAdapter {
       source: d.source || 'cadence',
     }));
 
-    this.monaco.editor.setModelMarkers(model, 'cadence-lsp', markers);
+    this.monaco.editor.setModelMarkers(model, this.options.markerOwner || 'cadence-lsp', markers);
   }
 
   async initialize() {
@@ -401,10 +404,11 @@ export class MonacoLspAdapter {
   private registerProviders() {
     const m = this.monaco;
     const self = this;
+    const langId = this.options.languageId || CADENCE_LANGUAGE_ID;
 
     // Completion provider
     this.disposables.push(
-      m.languages.registerCompletionItemProvider(CADENCE_LANGUAGE_ID, {
+      m.languages.registerCompletionItemProvider(langId, {
         triggerCharacters: ['.', ':', '<'],
         provideCompletionItems: async (model, position) => {
           try {
@@ -446,7 +450,7 @@ export class MonacoLspAdapter {
 
     // Hover provider
     this.disposables.push(
-      m.languages.registerHoverProvider(CADENCE_LANGUAGE_ID, {
+      m.languages.registerHoverProvider(langId, {
         provideHover: async (model, position) => {
           try {
             const result: LSPHoverResult | null = await sendRequest(self.bridge, HOVER, {
@@ -490,14 +494,14 @@ export class MonacoLspAdapter {
 
     // Definition provider
     this.disposables.push(
-      m.languages.registerDefinitionProvider(CADENCE_LANGUAGE_ID, {
+      m.languages.registerDefinitionProvider(langId, {
         provideDefinition: async (model, position) => self.resolveDefinition(model, position),
       })
     );
 
     // Signature help provider
     this.disposables.push(
-      m.languages.registerSignatureHelpProvider(CADENCE_LANGUAGE_ID, {
+      m.languages.registerSignatureHelpProvider(langId, {
         signatureHelpTriggerCharacters: ['(', ','],
         provideSignatureHelp: async (model, position) => {
           try {
@@ -537,12 +541,12 @@ export class MonacoLspAdapter {
     documentVersions.set(uri, version);
     const bridge = this.bridge;
 
-    // Pre-fetch imports, then notify LSP so cached data is available
-    prefetchImports(code).finally(() => {
+    const before = this.options.beforeOpen?.(code) ?? Promise.resolve();
+    before.finally(() => {
       sendNotification(bridge, DID_OPEN, {
         textDocument: {
           uri: fileUri(uri),
-          languageId: 'cadence',
+          languageId: this.options.languageId || 'cadence',
           version,
           text: code,
         },
@@ -557,7 +561,8 @@ export class MonacoLspAdapter {
     documentVersions.set(uri, version);
     const bridge = this.bridge;
 
-    prefetchImports(code).finally(() => {
+    const before = this.options.beforeChange?.(code) ?? Promise.resolve();
+    before.finally(() => {
       sendNotification(bridge, DID_CHANGE, {
         textDocument: { uri: fileUri(uri), version },
         contentChanges: [{ text: code }],

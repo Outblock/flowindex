@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  ChevronRight, ChevronDown, File, Folder, FolderOpen,
+  ChevronRight, ChevronDown, File, FileCode2, Folder, FolderOpen,
   Plus, FolderPlus, Trash2, Package, Lock,
 } from 'lucide-react';
 import type { TreeNode, ProjectState } from '../fs/fileSystem';
@@ -72,7 +72,13 @@ function TreeItem({
       }`}
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
     >
-      <File className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+      {node.name.endsWith('.sol') ? (
+        <FileCode2 className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+      ) : node.name.endsWith('.cdc') ? (
+        <File className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+      ) : (
+        <File className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+      )}
       <span className="truncate flex-1">{node.name}</span>
       {node.readOnly && <Lock className="w-2.5 h-2.5 text-zinc-600 shrink-0" />}
       {!node.readOnly && (
@@ -115,7 +121,7 @@ export default function FileExplorer({
     if (createMode === 'folder') {
       onCreateFolder(name);
     } else {
-      const path = name.endsWith('.cdc') ? name : `${name}.cdc`;
+      const path = (name.endsWith('.cdc') || name.endsWith('.sol')) ? name : `${name}.cdc`;
       onCreateFile(path);
     }
 

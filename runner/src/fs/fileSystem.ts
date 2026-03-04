@@ -272,6 +272,162 @@ transaction(amount: UFix64, recipient: Address) {
     }],
     activeFile: 'main.cdc',
   },
+  {
+    label: 'Simple Storage (Solidity)',
+    description: 'Basic Solidity contract on Flow EVM',
+    icon: 'box',
+    files: [{
+      path: 'src/SimpleStorage.sol',
+      content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract SimpleStorage {
+    uint256 private storedValue;
+
+    event ValueChanged(uint256 newValue);
+
+    function set(uint256 value) public {
+        storedValue = value;
+        emit ValueChanged(value);
+    }
+
+    function get() public view returns (uint256) {
+        return storedValue;
+    }
+}
+`,
+      language: 'sol',
+    }],
+    activeFile: 'src/SimpleStorage.sol',
+    folders: ['src'],
+  },
+  {
+    label: 'ERC-20 Token (Solidity)',
+    description: 'Standard ERC-20 token on Flow EVM',
+    icon: 'coins',
+    files: [{
+      path: 'src/MyToken.sol',
+      content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract MyToken {
+    string public name;
+    string public symbol;
+    uint8 public decimals = 18;
+    uint256 public totalSupply;
+
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    constructor(string memory _name, string memory _symbol, uint256 _initialSupply) {
+        name = _name;
+        symbol = _symbol;
+        totalSupply = _initialSupply * 10 ** decimals;
+        balanceOf[msg.sender] = totalSupply;
+        emit Transfer(address(0), msg.sender, totalSupply);
+    }
+
+    function transfer(address to, uint256 value) public returns (bool) {
+        require(balanceOf[msg.sender] >= value, "Insufficient balance");
+        balanceOf[msg.sender] -= value;
+        balanceOf[to] += value;
+        emit Transfer(msg.sender, to, value);
+        return true;
+    }
+
+    function approve(address spender, uint256 value) public returns (bool) {
+        allowance[msg.sender][spender] = value;
+        emit Approval(msg.sender, spender, value);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 value) public returns (bool) {
+        require(balanceOf[from] >= value, "Insufficient balance");
+        require(allowance[from][msg.sender] >= value, "Insufficient allowance");
+        balanceOf[from] -= value;
+        balanceOf[to] += value;
+        allowance[from][msg.sender] -= value;
+        emit Transfer(from, to, value);
+        return true;
+    }
+}
+`,
+      language: 'sol',
+    }],
+    activeFile: 'src/MyToken.sol',
+    folders: ['src'],
+  },
+  {
+    label: 'Cross-VM (Cadence ↔ EVM)',
+    description: 'Call an EVM contract from a Cadence transaction',
+    icon: 'link',
+    files: [
+      {
+        path: 'src/Counter.sol',
+        content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Counter {
+    uint256 public count;
+
+    function increment() public {
+        count += 1;
+    }
+
+    function getCount() public view returns (uint256) {
+        return count;
+    }
+}
+`,
+        language: 'sol',
+      },
+      {
+        path: 'call_evm.cdc',
+        content: `import EVM from 0xe467b9dd11fa00df
+
+// Call an EVM contract from Cadence
+// Deploy Counter.sol first, then paste the address below.
+
+access(all) fun main(evmContractHex: String): UInt256 {
+    // Convert hex address to EVM.EVMAddress
+    let addressBytes = evmContractHex.decodeHex()
+    let evmAddress = EVM.EVMAddress(bytes: [
+        addressBytes[0],  addressBytes[1],  addressBytes[2],  addressBytes[3],
+        addressBytes[4],  addressBytes[5],  addressBytes[6],  addressBytes[7],
+        addressBytes[8],  addressBytes[9],  addressBytes[10], addressBytes[11],
+        addressBytes[12], addressBytes[13], addressBytes[14], addressBytes[15],
+        addressBytes[16], addressBytes[17], addressBytes[18], addressBytes[19]
+    ])
+
+    // ABI-encode getCount() selector: keccak256("getCount()")[:4] = 0xa87d942c
+    let calldata: [UInt8] = [0xa8, 0x7d, 0x94, 0x2c]
+
+    // Call the EVM contract
+    let result = EVM.run(
+        tx: calldata,
+        coinbase: evmAddress
+    )
+
+    // Decode the uint256 return value (last 32 bytes)
+    let data = result.data
+    // Simple decode: last 32 bytes as UInt256
+    var value: UInt256 = 0
+    var i = data.length - 32
+    while i < data.length {
+        value = value << 8 + UInt256(data[i])
+        i = i + 1
+    }
+    return value
+}
+`,
+      },
+    ],
+    activeFile: 'call_evm.cdc',
+    folders: ['src'],
+  },
 ];
 
 function defaultProject(): ProjectState {
@@ -399,7 +555,7 @@ export function createFile(state: ProjectState, path: string, content = ''): Pro
 
   return {
     ...state,
-    files: [...state.files, { path: normalizedPath, content }],
+    files: [...state.files, { path: normalizedPath, content, language: normalizedPath.endsWith('.sol') ? 'sol' : undefined }],
     openFiles: [...state.openFiles, normalizedPath],
     activeFile: normalizedPath,
     folders: Array.from(folderSet).sort(),
