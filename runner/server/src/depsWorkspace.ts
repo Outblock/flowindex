@@ -6,6 +6,34 @@ import { hasAddressImports, rewriteToStringImports } from './importUtils.js';
 
 export type FlowNetwork = 'mainnet' | 'testnet' | 'emulator';
 
+/** Core Flow contracts to pre-install per network so LSP resolves them immediately. */
+const CORE_CONTRACTS: Record<'mainnet' | 'testnet', { name: string; address: string }[]> = {
+  mainnet: [
+    { name: 'FungibleToken', address: 'f233dcee88fe0abe' },
+    { name: 'FungibleTokenMetadataViews', address: 'f233dcee88fe0abe' },
+    { name: 'FungibleTokenSwitchboard', address: 'f233dcee88fe0abe' },
+    { name: 'Burner', address: 'f233dcee88fe0abe' },
+    { name: 'NonFungibleToken', address: '1d7e57aa55817448' },
+    { name: 'MetadataViews', address: '1d7e57aa55817448' },
+    { name: 'ViewResolver', address: '1d7e57aa55817448' },
+    { name: 'FlowToken', address: '1654653399040a61' },
+    { name: 'NFTStorefrontV2', address: '4eb8a10cb9f87357' },
+    { name: 'EVM', address: 'e467b9dd11fa00df' },
+  ],
+  testnet: [
+    { name: 'FungibleToken', address: '9a0766d93b6608b7' },
+    { name: 'FungibleTokenMetadataViews', address: '9a0766d93b6608b7' },
+    { name: 'FungibleTokenSwitchboard', address: '9a0766d93b6608b7' },
+    { name: 'Burner', address: '9a0766d93b6608b7' },
+    { name: 'NonFungibleToken', address: '631e88ae7f1d7c20' },
+    { name: 'MetadataViews', address: '631e88ae7f1d7c20' },
+    { name: 'ViewResolver', address: '631e88ae7f1d7c20' },
+    { name: 'FlowToken', address: '7e60df042a9c0868' },
+    { name: 'NFTStorefrontV2', address: '2d55b98eb200daef' },
+    { name: 'EVM', address: '8c5303eaa26202d6' },
+  ],
+};
+
 /**
  * Persistent workspace that caches installed dependencies per network.
  * Uses `flow dependencies install` to fetch contracts from mainnet/testnet.
@@ -51,6 +79,28 @@ export class DepsWorkspace {
         },
       }, null, 2), 'utf-8');
     }
+
+    // Pre-install core contracts in background (don't block init)
+    this.preInstallCoreContracts();
+  }
+
+  /** Pre-install core Flow contracts so LSP resolves them immediately. */
+  private preInstallCoreContracts(): void {
+    const contracts = CORE_CONTRACTS[this.network as 'mainnet' | 'testnet'];
+    if (!contracts) return; // emulator has no pre-defined core contracts
+
+    const missing = contracts.filter((c) => !this.installedContracts.has(c.name));
+    if (missing.length === 0) {
+      console.log(`[deps] All ${contracts.length} core contracts already cached for ${this.network}`);
+      return;
+    }
+
+    console.log(`[deps] Pre-installing ${missing.length} core contracts for ${this.network}...`);
+    void this.installDeps(missing).then(() => {
+      console.log(`[deps] Core contracts pre-installed for ${this.network}`);
+    }).catch((err) => {
+      console.error(`[deps] Failed to pre-install core contracts:`, err);
+    });
   }
 
   /** Install dependencies for contracts not yet cached */

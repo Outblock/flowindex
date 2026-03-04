@@ -28,11 +28,23 @@ import {
 import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';
 import ProjectSelector from './components/ProjectSelector';
 import ShareModal from './components/ShareModal';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2 } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare } from 'lucide-react';
 
 /* ── Detect if we're in an iframe ── */
 let isIframe = false;
 try { isIframe = window.self !== window.top; } catch { isIframe = true; }
+
+/* ── Mobile detection hook ── */
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 /* ── Draggable resize handle (horizontal) ── */
 
@@ -229,8 +241,10 @@ export default function App() {
   const [results, setResults] = useState<ExecutionResult[]>([]);
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const isMobile = useIsMobile();
   const [showExplorer, setShowExplorer] = useState(!isIframe);
   const [showAI, setShowAI] = useState(true);
+  const [showMobileAI, setShowMobileAI] = useState(false);
   const [pendingAiRevert, setPendingAiRevert] = useState<{
     previous: ProjectState;
     editCount: number;
@@ -682,23 +696,25 @@ export default function App() {
   return (
     <div className="flex flex-col h-full bg-zinc-900 text-zinc-100">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-2 border-b border-zinc-700 bg-zinc-900/80 backdrop-blur shrink-0">
+      <header className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-zinc-700 bg-zinc-900/80 backdrop-blur shrink-0">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowExplorer(!showExplorer)}
-            className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-            title={showExplorer ? 'Hide explorer' : 'Show explorer'}
-          >
-            {showExplorer ? (
-              <PanelLeftClose className="w-4 h-4" />
-            ) : (
-              <PanelLeftOpen className="w-4 h-4" />
-            )}
-          </button>
-          <h1 className="text-sm font-semibold tracking-tight">Cadence Runner</h1>
+          {!isMobile && (
+            <button
+              onClick={() => setShowExplorer(!showExplorer)}
+              className="p-1 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+              title={showExplorer ? 'Hide explorer' : 'Show explorer'}
+            >
+              {showExplorer ? (
+                <PanelLeftClose className="w-4 h-4" />
+              ) : (
+                <PanelLeftOpen className="w-4 h-4" />
+              )}
+            </button>
+          )}
+          <h1 className="text-sm font-semibold tracking-tight">{isMobile ? 'Runner' : 'Cadence Runner'}</h1>
         </div>
-        <div className="flex items-center gap-3">
-          {user && cloudMeta.id && cloudMeta.id !== '_dismissed' && (
+        <div className="flex items-center gap-2 md:gap-3">
+          {!isMobile && user && cloudMeta.id && cloudMeta.id !== '_dismissed' && (
             <button
               onClick={() => setShowShareModal(true)}
               className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded border border-zinc-700 transition-colors"
@@ -726,28 +742,31 @@ export default function App() {
             />
           )}
 
-          <WalletButton />
+          {!isMobile && <WalletButton />}
 
-          <button
-            onClick={handleRun}
-            disabled={loading || activeFileEntry?.readOnly}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
-          >
-            {loading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Play className="w-3.5 h-3.5" />
-            )}
-            {codeType === 'script' ? 'Run Script' : 'Send Transaction'}
-            <span className="ml-1.5 flex items-center gap-0.5 opacity-60">
-              <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
-                {navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}
-              </kbd>
-              <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
-                ↵
-              </kbd>
-            </span>
-          </button>
+          {/* Desktop run button */}
+          {!isMobile && (
+            <button
+              onClick={handleRun}
+              disabled={loading || activeFileEntry?.readOnly}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
+            >
+              {loading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Play className="w-3.5 h-3.5" />
+              )}
+              {codeType === 'script' ? 'Run Script' : 'Send Transaction'}
+              <span className="ml-1.5 flex items-center gap-0.5 opacity-60">
+                <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
+                  {navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}
+                </kbd>
+                <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
+                  ↵
+                </kbd>
+              </span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -818,8 +837,8 @@ export default function App() {
 
       {/* Main layout */}
       <div className="flex flex-1 min-h-0">
-        {/* File Explorer */}
-        {showExplorer && (
+        {/* File Explorer (hidden on mobile) */}
+        {showExplorer && !isMobile && (
           <>
             <div className="shrink-0 overflow-hidden bg-zinc-900 flex flex-col" style={{ width: explorer.width }}>
               {/* Cloud project selector */}
@@ -973,36 +992,93 @@ export default function App() {
           )}
         </div>
 
-        {/* AI Panel */}
-        {showAI ? (
-          <>
-            <DragBar direction="horizontal" onMouseDown={aiPanel.onMouseDown} />
-            <div className="shrink-0 overflow-hidden" style={{ width: aiPanel.width }}>
-              <AIPanel
-                onInsertCode={handleInsertCode}
-                onApplyCodeToFile={handleApplyCodeToFile}
-                onAutoApplyEdits={handleAutoApplyEdits}
-                onLoadTemplate={handleLoadTemplate}
-                editorCode={activeCode}
-                projectFiles={getUserFiles(project)}
-                activeFile={project.activeFile}
-                network={network}
-                onClose={() => setShowAI(false)}
-              />
-            </div>
-          </>
-        ) : (
-          <button
-            onClick={() => setShowAI(true)}
-            className="flex flex-col items-center justify-center w-10 shrink-0 bg-zinc-900 border-l border-zinc-700 hover:bg-zinc-800 transition-colors group"
-            title="Open AI Assistant"
-          >
-            <Bot className="w-5 h-5 text-emerald-500 group-hover:text-emerald-400" />
-            <span className="text-[9px] text-zinc-500 group-hover:text-zinc-400 mt-1 font-medium">AI</span>
-            <ChevronLeft className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 mt-0.5" />
-          </button>
+        {/* AI Panel — desktop sidebar */}
+        {!isMobile && (
+          showAI ? (
+            <>
+              <DragBar direction="horizontal" onMouseDown={aiPanel.onMouseDown} />
+              <div className="shrink-0 overflow-hidden" style={{ width: aiPanel.width }}>
+                <AIPanel
+                  onInsertCode={handleInsertCode}
+                  onApplyCodeToFile={handleApplyCodeToFile}
+                  onAutoApplyEdits={handleAutoApplyEdits}
+                  onLoadTemplate={handleLoadTemplate}
+                  editorCode={activeCode}
+                  projectFiles={getUserFiles(project)}
+                  activeFile={project.activeFile}
+                  network={network}
+                  onClose={() => setShowAI(false)}
+                />
+              </div>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowAI(true)}
+              className="flex flex-col items-center justify-center w-10 shrink-0 bg-zinc-900 border-l border-zinc-700 hover:bg-zinc-800 transition-colors group"
+              title="Open AI Assistant"
+            >
+              <Bot className="w-5 h-5 text-emerald-500 group-hover:text-emerald-400" />
+              <span className="text-[9px] text-zinc-500 group-hover:text-zinc-400 mt-1 font-medium">AI</span>
+              <ChevronLeft className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 mt-0.5" />
+            </button>
+          )
         )}
       </div>
+
+      {/* Mobile: Floating Run button */}
+      {isMobile && (
+        <button
+          onClick={handleRun}
+          disabled={loading || activeFileEntry?.readOnly}
+          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-500 text-white font-semibold pl-4 pr-5 py-3.5 rounded-full shadow-lg shadow-emerald-900/40 transition-colors"
+        >
+          {loading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Play className="w-5 h-5" fill="currentColor" />
+          )}
+          <span className="text-sm">{codeType === 'script' ? 'Run' : 'Send'}</span>
+        </button>
+      )}
+
+      {/* Mobile: Floating AI button */}
+      {isMobile && !showMobileAI && (
+        <button
+          onClick={() => setShowMobileAI(true)}
+          className="fixed bottom-5 left-5 z-40 flex items-center justify-center w-12 h-12 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 border border-zinc-600 text-emerald-400 rounded-full shadow-lg shadow-black/40 transition-colors"
+          title="AI Assistant"
+        >
+          <MessageSquare className="w-5 h-5" />
+        </button>
+      )}
+
+      {/* Mobile: AI panel fullscreen overlay */}
+      {isMobile && showMobileAI && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-zinc-900">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700 shrink-0">
+            <span className="text-sm font-semibold text-white">AI Assistant</span>
+            <button
+              onClick={() => setShowMobileAI(false)}
+              className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <AIPanel
+              onInsertCode={(code) => { handleInsertCode(code); setShowMobileAI(false); }}
+              onApplyCodeToFile={(path, code) => { handleApplyCodeToFile(path, code); setShowMobileAI(false); }}
+              onAutoApplyEdits={handleAutoApplyEdits}
+              onLoadTemplate={(t) => { handleLoadTemplate(t); setShowMobileAI(false); }}
+              editorCode={activeCode}
+              projectFiles={getUserFiles(project)}
+              activeFile={project.activeFile}
+              network={network}
+              onClose={() => setShowMobileAI(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Share Modal */}
       {showShareModal && cloudMeta.id && cloudMeta.slug && (
