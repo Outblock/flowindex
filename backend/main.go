@@ -564,6 +564,10 @@ func main() {
 			tierRPSResolverOpt = api.WithTierRPSResolver(whStore.GetUserAPIRPS)
 
 			whAuth := webhooks.NewAuthMiddleware(jwtSecret, whStore.LookupAPIKey)
+			if svcKey := os.Getenv("WEBHOOK_SERVICE_KEY"); svcKey != "" {
+				whAuth.SetServiceKey(svcKey)
+				log.Println("[webhooks] service-to-service auth enabled")
+			}
 
 			// Delivery backend: Hybrid (Svix + Direct) when Svix configured,
 			// otherwise DirectDelivery only.

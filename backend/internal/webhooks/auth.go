@@ -3,6 +3,7 @@ package webhooks
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -20,6 +21,7 @@ type APIKeyLookup func(ctx context.Context, keyHash string) (userID string, err 
 type AuthMiddleware struct {
 	jwtSecret    []byte
 	apiKeyLookup APIKeyLookup
+	serviceKey   string // shared secret for internal service-to-service calls
 }
 
 func NewAuthMiddleware(jwtSecret string, apiKeyLookup APIKeyLookup) *AuthMiddleware {
@@ -29,8 +31,26 @@ func NewAuthMiddleware(jwtSecret string, apiKeyLookup APIKeyLookup) *AuthMiddlew
 	}
 }
 
+// SetServiceKey configures a shared secret for internal service-to-service auth.
+// When X-Service-Key matches and X-User-ID is provided, the request is trusted.
+func (a *AuthMiddleware) SetServiceKey(key string) {
+	a.serviceKey = key
+}
+
 func (a *AuthMiddleware) ExtractUserID(r *http.Request) (string, error) {
-	// Try API Key first
+	// Try internal service key first (service-to-service)
+	if svcKey := r.Header.Get("X-Service-Key"); svcKey != "" && a.serviceKey != "" {
+		if subtle.ConstantTimeCompare([]byte(svcKey), []byte(a.serviceKey)) == 1 {
+			userID := r.Header.Get("X-User-ID")
+			if userID == "" {
+				return "", fmt.Errorf("X-User-ID required with service key auth")
+			}
+			return userID, nil
+		}
+		return "", fmt.Errorf("invalid service key")
+	}
+
+	// Try API Key
 	if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
 		if a.apiKeyLookup == nil {
 			return "", fmt.Errorf("API key auth not configured")
