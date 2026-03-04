@@ -1688,15 +1688,18 @@ function TransactionDetail() {
                                                 // Parse parameter names from script's transaction(...) signature
                                                 const parseParamNames = (script: string): { name: string; type: string }[] => {
                                                     if (!script) return [];
-                                                    // Match transaction(...) or prepare(...) — handle multiline
-                                                    const match = script.match(/(?:transaction|prepare)\s*\(([^)]*)\)/s);
+                                                    // Prefer transaction(...) for user-facing args; fall back to fun main(...) for scripts
+                                                    const match =
+                                                        script.match(/^\s*transaction\s*\(([^)]*)\)/m) ||
+                                                        script.match(/fun\s+main\s*\(([^)]*)\)/);
                                                     if (!match) return [];
                                                     const paramsStr = match[1].trim();
                                                     if (!paramsStr) return [];
                                                     return paramsStr.split(',').map(p => {
                                                         const trimmed = p.trim();
-                                                        const parts = trimmed.split(':').map(s => s.trim());
-                                                        return { name: parts[0] || '', type: parts[1] || '' };
+                                                        const colonIdx = trimmed.indexOf(':');
+                                                        if (colonIdx === -1) return { name: trimmed, type: '' };
+                                                        return { name: trimmed.slice(0, colonIdx).trim(), type: trimmed.slice(colonIdx + 1).trim() };
                                                     });
                                                 };
 
