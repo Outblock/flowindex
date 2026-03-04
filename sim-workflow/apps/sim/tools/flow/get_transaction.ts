@@ -11,7 +11,17 @@ export interface FlowGetTransactionResponse {
     proposer: string
     payer: string
     authorizers: string[]
+    gasLimit: string
+    fee: string
+    eventCount: string
+    error: string
     isEvm: string
+    evmHash: string
+    contractImports: string[]
+    arguments: string
+    events: string
+    timestamp: string
+    script: string
   }
 }
 
@@ -21,7 +31,7 @@ export const flowGetTransactionTool: ToolConfig<
 > = {
   id: 'flow_get_transaction',
   name: 'Flow Get Transaction',
-  description: 'Get Flow transaction details',
+  description: 'Get Flow transaction details by ID',
   version: '1.0.0',
 
   params: {
@@ -59,6 +69,16 @@ export const flowGetTransactionTool: ToolConfig<
     proposer: { type: 'string', description: 'Proposer address' },
     payer: { type: 'string', description: 'Payer address' },
     authorizers: { type: 'array', description: 'Authorizer addresses' },
+    gasLimit: { type: 'string', description: 'Gas limit' },
+    fee: { type: 'string', description: 'Transaction fee in FLOW' },
+    eventCount: { type: 'string', description: 'Number of events' },
+    error: { type: 'string', description: 'Error message if failed' },
     isEvm: { type: 'string', description: 'Whether transaction is EVM' },
+    evmHash: { type: 'string', description: 'EVM transaction hash' },
+    contractImports: { type: 'array', description: 'Imported contracts' },
+    arguments: { type: 'string', description: 'Transaction arguments (JSON)' },
+    events: { type: 'string', description: 'Transaction events (JSON)' },
+    timestamp: { type: 'string', description: 'Transaction timestamp' },
+    script: { type: 'string', description: 'Cadence script' },
   },
 }

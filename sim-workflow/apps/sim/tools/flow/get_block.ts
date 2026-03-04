@@ -10,13 +10,16 @@ export interface FlowGetBlockResponse {
     parentId: string
     timestamp: string
     transactionCount: string
+    evmTransactionCount: string
+    totalGasUsed: string
+    fees: string
   }
 }
 
 export const flowGetBlockTool: ToolConfig<FlowGetBlockParams, FlowGetBlockResponse> = {
   id: 'flow_get_block',
   name: 'Flow Get Block',
-  description: 'Get Flow block by height or ID',
+  description: 'Get Flow block by height',
   version: '1.0.0',
 
   params: {
@@ -28,7 +31,7 @@ export const flowGetBlockTool: ToolConfig<FlowGetBlockParams, FlowGetBlockRespon
     id: {
       type: 'string',
       required: false,
-      description: 'Block ID',
+      description: 'Block ID (alias for height lookup)',
     },
   },
 
@@ -58,5 +61,8 @@ export const flowGetBlockTool: ToolConfig<FlowGetBlockParams, FlowGetBlockRespon
     parentId: { type: 'string', description: 'Parent block ID' },
     timestamp: { type: 'string', description: 'Block timestamp' },
     transactionCount: { type: 'string', description: 'Transaction count' },
+    evmTransactionCount: { type: 'string', description: 'EVM transaction count' },
+    totalGasUsed: { type: 'string', description: 'Total gas used' },
+    fees: { type: 'string', description: 'Total fees' },
   },
 }

@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { checkInternalAuth } from '@/lib/auth/hybrid'
 import { flowApiFetch } from '@/app/api/tools/flow/utils'
-import type { FlowBlock } from '@/tools/flow/types'
 
 const Schema = z
   .object({
@@ -21,19 +20,39 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { height, id } = Schema.parse(body)
 
-    const path = id ? `/flow/block/${id}` : `/flow/block/${height}`
-    const data = await flowApiFetch<{ data: FlowBlock }>(path)
-    const block = data.data ?? (data as unknown as FlowBlock)
+    // Backend only supports /flow/block/{height}
+    // If user provides an ID, we can't look it up directly — use height
+    const query = height || id
+    const path = `/flow/block/${query}`
+    const data = await flowApiFetch<{ data: Record<string, unknown>[] | Record<string, unknown> }>(
+      path
+    )
+
+    // Backend returns { data: [block] } (array)
+    const raw = Array.isArray(data.data) ? data.data[0] : data.data
+    if (!raw) {
+      return NextResponse.json({ success: false, error: 'Block not found' }, { status: 404 })
+    }
+
+    const block = raw as Record<string, unknown>
+    const blockHeight = String(block.height ?? '')
+    const txCount = String(block.tx_count ?? 0)
+    const evmTxCount = String(block.evm_tx_count ?? 0)
+    const totalGasUsed = String(block.total_gas_used ?? 0)
+    const fees = String(block.fees ?? 0)
 
     return NextResponse.json({
       success: true,
       output: {
-        content: `Block ${block.height}: ${block.transactionCount} txs at ${block.timestamp}`,
-        height: String(block.height),
-        id: block.id,
-        parentId: block.parentId,
-        timestamp: block.timestamp,
-        transactionCount: String(block.transactionCount),
+        content: `Block ${blockHeight}: ${txCount} txs (${evmTxCount} EVM), gas ${totalGasUsed}, fees ${fees} at ${block.timestamp}`,
+        height: blockHeight,
+        id: String(block.id ?? ''),
+        parentId: String(block.parent_id ?? ''),
+        timestamp: String(block.timestamp ?? ''),
+        transactionCount: txCount,
+        evmTransactionCount: evmTxCount,
+        totalGasUsed,
+        fees,
       },
     })
   } catch (error) {
