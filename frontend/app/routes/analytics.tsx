@@ -19,7 +19,7 @@ import { ResponsiveGridLayout, useContainerWidth, verticalCompactor } from 'reac
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import '../styles/grid-overrides.css'
-import { GripVertical, RotateCcw, CalendarIcon } from 'lucide-react'
+import { GripVertical, RotateCcw, CalendarIcon, AlertTriangle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover'
 import { Calendar } from '../components/ui/calendar'
@@ -784,6 +784,18 @@ function AnalyticsPage() {
   const latest = dailyData.length > 0 ? dailyData[latestIdx] : null
   const prev = latestIdx > 0 ? dailyData[latestIdx - 1] : null
 
+  // For module-specific KPIs (accounts, evm, defi, bridge), the analytics deriver
+  // may not have processed today's blocks yet. Fall back to the most recent day
+  // with non-zero data for that specific field so KPIs don't show stale 0s.
+  function latestWithField(field: keyof DailyRow): { val: DailyRow | null; prev: DailyRow | null } {
+    for (let i = dailyData.length - 1; i >= 0; i--) {
+      if (toNum(dailyData[i][field]) > 0) {
+        return { val: dailyData[i], prev: i > 0 ? dailyData[i - 1] : null }
+      }
+    }
+    return { val: latest, prev }
+  }
+
   function delta(cur?: number, prv?: number) {
     if (cur == null || prv == null) return null
     return cur - prv
@@ -880,35 +892,40 @@ function AnalyticsPage() {
       kpiFormat: 'comma',
       delta: delta(latest?.new_contracts, prev?.new_contracts),
     })
+    const acct = latestWithField('new_accounts')
     m.set('kpi-new-accounts', {
-      value: latest ? fmtComma(latest.new_accounts) : '--',
-      numericValue: latest?.new_accounts,
+      value: acct.val ? fmtComma(acct.val.new_accounts) : '--',
+      numericValue: acct.val?.new_accounts,
       kpiFormat: 'comma',
-      delta: delta(latest?.new_accounts, prev?.new_accounts),
+      delta: delta(acct.val?.new_accounts, acct.prev?.new_accounts),
     })
+    const coa = latestWithField('coa_new_accounts')
     m.set('kpi-coa-new', {
-      value: latest ? fmtComma(latest.coa_new_accounts) : '--',
-      numericValue: latest?.coa_new_accounts,
+      value: coa.val ? fmtComma(coa.val.coa_new_accounts) : '--',
+      numericValue: coa.val?.coa_new_accounts,
       kpiFormat: 'comma',
-      delta: delta(latest?.coa_new_accounts, prev?.coa_new_accounts),
+      delta: delta(coa.val?.coa_new_accounts, coa.prev?.coa_new_accounts),
     })
+    const evm = latestWithField('evm_active_addresses')
     m.set('kpi-evm-active', {
-      value: latest ? fmtComma(latest.evm_active_addresses) : '--',
-      numericValue: latest?.evm_active_addresses,
+      value: evm.val ? fmtComma(evm.val.evm_active_addresses) : '--',
+      numericValue: evm.val?.evm_active_addresses,
       kpiFormat: 'comma',
-      delta: delta(latest?.evm_active_addresses, prev?.evm_active_addresses),
+      delta: delta(evm.val?.evm_active_addresses, evm.prev?.evm_active_addresses),
     })
+    const defi = latestWithField('defi_swap_count')
     m.set('kpi-defi-swaps', {
-      value: latest ? fmtComma(latest.defi_swap_count) : '--',
-      numericValue: latest?.defi_swap_count,
+      value: defi.val ? fmtComma(defi.val.defi_swap_count) : '--',
+      numericValue: defi.val?.defi_swap_count,
       kpiFormat: 'comma',
-      delta: delta(latest?.defi_swap_count, prev?.defi_swap_count),
+      delta: delta(defi.val?.defi_swap_count, defi.prev?.defi_swap_count),
     })
+    const bridge = latestWithField('bridge_to_evm_txs')
     m.set('kpi-bridge-evm', {
-      value: latest ? fmtComma(latest.bridge_to_evm_txs) : '--',
-      numericValue: latest?.bridge_to_evm_txs,
+      value: bridge.val ? fmtComma(bridge.val.bridge_to_evm_txs) : '--',
+      numericValue: bridge.val?.bridge_to_evm_txs,
       kpiFormat: 'comma',
-      delta: delta(latest?.bridge_to_evm_txs, prev?.bridge_to_evm_txs),
+      delta: delta(bridge.val?.bridge_to_evm_txs, bridge.prev?.bridge_to_evm_txs),
     })
     m.set('kpi-epoch-payout', (() => {
       // Show the most recent non-zero payout (payouts are weekly, most days are 0)
@@ -1458,6 +1475,13 @@ function AnalyticsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-nothing-black">
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+        {/* Alpha warning banner */}
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <p>
+            <span className="font-semibold">Alpha Preview</span> — Analytics is under active development. Historical block indexing is still in progress, so some metrics may be incomplete or show zero values.
+          </p>
+        </div>
         {/* header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">
