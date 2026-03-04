@@ -17,8 +17,84 @@ import { useTimeTicker } from '../hooks/useTimeTicker';
 import { formatNumber } from '../lib/format';
 import { deriveActivityType } from '../components/TransactionRow';
 
+function HomeSkeleton() {
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-nothing-black text-zinc-900 dark:text-nothing-white font-mono">
+            <div className="border-b border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-nothing-dark/50">
+                <div className="container mx-auto px-4 py-12 space-y-8">
+                    {/* Hero */}
+                    <div className="text-center space-y-2 mb-8">
+                        <div className="h-12 w-56 mx-auto bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                        <div className="h-3 w-64 mx-auto bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                    </div>
+
+                    {/* Stats Grid (3 cards) */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {[...Array(3)].map((_, i) => (
+                            <div key={i} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm p-6 h-[200px] animate-pulse">
+                                <div className="h-4 w-24 bg-zinc-200 dark:bg-white/10 rounded-sm mb-4" />
+                                <div className="h-[120px] bg-zinc-100 dark:bg-white/5 rounded-sm" />
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Daily Stats Chart */}
+                    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm p-6 h-[300px] animate-pulse">
+                        <div className="h-4 w-32 bg-zinc-200 dark:bg-white/10 rounded-sm mb-4" />
+                        <div className="h-[230px] bg-zinc-100 dark:bg-white/5 rounded-sm" />
+                    </div>
+                </div>
+            </div>
+
+            <div className="container mx-auto px-4 py-8 space-y-8">
+                {/* Blocks + Transactions (2 col) */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {[0, 1].map(col => (
+                        <div key={col} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
+                            <div className="p-4 border-b border-zinc-200 dark:border-white/5">
+                                <div className="h-4 w-28 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                            </div>
+                            {[...Array(8)].map((_, i) => (
+                                <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 dark:border-white/5">
+                                    <div className="h-8 w-8 rounded bg-zinc-200 dark:bg-white/10 animate-pulse flex-shrink-0" />
+                                    <div className="flex-1 space-y-1.5">
+                                        <div className="h-3.5 w-32 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                                        <div className="h-3 w-48 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                                    </div>
+                                    <div className="h-3 w-12 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Tokens + NFTs + Whales (3 col) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {[...Array(3)].map((_, col) => (
+                        <div key={col} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
+                            <div className="p-4 border-b border-zinc-200 dark:border-white/5">
+                                <div className="h-4 w-24 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                            </div>
+                            {[...Array(5)].map((_, i) => (
+                                <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 dark:border-white/5">
+                                    <div className="h-6 w-6 rounded-full bg-zinc-200 dark:bg-white/10 animate-pulse flex-shrink-0" />
+                                    <div className="flex-1 space-y-1">
+                                        <div className="h-3 w-24 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                                        <div className="h-2.5 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export const Route = createFileRoute('/')({
     component: Home,
+    pendingComponent: HomeSkeleton,
     head: () => ({
         meta: [
             { title: 'FlowIndex — Flow Blockchain Explorer' },

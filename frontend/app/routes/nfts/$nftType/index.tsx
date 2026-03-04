@@ -28,8 +28,49 @@ const VALID_TABS = ['nfts', 'owners', 'transfers'] as const;
 type CollectionTab = (typeof VALID_TABS)[number];
 type ViewMode = 'grid' | 'list';
 
+function NFTCollectionSkeleton() {
+  return (
+    <div className="min-h-screen bg-gray-50/50 dark:bg-black text-zinc-900 dark:text-white font-mono">
+      <div className="max-w-7xl mx-auto px-4 pt-12 pb-24">
+        {/* Back */}
+        <div className="h-4 w-16 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse mb-6" />
+
+        {/* Banner */}
+        <div className="h-48 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse mb-6" />
+
+        {/* Stats cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-6 rounded-sm">
+              <div className="h-3 w-20 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse mb-3" />
+              <div className="h-7 w-16 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div className="h-10 w-64 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse mb-6" />
+
+        {/* NFT Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {[...Array(15)].map((_, i) => (
+            <div key={i} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 overflow-hidden">
+              <div className="aspect-square bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+              <div className="p-3 space-y-2">
+                <div className="h-3 w-20 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                <div className="h-2.5 w-12 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const Route = createFileRoute('/nfts/$nftType/')({
   component: NFTCollectionDetail,
+  pendingComponent: NFTCollectionSkeleton,
   validateSearch: (search: Record<string, unknown>): { tab?: CollectionTab; page?: number } => {
     const tab = search.tab as string;
     const page = Number(search.page) || undefined;

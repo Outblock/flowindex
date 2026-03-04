@@ -97,8 +97,62 @@ async function fetchFTStats(): Promise<{ total: number; with_price: number; evm_
   }
 }
 
+function TokensListSkeleton() {
+  return (
+    <div className="container mx-auto px-4 py-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center space-x-4">
+        <div className="p-3 bg-zinc-100 dark:bg-white/10 animate-pulse"><div className="h-8 w-8" /></div>
+        <div className="space-y-2">
+          <div className="h-8 w-40 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+          <div className="h-4 w-56 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-5 rounded-sm">
+            <div className="h-3 w-24 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse mb-3" />
+            <div className="h-7 w-20 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      {/* Search bar */}
+      <div className="h-12 bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm animate-pulse" />
+
+      {/* Table */}
+      <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
+        <div className="border-b border-zinc-200 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5 p-4">
+          <div className="flex gap-16">
+            {['Token', 'Price', '24h', '30d', 'Deployed', 'Holders'].map(h => (
+              <div key={h} className="h-3 w-16 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+            ))}
+          </div>
+        </div>
+        {[...Array(15)].map((_, i) => (
+          <div key={i} className="flex items-center gap-4 p-4 border-b border-zinc-100 dark:border-white/5">
+            <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-white/10 animate-pulse flex-shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3.5 w-32 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+              <div className="h-3 w-48 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+            </div>
+            <div className="h-3.5 w-16 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+            <div className="h-3 w-12 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+            <div className="h-3 w-20 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+            <div className="h-3 w-20 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+            <div className="h-3.5 w-14 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const Route = createFileRoute('/tokens/')({
   component: Tokens,
+  pendingComponent: TokensListSkeleton,
   validateSearch: (search: Record<string, unknown>): TokensSearch => ({
     page: Number(search.page) || 1,
     search: (search.search as string) || undefined,

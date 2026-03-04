@@ -45,8 +45,54 @@ async function fetchNFTStats(): Promise<{ total: number; total_nfts: number; evm
   }
 }
 
+function NFTsListSkeleton() {
+  return (
+    <div className="container mx-auto px-4 py-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <div className="p-3 bg-zinc-100 dark:bg-white/10 animate-pulse"><div className="h-8 w-8" /></div>
+          <div className="space-y-2">
+            <div className="h-8 w-32 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+            <div className="h-4 w-56 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+          </div>
+        </div>
+        <div className="h-8 w-20 bg-zinc-100 dark:bg-white/10 rounded-sm animate-pulse" />
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 p-5 rounded-sm">
+            <div className="h-3 w-24 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse mb-3" />
+            <div className="h-7 w-20 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      {/* Search bar */}
+      <div className="h-12 bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm animate-pulse" />
+
+      {/* Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {[...Array(15)].map((_, i) => (
+          <div key={i} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 overflow-hidden">
+            <div className="aspect-square bg-zinc-200 dark:bg-white/10 animate-pulse" />
+            <div className="p-3 space-y-2">
+              <div className="h-3.5 w-24 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+              <div className="h-3 w-32 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+              <div className="h-4 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const Route = createFileRoute('/nfts/')({
   component: NFTs,
+  pendingComponent: NFTsListSkeleton,
   validateSearch: (search: Record<string, unknown>): NFTsSearch => ({
     page: Number(search.page) || 1,
     search: (search.search as string) || undefined,

@@ -8,8 +8,54 @@ import { formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
 import { PageHeader } from '../../components/ui/PageHeader';
 
+function ScheduledSkeleton() {
+    return (
+        <div className="min-h-screen bg-gray-50/50 dark:bg-black text-zinc-900 dark:text-white font-mono">
+            <div className="max-w-7xl mx-auto px-4 pt-12 pb-24">
+                {/* Header */}
+                <div className="mb-8 space-y-2">
+                    <div className="h-8 w-72 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                    <div className="h-4 w-96 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                </div>
+
+                {/* Table header */}
+                <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 border-b border-zinc-200 dark:border-white/10">
+                    {['col-span-4', 'col-span-2', 'col-span-2', 'col-span-2', 'col-span-2'].map((span, i) => (
+                        <div key={i} className={span}>
+                            <div className="h-2.5 w-20 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                        </div>
+                    ))}
+                </div>
+
+                {/* Rows */}
+                {[...Array(15)].map((_, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-4 px-4 py-4 border-b border-zinc-100 dark:border-white/5 items-center">
+                        <div className="col-span-4 flex items-center gap-2">
+                            <div className="h-4 w-4 rounded-full bg-zinc-200 dark:bg-white/10 animate-pulse flex-shrink-0" />
+                            <div className="h-3 w-40 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                        </div>
+                        <div className="col-span-2">
+                            <div className="h-3 w-20 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                        </div>
+                        <div className="col-span-2">
+                            <div className="h-3 w-24 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                        </div>
+                        <div className="col-span-2">
+                            <div className="h-3 w-14 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                        </div>
+                        <div className="col-span-2 flex justify-end">
+                            <div className="h-3 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export const Route = createFileRoute('/scheduled/')({
     component: ScheduledTransactions,
+    pendingComponent: ScheduledSkeleton,
     loader: async () => {
         try {
             const baseUrl = await resolveApiBaseUrl();

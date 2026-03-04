@@ -18,8 +18,61 @@ interface TokenSearch {
   transfersPage?: number;
 }
 
+function TokenDetailSkeleton() {
+  return (
+    <div className="container mx-auto px-4 py-8 space-y-8">
+      {/* Back button */}
+      <div className="h-4 w-16 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+
+      {/* Header */}
+      <div className="flex items-center space-x-4">
+        <div className="h-10 w-10 rounded-full bg-zinc-200 dark:bg-white/10 animate-pulse" />
+        <div className="space-y-2">
+          <div className="h-8 w-48 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+          <div className="h-4 w-72 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+        </div>
+      </div>
+
+      {/* Info table + Price chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="grid grid-cols-[auto_1fr] border-b border-zinc-100 dark:border-white/5 last:border-b-0">
+              <div className="px-4 py-3"><div className="h-3 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" /></div>
+              <div className="px-4 py-3"><div className="h-3 w-40 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" /></div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm p-5">
+          <div className="h-8 w-32 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse mb-4" />
+          <div className="h-[200px] bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+        </div>
+      </div>
+
+      {/* Holders + Transfers */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {[0, 1].map(col => (
+          <div key={col} className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
+            <div className="p-4 border-b border-zinc-200 dark:border-white/5">
+              <div className="h-4 w-24 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+            </div>
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 p-4 border-b border-zinc-100 dark:border-white/5">
+                <div className="h-3 w-6 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+                <div className="h-3 flex-1 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+                <div className="h-3 w-20 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const Route = createFileRoute('/tokens/$token')({
   component: TokenDetail,
+  pendingComponent: TokenDetailSkeleton,
   loader: async ({ params, location }: any) => {
     const token = params.token;
     const sp = new URLSearchParams(location?.search ?? '');
