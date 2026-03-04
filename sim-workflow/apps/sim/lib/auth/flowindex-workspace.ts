@@ -18,6 +18,9 @@ export async function ensurePersonalWorkspace(
 ): Promise<void> {
   if (checkedUsers.has(userId)) return
 
+  // Always seed Flow templates (idempotent — skips existing rows)
+  await seedFlowTemplates()
+
   // Check if user already has any workspace permission
   const existingPermission = await db.query.permissions.findFirst({
     where: eq(schema.permissions.userId, userId),
@@ -51,9 +54,6 @@ export async function ensurePersonalWorkspace(
     createdAt: now,
     updatedAt: now,
   })
-
-  // Seed Flow templates (idempotent — only inserts once globally)
-  await seedFlowTemplates()
 
   logger.info('Created personal workspace for FlowIndex user', { userId, workspaceId })
   checkedUsers.add(userId)
