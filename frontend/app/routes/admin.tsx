@@ -38,7 +38,8 @@ async function adminFetch(path: string, token: string, options?: RequestInit) {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new AdminApiError(body?.error || `HTTP ${res.status}`, res.status)
+    const errMsg = typeof body?.error === 'string' ? body.error : body?.error?.message || `HTTP ${res.status}`
+    throw new AdminApiError(errMsg, res.status)
   }
   return res.json()
 }

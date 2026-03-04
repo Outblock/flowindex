@@ -149,7 +149,7 @@ func authorizeAdminViaDB(ctx context.Context, userID string, allowedRoles, allow
 		SELECT
 			COALESCE(string_agg(DISTINCT lower(upr.role), ','), '') AS roles_csv,
 			COALESCE(string_agg(DISTINCT lower(t.slug), ','), '') AS teams_csv,
-			(COUNT(DISTINCT upr.role) + COUNT(DISTINCT tm.team_id)) > 0 AS has_assignments
+			COUNT(DISTINCT upr.role) > 0 AS has_assignments
 		FROM (SELECT $1::text AS uid) u
 		LEFT JOIN public.user_platform_roles upr ON upr.user_id::text = u.uid
 		LEFT JOIN public.team_memberships tm ON tm.user_id::text = u.uid AND tm.status = 'active'
