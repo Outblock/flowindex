@@ -1,8 +1,9 @@
 FROM oven/bun:1 AS frontend-builder
 WORKDIR /app
-COPY package.json bun.lock* ./
+COPY runner/package.json runner/bun.lock* ./
+COPY frontend/packages/flowtoken /frontend/packages/flowtoken
 RUN bun install --frozen-lockfile
-COPY . .
+COPY runner/ .
 ARG VITE_AI_CHAT_URL=https://ai.flowindex.io
 ARG VITE_SUPABASE_URL=
 ARG VITE_SUPABASE_ANON_KEY=
@@ -15,9 +16,9 @@ RUN bun run build
 
 FROM oven/bun:1 AS server-builder
 WORKDIR /app/server
-COPY server/package.json server/bun.lock* ./
+COPY runner/server/package.json runner/server/bun.lock* ./
 RUN bun install --frozen-lockfile
-COPY server/ .
+COPY runner/server/ .
 RUN bun run build
 
 FROM nginx:alpine
@@ -40,9 +41,9 @@ COPY --from=server-builder /app/server/dist /app/server
 COPY --from=server-builder /app/server/node_modules /app/server/node_modules
 # Copy configs — nginx.conf is a template, resolved at runtime by entrypoint
 RUN mkdir -p /etc/nginx/templates
-COPY nginx.conf /etc/nginx/templates/default.conf.template
-COPY supervisord.conf /etc/supervisord.conf
-COPY entrypoint.sh /entrypoint.sh
+COPY runner/nginx.conf /etc/nginx/templates/default.conf.template
+COPY runner/supervisord.conf /etc/supervisord.conf
+COPY runner/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 EXPOSE 80
 ENTRYPOINT ["/entrypoint.sh"]

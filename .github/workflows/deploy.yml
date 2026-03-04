@@ -309,7 +309,7 @@ jobs:
       - name: Build & push runner
         uses: docker/build-push-action@v6
         with:
-          context: runner
+          context: .
           file: runner/Dockerfile
           push: true
           provenance: false
