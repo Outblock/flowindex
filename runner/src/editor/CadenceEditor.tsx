@@ -109,6 +109,7 @@ export default function CadenceEditor({
       theme={darkMode ? CADENCE_DARK_THEME : CADENCE_LIGHT_THEME}
       value={code}
       path={path}
+      keepCurrentModel={true}
       onChange={handleChange}
       beforeMount={handleBeforeMount}
       onMount={handleMount}
