@@ -4,14 +4,20 @@ export interface CadenceParam {
 }
 
 export function parseMainParams(code: string): CadenceParam[] {
-  // Match `fun main(...)` — works for both scripts and transaction prepare blocks
-  const match = code.match(/fun\s+main\s*\(([^)]*)\)/);
+  // Match `fun main(...)` for scripts, or `transaction(...)` for transactions
+  const match =
+    code.match(/fun\s+main\s*\(([^)]*)\)/) ||
+    code.match(/^\s*transaction\s*\(([^)]*)\)/m);
   if (!match || !match[1].trim()) return [];
   return match[1]
     .split(',')
     .map((param) => {
-      const parts = param.trim().split(':').map((s) => s.trim());
-      return { name: parts[0], type: parts[1] || 'String' };
+      const trimmed = param.trim();
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx === -1) return { name: trimmed, type: 'String' };
+      const name = trimmed.slice(0, colonIdx).trim();
+      const type = trimmed.slice(colonIdx + 1).trim();
+      return { name, type: type || 'String' };
     })
     .filter((p) => p.name);
 }
