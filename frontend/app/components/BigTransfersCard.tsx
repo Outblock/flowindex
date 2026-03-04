@@ -107,6 +107,20 @@ function AddressWithAvatar({ address }: { address: string }) {
   );
 }
 
+function TransferHeader() {
+  return (
+    <div className="grid grid-cols-[auto_1fr_1fr_auto_1fr_auto_auto] items-center gap-3 px-4 py-2 border-b border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5">
+      <div className="w-6" />
+      <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 dark:text-gray-500 font-semibold">Amount</span>
+      <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 dark:text-gray-500 font-semibold">From</span>
+      <div className="w-3" />
+      <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 dark:text-gray-500 font-semibold">To</span>
+      <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 dark:text-gray-500 font-semibold">Type</span>
+      <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 dark:text-gray-500 font-semibold text-right min-w-[3.5rem]">Time</span>
+    </div>
+  );
+}
+
 function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boolean }) {
   if (compact) {
     return (
@@ -140,7 +154,7 @@ function TransferRow({ tx, compact = false }: { tx: BigTransfer; compact?: boole
   return (
     <Link
       to={`/tx/0x${tx.tx_id}` as any}
-      className="grid grid-cols-[auto_1fr_minmax(0,120px)_auto_minmax(0,120px)_auto_auto] items-center gap-3 px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors border-b border-zinc-100 dark:border-white/5 last:border-b-0"
+      className="grid grid-cols-[auto_1fr_1fr_auto_1fr_auto_auto] items-center gap-3 px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors border-b border-zinc-100 dark:border-white/5 last:border-b-0"
     >
       {/* Token icon + amount */}
       <TokenIcon logo={tx.token_logo} symbol={tx.token_symbol} size={24} />
@@ -416,6 +430,7 @@ export function BigTransfersFull() {
             </div>
           ) : (
             <div className="flex flex-col">
+              <TransferHeader />
               {timelineSections.map(section => (
                 <Fragment key={section.label}>
                   <div className="sticky top-0 z-10 px-3 py-1.5 bg-zinc-50 dark:bg-white/5 border-b border-zinc-100 dark:border-white/5">
@@ -457,6 +472,7 @@ export function BigTransfersFull() {
             </div>
           ) : (
             <div className="flex flex-col">
+              <TransferHeader />
               {displayTransfers.map((tx, i) => (
                 <TransferRow key={`${tx.tx_id}-${i}`} tx={tx} />
               ))}
