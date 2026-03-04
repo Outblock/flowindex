@@ -151,42 +151,17 @@ func (r *Repository) GetAnalyticsDailyEpochModule(ctx context.Context, from, to 
 	return out, rows.Err()
 }
 
-// GetAnalyticsDailyBridgeModule returns daily bridge-to-EVM tx metric only.
-// Uses block_height bounds to enable partition pruning on ft_transfers.
+// GetAnalyticsDailyBridgeModule returns daily bridge-to-EVM tx metric from pre-computed analytics.daily_metrics.
 func (r *Repository) GetAnalyticsDailyBridgeModule(ctx context.Context, from, to time.Time) ([]AnalyticsDailyRow, error) {
-	// Compute height bounds in Go instead of scanning raw.blocks (no timestamp index).
-	var latestHeight int64
-	_ = r.db.QueryRow(ctx, `SELECT COALESCE(last_height, 0) FROM app.indexing_checkpoints WHERE service_name = 'main_ingester'`).Scan(&latestHeight)
-	// Estimate: ~100k blocks per day
-	daySpan := to.Sub(from).Hours()/24 + 2 // +2 for margin
-	heightLo := latestHeight - int64(daySpan*100000)
-	if heightLo < 0 {
-		heightLo = 0
-	}
-
 	query := `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS date
-		),
-		bridge_txs AS (
-			SELECT DATE(ft.timestamp) AS d, COUNT(DISTINCT ft.transaction_id)::bigint AS cnt
-			FROM app.ft_transfers ft
-			WHERE ft.block_height >= $3
-			  AND ft.block_height < $4
-			  AND (ft.from_address IS NULL OR ft.to_address IS NULL)
-			  AND EXISTS (
-			    SELECT 1 FROM raw.transactions rtx
-			    WHERE rtx.id = ft.transaction_id
-			      AND rtx.block_height = ft.block_height
-			      AND rtx.is_evm = true
-			  )
-			GROUP BY 1
 		)
-		SELECT d.date::text, COALESCE(b.cnt, 0)::bigint
+		SELECT d.date::text, COALESCE(m.bridge_to_evm_txs, 0)::bigint
 		FROM dates d
-		LEFT JOIN bridge_txs b ON b.d = d.date
+		LEFT JOIN analytics.daily_metrics m ON m.date = d.date
 		ORDER BY d.date ASC`
-	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC(), heightLo, latestHeight+1)
+	rows, err := r.db.Query(ctx, query, from.UTC(), to.UTC())
 	if err != nil {
 		return nil, err
 	}

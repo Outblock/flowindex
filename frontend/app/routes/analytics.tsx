@@ -774,8 +774,15 @@ function AnalyticsPage() {
 
   /* ── KPI helpers ── */
 
-  const latest = dailyData.length > 0 ? dailyData[dailyData.length - 1] : null
-  const prev = dailyData.length > 1 ? dailyData[dailyData.length - 2] : null
+  // Use the most recent day with actual tx data (today may have 0s if not yet aggregated)
+  const latestIdx = (() => {
+    for (let i = dailyData.length - 1; i >= 0; i--) {
+      if (dailyData[i].tx_count > 0) return i
+    }
+    return dailyData.length - 1
+  })()
+  const latest = dailyData.length > 0 ? dailyData[latestIdx] : null
+  const prev = latestIdx > 0 ? dailyData[latestIdx - 1] : null
 
   function delta(cur?: number, prv?: number) {
     if (cur == null || prv == null) return null
