@@ -949,6 +949,7 @@ jobs:
           SIM_STUDIO_MIGRATIONS_IMAGE=us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-fork-migrations:latest
           CRON_SECRET=$(openssl rand -hex 32)
           FLOWINDEX_AUTH_MODE=supabase_cookie
+          FLOWINDEX_API_URL=http://127.0.0.1:8080
           ENVEOF
               echo "Created $SIM_ENV with generated secrets"
             fi
@@ -958,6 +959,7 @@ jobs:
             SIM_STUDIO_REALTIME_IMAGE="${SIM_STUDIO_REALTIME_IMAGE:-us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-fork-realtime:latest}"
             SIM_STUDIO_MIGRATIONS_IMAGE="${SIM_STUDIO_MIGRATIONS_IMAGE:-us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-fork-migrations:latest}"
             FLOWINDEX_AUTH_MODE="${FLOWINDEX_AUTH_MODE:-supabase_cookie}"
+            FLOWINDEX_API_URL="${FLOWINDEX_API_URL:-http://127.0.0.1:8080}"
 
             # Use a single shared DB with Supabase by default.
             # Optional override: define SOURCE_SIM_DB_URL in sim-studio.env.
@@ -1075,6 +1077,7 @@ jobs:
               -e SUPABASE_URL="${VITE_SUPABASE_URL}" \
               -e SUPABASE_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
               -e FLOWINDEX_AUTH_MODE="${FLOWINDEX_AUTH_MODE}" \
+              -e FLOWINDEX_API_URL="${FLOWINDEX_API_URL}" \
               -e NEXT_PUBLIC_APP_URL="https://studio.flowindex.io" \
               -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
               -e SOCKET_SERVER_URL="http://127.0.0.1:3202" \
