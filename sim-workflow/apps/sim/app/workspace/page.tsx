@@ -99,46 +99,32 @@ export default function WorkspacePage() {
           }
         }
 
-        // Fetch user's workspaces
-        const response = await fetchWithTimeout('/api/workspaces')
+        // Fetch user's workspaces (workspace creation happens in auth middleware)
+        let workspaces: Array<{ id: string }> = []
+        const maxRetries = 3
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch workspaces')
-        }
-
-        const data = await response.json()
-        const workspaces = data.workspaces || []
-
-        if (workspaces.length === 0) {
-          logger.warn('No workspaces found for user, creating default workspace')
-
-          try {
-            const createResponse = await fetchWithTimeout('/api/workspaces', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ name: 'My Workspace' }),
-            })
-
-            if (createResponse.ok) {
-              const createData = await createResponse.json()
-              const newWorkspace = createData.workspace
-
-              if (newWorkspace?.id) {
-                logger.info(`Created default workspace: ${newWorkspace.id}`)
-                router.replace(`/workspace/${newWorkspace.id}/w`)
-                return
-              }
-            }
-
-            logger.error('Failed to create default workspace')
-          } catch (createError) {
-            logger.error('Error creating default workspace:', createError)
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          const response = await fetchWithTimeout('/api/workspaces')
+          if (!response.ok) {
+            throw new Error('Failed to fetch workspaces')
           }
 
+          const data = await response.json()
+          workspaces = data.workspaces || []
+
+          if (workspaces.length > 0) break
+
+          // Auth middleware creates the workspace; wait briefly for it to commit
+          if (attempt < maxRetries - 1) {
+            logger.info(`No workspaces yet, retrying (${attempt + 1}/${maxRetries})...`)
+            await new Promise((r) => globalThis.setTimeout(r, 800))
+          }
+        }
+
+        if (workspaces.length === 0) {
+          logger.error('No workspaces found after retries')
           setRedirectState('failed')
-          setErrorMessage('无法创建默认 workspace，请稍后重试。')
+          setErrorMessage('无法加载 workspace，请刷新重试。')
           return
         }
 

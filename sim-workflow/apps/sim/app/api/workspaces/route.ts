@@ -38,11 +38,9 @@ export async function GET() {
     .orderBy(desc(workspace.createdAt))
 
   if (userWorkspaces.length === 0) {
-    const defaultWorkspace = await createDefaultWorkspace(session.user.id, session.user.name)
-
-    await migrateExistingWorkflows(session.user.id, defaultWorkspace.id)
-
-    return NextResponse.json({ workspaces: [defaultWorkspace] })
+    // Workspace creation is handled by ensurePersonalWorkspace during auth.
+    // If none found, return empty — the client will retry after auth completes.
+    return NextResponse.json({ workspaces: [] })
   }
 
   await ensureWorkflowsHaveWorkspace(session.user.id, userWorkspaces[0].workspace.id)
@@ -90,12 +88,6 @@ export async function POST(req: Request) {
     logger.error('Error creating workspace:', error)
     return NextResponse.json({ error: 'Failed to create workspace' }, { status: 500 })
   }
-}
-
-async function createDefaultWorkspace(userId: string, userName?: string | null) {
-  const firstName = userName?.split(' ')[0] || null
-  const workspaceName = firstName ? `${firstName}'s Workspace` : 'My Workspace'
-  return createWorkspace(userId, workspaceName)
 }
 
 async function createWorkspace(userId: string, name: string, skipDefaultWorkflow = false) {
@@ -190,29 +182,6 @@ async function createWorkspace(userId: string, name: string, skipDefaultWorkflow
     updatedAt: now,
     role: 'owner',
   }
-}
-
-async function migrateExistingWorkflows(userId: string, workspaceId: string) {
-  const orphanedWorkflows = await db
-    .select({ id: workflow.id })
-    .from(workflow)
-    .where(and(eq(workflow.userId, userId), isNull(workflow.workspaceId)))
-
-  if (orphanedWorkflows.length === 0) {
-    return // No orphaned workflows to migrate
-  }
-
-  logger.info(
-    `Migrating ${orphanedWorkflows.length} workflows to workspace ${workspaceId} for user ${userId}`
-  )
-
-  await db
-    .update(workflow)
-    .set({
-      workspaceId: workspaceId,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(workflow.userId, userId), isNull(workflow.workspaceId)))
 }
 
 async function ensureWorkflowsHaveWorkspace(userId: string, defaultWorkspaceId: string) {
