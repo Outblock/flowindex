@@ -974,7 +974,7 @@ function ChatMessage({ message, hideTools, isStreamingMsg, onInsertCode, onApply
                       animation={["colorTransition", "blurIn"]}
                       animationDuration="0.6s"
                       animationTimingFunction="ease-out"
-                      sep="word"
+                      sep="diff"
                       customComponents={animatedComponents}
                     />
                   ) : (

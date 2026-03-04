@@ -340,7 +340,7 @@ export const MessageResponse = memo(
         animation={["colorTransition", "blurIn"]}
         animationDuration="0.6s"
         animationTimingFunction="ease-out"
-        sep="word"
+        sep="diff"
       />
     </div>
   ),
