@@ -15,6 +15,7 @@ export const flowContractDeployTrigger: TriggerConfig = {
     triggerId: 'flow_contract_deploy',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('contract deployment'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'addressFilter',

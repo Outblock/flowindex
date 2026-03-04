@@ -15,6 +15,7 @@ export const flowStakingEventTrigger: TriggerConfig = {
     triggerId: 'flow_staking_event',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('staking event'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'delegatorAddress',

@@ -19,7 +19,7 @@ export function flowSetupInstructions(eventType: string): string {
   const steps = [
     `This trigger fires when a <strong>${eventType}</strong> event is detected on the Flow blockchain.`,
     'Configure the filter fields above to narrow which events trigger the workflow.',
-    'The webhook URL will receive event data from the FlowIndex backend when matching events are indexed.',
+    'Events are automatically pushed from FlowIndex as matching blockchain events are indexed.',
     'Deploy the workflow to activate the trigger. Events are delivered in near-real-time as blocks are sealed.',
   ]
   return steps

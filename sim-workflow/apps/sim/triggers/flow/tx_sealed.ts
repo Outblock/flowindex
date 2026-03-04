@@ -15,6 +15,7 @@ export const flowTxSealedTrigger: TriggerConfig = {
     triggerId: 'flow_tx_sealed',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('transaction sealed'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'addressFilter',

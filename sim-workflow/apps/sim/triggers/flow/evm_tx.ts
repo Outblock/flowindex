@@ -15,6 +15,7 @@ export const flowEvmTxTrigger: TriggerConfig = {
     triggerId: 'flow_evm_tx',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('EVM transaction'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'fromAddress',

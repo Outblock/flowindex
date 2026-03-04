@@ -15,6 +15,7 @@ export const flowWhaleActivityTrigger: TriggerConfig = {
     triggerId: 'flow_whale_activity',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('whale activity'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'addressList',

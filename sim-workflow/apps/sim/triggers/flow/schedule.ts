@@ -15,6 +15,7 @@ export const flowScheduleTrigger: TriggerConfig = {
     triggerId: 'flow_schedule',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('scheduled check'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'cronExpression',

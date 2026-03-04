@@ -15,6 +15,7 @@ export const flowContractEventTrigger: TriggerConfig = {
     triggerId: 'flow_contract_event',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('contract event'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'eventType',

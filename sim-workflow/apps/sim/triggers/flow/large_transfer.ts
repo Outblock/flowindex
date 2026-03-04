@@ -15,6 +15,7 @@ export const flowLargeTransferTrigger: TriggerConfig = {
     triggerId: 'flow_large_transfer',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('large transfer'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'token',

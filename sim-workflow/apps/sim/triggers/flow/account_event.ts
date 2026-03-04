@@ -15,6 +15,7 @@ export const flowAccountEventTrigger: TriggerConfig = {
     triggerId: 'flow_account_event',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('account event'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'eventCategory',
