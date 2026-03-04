@@ -12,6 +12,7 @@ export const formatShort = (value: any, head = 8, tail = 6): string => {
     if (!value) return 'N/A';
     const normalized = normalizeAddress(value);
     if (normalized.length <= head + tail + 3) return normalized;
+    if (tail === 0) return `${normalized.slice(0, head)}...`;
     return `${normalized.slice(0, head)}...${normalized.slice(-tail)}`;
 };
 
@@ -118,7 +119,7 @@ export const getTokenLogoURL = (token: FTVaultInfo): string => {
     return '';
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type BackfillCollection = {
     id: string;
     public_path: string;

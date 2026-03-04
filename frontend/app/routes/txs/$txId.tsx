@@ -806,6 +806,39 @@ function TransactionDetail() {
         })();
     }, [transaction?.script, transaction?.script_hash]);
 
+    // Contract identifier metadata for enriching script args (logo, name, symbol)
+    const [contractMeta, setContractMeta] = useState<Map<string, { name: string; symbol: string; logo: string }>>(new Map());
+    useEffect(() => {
+        if (!transaction?.arguments) return;
+        // Scan args for A.{16hex}.{Name} patterns
+        const CONTRACT_ID_RE = /A\.[a-f0-9]{16}\.\w+/g;
+        const argStr = typeof transaction.arguments === 'string' ? transaction.arguments : JSON.stringify(transaction.arguments);
+        const matches = argStr.match(CONTRACT_ID_RE);
+        if (!matches || matches.length === 0) return;
+        const unique = [...new Set(matches)];
+        // Fetch FT token list to resolve metadata
+        resolveApiBaseUrl().then(base =>
+            fetch(`${base}/flow/v1/ft?limit=500`).then(r => r.ok ? r.json() : null).then(json => {
+                const tokens: any[] = json?.data || [];
+                const map = new Map<string, { name: string; symbol: string; logo: string }>();
+                for (const id of unique) {
+                    // id format: A.{addr}.{ContractName} — match against token's address+contract_name
+                    const parts = id.split('.');
+                    if (parts.length < 3) continue;
+                    const addr = parts[1];
+                    const contractName = parts.slice(2).join('.');
+                    const token = tokens.find((t: any) =>
+                        t.contract_name === contractName && t.address?.replace(/^0x/, '') === addr
+                    );
+                    if (token) {
+                        map.set(id, { name: token.name || contractName, symbol: token.symbol || '', logo: token.logo || '' });
+                    }
+                }
+                if (map.size > 0) setContractMeta(map);
+            })
+        ).catch(() => {});
+    }, [transaction?.arguments]);
+
     const [expandedPayloads, setExpandedPayloads] = useState<Record<number, boolean>>({});
     const [selectedNft, setSelectedNft] = useState<any | null>(null);
     const [selectedNftCollection, setSelectedNftCollection] = useState<{ id: string; name: string }>({ id: '', name: '' });
@@ -1604,10 +1637,27 @@ function TransactionDetail() {
                                             {(() => {
                                                 // Detect Flow (0x + 16 hex) or EVM (0x + 40 hex) addresses in values
                                                 const ADDRESS_RE = /^0x[a-fA-F0-9]{16}$|^0x[a-fA-F0-9]{40}$/;
+                                                const CONTRACT_ID_RE = /^A\.[a-f0-9]{16}\.\w+$/;
 
                                                 const renderArgValue = (decoded: any): React.ReactNode => {
                                                     if (typeof decoded === 'string' && ADDRESS_RE.test(decoded)) {
                                                         return <AddressLink address={decoded.replace(/^0x/, '')} prefixLen={20} suffixLen={0} className="text-xs" />;
+                                                    }
+                                                    if (typeof decoded === 'string' && CONTRACT_ID_RE.test(decoded)) {
+                                                        const meta = contractMeta.get(decoded);
+                                                        const parts = decoded.split('.');
+                                                        const addr = parts[1];
+                                                        const contractName = parts.slice(2).join('.');
+                                                        return (
+                                                            <Link to={`/contract/A.${addr}.${contractName}`} className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline" title={meta ? `${meta.name}${meta.symbol ? ` (${meta.symbol})` : ''}` : contractName}>
+                                                                {meta?.logo ? (
+                                                                    <img src={meta.logo} alt="" className="w-4 h-4 rounded-full" />
+                                                                ) : (
+                                                                    <FileText className="w-3.5 h-3.5 text-zinc-400" />
+                                                                )}
+                                                                <span>{meta ? `${contractName}${meta.symbol ? ` (${meta.symbol})` : ''}` : decoded}</span>
+                                                            </Link>
+                                                        );
                                                     }
                                                     if (Array.isArray(decoded)) {
                                                         const hasAddr = decoded.some((v: any) => typeof v === 'string' && ADDRESS_RE.test(v));
