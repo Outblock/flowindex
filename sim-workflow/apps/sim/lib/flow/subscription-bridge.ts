@@ -19,6 +19,7 @@ import { env } from '@/lib/core/config/env'
 const logger = createLogger('FlowSubscriptionBridge')
 
 const FLOW_API_BASE = env.FLOWINDEX_API_URL || 'http://127.0.0.1:8080'
+const FLOW_SERVICE_KEY = env.FLOWINDEX_SERVICE_KEY || ''
 
 /**
  * Map from Sim Studio trigger IDs to FlowIndex event types.
@@ -103,11 +104,14 @@ export async function getOrCreateFlowIndexApiKey(
     }
   }
 
-  // Provision a new API key via FlowIndex
+  // Provision a new API key via FlowIndex using service-to-service auth
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
-  if (supabaseJwt) {
+  if (FLOW_SERVICE_KEY) {
+    headers['X-Service-Key'] = FLOW_SERVICE_KEY
+    headers['X-User-ID'] = userId
+  } else if (supabaseJwt) {
     headers['Authorization'] = `Bearer ${supabaseJwt}`
   }
 

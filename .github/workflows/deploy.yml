@@ -914,15 +914,25 @@ jobs:
         env:
           SIM_COPILOT_API_KEY: ${{ secrets.SIM_COPILOT_API_KEY }}
           SIM_CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          FLOWINDEX_SERVICE_KEY: ${{ secrets.FLOWINDEX_SERVICE_KEY }}
         run: |
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command="
             SIM_ENV=/mnt/stateful_partition/pgdata/sim-studio.env
             if [ -f \"\$SIM_ENV\" ]; then
               sed -i '/^COPILOT_API_KEY=/d' \"\$SIM_ENV\"
               sed -i '/^CRON_SECRET=/d' \"\$SIM_ENV\"
+              sed -i '/^FLOWINDEX_SERVICE_KEY=/d' \"\$SIM_ENV\"
             fi
             echo 'COPILOT_API_KEY=${SIM_COPILOT_API_KEY}' >> \"\$SIM_ENV\"
             echo 'CRON_SECRET=${SIM_CRON_SECRET}' >> \"\$SIM_ENV\"
+            echo 'FLOWINDEX_SERVICE_KEY=${FLOWINDEX_SERVICE_KEY}' >> \"\$SIM_ENV\"
+          "
+          # Also add WEBHOOK_SERVICE_KEY to backend.env (same key, different env var name)
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command="
+            BE_ENV=/mnt/stateful_partition/pgdata/backend.env
+            if ! grep -q '^WEBHOOK_SERVICE_KEY=' \"\$BE_ENV\" 2>/dev/null; then
+              echo 'WEBHOOK_SERVICE_KEY=${FLOWINDEX_SERVICE_KEY}' >> \"\$BE_ENV\"
+            fi
           "
           gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
             set -e
@@ -950,6 +960,7 @@ jobs:
           CRON_SECRET=$(openssl rand -hex 32)
           FLOWINDEX_AUTH_MODE=supabase_cookie
           FLOWINDEX_API_URL=http://127.0.0.1:8080
+          FLOWINDEX_SERVICE_KEY=${FLOWINDEX_SERVICE_KEY:-}
           ENVEOF
               echo "Created $SIM_ENV with generated secrets"
             fi
@@ -1078,6 +1089,7 @@ jobs:
               -e SUPABASE_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
               -e FLOWINDEX_AUTH_MODE="${FLOWINDEX_AUTH_MODE}" \
               -e FLOWINDEX_API_URL="${FLOWINDEX_API_URL}" \
+              -e FLOWINDEX_SERVICE_KEY="${FLOWINDEX_SERVICE_KEY:-}" \
               -e NEXT_PUBLIC_APP_URL="https://studio.flowindex.io" \
               -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
               -e SOCKET_SERVER_URL="http://127.0.0.1:3202" \
