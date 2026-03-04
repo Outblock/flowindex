@@ -6,7 +6,7 @@ import { CadenceLSPClient } from './lspClient.js';
 import { DepsWorkspace, type FlowNetwork } from './depsWorkspace.js';
 import { hasAddressImports, extractAddressImports, rewriteToStringImports } from './importUtils.js';
 
-const PORT = parseInt(process.env.LSP_PORT || '3001', 10);
+const PORT = parseInt(process.env.LSP_PORT || '3002', 10);
 const FLOW_COMMAND = process.env.FLOW_COMMAND || 'flow';
 
 // One LSP client + workspace per network
