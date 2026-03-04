@@ -112,55 +112,60 @@ export default function CadenceDiffEditor({
           : hunk.modifiedStartLineNumber;
 
         const domNode = document.createElement('div');
-        domNode.style.display = 'flex';
-        domNode.style.alignItems = 'center';
-        domNode.style.gap = '12px';
-        domNode.style.padding = '6px 16px 6px 52px';
-        domNode.style.background = darkMode ? 'rgba(24, 24, 27, 0.95)' : 'rgba(250, 250, 250, 0.95)';
-        domNode.style.borderTop = `1px solid ${darkMode ? 'rgba(63, 63, 70, 0.5)' : '#e4e4e7'}`;
-        domNode.style.borderBottom = `1px solid ${darkMode ? 'rgba(63, 63, 70, 0.5)' : '#e4e4e7'}`;
+        domNode.style.cssText = `
+          display: flex; align-items: center; gap: 16px;
+          padding: 4px 16px 4px 52px;
+          position: relative; z-index: 10; pointer-events: auto;
+        `;
 
         // Capture hunk values at creation time
         const hunkOrig = hunk.originalText;
         const hunkMod = hunk.modifiedText;
 
         const acceptBtn = document.createElement('button');
-        acceptBtn.innerHTML = '&#x2713;&ensp;Accept';
+        acceptBtn.textContent = 'Accept';
         acceptBtn.style.cssText = `
-          font-size: 12px; padding: 3px 14px; border-radius: 6px;
-          border: none; color: #fff; background: #22c55e;
+          font-size: 11px; padding: 2px 10px; border-radius: 4px;
+          border: none; color: rgba(134, 239, 172, 0.9); background: rgba(22, 163, 74, 0.15);
           cursor: pointer; font-family: system-ui, sans-serif;
-          font-weight: 500; line-height: 20px; letter-spacing: 0.01em;
-          transition: background 0.15s ease;
+          font-weight: 500; line-height: 18px;
+          transition: all 0.15s ease; pointer-events: auto;
         `;
-        acceptBtn.onmouseenter = () => { acceptBtn.style.background = '#16a34a'; };
-        acceptBtn.onmouseleave = () => { acceptBtn.style.background = '#22c55e'; };
+        acceptBtn.onmouseenter = () => {
+          acceptBtn.style.background = 'rgba(22, 163, 74, 0.3)';
+          acceptBtn.style.color = '#86efac';
+        };
+        acceptBtn.onmouseleave = () => {
+          acceptBtn.style.background = 'rgba(22, 163, 74, 0.15)';
+          acceptBtn.style.color = 'rgba(134, 239, 172, 0.9)';
+        };
+        acceptBtn.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
         acceptBtn.onclick = (e) => {
+          e.preventDefault();
           e.stopPropagation();
           onAcceptHunkRef.current(hunkOrig, hunkMod);
         };
 
         const rejectBtn = document.createElement('button');
-        rejectBtn.innerHTML = '&#x2717;&ensp;Reject';
+        rejectBtn.textContent = 'Reject';
         rejectBtn.style.cssText = `
-          font-size: 12px; padding: 3px 14px; border-radius: 6px;
-          border: 1px solid ${darkMode ? 'rgba(113, 113, 122, 0.4)' : '#d4d4d8'};
-          color: ${darkMode ? '#a1a1aa' : '#71717a'}; background: transparent;
+          font-size: 11px; padding: 2px 10px; border-radius: 4px;
+          border: none; color: rgba(161, 161, 170, 0.6); background: transparent;
           cursor: pointer; font-family: system-ui, sans-serif;
-          font-weight: 500; line-height: 20px; letter-spacing: 0.01em;
-          transition: all 0.15s ease;
+          font-weight: 500; line-height: 18px;
+          transition: all 0.15s ease; pointer-events: auto;
         `;
         rejectBtn.onmouseenter = () => {
-          rejectBtn.style.background = 'rgba(239, 68, 68, 0.1)';
-          rejectBtn.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-          rejectBtn.style.color = '#fca5a5';
+          rejectBtn.style.color = 'rgba(252, 165, 165, 0.8)';
+          rejectBtn.style.background = 'rgba(239, 68, 68, 0.08)';
         };
         rejectBtn.onmouseleave = () => {
+          rejectBtn.style.color = 'rgba(161, 161, 170, 0.6)';
           rejectBtn.style.background = 'transparent';
-          rejectBtn.style.borderColor = darkMode ? 'rgba(113, 113, 122, 0.4)' : '#d4d4d8';
-          rejectBtn.style.color = darkMode ? '#a1a1aa' : '#71717a';
         };
+        rejectBtn.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
         rejectBtn.onclick = (e) => {
+          e.preventDefault();
           e.stopPropagation();
           onRejectHunkRef.current(hunkOrig, hunkMod);
         };
@@ -170,7 +175,7 @@ export default function CadenceDiffEditor({
 
         const id = accessor.addZone({
           afterLineNumber: afterLine,
-          heightInLines: 1.6,
+          heightInLines: 1.2,
           domNode,
         });
         zoneIdsRef.current.push(id);
@@ -243,18 +248,23 @@ export default function CadenceDiffEditor({
     [onAcceptAll, onRejectAll, updateHunks],
   );
 
-  // Clean up zone widgets on unmount
+  // Clean up zone widgets and dispose editor on unmount
   useEffect(() => {
     return () => {
       const diffEditor = diffEditorRef.current;
       if (diffEditor) {
-        const modifiedEditor = diffEditor.getModifiedEditor();
-        modifiedEditor.changeViewZones((accessor) => {
-          for (const id of zoneIdsRef.current) {
-            accessor.removeZone(id);
-          }
-          zoneIdsRef.current = [];
-        });
+        try {
+          const modifiedEditor = diffEditor.getModifiedEditor();
+          modifiedEditor.changeViewZones((accessor) => {
+            for (const id of zoneIdsRef.current) {
+              accessor.removeZone(id);
+            }
+          });
+        } catch {
+          // Editor may already be disposed
+        }
+        zoneIdsRef.current = [];
+        diffEditorRef.current = null;
       }
     };
   }, []);
@@ -304,8 +314,8 @@ export default function CadenceDiffEditor({
           theme={darkMode ? CADENCE_DARK_THEME : CADENCE_LIGHT_THEME}
           original={original}
           modified={modified}
-          originalModelPath={path ? `original://${path}` : undefined}
-          modifiedModelPath={path ? `modified://${path}` : undefined}
+          originalModelPath={path ? `inmemory://diff-original/${path}` : undefined}
+          modifiedModelPath={path ? `inmemory://diff-modified/${path}` : undefined}
           beforeMount={handleBeforeMount}
           onMount={handleMount}
           options={{
