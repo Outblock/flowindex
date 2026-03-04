@@ -1795,19 +1795,7 @@ export default function AIPanel({
             {hideTools ? <EyeOff size={10} /> : <Eye size={10} />}
             Tools
           </button>
-          <button
-            type="button"
-            onClick={() => setAutoApply((v) => !v)}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] uppercase tracking-widest font-bold transition-all ${
-              autoApply
-                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
-                : 'text-zinc-500 hover:text-zinc-300 border border-transparent hover:border-zinc-700'
-            }`}
-            title={autoApply ? 'Auto apply AI edits is on' : 'Auto apply AI edits is off'}
-          >
-            <ReplaceAll size={10} />
-            Auto Apply
-          </button>
+          {/* Auto Apply removed */}
           {/* MCP indicator */}
           <div className="relative group/mcp">
             <button

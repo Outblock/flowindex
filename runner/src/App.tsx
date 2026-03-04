@@ -29,7 +29,8 @@ import {
 import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';
 import ProjectSelector from './components/ProjectSelector';
 import ShareModal from './components/ShareModal';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server } from 'lucide-react';
+import type { LspMode } from './editor/useLsp';
 
 /* ── Detect if we're in an iframe ── */
 let isIframe = false;
@@ -219,6 +220,15 @@ export default function App() {
   const pendingTxArgsRef = useRef<unknown[] | null>(null);
   const [txArgsReady, setTxArgsReady] = useState(() => !new URLSearchParams(window.location.search).get('tx'));
 
+  // LSP mode: 'wasm' (local, default) or 'server' (WebSocket)
+  const [lspMode, setLspMode] = useState<LspMode>(() => {
+    try { return (localStorage.getItem('runner-lsp-mode') as LspMode) || 'wasm'; } catch { return 'wasm'; }
+  });
+  const [showLspMenu, setShowLspMenu] = useState(false);
+  useEffect(() => {
+    try { localStorage.setItem('runner-lsp-mode', lspMode); } catch { /* noop */ }
+  }, [lspMode]);
+
   // Load transaction from API when ?tx= param is present
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -400,7 +410,7 @@ export default function App() {
     setProject((prev) => addDependencyFile(prev, address, contractName, code));
   }, []);
 
-  const { notifyChange, goToDefinition, loadingDeps } = useLsp(monacoInstance, project, network, handleDependency);
+  const { notifyChange, goToDefinition, loadingDeps, activeMode } = useLsp(monacoInstance, project, network, lspMode, handleDependency);
 
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const codeType = useMemo(() => detectCodeType(activeCode), [activeCode]);
@@ -831,6 +841,7 @@ export default function App() {
             <option value="testnet">Testnet</option>
           </select>
 
+
           {/* Signer selector - show when there are custodial keys and code is transaction */}
           {codeType === 'transaction' && keys.length > 0 && (
             <SignerSelector
@@ -1013,6 +1024,73 @@ export default function App() {
                   )}
                 </div>
               )}
+              {/* Settings */}
+              <div className="shrink-0 border-t border-zinc-700">
+                <button
+                  onClick={() => setShowLspMenu((v) => !v)}
+                  className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                >
+                  <Settings className="w-3 h-3" />
+                  <span>Settings</span>
+                </button>
+                {showLspMenu && (
+                  <div className="px-3 pb-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">LSP Mode</span>
+                      {!activeMode && <Loader2 className="w-3 h-3 animate-spin text-zinc-500" />}
+                    </div>
+                    <div className="flex rounded-md overflow-hidden border border-zinc-700 bg-zinc-900">
+                      <div className="relative flex-1 group/wasm">
+                        <button
+                          onClick={() => setLspMode('wasm')}
+                          className={`flex items-center justify-center gap-1 w-full px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                            lspMode === 'wasm'
+                              ? 'bg-emerald-500/15 text-emerald-400 border-r border-emerald-500/30'
+                              : 'text-zinc-500 hover:text-zinc-300 border-r border-zinc-700'
+                          }`}
+                        >
+                          <Cpu className="w-3 h-3" />
+                          WASM
+                        </button>
+                        <div className="absolute bottom-full left-0 mb-2 w-52 p-2.5 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl text-[10px] leading-relaxed opacity-0 pointer-events-none group-hover/wasm:opacity-100 transition-opacity z-50">
+                          <div className="text-emerald-400 font-semibold mb-1">WASM (Local)</div>
+                          <div className="text-zinc-400 mb-1.5">Runs in browser Web Worker</div>
+                          <div className="text-zinc-500 space-y-0.5">
+                            <div>+ Zero latency</div>
+                            <div>+ Works offline</div>
+                            <div>+ No server needed</div>
+                            <div className="text-amber-500/80">- 47MB initial download</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="relative flex-1 group/server">
+                        <button
+                          onClick={() => setLspMode('server')}
+                          className={`flex items-center justify-center gap-1 w-full px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                            lspMode === 'server'
+                              ? 'bg-blue-500/15 text-blue-400'
+                              : 'text-zinc-500 hover:text-zinc-300'
+                          }`}
+                        >
+                          <Server className="w-3 h-3" />
+                          Server
+                        </button>
+                        <div className="absolute bottom-full right-0 mb-2 w-52 p-2.5 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl text-[10px] leading-relaxed opacity-0 pointer-events-none group-hover/server:opacity-100 transition-opacity z-50">
+                          <div className="text-blue-400 font-semibold mb-1">Server (WebSocket)</div>
+                          <div className="text-zinc-400 mb-1.5">Remote LSP via WebSocket</div>
+                          <div className="text-zinc-500 space-y-0.5">
+                            <div>+ Full Go runtime</div>
+                            <div>+ Faster import resolution</div>
+                            <div>+ No WASM download</div>
+                            <div className="text-amber-500/80">- Requires server</div>
+                            <div className="text-amber-500/80">- Network latency</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <DragBar direction="horizontal" onMouseDown={explorer.onMouseDown} />
           </>

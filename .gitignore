@@ -40,3 +40,4 @@ docker-compose.override.yml
 .claude/
 *.swp
 *.swo
+runner/public/*.wasm
