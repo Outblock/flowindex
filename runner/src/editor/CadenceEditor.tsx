@@ -114,7 +114,7 @@ export default function CadenceEditor({
       onMount={handleMount}
       options={{
         minimap: { enabled: false },
-        fontSize: 13,
+        fontSize: window.innerWidth < 768 ? 16 : 13,
         fontFamily: "'GeistMono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
         automaticLayout: true,
         wordWrap: 'on',

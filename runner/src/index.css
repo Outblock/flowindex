@@ -17,4 +17,9 @@ body { margin: 0; font-family: 'GeistMono', 'SF Mono', monospace; }
   .tab-bar button {
     min-height: 36px;
   }
+
+  /* Prevent iOS Safari auto-zoom on focus for inputs < 16px */
+  input, textarea, select, .monaco-editor .inputarea {
+    font-size: 16px !important;
+  }
 }
