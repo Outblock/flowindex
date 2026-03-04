@@ -17,6 +17,8 @@ import { parseMainParams } from './flow/cadenceParams';
 import { detectCodeType, executeScript, executeTransaction, executeCustodialTransaction } from './flow/execute';
 import type { ExecutionResult } from './flow/execute';
 import type { FlowNetwork } from './flow/networks';
+import { useEvmWallet } from './flow/evmWallet';
+import { compileSolidity, deploySolidityContract } from './flow/evmExecute';
 import { useAuth } from './auth/AuthContext';
 import { useKeys } from './auth/useKeys';
 import KeyManager from './components/KeyManager';
@@ -272,6 +274,7 @@ export default function App() {
   const { keys, signMessage } = useKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'fcl' });
+  const evmWallet = useEvmWallet(network);
 
   const {
     projects: cloudProjects,
@@ -472,7 +475,74 @@ export default function App() {
     setLoading(true);
     setResults([]);
 
-    if (codeType === 'script') {
+    const activePath = project.activeFile;
+    const isSolidity = activePath.endsWith('.sol');
+
+    if (isSolidity) {
+      // Collect all .sol files for compilation
+      const solFiles = getUserFiles(project).filter(f => f.path.endsWith('.sol'));
+      const sources: Record<string, string> = {};
+      for (const f of solFiles) {
+        sources[f.path] = f.content;
+      }
+
+      // Compile
+      const compileResult = await compileSolidity(sources);
+      if (compileResult.type === 'error') {
+        setResults([{ type: 'error', value: compileResult.data.message }]);
+        setLoading(false);
+        return;
+      }
+
+      // Check for severe compilation errors
+      const { contracts, errors } = compileResult.data;
+      if (errors.length > 0) {
+        const severeErrors = errors.filter((e: any) => e.severity === 'error');
+        if (severeErrors.length > 0) {
+          setResults([{ type: 'error', value: JSON.stringify(errors, null, 2) }]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // If we have a signer, deploy the first contract
+      if (evmWallet.signer && Object.keys(contracts).length > 0) {
+        const [contractName, contractData] = Object.entries(contracts)[0];
+        await deploySolidityContract(
+          evmWallet.signer,
+          contractName,
+          contractData.abi,
+          contractData.bytecode,
+          [],
+          (result) => {
+            if (result.type === 'deploy_submitted') {
+              setResults(prev => [...prev, {
+                type: 'tx_submitted' as const,
+                value: `Deploying ${result.data.contractName}...`,
+                txId: result.data.txHash,
+              }]);
+            } else if (result.type === 'deploy_result') {
+              setResults(prev => [...prev, {
+                type: 'tx_sealed' as const,
+                value: `Contract deployed at ${result.data.address}`,
+                txId: result.data.txHash,
+              }]);
+            } else if (result.type === 'error') {
+              setResults(prev => [...prev, {
+                type: 'error' as const,
+                value: result.data.message,
+              }]);
+            }
+          },
+        );
+      } else if (Object.keys(contracts).length > 0) {
+        // No signer -- just show compilation success
+        setResults([{
+          type: 'script_result' as const,
+          value: `Compiled ${Object.keys(contracts).length} contract(s): ${Object.keys(contracts).join(', ')}`,
+        }]);
+      }
+    } else if (codeType === 'script') {
       const result = await executeScript(activeCode, paramValues);
       setResults([result]);
     } else if (selectedSigner.type === 'fcl') {
@@ -495,7 +565,7 @@ export default function App() {
     }
 
     setLoading(false);
-  }, [activeCode, codeType, paramValues, loading, selectedSigner, signMessage]);
+  }, [activeCode, codeType, paramValues, loading, selectedSigner, signMessage, project, evmWallet.signer]);
 
   const handleInsertCode = useCallback((newCode: string) => {
     setProject((prev) => updateFileContent(prev, prev.activeFile, newCode));
@@ -858,31 +928,50 @@ export default function App() {
             />
           )}
 
-          {!isMobile && <WalletButton />}
+          {!isMobile && (
+            <WalletButton
+              evmAddress={evmWallet.address}
+              evmChainId={evmWallet.chainId}
+              evmCorrectChain={evmWallet.isCorrectChain}
+              onEvmConnect={evmWallet.connect}
+              onEvmDisconnect={evmWallet.disconnect}
+              onEvmSwitchChain={evmWallet.switchChain}
+              hasMetaMask={evmWallet.hasMetaMask}
+            />
+          )}
 
           {/* Desktop run button */}
-          {!isMobile && (
-            <button
-              onClick={handleRun}
-              disabled={loading || activeFileEntry?.readOnly}
-              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
-            >
-              {loading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Play className="w-3.5 h-3.5" />
-              )}
-              {codeType === 'script' ? 'Run Script' : 'Send Transaction'}
-              <span className="ml-1.5 flex items-center gap-0.5 opacity-60">
-                <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
-                  {navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}
-                </kbd>
-                <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
-                  ↵
-                </kbd>
-              </span>
-            </button>
-          )}
+          {!isMobile && (() => {
+            const isSol = project.activeFile.endsWith('.sol');
+            const btnColor = isSol
+              ? 'bg-orange-600 hover:bg-orange-500 disabled:bg-orange-800 disabled:text-orange-500'
+              : 'bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500';
+            const label = isSol
+              ? (evmWallet.signer ? 'Compile & Deploy' : 'Compile')
+              : (codeType === 'script' ? 'Run Script' : 'Send Transaction');
+            return (
+              <button
+                onClick={handleRun}
+                disabled={loading || activeFileEntry?.readOnly}
+                className={`flex items-center gap-1.5 ${btnColor} text-white text-xs font-medium px-3 py-1.5 rounded transition-colors`}
+              >
+                {loading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Play className="w-3.5 h-3.5" />
+                )}
+                {label}
+                <span className="ml-1.5 flex items-center gap-0.5 opacity-60">
+                  <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
+                    {navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}
+                  </kbd>
+                  <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
+                    ↵
+                  </kbd>
+                </span>
+              </button>
+            );
+          })()}
         </div>
       </header>
 
@@ -1142,20 +1231,29 @@ export default function App() {
       </div>
 
       {/* Mobile: Floating Run button */}
-      {isMobile && (
-        <button
-          onClick={handleRun}
-          disabled={loading || activeFileEntry?.readOnly}
-          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-500 text-white font-semibold pl-4 pr-5 py-3.5 rounded-full shadow-lg shadow-emerald-900/40 transition-colors"
-        >
-          {loading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Play className="w-5 h-5" fill="currentColor" />
-          )}
-          <span className="text-sm">{codeType === 'script' ? 'Run' : 'Send'}</span>
-        </button>
-      )}
+      {isMobile && (() => {
+        const isSol = project.activeFile.endsWith('.sol');
+        const mobileColor = isSol
+          ? 'bg-orange-600 hover:bg-orange-500 active:bg-orange-700 disabled:bg-orange-800 disabled:text-orange-500 shadow-orange-900/40'
+          : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-500 shadow-emerald-900/40';
+        const mobileLabel = isSol
+          ? (evmWallet.signer ? 'Deploy' : 'Compile')
+          : (codeType === 'script' ? 'Run' : 'Send');
+        return (
+          <button
+            onClick={handleRun}
+            disabled={loading || activeFileEntry?.readOnly}
+            className={`fixed bottom-5 right-5 z-40 flex items-center gap-2 ${mobileColor} text-white font-semibold pl-4 pr-5 py-3.5 rounded-full shadow-lg transition-colors`}
+          >
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Play className="w-5 h-5" fill="currentColor" />
+            )}
+            <span className="text-sm">{mobileLabel}</span>
+          </button>
+        );
+      })()}
 
       {/* Mobile: Floating AI button */}
       {isMobile && !showMobileAI && (
