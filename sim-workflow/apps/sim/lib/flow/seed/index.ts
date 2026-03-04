@@ -8,6 +8,8 @@ const logger = createLogger('FlowSeed')
 
 const FLOW_CREATOR_ID = 'flow-official-creator'
 
+let seeded = false
+
 /**
  * Ensures the FlowIndex template creator profile exists.
  */
@@ -41,6 +43,8 @@ async function ensureFlowCreator(): Promise<void> {
  * Safe to call multiple times — skips existing templates.
  */
 export async function seedFlowTemplates(): Promise<void> {
+  if (seeded) return
+
   try {
     await ensureFlowCreator()
 
@@ -70,6 +74,8 @@ export async function seedFlowTemplates(): Promise<void> {
 
       logger.info(`Seeded Flow template: ${tmpl.name}`)
     }
+
+    seeded = true
   } catch (error) {
     logger.warn('Failed to seed Flow templates', { error })
   }
