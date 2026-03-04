@@ -80,12 +80,14 @@ jobs:
               - '.github/workflows/deploy.yml'
             runner:
               - 'runner/**'
+              - 'frontend/packages/flowtoken/**'
               - '.github/workflows/deploy.yml'
             docs:
               - 'devportal/**'
               - 'docs/**'
             ai-chat:
               - 'ai/chat/**'
+              - 'frontend/packages/flowtoken/**'
               - '.github/workflows/deploy.yml'
             supabase:
               - 'supabase/**'
@@ -624,7 +626,7 @@ jobs:
       - name: Build & push ai-chat
         uses: docker/build-push-action@v6
         with:
-          context: ai/chat
+          context: .
           file: ai/chat/Dockerfile
           push: true
           provenance: false

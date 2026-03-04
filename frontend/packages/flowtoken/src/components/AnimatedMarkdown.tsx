@@ -77,13 +77,18 @@ const MarkdownAnimateText: React.FC<MarkdownAnimateTextProps> = ({
   customComponents = DEFAULT_CUSTOM_COMPONENTS,
   imgHeight = '20rem',
 }) => {
+  // Serialize animation prop for stable useMemo dependency
+  // (JSX array literals like animation={["a","b"]} create new refs each render)
+  const animPropKey = Array.isArray(animationProp) ? animationProp.join(',') : animationProp;
+
   // Resolve animation names through the animations map, supporting arrays
   const animation = useMemo(() => {
     if (Array.isArray(animationProp)) {
       return animationProp.map((name) => animations[name] || name);
     }
     return animations[animationProp] || animationProp;
-  }, [animationProp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animPropKey]);
 
   const resolvedCodeStyle = (codeStyle || doccoStyle.docco || doccoStyle) as Record<string, React.CSSProperties>;
 
@@ -172,7 +177,10 @@ const MarkdownAnimateText: React.FC<MarkdownAnimateTextProps> = ({
   );
 
   // For passing single animation string to sub-components that only accept string
-  const firstAnimation = Array.isArray(animation) ? animation[0] || '' : animation;
+  const firstAnimation = useMemo(
+    () => Array.isArray(animation) ? animation[0] || '' : animation,
+    [animation],
+  );
 
   const components = useMemo(
      
