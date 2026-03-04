@@ -30,7 +30,12 @@ ai.flowindex.io {
 }
 
 studio.flowindex.io {
-	reverse_proxy 10.128.0.4:3200
+	handle /socket.io/* {
+		reverse_proxy 10.128.0.4:3202
+	}
+	handle {
+		reverse_proxy 10.128.0.4:3200
+	}
 }
 
 analytics.flowindex.io {
