@@ -27,7 +27,7 @@ export const env = createEnv({
     FLOWINDEX_DEFAULT_WORKSPACE_ID:        z.string().optional(),                  // Default workspace ID to grant on login for FlowIndex users
     FLOWINDEX_LOGIN_URL:                   z.string().url().optional(),            // External FlowIndex login URL used when auth is delegated
     FLOWINDEX_API_URL:                     z.string().url().optional(),            // FlowIndex Go backend REST API base URL (default: http://127.0.0.1:8080)
-    FLOWINDEX_INTERNAL_API_KEY:            z.string().optional(),                  // API key for FlowIndex webhook subscription management
+    // FLOWINDEX_INTERNAL_API_KEY removed — per-user keys provisioned automatically via subscription-bridge.ts
     FLOWINDEX_APP_URL:                     z.string().url().optional(),            // Public app URL used for login redirect callback generation
     ALLOWED_LOGIN_EMAILS:                  z.string().optional(),                  // Comma-separated list of allowed email addresses for login
     ALLOWED_LOGIN_DOMAINS:                 z.string().optional(),                  // Comma-separated list of allowed email domains for login
