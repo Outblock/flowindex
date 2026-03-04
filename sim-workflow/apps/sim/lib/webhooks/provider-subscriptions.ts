@@ -4,6 +4,7 @@ import { createLogger } from '@sim/logger'
 import { eq } from 'drizzle-orm'
 import type { NextRequest } from 'next/server'
 import { validateAirtableId, validateAlphanumericId } from '@/lib/core/security/input-validation'
+import { registerFlowSubscriptions, deleteFlowSubscription, extractFlowConditions } from '@/lib/flow/subscription-bridge'
 import { getBaseUrl } from '@/lib/core/utils/urls'
 import {
   getOAuthToken,
@@ -1811,6 +1812,7 @@ const PROVIDERS_WITH_EXTERNAL_SUBSCRIPTIONS = new Set([
   'airtable',
   'attio',
   'calendly',
+  'flow',
   'webflow',
   'typeform',
   'grain',
@@ -1824,6 +1826,8 @@ const SYSTEM_MANAGED_FIELDS = new Set([
   'externalId',
   'externalSubscriptionId',
   'eventTypes',
+  'flowIndexSubscriptionId',
+  'flowIndexSigningSecret',
   'webhookTag',
   'webhookSecret',
   'historyId',
@@ -1939,6 +1943,27 @@ export async function createExternalWebhookSubscription(
       updatedProviderConfig = { ...updatedProviderConfig, externalId: result.id }
       externalSubscriptionCreated = true
     }
+  } else if (provider === 'flow') {
+    const triggerId = providerConfig.triggerId as string
+    if (triggerId) {
+      const conditions = extractFlowConditions(triggerId, providerConfig as Record<string, unknown>)
+      const callbackUrl = getNotificationUrl(webhookData)
+      const result = await registerFlowSubscriptions({
+        workflowId: (workflow as any).id || (workflow as any).workflowId || '',
+        triggerId,
+        conditions,
+        callbackUrl,
+        userId,
+      })
+      if (result) {
+        updatedProviderConfig = {
+          ...updatedProviderConfig,
+          flowIndexSubscriptionId: result.subscriptionId,
+          flowIndexSigningSecret: result.signingSecret,
+        }
+        externalSubscriptionCreated = true
+      }
+    }
   }
 
   return { updatedProviderConfig, externalSubscriptionCreated }
@@ -1972,5 +1997,11 @@ export async function cleanupExternalWebhook(
     await deleteGrainWebhook(webhook, requestId)
   } else if (webhook.provider === 'lemlist') {
     await deleteLemlistWebhook(webhook, requestId)
+  } else if (webhook.provider === 'flow') {
+    const config = getProviderConfig(webhook)
+    const subId = config.flowIndexSubscriptionId as string
+    if (subId) {
+      await deleteFlowSubscription(subId, webhook)
+    }
   }
 }
