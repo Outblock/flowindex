@@ -10,8 +10,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { AnimatedMarkdown } from '@flowindex/flowtoken';
-import '@flowindex/flowtoken/styles.css';
+import { AnimatedMarkdown } from '@outblock/flowtoken';
+import '@outblock/flowtoken/styles.css';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';

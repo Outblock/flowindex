@@ -80,14 +80,12 @@ jobs:
               - '.github/workflows/deploy.yml'
             runner:
               - 'runner/**'
-              - 'frontend/packages/flowtoken/**'
               - '.github/workflows/deploy.yml'
             docs:
               - 'devportal/**'
               - 'docs/**'
             ai-chat:
               - 'ai/chat/**'
-              - 'frontend/packages/flowtoken/**'
               - '.github/workflows/deploy.yml'
             supabase:
               - 'supabase/**'

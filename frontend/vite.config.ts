@@ -37,7 +37,7 @@ export default defineConfig({
     }),
   ],
 
-  // Dedupe React so workspace packages (e.g. @flowindex/flowtoken) always
+  // Dedupe React so packages (e.g. @outblock/flowtoken) always
   // resolve react/jsx-runtime from the root node_modules, not their own.
   resolve: {
     dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],

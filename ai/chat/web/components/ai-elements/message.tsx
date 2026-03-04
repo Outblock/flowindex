@@ -15,8 +15,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { AnimatedMarkdown } from "@flowindex/flowtoken";
-import "@flowindex/flowtoken/styles.css";
+import { AnimatedMarkdown } from "@outblock/flowtoken";
+import "@outblock/flowtoken/styles.css";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";

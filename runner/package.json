@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.103",
-    "@flowindex/flowtoken": "file:./packages/flowtoken",
+    "@outblock/flowtoken": "^1.0.0",
     "@monaco-editor/react": "^4.7.0",
     "@onflow/cadence-language-server": "^1.7.4",
     "@onflow/fcl": "^1.21.9",

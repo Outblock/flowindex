@@ -2,11 +2,8 @@
 FROM oven/bun:1 AS frontend
 WORKDIR /app/web
 COPY ai/chat/web/package.json ai/chat/web/bun.lock ./
-COPY frontend/packages/flowtoken ./packages/flowtoken
 RUN bun install
 COPY ai/chat/web/ .
-# Re-copy flowtoken (real dir) after COPY ai/chat/web/ to overwrite any symlink
-COPY frontend/packages/flowtoken ./packages/flowtoken
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
