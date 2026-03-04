@@ -26,6 +26,7 @@ export interface OperationQueueState {
   cancelOperationsForVariable: (variableId: string) => void
 
   cancelOperationsForWorkflow: (workflowId: string) => void
+  waitForPendingOperations: (workflowId: string, timeoutMs?: number) => Promise<void>
 
   triggerOfflineMode: () => void
   clearError: () => void

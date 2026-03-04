@@ -551,16 +551,26 @@ export function SocketProvider({ children, user }: SocketProviderProps) {
       `URL workflow changed from ${currentWorkflowId} to ${urlWorkflowId}, switching rooms`
     )
 
-    if (currentWorkflowId) {
-      logger.info(`Leaving current workflow ${currentWorkflowId} before joining ${urlWorkflowId}`)
-      socket.emit('leave-workflow')
+    const switchRoom = async () => {
+      if (currentWorkflowId) {
+        // Wait for pending operations before leaving the room
+        const { useOperationQueueStore } = await import('@/stores/operation-queue/store')
+        await useOperationQueueStore
+          .getState()
+          .waitForPendingOperations(currentWorkflowId)
+
+        logger.info(`Leaving current workflow ${currentWorkflowId} before joining ${urlWorkflowId}`)
+        socket.emit('leave-workflow')
+      }
+
+      logger.info(`Joining workflow room: ${urlWorkflowId}`)
+      socket.emit('join-workflow', {
+        workflowId: urlWorkflowId,
+        tabSessionId: getTabSessionId(),
+      })
     }
 
-    logger.info(`Joining workflow room: ${urlWorkflowId}`)
-    socket.emit('join-workflow', {
-      workflowId: urlWorkflowId,
-      tabSessionId: getTabSessionId(),
-    })
+    switchRoom()
   }, [socket, isConnected, urlWorkflowId, currentWorkflowId])
 
   const joinWorkflow = useCallback(
