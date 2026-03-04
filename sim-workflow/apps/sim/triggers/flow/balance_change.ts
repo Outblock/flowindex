@@ -15,6 +15,7 @@ export const flowBalanceChangeTrigger: TriggerConfig = {
     triggerId: 'flow_balance_change',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('balance change'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'addressFilter',

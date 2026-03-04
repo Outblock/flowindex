@@ -15,6 +15,7 @@ export const flowNewAccountTrigger: TriggerConfig = {
     triggerId: 'flow_new_account',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('new account creation'),
+    hideWebhookUrl: true,
   }),
 
   outputs: {

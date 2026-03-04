@@ -150,6 +150,8 @@ export interface BuildTriggerSubBlocksOptions {
   extraFields?: SubBlockConfig[]
   /** Webhook URL placeholder text */
   webhookPlaceholder?: string
+  /** Hide the webhook URL field (for triggers where subscription is auto-managed) */
+  hideWebhookUrl?: boolean
 }
 
 /**
@@ -186,6 +188,7 @@ export function buildTriggerSubBlocks(options: BuildTriggerSubBlocksOptions): Su
     setupInstructions,
     extraFields = [],
     webhookPlaceholder = 'Webhook URL will be generated',
+    hideWebhookUrl = false,
   } = options
 
   const blocks: SubBlockConfig[] = []
@@ -203,19 +206,20 @@ export function buildTriggerSubBlocks(options: BuildTriggerSubBlocksOptions): Su
     })
   }
 
-  // Webhook URL display (common to all triggers)
-  // ID will be namespaced by getTrigger() when merged into blocks
-  blocks.push({
-    id: 'webhookUrlDisplay',
-    title: 'Webhook URL',
-    type: 'short-input',
-    readOnly: true,
-    showCopyButton: true,
-    useWebhookUrl: true,
-    placeholder: webhookPlaceholder,
-    mode: 'trigger',
-    condition: { field: 'selectedTriggerId', value: triggerId },
-  })
+  // Webhook URL display (skip for auto-managed triggers like Flow)
+  if (!hideWebhookUrl) {
+    blocks.push({
+      id: 'webhookUrlDisplay',
+      title: 'Webhook URL',
+      type: 'short-input',
+      readOnly: true,
+      showCopyButton: true,
+      useWebhookUrl: true,
+      placeholder: webhookPlaceholder,
+      mode: 'trigger',
+      condition: { field: 'selectedTriggerId', value: triggerId },
+    })
+  }
 
   // Insert any extra fields (campaign filters, event types, etc.)
   if (extraFields.length > 0) {

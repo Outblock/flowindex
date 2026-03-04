@@ -15,6 +15,7 @@ export const flowNftTransferTrigger: TriggerConfig = {
     triggerId: 'flow_nft_transfer',
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     setupInstructions: flowSetupInstructions('NFT transfer'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'collection',

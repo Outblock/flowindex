@@ -16,6 +16,7 @@ export const flowFtTransferTrigger: TriggerConfig = {
     triggerOptions: FLOW_TRIGGER_OPTIONS,
     includeDropdown: true,
     setupInstructions: flowSetupInstructions('fungible token transfer'),
+    hideWebhookUrl: true,
     extraFields: [
       {
         id: 'token',
