@@ -14,8 +14,7 @@ import '@flowindex/flowtoken/styles.css';
 import './aipanel-flowtoken-overrides.css';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useShikiHighlighter, highlightCode } from '../hooks/useShiki';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -317,8 +316,7 @@ function CodeBlock({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const langMap: Record<string, string> = { cadence: 'swift', cdc: 'swift', sh: 'bash', zsh: 'bash', shell: 'bash', ts: 'typescript', js: 'javascript', py: 'python', yml: 'yaml' };
-  const prismLang = langMap[language] || language || 'text';
+  const highlighter = useShikiHighlighter();
   const isCadence = language === 'cadence' || language === 'cdc';
   const targetPath = resolveTargetPath(meta, language, code);
   const canApplyToFile = !!targetPath && !!onApplyCodeToFile;
@@ -328,6 +326,11 @@ function CodeBlock({
   const patches = isDiff ? parseSearchReplacePatches(code) : null;
   const patchCount = patches?.length ?? 0;
   const [expanded, setExpanded] = useState(false);
+
+  const highlighted = useMemo(() => {
+    if (!highlighter || isDiff) return '';
+    return highlightCode(highlighter, code, language);
+  }, [highlighter, code, language, isDiff]);
 
   return (
     <div className="rounded border border-zinc-700 overflow-hidden my-2">
@@ -390,15 +393,15 @@ function CodeBlock({
       {expanded ? (
         isDiff && patches ? (
           <DiffView code={code} />
+        ) : highlighted ? (
+          <div
+            className="shiki-code-block"
+            dangerouslySetInnerHTML={{ __html: highlighted }}
+          />
         ) : (
-          <SyntaxHighlighter
-            language={prismLang}
-            style={vscDarkPlus}
-            customStyle={{ margin: 0, padding: '10px', fontSize: '11px', lineHeight: '1.5', background: '#09090b', borderRadius: 0 }}
-            wrapLongLines
-          >
-            {code}
-          </SyntaxHighlighter>
+          <pre className="m-0 p-2.5 text-[11px] leading-[1.5] bg-[#09090b] text-zinc-300 font-mono overflow-x-auto">
+            <code>{code}</code>
+          </pre>
         )
       ) : (
         <div className="px-2.5 py-2 bg-zinc-950 text-[11px] text-zinc-500 font-mono">
@@ -423,8 +426,11 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const langMap: Record<string, string> = { cadence: 'swift', sh: 'bash', zsh: 'bash', shell: 'bash', ts: 'typescript', js: 'javascript', py: 'python' };
-  const prismLang = langMap[language] || language || 'text';
+  const highlighter = useShikiHighlighter();
+  const highlighted = useMemo(() => {
+    if (!highlighter) return '';
+    return highlightCode(highlighter, code, language);
+  }, [highlighter, code, language]);
 
   return (
     <div className="rounded border border-zinc-700 overflow-hidden my-1.5">
@@ -453,14 +459,16 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
             transition={{ duration: 0.2, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <SyntaxHighlighter
-              language={prismLang}
-              style={vscDarkPlus}
-              customStyle={{ margin: 0, padding: '12px', fontSize: '12px', lineHeight: '1.6', background: '#09090b', borderRadius: 0 }}
-              wrapLongLines
-            >
-              {code}
-            </SyntaxHighlighter>
+            {highlighted ? (
+              <div
+                className="shiki-code-block shiki-collapsible"
+                dangerouslySetInnerHTML={{ __html: highlighted }}
+              />
+            ) : (
+              <pre className="m-0 p-3 text-xs leading-[1.6] bg-[#09090b] text-zinc-300 font-mono overflow-x-auto">
+                <code>{code}</code>
+              </pre>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

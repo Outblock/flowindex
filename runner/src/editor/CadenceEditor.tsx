@@ -1,8 +1,9 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { registerCadenceLanguage, CADENCE_LANGUAGE_ID } from './cadenceLanguage';
 import { registerCadenceThemes, CADENCE_DARK_THEME, CADENCE_LIGHT_THEME } from './cadenceTheme';
+import { activateCadenceTextmate } from './cadenceTextmate';
 
 interface CadenceEditorProps {
   code: string;
@@ -28,10 +29,17 @@ export default function CadenceEditor({
   const onRunRef = useRef(onRun);
   useEffect(() => { onRunRef.current = onRun; }, [onRun]);
 
+  const [tmReady, setTmReady] = useState(false);
+  const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
+
   const handleBeforeMount: BeforeMount = useCallback((monaco) => {
+    monacoRef.current = monaco;
+    // Register Monarch as fallback first — TextMate will override once WASM loads
     registerCadenceLanguage(monaco);
     registerCadenceThemes(monaco);
     onMonacoReady?.(monaco);
+    // Load TextMate grammar async (overrides Monarch tokenizer)
+    activateCadenceTextmate(monaco).then(() => setTmReady(true)).catch(console.error);
   }, [onMonacoReady]);
 
   const handleMount: OnMount = useCallback(

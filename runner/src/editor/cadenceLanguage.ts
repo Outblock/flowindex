@@ -46,57 +46,81 @@ export const cadenceTokenProvider: languages.IMonarchLanguage = {
 
   keywords: [
     'if', 'else', 'while', 'for', 'in', 'return', 'break', 'continue',
-    'fun', 'let', 'var', 'import', 'from',
+    'fun', 'let', 'var',
     'transaction', 'prepare', 'execute', 'pre', 'post',
-    'access', 'all', 'self', 'account',
+    'access', 'all', 'self', 'account', 'auth',
     'contract', 'resource', 'struct', 'event', 'emit', 'enum', 'case',
-    'interface', 'entitlement', 'mapping',
+    'interface', 'entitlement', 'mapping', 'require',
     'create', 'destroy', 'move', 'attach', 'remove',
     'nil', 'true', 'false',
-    'as', 'as!', 'as?',
     'pub', 'priv',
     'init', 'view',
     'switch', 'default',
     'try', 'catch',
+    'where', 'panic', 'log',
+    'import', 'from',
   ],
 
   typeKeywords: [
     'String', 'Bool', 'Address', 'Void', 'Never', 'AnyStruct', 'AnyResource',
     'Character', 'Path', 'StoragePath', 'PublicPath', 'PrivatePath', 'CapabilityPath',
-    'Type', 'Block',
+    'Type', 'Block', 'Capability',
     'Int', 'Int8', 'Int16', 'Int32', 'Int64', 'Int128', 'Int256',
     'UInt', 'UInt8', 'UInt16', 'UInt32', 'UInt64', 'UInt128', 'UInt256',
     'Word8', 'Word16', 'Word32', 'Word64', 'Word128', 'Word256',
     'Fix64', 'UFix64',
-    'AuthAccount', 'PublicAccount',
-    'Account',
+    'AuthAccount', 'PublicAccount', 'Account',
+    'Storage', 'BorrowValue', 'Capabilities', 'SaveValue', 'LoadValue',
+    'Inbox', 'Keys', 'Contracts', 'CompositeType',
   ],
 
-  operators: [
-    '=', '>', '<', '!', '~', '?', ':',
-    '==', '<=', '>=', '!=', '&&', '||',
-    '+', '-', '*', '/', '%', '&', '|', '^',
-    '??', '<-', '<-!',
-    '+=', '-=', '*=', '/=', '%=',
-  ],
-
-  symbols: /[=><!~?:&|+\-*\/\^%]+/,
   escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 
   tokenizer: {
     root: [
-      // Import statements
-      [/import/, 'keyword', '@import_statement'],
+      // Whitespace & comments first
+      { include: '@whitespace' },
 
-      // Access control: access(all), access(self), access(account), access(contract)
-      [/access/, {
+      // Move operator — must come before generic symbol matching
+      [/<-!?/, 'operator.move'],
+
+      // Path literals: /storage/xxx, /public/xxx, /private/xxx
+      [/\/(?:storage|public|private)\/\w+/, 'string.path'],
+
+      // import statements: `import X from 0xABC` or `import "path"`
+      [/(import)(\s+)([A-Za-z_]\w*)(\s+)(from)(\s+)(0x[0-9a-fA-F]+)/, ['keyword', '', 'type', '', 'keyword', '', 'number.hex']],
+      [/(import)(\s+)([A-Za-z_]\w*)(\s+)(from)(\s+)("[^"]*")/, ['keyword', '', 'type', '', 'keyword', '', 'string']],
+      [/(import)(\s+)([A-Za-z_]\w*)/, ['keyword', '', 'type']],
+
+      // Function call after dot: `.withdraw(`, `.deposit(`
+      [/(\.)([a-zA-Z_]\w*)(\s*\()/, ['delimiter', 'function', 'delimiter']],
+
+      // Property/field access after dot: `.storagePath`, `.name`
+      [/(\.)([a-zA-Z_]\w*)/, ['delimiter', 'variable.property']],
+
+      // Argument labels: `amount:`, `from:`, `forPath:`
+      [/\b([a-zA-Z_]\w*)\s*(?=:\s*[^:])/, {
         cases: {
+          '@typeKeywords': 'type',
           '@keywords': 'keyword',
+          '@default': 'parameter',
+        },
+      }],
+
+      // Function declarations: `fun withdraw(`
+      [/(fun)(\s+)([a-zA-Z_]\w*)/, ['keyword', '', 'function']],
+
+      // Type-like identifiers (start with uppercase)
+      [/\b[A-Z]\w*/, {
+        cases: {
+          '@typeKeywords': 'type',
+          '@keywords': 'keyword',
+          '@default': 'type.identifier',
         },
       }],
 
       // Identifiers and keywords
-      [/[a-zA-Z_]\w*/, {
+      [/\b[a-z_]\w*\b/, {
         cases: {
           '@typeKeywords': 'type',
           '@keywords': 'keyword',
@@ -104,42 +128,30 @@ export const cadenceTokenProvider: languages.IMonarchLanguage = {
         },
       }],
 
-      // Whitespace
-      { include: '@whitespace' },
-
-      // Delimiters and operators
+      // Delimiters
       [/[{}()\[\]]/, '@brackets'],
-      [/@symbols/, {
-        cases: {
-          '@operators': 'operator',
-          '@default': '',
-        },
-      }],
+      [/[<>]/, 'delimiter.angle'],
+
+      // Operators (multi-char first, then single-char)
+      [/[=!<>]=|&&|\|\||[?]{2}|\+=|-=|\*=|\/=|%=/, 'operator'],
+      [/[+\-*/%&|^~!=<>?:]/, 'operator'],
+
+      // Semicolons, commas, dots
+      [/[;,.]/, 'delimiter'],
 
       // Numbers
-      [/0[xX][0-9a-fA-F]+/, 'number.hex'],
-      [/0[bB][01]+/, 'number.binary'],
-      [/0[oO][0-7]+/, 'number.octal'],
-      [/\d+\.\d+/, 'number.float'],
-      [/\d+/, 'number'],
+      [/0[xX][0-9a-fA-F_]+/, 'number.hex'],
+      [/0[bB][01_]+/, 'number.binary'],
+      [/0[oO][0-7_]+/, 'number.octal'],
+      [/\d[\d_]*\.\d[\d_]*/, 'number.float'],
+      [/\d[\d_]*/, 'number'],
 
       // Strings
-      [/"([^"\\]|\\.)*$/, 'string.invalid'], // non-terminated string
+      [/"([^"\\]|\\.)*$/, 'string.invalid'],
       [/"/, 'string', '@string'],
 
       // Decorators / attributes
       [/@[a-zA-Z_]\w*/, 'annotation'],
-    ],
-
-    import_statement: [
-      [/\s+/, ''],
-      [/[a-zA-Z_]\w*/, 'type'],
-      [/from/, 'keyword'],
-      [/0x[0-9a-fA-F]+/, 'number.hex'],
-      [/"([^"\\]|\\.)*"/, 'string'],
-      [/$/, '', '@pop'],
-      [/\n/, '', '@pop'],
-      [/./, '', '@pop'],
     ],
 
     whitespace: [
@@ -149,9 +161,9 @@ export const cadenceTokenProvider: languages.IMonarchLanguage = {
     ],
 
     comment: [
-      [/[^\/*]+/, 'comment'],
+      [/[^/*]+/, 'comment'],
       [/\*\//, 'comment', '@pop'],
-      [/[\/*]/, 'comment'],
+      [/[/*]/, 'comment'],
     ],
 
     string: [
