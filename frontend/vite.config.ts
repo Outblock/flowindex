@@ -37,6 +37,12 @@ export default defineConfig({
     }),
   ],
 
+  // Dedupe React so workspace packages (e.g. @flowindex/flowtoken) always
+  // resolve react/jsx-runtime from the root node_modules, not their own.
+  resolve: {
+    dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+  },
+
   // Keep the historical dev port for local workflows
   server: {
     port: 5173,
