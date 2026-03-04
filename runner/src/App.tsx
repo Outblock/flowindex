@@ -5,6 +5,7 @@ import axios from 'axios';
 import CadenceEditor from './editor/CadenceEditor';
 import CadenceDiffEditor from './editor/CadenceDiffEditor';
 import { useLsp } from './editor/useLsp';
+import { useSolidityLsp } from './editor/useSolidityLsp';
 import ResultPanel from './components/ResultPanel';
 import ParamPanel from './components/ParamPanel';
 import WalletButton from './components/WalletButton';
@@ -400,7 +401,24 @@ export default function App() {
     setProject((prev) => addDependencyFile(prev, address, contractName, code));
   }, []);
 
-  const { notifyChange, goToDefinition, loadingDeps } = useLsp(monacoInstance, project, network, handleDependency);
+  const { notifyChange: cadenceNotifyChange, goToDefinition: cadenceGoToDefinition, loadingDeps } = useLsp(monacoInstance, project, network, handleDependency);
+  const { notifyChange: solNotifyChange, goToDefinition: solGoToDefinition } = useSolidityLsp(monacoInstance, project, network);
+
+  // Unified handlers that route by file extension
+  const notifyChange = useCallback((path: string, content: string) => {
+    if (path.endsWith('.sol')) {
+      solNotifyChange(path, content);
+    } else {
+      cadenceNotifyChange(path, content);
+    }
+  }, [cadenceNotifyChange, solNotifyChange]);
+
+  const goToDefinition = useCallback(async (path: string, line: number, column: number) => {
+    if (path.endsWith('.sol')) {
+      return solGoToDefinition(path, line, column);
+    }
+    return cadenceGoToDefinition(path, line, column);
+  }, [cadenceGoToDefinition, solGoToDefinition]);
 
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const codeType = useMemo(() => detectCodeType(activeCode), [activeCode]);
