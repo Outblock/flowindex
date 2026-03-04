@@ -11,7 +11,7 @@ import { ensureHeyApiConfigured, getBaseURL } from '../../api/heyapi';
 import { getFlowV1FtByToken, getFlowV1FtByTokenHolding, getFlowV1FtTransfer } from '../../api/gen/find';
 import { Pagination } from '../../components/Pagination';
 import { RouteErrorBoundary } from '../../components/RouteErrorBoundary';
-import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
+import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis, XAxis } from 'recharts';
 
 interface TokenSearch {
   holdersPage?: number;
@@ -332,20 +332,35 @@ function TokenDetailInner() {
                 </div>
                 <div className="flex-1 min-h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={priceHistory} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+                    <AreaChart data={priceHistory} margin={{ top: 4, right: 4, bottom: 20, left: 4 }}>
                       <defs>
                         <linearGradient id="priceGradLg" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor={color} stopOpacity={0.2} />
                           <stop offset="100%" stopColor={color} stopOpacity={0} />
                         </linearGradient>
                       </defs>
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'monospace' }}
+                        tickFormatter={(d: string) => {
+                          const dt = new Date(d);
+                          return `${dt.getMonth() + 1}/${dt.getDate()}`;
+                        }}
+                        interval="preserveStartEnd"
+                        minTickGap={40}
+                      />
                       <YAxis domain={['dataMin', 'dataMax']} hide />
                       <Tooltip
                         contentStyle={{ background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', padding: '8px 12px' }}
                         labelStyle={{ color: '#a1a1aa', fontSize: 11 }}
                         itemStyle={{ color: '#fff' }}
                         formatter={(value: number) => [`$${value.toFixed(value >= 1 ? 2 : 6)}`, 'Price']}
-                        labelFormatter={(label: string) => label}
+                        labelFormatter={(label: string) => {
+                          const dt = new Date(label);
+                          return isNaN(dt.getTime()) ? label : dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                        }}
                       />
                       <Area
                         type="monotone"
