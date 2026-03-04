@@ -5,6 +5,11 @@ import { registerCadenceLanguage, CADENCE_LANGUAGE_ID } from './cadenceLanguage'
 import { registerCadenceThemes, CADENCE_DARK_THEME, CADENCE_LIGHT_THEME } from './cadenceTheme';
 import { activateCadenceTextmate } from './cadenceTextmate';
 
+function detectLanguage(path?: string): string {
+  if (path?.endsWith('.sol')) return 'sol';
+  return CADENCE_LANGUAGE_ID;
+}
+
 interface CadenceEditorProps {
   code: string;
   onChange: (value: string) => void;
@@ -105,7 +110,7 @@ export default function CadenceEditor({
 
   return (
     <Editor
-      language={CADENCE_LANGUAGE_ID}
+      language={detectLanguage(path)}
       theme={darkMode ? CADENCE_DARK_THEME : CADENCE_LIGHT_THEME}
       value={code}
       path={path}
