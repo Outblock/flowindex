@@ -12,15 +12,22 @@ const logger = createLogger('WorkflowsPage')
 
 export default function WorkflowsPage() {
   const router = useRouter()
-  const { workflows } = useWorkflowRegistry()
+  const { workflows, hydration } = useWorkflowRegistry()
   const params = useParams()
   const workspaceId = params.workspaceId as string
   const [isMounted, setIsMounted] = useState(false)
   const [isCreatingDefaultWorkflow, setIsCreatingDefaultWorkflow] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // Fetch workflows using React Query
-  const { isLoading, isError } = useWorkflows(workspaceId)
+  // Fetch workflows using React Query (also syncs to registry store)
+  const { isError } = useWorkflows(workspaceId)
+
+  // Use the registry's hydration phase to know when workflows are actually in the store.
+  // React Query's isLoading can flip to false before the sync useEffect populates the store.
+  const isRegistryReady =
+    hydration.phase === 'metadata-ready' ||
+    hydration.phase === 'state-loading' ||
+    hydration.phase === 'ready'
 
   // Track when component is mounted to avoid hydration issues
   useEffect(() => {
@@ -32,16 +39,16 @@ export default function WorkflowsPage() {
     // Wait for component to be mounted to avoid hydration mismatches
     if (!isMounted) return
 
-    // Only proceed if workflows are done loading
-    if (isLoading) return
-
-    if (isError) {
+    // Handle errors early (hydration phase will be 'error', not 'metadata-ready')
+    if (isError || hydration.phase === 'error') {
       logger.error('Failed to load workflows for workspace, fallback to /workspace', { workspaceId })
       setLoadError('无法加载该 workspace，正在返回工作区列表。')
-      // Prevent permanent blank/spinner on stale or unauthorized workspace links.
       router.replace('/workspace')
       return
     }
+
+    // Wait until the registry store is actually populated (not just React Query done)
+    if (!isRegistryReady) return
 
     const workflowIds = Object.keys(workflows)
 
@@ -97,7 +104,8 @@ export default function WorkflowsPage() {
     void ensureDefaultWorkflow()
   }, [
     isMounted,
-    isLoading,
+    isRegistryReady,
+    hydration.phase,
     workflows,
     workspaceId,
     router,
