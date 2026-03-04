@@ -522,6 +522,42 @@ export const useOperationQueueStore = create<OperationQueueState>((set, get) => 
     get().processNextOperation()
   },
 
+  waitForPendingOperations: (workflowId: string, timeoutMs = 5000) => {
+    return new Promise<void>((resolve) => {
+      const state = get()
+      const hasPending = state.operations.some(
+        (op) => op.workflowId === workflowId && (op.status === 'pending' || op.status === 'processing')
+      )
+
+      if (!hasPending) {
+        resolve()
+        return
+      }
+
+      logger.info(`Waiting for pending operations to complete for workflow ${workflowId}`)
+
+      const timeout = setTimeout(() => {
+        logger.warn(`Timed out waiting for pending operations on workflow ${workflowId}`)
+        unsubscribe()
+        resolve()
+      }, timeoutMs)
+
+      const unsubscribe = useOperationQueueStore.subscribe((state) => {
+        const stillPending = state.operations.some(
+          (op) =>
+            op.workflowId === workflowId &&
+            (op.status === 'pending' || op.status === 'processing')
+        )
+        if (!stillPending) {
+          clearTimeout(timeout)
+          unsubscribe()
+          logger.info(`All pending operations completed for workflow ${workflowId}`)
+          resolve()
+        }
+      })
+    })
+  },
+
   cancelOperationsForWorkflow: (workflowId: string) => {
     const state = get()
     retryTimeouts.forEach((timeout, opId) => {

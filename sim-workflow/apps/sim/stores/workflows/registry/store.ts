@@ -5,6 +5,7 @@ import { withOptimisticUpdate } from '@/lib/core/utils/optimistic-update'
 import { DEFAULT_DUPLICATE_OFFSET } from '@/lib/workflows/autolayout/constants'
 import { getNextWorkflowColor } from '@/lib/workflows/colors'
 import { buildDefaultWorkflowArtifacts } from '@/lib/workflows/defaults'
+import { useOperationQueueStore } from '@/stores/operation-queue/store'
 import { useVariablesStore } from '@/stores/panel/variables/store'
 import type {
   DeploymentStatus,
@@ -405,6 +406,13 @@ export const useWorkflowRegistry = create<WorkflowRegistry>()(
         if (isFullyHydrated) {
           logger.info(`Already active workflow ${id} with data loaded, skipping switch`)
           return
+        }
+
+        // Wait for pending operations on the current workflow before switching
+        if (activeWorkflowId && activeWorkflowId !== id) {
+          await useOperationQueueStore
+            .getState()
+            .waitForPendingOperations(activeWorkflowId)
         }
 
         await get().loadWorkflowState(id)
