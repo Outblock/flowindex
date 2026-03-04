@@ -489,25 +489,31 @@ export default function App() {
       // Compile
       const compileResult = await compileSolidity(sources);
       if (compileResult.type === 'error') {
-        setResults([{ type: 'error', value: compileResult.data.message }]);
+        setResults([{ type: 'error', data: compileResult.data.message }]);
         setLoading(false);
         return;
       }
 
-      // Check for severe compilation errors
+      // Narrow to compile_result
+      if (compileResult.type !== 'compile_result') {
+        setLoading(false);
+        return;
+      }
+
       const { contracts, errors } = compileResult.data;
       if (errors.length > 0) {
         const severeErrors = errors.filter((e: any) => e.severity === 'error');
         if (severeErrors.length > 0) {
-          setResults([{ type: 'error', value: JSON.stringify(errors, null, 2) }]);
+          setResults([{ type: 'error', data: JSON.stringify(errors, null, 2) }]);
           setLoading(false);
           return;
         }
       }
 
       // If we have a signer, deploy the first contract
-      if (evmWallet.signer && Object.keys(contracts).length > 0) {
-        const [contractName, contractData] = Object.entries(contracts)[0];
+      const contractEntries = Object.entries(contracts);
+      if (evmWallet.signer && contractEntries.length > 0) {
+        const [contractName, contractData] = contractEntries[0];
         await deploySolidityContract(
           evmWallet.signer,
           contractName,
@@ -518,28 +524,29 @@ export default function App() {
             if (result.type === 'deploy_submitted') {
               setResults(prev => [...prev, {
                 type: 'tx_submitted' as const,
-                value: `Deploying ${result.data.contractName}...`,
+                data: `Deploying ${result.data.contractName}...`,
                 txId: result.data.txHash,
               }]);
             } else if (result.type === 'deploy_result') {
               setResults(prev => [...prev, {
                 type: 'tx_sealed' as const,
-                value: `Contract deployed at ${result.data.address}`,
+                data: `Contract deployed at ${result.data.address}`,
                 txId: result.data.txHash,
               }]);
             } else if (result.type === 'error') {
               setResults(prev => [...prev, {
                 type: 'error' as const,
-                value: result.data.message,
+                data: result.data.message,
               }]);
             }
           },
         );
-      } else if (Object.keys(contracts).length > 0) {
+      } else if (contractEntries.length > 0) {
         // No signer -- just show compilation success
+        const names = Object.keys(contracts);
         setResults([{
           type: 'script_result' as const,
-          value: `Compiled ${Object.keys(contracts).length} contract(s): ${Object.keys(contracts).join(', ')}`,
+          data: `Compiled ${names.length} contract(s): ${names.join(', ')}`,
         }]);
       }
     } else if (codeType === 'script') {

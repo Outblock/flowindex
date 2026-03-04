@@ -3,7 +3,7 @@ import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
 import { buildMeta } from '../../lib/og/meta';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown, Sparkles, Play } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown, Sparkles } from 'lucide-react';
 import { openAIChat } from '../../components/chat/openAIChat';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -806,39 +806,6 @@ function TransactionDetail() {
         })();
     }, [transaction?.script, transaction?.script_hash]);
 
-    // Contract identifier metadata for enriching script args (logo, name, symbol)
-    const [contractMeta, setContractMeta] = useState<Map<string, { name: string; symbol: string; logo: string }>>(new Map());
-    useEffect(() => {
-        if (!transaction?.arguments) return;
-        // Scan args for A.{16hex}.{Name} patterns
-        const CONTRACT_ID_RE = /A\.[a-f0-9]{16}\.\w+/g;
-        const argStr = typeof transaction.arguments === 'string' ? transaction.arguments : JSON.stringify(transaction.arguments);
-        const matches = argStr.match(CONTRACT_ID_RE);
-        if (!matches || matches.length === 0) return;
-        const unique = [...new Set(matches)];
-        // Fetch FT token list to resolve metadata
-        resolveApiBaseUrl().then(base =>
-            fetch(`${base}/flow/v1/ft?limit=500`).then(r => r.ok ? r.json() : null).then(json => {
-                const tokens: any[] = json?.data || [];
-                const map = new Map<string, { name: string; symbol: string; logo: string }>();
-                for (const id of unique) {
-                    // id format: A.{addr}.{ContractName} — match against token's address+contract_name
-                    const parts = id.split('.');
-                    if (parts.length < 3) continue;
-                    const addr = parts[1];
-                    const contractName = parts.slice(2).join('.');
-                    const token = tokens.find((t: any) =>
-                        t.contract_name === contractName && t.address?.replace(/^0x/, '') === addr
-                    );
-                    if (token) {
-                        map.set(id, { name: token.name || contractName, symbol: token.symbol || '', logo: token.logo || '' });
-                    }
-                }
-                if (map.size > 0) setContractMeta(map);
-            })
-        ).catch(() => {});
-    }, [transaction?.arguments]);
-
     const [expandedPayloads, setExpandedPayloads] = useState<Record<number, boolean>>({});
     const [selectedNft, setSelectedNft] = useState<any | null>(null);
     const [selectedNftCollection, setSelectedNftCollection] = useState<{ id: string; name: string }>({ id: '', name: '' });
@@ -1587,77 +1554,57 @@ function TransactionDetail() {
                             <div className="space-y-8">
                                 {/* Arguments */}
                                 <div className="font-mono">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <h3 className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                                            <FileText className="h-4 w-4" /> Script Arguments
-                                        </h3>
+                                    <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                        <FileText className="h-4 w-4" /> Script Arguments
                                         {transaction.arguments && (() => {
                                             try {
-                                                const raw = typeof transaction.arguments === 'string' ? JSON.parse(transaction.arguments) : transaction.arguments;
-                                                if (!Array.isArray(raw)) return null;
-                                                const decoded = raw.map((a: any) => {
-                                                    const dec = (v: any): any => {
-                                                        if (!v || typeof v !== 'object') return v;
-                                                        if (v.value !== undefined) {
-                                                            if (v.type === 'Optional') return v.value ? dec(v.value) : null;
-                                                            if (v.type === 'Array') return v.value.map(dec);
-                                                            if (v.type === 'Dictionary') { const d: Record<string, any> = {}; v.value.forEach((i: any) => { d[String(dec(i.key))] = dec(i.value); }); return d; }
-                                                            if (v.type === 'Struct' || v.type === 'Resource' || v.type === 'Event') { const o: Record<string, any> = {}; v.value?.fields?.forEach((f: any) => { o[f.name] = dec(f.value); }); return o; }
-                                                            if (v.type === 'Path') return `${v.value.domain}/${v.value.identifier}`;
-                                                            if (v.type === 'Type') return v.value.staticType;
-                                                            return v.value;
+                                                const rawArgs = typeof transaction.arguments === 'string' ? JSON.parse(transaction.arguments) : transaction.arguments;
+                                                if (Array.isArray(rawArgs)) {
+                                                    // Decoded values for JSON copy
+                                                    const decodeCadVal = (val: any): any => {
+                                                        if (!val || typeof val !== 'object') return val;
+                                                        if (val.value !== undefined) {
+                                                            if (val.type === 'Optional') return val.value ? decodeCadVal(val.value) : null;
+                                                            if (val.type === 'Array') return val.value.map(decodeCadVal);
+                                                            if (val.type === 'Dictionary') {
+                                                                const d: Record<string, any> = {};
+                                                                val.value.forEach((item: any) => { d[String(decodeCadVal(item.key))] = decodeCadVal(item.value); });
+                                                                return d;
+                                                            }
+                                                            if (val.type === 'Struct' || val.type === 'Resource' || val.type === 'Event') {
+                                                                const o: Record<string, any> = {};
+                                                                if (val.value?.fields) val.value.fields.forEach((f: any) => { o[f.name] = decodeCadVal(f.value); });
+                                                                return o;
+                                                            }
+                                                            if (val.type === 'Path') return `${val.value.domain}/${val.value.identifier}`;
+                                                            if (val.type === 'Type') return val.value.staticType;
+                                                            return val.value;
                                                         }
-                                                        return v;
+                                                        return val;
                                                     };
-                                                    return dec(a);
-                                                });
-                                                const CopyLabel = ({ label, content }: { label: string; content: string }) => {
-                                                    const [copied, setCopied] = useState(false);
+                                                    const decodedArr = rawArgs.map(decodeCadVal);
                                                     return (
-                                                        <button
-                                                            type="button"
-                                                            title={`Copy as ${label}`}
-                                                            onClick={() => { navigator.clipboard.writeText(content); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-                                                            className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${copied ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
-                                                        >{copied ? 'Copied!' : label}</button>
+                                                        <span className="flex items-center gap-1 ml-1">
+                                                            <CopyButton content={JSON.stringify(decodedArr, null, 2)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />
+                                                            <span className="text-[9px] text-zinc-400 mr-1">JSON</span>
+                                                            <CopyButton content={JSON.stringify(rawArgs, null, 2)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />
+                                                            <span className="text-[9px] text-zinc-400">Cadence</span>
+                                                        </span>
                                                     );
-                                                };
-                                                return (
-                                                    <div className="flex items-center gap-1 ml-auto">
-                                                        <span className="text-[10px] text-zinc-400 mr-0.5">Copy:</span>
-                                                        <CopyLabel label="JSON" content={JSON.stringify(decoded, null, 2)} />
-                                                        <CopyLabel label="Cadence" content={JSON.stringify(raw, null, 2)} />
-                                                    </div>
-                                                );
-                                            } catch { return null; }
+                                                }
+                                            } catch { /* ignore */ }
+                                            return null;
                                         })()}
-                                    </div>
+                                    </h3>
                                     {transaction.arguments ? (
                                         <div className="bg-zinc-50 dark:bg-black/50 border border-zinc-200 dark:border-white/5 p-4 rounded-sm">
                                             {(() => {
                                                 // Detect Flow (0x + 16 hex) or EVM (0x + 40 hex) addresses in values
                                                 const ADDRESS_RE = /^0x[a-fA-F0-9]{16}$|^0x[a-fA-F0-9]{40}$/;
-                                                const CONTRACT_ID_RE = /^A\.[a-f0-9]{16}\.\w+$/;
 
                                                 const renderArgValue = (decoded: any): React.ReactNode => {
                                                     if (typeof decoded === 'string' && ADDRESS_RE.test(decoded)) {
                                                         return <AddressLink address={decoded.replace(/^0x/, '')} prefixLen={20} suffixLen={0} className="text-xs" />;
-                                                    }
-                                                    if (typeof decoded === 'string' && CONTRACT_ID_RE.test(decoded)) {
-                                                        const meta = contractMeta.get(decoded);
-                                                        const parts = decoded.split('.');
-                                                        const addr = parts[1];
-                                                        const contractName = parts.slice(2).join('.');
-                                                        return (
-                                                            <Link to={`/contract/A.${addr}.${contractName}`} className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline" title={meta ? `${meta.name}${meta.symbol ? ` (${meta.symbol})` : ''}` : contractName}>
-                                                                {meta?.logo ? (
-                                                                    <img src={meta.logo} alt="" className="w-4 h-4 rounded-full" />
-                                                                ) : (
-                                                                    <FileText className="w-3.5 h-3.5 text-zinc-400" />
-                                                                )}
-                                                                <span>{meta ? `${contractName}${meta.symbol ? ` (${meta.symbol})` : ''}` : decoded}</span>
-                                                            </Link>
-                                                        );
                                                     }
                                                     if (Array.isArray(decoded)) {
                                                         const hasAddr = decoded.some((v: any) => typeof v === 'string' && ADDRESS_RE.test(v));
@@ -1738,18 +1685,15 @@ function TransactionDetail() {
                                                 // Parse parameter names from script's transaction(...) signature
                                                 const parseParamNames = (script: string): { name: string; type: string }[] => {
                                                     if (!script) return [];
-                                                    // Prefer transaction(...) for user-facing args; fall back to fun main(...) for scripts
-                                                    const match =
-                                                        script.match(/^\s*transaction\s*\(([^)]*)\)/m) ||
-                                                        script.match(/fun\s+main\s*\(([^)]*)\)/);
+                                                    // Match transaction(...) or prepare(...) — handle multiline
+                                                    const match = script.match(/(?:transaction|prepare)\s*\(([^)]*)\)/s);
                                                     if (!match) return [];
                                                     const paramsStr = match[1].trim();
                                                     if (!paramsStr) return [];
                                                     return paramsStr.split(',').map(p => {
                                                         const trimmed = p.trim();
-                                                        const colonIdx = trimmed.indexOf(':');
-                                                        if (colonIdx === -1) return { name: trimmed, type: '' };
-                                                        return { name: trimmed.slice(0, colonIdx).trim(), type: trimmed.slice(colonIdx + 1).trim() };
+                                                        const parts = trimmed.split(':').map(s => s.trim());
+                                                        return { name: parts[0] || '', type: parts[1] || '' };
                                                     });
                                                 };
 
@@ -1778,7 +1722,8 @@ function TransactionDetail() {
                                                                 const paramName = param?.name || `arg${idx}`;
                                                                 const paramType = param?.type || cadenceType;
 
-                                                                const decodedStr = typeof decoded === 'object' && decoded !== null
+                                                                // Build copyable string for this arg
+                                                                const argCopyStr = typeof decoded === 'object' && decoded !== null
                                                                     ? JSON.stringify(decoded, null, 2)
                                                                     : String(decoded);
 
@@ -1789,9 +1734,10 @@ function TransactionDetail() {
                                                                             <span className="text-[10px] text-zinc-400 font-mono tabular-nums">{idx}</span>
                                                                             <span className="text-[11px] text-zinc-800 dark:text-zinc-200 font-medium font-mono">{paramName}</span>
                                                                             <span className="text-[10px] text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-500/10 px-1.5 py-0.5 rounded">{paramType}</span>
-                                                                            <CopyButton content={decodedStr} className="ml-auto" />
+                                                                            <span className="flex-1" />
+                                                                            <CopyButton content={argCopyStr} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200" />
                                                                         </div>
-                                                                        {/* Value — scrollable if tall */}
+                                                                        {/* Value — scrollable when tall */}
                                                                         <div className="px-3 py-2.5 text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all leading-relaxed max-h-48 overflow-y-auto">
                                                                             {renderArgValue(decoded)}
                                                                         </div>
@@ -1817,18 +1763,6 @@ function TransactionDetail() {
                                         <h3 className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                                             <Braces className="h-4 w-4" /> Cadence Script
                                         </h3>
-                                        <div className="flex items-center gap-2">
-                                        {transaction.script && (
-                                            <Link
-                                                to="/playground"
-                                                search={{ tx: transaction.id }}
-                                                target="_blank"
-                                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 transition-colors"
-                                            >
-                                                <Play size={10} />
-                                                Open in Playground
-                                            </Link>
-                                        )}
                                         {parsedError?.scriptErrorLine && transaction.script && (
                                             <button
                                                 onClick={() => {
@@ -1841,7 +1775,6 @@ function TransactionDetail() {
                                                 Jump to Error (Line {parsedError.scriptErrorLine})
                                             </button>
                                         )}
-                                        </div>
                                     </div>
                                     {transaction.script ? (
                                         <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden text-[10px]">
