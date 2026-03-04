@@ -38,7 +38,7 @@ export const flowGetNftInventoryTool: ToolConfig<FlowGetNftInventoryParams, Flow
         success: false,
         output: { content: data.error || 'Failed to get NFT inventory' },
         error: data.error,
-      } as FlowGetNftInventoryResponse
+      } as unknown as FlowGetNftInventoryResponse
     }
     return { success: true, output: data.output }
   },

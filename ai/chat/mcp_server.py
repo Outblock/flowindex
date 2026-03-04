@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Flow AI MCP Server.
+FlowIndex AI MCP Server.
 
 Exposes:
 - run_flowindex_sql tool: Execute read-only SQL against the Flowindex database
@@ -151,5 +151,5 @@ def get_cadence_docs() -> str:
 
 if __name__ == "__main__":
     port = config.MCP_PORT
-    print(f"Starting Flow AI MCP server on http://0.0.0.0:{port}/mcp")
+    print(f"Starting FlowIndex AI MCP server on http://0.0.0.0:{port}/mcp")
     mcp.run(transport="streamable-http", host="0.0.0.0", port=port)

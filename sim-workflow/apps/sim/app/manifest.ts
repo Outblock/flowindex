@@ -5,10 +5,10 @@ export default function manifest(): MetadataRoute.Manifest {
   const brand = getBrandConfig()
 
   return {
-    name: brand.name === 'Sim' ? 'Sim - AI Agent Workflow Builder' : brand.name,
+    name: brand.name,
     short_name: brand.name,
     description:
-      'Open-source AI agent workflow builder. 70,000+ developers build and deploy agentic workflows on Sim. Visual drag-and-drop interface for creating AI automations. SOC2 and HIPAA compliant.',
+      'FlowIndex Studio — AI agent workflow builder for the Flow blockchain. Build, deploy, and automate workflows with Flow smart contracts, tokens, and on-chain data.',
     start_url: '/',
     scope: '/',
     display: 'standalone',

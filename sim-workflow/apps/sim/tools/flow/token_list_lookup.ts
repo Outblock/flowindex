@@ -45,7 +45,7 @@ export const flowTokenListLookupTool: ToolConfig<
         success: false,
         output: { content: data.error || 'Failed to look up tokens', tokens: [] },
         error: data.error,
-      } as FlowTokenListLookupResponse
+      } as unknown as FlowTokenListLookupResponse
     }
     return { success: true, output: data.output }
   },

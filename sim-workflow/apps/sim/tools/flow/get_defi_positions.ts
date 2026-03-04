@@ -38,7 +38,7 @@ export const flowGetDefiPositionsTool: ToolConfig<FlowGetDefiPositionsParams, Fl
         success: false,
         output: { content: data.error || 'Failed to get DeFi positions' },
         error: data.error,
-      } as FlowGetDefiPositionsResponse
+      } as unknown as FlowGetDefiPositionsResponse
     }
     return { success: true, output: data.output }
   },

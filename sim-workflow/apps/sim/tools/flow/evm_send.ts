@@ -76,7 +76,7 @@ export const flowEvmSendTool: ToolConfig<FlowEvmSendParams, FlowEvmSendResponse>
         success: false,
         output: { content: data.error || 'EVM transaction failed', transactionId: '', status: 'ERROR' },
         error: data.error,
-      } as FlowEvmSendResponse
+      } as unknown as FlowEvmSendResponse
     }
     return { success: true, output: data.output }
   },

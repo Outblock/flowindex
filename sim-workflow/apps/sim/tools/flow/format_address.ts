@@ -47,7 +47,7 @@ export const flowFormatAddressTool: ToolConfig<FlowFormatAddressParams, FlowForm
           success: false,
           output: { content: data.error || 'Failed to format address', formatted: '', isValid: false },
           error: data.error,
-        } as FlowFormatAddressResponse
+        } as unknown as FlowFormatAddressResponse
       }
       return { success: true, output: data.output }
     },

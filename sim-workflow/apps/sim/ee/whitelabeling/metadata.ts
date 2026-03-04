@@ -9,8 +9,8 @@ export function generateBrandedMetadata(override: Partial<Metadata> = {}): Metad
   const brand = getBrandConfig()
 
   const defaultTitle = brand.name
-  const summaryFull = `Sim is an open-source AI agent workflow builder. Developers at trail-blazing startups to Fortune 500 companies deploy agentic workflows on the Sim platform. 70,000+ developers already use Sim to build and deploy AI agent workflows and connect them to 100+ apps. Sim is SOC2 and HIPAA compliant, ensuring enterprise-grade security for AI automation.`
-  const summaryShort = `Sim is an open-source AI agent workflow builder for production workflows.`
+  const summaryFull = `FlowIndex Studio is an AI agent workflow builder for the Flow blockchain. Build, deploy, and automate workflows that interact with Flow smart contracts, tokens, NFTs, and on-chain data.`
+  const summaryShort = `FlowIndex Studio — AI agent workflow builder for the Flow blockchain.`
 
   return {
     title: {
@@ -22,20 +22,18 @@ export function generateBrandedMetadata(override: Partial<Metadata> = {}): Metad
     authors: [{ name: brand.name }],
     generator: 'Next.js',
     keywords: [
-      'AI agent',
-      'AI agent builder',
+      'Flow blockchain',
+      'FlowIndex',
       'AI agent workflow',
-      'AI workflow automation',
-      'visual workflow editor',
-      'AI agents',
-      'workflow canvas',
-      'intelligent automation',
-      'AI tools',
-      'workflow designer',
-      'artificial intelligence',
-      'business automation',
-      'AI agent workflows',
-      'visual programming',
+      'blockchain automation',
+      'Flow smart contracts',
+      'Cadence',
+      'Flow NFT',
+      'Flow tokens',
+      'workflow builder',
+      'on-chain data',
+      'blockchain explorer',
+      'Flow EVM',
     ],
     referrer: 'origin-when-cross-origin',
     creator: brand.name,
@@ -79,8 +77,8 @@ export function generateBrandedMetadata(override: Partial<Metadata> = {}): Metad
       title: defaultTitle,
       description: summaryFull,
       images: [brand.logoUrl || '/logo/426-240/primary/small.png'],
-      creator: '@simdotai',
-      site: '@simdotai',
+      creator: '@flowaboratory',
+      site: '@flowaboratory',
     },
     manifest: '/manifest.webmanifest',
     icons: {
@@ -114,7 +112,7 @@ export function generateBrandedMetadata(override: Partial<Metadata> = {}): Metad
     other: {
       'apple-mobile-web-app-capable': 'yes',
       'mobile-web-app-capable': 'yes',
-      'msapplication-TileColor': '#701FFC', // Default Sim brand primary color
+      'msapplication-TileColor': '#00EF8B',
       'msapplication-config': '/favicon/browserconfig.xml',
     },
     ...override,
@@ -128,13 +126,13 @@ export function generateStructuredData() {
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'Sim',
+    name: 'FlowIndex Studio',
     description:
-      'Sim is an open-source AI agent workflow builder. Developers at trail-blazing startups to Fortune 500 companies deploy agentic workflows on the Sim platform. 70,000+ developers already use Sim to build and deploy AI agent workflows and connect them to 100+ apps. Sim is SOC2 and HIPAA compliant, ensuring enterprise-level security.',
+      'FlowIndex Studio is an AI agent workflow builder for the Flow blockchain. Build, deploy, and automate workflows that interact with Flow smart contracts, tokens, NFTs, and on-chain data.',
     url: getBaseUrl(),
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web Browser',
-    applicationSubCategory: 'AIWorkflowAutomation',
+    applicationSubCategory: 'BlockchainAutomation',
     areaServed: 'Worldwide',
     availableLanguage: ['en'],
     offers: {
@@ -143,14 +141,14 @@ export function generateStructuredData() {
     },
     creator: {
       '@type': 'Organization',
-      name: 'Sim',
-      url: 'https://sim.ai',
+      name: 'FlowIndex',
+      url: 'https://flowindex.io',
     },
     featureList: [
-      'Visual AI Agent Builder',
-      'Workflow Canvas Interface',
-      'AI Agent Automation',
-      'Custom AI Workflows',
+      'Flow Blockchain AI Workflows',
+      'Visual Workflow Builder',
+      'On-Chain Data Automation',
+      'Smart Contract Integration',
     ],
   }
 }

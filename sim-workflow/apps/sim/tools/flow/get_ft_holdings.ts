@@ -38,7 +38,7 @@ export const flowGetFtHoldingsTool: ToolConfig<FlowGetFtHoldingsParams, FlowGetF
         success: false,
         output: { content: data.error || 'Failed to get FT holdings' },
         error: data.error,
-      } as FlowGetFtHoldingsResponse
+      } as unknown as FlowGetFtHoldingsResponse
     }
     return { success: true, output: data.output }
   },

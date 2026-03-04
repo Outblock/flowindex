@@ -76,7 +76,7 @@ export const flowTransferFtTool: ToolConfig<FlowTransferFtParams, FlowTransferFt
         success: false,
         output: { content: data.error || 'Failed to transfer tokens', transactionId: '', status: 'ERROR' },
         error: data.error,
-      } as FlowTransferFtResponse
+      } as unknown as FlowTransferFtResponse
     }
     return { success: true, output: data.output }
   },

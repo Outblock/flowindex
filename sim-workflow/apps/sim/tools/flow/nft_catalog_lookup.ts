@@ -40,7 +40,7 @@ export const flowNftCatalogLookupTool: ToolConfig<
         success: false,
         output: { content: data.error || 'Failed to look up collection', collection: {} },
         error: data.error,
-      } as FlowNftCatalogLookupResponse
+      } as unknown as FlowNftCatalogLookupResponse
     }
     return { success: true, output: data.output }
   },

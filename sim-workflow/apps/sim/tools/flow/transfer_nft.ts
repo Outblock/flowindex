@@ -76,7 +76,7 @@ export const flowTransferNftTool: ToolConfig<FlowTransferNftParams, FlowTransfer
         success: false,
         output: { content: data.error || 'Failed to transfer NFT', transactionId: '', status: 'ERROR' },
         error: data.error,
-      } as FlowTransferNftResponse
+      } as unknown as FlowTransferNftResponse
     }
     return { success: true, output: data.output }
   },

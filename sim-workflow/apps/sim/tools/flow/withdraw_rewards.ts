@@ -65,7 +65,7 @@ export const flowWithdrawRewardsTool: ToolConfig<
           status: 'ERROR',
         },
         error: data.error,
-      } as FlowWithdrawRewardsResponse
+      } as unknown as FlowWithdrawRewardsResponse
     }
     return { success: true, output: data.output }
   },

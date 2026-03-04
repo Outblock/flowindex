@@ -38,7 +38,7 @@ export const flowResolveNameTool: ToolConfig<FlowResolveNameParams, FlowResolveN
         success: false,
         output: { content: data.error || 'Failed to resolve name' },
         error: data.error,
-      } as FlowResolveNameResponse
+      } as unknown as FlowResolveNameResponse
     }
     return { success: true, output: data.output }
   },

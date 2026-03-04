@@ -51,7 +51,7 @@ export const flowFlowIndexApiTool: ToolConfig<FlowFlowIndexApiParams, FlowFlowIn
         success: false,
         output: { content: data.error || 'FlowIndex API request failed', data: null },
         error: data.error,
-      } as FlowFlowIndexApiResponse
+      } as unknown as FlowFlowIndexApiResponse
     }
     return { success: true, output: data.output }
   },

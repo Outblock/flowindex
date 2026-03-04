@@ -38,7 +38,7 @@ export const flowGetStakingInfoTool: ToolConfig<FlowGetStakingInfoParams, FlowGe
         success: false,
         output: { content: data.error || 'Failed to get staking info' },
         error: data.error,
-      } as FlowGetStakingInfoResponse
+      } as unknown as FlowGetStakingInfoResponse
     }
     return { success: true, output: data.output }
   },

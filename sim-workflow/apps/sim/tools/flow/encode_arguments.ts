@@ -48,7 +48,7 @@ export const flowEncodeArgumentsTool: ToolConfig<
         success: false,
         output: { content: data.error || 'Failed to encode arguments', encoded: [] },
         error: data.error,
-      } as FlowEncodeArgumentsResponse
+      } as unknown as FlowEncodeArgumentsResponse
     }
     return { success: true, output: data.output }
   },

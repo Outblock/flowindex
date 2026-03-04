@@ -280,7 +280,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
                         <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" />
                       </svg>
                     </div>
-                    <h1 className="text-2xl font-bold text-white">Flow AI</h1>
+                    <h1 className="text-2xl font-bold text-white">FlowIndex AI</h1>
                     <p className="text-sm text-neutral-400 mt-1">Sign in to save your conversations</p>
                   </div>
 

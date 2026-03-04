@@ -64,7 +64,7 @@ export const flowTransferFlowTool: ToolConfig<FlowTransferFlowParams, FlowTransf
         success: false,
         output: { content: data.error || 'Failed to transfer FLOW', transactionId: '', status: 'ERROR' },
         error: data.error,
-      } as FlowTransferFlowResponse
+      } as unknown as FlowTransferFlowResponse
     }
     return { success: true, output: data.output }
   },

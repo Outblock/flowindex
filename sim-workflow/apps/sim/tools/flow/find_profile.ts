@@ -37,7 +37,7 @@ export const flowFindProfileTool: ToolConfig<FlowFindProfileParams, FlowFindProf
         success: false,
         output: { content: data.error || 'Failed to look up .find profile', profile: {} },
         error: data.error,
-      } as FlowFindProfileResponse
+      } as unknown as FlowFindProfileResponse
     }
     return { success: true, output: data.output }
   },

@@ -57,7 +57,7 @@ export const flowEvmCallTool: ToolConfig<FlowEvmCallParams, FlowEvmCallResponse>
         success: false,
         output: { content: data.error || 'EVM call failed', result: '' },
         error: data.error,
-      } as FlowEvmCallResponse
+      } as unknown as FlowEvmCallResponse
     }
     return { success: true, output: data.output }
   },

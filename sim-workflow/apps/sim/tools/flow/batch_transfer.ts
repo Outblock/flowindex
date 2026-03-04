@@ -65,7 +65,7 @@ export const flowBatchTransferTool: ToolConfig<
           status: 'ERROR',
         },
         error: data.error,
-      } as FlowBatchTransferResponse
+      } as unknown as FlowBatchTransferResponse
     }
     return { success: true, output: data.output }
   },

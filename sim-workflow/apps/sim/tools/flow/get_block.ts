@@ -46,7 +46,7 @@ export const flowGetBlockTool: ToolConfig<FlowGetBlockParams, FlowGetBlockRespon
         success: false,
         output: { content: data.error || 'Failed to get block' },
         error: data.error,
-      } as FlowGetBlockResponse
+      } as unknown as FlowGetBlockResponse
     }
     return { success: true, output: data.output }
   },

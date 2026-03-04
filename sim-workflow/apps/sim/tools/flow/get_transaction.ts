@@ -46,7 +46,7 @@ export const flowGetTransactionTool: ToolConfig<
         success: false,
         output: { content: data.error || 'Failed to get transaction' },
         error: data.error,
-      } as FlowGetTransactionResponse
+      } as unknown as FlowGetTransactionResponse
     }
     return { success: true, output: data.output }
   },

@@ -58,7 +58,7 @@ export const flowGetEventsTool: ToolConfig<FlowGetEventsParams, FlowGetEventsRes
         success: false,
         output: { content: data.error || 'Failed to get events' },
         error: data.error,
-      } as FlowGetEventsResponse
+      } as unknown as FlowGetEventsResponse
     }
     return { success: true, output: data.output }
   },

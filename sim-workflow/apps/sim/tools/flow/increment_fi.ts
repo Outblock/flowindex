@@ -51,7 +51,7 @@ export const flowIncrementFiTool: ToolConfig<FlowIncrementFiParams, FlowIncremen
         success: false,
         output: { content: data.error || 'Failed to get swap quote', quote: {} },
         error: data.error,
-      } as FlowIncrementFiResponse
+      } as unknown as FlowIncrementFiResponse
     }
     return { success: true, output: data.output }
   },

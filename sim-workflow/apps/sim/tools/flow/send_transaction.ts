@@ -67,7 +67,7 @@ export const flowSendTransactionTool: ToolConfig<
         success: false,
         output: { content: data.error || 'Failed to send transaction', transactionId: '', status: 'ERROR' },
         error: data.error,
-      } as FlowSendTransactionResponse
+      } as unknown as FlowSendTransactionResponse
     }
     return { success: true, output: data.output }
   },

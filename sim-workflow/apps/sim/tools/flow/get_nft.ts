@@ -44,7 +44,7 @@ export const flowGetNftTool: ToolConfig<FlowGetNftParams, FlowGetNftResponse> = 
         success: false,
         output: { content: data.error || 'Failed to get NFT' },
         error: data.error,
-      } as FlowGetNftResponse
+      } as unknown as FlowGetNftResponse
     }
     return { success: true, output: data.output }
   },

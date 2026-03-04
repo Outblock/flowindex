@@ -79,7 +79,7 @@ export const flowCreateAccountTool: ToolConfig<
           status: 'ERROR',
         },
         error: data.error,
-      } as FlowCreateAccountResponse
+      } as unknown as FlowCreateAccountResponse
     }
     return { success: true, output: data.output }
   },

@@ -58,7 +58,7 @@ export const flowUnstakeTool: ToolConfig<FlowUnstakeParams, FlowUnstakeResponse>
         success: false,
         output: { content: data.error || 'Failed to unstake FLOW', transactionId: '', status: 'ERROR' },
         error: data.error,
-      } as FlowUnstakeResponse
+      } as unknown as FlowUnstakeResponse
     }
     return { success: true, output: data.output }
   },

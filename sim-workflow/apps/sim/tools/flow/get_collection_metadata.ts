@@ -38,7 +38,7 @@ export const flowGetCollectionMetadataTool: ToolConfig<FlowGetCollectionMetadata
         success: false,
         output: { content: data.error || 'Failed to get collection metadata' },
         error: data.error,
-      } as FlowGetCollectionMetadataResponse
+      } as unknown as FlowGetCollectionMetadataResponse
     }
     return { success: true, output: data.output }
   },

@@ -43,7 +43,7 @@ export const flowGetBalanceTool: ToolConfig<FlowGetBalanceParams, FlowGetBalance
         success: false,
         output: { content: data.error || 'Failed to get balance' },
         error: data.error,
-      } as FlowGetBalanceResponse
+      } as unknown as FlowGetBalanceResponse
     }
     return { success: true, output: data.output }
   },

@@ -58,7 +58,7 @@ export const flowRemoveKeyTool: ToolConfig<FlowRemoveKeyParams, FlowRemoveKeyRes
         success: false,
         output: { content: data.error || 'Failed to remove key', transactionId: '', status: 'ERROR' },
         error: data.error,
-      } as FlowRemoveKeyResponse
+      } as unknown as FlowRemoveKeyResponse
     }
     return { success: true, output: data.output }
   },

@@ -110,7 +110,7 @@ export function Chat() {
               </div>
 
               <h1 className="text-[28px] font-semibold tracking-tight text-foreground mb-2">
-                Flow AI
+                FlowIndex AI
               </h1>
               <p className="text-[13px] text-[var(--text-tertiary)] mb-10 max-w-sm text-center leading-relaxed">
                 Query the Flow blockchain with natural language — SQL and

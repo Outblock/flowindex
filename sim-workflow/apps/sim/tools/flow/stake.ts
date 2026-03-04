@@ -64,7 +64,7 @@ export const flowStakeTool: ToolConfig<FlowStakeParams, FlowStakeResponse> = {
         success: false,
         output: { content: data.error || 'Failed to stake FLOW', transactionId: '', status: 'ERROR' },
         error: data.error,
-      } as FlowStakeResponse
+      } as unknown as FlowStakeResponse
     }
     return { success: true, output: data.output }
   },

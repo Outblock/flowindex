@@ -40,7 +40,7 @@ export const flowGetAccountTool: ToolConfig<FlowGetAccountParams, FlowGetAccount
         success: false,
         output: { content: data.error || 'Failed to get account' },
         error: data.error,
-      } as FlowGetAccountResponse
+      } as unknown as FlowGetAccountResponse
     }
     return { success: true, output: data.output }
   },

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Flow AI",
+  title: "FlowIndex AI",
   description: "Query the Flow blockchain with natural language",
 };
 

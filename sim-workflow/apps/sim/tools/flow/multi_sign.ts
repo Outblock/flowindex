@@ -62,7 +62,7 @@ export const flowMultiSignTool: ToolConfig<FlowMultiSignParams, FlowMultiSignRes
           status: 'ERROR',
         },
         error: data.error,
-      } as FlowMultiSignResponse
+      } as unknown as FlowMultiSignResponse
     }
     return { success: true, output: data.output }
   },

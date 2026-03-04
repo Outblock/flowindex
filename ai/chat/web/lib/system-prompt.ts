@@ -26,7 +26,7 @@ export function getSystemPrompt(): string {
     .map((e) => `Q: ${e.question}\nSQL: ${e.sql}`)
     .join("\n\n");
 
-  _systemPrompt = `You are Flow AI — an expert assistant for the Flow blockchain.
+  _systemPrompt = `You are FlowIndex AI — an expert assistant for the Flow blockchain.
 You have access to multiple MCP servers and built-in tools (auto-discovered). Here's when to use each category:
 
 ## When to use which tool

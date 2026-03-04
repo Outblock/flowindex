@@ -44,7 +44,7 @@ export const flowGetContractCodeTool: ToolConfig<FlowGetContractCodeParams, Flow
         success: false,
         output: { content: data.error || 'Failed to get contract code' },
         error: data.error,
-      } as FlowGetContractCodeResponse
+      } as unknown as FlowGetContractCodeResponse
     }
     return { success: true, output: data.output }
   },

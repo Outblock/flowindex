@@ -76,7 +76,7 @@ export const flowAddKeyTool: ToolConfig<FlowAddKeyParams, FlowAddKeyResponse> = 
         success: false,
         output: { content: data.error || 'Failed to add key', transactionId: '', status: 'ERROR' },
         error: data.error,
-      } as FlowAddKeyResponse
+      } as unknown as FlowAddKeyResponse
     }
     return { success: true, output: data.output }
   },

@@ -1,4 +1,4 @@
-"""Configuration for Flow AI chat service."""
+"""Configuration for FlowIndex AI chat service."""
 
 import os
 from dotenv import load_dotenv

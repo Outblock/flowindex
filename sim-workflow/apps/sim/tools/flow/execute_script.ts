@@ -52,7 +52,7 @@ export const flowExecuteScriptTool: ToolConfig<FlowExecuteScriptParams, FlowExec
           success: false,
           output: { content: data.error || 'Failed to execute script', result: null },
           error: data.error,
-        } as FlowExecuteScriptResponse
+        } as unknown as FlowExecuteScriptResponse
       }
       return { success: true, output: data.output }
     },

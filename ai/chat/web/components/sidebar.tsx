@@ -69,7 +69,7 @@ export function Sidebar({ activeSessionId, onSelectSession, onNewChat, refreshKe
               </svg>
             </div>
             <div>
-              <h3 className="text-[12px] font-bold text-white uppercase tracking-widest">Flow AI</h3>
+              <h3 className="text-[12px] font-bold text-white uppercase tracking-widest">FlowIndex AI</h3>
             </div>
           </div>
           <button onClick={() => setCollapsed(true)} className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-sm transition-colors">

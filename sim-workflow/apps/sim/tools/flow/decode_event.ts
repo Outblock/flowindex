@@ -38,7 +38,7 @@ export const flowDecodeEventTool: ToolConfig<FlowDecodeEventParams, FlowDecodeEv
         success: false,
         output: { content: data.error || 'Failed to decode event', eventType: '', fields: {} },
         error: data.error,
-      } as FlowDecodeEventResponse
+      } as unknown as FlowDecodeEventResponse
     }
     return { success: true, output: data.output }
   },
