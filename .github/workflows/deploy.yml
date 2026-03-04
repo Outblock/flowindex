@@ -1102,24 +1102,8 @@ jobs:
             docker ps --filter name=sim-studio --format "table {{.Names}}\t{{.Status}}"
 
             # Set up systemd timer to poll schedule execution endpoint every minute
-            sudo tee /etc/systemd/system/sim-schedule.service > /dev/null <<SVCEOF
-[Unit]
-Description=Sim Studio Schedule Executor
-After=network.target
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/curl -sf -H "Authorization: Bearer ${CRON_SECRET}" http://localhost:3200/api/schedules/execute
-TimeoutStartSec=30
-SVCEOF
-            sudo tee /etc/systemd/system/sim-schedule.timer > /dev/null <<TMREOF
-[Unit]
-Description=Run Sim Studio schedule check every minute
-[Timer]
-OnCalendar=*-*-* *:*:00
-Persistent=true
-[Install]
-WantedBy=timers.target
-TMREOF
+            printf "[Unit]\nDescription=Sim Studio Schedule Executor\nAfter=network.target\n[Service]\nType=oneshot\nExecStart=/usr/bin/curl -sf -H \"Authorization: Bearer ${CRON_SECRET}\" http://localhost:3200/api/schedules/execute\nTimeoutStartSec=30\n" | sudo tee /etc/systemd/system/sim-schedule.service > /dev/null
+            printf "[Unit]\nDescription=Run Sim Studio schedule check every minute\n[Timer]\nOnCalendar=*-*-* *:*:00\nPersistent=true\n[Install]\nWantedBy=timers.target\n" | sudo tee /etc/systemd/system/sim-schedule.timer > /dev/null
             sudo systemctl daemon-reload
             sudo systemctl enable --now sim-schedule.timer
             echo "Schedule timer installed"
