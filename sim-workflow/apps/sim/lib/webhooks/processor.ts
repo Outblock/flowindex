@@ -9,6 +9,7 @@ import { getJobQueue, shouldExecuteInline } from '@/lib/core/async-jobs'
 import { isProd } from '@/lib/core/config/feature-flags'
 import { getEffectiveDecryptedEnv } from '@/lib/environment/utils'
 import { preprocessExecution } from '@/lib/execution/preprocessing'
+import { verifyFlowIndexSignature } from '@/lib/flow/hmac'
 import { convertSquareBracketsToTwiML } from '@/lib/webhooks/utils'
 import {
   handleSlackChallenge,
@@ -786,6 +787,29 @@ export async function verifyProviderAuth(
           secretLength: secret.length,
         })
         return new NextResponse('Unauthorized - Invalid Fireflies signature', { status: 401 })
+      }
+    }
+  }
+
+  if (foundWebhook.provider === 'flow') {
+    const secret = providerConfig.flowIndexSigningSecret as string | undefined
+
+    if (secret) {
+      const signature = request.headers.get('X-FlowIndex-Signature')
+
+      if (!signature) {
+        logger.warn(`[${requestId}] FlowIndex webhook missing signature header`)
+        return new NextResponse('Unauthorized - Missing FlowIndex signature', { status: 401 })
+      }
+
+      const isValidSignature = verifyFlowIndexSignature(rawBody, signature, secret)
+
+      if (!isValidSignature) {
+        logger.warn(`[${requestId}] FlowIndex signature verification failed`, {
+          signatureLength: signature.length,
+          secretLength: secret.length,
+        })
+        return new NextResponse('Unauthorized - Invalid FlowIndex signature', { status: 401 })
       }
     }
   }
