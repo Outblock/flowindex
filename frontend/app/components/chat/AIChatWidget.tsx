@@ -830,7 +830,7 @@ function ChatMessage({ message, hideTools, isStreamingMsg }: { message: UIMessag
               return (
                 <div key={i} className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
                   {isStreamingMsg ? (
-                    <AnimatedMarkdown content={(part as any).text} animation={["colorTransition", "blurIn"]} animationDuration="0.6s" animationTimingFunction="ease-out" sep="word" customComponents={animatedMarkdownComponents} />
+                    <AnimatedMarkdown content={(part as any).text} animation={["colorTransition", "blurIn"]} animationDuration="0.6s" animationTimingFunction="ease-out" sep="diff" customComponents={animatedMarkdownComponents} />
                   ) : (
                     <MarkdownContent text={(part as any).text} />
                   )}
