@@ -4,6 +4,8 @@ COPY runner/package.json runner/bun.lock* ./
 COPY frontend/packages/flowtoken ./packages/flowtoken
 RUN bun install --frozen-lockfile
 COPY runner/ .
+# Re-copy flowtoken (real dir) after COPY runner/ to overwrite any symlink
+COPY frontend/packages/flowtoken ./packages/flowtoken
 ARG VITE_AI_CHAT_URL=https://ai.flowindex.io
 ARG VITE_SUPABASE_URL=
 ARG VITE_SUPABASE_ANON_KEY=
