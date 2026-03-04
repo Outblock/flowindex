@@ -77,6 +77,22 @@ import { FlowIncrementFiBlock } from '@/blocks/blocks/flow_increment_fi'
 import { FlowFlowIndexApiBlock } from '@/blocks/blocks/flow_flowindex_api'
 import { FlowFindProfileBlock } from '@/blocks/blocks/flow_find_profile'
 import { FlowTriggerBlock } from '@/blocks/blocks/flow_trigger'
+import {
+  FlowAccountEventTriggerBlock,
+  FlowBalanceChangeTriggerBlock,
+  FlowContractDeployTriggerBlock,
+  FlowContractEventTriggerBlock,
+  FlowDefiEventTriggerBlock,
+  FlowEvmTxTriggerBlock,
+  FlowFtTransferTriggerBlock,
+  FlowLargeTransferTriggerBlock,
+  FlowNewAccountTriggerBlock,
+  FlowNftTransferTriggerBlock,
+  FlowScheduleTriggerBlock,
+  FlowStakingEventTriggerBlock,
+  FlowTxSealedTriggerBlock,
+  FlowWhaleActivityTriggerBlock,
+} from '@/blocks/blocks/flow_triggers'
 import { FunctionBlock } from '@/blocks/blocks/function'
 import { GammaBlock } from '@/blocks/blocks/gamma'
 import { GenericWebhookBlock } from '@/blocks/blocks/generic_webhook'
@@ -312,6 +328,20 @@ export const registry: Record<string, BlockConfig> = {
   flow_flowindex_api: FlowFlowIndexApiBlock,
   flow_find_profile: FlowFindProfileBlock,
   flow_trigger: FlowTriggerBlock,
+  flow_account_event_trigger: FlowAccountEventTriggerBlock,
+  flow_balance_change_trigger: FlowBalanceChangeTriggerBlock,
+  flow_contract_deploy_trigger: FlowContractDeployTriggerBlock,
+  flow_contract_event_trigger: FlowContractEventTriggerBlock,
+  flow_defi_event_trigger: FlowDefiEventTriggerBlock,
+  flow_evm_tx_trigger: FlowEvmTxTriggerBlock,
+  flow_ft_transfer_trigger: FlowFtTransferTriggerBlock,
+  flow_large_transfer_trigger: FlowLargeTransferTriggerBlock,
+  flow_new_account_trigger: FlowNewAccountTriggerBlock,
+  flow_nft_transfer_trigger: FlowNftTransferTriggerBlock,
+  flow_schedule_trigger: FlowScheduleTriggerBlock,
+  flow_staking_event_trigger: FlowStakingEventTriggerBlock,
+  flow_tx_sealed_trigger: FlowTxSealedTriggerBlock,
+  flow_whale_activity_trigger: FlowWhaleActivityTriggerBlock,
   function: FunctionBlock,
   gamma: GammaBlock,
   generic_webhook: GenericWebhookBlock,
