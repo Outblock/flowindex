@@ -3,6 +3,9 @@ package webhooks
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -49,7 +52,7 @@ func (d *DirectDelivery) SendMessage(ctx context.Context, appID, eventType strin
 		if !ep.IsActive {
 			return fmt.Errorf("endpoint %s is not active", epID)
 		}
-		return d.deliverToURL(ctx, ep.URL, eventType, payload)
+		return d.deliverToURL(ctx, ep.URL, eventType, payload, ep.SigningSecret)
 	}
 
 	// Fallback: send to all active endpoints for the user
@@ -63,7 +66,7 @@ func (d *DirectDelivery) SendMessage(ctx context.Context, appID, eventType strin
 		if !ep.IsActive {
 			continue
 		}
-		if err := d.deliverToURL(ctx, ep.URL, eventType, payload); err != nil {
+		if err := d.deliverToURL(ctx, ep.URL, eventType, payload, ep.SigningSecret); err != nil {
 			log.Printf("[direct_delivery] failed to POST to %s: %v", ep.URL, err)
 			lastErr = err
 		}
@@ -76,7 +79,8 @@ func (d *DirectDelivery) DeleteEndpoint(_ context.Context, appID, endpointID str
 }
 
 // deliverToURL detects the endpoint type and formats the payload accordingly.
-func (d *DirectDelivery) deliverToURL(ctx context.Context, url, eventType string, payload map[string]interface{}) error {
+// signingSecret, if non-empty, is used to HMAC-SHA256 sign the request body.
+func (d *DirectDelivery) deliverToURL(ctx context.Context, url, eventType string, payload map[string]interface{}, signingSecret string) error {
 	// Normalize the payload: convert struct data fields to map via JSON round-trip
 	// so that formatDiscordPayload/formatSlackPayload can access fields by string key.
 	normalized := normalizePayload(payload)
@@ -107,7 +111,7 @@ func (d *DirectDelivery) deliverToURL(ctx context.Context, url, eventType string
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	return d.postToURL(ctx, url, body, eventType)
+	return d.postToURL(ctx, url, body, eventType, signingSecret)
 }
 
 // normalizePayload converts struct values (like *models.TokenTransfer) to
@@ -124,13 +128,21 @@ func normalizePayload(payload map[string]interface{}) map[string]interface{} {
 	return out
 }
 
-func (d *DirectDelivery) postToURL(ctx context.Context, url string, body []byte, eventType string) error {
+func (d *DirectDelivery) postToURL(ctx context.Context, url string, body []byte, eventType, signingSecret string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-FlowIndex-Event", eventType)
+
+	// HMAC-SHA256 sign the body if a signing secret is configured
+	if signingSecret != "" {
+		mac := hmac.New(sha256.New, []byte(signingSecret))
+		mac.Write(body)
+		sig := hex.EncodeToString(mac.Sum(nil))
+		req.Header.Set("X-FlowIndex-Signature", "sha256="+sig)
+	}
 
 	resp, err := d.client.Do(req)
 	if err != nil {
