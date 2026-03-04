@@ -6,9 +6,13 @@
  * subscriptions so that matching blockchain events are forwarded to the
  * Sim Studio webhook trigger URL.
  *
- * Uses the FlowIndex webhook API (/api/v1/subscriptions and /api/v1/endpoints)
- * with an internal API key for authentication.
+ * Uses per-user FlowIndex API keys, auto-provisioned on first deploy and
+ * encrypted at rest in Studio's database.
  */
+import { db } from '@sim/db'
+import { flowindexApiKey } from '@sim/db/schema'
+import { eq } from 'drizzle-orm'
+import { encryptApiKeyForStorage, decryptApiKeyFromStorage } from '@/lib/api-key/auth'
 import { createLogger } from '@sim/logger'
 import { env } from '@/lib/core/config/env'
 
@@ -41,15 +45,20 @@ interface FlowIndexApiResponse {
   [key: string]: unknown
 }
 
+interface FlowIndexApiKeyResult {
+  apiKey: string
+  endpointId?: string
+  signingSecret?: string
+}
+
+/**
+ * Makes an authenticated request to the FlowIndex API.
+ */
 async function flowIndexFetch<T = FlowIndexApiResponse>(
   path: string,
+  apiKey: string,
   options?: { method?: string; body?: unknown }
 ): Promise<T> {
-  const apiKey = env.FLOWINDEX_INTERNAL_API_KEY
-  if (!apiKey) {
-    throw new Error('FLOWINDEX_INTERNAL_API_KEY not configured')
-  }
-
   const res = await fetch(`${FLOW_API_BASE}${path}`, {
     method: options?.method ?? 'GET',
     headers: {
@@ -68,31 +77,143 @@ async function flowIndexFetch<T = FlowIndexApiResponse>(
 }
 
 /**
- * Ensures a webhook endpoint exists for the given callback URL.
- * Returns the endpoint ID.
+ * Retrieves or provisions a FlowIndex API key for the given user.
+ *
+ * On first call for a user, creates a new API key via the FlowIndex API
+ * (authenticated with the user's Supabase JWT), encrypts the key, and
+ * stores it in Studio's database. Subsequent calls return the cached key.
  */
-async function ensureEndpoint(callbackUrl: string, workflowId: string): Promise<string> {
-  // Try to find existing endpoint for this workflow
+export async function getOrCreateFlowIndexApiKey(
+  userId: string,
+  supabaseJwt?: string
+): Promise<FlowIndexApiKeyResult> {
+  const existing = await db
+    .select()
+    .from(flowindexApiKey)
+    .where(eq(flowindexApiKey.userId, userId))
+    .limit(1)
+
+  if (existing.length > 0) {
+    const row = existing[0]
+    const apiKey = await decryptApiKeyFromStorage(row.encryptedKey)
+    return {
+      apiKey,
+      endpointId: row.endpointId ?? undefined,
+      signingSecret: row.signingSecret ?? undefined,
+    }
+  }
+
+  // Provision a new API key via FlowIndex
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (supabaseJwt) {
+    headers['Authorization'] = `Bearer ${supabaseJwt}`
+  }
+
+  const res = await fetch(`${FLOW_API_BASE}/api/v1/api-keys`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: `sim-studio-${userId}` }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`Failed to provision FlowIndex API key: ${res.status} ${text}`)
+  }
+
+  const data = (await res.json()) as { key: string; prefix: string; id: string }
+
+  const encrypted = await encryptApiKeyForStorage(data.key)
+
+  await db.insert(flowindexApiKey).values({
+    id: crypto.randomUUID(),
+    userId,
+    encryptedKey: encrypted,
+    keyPrefix: data.prefix ?? data.key.slice(0, 8),
+  })
+
+  logger.info('Provisioned FlowIndex API key for user', {
+    userId,
+    keyPrefix: data.prefix ?? data.key.slice(0, 8),
+  })
+
+  return { apiKey: data.key }
+}
+
+/**
+ * Updates the stored endpoint ID and signing secret for a user's FlowIndex key.
+ */
+async function updateEndpointInfo(
+  userId: string,
+  endpointId: string,
+  signingSecret?: string
+): Promise<void> {
+  await db
+    .update(flowindexApiKey)
+    .set({
+      endpointId,
+      signingSecret: signingSecret ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(flowindexApiKey.userId, userId))
+}
+
+/**
+ * Ensures a webhook endpoint exists for the given callback URL.
+ * Returns the endpoint ID and signing secret.
+ */
+async function ensureEndpoint(
+  callbackUrl: string,
+  workflowId: string,
+  apiKey: string,
+  userId: string,
+  storedEndpointId?: string,
+  storedSigningSecret?: string
+): Promise<{ endpointId: string; signingSecret?: string }> {
+  // If we already have a stored endpoint, verify it still exists
+  if (storedEndpointId) {
+    try {
+      await flowIndexFetch(`/api/v1/endpoints/${storedEndpointId}`, apiKey)
+      return { endpointId: storedEndpointId, signingSecret: storedSigningSecret }
+    } catch {
+      // Endpoint was deleted, create a new one
+      logger.warn('Stored endpoint no longer exists, creating new one', {
+        endpointId: storedEndpointId,
+        userId,
+      })
+    }
+  }
+
+  // Try to find existing endpoint for this callback URL
   const endpoints = await flowIndexFetch<{ data: Array<{ id: string; url: string }> }>(
-    '/api/v1/endpoints'
+    '/api/v1/endpoints',
+    apiKey
   )
 
   const existing = endpoints.data?.find((ep) => ep.url === callbackUrl)
   if (existing) {
-    return existing.id
+    await updateEndpointInfo(userId, existing.id)
+    return { endpointId: existing.id }
   }
 
   // Create new endpoint
-  const result = await flowIndexFetch<FlowIndexApiResponse>('/api/v1/endpoints', {
-    method: 'POST',
-    body: {
-      url: callbackUrl,
-      description: `Sim Studio workflow ${workflowId}`,
-      endpoint_type: 'direct',
-    },
-  })
+  const result = await flowIndexFetch<{ id: string; signing_secret?: string }>(
+    '/api/v1/endpoints',
+    apiKey,
+    {
+      method: 'POST',
+      body: {
+        url: callbackUrl,
+        description: `Sim Studio workflow ${workflowId}`,
+        endpoint_type: 'direct',
+      },
+    }
+  )
 
-  return result.id
+  await updateEndpointInfo(userId, result.id, result.signing_secret)
+
+  return { endpointId: result.id, signingSecret: result.signing_secret }
 }
 
 /**
@@ -104,7 +225,9 @@ export async function registerFlowSubscriptions(params: {
   triggerId: string
   conditions: Record<string, unknown>
   callbackUrl: string
-}): Promise<string | null> {
+  userId: string
+  supabaseJwt?: string
+}): Promise<{ subscriptionId: string; signingSecret?: string } | null> {
   const eventType = TRIGGER_TO_EVENT_TYPE[params.triggerId]
   if (!eventType) {
     // Trigger doesn't need a webhook subscription (e.g., flow_schedule)
@@ -112,17 +235,30 @@ export async function registerFlowSubscriptions(params: {
   }
 
   try {
-    const endpointId = await ensureEndpoint(params.callbackUrl, params.workflowId)
+    const keyResult = await getOrCreateFlowIndexApiKey(params.userId, params.supabaseJwt)
 
-    const sub = await flowIndexFetch<FlowIndexApiResponse>('/api/v1/subscriptions', {
-      method: 'POST',
-      body: {
-        endpoint_id: endpointId,
-        event_type: eventType,
-        conditions: params.conditions,
-        workflow_id: params.workflowId,
-      },
-    })
+    const { endpointId, signingSecret } = await ensureEndpoint(
+      params.callbackUrl,
+      params.workflowId,
+      keyResult.apiKey,
+      params.userId,
+      keyResult.endpointId,
+      keyResult.signingSecret
+    )
+
+    const sub = await flowIndexFetch<FlowIndexApiResponse>(
+      '/api/v1/subscriptions',
+      keyResult.apiKey,
+      {
+        method: 'POST',
+        body: {
+          endpoint_id: endpointId,
+          event_type: eventType,
+          conditions: params.conditions,
+          workflow_id: params.workflowId,
+        },
+      }
+    )
 
     logger.info('Registered Flow subscription', {
       subscriptionId: sub.id,
@@ -131,7 +267,7 @@ export async function registerFlowSubscriptions(params: {
       eventType,
     })
 
-    return sub.id
+    return { subscriptionId: sub.id, signingSecret }
   } catch (error) {
     logger.error('Failed to register Flow subscription', {
       workflowId: params.workflowId,
@@ -143,19 +279,48 @@ export async function registerFlowSubscriptions(params: {
 }
 
 /**
+ * Deletes a single Flow subscription.
+ */
+export async function deleteFlowSubscription(
+  subscriptionId: string,
+  workflow: { userId: string }
+): Promise<void> {
+  try {
+    const keyResult = await getOrCreateFlowIndexApiKey(workflow.userId)
+    await flowIndexFetch(`/api/v1/subscriptions/${subscriptionId}`, keyResult.apiKey, {
+      method: 'DELETE',
+    })
+    logger.info('Deleted Flow subscription', { subscriptionId })
+  } catch (error) {
+    logger.warn('Failed to delete Flow subscription', {
+      subscriptionId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
  * Removes all Flow subscriptions for a workflow.
  * Called when a workflow is undeployed.
  */
-export async function deleteFlowSubscriptionsForWorkflow(workflowId: string): Promise<void> {
+export async function deleteFlowSubscriptionsForWorkflow(
+  workflowId: string,
+  userId: string
+): Promise<void> {
   try {
+    const keyResult = await getOrCreateFlowIndexApiKey(userId)
+
     const subs = await flowIndexFetch<{ data: Array<{ id: string; workflow_id: string }> }>(
-      '/api/v1/subscriptions'
+      '/api/v1/subscriptions',
+      keyResult.apiKey
     )
 
     const workflowSubs = subs.data?.filter((s) => s.workflow_id === workflowId) || []
 
     for (const sub of workflowSubs) {
-      await flowIndexFetch(`/api/v1/subscriptions/${sub.id}`, { method: 'DELETE' })
+      await flowIndexFetch(`/api/v1/subscriptions/${sub.id}`, keyResult.apiKey, {
+        method: 'DELETE',
+      })
     }
 
     if (workflowSubs.length > 0) {
