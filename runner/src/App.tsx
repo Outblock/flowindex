@@ -887,21 +887,23 @@ export default function App() {
           </select>
 
 
-          {/* Signer selector - show when there are keys available and code is transaction or contract */}
-          {(codeType === 'transaction' || codeType === 'contract') && localKeys.some(k => (accountsMap[k.id] || []).length > 0) && (
+          {/* Signer selector - show when there are local accounts available */}
+          {localKeys.some(k => (accountsMap[k.id] || []).length > 0) && (
             <SignerSelector
               selected={selectedSigner}
               onSelect={setSelectedSigner}
               localKeys={localKeys}
               accountsMap={accountsMap}
+              onViewAccount={handleViewAccount}
             />
           )}
 
-          {!isMobile && (
+          {/* Account button — show only when no local signer selected (avoids duplicate) */}
+          {!isMobile && selectedSigner.type !== 'local' && (
             <WalletButton
               localKeys={localKeys}
               accountsMap={accountsMap}
-              selectedLocalAccount={selectedSigner.type === 'local' ? { key: selectedSigner.key, account: selectedSigner.account } : null}
+              selectedLocalAccount={null}
               network={network}
               onOpenKeyManager={() => setShowKeyManager(true)}
               onSelectLocalAccount={(key, account) => setSelectedSigner({ type: 'local', key, account })}

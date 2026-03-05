@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Wallet, ChevronDown, HardDrive } from 'lucide-react';
+import { Wallet, ChevronDown } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
 
@@ -12,9 +12,10 @@ interface SignerSelectorProps {
   onSelect: (option: SignerOption) => void;
   localKeys: LocalKey[];
   accountsMap: Record<string, KeyAccount[]>;
+  onViewAccount?: (address: string) => void;
 }
 
-export default function SignerSelector({ selected, onSelect, localKeys, accountsMap }: SignerSelectorProps) {
+export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, onViewAccount }: SignerSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -43,21 +44,35 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
   const label =
     selected.type === 'fcl'
       ? 'FCL Wallet'
-      : `${selected.key.label || 'Key'} → ${truncateAddress(selected.account.flowAddress)}`;
+      : truncateAddress(selected.account.flowAddress);
 
   const icon =
     selected.type === 'fcl'
       ? <Wallet className="w-3 h-3" />
       : <Avatar size={14} name={selected.account.flowAddress} variant="beam" colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']} />;
 
+  // Click the main button: open account panel if local, toggle dropdown if FCL
+  const handleMainClick = () => {
+    if (selected.type === 'local' && onViewAccount) {
+      onViewAccount(selected.account.flowAddress);
+    } else {
+      setOpen(!open);
+    }
+  };
+
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex">
       <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs px-2 py-1 rounded border border-zinc-700 transition-colors"
+        onClick={handleMainClick}
+        className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 text-xs px-2 py-1 rounded-l border border-zinc-700 transition-colors"
       >
         {icon}
-        <span className="max-w-[120px] truncate">{label}</span>
+        <span className="max-w-[120px] truncate font-mono">{label}</span>
+      </button>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs px-1 py-1 rounded-r border border-l-0 border-zinc-700 transition-colors"
+      >
         <ChevronDown className="w-3 h-3" />
       </button>
 
@@ -86,7 +101,7 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
                     <Avatar size={16} name={entry.account.flowAddress} variant="beam" colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']} />
                     <span className="truncate">{entry.key.label || 'Key'}</span>
                     <span className="text-zinc-500 ml-auto flex-shrink-0">
-                      {truncateAddress(entry.account.flowAddress)} (key #{entry.account.keyIndex})
+                      {truncateAddress(entry.account.flowAddress)}
                     </span>
                   </button>
                 );
