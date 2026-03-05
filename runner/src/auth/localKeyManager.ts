@@ -265,6 +265,10 @@ export async function encryptMnemonicToKeystore(
 /**
  * Decrypt a private key from a wallet-core StoredKey JSON string.
  * Returns hex-encoded private key.
+ *
+ * For mnemonic-based keystores, we decrypt the mnemonic and re-derive
+ * the Flow key (using the nist256p1 curve + Flow BIP44 path), because
+ * `decryptPrivateKey` returns the Ethereum-derived key which is different.
  */
 export async function decryptFromKeystore(
   json: string,
@@ -275,6 +279,17 @@ export async function decryptFromKeystore(
   const pwBytes = stringToBytes(password);
 
   const storedKey = core.StoredKey.importJSON(jsonBytes);
+
+  // Check if this is a mnemonic-based keystore by trying to decrypt mnemonic
+  const mnemonic = storedKey.decryptMnemonic(pwBytes);
+  if (mnemonic && mnemonic.length > 0) {
+    storedKey.delete();
+    // Re-derive the Flow private key from the mnemonic
+    const derived = await deriveFromMnemonic(mnemonic);
+    return derived.privateKeyHex;
+  }
+
+  // Private key-based keystore: decrypt directly
   const privateKeyBytes = storedKey.decryptPrivateKey(pwBytes);
 
   if (!privateKeyBytes || privateKeyBytes.length === 0) {
@@ -315,6 +330,9 @@ export async function signMessage(
   const msgBytes = hexToBytes(messageHex);
 
   const privateKey = core.PrivateKey.createWithData(pkBytes);
+  if (!privateKey) {
+    throw new Error('Failed to load private key — the key data may be corrupt or invalid');
+  }
   const curve =
     sigAlgo === 'ECDSA_secp256k1' ? core.Curve.secp256k1 : core.Curve.nist256p1;
 
