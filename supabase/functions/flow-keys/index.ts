@@ -141,7 +141,9 @@ function signMessage(privateKeyHex: string, messageHex: string): string {
 async function createFlowAccount(
   publicKeyHex: string,
   network: 'mainnet' | 'testnet' = 'mainnet',
-): Promise<{ address: string }> {
+  signatureAlgorithm = 'ECDSA_secp256k1',
+  hashAlgorithm = 'SHA3_256',
+): Promise<{ txId: string }> {
   const lilicoBase = 'https://openapi.lilico.app';
   const endpoint = network === 'testnet'
     ? `${lilicoBase}/v1/address/testnet`
@@ -155,8 +157,8 @@ async function createFlowAccount(
     },
     body: JSON.stringify({
       publicKey: publicKeyHex,
-      signatureAlgorithm: 'ECDSA_P256',
-      hashAlgorithm: 'SHA2_256',
+      signatureAlgorithm,
+      hashAlgorithm,
       weight: 1000,
     }),
   });
@@ -167,17 +169,22 @@ async function createFlowAccount(
   }
 
   const json = await res.json();
-
-  // Lilico returns { txId } — need to poll for sealed result
   const txId = json.txId || json.data?.txId;
   if (!txId) {
-    // Some responses may include address directly
-    const address = json.address || json.data?.address;
-    if (address) return { address };
-    throw new Error(`Lilico API: no txId or address in response: ${JSON.stringify(json)}`);
+    throw new Error(`Lilico API: no txId in response: ${JSON.stringify(json)}`);
   }
 
-  // Poll Flow Access Node REST API for sealed transaction
+  return { txId };
+}
+
+/**
+ * Poll Flow Access Node for a sealed account-creation tx and extract the new address.
+ * Used only by the custodial /keys/create endpoint which needs to store the address.
+ */
+async function waitForAccountAddress(
+  txId: string,
+  network: 'mainnet' | 'testnet',
+): Promise<string> {
   const accessNode = network === 'testnet'
     ? 'https://rest-testnet.onflow.org'
     : 'https://rest-mainnet.onflow.org';
@@ -196,7 +203,6 @@ async function createFlowAccount(
       throw new Error(`Account creation tx failed: ${txResult.error_message}`);
     }
 
-    // Extract address from flow.AccountCreated event
     for (const event of txResult.events || []) {
       if (event.type === 'flow.AccountCreated') {
         try {
@@ -204,7 +210,7 @@ async function createFlowAccount(
           const address = payload?.value?.fields?.find(
             (f: { name: string }) => f.name === 'address',
           )?.value?.value;
-          if (address) return { address: address.replace(/^0x/, '') };
+          if (address) return address.replace(/^0x/, '');
         } catch {
           // Try next event
         }
@@ -283,9 +289,14 @@ serve(async (req: Request) => {
       }
 
       try {
-        const account = await createFlowAccount(publicKey, network || 'testnet');
+        const result = await createFlowAccount(
+          publicKey,
+          network || 'testnet',
+          signatureAlgorithm || 'ECDSA_secp256k1',
+          hashAlgorithm || 'SHA3_256',
+        );
         return new Response(
-          JSON.stringify(success({ address: account.address, network: network || 'testnet' })),
+          JSON.stringify(success({ txId: result.txId, network: network || 'testnet' })),
           { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
         );
       } catch (e) {
@@ -326,11 +337,11 @@ serve(async (req: Request) => {
         // 1. Generate P-256 keypair
         const { publicKeyHex, privateKeyHex } = generateP256KeyPair();
 
-        // 2. Create Flow account via API
+        // 2. Create Flow account via API and wait for address
         let flowAddress: string;
         try {
-          const account = await createFlowAccount(publicKeyHex, network || 'mainnet');
-          flowAddress = account.address;
+          const { txId } = await createFlowAccount(publicKeyHex, network || 'mainnet');
+          flowAddress = await waitForAccountAddress(txId, network || 'mainnet');
         } catch (e) {
           result = error(
             'ACCOUNT_CREATION_FAILED',

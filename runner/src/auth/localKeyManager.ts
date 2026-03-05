@@ -360,16 +360,17 @@ export function loadLocalKeys(): LocalKey[] {
 
 /**
  * Create a Flow account via the Supabase edge function (which calls Lilico API).
- * The edge function endpoint /keys/create-account is public (no auth required).
+ * Returns immediately with the txId — does NOT wait for the tx to seal.
+ * Use findAccountsForKey to discover the created address afterwards.
  */
 export async function createFlowAccount(
   publicKey: string,
-  sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_P256',
+  sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_secp256k1',
   hashAlgo: 'SHA2_256' | 'SHA3_256' = 'SHA3_256',
   network: 'mainnet' | 'testnet' = 'testnet',
   supabaseUrl: string,
   supabaseAnonKey: string,
-): Promise<{ address: string }> {
+): Promise<{ txId: string }> {
   const res = await fetch(`${supabaseUrl}/functions/v1/flow-keys`, {
     method: 'POST',
     headers: {
@@ -396,70 +397,41 @@ export async function createFlowAccount(
   if (!json.success) {
     throw new Error(json.error?.message || 'Account creation failed');
   }
-  return json.data;
+  return { txId: json.data?.txId || json.data?.address || '' };
 }
 
 /**
- * Query the Flow key indexer to find accounts that have a matching public key.
- * Uses the public Flow key indexer service (no auth needed, no CORS issues).
+ * Query FlowIndex API to find accounts that have a matching public key.
+ * Uses flowindex.io (our own indexer) — no auth needed, supports both networks.
  */
 export async function findAccountsForKey(
   publicKey: string,
   network: 'mainnet' | 'testnet' = 'testnet',
 ): Promise<KeyAccount[]> {
-  // Flow's public key indexer
   const baseUrl = network === 'testnet'
-    ? 'https://key-indexer.testnet.flow.com'
-    : 'https://key-indexer.mainnet.flow.com';
+    ? 'https://testnet.flowindex.io'
+    : 'https://flowindex.io';
 
-  const res = await fetch(`${baseUrl}/key/${publicKey}`);
+  const res = await fetch(`${baseUrl}/api/flow/key/${publicKey}`);
 
-  if (!res.ok) {
-    if (res.status === 404) return [];
-    // Fallback: try Lilico's indexer
-    return findAccountsViaLilico(publicKey, network);
-  }
+  if (!res.ok) return [];
 
-  const data = await res.json();
+  const json = await res.json();
+  const data = json.data;
 
-  // Normalize response into KeyAccount[]
   if (Array.isArray(data)) {
-    return data.map((item: Record<string, unknown>) => ({
-      flowAddress: String(item.address || item.flowAddress || ''),
-      keyIndex: Number(item.keyIndex ?? item.key_index ?? 0),
-      sigAlgo: normalizeSigAlgo(item.sigAlgo ?? item.sig_algo),
-      hashAlgo: normalizeHashAlgo(item.hashAlgo ?? item.hash_algo),
-      weight: Number(item.weight ?? 1000),
-    }));
+    return data
+      .filter((item: Record<string, unknown>) => !item.revoked)
+      .map((item: Record<string, unknown>) => ({
+        flowAddress: String(item.address || '').replace(/^0x/, ''),
+        keyIndex: Number(item.key_index ?? 0),
+        sigAlgo: normalizeSigAlgo(item.signing_algorithm),
+        hashAlgo: normalizeHashAlgo(item.hashing_algorithm),
+        weight: Number(item.weight ?? 1000),
+      }));
   }
 
   return [];
-}
-
-async function findAccountsViaLilico(
-  publicKey: string,
-  network: 'mainnet' | 'testnet',
-): Promise<KeyAccount[]> {
-  try {
-    const url = network === 'testnet'
-      ? `https://openapi.lilico.app/v1/address/testnet/${publicKey}`
-      : `https://openapi.lilico.app/v1/address/${publicKey}`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (data.address) {
-      return [{
-        flowAddress: data.address,
-        keyIndex: 0,
-        sigAlgo: 'ECDSA_P256',
-        hashAlgo: 'SHA2_256',
-        weight: 1000,
-      }];
-    }
-    return [];
-  } catch {
-    return [];
-  }
 }
 
 function normalizeSigAlgo(
