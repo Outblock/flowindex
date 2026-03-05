@@ -482,12 +482,32 @@ export async function findAccountsForKey(
   publicKey: string,
   network: 'mainnet' | 'testnet' = 'testnet',
 ): Promise<KeyAccount[]> {
+  // Try FlowIndex first with 5s timeout, fall back to Flow key-indexer
+  try {
+    const result = await findAccountsViaFlowIndex(publicKey, network);
+    if (result.length > 0) return result;
+  } catch { /* timeout or error — fall through */ }
+
+  return findAccountsViaKeyIndexer(publicKey, network);
+}
+
+/** Fetch with a timeout (AbortController). */
+function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+/** Primary: FlowIndex API. */
+async function findAccountsViaFlowIndex(
+  publicKey: string,
+  network: 'mainnet' | 'testnet',
+): Promise<KeyAccount[]> {
   const baseUrl = network === 'testnet'
     ? 'https://testnet.flowindex.io'
     : 'https://flowindex.io';
 
-  const res = await fetch(`${baseUrl}/api/flow/key/${publicKey}`);
-
+  const res = await fetchWithTimeout(`${baseUrl}/api/flow/key/${publicKey}`, 5000);
   if (!res.ok) return [];
 
   const json = await res.json();
@@ -504,7 +524,32 @@ export async function findAccountsForKey(
         weight: Number(item.weight ?? 1000),
       }));
   }
+  return [];
+}
 
+/** Fallback: Flow key-indexer API (production / staging). */
+async function findAccountsViaKeyIndexer(
+  publicKey: string,
+  network: 'mainnet' | 'testnet',
+): Promise<KeyAccount[]> {
+  const env = network === 'mainnet' ? 'production' : 'staging';
+  const res = await fetch(`https://${env}.key-indexer.flow.com/key/${publicKey}`);
+  if (!res.ok) return [];
+
+  const json = await res.json();
+  const accounts = json.accounts;
+
+  if (Array.isArray(accounts)) {
+    return accounts
+      .filter((item: Record<string, unknown>) => !item.isRevoked)
+      .map((item: Record<string, unknown>) => ({
+        flowAddress: String(item.address || '').replace(/^0x/, ''),
+        keyIndex: Number(item.keyId ?? 0),
+        sigAlgo: normalizeSigAlgo(item.signing || item.sigAlgo),
+        hashAlgo: normalizeHashAlgo(item.hashing || item.hashAlgo),
+        weight: Number(item.weight ?? 1000),
+      }));
+  }
   return [];
 }
 
