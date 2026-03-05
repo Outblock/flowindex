@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Wallet, ChevronDown, LogOut, Key, Settings2 } from 'lucide-react';
+import { Wallet, ChevronDown, LogOut, Key, Zap } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import { fcl } from '../flow/fclConfig';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
@@ -16,6 +16,8 @@ interface SignerSelectorProps {
   accountsMap: Record<string, KeyAccount[]>;
   onViewAccount?: (address: string) => void;
   onOpenKeyManager?: () => void;
+  autoSign: boolean;
+  onToggleAutoSign: (value: boolean) => void;
 }
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
@@ -50,7 +52,7 @@ function useFlowBalance(address: string | null) {
   return balance;
 }
 
-export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, onViewAccount, onOpenKeyManager }: SignerSelectorProps) {
+export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, onViewAccount, onOpenKeyManager, autoSign, onToggleAutoSign }: SignerSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -101,6 +103,7 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
       const colors = colorsFromAddress(selected.account.flowAddress);
       return (
         <>
+          {autoSign && <Zap className="w-3 h-3 text-amber-400" />}
           <Avatar size={16} name={`0x${selected.account.flowAddress}`} variant="beam" colors={colors} />
           {balance !== null ? (
             <span className="text-xs text-emerald-400 font-medium">{balance} FLOW</span>
@@ -206,6 +209,29 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
               </button>
             </>
           )}
+
+          {/* Auto Sign toggle */}
+          <div className="border-t border-zinc-700" />
+          <button
+            onClick={() => onToggleAutoSign(!autoSign)}
+            className="w-full flex items-center justify-between px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-700 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Zap className={`w-3.5 h-3.5 ${autoSign ? 'text-amber-400' : ''}`} />
+              <span>Auto Sign</span>
+            </div>
+            <div
+              className={`relative w-7 h-4 rounded-full transition-colors ${
+                autoSign ? 'bg-amber-500' : 'bg-zinc-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                  autoSign ? 'translate-x-3' : ''
+                }`}
+              />
+            </div>
+          </button>
 
           {/* Disconnect option — show when connected */}
           {isConnected && (
