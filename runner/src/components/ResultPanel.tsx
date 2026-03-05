@@ -13,6 +13,7 @@ interface ResultPanelProps {
   code?: string;
   filename?: string;
   codeType?: 'script' | 'transaction' | 'contract';
+  onFixWithAI?: (errorMessage: string) => void;
 }
 
 function txExplorerUrl(txId: string, network?: 'mainnet' | 'testnet'): string {
@@ -236,7 +237,7 @@ function DataDisplay({ data, isError }: { data: any; isError?: boolean }) {
   );
 }
 
-export default function ResultPanel({ results, loading, network, code, filename, codeType }: ResultPanelProps) {
+export default function ResultPanel({ results, loading, network, code, filename, codeType, onFixWithAI }: ResultPanelProps) {
   const [tab, setTab] = useState<Tab>('result');
 
   const lastResult = results.length > 0 ? results[results.length - 1] : null;
@@ -291,7 +292,7 @@ export default function ResultPanel({ results, loading, network, code, filename,
               </div>
             }
           >
-            <CodegenPanel code={code || ''} filename={filename} codeType={codeType || 'script'} />
+            <CodegenPanel code={code || ''} filename={filename} codeType={codeType || 'script'} onFixWithAI={onFixWithAI} />
           </Suspense>
         </div>
       )}

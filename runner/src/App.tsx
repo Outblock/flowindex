@@ -279,6 +279,7 @@ export default function App() {
   const [showExplorer, setShowExplorer] = useState(!isIframe);
   const [showAI, setShowAI] = useState(true);
   const [showMobileAI, setShowMobileAI] = useState(false);
+  const [aiPendingMessage, setAiPendingMessage] = useState<string | undefined>();
   const [pendingDiffs, setPendingDiffs] = useState<PendingDiffMap>({});
   const { user, loading: authLoading, signOut } = useAuth();
   useKeys();
@@ -953,6 +954,11 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, [project.activeFile, activeCode]);
 
+  const handleFixWithAI = useCallback((errorMessage: string) => {
+    setShowAI(true);
+    setAiPendingMessage(`The codegen tool returned this error when trying to generate code from my Cadence:\n\n\`\`\`\n${errorMessage}\n\`\`\`\n\nPlease help me fix my Cadence code.`);
+  }, []);
+
   const handleExportZip = useCallback(async () => {
     const zip = new JSZip();
     const userFiles = project.files.filter(f => !f.readOnly && !f.path.startsWith('deps/'));
@@ -1372,7 +1378,7 @@ export default function App() {
                   />
                 </div>
                 <div className="flex-1 min-h-0">
-                  <ResultPanel results={results} loading={loading} network={network} code={activeCode} filename={project.activeFile} codeType={codeType} />
+                  <ResultPanel results={results} loading={loading} network={network} code={activeCode} filename={project.activeFile} codeType={codeType} onFixWithAI={handleFixWithAI} />
                 </div>
               </div>
             </>
@@ -1407,6 +1413,8 @@ export default function App() {
                   onRefreshAccounts={refreshAccounts}
                   onSwitchNetwork={(n) => setNetwork(n as FlowNetwork)}
                   onViewAccount={handleViewAccount}
+                  pendingMessage={aiPendingMessage}
+                  onPendingMessageConsumed={() => setAiPendingMessage(undefined)}
                 />
               </div>
             </>
@@ -1486,6 +1494,8 @@ export default function App() {
               onRefreshAccounts={refreshAccounts}
               onSwitchNetwork={(n) => setNetwork(n as FlowNetwork)}
               onViewAccount={handleViewAccount}
+              pendingMessage={aiPendingMessage}
+              onPendingMessageConsumed={() => setAiPendingMessage(undefined)}
             />
           </div>
         </div>

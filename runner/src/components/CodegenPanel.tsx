@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Loader2, Copy, Check, Download, AlertTriangle } from 'lucide-react';
+import { Loader2, Copy, Check, Download, AlertTriangle, Sparkles } from 'lucide-react';
 import { ensureCodegenLoaded, analyzeCode, generateFromReport } from '../codegen/wasmLoader';
 import type { CodegenLanguage, CodegenResult } from '../codegen/wasmLoader';
 import { useShikiHighlighter, highlightCode } from '../hooks/useShiki';
@@ -12,6 +12,7 @@ interface CodegenPanelProps {
   code: string;
   filename?: string;
   codeType: 'script' | 'transaction' | 'contract';
+  onFixWithAI?: (errorMessage: string) => void;
 }
 
 const LANGUAGES: { key: CodegenLanguage; label: string; ext: string }[] = [
@@ -113,7 +114,7 @@ function LanguagePills({
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function CodegenPanel({ code, filename, codeType }: CodegenPanelProps) {
+export default function CodegenPanel({ code, filename, codeType, onFixWithAI }: CodegenPanelProps) {
   const [language, setLanguage] = useState<CodegenLanguage>('typescript');
   // Per-language results + the cached analysis report JSON
   const [results, setResults] = useState<Partial<Record<CodegenLanguage, CodegenResult>>>({});
@@ -249,14 +250,32 @@ export default function CodegenPanel({ code, filename, codeType }: CodegenPanelP
         )}
 
         {!loading && error && (
-          <div className="rounded border border-red-800/50 bg-red-900/20 p-3 text-red-400">
-            {error}
+          <div className="rounded border border-red-800/50 bg-red-900/20 p-3">
+            <p className="text-red-400">{error}</p>
+            {onFixWithAI && (
+              <button
+                onClick={() => onFixWithAI(error)}
+                className="mt-2 flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Fix with AI
+              </button>
+            )}
           </div>
         )}
 
         {!loading && !error && hasError && (
-          <div className="rounded border border-red-800/50 bg-red-900/20 p-3 text-red-400">
-            {currentResult!.error}
+          <div className="rounded border border-red-800/50 bg-red-900/20 p-3">
+            <p className="text-red-400">{currentResult!.error}</p>
+            {onFixWithAI && (
+              <button
+                onClick={() => onFixWithAI(currentResult!.error!)}
+                className="mt-2 flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Fix with AI
+              </button>
+            )}
           </div>
         )}
 

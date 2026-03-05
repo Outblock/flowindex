@@ -76,6 +76,9 @@ interface AIPanelProps {
   ) => Promise<KeyAccount[]>;
   onSwitchNetwork?: (network: 'mainnet' | 'testnet') => void;
   onViewAccount?: (address: string) => void;
+  /** External message to auto-send (e.g. "Fix with AI" from codegen errors) */
+  pendingMessage?: string;
+  onPendingMessageConsumed?: () => void;
 }
 
 /* ── SQL Result Table ── */
@@ -1491,6 +1494,8 @@ export default function AIPanel({
   onRefreshAccounts,
   onSwitchNetwork,
   onViewAccount,
+  pendingMessage,
+  onPendingMessageConsumed,
 }: AIPanelProps) {
   const [input, setInput] = useState('');
   const [chatMode, setChatMode] = useState<ChatMode>(getStoredMode);
@@ -1912,6 +1917,13 @@ export default function AIPanel({
     sendMessage({ text });
     setInput('');
   }, [sendMessage, isStreaming]);
+
+  // Auto-send external pending message (e.g. "Fix with AI" from codegen)
+  useEffect(() => {
+    if (!pendingMessage || isStreaming) return;
+    handleSend(pendingMessage);
+    onPendingMessageConsumed?.();
+  }, [pendingMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
