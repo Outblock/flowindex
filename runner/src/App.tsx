@@ -321,13 +321,24 @@ export default function App() {
     });
   }, []);
 
-  // Restore saved signer from localStorage, or auto-select first local account
+  // Restore saved signer from localStorage, or auto-select first local account.
+  // localKeys are loaded from localStorage (public keys are plaintext, no WASM needed).
+  // We just need accounts to be discovered before we can restore.
   const hasRestoredSigner = useRef(false);
   useEffect(() => {
     if (hasRestoredSigner.current) return;
-    // Wait until WASM is ready and keys are loaded before attempting restore
-    if (!wasmReady) return;
-    // If keys exist but no accounts yet, wait for account discovery
+
+    // Check if we expect local keys to load (saved signer is local type)
+    // If so, wait until localKeys are populated
+    try {
+      const saved = localStorage.getItem('flow-selected-signer');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.type === 'local' && localKeys.length === 0) return; // keys not loaded yet
+      }
+    } catch {}
+
+    // If keys exist but no accounts discovered yet, wait
     const hasLocalAccounts = localKeys.some(k => (accountsMap[k.id] || []).length > 0);
     if (localKeys.length > 0 && !hasLocalAccounts) return;
 
@@ -357,7 +368,7 @@ export default function App() {
         return;
       }
     }
-  }, [wasmReady, localKeys, accountsMap]);
+  }, [localKeys, accountsMap]);
 
   const {
     projects: cloudProjects,
