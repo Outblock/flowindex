@@ -1372,7 +1372,7 @@ export default function App() {
                   />
                 </div>
                 <div className="flex-1 min-h-0">
-                  <ResultPanel results={results} loading={loading} network={network} />
+                  <ResultPanel results={results} loading={loading} network={network} code={activeCode} filename={project.activeFile} />
                 </div>
               </div>
             </>

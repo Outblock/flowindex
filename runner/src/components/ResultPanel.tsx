@@ -1,13 +1,17 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import type { ExecutionResult } from '../flow/execute';
 import { Loader2, Code2, List, Copy, Check } from 'lucide-react';
 import { JsonView, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
 
+const CodegenPanel = lazy(() => import('./CodegenPanel'));
+
 interface ResultPanelProps {
   results: ExecutionResult[];
   loading: boolean;
   network?: 'mainnet' | 'testnet';
+  code?: string;
+  filename?: string;
 }
 
 function txExplorerUrl(txId: string, network?: 'mainnet' | 'testnet'): string {
@@ -17,7 +21,7 @@ function txExplorerUrl(txId: string, network?: 'mainnet' | 'testnet'): string {
   return `${base}/txs/${txId}`;
 }
 
-type Tab = 'result' | 'events' | 'logs';
+type Tab = 'result' | 'events' | 'logs' | 'codegen';
 type ViewMode = 'tree' | 'raw';
 
 function Badge({ children, variant }: { children: React.ReactNode; variant: 'success' | 'error' | 'info' }) {
@@ -231,7 +235,7 @@ function DataDisplay({ data, isError }: { data: any; isError?: boolean }) {
   );
 }
 
-export default function ResultPanel({ results, loading, network }: ResultPanelProps) {
+export default function ResultPanel({ results, loading, network, code, filename }: ResultPanelProps) {
   const [tab, setTab] = useState<Tab>('result');
 
   const lastResult = results.length > 0 ? results[results.length - 1] : null;
@@ -241,6 +245,7 @@ export default function ResultPanel({ results, loading, network }: ResultPanelPr
     { key: 'result', label: 'Result' },
     { key: 'events', label: 'Events', count: allEvents.length },
     { key: 'logs', label: 'Logs', count: results.length },
+    { key: 'codegen', label: 'Codegen' },
   ];
 
   return (
@@ -271,7 +276,24 @@ export default function ResultPanel({ results, loading, network }: ResultPanelPr
         )}
       </div>
 
+      {/* Codegen tab — rendered outside the overflow-auto content div so it manages its own layout */}
+      {tab === 'codegen' && (
+        <div className="flex-1 min-h-0">
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full gap-2 text-zinc-500 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading codegen...
+              </div>
+            }
+          >
+            <CodegenPanel code={code || ''} filename={filename} />
+          </Suspense>
+        </div>
+      )}
+
       {/* Content */}
+      {tab !== 'codegen' && (
       <div className="flex-1 overflow-auto p-3 font-mono text-xs">
         {results.length === 0 && !loading ? (
           <div className="flex items-center justify-center h-full text-zinc-600 text-sm">
@@ -349,6 +371,7 @@ export default function ResultPanel({ results, loading, network }: ResultPanelPr
           </div>
         )}
       </div>
+      )}
 
       {/* Inline styles for JSON highlighting */}
       <style>{`
