@@ -11,7 +11,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['monaco-editor'],
-    exclude: ['@onflow/cadence-language-server'],
+    exclude: ['@onflow/cadence-language-server', '@trustwallet/wallet-core'],
   },
   worker: {
     format: 'es',
