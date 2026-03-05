@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"flowscan-clone/internal/models"
@@ -253,15 +254,30 @@ func (r *Repository) UpsertContractRegistry(ctx context.Context, rows []models.S
 		)
 	}
 
-	br := r.db.SendBatch(ctx, batch)
-	defer br.Close()
-
-	for i := 0; i < len(deduped); i++ {
-		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("upsert contract registry: %w", err)
+	// Retry once on duplicate-key errors from concurrent chunk processing.
+	for attempt := 0; attempt < 2; attempt++ {
+		br := r.db.SendBatch(ctx, batch)
+		var batchErr error
+		for i := 0; i < len(deduped); i++ {
+			if _, err := br.Exec(); err != nil {
+				batchErr = err
+			}
 		}
+		br.Close()
+		if batchErr == nil {
+			return nil
+		}
+		if attempt == 0 && isDuplicateKeyError(batchErr) {
+			continue // retry — rows now exist, ON CONFLICT will succeed
+		}
+		return fmt.Errorf("upsert contract registry: %w", batchErr)
 	}
 	return nil
+}
+
+// isDuplicateKeyError checks for PostgreSQL unique constraint violation (23505).
+func isDuplicateKeyError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "SQLSTATE 23505")
 }
 
 // UpsertAddressTransactions inserts address->tx relations.
