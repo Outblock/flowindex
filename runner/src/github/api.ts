@@ -105,6 +105,17 @@ export const githubApi = {
       secrets_needed: string[];
     }>('/github/workflow', { method: 'POST', body: JSON.stringify(body) }),
 
+  createRepo: (body: {
+    installation_id: number;
+    name: string;
+    description?: string;
+    is_private?: boolean;
+  }) =>
+    fetchApi<GitHubRepo>('/github/repos', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   listRuns: (installationId: number, owner: string, repo: string) =>
     fetchApi<{ runs: WorkflowRun[] }>(
       `/github/runs/${owner}/${repo}?installation_id=${installationId}`,

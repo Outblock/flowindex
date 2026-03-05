@@ -47,6 +47,41 @@ router.get('/repos', async (req: Request, res: Response) => {
   }
 });
 
+// POST /repos — Create a new repo for the installation owner
+router.post('/repos', async (req: Request, res: Response) => {
+  try {
+    const { installation_id, name, description, is_private } = req.body as {
+      installation_id: number;
+      name: string;
+      description?: string;
+      is_private?: boolean;
+    };
+    if (!installation_id || !name) {
+      res.status(400).json({ error: 'installation_id and name are required' });
+      return;
+    }
+    const octokit = await getInstallationOctokit(installation_id);
+    // Create repo for the authenticated installation owner
+    const { data } = await octokit.request('POST /user/repos', {
+      name,
+      description: description || '',
+      private: is_private ?? false,
+      auto_init: true, // create with README so it has a default branch
+    });
+    res.json({
+      id: data.id,
+      full_name: data.full_name,
+      owner: data.owner?.login ?? '',
+      name: data.name,
+      default_branch: data.default_branch,
+      private: data.private,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: message });
+  }
+});
+
 // GET /tree/:owner/:repo — Read file tree of a repo directory
 router.get('/tree/:owner/:repo', async (req: Request, res: Response) => {
   try {
@@ -61,7 +96,7 @@ router.get('/tree/:owner/:repo', async (req: Request, res: Response) => {
     const ref = (req.query.ref as string) || undefined;
 
     const octokit = await getInstallationOctokit(installationId);
-    const { data } = await octokit.repos.getContent({
+    const { data } = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
       owner,
       repo,
       path,
@@ -73,7 +108,7 @@ router.get('/tree/:owner/:repo', async (req: Request, res: Response) => {
       return;
     }
 
-    const files = data.map((f) => ({
+    const files = data.map((f: any) => ({
       name: f.name,
       path: f.path,
       type: f.type,
@@ -101,7 +136,7 @@ router.get('/file/:owner/:repo/*path', async (req: Request, res: Response) => {
     const ref = (req.query.ref as string) || undefined;
 
     const octokit = await getInstallationOctokit(installationId);
-    const { data } = await octokit.repos.getContent({
+    const { data } = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
       owner,
       repo,
       path: filePath,
@@ -141,76 +176,44 @@ router.post('/commit', async (req: Request, res: Response) => {
     const octokit = await getInstallationOctokit(installation_id);
 
     // 1. Get current branch ref SHA
-    const { data: refData } = await octokit.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${branch}`,
+    const { data: refData } = await octokit.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
+      owner, repo, ref: `heads/${branch}`,
     });
     const parentSha = refData.object.sha;
 
     // 2. Get base tree SHA from that commit
-    const { data: commitData } = await octokit.git.getCommit({
-      owner,
-      repo,
-      commit_sha: parentSha,
+    const { data: commitData } = await octokit.request('GET /repos/{owner}/{repo}/git/commits/{commit_sha}', {
+      owner, repo, commit_sha: parentSha,
     });
     const baseTreeSha = commitData.tree.sha;
 
     // 3. For each file: create blob (or set sha=null for deletes)
-    const tree: Array<{
-      path: string;
-      mode: '100644';
-      type: 'blob';
-      sha: string | null;
-    }> = [];
+    const tree: Array<{ path: string; mode: '100644'; type: 'blob'; sha: string | null }> = [];
 
     for (const file of files) {
       if (file.action === 'delete') {
-        tree.push({
-          path: file.path,
-          mode: '100644',
-          type: 'blob',
-          sha: null,
-        });
+        tree.push({ path: file.path, mode: '100644', type: 'blob', sha: null });
       } else {
-        const { data: blobData } = await octokit.git.createBlob({
-          owner,
-          repo,
-          content: file.content ?? '',
-          encoding: 'utf-8',
+        const { data: blobData } = await octokit.request('POST /repos/{owner}/{repo}/git/blobs', {
+          owner, repo, content: file.content ?? '', encoding: 'utf-8',
         });
-        tree.push({
-          path: file.path,
-          mode: '100644',
-          type: 'blob',
-          sha: blobData.sha,
-        });
+        tree.push({ path: file.path, mode: '100644', type: 'blob', sha: blobData.sha });
       }
     }
 
     // 4. Create new tree with base_tree
-    const { data: newTree } = await octokit.git.createTree({
-      owner,
-      repo,
-      base_tree: baseTreeSha,
-      tree,
+    const { data: newTree } = await octokit.request('POST /repos/{owner}/{repo}/git/trees', {
+      owner, repo, base_tree: baseTreeSha, tree,
     });
 
     // 5. Create commit with new tree + parent
-    const { data: newCommit } = await octokit.git.createCommit({
-      owner,
-      repo,
-      message,
-      tree: newTree.sha,
-      parents: [parentSha],
+    const { data: newCommit } = await octokit.request('POST /repos/{owner}/{repo}/git/commits', {
+      owner, repo, message, tree: newTree.sha, parents: [parentSha],
     });
 
     // 6. Update branch ref
-    await octokit.git.updateRef({
-      owner,
-      repo,
-      ref: `heads/${branch}`,
-      sha: newCommit.sha,
+    await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', {
+      owner, repo, ref: `heads/${branch}`, sha: newCommit.sha,
     });
 
     res.json({
@@ -283,54 +286,31 @@ router.post('/workflow', async (req: Request, res: Response) => {
     const workflowPath = '.github/workflows/cadence-deploy.yml';
     const workflowContent = generateWorkflowYaml(branch, path, network);
 
-    // Use Git Trees API to commit the workflow file
-    const { data: refData } = await octokit.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${branch}`,
+    const { data: refData } = await octokit.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
+      owner, repo, ref: `heads/${branch}`,
     });
     const parentSha = refData.object.sha;
 
-    const { data: commitData } = await octokit.git.getCommit({
-      owner,
-      repo,
-      commit_sha: parentSha,
+    const { data: commitData } = await octokit.request('GET /repos/{owner}/{repo}/git/commits/{commit_sha}', {
+      owner, repo, commit_sha: parentSha,
     });
 
-    const { data: blobData } = await octokit.git.createBlob({
-      owner,
-      repo,
-      content: workflowContent,
-      encoding: 'utf-8',
+    const { data: blobData } = await octokit.request('POST /repos/{owner}/{repo}/git/blobs', {
+      owner, repo, content: workflowContent, encoding: 'utf-8',
     });
 
-    const { data: newTree } = await octokit.git.createTree({
-      owner,
-      repo,
-      base_tree: commitData.tree.sha,
-      tree: [
-        {
-          path: workflowPath,
-          mode: '100644',
-          type: 'blob',
-          sha: blobData.sha,
-        },
-      ],
+    const { data: newTree } = await octokit.request('POST /repos/{owner}/{repo}/git/trees', {
+      owner, repo, base_tree: commitData.tree.sha,
+      tree: [{ path: workflowPath, mode: '100644', type: 'blob', sha: blobData.sha }],
     });
 
-    const { data: newCommit } = await octokit.git.createCommit({
-      owner,
-      repo,
-      message: `Add Cadence deploy workflow for ${network}`,
-      tree: newTree.sha,
-      parents: [parentSha],
+    const { data: newCommit } = await octokit.request('POST /repos/{owner}/{repo}/git/commits', {
+      owner, repo, message: `Add Cadence deploy workflow for ${network}`,
+      tree: newTree.sha, parents: [parentSha],
     });
 
-    await octokit.git.updateRef({
-      owner,
-      repo,
-      ref: `heads/${branch}`,
-      sha: newCommit.sha,
+    await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', {
+      owner, repo, ref: `heads/${branch}`, sha: newCommit.sha,
     });
 
     res.json({
@@ -370,28 +350,12 @@ router.get('/runs/:owner/:repo', async (req: Request, res: Response) => {
     }> = [];
 
     try {
-      const params: {
-        owner: string;
-        repo: string;
-        per_page: number;
-        workflow_id?: string;
-      } = { owner, repo, per_page: 20 };
-
-      if (workflow) {
-        params.workflow_id = workflow;
-      }
-
       const { data } = workflow
-        ? await octokit.actions.listWorkflowRuns({
-            owner,
-            repo,
-            workflow_id: workflow,
-            per_page: 20,
+        ? await octokit.request('GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs', {
+            owner, repo, workflow_id: workflow, per_page: 20,
           })
-        : await octokit.actions.listWorkflowRunsForRepo({
-            owner,
-            repo,
-            per_page: 20,
+        : await octokit.request('GET /repos/{owner}/{repo}/actions/runs', {
+            owner, repo, per_page: 20,
           });
 
       runs = data.workflow_runs.map((r: any) => ({
