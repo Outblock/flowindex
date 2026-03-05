@@ -17,18 +17,9 @@ interface ConnectModalProps {
   onOpenKeyManager?: () => void;
 }
 
-/** Flow logo SVG */
+/** Flow logo image */
 function FlowLogo({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="50" cy="50" r="50" fill="#00EF8B" />
-      <path d="M58.75 44.375H69.375V55H58.75V44.375Z" fill="white" />
-      <path d="M48.125 55H58.75V59.6875C58.75 62.6172 56.3672 65 53.4375 65C50.5078 65 48.125 62.6172 48.125 59.6875V55Z" fill="white" />
-      <path d="M48.125 44.375H58.75V55H48.125V44.375Z" fill="white" fillOpacity="0.72" />
-      <path d="M37.5 49.6875C37.5 46.7578 39.8828 44.375 42.8125 44.375H48.125V55H37.5V49.6875Z" fill="white" />
-      <path d="M58.75 33.75H69.375V44.375H58.75V33.75Z" fill="white" fillOpacity="0.72" />
-    </svg>
-  );
+  return <img src="/flow-logo.png" alt="Flow" width={size} height={size} className="rounded-full" />;
 }
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
