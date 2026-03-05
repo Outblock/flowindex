@@ -199,8 +199,10 @@ export function useGitHub(projectId: string | undefined) {
       const { installation_id, repo_owner, repo_name, repo_path, branch } =
         connection;
 
+      // Normalize: "/" means root (same as no prefix)
+      const prefix = (!repo_path || repo_path === '/') ? '' : repo_path;
       const prefixedFiles = filesToCommit.map((f) => ({
-        path: repo_path ? `${repo_path}/${f.path}` : f.path,
+        path: prefix ? `${prefix}/${f.path}` : f.path,
         content: f.content,
         action: 'create' as const,
       }));

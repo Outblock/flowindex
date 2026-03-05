@@ -148,6 +148,11 @@ router.post('/commit', async (req: Request, res: Response) => {
       return;
     }
 
+    // Sanitize file paths — strip leading slashes
+    for (const file of files) {
+      file.path = file.path.replace(/^\/+/, '');
+    }
+
     const octokit = await getInstallationOctokit(installation_id);
 
     // Try to get the current branch ref — may not exist for empty repos
@@ -166,12 +171,15 @@ router.post('/commit', async (req: Request, res: Response) => {
       // Empty repo — no branch exists yet, will create initial commit
     }
 
-    // Create blobs for each file
-    const tree: Array<{ path: string; mode: '100644'; type: 'blob'; sha: string | null }> = [];
+    // Build tree entries for each file
+    const tree: Array<Record<string, unknown>> = [];
 
     for (const file of files) {
       if (file.action === 'delete') {
         tree.push({ path: file.path, mode: '100644', type: 'blob', sha: null });
+      } else if (!parentSha) {
+        // Empty repo: Blob API doesn't work — use inline content in tree
+        tree.push({ path: file.path, mode: '100644', type: 'blob', content: file.content ?? '' });
       } else {
         const { data: blobData } = await octokit.request('POST /repos/{owner}/{repo}/git/blobs', {
           owner, repo, content: file.content ?? '', encoding: 'utf-8',
