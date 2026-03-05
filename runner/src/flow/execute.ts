@@ -104,19 +104,30 @@ export async function executeCustodialTransaction(
     const signatureAlgorithm = sigAlgo === 'ECDSA_secp256k1' ? 3 : 2; // ECDSA_P256=2, ECDSA_secp256k1=3
 
     // Custom FCL authorization function using custodial key
-    const authz = (account: any) => ({
-      ...account,
-      tempId: `${signerAddress}-${keyIndex}`,
-      addr: fcl.sansPrefix(signerAddress),
-      keyId: keyIndex,
-      signingFunction: async (signable: { message: string }) => ({
-        addr: fcl.withPrefix(signerAddress),
+    const authz = (account: any) => {
+      console.log('[authz] account:', JSON.stringify(account, null, 2));
+      console.log('[authz] addr:', fcl.sansPrefix(signerAddress), 'keyId:', keyIndex);
+      console.log('[authz] hashAlgorithm:', hashAlgorithm, 'signatureAlgorithm:', signatureAlgorithm);
+      return {
+        ...account,
+        tempId: `${signerAddress}-${keyIndex}`,
+        addr: fcl.sansPrefix(signerAddress),
         keyId: keyIndex,
-        signature: await signFn(signable.message),
-      }),
-      hashAlgorithm,
-      signatureAlgorithm,
-    });
+        signingFunction: async (signable: { message: string }) => {
+          console.log('[signingFunction] signable.message:', signable.message?.substring(0, 80) + '...');
+          console.log('[signingFunction] signable keys:', Object.keys(signable));
+          const sig = await signFn(signable.message);
+          console.log('[signingFunction] signature:', sig?.substring(0, 40) + '...');
+          return {
+            addr: fcl.withPrefix(signerAddress),
+            keyId: keyIndex,
+            signature: sig,
+          };
+        },
+        hashAlgorithm,
+        signatureAlgorithm,
+      };
+    };
 
     const txId = await fcl.mutate({
       cadence: code,

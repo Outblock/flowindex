@@ -376,6 +376,29 @@ export async function signMessage(
   const curve =
     sigAlgo === 'ECDSA_secp256k1' ? core.Curve.secp256k1 : core.Curve.nist256p1;
 
+  // Debug: verify public key matches what we expect
+  if (sigAlgo === 'ECDSA_secp256k1') {
+    const pubSecp = privateKey.getPublicKeySecp256k1(false);
+    const pubHex = bytesToHex(pubSecp.data());
+    console.log('[signMessage] sigAlgo:', sigAlgo, 'hashAlgo:', hashAlgo);
+    console.log('[signMessage] secp256k1 pubkey (with 04):', pubHex);
+    console.log('[signMessage] secp256k1 pubkey (stripped):', stripUncompressedPrefix(pubHex));
+    console.log('[signMessage] message length:', msgBytes.length, 'hash length:', messageHash.length);
+    console.log('[signMessage] hash hex:', bytesToHex(messageHash));
+    pubSecp.delete();
+  } else {
+    const pubP256 = privateKey.getPublicKeyNist256p1();
+    const pubP256U = pubP256.uncompressed();
+    const pubHex = bytesToHex(pubP256U.data());
+    console.log('[signMessage] sigAlgo:', sigAlgo, 'hashAlgo:', hashAlgo);
+    console.log('[signMessage] P256 pubkey (with 04):', pubHex);
+    console.log('[signMessage] P256 pubkey (stripped):', stripUncompressedPrefix(pubHex));
+    console.log('[signMessage] message length:', msgBytes.length, 'hash length:', messageHash.length);
+    console.log('[signMessage] hash hex:', bytesToHex(messageHash));
+    pubP256U.delete();
+    pubP256.delete();
+  }
+
   const signature = privateKey.sign(messageHash, curve);
   privateKey.delete();
 
@@ -383,9 +406,13 @@ export async function signMessage(
     throw new Error('Signing failed');
   }
 
+  const sigHex = bytesToHex(signature.subarray(0, signature.length - 1));
+  console.log('[signMessage] signature length:', signature.length, 'stripped length:', signature.length - 1);
+  console.log('[signMessage] signature hex:', sigHex);
+
   // 3. Strip recovery byte — FCL expects raw r||s (64 bytes)
   // Both curves return r(32) || s(32) || v(1) = 65 bytes when signing a 32-byte digest
-  return bytesToHex(signature.subarray(0, signature.length - 1));
+  return sigHex;
 }
 
 // ---------------------------------------------------------------------------
