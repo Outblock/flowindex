@@ -262,7 +262,41 @@ serve(async (req: Request) => {
   try {
     const { endpoint, data }: RequestBody = await req.json();
 
-    // All endpoints require authentication
+    // -----------------------------------------------------------------------
+    // /keys/create-account — Public endpoint (no auth required)
+    // Accepts a public key and creates a Flow account via Lilico API.
+    // Used by local key management where the private key never leaves the browser.
+    // -----------------------------------------------------------------------
+    if (endpoint === '/keys/create-account') {
+      const { publicKey, network, signatureAlgorithm, hashAlgorithm } = data as {
+        publicKey: string;
+        network?: 'mainnet' | 'testnet';
+        signatureAlgorithm?: 'ECDSA_P256' | 'ECDSA_secp256k1';
+        hashAlgorithm?: 'SHA2_256' | 'SHA3_256';
+      };
+
+      if (!publicKey || !/^[0-9a-fA-F]{128}$/.test(publicKey)) {
+        return new Response(
+          JSON.stringify(error('INVALID_KEY', 'publicKey must be 128 hex characters (64 bytes uncompressed, no 04 prefix)')),
+          { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+        );
+      }
+
+      try {
+        const account = await createFlowAccount(publicKey, network || 'testnet');
+        return new Response(
+          JSON.stringify(success({ address: account.address, network: network || 'testnet' })),
+          { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+        );
+      } catch (e) {
+        return new Response(
+          JSON.stringify(error('ACCOUNT_CREATION_FAILED', e instanceof Error ? e.message : 'Failed to create account')),
+          { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+        );
+      }
+    }
+
+    // All other endpoints require authentication
     const user = await getAuthUser(req, supabaseUrl);
     if (!user) {
       return new Response(

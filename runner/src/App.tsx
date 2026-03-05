@@ -13,12 +13,14 @@ import FileExplorer from './components/FileExplorer';
 import TabBar from './components/TabBar';
 import { configureFcl } from './flow/fclConfig';
 import { parseMainParams } from './flow/cadenceParams';
-import { detectCodeType, executeScript, executeTransaction, executeCustodialTransaction } from './flow/execute';
+import { detectCodeType, executeScript, executeTransaction, executeCustodialTransaction, deployContract } from './flow/execute';
 import type { ExecutionResult } from './flow/execute';
 import type { FlowNetwork } from './flow/networks';
 import { useAuth } from './auth/AuthContext';
 import { useKeys } from './auth/useKeys';
+import { useLocalKeys } from './auth/useLocalKeys';
 import KeyManager from './components/KeyManager';
+import { PasswordPrompt } from './components/PasswordPrompt';
 import SignerSelector, { type SignerOption } from './components/SignerSelector';
 import {
   loadProject, saveProject, updateFileContent, createFile, createFolder, deleteFile,
@@ -279,8 +281,37 @@ export default function App() {
   const [pendingDiffs, setPendingDiffs] = useState<PendingDiffMap>({});
   const { user, loading: authLoading, signOut } = useAuth();
   const { keys, signMessage } = useKeys();
+  const {
+    localKeys, accountsMap, wasmReady,
+    generateNewKey, importMnemonic, importPrivateKey: importLocalPrivateKey,
+    importKeystore, deleteLocalKey, exportKeystore,
+    signWithLocalKey, refreshAccounts, createAccount,
+  } = useLocalKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'fcl' });
+  const [passwordPrompt, setPasswordPrompt] = useState<{
+    keyLabel: string;
+    resolve: (password: string) => void;
+    reject: () => void;
+  } | null>(null);
+
+  const promptForPassword = useCallback((keyLabel: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      setPasswordPrompt({ keyLabel, resolve, reject });
+    });
+  }, []);
+
+  // Auto-select first local key+account as default signer when available
+  useEffect(() => {
+    if (selectedSigner.type !== 'fcl') return; // user already chose something
+    for (const key of localKeys) {
+      const accounts = accountsMap[key.id];
+      if (accounts && accounts.length > 0) {
+        setSelectedSigner({ type: 'local', key, account: accounts[0] });
+        return;
+      }
+    }
+  }, [localKeys, accountsMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const {
     projects: cloudProjects,
@@ -464,30 +495,48 @@ export default function App() {
     setLoading(true);
     setResults([]);
 
+    // Helper: build sign function for local key signer
+    const buildLocalSignFn = (key: any, account: any) => async (message: string) => {
+      try {
+        return await signWithLocalKey(key.id, message, account.hashAlgo, undefined, account.sigAlgo);
+      } catch (e: any) {
+        if (e.message === 'PASSWORD_REQUIRED') {
+          const password = await promptForPassword(key.label);
+          return signWithLocalKey(key.id, message, account.hashAlgo, password, account.sigAlgo);
+        }
+        throw e;
+      }
+    };
+
+    const onResult = (result: any) => setResults((prev: any) => [...prev, result]);
+
     if (codeType === 'script') {
       const result = await executeScript(activeCode, paramValues);
       setResults([result]);
+    } else if (codeType === 'contract') {
+      // Deploy contract — requires a signer
+      if (selectedSigner.type === 'local') {
+        const { key, account } = selectedSigner;
+        await deployContract(activeCode, account.flowAddress, account.keyIndex, buildLocalSignFn(key, account), onResult);
+      } else if (selectedSigner.type === 'custodial') {
+        const key = selectedSigner.key;
+        await deployContract(activeCode, key.flow_address, key.key_index, (msg) => signMessage(key.id, msg), onResult);
+      } else {
+        setResults([{ type: 'error', data: 'Deploy requires a local or custodial key signer. Please select one.' }]);
+      }
     } else if (selectedSigner.type === 'fcl') {
-      await executeTransaction(activeCode, paramValues, (result) => {
-        setResults((prev) => [...prev, result]);
-      });
+      await executeTransaction(activeCode, paramValues, onResult);
+    } else if (selectedSigner.type === 'local') {
+      const { key, account } = selectedSigner;
+      await executeCustodialTransaction(activeCode, paramValues, account.flowAddress, account.keyIndex, buildLocalSignFn(key, account), onResult);
     } else {
       // Custodial signer
       const key = selectedSigner.key;
-      await executeCustodialTransaction(
-        activeCode,
-        paramValues,
-        key.flow_address,
-        key.key_index,
-        (message) => signMessage(key.id, message),
-        (result) => {
-          setResults((prev) => [...prev, result]);
-        },
-      );
+      await executeCustodialTransaction(activeCode, paramValues, key.flow_address, key.key_index, (msg) => signMessage(key.id, msg), onResult);
     }
 
     setLoading(false);
-  }, [activeCode, codeType, paramValues, loading, selectedSigner, signMessage]);
+  }, [activeCode, codeType, paramValues, loading, selectedSigner, signMessage, signWithLocalKey, promptForPassword]);
 
   const handleInsertCode = useCallback((newCode: string) => {
     setProject((prev) => updateFileContent(prev, prev.activeFile, newCode));
@@ -842,12 +891,14 @@ export default function App() {
           </select>
 
 
-          {/* Signer selector - show when there are custodial keys and code is transaction */}
-          {codeType === 'transaction' && keys.length > 0 && (
+          {/* Signer selector - show when there are keys available and code is transaction or contract */}
+          {(codeType === 'transaction' || codeType === 'contract') && (keys.length > 0 || localKeys.some(k => (accountsMap[k.id] || []).length > 0)) && (
             <SignerSelector
               keys={keys}
               selected={selectedSigner}
               onSelect={setSelectedSigner}
+              localKeys={localKeys}
+              accountsMap={accountsMap}
             />
           )}
 
@@ -865,7 +916,7 @@ export default function App() {
               ) : (
                 <Play className="w-3.5 h-3.5" />
               )}
-              {codeType === 'script' ? 'Run Script' : 'Send Transaction'}
+              {codeType === 'script' ? 'Run Script' : codeType === 'contract' ? 'Deploy' : 'Send Transaction'}
               <span className="ml-1.5 flex items-center gap-0.5 opacity-60">
                 <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
                   {navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}
@@ -1012,15 +1063,26 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <a
-                      href={`https://flowindex.io/developer/login?redirect=${encodeURIComponent(window.location.origin)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors px-3 py-2"
-                    >
-                      <LogIn className="w-3 h-3" />
-                      <span>Sign in</span>
-                    </a>
+                    <div>
+                      <a
+                        href={`https://flowindex.io/developer/login?redirect=${encodeURIComponent(window.location.origin)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors px-3 py-2"
+                      >
+                        <LogIn className="w-3 h-3" />
+                        <span>Sign in</span>
+                      </a>
+                      <button
+                        onClick={() => setShowKeyManager(!showKeyManager)}
+                        className={`flex items-center gap-1.5 w-full px-3 py-1.5 text-[11px] transition-colors ${
+                          showKeyManager ? 'text-emerald-400 bg-emerald-600/10' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+                        }`}
+                      >
+                        <KeyIcon className="w-3 h-3" />
+                        <span>Manage Keys</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -1184,6 +1246,9 @@ export default function App() {
                   activeFile={project.activeFile}
                   network={network}
                   onClose={() => setShowAI(false)}
+                  selectedSigner={selectedSigner}
+                  signWithLocalKey={signWithLocalKey}
+                  promptForPassword={promptForPassword}
                 />
               </div>
             </>
@@ -1213,7 +1278,7 @@ export default function App() {
           ) : (
             <Play className="w-5 h-5" fill="currentColor" />
           )}
-          <span className="text-sm">{codeType === 'script' ? 'Run' : 'Send'}</span>
+          <span className="text-sm">{codeType === 'script' ? 'Run' : codeType === 'contract' ? 'Deploy' : 'Send'}</span>
         </button>
       )}
 
@@ -1254,6 +1319,9 @@ export default function App() {
               activeFile={project.activeFile}
               network={network}
               onClose={() => setShowMobileAI(false)}
+              selectedSigner={selectedSigner}
+              signWithLocalKey={signWithLocalKey}
+              promptForPassword={promptForPassword}
             />
           </div>
         </div>
@@ -1277,12 +1345,33 @@ export default function App() {
 
       {/* Key Manager Panel (overlay) */}
       {showKeyManager && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="bg-black/50 flex-1" onClick={() => setShowKeyManager(false)} />
-          <div className="w-80 bg-zinc-900 border-l border-zinc-700 overflow-y-auto">
-            <KeyManager onClose={() => setShowKeyManager(false)} network={network} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowKeyManager(false)} />
+          <div className="relative w-[480px] max-w-[90vw] max-h-[80vh] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-y-auto">
+            <KeyManager
+              onClose={() => setShowKeyManager(false)}
+              network={network}
+              localKeys={localKeys}
+              accountsMap={accountsMap}
+              wasmReady={wasmReady}
+              onGenerateKey={generateNewKey}
+              onImportMnemonic={importMnemonic}
+              onImportPrivateKey={importLocalPrivateKey}
+              onImportKeystore={importKeystore}
+              onDeleteLocalKey={deleteLocalKey}
+              onExportKeystore={exportKeystore}
+              onRefreshAccounts={refreshAccounts}
+              onCreateAccount={createAccount}
+            />
           </div>
         </div>
+      )}
+      {passwordPrompt && (
+        <PasswordPrompt
+          keyLabel={passwordPrompt.keyLabel}
+          onSubmit={(pw) => { passwordPrompt.resolve(pw); setPasswordPrompt(null); }}
+          onCancel={() => { passwordPrompt.reject(); setPasswordPrompt(null); }}
+        />
       )}
     </div>
   );

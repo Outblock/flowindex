@@ -8,7 +8,14 @@ export interface ExecutionResult {
   txId?: string;
 }
 
-export function detectCodeType(code: string): 'script' | 'transaction' {
+export function detectCodeType(code: string): 'script' | 'transaction' | 'contract' {
+  // Contract: starts with access(all) contract or pub contract (after optional imports)
+  const stripped = code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
+  const lines = stripped.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const firstNonImport = lines.find(l => !l.startsWith('import '));
+  if (firstNonImport && /^(access\s*\(all\)|pub)\s+contract\b/.test(firstNonImport)) {
+    return 'contract';
+  }
   return code.includes('transaction') && code.includes('prepare')
     ? 'transaction'
     : 'script';
@@ -105,6 +112,75 @@ export async function executeCustodialTransaction(
     const txId = await fcl.mutate({
       cadence: code,
       args,
+      proposer: authz,
+      payer: authz,
+      authorizations: [authz],
+      limit: 9999,
+    });
+
+    onResult({ type: 'tx_submitted', data: txId, txId });
+
+    const result = await fcl.tx(txId).onceSealed();
+    onResult({
+      type: 'tx_sealed',
+      data: result,
+      events: result.events || [],
+      txId,
+    });
+  } catch (err) {
+    onResult({ type: 'error', data: extractError(err) });
+  }
+}
+
+/**
+ * Extract contract name from Cadence contract source code.
+ */
+function extractContractName(code: string): string {
+  const match = code.match(/(?:access\s*\(all\)|pub)\s+contract\s+(?:interface\s+)?(\w+)/);
+  return match?.[1] ?? 'UnknownContract';
+}
+
+/**
+ * Deploy a Cadence contract to a Flow account.
+ * Generates a deploy transaction that calls Account.contracts.add().
+ */
+export async function deployContract(
+  code: string,
+  signerAddress: string,
+  keyIndex: number,
+  signFn: (message: string) => Promise<string>,
+  onResult: (result: ExecutionResult) => void,
+): Promise<void> {
+  try {
+    const contractName = extractContractName(code);
+    const codeHex = Array.from(new TextEncoder().encode(code))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const deployTx = `
+transaction(name: String, code: String) {
+  prepare(signer: auth(AddContract) &Account) {
+    signer.contracts.add(name: name, code: code.decodeHex())
+  }
+}`;
+
+    const authz = (account: any) => ({
+      ...account,
+      addr: fcl.sansPrefix(signerAddress),
+      keyId: keyIndex,
+      signingFunction: async (signable: { message: string }) => ({
+        addr: fcl.sansPrefix(signerAddress),
+        keyId: keyIndex,
+        signature: await signFn(signable.message),
+      }),
+    });
+
+    const txId = await fcl.mutate({
+      cadence: deployTx,
+      args: (arg: any, t: any) => [
+        arg(contractName, t.String),
+        arg(codeHex, t.String),
+      ],
       proposer: authz,
       payer: authz,
       authorizations: [authz],
