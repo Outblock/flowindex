@@ -1493,7 +1493,7 @@ export default function App() {
                       className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
                     >
                       <Github className="w-3 h-3" />
-                      <span>Connect GitHub</span>
+                      <span>GitHub</span>
                     </button>
                   )}
                 </div>
