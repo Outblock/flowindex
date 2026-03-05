@@ -4,6 +4,8 @@ WORKDIR /app/web
 COPY ai/chat/web/package.json ai/chat/web/bun.lock ./
 RUN bun install
 COPY ai/chat/web/ .
+# Skills directory (loadSkill tool reads at runtime via path walk-up)
+COPY skills/ /app/skills/
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
@@ -28,6 +30,9 @@ COPY ai/chat/ .
 COPY --from=frontend /app/web/.next ./web/.next
 COPY --from=frontend /app/web/node_modules ./web/node_modules
 COPY --from=frontend /app/web/package.json ./web/package.json
+
+# Skills for runtime loadSkill tool (Next.js SSR reads these on request)
+COPY --from=frontend /app/skills ./skills
 
 # Train on startup data (DDL + queries + docs baked into the image)
 RUN python train.py
