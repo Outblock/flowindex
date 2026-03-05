@@ -98,7 +98,7 @@ export interface UseLocalKeysReturn {
     network: 'mainnet' | 'testnet',
   ) => Promise<{ txId: string }>;
   // Private key access
-  getPrivateKey: (keyId: string, password?: string) => Promise<string>;
+  getPrivateKey: (keyId: string, password?: string, sigAlgo?: 'ECDSA_P256' | 'ECDSA_secp256k1') => Promise<string>;
   // Reveal secret — returns { type: 'mnemonic', value } or { type: 'privateKey', value }
   revealSecret: (keyId: string, password?: string) => Promise<{ type: 'mnemonic' | 'privateKey'; value: string }>;
 }
@@ -172,9 +172,17 @@ export function useLocalKeys(): UseLocalKeysReturn {
   // -------------------------------------------------------------------------
 
   const getPrivateKey = useCallback(
-    async (keyId: string, password?: string): Promise<string> => {
+    async (
+      keyId: string,
+      password?: string,
+      sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_P256',
+    ): Promise<string> => {
+      // Cache key includes sigAlgo because mnemonic keys have different
+      // private keys per curve (HD derivation with different curves)
+      const cacheKey = `${keyId}:${sigAlgo}`;
+
       // Try cache first
-      const cached = keyCache.current.get(keyId);
+      const cached = keyCache.current.get(cacheKey);
       if (cached) return cached;
 
       // Find the key
@@ -183,8 +191,8 @@ export function useLocalKeys(): UseLocalKeysReturn {
 
       // Use autoPassword if available (transparent to user)
       if (key.autoPassword) {
-        const hex = await decryptFromKeystore(key.encryptedKey, key.autoPassword);
-        keyCache.current.set(keyId, hex);
+        const hex = await decryptFromKeystore(key.encryptedKey, key.autoPassword, sigAlgo);
+        keyCache.current.set(cacheKey, hex);
         return hex;
       }
 
@@ -193,8 +201,8 @@ export function useLocalKeys(): UseLocalKeysReturn {
         throw new Error('PASSWORD_REQUIRED');
       }
 
-      const hex = await decryptFromKeystore(key.encryptedKey, password ?? '');
-      keyCache.current.set(keyId, hex);
+      const hex = await decryptFromKeystore(key.encryptedKey, password ?? '', sigAlgo);
+      keyCache.current.set(cacheKey, hex);
       return hex;
     },
     [localKeys],
@@ -257,8 +265,9 @@ export function useLocalKeys(): UseLocalKeysReturn {
         createdAt: Date.now(),
       };
 
-      // Cache the decrypted private key
-      keyCache.current.set(key.id, derived.privateKeyHex);
+      // Cache the decrypted private keys (same key for both curves in raw import)
+      keyCache.current.set(`${key.id}:ECDSA_P256`, derived.privateKeyHex);
+      keyCache.current.set(`${key.id}:ECDSA_secp256k1`, derived.privateKeyHexSecp256k1);
 
       return key;
     },
@@ -297,8 +306,9 @@ export function useLocalKeys(): UseLocalKeysReturn {
         createdAt: Date.now(),
       };
 
-      // Cache decrypted private key
-      keyCache.current.set(key.id, derived.privateKeyHex);
+      // Cache decrypted private keys for both curves
+      keyCache.current.set(`${key.id}:ECDSA_P256`, derived.privateKeyHex);
+      keyCache.current.set(`${key.id}:ECDSA_secp256k1`, derived.privateKeyHexSecp256k1);
 
       setLocalKeys((prev) => [...prev, key]);
       return { mnemonic, key };
@@ -332,7 +342,8 @@ export function useLocalKeys(): UseLocalKeysReturn {
         createdAt: Date.now(),
       };
 
-      keyCache.current.set(key.id, derived.privateKeyHex);
+      keyCache.current.set(`${key.id}:ECDSA_P256`, derived.privateKeyHex);
+      keyCache.current.set(`${key.id}:ECDSA_secp256k1`, derived.privateKeyHexSecp256k1);
 
       setLocalKeys((prev) => [...prev, key]);
       return key;
@@ -374,7 +385,8 @@ export function useLocalKeys(): UseLocalKeysReturn {
   );
 
   const deleteLocalKey = useCallback((id: string) => {
-    keyCache.current.delete(id);
+    keyCache.current.delete(`${id}:ECDSA_P256`);
+    keyCache.current.delete(`${id}:ECDSA_secp256k1`);
     setLocalKeys((prev) => prev.filter((k) => k.id !== id));
     setAccountsMap((prev) => {
       const next = { ...prev };
@@ -405,7 +417,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       password?: string,
       sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_secp256k1',
     ): Promise<string> => {
-      const privateKeyHex = await getPrivateKey(keyId, password);
+      const privateKeyHex = await getPrivateKey(keyId, password, sigAlgo);
       return signMessage(privateKeyHex, message, sigAlgo, hashAlgo);
     },
     [getPrivateKey],

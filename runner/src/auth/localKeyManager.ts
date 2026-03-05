@@ -137,16 +137,19 @@ export async function generatePrivateKey(): Promise<string> {
 // ---------------------------------------------------------------------------
 
 export interface DerivedKeys {
-  privateKeyHex: string;
+  privateKeyHex: string;           // nist256p1-derived (used for P256 signing)
+  privateKeyHexSecp256k1: string;  // secp256k1-derived (used for secp256k1 signing)
   publicKeyP256: string;
   publicKeySecp256k1: string;
 }
 
 /**
  * Derive keys from a BIP39 mnemonic using the Flow BIP44 path.
- * Uses the P256 (nist256p1) curve for derivation. The same private key bytes
- * are used with both curves — secp256k1 public key is extracted from the same
- * key data, and signing works correctly with either curve.
+ *
+ * HD derivation with different curves produces DIFFERENT private keys from the
+ * same mnemonic+path. So we derive twice:
+ *   - nist256p1 curve → private key for P256 signing, P256 public key
+ *   - secp256k1 curve → private key for secp256k1 signing, secp256k1 public key
  */
 export async function deriveFromMnemonic(
   mnemonic: string,
@@ -160,16 +163,38 @@ export async function deriveFromMnemonic(
   }
 
   const wallet = core.HDWallet.createWithMnemonic(mnemonic, passphrase);
-  const privateKey = wallet.getKeyByCurve(core.Curve.nist256p1, path);
 
-  const result = extractPublicKeys(core, privateKey);
+  // P256: derive with nist256p1 curve
+  const p256PrivateKey = wallet.getKeyByCurve(core.Curve.nist256p1, path);
+  const p256PrivHex = bytesToHex(p256PrivateKey.data());
+  const pubP256 = p256PrivateKey.getPublicKeyNist256p1();
+  const pubP256U = pubP256.uncompressed();
+  const p256PubHex = stripUncompressedPrefix(bytesToHex(pubP256U.data()));
+  pubP256U.delete();
+  pubP256.delete();
+  p256PrivateKey.delete();
+
+  // secp256k1: derive with secp256k1 curve (different private key!)
+  const secpPrivateKey = wallet.getKeyByCurve(core.Curve.secp256k1, path);
+  const secpPrivHex = bytesToHex(secpPrivateKey.data());
+  const pubSecp = secpPrivateKey.getPublicKeySecp256k1(false);
+  const secpPubHex = stripUncompressedPrefix(bytesToHex(pubSecp.data()));
+  pubSecp.delete();
+  secpPrivateKey.delete();
+
   wallet.delete();
 
-  return result;
+  return {
+    privateKeyHex: p256PrivHex,
+    privateKeyHexSecp256k1: secpPrivHex,
+    publicKeyP256: p256PubHex,
+    publicKeySecp256k1: secpPubHex,
+  };
 }
 
 /**
- * Derive both public keys from a private key hex string.
+ * Derive both public keys from a raw private key hex string.
+ * For raw imports, the same key bytes are used with both curves.
  */
 export async function deriveFromPrivateKey(hex: string): Promise<DerivedKeys> {
   const core = await getWalletCore();
@@ -180,30 +205,16 @@ export async function deriveFromPrivateKey(hex: string): Promise<DerivedKeys> {
   }
 
   const privateKey = core.PrivateKey.createWithData(pkBytes);
-  const result = extractPublicKeys(core, privateKey);
-
-  return result;
-}
-
-/**
- * Extract P256 and secp256k1 public keys from a wallet-core PrivateKey.
- * Same private key bytes work with both curves.
- * Note: deletes the PrivateKey after extraction.
- */
-function extractPublicKeys(
-  core: WalletCore,
-  privateKey: InstanceType<WalletCore['PrivateKey']>,
-): DerivedKeys {
   const privateKeyHex = bytesToHex(privateKey.data());
 
-  // P256 (nist256p1) — uncompressed
+  // P256
   const pubP256 = privateKey.getPublicKeyNist256p1();
-  const pubP256Uncompressed = pubP256.uncompressed();
-  const p256Hex = stripUncompressedPrefix(bytesToHex(pubP256Uncompressed.data()));
-  pubP256Uncompressed.delete();
+  const pubP256U = pubP256.uncompressed();
+  const p256Hex = stripUncompressedPrefix(bytesToHex(pubP256U.data()));
+  pubP256U.delete();
   pubP256.delete();
 
-  // secp256k1 — uncompressed (same private key bytes)
+  // secp256k1
   const pubSecp = privateKey.getPublicKeySecp256k1(false);
   const secpHex = stripUncompressedPrefix(bytesToHex(pubSecp.data()));
   pubSecp.delete();
@@ -212,6 +223,7 @@ function extractPublicKeys(
 
   return {
     privateKeyHex,
+    privateKeyHexSecp256k1: privateKeyHex, // same key for raw imports
     publicKeyP256: p256Hex,
     publicKeySecp256k1: secpHex,
   };
@@ -276,12 +288,16 @@ export async function encryptMnemonicToKeystore(
  * Returns hex-encoded private key.
  *
  * For mnemonic-based keystores, we decrypt the mnemonic and re-derive
- * the Flow key (using the nist256p1 curve + Flow BIP44 path), because
- * `decryptPrivateKey` returns the Ethereum-derived key which is different.
+ * with the correct curve (nist256p1 for P256, secp256k1 for secp256k1).
+ * HD derivation with different curves produces different private keys!
+ *
+ * @param sigAlgo  Which curve's private key to return (for mnemonic keys).
+ *                 Defaults to P256 for backwards compatibility.
  */
 export async function decryptFromKeystore(
   json: string,
   password: string = '',
+  sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_P256',
 ): Promise<string> {
   const core = await getWalletCore();
   const jsonBytes = stringToBytes(json);
@@ -291,17 +307,16 @@ export async function decryptFromKeystore(
 
   // Check if this is a mnemonic-based keystore by trying to decrypt mnemonic
   const mnemonic = storedKey.decryptMnemonic(pwBytes);
-  console.log('[decryptFromKeystore] mnemonic result:', mnemonic ? `"${mnemonic.substring(0, 20)}..." (len=${mnemonic.length})` : 'null/empty');
   if (mnemonic && mnemonic.length > 0) {
     storedKey.delete();
-    // Re-derive the Flow private key from the mnemonic
+    // Re-derive with the correct curve
     const derived = await deriveFromMnemonic(mnemonic);
-    console.log('[decryptFromKeystore] re-derived secp256k1 pubkey:', derived.publicKeySecp256k1.substring(0, 20) + '...');
-    return derived.privateKeyHex;
+    return sigAlgo === 'ECDSA_secp256k1'
+      ? derived.privateKeyHexSecp256k1
+      : derived.privateKeyHex;
   }
 
-  // Private key-based keystore: decrypt directly
-  console.log('[decryptFromKeystore] falling through to decryptPrivateKey (mnemonic not found)');
+  // Private key-based keystore: decrypt directly (same key for both curves)
   const privateKeyBytes = storedKey.decryptPrivateKey(pwBytes);
 
   if (!privateKeyBytes || privateKeyBytes.length === 0) {
@@ -379,29 +394,6 @@ export async function signMessage(
   const curve =
     sigAlgo === 'ECDSA_secp256k1' ? core.Curve.secp256k1 : core.Curve.nist256p1;
 
-  // Debug: verify public key matches what we expect
-  if (sigAlgo === 'ECDSA_secp256k1') {
-    const pubSecp = privateKey.getPublicKeySecp256k1(false);
-    const pubHex = bytesToHex(pubSecp.data());
-    console.log('[signMessage] sigAlgo:', sigAlgo, 'hashAlgo:', hashAlgo);
-    console.log('[signMessage] secp256k1 pubkey (with 04):', pubHex);
-    console.log('[signMessage] secp256k1 pubkey (stripped):', stripUncompressedPrefix(pubHex));
-    console.log('[signMessage] message length:', msgBytes.length, 'hash length:', messageHash.length);
-    console.log('[signMessage] hash hex:', bytesToHex(messageHash));
-    pubSecp.delete();
-  } else {
-    const pubP256 = privateKey.getPublicKeyNist256p1();
-    const pubP256U = pubP256.uncompressed();
-    const pubHex = bytesToHex(pubP256U.data());
-    console.log('[signMessage] sigAlgo:', sigAlgo, 'hashAlgo:', hashAlgo);
-    console.log('[signMessage] P256 pubkey (with 04):', pubHex);
-    console.log('[signMessage] P256 pubkey (stripped):', stripUncompressedPrefix(pubHex));
-    console.log('[signMessage] message length:', msgBytes.length, 'hash length:', messageHash.length);
-    console.log('[signMessage] hash hex:', bytesToHex(messageHash));
-    pubP256U.delete();
-    pubP256.delete();
-  }
-
   const signature = privateKey.sign(messageHash, curve);
   privateKey.delete();
 
@@ -409,13 +401,9 @@ export async function signMessage(
     throw new Error('Signing failed');
   }
 
-  const sigHex = bytesToHex(signature.subarray(0, signature.length - 1));
-  console.log('[signMessage] signature length:', signature.length, 'stripped length:', signature.length - 1);
-  console.log('[signMessage] signature hex:', sigHex);
-
   // 3. Strip recovery byte — FCL expects raw r||s (64 bytes)
   // Both curves return r(32) || s(32) || v(1) = 65 bytes when signing a 32-byte digest
-  return sigHex;
+  return bytesToHex(signature.subarray(0, signature.length - 1));
 }
 
 // ---------------------------------------------------------------------------
