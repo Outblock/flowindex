@@ -6,6 +6,7 @@ import {
   Bot, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download,
   Search, ChevronRight, Code, Wrench, Zap, Scale, Brain, ChevronUp,
   Eye, EyeOff, Square, ReplaceAll, Coins, Image, SendHorizonal,
+  ShieldCheck, ShieldOff,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
@@ -47,6 +48,7 @@ interface AIPanelProps {
   activeFile?: string;
   network?: string;
   onClose?: () => void;
+  onAutoApproveChange?: (autoApprove: boolean) => void;
 }
 
 /* ── SQL Result Table ── */
@@ -1430,11 +1432,31 @@ export default function AIPanel({
   activeFile,
   network,
   onClose,
+  onAutoApproveChange,
 }: AIPanelProps) {
   const [input, setInput] = useState('');
   const [chatMode, setChatMode] = useState<ChatMode>(getStoredMode);
   const [autoApply, setAutoApply] = useState<boolean>(getStoredAutoApply);
   const [hideTools, setHideTools] = useState(false);
+
+  // Auto-approve toggle for transaction signing
+  const [autoApprove, setAutoApprove] = useState(() => {
+    try { return localStorage.getItem('flow-auto-approve') === 'true'; } catch { return false; }
+  });
+
+  const toggleAutoApprove = useCallback(() => {
+    setAutoApprove(prev => {
+      const next = !prev;
+      try { localStorage.setItem('flow-auto-approve', String(next)); } catch { /* noop */ }
+      onAutoApproveChange?.(next);
+      return next;
+    });
+  }, [onAutoApproveChange]);
+
+  // Notify parent of initial autoApprove value on mount
+  useEffect(() => {
+    onAutoApproveChange?.(autoApprove);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [chatError, setChatError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1795,7 +1817,20 @@ export default function AIPanel({
             {hideTools ? <EyeOff size={10} /> : <Eye size={10} />}
             Tools
           </button>
-          {/* Auto Apply removed */}
+          {/* Auto-approve toggle for transaction signing */}
+          <button
+            type="button"
+            onClick={toggleAutoApprove}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] uppercase tracking-widest font-bold transition-all ${
+              autoApprove
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+            }`}
+            title={autoApprove ? 'Auto-approve ON: transactions sign automatically' : 'Auto-approve OFF: manual approval required'}
+          >
+            {autoApprove ? <ShieldCheck size={10} /> : <ShieldOff size={10} />}
+            Auto
+          </button>
           {/* MCP indicator */}
           <div className="relative group/mcp">
             <button
