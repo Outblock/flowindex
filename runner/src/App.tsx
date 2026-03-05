@@ -32,7 +32,7 @@ import {
 import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';
 import ProjectSelector from './components/ProjectSelector';
 import ShareModal from './components/ShareModal';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, Check } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
 /* ── Detect if we're in an iframe ── */
@@ -405,7 +405,6 @@ export default function App() {
   const autoCreatingRef = useRef(false);
   const [viewingShared, setViewingShared] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
 
   const [monacoInstance, setMonacoInstance] = useState<typeof MonacoNS | null>(null);
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
@@ -941,30 +940,25 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2 md:gap-3">
           {!isMobile && (
-            <button
-              onClick={() => {
-                // If logged in with cloud project, show the full share modal
-                if (user && cloudMeta.id && cloudMeta.id !== '_dismissed') {
-                  setShowShareModal(true);
-                  return;
-                }
-                // Otherwise, copy a share link with the code encoded
-                const code = getFileContent(project, project.activeFile) || '';
-                const url = `${window.location.origin}${window.location.pathname}?code=${btoa(code)}`;
-                navigator.clipboard.writeText(url);
-                setShareCopied(true);
-                setTimeout(() => setShareCopied(false), 2000);
-              }}
-              className={`flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors ${
-                shareCopied
-                  ? 'text-emerald-400 border-emerald-600/30 bg-emerald-600/10'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border-zinc-700'
-              }`}
-              title="Share code"
-            >
-              {shareCopied ? <Check className="w-3 h-3" /> : <Share2 className="w-3 h-3" />}
-              <span>{shareCopied ? 'Copied!' : 'Share'}</span>
-            </button>
+            user && cloudMeta.id && cloudMeta.id !== '_dismissed' ? (
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded border border-zinc-700 transition-colors"
+                title="Share project"
+              >
+                <Share2 className="w-3 h-3" />
+                <span>Share</span>
+              </button>
+            ) : (
+              <a
+                href={`https://flowindex.io/developer/login?redirect=${encodeURIComponent(window.location.href)}`}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded border border-zinc-700 transition-colors"
+                title="Log in to share"
+              >
+                <Share2 className="w-3 h-3" />
+                <span>Share</span>
+              </a>
+            )
           )}
           <select
             value={network}
