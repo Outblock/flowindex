@@ -9,6 +9,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { getSystemPrompt } from "@/lib/system-prompt";
+import { buildSkillsPrompt, createLoadSkillTool } from "@/lib/skills";
 
 const MCP_URL = process.env.MCP_SERVER_URL || "http://localhost:8085/mcp";
 const CADENCE_MCP_URL =
@@ -137,12 +138,15 @@ export async function POST(req: Request) {
         },
       },
     }),
-    system: getSystemPrompt(),
+    system: getSystemPrompt() + buildSkillsPrompt(),
     messages: await convertToModelMessages(messages),
     tools: {
       ...mcp.tools,
       ...cadenceMcp.tools,
       ...evmMcp.tools,
+
+      // Skills — on-demand specialized knowledge
+      loadSkill: createLoadSkillTool(),
 
       // Web search — built-in Anthropic provider tool
       web_search: anthropic.tools.webSearch_20250305() as any,

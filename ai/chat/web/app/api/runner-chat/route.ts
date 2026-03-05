@@ -8,6 +8,7 @@ import {
   type UIMessage,
 } from "ai";
 import { z } from "zod";
+import { buildSkillsPrompt, createLoadSkillTool } from "@/lib/skills";
 
 const CADENCE_MCP_URL =
   process.env.CADENCE_MCP_URL || "https://cadence-mcp.up.railway.app/mcp";
@@ -147,7 +148,7 @@ Workflow:
   - FlowToken: 0x1654653399040a61
   - FUSD: 0x3c5959b568896393
 
-Keep responses concise and implementation-focused.`;
+Keep responses concise and implementation-focused.${buildSkillsPrompt()}`;
 
 function sanitizeProjectFiles(files?: RunnerProjectFile[]): RunnerProjectFile[] {
   if (!Array.isArray(files)) return [];
@@ -234,6 +235,7 @@ export async function POST(req: Request) {
   const allTools = {
     ...editorTools,
     ...cadenceMcp.tools,
+    loadSkill: createLoadSkillTool(),
   };
 
   const result = streamText({

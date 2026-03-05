@@ -41,3 +41,4 @@ docker-compose.override.yml
 *.swp
 *.swo
 runner/public/*.wasm
+skills/.registry.json
