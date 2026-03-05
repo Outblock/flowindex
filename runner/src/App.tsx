@@ -32,7 +32,7 @@ import {
 import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';
 import ProjectSelector from './components/ProjectSelector';
 import ShareModal from './components/ShareModal';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
 /* ── Detect if we're in an iframe ── */
@@ -289,6 +289,20 @@ export default function App() {
     signWithLocalKey, refreshAccounts, createAccount, getPrivateKey, revealSecret,
   } = useLocalKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
+  const [showNetworkMenu, setShowNetworkMenu] = useState(false);
+  const networkMenuRef = useRef<HTMLDivElement>(null);
+  // Close network menu on outside click
+  useEffect(() => {
+    if (!showNetworkMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (networkMenuRef.current && !networkMenuRef.current.contains(e.target as Node)) {
+        setShowNetworkMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showNetworkMenu]);
+
   const [accountPanelAddress, setAccountPanelAddress] = useState<string | null>(null);
   const handleViewAccount = useCallback((address: string) => setAccountPanelAddress(address), []);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'none' });
@@ -943,7 +957,7 @@ export default function App() {
             user && cloudMeta.id && cloudMeta.id !== '_dismissed' ? (
               <button
                 onClick={() => setShowShareModal(true)}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded border border-zinc-700 transition-colors"
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs px-2 py-1 rounded border border-zinc-700 transition-colors"
                 title="Share project"
               >
                 <Share2 className="w-3 h-3" />
@@ -952,7 +966,7 @@ export default function App() {
             ) : (
               <a
                 href={`https://flowindex.io/developer/login?redirect=${encodeURIComponent(window.location.href)}`}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded border border-zinc-700 transition-colors"
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs px-2 py-1 rounded border border-zinc-700 transition-colors"
                 title="Log in to share"
               >
                 <Share2 className="w-3 h-3" />
@@ -960,14 +974,34 @@ export default function App() {
               </a>
             )
           )}
-          <select
-            value={network}
-            onChange={(e) => setNetwork(e.target.value as FlowNetwork)}
-            className="bg-zinc-800 text-zinc-300 text-xs px-2 py-1 rounded border border-zinc-700 focus:outline-none focus:border-zinc-500"
-          >
-            <option value="mainnet">Mainnet</option>
-            <option value="testnet">Testnet</option>
-          </select>
+          {/* Network selector */}
+          <div ref={networkMenuRef} className="relative">
+            <button
+              onClick={() => setShowNetworkMenu(!showNetworkMenu)}
+              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs px-2 py-1 rounded border border-zinc-700 transition-colors"
+            >
+              <Globe className="w-3 h-3 text-zinc-400" />
+              <span>{network === 'testnet' ? 'Testnet' : 'Mainnet'}</span>
+              <ChevronDown className="w-3 h-3 text-zinc-400" />
+            </button>
+            {showNetworkMenu && (
+              <div className="absolute top-full right-0 mt-1 w-32 bg-zinc-800 border border-zinc-700 rounded shadow-xl z-50 py-1">
+                {(['mainnet', 'testnet'] as const).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => { setNetwork(n); setShowNetworkMenu(false); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                      network === n
+                        ? 'text-emerald-400 bg-emerald-600/10'
+                        : 'text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    {n === 'testnet' ? 'Testnet' : 'Mainnet'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
 
           {/* Signer selector — always shown */}
