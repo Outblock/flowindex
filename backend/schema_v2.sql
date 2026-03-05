@@ -1037,4 +1037,13 @@ UPDATE app.ft_tokens SET market_symbol = 'ceDAI',  coingecko_id = NULL          
 UPDATE app.ft_tokens SET market_symbol = 'ceUSDT', coingecko_id = NULL                  WHERE contract_name = 'ceUSDT'       AND (market_symbol IS NULL OR market_symbol = '');
 UPDATE app.ft_tokens SET market_symbol = 'ceBUSD', coingecko_id = NULL                  WHERE contract_name = 'ceBUSD'       AND (market_symbol IS NULL OR market_symbol = '');
 
+-- ============================================================
+-- Migrate signing_algorithm to Flow SDK numbering:
+-- Old: 1=ECDSA_P256, 2=ECDSA_secp256k1
+-- New: 2=ECDSA_P256, 3=ECDSA_secp256k1
+-- Must remap 2→3 first (to avoid collision), then 1→2.
+-- ============================================================
+UPDATE app.account_keys SET signing_algorithm = 3 WHERE signing_algorithm = 2;
+UPDATE app.account_keys SET signing_algorithm = 2 WHERE signing_algorithm = 1;
+
 COMMIT;

@@ -822,9 +822,9 @@ func (s *Server) handleFlowAccountBalanceHistory(w http.ResponseWriter, r *http.
 func sigAlgoToNum(name string) string {
 	switch strings.ToUpper(name) {
 	case "ECDSA_P256":
-		return "1"
-	case "ECDSA_SECP256K1":
 		return "2"
+	case "ECDSA_SECP256K1":
+		return "3"
 	default:
 		return name
 	}
@@ -847,9 +847,9 @@ func hashAlgoToNum(name string) string {
 
 func numToSigAlgo(num string) string {
 	switch num {
-	case "1":
-		return "ECDSA_P256"
 	case "2":
+		return "ECDSA_P256"
+	case "3":
 		return "ECDSA_secp256k1"
 	default:
 		return num

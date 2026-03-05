@@ -522,9 +522,7 @@ function normalizeSigAlgo(
 ): 'ECDSA_P256' | 'ECDSA_secp256k1' {
   const s = String(val).toUpperCase();
   if (s.includes('SECP256K1')) return 'ECDSA_secp256k1';
-  // FlowIndex API: 1=P256, 2=secp256k1
-  // Flow SDK:      2=P256, 3=secp256k1
-  if (s === '2') return 'ECDSA_secp256k1';
+  // Flow SDK numbering: 2=P256, 3=secp256k1
   if (s === '3') return 'ECDSA_secp256k1';
   return 'ECDSA_P256';
 }
