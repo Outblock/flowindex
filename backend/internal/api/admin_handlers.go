@@ -1279,7 +1279,11 @@ func (s *Server) handleAdminBackfillStakingBlocks(w http.ResponseWriter, r *http
 // POST /admin/reprocess-worker
 //
 //	{"worker": "token_worker", "from_height": 85000000, "to_height": 143000000,
-//	 "chunk_size": 1000, "concurrency": 4, "delete_staking_transfers": true}
+//	 "chunk_size": 1000, "concurrency": 4, "delete_staking_transfers": true,
+//	 "resume": true}
+//
+// When "resume" is true, from_height is overridden by the saved checkpoint
+// (reprocess_{worker}), allowing the job to continue after a restart.
 //
 // Supported workers: token_worker, evm_worker
 func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Request) {
@@ -1290,13 +1294,29 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 		ChunkSize               uint64 `json:"chunk_size"`
 		Concurrency             int    `json:"concurrency"`
 		DeleteStakingTransfers  bool   `json:"delete_staking_transfers"`
+		Resume                  bool   `json:"resume"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if req.Worker == "" || req.FromHeight == 0 || req.ToHeight == 0 {
-		writeAPIError(w, http.StatusBadRequest, "worker, from_height, and to_height are required")
+	if req.Worker == "" || req.ToHeight == 0 {
+		writeAPIError(w, http.StatusBadRequest, "worker and to_height are required")
+		return
+	}
+
+	// Resume from last checkpoint if requested
+	checkpointKey := "reprocess_" + req.Worker
+	if req.Resume {
+		saved, err := s.repo.GetLastIndexedHeight(r.Context(), checkpointKey)
+		if err == nil && saved > 0 && saved > req.FromHeight {
+			log.Printf("[admin] reprocess-worker: resuming %s from checkpoint %d (was %d)", req.Worker, saved, req.FromHeight)
+			req.FromHeight = saved
+		}
+	}
+
+	if req.FromHeight == 0 {
+		writeAPIError(w, http.StatusBadRequest, "from_height is required (or use resume with a prior checkpoint)")
 		return
 	}
 	if req.ToHeight < req.FromHeight {
@@ -1369,8 +1389,9 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 	log.Printf("[admin] reprocess-worker: %s from %d to %d (%d chunks, concurrency=%d)",
 		req.Worker, req.FromHeight, req.ToHeight, totalChunks, req.Concurrency)
 
-	// Process in parallel with bounded concurrency
+	// Process in parallel with bounded concurrency.
 	// Run in background goroutine so the HTTP response returns immediately.
+	// Track completed chunks to maintain a contiguous checkpoint.
 	go func() {
 		sem := make(chan struct{}, req.Concurrency)
 		var mu sync.Mutex
@@ -1378,15 +1399,36 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 		errored := 0
 		startTime := time.Now()
 
+		// Track per-chunk completion for contiguous checkpoint advancement.
+		chunkDone := make([]bool, len(chunks))
+		checkpointIdx := -1 // index of last contiguously completed chunk
+
+		advanceCheckpoint := func() {
+			// Advance checkpoint to highest contiguous completed chunk.
+			advanced := false
+			for checkpointIdx+1 < len(chunks) && chunkDone[checkpointIdx+1] {
+				checkpointIdx++
+				advanced = true
+			}
+			if advanced {
+				cpHeight := chunks[checkpointIdx].to
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := s.repo.SetCheckpoint(ctx, checkpointKey, cpHeight); err != nil {
+					log.Printf("[admin] reprocess-worker: checkpoint save error: %v", err)
+				}
+			}
+		}
+
 		for i, c := range chunks {
 			sem <- struct{}{}
 			go func(idx int, ch chunk) {
 				defer func() { <-sem }()
 				chunkTimeout := 2 * time.Minute
-			if req.Worker == "proposer_key_backfill" {
-				chunkTimeout = 30 * time.Minute
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), chunkTimeout)
+				if req.Worker == "proposer_key_backfill" {
+					chunkTimeout = 30 * time.Minute
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), chunkTimeout)
 				defer cancel()
 				if err := proc.ProcessRange(ctx, ch.from, ch.to); err != nil {
 					mu.Lock()
@@ -1396,8 +1438,10 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 				} else {
 					mu.Lock()
 					processed++
+					chunkDone[idx] = true
 					p := processed
 					e := errored
+					advanceCheckpoint()
 					mu.Unlock()
 					if p%100 == 0 || p+e == totalChunks {
 						elapsed := time.Since(startTime).Round(time.Second)
@@ -1411,18 +1455,25 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 		for i := 0; i < req.Concurrency; i++ {
 			sem <- struct{}{}
 		}
+		// Final checkpoint advancement
+		mu.Lock()
+		advanceCheckpoint()
+		mu.Unlock()
+
 		elapsed := time.Since(startTime).Round(time.Second)
 		log.Printf("[admin] reprocess-worker: %s DONE processed=%d errored=%d total=%d elapsed=%s",
 			req.Worker, processed, errored, totalChunks, elapsed)
 	}()
 
 	writeAPIResponse(w, map[string]interface{}{
-		"worker":      req.Worker,
-		"from_height": req.FromHeight,
-		"to_height":   req.ToHeight,
-		"chunk_size":  req.ChunkSize,
-		"concurrency": req.Concurrency,
+		"worker":       req.Worker,
+		"from_height":  req.FromHeight,
+		"to_height":    req.ToHeight,
+		"chunk_size":   req.ChunkSize,
+		"concurrency":  req.Concurrency,
 		"total_chunks": totalChunks,
-		"message":     fmt.Sprintf("Reprocessing %s from %d to %d in background (%d chunks). Check server logs for progress.", req.Worker, req.FromHeight, req.ToHeight, totalChunks),
+		"resume":       req.Resume,
+		"checkpoint":   checkpointKey,
+		"message":      fmt.Sprintf("Reprocessing %s from %d to %d in background (%d chunks). Checkpoint: %s. Use resume:true to continue after restart.", req.Worker, req.FromHeight, req.ToHeight, totalChunks, checkpointKey),
 	}, nil, nil)
 }
