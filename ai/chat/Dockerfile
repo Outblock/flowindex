@@ -1,5 +1,6 @@
 # Stage 1: Build Next.js frontend
-FROM oven/bun:1 AS frontend
+FROM node:22-slim AS frontend
+RUN npm install -g bun
 WORKDIR /app/web
 COPY ai/chat/web/package.json ai/chat/web/bun.lock ./
 RUN bun install
@@ -10,7 +11,7 @@ ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
-RUN bun run build
+RUN npx next build
 
 # Stage 2: Python backend + MCP server + serve frontend
 FROM python:3.12-slim
