@@ -46,6 +46,11 @@ import {
   PromptInputFooter,
   PromptInputSubmit,
 } from "@/components/ai-elements/prompt-input";
+import {
+  Reasoning,
+  ReasoningTrigger,
+  ReasoningContent,
+} from "@/components/ai-elements/reasoning";
 
 import { SqlResultTable } from "./sql-result-table";
 import { ChartArtifact } from "./chart-artifact";
@@ -270,6 +275,16 @@ function ChatMessage({ message }: { message: UIMessage }) {
         </div>
         <MessageContent>
           {message.parts.map((part, i) => {
+            if (part.type === "reasoning") {
+              const reasoningPart = part as any;
+              return (
+                <Reasoning key={i} isStreaming={!reasoningPart.reasoning}>
+                  <ReasoningTrigger />
+                  <ReasoningContent>{reasoningPart.reasoning || ""}</ReasoningContent>
+                </Reasoning>
+              );
+            }
+
             if (part.type === "text") {
               if (!part.text.trim()) return null;
               return <MessageResponse key={i}>{part.text}</MessageResponse>;
