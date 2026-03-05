@@ -20,6 +20,7 @@ export interface LocalKey {
   source: 'mnemonic' | 'privateKey' | 'keystore';
   encryptedKey: string; // wallet-core StoredKey JSON string
   hasPassword: boolean;
+  autoPassword?: string; // random password for default keys (stored in localStorage, transparent to user)
   createdAt: number;
 }
 
@@ -82,6 +83,13 @@ function stringToBytes(str: string): Uint8Array {
   return new TextEncoder().encode(str);
 }
 
+/** Generate a random 32-char hex password for transparent key encryption. */
+export function generateRandomPassword(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return bytesToHex(bytes);
+}
+
 /**
  * Strip the 04 prefix from an uncompressed public key hex string.
  * Uncompressed keys are 65 bytes: 04 || x (32) || y (32).
@@ -129,13 +137,16 @@ export async function generatePrivateKey(): Promise<string> {
 // ---------------------------------------------------------------------------
 
 export interface DerivedKeys {
-  privateKeyHex: string;
+  privateKeyHex: string; // P256 private key (primary, used for encryption)
+  privateKeySecpHex?: string; // secp256k1 private key (different derivation path for mnemonic)
   publicKeyP256: string;
   publicKeySecp256k1: string;
 }
 
 /**
  * Derive keys from a BIP39 mnemonic using the Flow BIP44 path.
+ * Like Flow-Wallet-Tool, derives separate keys per curve since HD derivation
+ * produces different private keys for different curves on the same path.
  */
 export async function deriveFromMnemonic(
   mnemonic: string,
@@ -149,16 +160,38 @@ export async function deriveFromMnemonic(
   }
 
   const wallet = core.HDWallet.createWithMnemonic(mnemonic, passphrase);
-  const privateKey = wallet.getKeyByCurve(core.Curve.nist256p1, path);
 
-  const result = extractPublicKeys(core, privateKey);
+  // P256 key
+  const p256Key = wallet.getKeyByCurve(core.Curve.nist256p1, path);
+  const p256PrivHex = bytesToHex(p256Key.data());
+  const pubP256 = p256Key.getPublicKeyNist256p1();
+  const pubP256Uncompressed = pubP256.uncompressed();
+  const p256PubHex = stripUncompressedPrefix(bytesToHex(pubP256Uncompressed.data()));
+  pubP256Uncompressed.delete();
+  pubP256.delete();
+  p256Key.delete();
+
+  // secp256k1 key (different private key from same mnemonic!)
+  const secpKey = wallet.getKeyByCurve(core.Curve.secp256k1, path);
+  const secpPrivHex = bytesToHex(secpKey.data());
+  const pubSecp = secpKey.getPublicKeySecp256k1(false);
+  const secpPubHex = stripUncompressedPrefix(bytesToHex(pubSecp.data()));
+  pubSecp.delete();
+  secpKey.delete();
+
   wallet.delete();
 
-  return result;
+  return {
+    privateKeyHex: p256PrivHex,
+    privateKeySecpHex: secpPrivHex,
+    publicKeyP256: p256PubHex,
+    publicKeySecp256k1: secpPubHex,
+  };
 }
 
 /**
  * Derive both public keys from a private key hex string.
+ * For raw private keys, the same bytes work with both curves.
  */
 export async function deriveFromPrivateKey(hex: string): Promise<DerivedKeys> {
   const core = await getWalletCore();
@@ -169,32 +202,16 @@ export async function deriveFromPrivateKey(hex: string): Promise<DerivedKeys> {
   }
 
   const privateKey = core.PrivateKey.createWithData(pkBytes);
-  const result = extractPublicKeys(core, privateKey);
-
-  return result;
-}
-
-/**
- * Extract P256 and secp256k1 public keys from a wallet-core PrivateKey.
- * Returns hex strings without the 04 uncompressed prefix.
- * Note: deletes the PrivateKey after extraction.
- */
-function extractPublicKeys(
-  core: WalletCore,
-  privateKey: InstanceType<WalletCore['PrivateKey']>,
-): DerivedKeys {
   const privateKeyHex = bytesToHex(privateKey.data());
 
   // P256 (nist256p1) — uncompressed
   const pubP256 = privateKey.getPublicKeyNist256p1();
   const pubP256Uncompressed = pubP256.uncompressed();
-  const p256Hex = stripUncompressedPrefix(
-    bytesToHex(pubP256Uncompressed.data()),
-  );
+  const p256Hex = stripUncompressedPrefix(bytesToHex(pubP256Uncompressed.data()));
   pubP256Uncompressed.delete();
   pubP256.delete();
 
-  // secp256k1 — uncompressed
+  // secp256k1 — uncompressed (same private key bytes for raw import)
   const pubSecp = privateKey.getPublicKeySecp256k1(false);
   const secpHex = stripUncompressedPrefix(bytesToHex(pubSecp.data()));
   pubSecp.delete();
@@ -262,18 +279,25 @@ export async function encryptMnemonicToKeystore(
   return jsonStr;
 }
 
+/** Result of decrypting a keystore — may contain both P256 and secp256k1 keys for mnemonic-based keystores. */
+export interface DecryptedKeys {
+  privateKeyHex: string; // P256 private key
+  privateKeySecpHex?: string; // secp256k1 private key (only for mnemonic-based keys)
+}
+
 /**
- * Decrypt a private key from a wallet-core StoredKey JSON string.
- * Returns hex-encoded private key.
+ * Decrypt keys from a wallet-core StoredKey JSON string.
  *
  * For mnemonic-based keystores, we decrypt the mnemonic and re-derive
- * the Flow key (using the nist256p1 curve + Flow BIP44 path), because
- * `decryptPrivateKey` returns the Ethereum-derived key which is different.
+ * both curve keys (P256 + secp256k1), because HD derivation produces
+ * different private keys per curve.
+ *
+ * For raw private key keystores, returns the single key (works with both curves).
  */
 export async function decryptFromKeystore(
   json: string,
   password: string = '',
-): Promise<string> {
+): Promise<DecryptedKeys> {
   const core = await getWalletCore();
   const jsonBytes = stringToBytes(json);
   const pwBytes = stringToBytes(password);
@@ -284,12 +308,15 @@ export async function decryptFromKeystore(
   const mnemonic = storedKey.decryptMnemonic(pwBytes);
   if (mnemonic && mnemonic.length > 0) {
     storedKey.delete();
-    // Re-derive the Flow private key from the mnemonic
+    // Re-derive both curve keys from the mnemonic
     const derived = await deriveFromMnemonic(mnemonic);
-    return derived.privateKeyHex;
+    return {
+      privateKeyHex: derived.privateKeyHex,
+      privateKeySecpHex: derived.privateKeySecpHex,
+    };
   }
 
-  // Private key-based keystore: decrypt directly
+  // Private key-based keystore: decrypt directly (same bytes for both curves)
   const privateKeyBytes = storedKey.decryptPrivateKey(pwBytes);
 
   if (!privateKeyBytes || privateKeyBytes.length === 0) {
@@ -300,7 +327,7 @@ export async function decryptFromKeystore(
   const hex = bytesToHex(privateKeyBytes);
   storedKey.delete();
 
-  return hex;
+  return { privateKeyHex: hex };
 }
 
 // ---------------------------------------------------------------------------
@@ -343,9 +370,16 @@ export async function signMessage(
     throw new Error('Signing failed');
   }
 
-  // wallet-core returns a DER-encoded signature for ECDSA curves.
+  // wallet-core returns different signature formats per curve:
+  // - secp256k1: raw r(32) || s(32) || v(1) = 65 bytes → drop v, take first 64
+  // - nist256p1 (P256): DER-encoded → convert to raw r || s via AsnParser
   // FCL expects a raw (r || s) signature (64 bytes).
-  // Use AsnParser to convert DER → raw.
+  if (signature.length === 65) {
+    // secp256k1: drop recovery byte (v)
+    return bytesToHex(signature.slice(0, 64));
+  }
+
+  // P256: DER → raw r||s
   const rawSig = core.AsnParser.ecdsaSignatureFromDer(signature);
   return bytesToHex(rawSig);
 }

@@ -286,7 +286,7 @@ export default function App() {
     localKeys, accountsMap, wasmReady,
     generateNewKey, importMnemonic, importPrivateKey: importLocalPrivateKey,
     importKeystore, deleteLocalKey, exportKeystore,
-    signWithLocalKey, refreshAccounts, createAccount,
+    signWithLocalKey, refreshAccounts, createAccount, getPrivateKey,
   } = useLocalKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [accountPanelAddress, setAccountPanelAddress] = useState<string | null>(null);
@@ -1442,6 +1442,7 @@ export default function App() {
               onExportKeystore={exportKeystore}
               onRefreshAccounts={refreshAccounts}
               onCreateAccount={createAccount}
+              onGetPrivateKey={getPrivateKey}
               onViewAccount={handleViewAccount}
               selectedAccount={selectedSigner.type === 'local' ? { keyId: selectedSigner.key.id, address: selectedSigner.account.flowAddress, keyIndex: selectedSigner.account.keyIndex } : null}
               onSelectAccount={(key, account) => persistSigner({ type: 'local', key, account })}

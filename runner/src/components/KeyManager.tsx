@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Settings2,
 } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
@@ -65,6 +66,7 @@ interface KeyManagerProps {
     hashAlgo: 'SHA2_256' | 'SHA3_256',
     network: 'mainnet' | 'testnet',
   ) => Promise<{ txId: string }>;
+  onGetPrivateKey?: (keyId: string, password?: string) => Promise<string>;
   onViewAccount?: (address: string) => void;
   selectedAccount?: { keyId: string; address: string; keyIndex: number } | null;
   onSelectAccount?: (key: LocalKey, account: KeyAccount) => void;
@@ -165,6 +167,7 @@ export default function KeyManager({
   onExportKeystore,
   onRefreshAccounts,
   onCreateAccount,
+  onGetPrivateKey,
   onViewAccount,
   selectedAccount,
   onSelectAccount,
@@ -466,6 +469,7 @@ export default function KeyManager({
                     onExportKeystore={onExportKeystore}
                     onRefreshAccounts={onRefreshAccounts}
                     onCreateAccount={onCreateAccount}
+                    onGetPrivateKey={onGetPrivateKey}
                     onViewAccount={onViewAccount}
                   />
                 ))
@@ -508,6 +512,7 @@ function GenerateForm({
   const [mnemonic, setMnemonic] = useState<string | null>(null);
   const [mnemonicCopied, setMnemonicCopied] = useState(false);
   const [autoStatus, setAutoStatus] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const handleGenerate = async () => {
     setError('');
@@ -580,69 +585,28 @@ function GenerateForm({
   }
 
   return (
-    <div className="space-y-2">
-      <input
-        type="text"
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        placeholder="Key label (optional)"
-        className={inputClass}
-      />
+    <div className="space-y-2.5">
+      {/* Label + word count on same row */}
       <div className="flex gap-2">
+        <input
+          type="text"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Key label (optional)"
+          className={`${inputClass} flex-1`}
+        />
         <select
           value={wordCount}
           onChange={(e) => setWordCount(Number(e.target.value) as 12 | 24)}
-          className={`${inputClass} w-auto`}
+          className={`${inputClass} w-auto shrink-0`}
         >
           <option value={12}>12 words</option>
           <option value={24}>24 words</option>
         </select>
-        <div className="relative flex-1">
-          <input
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password (optional)"
-            className={inputClass}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
-          >
-            {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Signature & hash algorithm */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-zinc-400 shrink-0">Curve:</span>
-          <select
-            value={sigAlgo}
-            onChange={(e) => setSigAlgo(e.target.value as 'ECDSA_P256' | 'ECDSA_secp256k1')}
-            className={`${inputClass} w-auto`}
-          >
-            <option value="ECDSA_secp256k1">secp256k1</option>
-            <option value="ECDSA_P256">P256</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-zinc-400 shrink-0">Hash:</span>
-          <select
-            value={hashAlgo}
-            onChange={(e) => setHashAlgo(e.target.value as 'SHA2_256' | 'SHA3_256')}
-            className={`${inputClass} w-auto`}
-          >
-            <option value="SHA2_256">SHA2_256</option>
-            <option value="SHA3_256">SHA3_256</option>
-          </select>
-        </div>
       </div>
 
       {/* Auto-create toggle + network checkboxes */}
-      <div className="space-y-1.5">
+      <div className="flex items-center gap-3">
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <button
             type="button"
@@ -659,35 +623,99 @@ function GenerateForm({
               }`}
             />
           </button>
-          <span className="text-[11px] text-zinc-300">Auto-create account</span>
+          <span className="text-[11px] text-zinc-300">Auto-create</span>
         </label>
         {autoCreate && (
-          <div className="flex items-center gap-3 ml-9">
-            <label className="flex items-center gap-1.5 cursor-pointer">
+          <>
+            <label className="flex items-center gap-1 cursor-pointer">
               <input
                 type="checkbox"
                 checked={createMainnet}
                 onChange={(e) => setCreateMainnet(e.target.checked)}
                 className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500"
               />
-              <span className="text-[11px] text-zinc-300">Mainnet</span>
+              <span className="text-[10px] text-zinc-400">Mainnet</span>
             </label>
-            <label className="flex items-center gap-1.5 cursor-pointer">
+            <label className="flex items-center gap-1 cursor-pointer">
               <input
                 type="checkbox"
                 checked={createTestnet}
                 onChange={(e) => setCreateTestnet(e.target.checked)}
                 className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500"
               />
-              <span className="text-[11px] text-zinc-300">Testnet</span>
+              <span className="text-[10px] text-zinc-400">Testnet</span>
             </label>
-          </div>
+          </>
         )}
       </div>
 
-      <button onClick={handleGenerate} disabled={generating || !wasmReady} className={btnPrimary}>
+      {/* Advanced toggle */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+      >
+        <Settings2 className="w-3 h-3" />
+        Advanced
+        <ChevronDown className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+      </button>
+
+      {showAdvanced && (
+        <div className="space-y-2 pl-1 border-l-2 border-zinc-700 ml-1">
+          {/* Custom password */}
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Custom password (leave empty for auto)"
+              className={inputClass}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+            >
+              {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </button>
+          </div>
+          {!password && (
+            <p className="text-[10px] text-zinc-600 -mt-1">
+              Auto-generated password — no prompt on sign
+            </p>
+          )}
+
+          {/* Curve + Hash */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500">Curve:</span>
+              <select
+                value={sigAlgo}
+                onChange={(e) => setSigAlgo(e.target.value as 'ECDSA_P256' | 'ECDSA_secp256k1')}
+                className={`${inputClass} w-auto text-[11px]`}
+              >
+                <option value="ECDSA_secp256k1">secp256k1</option>
+                <option value="ECDSA_P256">P256</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500">Hash:</span>
+              <select
+                value={hashAlgo}
+                onChange={(e) => setHashAlgo(e.target.value as 'SHA2_256' | 'SHA3_256')}
+                className={`${inputClass} w-auto text-[11px]`}
+              >
+                <option value="SHA2_256">SHA2_256</option>
+                <option value="SHA3_256">SHA3_256</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <button onClick={handleGenerate} disabled={generating || !wasmReady} className={`${btnPrimary} w-full justify-center`}>
         {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-        Generate
+        Generate Key
       </button>
       {error && <p className="text-red-400 text-[11px]">{error}</p>}
     </div>
@@ -713,6 +741,7 @@ function ImportMnemonicForm({
   const [path, setPath] = useState("m/44'/539'/0'/0/0");
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -753,21 +782,38 @@ function ImportMnemonicForm({
         className={`${inputMonoClass} resize-none`}
       />
       <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Key label (optional)" className={inputClass} />
-      <input type="text" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} placeholder="BIP39 passphrase (optional)" className={inputClass} />
-      <input type="text" value={path} onChange={(e) => setPath(e.target.value)} placeholder="Derivation path" className={inputMonoClass} />
-      <div className="relative">
-        <input
-          type={showPassword ? 'text' : 'password'}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Encryption password (optional)"
-          className={inputClass}
-        />
-        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
-          {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-        </button>
-      </div>
-      <button onClick={handleImport} disabled={importing || !wasmReady} className={btnPrimary}>
+
+      {/* Advanced toggle */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+      >
+        <Settings2 className="w-3 h-3" />
+        Advanced
+        <ChevronDown className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+      </button>
+
+      {showAdvanced && (
+        <div className="space-y-2 pl-1 border-l-2 border-zinc-700 ml-1">
+          <input type="text" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} placeholder="BIP39 passphrase (optional)" className={inputClass} />
+          <input type="text" value={path} onChange={(e) => setPath(e.target.value)} placeholder="Derivation path" className={inputMonoClass} />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Custom password (leave empty for auto)"
+              className={inputClass}
+            />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+              {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button onClick={handleImport} disabled={importing || !wasmReady} className={`${btnPrimary} w-full justify-center`}>
         {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
         Import Mnemonic
       </button>
@@ -794,6 +840,7 @@ function ImportPrivateKeyForm({
   const [label, setLabel] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -822,19 +869,36 @@ function ImportPrivateKeyForm({
     <div className="space-y-2">
       <textarea value={hex} onChange={(e) => setHex(e.target.value)} placeholder="Enter private key hex..." rows={2} className={`${inputMonoClass} resize-none`} />
       <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Key label (optional)" className={inputClass} />
-      <div className="relative">
-        <input
-          type={showPassword ? 'text' : 'password'}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Encryption password (optional)"
-          className={inputClass}
-        />
-        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
-          {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-        </button>
-      </div>
-      <button onClick={handleImport} disabled={importing || !wasmReady} className={btnPrimary}>
+
+      {/* Advanced toggle */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+      >
+        <Settings2 className="w-3 h-3" />
+        Advanced
+        <ChevronDown className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+      </button>
+
+      {showAdvanced && (
+        <div className="space-y-2 pl-1 border-l-2 border-zinc-700 ml-1">
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Custom password (leave empty for auto)"
+              className={inputClass}
+            />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+              {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button onClick={handleImport} disabled={importing || !wasmReady} className={`${btnPrimary} w-full justify-center`}>
         {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
         Import Key
       </button>
@@ -943,6 +1007,7 @@ function LocalKeyCard({
   onExportKeystore,
   onRefreshAccounts,
   onCreateAccount,
+  onGetPrivateKey,
   onViewAccount,
 }: {
   localKey: LocalKey;
@@ -957,6 +1022,7 @@ function LocalKeyCard({
     hashAlgo: 'SHA2_256' | 'SHA3_256',
     network: 'mainnet' | 'testnet',
   ) => Promise<{ txId: string }>;
+  onGetPrivateKey?: (keyId: string, password?: string) => Promise<string>;
   onViewAccount?: (address: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -965,6 +1031,9 @@ function LocalKeyCard({
   const [exporting, setExporting] = useState(false);
   const [exportPassword, setExportPassword] = useState('');
   const [showExportInput, setShowExportInput] = useState(false);
+  const [revealedPrivateKey, setRevealedPrivateKey] = useState<string | null>(null);
+  const [revealingKey, setRevealingKey] = useState(false);
+  const [pkCopied, setPkCopied] = useState(false);
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
@@ -1089,7 +1158,55 @@ function LocalKeyCard({
               {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
               Export
             </button>
+            {onGetPrivateKey && (
+              <button
+                onClick={async () => {
+                  if (revealedPrivateKey) {
+                    setRevealedPrivateKey(null);
+                    return;
+                  }
+                  setRevealingKey(true);
+                  setActionError('');
+                  try {
+                    const pk = await onGetPrivateKey(localKey.id);
+                    setRevealedPrivateKey(pk);
+                  } catch (err: unknown) {
+                    setActionError(err instanceof Error ? err.message : 'Failed to decrypt key');
+                  } finally {
+                    setRevealingKey(false);
+                  }
+                }}
+                disabled={revealingKey}
+                className={btnSecondary}
+                title={revealedPrivateKey ? 'Hide private key' : 'Reveal private key'}
+              >
+                {revealingKey ? <Loader2 className="w-3 h-3 animate-spin" /> : revealedPrivateKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                {revealedPrivateKey ? 'Hide' : 'Reveal'}
+              </button>
+            )}
           </div>
+
+          {/* Revealed private key */}
+          {revealedPrivateKey && (
+            <div className="bg-red-500/5 border border-red-500/20 rounded px-2 py-1.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-red-400 font-medium">Private Key</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(revealedPrivateKey);
+                    setPkCopied(true);
+                    setTimeout(() => setPkCopied(false), 2000);
+                  }}
+                  className="text-zinc-500 hover:text-zinc-300 p-0.5"
+                >
+                  {pkCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-zinc-300 font-mono break-all select-all leading-relaxed">
+                {revealedPrivateKey}
+              </p>
+            </div>
+          )}
 
           {/* Export password input */}
           {showExportInput && (
