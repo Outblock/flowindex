@@ -849,7 +849,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-full bg-zinc-900 text-zinc-100">
       {/* Header */}
-      <header className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-zinc-700 bg-zinc-900/80 backdrop-blur shrink-0">
+      <header className="flex items-center justify-between px-3 md:px-4 py-2 border-b border-zinc-700 bg-zinc-900/80 backdrop-blur shrink-0 overflow-visible relative z-20">
         <div className="flex items-center gap-2">
           {!isMobile && (
             <button
