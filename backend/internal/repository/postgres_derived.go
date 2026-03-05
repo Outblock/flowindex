@@ -196,11 +196,32 @@ func (r *Repository) UpsertContractRegistry(ctx context.Context, rows []models.S
 		return nil
 	}
 
-	batch := &pgx.Batch{}
+	// Deduplicate within batch: keep the entry with the widest height range
+	// per (address, name) to avoid duplicate-key errors within the same batch.
+	deduped := make(map[string]models.SmartContract, len(rows))
 	for _, c := range rows {
 		if c.Address == "" || c.Name == "" {
 			continue
 		}
+		key := c.Address + ":" + c.Name
+		if existing, ok := deduped[key]; ok {
+			if c.FirstSeenHeight > 0 && (existing.FirstSeenHeight == 0 || c.FirstSeenHeight < existing.FirstSeenHeight) {
+				existing.FirstSeenHeight = c.FirstSeenHeight
+			}
+			if c.LastSeenHeight > existing.LastSeenHeight {
+				existing.LastSeenHeight = c.LastSeenHeight
+			}
+			if c.Kind != "" && existing.Kind == "" {
+				existing.Kind = c.Kind
+			}
+			deduped[key] = existing
+		} else {
+			deduped[key] = c
+		}
+	}
+
+	batch := &pgx.Batch{}
+	for _, c := range deduped {
 		firstSeen := c.FirstSeenHeight
 		lastSeen := c.LastSeenHeight
 		if firstSeen == 0 {
@@ -235,7 +256,7 @@ func (r *Repository) UpsertContractRegistry(ctx context.Context, rows []models.S
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()
 
-	for i := 0; i < len(rows); i++ {
+	for i := 0; i < len(deduped); i++ {
 		if _, err := br.Exec(); err != nil {
 			return fmt.Errorf("upsert contract registry: %w", err)
 		}
