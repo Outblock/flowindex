@@ -1,5 +1,6 @@
 import express from 'express';
 import { githubRouter } from './github/routes.js';
+import { webhookRouter } from './github/webhook.js';
 
 const app = express();
 
@@ -25,5 +26,8 @@ app.get('/health', (_req, res) => {
 
 // GitHub integration routes
 app.use('/github', githubRouter);
+
+// GitHub webhook receiver
+app.use('/github/webhook', webhookRouter);
 
 export { app };
