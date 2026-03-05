@@ -26,7 +26,7 @@ import SignerSelector, { type SignerOption } from './components/SignerSelector';
 import {
   loadProject, saveProject, updateFileContent, createFile, createFolder, deleteFile,
   openFile, closeFile, getFileContent, addDependencyFile, getUserFiles,
-  TEMPLATES, DEFAULT_CODE,
+  TEMPLATES, DEFAULT_CODE, getTemplates, replaceContractAddresses,
   type ProjectState, type Template,
 } from './fs/fileSystem';
 import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';

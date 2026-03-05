@@ -20,7 +20,8 @@ import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { TEMPLATES, type Template } from '../fs/fileSystem';
+import { getTemplates, type Template } from '../fs/fileSystem';
+import type { FlowNetwork } from '../flow/networks';
 import type { SignerOption } from './SignerSelector';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
 import { executeCustodialTransaction } from '../flow/execute';
@@ -1991,7 +1992,7 @@ export default function AIPanel({
             <div className="pt-2 border-t border-zinc-800">
               <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2 px-1">Templates</p>
               <div className="grid grid-cols-2 gap-1.5">
-                {TEMPLATES.map((template) => (
+                {getTemplates((network || 'mainnet') as FlowNetwork).map((template) => (
                   <button
                     key={template.label}
                     onClick={() => onLoadTemplate(template)}

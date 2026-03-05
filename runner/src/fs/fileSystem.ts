@@ -1,6 +1,8 @@
 /** Virtual file system for multi-file Cadence projects.
  * Stores files in localStorage, keyed by project name. */
 
+import { NETWORK_CONFIG, type FlowNetwork } from '../flow/networks';
+
 export interface FileEntry {
   path: string;        // e.g. "main.cdc", "contracts/MyToken.cdc"
   content: string;
@@ -32,6 +34,66 @@ export interface Template {
   files: FileEntry[];
   activeFile: string;
   folders?: string[];
+}
+
+/**
+ * Replace well-known Flow contract addresses in code for the given network.
+ * Templates use mainnet addresses by default; this swaps them for testnet when needed.
+ */
+/** Well-known Flow contract addresses per network. */
+const CONTRACT_ADDRESSES: Record<string, Record<FlowNetwork, string>> = {
+  NonFungibleToken:          { mainnet: '0x1d7e57aa55817448', testnet: '0x631e88ae7f1d7c20' },
+  FungibleToken:             { mainnet: '0xf233dcee88fe0abe', testnet: '0x9a0766d93b6608b7' },
+  MetadataViews:             { mainnet: '0x1d7e57aa55817448', testnet: '0x631e88ae7f1d7c20' },
+  ViewResolver:              { mainnet: '0x1d7e57aa55817448', testnet: '0x631e88ae7f1d7c20' },
+  FlowToken:                 { mainnet: '0x1654653399040a61', testnet: '0x7e60df042a9c0868' },
+  FlowFees:                  { mainnet: '0xf919ee77447b7497', testnet: '0x912d5440f7e3769e' },
+  EVM:                       { mainnet: '0xe467b9dd11fa00df', testnet: '0x8c5303eaa26202d6' },
+  FlowEVMBridge:             { mainnet: '0x1e4aa0b87d10b141', testnet: '0xdfc20aee650fcbdf' },
+  NFTCatalog:                { mainnet: '0x49a7cda3a1eecc29', testnet: '0x324c34e1c517e4db' },
+  NFTRetrieval:              { mainnet: '0x49a7cda3a1eecc29', testnet: '0x324c34e1c517e4db' },
+  NFTStorefrontV2:           { mainnet: '0x4eb8a10cb9f87357', testnet: '0x2d55b98eb200daef' },
+  Find:                      { mainnet: '0x097bafa4e0b48eef', testnet: '0xa16ab1d0abde3625' },
+  Flowns:                    { mainnet: '0x233eb012d34b0070', testnet: '0xb05b2abb42335e88' },
+  Domains:                   { mainnet: '0x233eb012d34b0070', testnet: '0xb05b2abb42335e88' },
+  FlowIDTableStaking:        { mainnet: '0x8624b52f9ddcd04a', testnet: '0x9eca2b38b18b5dfe' },
+  FlowStakingCollection:     { mainnet: '0x8d0e87b65159ae63', testnet: '0x95e019a17d0e23d7' },
+  LockedTokens:              { mainnet: '0x8d0e87b65159ae63', testnet: '0x8d0e87b65159ae63' },
+  FlowEpoch:                 { mainnet: '0x8624b52f9ddcd04a', testnet: '0x9eca2b38b18b5dfe' },
+  FlowClusterQC:             { mainnet: '0x8624b52f9ddcd04a', testnet: '0x9eca2b38b18b5dfe' },
+  HybridCustody:             { mainnet: '0xd8a7e05a7ac670c0', testnet: '0x294e44e1ec6993c6' },
+  CapabilityFactory:         { mainnet: '0xd8a7e05a7ac670c0', testnet: '0x294e44e1ec6993c6' },
+  CapabilityFilter:          { mainnet: '0xd8a7e05a7ac670c0', testnet: '0x294e44e1ec6993c6' },
+  TransactionGeneration:     { mainnet: '0xe52522745adf5c34', testnet: '0x830c495357676f8b' },
+  StringUtils:               { mainnet: '0xa340dc0a4ec828ab', testnet: '0x31ad40c07a2a9788' },
+  FlowviewAccountBookmark:   { mainnet: '0x39b144ab4d348e2b', testnet: '0xdc34f5a7b807bcfb' },
+  FungibleTokenSwitchboard:  { mainnet: '0xf233dcee88fe0abe', testnet: '0x9a0766d93b6608b7' },
+  FungibleTokenMetadataViews:{ mainnet: '0xf233dcee88fe0abe', testnet: '0x9a0766d93b6608b7' },
+  Burner:                    { mainnet: '0xf233dcee88fe0abe', testnet: '0x9a0766d93b6608b7' },
+};
+
+export function replaceContractAddresses(code: string, network: FlowNetwork): string {
+  let result = code;
+  for (const [name, addrs] of Object.entries(CONTRACT_ADDRESSES)) {
+    // Replace `import X from 0x<mainnet>` → `import X from 0x<target>`
+    // and `import X from 0x<testnet>` → `import X from 0x<target>`
+    const target = addrs[network];
+    for (const net of ['mainnet', 'testnet'] as const) {
+      if (net === network) continue;
+      result = result.replaceAll(addrs[net], target);
+    }
+  }
+  return result;
+}
+
+export function getTemplates(network: FlowNetwork): Template[] {
+  return TEMPLATES.map(t => ({
+    ...t,
+    files: t.files.map(f => ({
+      ...f,
+      content: replaceContractAddresses(f.content, network),
+    })),
+  }));
 }
 
 export const TEMPLATES: Template[] = [
