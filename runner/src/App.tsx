@@ -24,6 +24,7 @@ import KeyManager from './components/KeyManager';
 import AccountPanel from './components/AccountPanel';
 import { PasswordPrompt } from './components/PasswordPrompt';
 import SignerSelector, { type SignerOption } from './components/SignerSelector';
+import ConnectModal from './components/ConnectModal';
 import {
   loadProject, saveProject, updateFileContent, createFile, createFolder, deleteFile,
   openFile, closeFile, getFileContent, addDependencyFile, getUserFiles,
@@ -33,7 +34,7 @@ import {
 import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';
 import ProjectSelector from './components/ProjectSelector';
 import ShareModal from './components/ShareModal';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe, Sparkles } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
 /* ── Detect if we're in an iframe ── */
@@ -224,9 +225,9 @@ export default function App() {
   const pendingTxArgsRef = useRef<unknown[] | null>(null);
   const [txArgsReady, setTxArgsReady] = useState(() => !new URLSearchParams(window.location.search).get('tx'));
 
-  // LSP mode: 'wasm' (local, default) or 'server' (WebSocket)
+  // LSP mode: 'auto' (default), 'wasm' (local), or 'server' (WebSocket)
   const [lspMode, setLspMode] = useState<LspMode>(() => {
-    try { return (localStorage.getItem('runner-lsp-mode') as LspMode) || 'wasm'; } catch { return 'wasm'; }
+    try { return (localStorage.getItem('runner-lsp-mode') as LspMode) || 'auto'; } catch { return 'auto'; }
   });
   const [showLspMenu, setShowLspMenu] = useState(false);
   useEffect(() => {
@@ -316,6 +317,8 @@ export default function App() {
   const [accountPanelAddress, setAccountPanelAddress] = useState<string | null>(null);
   const handleViewAccount = useCallback((address: string) => setAccountPanelAddress(address), []);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'none' });
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const pendingRunRef = useRef(false);
   const [passwordPrompt, setPasswordPrompt] = useState<{
     keyLabel: string;
     resolve: (password: string) => void;
@@ -340,6 +343,13 @@ export default function App() {
       }
     } catch {}
   }, []);
+
+  // Handle wallet selected from ConnectModal — persist and auto-retry pending run
+  const handleModalSelect = useCallback((signer: SignerOption) => {
+    persistSigner(signer);
+    setConnectModalOpen(false);
+    // Mark for pending run retry — the effect below will pick it up
+  }, [persistSigner]);
 
   const promptForPassword = useCallback((keyLabel: string): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -565,7 +575,7 @@ export default function App() {
     setProject((prev) => addDependencyFile(prev, address, contractName, code));
   }, []);
 
-  const { notifyChange, goToDefinition, loadingDeps, activeMode, wasmProgress } = useLsp(monacoInstance, project, network, lspMode, handleDependency);
+  const { notifyChange, goToDefinition, loadingDeps, activeMode, lspError, wasmProgress } = useLsp(monacoInstance, project, network, lspMode, handleDependency);
 
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const codeType = useMemo(() => detectCodeType(activeCode), [activeCode]);
@@ -617,6 +627,13 @@ export default function App() {
   const handleRun = useCallback(async () => {
     if (loading) return;
 
+    // If no signer and this requires signing, open connect modal
+    if (selectedSigner.type === 'none' && codeType !== 'script') {
+      pendingRunRef.current = true;
+      setConnectModalOpen(true);
+      return;
+    }
+
     // If auto-sign is off and this is a transaction/contract, confirm first
     if (!autoSign && codeType !== 'script') {
       const action = codeType === 'contract' ? 'deploy this contract' : 'send this transaction';
@@ -667,6 +684,14 @@ export default function App() {
 
     setLoading(false);
   }, [activeCode, codeType, paramValues, loading, selectedSigner, signWithLocalKey, promptForPassword, autoSign]);
+
+  // Auto-retry run after connecting wallet from the modal
+  useEffect(() => {
+    if (pendingRunRef.current && selectedSigner.type !== 'none') {
+      pendingRunRef.current = false;
+      handleRun();
+    }
+  }, [selectedSigner, handleRun]);
 
   // Apply error decorations when execution results contain errors
   useEffect(() => {
@@ -1083,6 +1108,40 @@ export default function App() {
           </div>
 
 
+          {/* LSP status indicator */}
+          <div className="relative group/lsp">
+            <button
+              onClick={() => {
+                if (lspError) { setShowExplorer(true); setShowLspMenu(true); }
+              }}
+              className={`flex items-center gap-1 px-1.5 py-1 rounded transition-colors ${
+                lspError ? 'hover:bg-zinc-700 cursor-pointer' : 'cursor-default'
+              }`}
+              title={
+                lspError ? 'LSP connection failed — click Settings to switch mode'
+                : activeMode ? `LSP: ${activeMode}${lspMode === 'auto' ? ' (auto)' : ''}`
+                : 'LSP connecting...'
+              }
+            >
+              {!activeMode && !lspError ? (
+                <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+              ) : (
+                <span className={`inline-block w-2 h-2 rounded-full ${
+                  lspError ? 'bg-red-500' : 'bg-emerald-500'
+                }`} />
+              )}
+              {lspError && (
+                <span className="text-[10px] text-red-400">LSP</span>
+              )}
+            </button>
+            {/* Tooltip on hover for non-error states */}
+            {!lspError && activeMode && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-[10px] text-zinc-300 whitespace-nowrap opacity-0 pointer-events-none group-hover/lsp:opacity-100 transition-opacity z-50">
+                LSP: {activeMode}{lspMode === 'auto' ? ' (auto)' : ''}
+              </div>
+            )}
+          </div>
+
           {/* Signer selector — always shown */}
           <SignerSelector
             selected={selectedSigner}
@@ -1091,6 +1150,7 @@ export default function App() {
             accountsMap={accountsMap}
             onViewAccount={handleViewAccount}
             onOpenKeyManager={() => setShowKeyManager(true)}
+            onOpenConnectModal={() => setConnectModalOpen(true)}
             autoSign={autoSign}
             onToggleAutoSign={handleToggleAutoSign}
             network={network}
@@ -1292,8 +1352,34 @@ export default function App() {
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">LSP Mode</span>
                       {!activeMode && <Loader2 className="w-3 h-3 animate-spin text-zinc-500" />}
+                      {activeMode && lspMode === 'auto' && (
+                        <span className="text-[10px] text-zinc-500">→ {activeMode}</span>
+                      )}
                     </div>
                     <div className="flex rounded-md overflow-hidden border border-zinc-700 bg-zinc-900">
+                      <div className="relative flex-1 group/auto">
+                        <button
+                          onClick={() => setLspMode('auto')}
+                          className={`flex items-center justify-center gap-1 w-full px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                            lspMode === 'auto'
+                              ? 'bg-violet-500/15 text-violet-400 border-r border-violet-500/30'
+                              : 'text-zinc-500 hover:text-zinc-300 border-r border-zinc-700'
+                          }`}
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          Auto
+                        </button>
+                        <div className="absolute bottom-full left-0 mb-2 w-52 p-2.5 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl text-[10px] leading-relaxed opacity-0 pointer-events-none group-hover/auto:opacity-100 transition-opacity z-50">
+                          <div className="text-violet-400 font-semibold mb-1">Auto (Recommended)</div>
+                          <div className="text-zinc-400 mb-1.5">Best of both worlds</div>
+                          <div className="text-zinc-500 space-y-0.5">
+                            <div>+ Uses WASM if cached</div>
+                            <div>+ Falls back to Server</div>
+                            <div>+ Background downloads WASM</div>
+                            <div>+ No waiting on first visit</div>
+                          </div>
+                        </div>
+                      </div>
                       <div className="relative flex-1 group/wasm">
                         <button
                           onClick={() => setLspMode('wasm')}
@@ -1360,27 +1446,6 @@ export default function App() {
               onCloseFile={handleCloseTab}
               pendingDiffPaths={Object.keys(pendingDiffs)}
             />
-            {wasmProgress !== null && wasmProgress < 100 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/80 border-b border-zinc-700/50 shrink-0">
-                <div className="flex-1 flex items-center gap-2 min-w-0">
-                  <div className="flex-1 h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                      style={{ width: `${wasmProgress}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] text-zinc-400 tabular-nums whitespace-nowrap">
-                    LSP {wasmProgress}%
-                  </span>
-                </div>
-                <button
-                  onClick={() => setLspMode('server')}
-                  className="text-[10px] px-2 py-0.5 rounded border border-zinc-600 text-zinc-400 hover:text-blue-400 hover:border-blue-500/50 transition-colors cursor-pointer whitespace-nowrap"
-                >
-                  Switch to Server
-                </button>
-              </div>
-            )}
             {loadingDeps && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 shrink-0">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1625,6 +1690,18 @@ export default function App() {
           onCancel={() => { passwordPrompt.reject(); setPasswordPrompt(null); }}
         />
       )}
+
+      <ConnectModal
+        open={connectModalOpen}
+        onClose={() => { setConnectModalOpen(false); pendingRunRef.current = false; }}
+        onSelect={handleModalSelect}
+        localKeys={localKeys}
+        accountsMap={accountsMap}
+        autoSign={autoSign}
+        onToggleAutoSign={handleToggleAutoSign}
+        network={network}
+        onOpenKeyManager={() => { setConnectModalOpen(false); setShowKeyManager(true); }}
+      />
     </div>
   );
 }
