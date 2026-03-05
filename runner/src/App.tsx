@@ -20,6 +20,7 @@ import { useAuth } from './auth/AuthContext';
 import { useKeys } from './auth/useKeys';
 import { useLocalKeys } from './auth/useLocalKeys';
 import KeyManager from './components/KeyManager';
+import AccountPanel from './components/AccountPanel';
 import { PasswordPrompt } from './components/PasswordPrompt';
 import SignerSelector, { type SignerOption } from './components/SignerSelector';
 import {
@@ -288,6 +289,8 @@ export default function App() {
     signWithLocalKey, refreshAccounts, createAccount,
   } = useLocalKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
+  const [accountPanelAddress, setAccountPanelAddress] = useState<string | null>(null);
+  const handleViewAccount = useCallback((address: string) => setAccountPanelAddress(address), []);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'fcl' });
   const [passwordPrompt, setPasswordPrompt] = useState<{
     keyLabel: string;
@@ -903,6 +906,7 @@ export default function App() {
               onOpenKeyManager={() => setShowKeyManager(true)}
               onSelectLocalAccount={(key, account) => setSelectedSigner({ type: 'local', key, account })}
               onDisconnectLocal={() => setSelectedSigner({ type: 'fcl' })}
+              onViewAccount={handleViewAccount}
             />
           )}
 
@@ -1256,6 +1260,7 @@ export default function App() {
                   onCreateAccount={createAccount}
                   onRefreshAccounts={refreshAccounts}
                   onSwitchNetwork={(n) => setNetwork(n as FlowNetwork)}
+                  onViewAccount={handleViewAccount}
                 />
               </div>
             </>
@@ -1334,6 +1339,7 @@ export default function App() {
               onCreateAccount={createAccount}
               onRefreshAccounts={refreshAccounts}
               onSwitchNetwork={(n) => setNetwork(n as FlowNetwork)}
+              onViewAccount={handleViewAccount}
             />
           </div>
         </div>
@@ -1374,10 +1380,26 @@ export default function App() {
               onExportKeystore={exportKeystore}
               onRefreshAccounts={refreshAccounts}
               onCreateAccount={createAccount}
+              onViewAccount={handleViewAccount}
             />
           </div>
         </div>
       )}
+
+      {/* Account Side Panel */}
+      {accountPanelAddress && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="flex-1" onClick={() => setAccountPanelAddress(null)} />
+          <div className="w-[480px] max-w-full shrink-0 shadow-2xl">
+            <AccountPanel
+              address={accountPanelAddress}
+              network={network}
+              onClose={() => setAccountPanelAddress(null)}
+            />
+          </div>
+        </div>
+      )}
+
       {passwordPrompt && (
         <PasswordPrompt
           keyLabel={passwordPrompt.keyLabel}

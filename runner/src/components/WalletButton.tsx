@@ -12,11 +12,7 @@ interface WalletButtonProps {
   onOpenKeyManager?: () => void;
   onSelectLocalAccount?: (key: LocalKey, account: KeyAccount) => void;
   onDisconnectLocal?: () => void;
-}
-
-function flowIndexUrl(address: string, network: 'mainnet' | 'testnet'): string {
-  const base = network === 'testnet' ? 'https://testnet.flowindex.io' : 'https://flowindex.io';
-  return `${base}/${address}`;
+  onViewAccount?: (address: string) => void;
 }
 
 export default function WalletButton({
@@ -27,6 +23,7 @@ export default function WalletButton({
   onOpenKeyManager,
   onSelectLocalAccount,
   onDisconnectLocal,
+  onViewAccount,
 }: WalletButtonProps) {
   const [fclUser, setFclUser] = useState<{ addr?: string | null }>({});
   const [open, setOpen] = useState(false);
@@ -104,17 +101,14 @@ export default function WalletButton({
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-56 bg-zinc-800 border border-zinc-700 rounded shadow-lg z-50">
-          {/* View on flowindex */}
-          <a
-            href={flowIndexUrl(displayAddress!, network)}
-            target="_blank"
-            rel="noopener noreferrer"
+          {/* View account */}
+          <button
+            onClick={() => { onViewAccount?.(displayAddress!); setOpen(false); }}
             className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
-            onClick={() => setOpen(false)}
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            View on FlowIndex
-          </a>
+            View Account
+          </button>
 
           <div className="border-t border-zinc-700" />
 

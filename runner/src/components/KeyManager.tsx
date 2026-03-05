@@ -65,6 +65,7 @@ interface KeyManagerProps {
     hashAlgo: 'SHA2_256' | 'SHA3_256',
     network: 'mainnet' | 'testnet',
   ) => Promise<{ txId: string }>;
+  onViewAccount?: (address: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +163,7 @@ export default function KeyManager({
   onExportKeystore,
   onRefreshAccounts,
   onCreateAccount,
+  onViewAccount,
 }: KeyManagerProps) {
   const [mode, setMode] = useState<'idle' | 'create' | 'import'>('idle');
   const [importType, setImportType] = useState<ImportType>('mnemonic');
@@ -384,6 +386,7 @@ export default function KeyManager({
                 onExportKeystore={onExportKeystore}
                 onRefreshAccounts={onRefreshAccounts}
                 onCreateAccount={onCreateAccount}
+                onViewAccount={onViewAccount}
               />
             ))
           )}
@@ -774,6 +777,7 @@ function LocalKeyCard({
   onExportKeystore,
   onRefreshAccounts,
   onCreateAccount,
+  onViewAccount,
 }: {
   localKey: LocalKey;
   accounts: KeyAccount[];
@@ -787,6 +791,7 @@ function LocalKeyCard({
     hashAlgo: 'SHA2_256' | 'SHA3_256',
     network: 'mainnet' | 'testnet',
   ) => Promise<{ txId: string }>;
+  onViewAccount?: (address: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -885,18 +890,16 @@ function LocalKeyCard({
         {accounts.length > 0 && (
           <div className="mt-2 ml-5 space-y-1">
             {accounts.map((acc, i) => (
-              <a
+              <button
                 key={`${acc.flowAddress}-${acc.keyIndex}-${i}`}
-                href={flowIndexUrl(acc.flowAddress, network)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 bg-zinc-900 rounded px-2 py-1.5 hover:bg-zinc-700/50 transition-colors group"
+                onClick={() => onViewAccount?.(acc.flowAddress)}
+                className="w-full flex items-center gap-2 bg-zinc-900 rounded px-2 py-1.5 hover:bg-zinc-700/50 transition-colors group text-left"
               >
                 <Avatar size={18} name={acc.flowAddress} variant="beam" colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']} />
                 <span className="text-[11px] text-zinc-200 font-mono">{acc.flowAddress}</span>
                 <span className="text-[10px] text-zinc-500">#{acc.keyIndex}</span>
                 <ExternalLink className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 ml-auto" />
-              </a>
+              </button>
             ))}
           </div>
         )}

@@ -74,6 +74,7 @@ interface AIPanelProps {
     network: 'mainnet' | 'testnet',
   ) => Promise<KeyAccount[]>;
   onSwitchNetwork?: (network: 'mainnet' | 'testnet') => void;
+  onViewAccount?: (address: string) => void;
 }
 
 /* ── SQL Result Table ── */
@@ -181,6 +182,9 @@ function SqlResultTable({ result }: { result: SqlResult }) {
 
 /* ── Auto-linking helpers ── */
 
+// Module-level ref so LinkedHex can open the account side panel
+let _onViewAccount: ((address: string) => void) | undefined;
+
 function classifyHex(val: string): { type: string; url: string | null } {
   const hex = val.toLowerCase();
   const has0x = hex.startsWith('0x');
@@ -202,9 +206,17 @@ function classifyHex(val: string): { type: string; url: string | null } {
 }
 
 function LinkedHex({ val }: { val: string }) {
-  const { url } = classifyHex(val);
+  const { type, url } = classifyHex(val);
   if (!url) return <span className="text-emerald-400/70">{val}</span>;
   const short = val.length > 20 ? `${val.slice(0, 10)}...${val.slice(-8)}` : val;
+  if (type === 'cadence-addr' && _onViewAccount) {
+    const addr = val.toLowerCase().startsWith('0x') ? val.slice(2) : val;
+    return (
+      <button onClick={() => _onViewAccount!(addr)} className="text-emerald-400/90 hover:text-emerald-400 hover:underline" title={val}>
+        {short}
+      </button>
+    );
+  }
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="text-emerald-400/90 hover:text-emerald-400 hover:underline" title={val}>
       {short}
@@ -568,9 +580,20 @@ function createMarkdownComponents(
       }
 
       if (/^0x[0-9a-fA-F]{16,64}$/.test(codeString)) {
-        const { url } = classifyHex(codeString);
+        const { type, url } = classifyHex(codeString);
         if (url) {
           const short = codeString.length > 20 ? `${codeString.slice(0, 10)}...${codeString.slice(-8)}` : codeString;
+          if (type === 'cadence-addr' && _onViewAccount) {
+            const addr = codeString.toLowerCase().startsWith('0x') ? codeString.slice(2) : codeString;
+            return (
+              <button onClick={() => _onViewAccount!(addr)}
+                className="text-[11px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono text-emerald-400 hover:underline"
+                title={codeString}
+              >
+                {short}
+              </button>
+            );
+          }
           return (
             <a href={url} target="_blank" rel="noopener noreferrer"
               className="text-[11px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono text-emerald-400 hover:underline"
@@ -1466,6 +1489,7 @@ export default function AIPanel({
   onCreateAccount,
   onRefreshAccounts,
   onSwitchNetwork,
+  onViewAccount,
 }: AIPanelProps) {
   const [input, setInput] = useState('');
   const [chatMode, setChatMode] = useState<ChatMode>(getStoredMode);
@@ -1533,6 +1557,8 @@ export default function AIPanel({
   onRefreshAccountsRef.current = onRefreshAccounts;
   const onSwitchNetworkRef = useRef(onSwitchNetwork);
   onSwitchNetworkRef.current = onSwitchNetwork;
+  // Keep module-level ref in sync for LinkedHex / inline code links
+  _onViewAccount = onViewAccount;
   const [chatError, setChatError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
