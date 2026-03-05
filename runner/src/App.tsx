@@ -280,7 +280,12 @@ export default function App() {
   const [pendingDiffs, setPendingDiffs] = useState<PendingDiffMap>({});
   const { user, loading: authLoading, signOut } = useAuth();
   const { keys, signMessage } = useKeys();
-  const { localKeys, accountsMap, signWithLocalKey } = useLocalKeys();
+  const {
+    localKeys, accountsMap, wasmReady,
+    generateNewKey, importMnemonic, importPrivateKey: importLocalPrivateKey,
+    importKeystore, deleteLocalKey, exportKeystore,
+    signWithLocalKey, refreshAccounts, createAccount,
+  } = useLocalKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'fcl' });
 
@@ -1309,7 +1314,21 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="bg-black/50 flex-1" onClick={() => setShowKeyManager(false)} />
           <div className="w-80 bg-zinc-900 border-l border-zinc-700 overflow-y-auto">
-            <KeyManager onClose={() => setShowKeyManager(false)} network={network} />
+            <KeyManager
+              onClose={() => setShowKeyManager(false)}
+              network={network}
+              localKeys={localKeys}
+              accountsMap={accountsMap}
+              wasmReady={wasmReady}
+              onGenerateKey={generateNewKey}
+              onImportMnemonic={importMnemonic}
+              onImportPrivateKey={importLocalPrivateKey}
+              onImportKeystore={importKeystore}
+              onDeleteLocalKey={deleteLocalKey}
+              onExportKeystore={exportKeystore}
+              onRefreshAccounts={refreshAccounts}
+              onCreateAccount={createAccount}
+            />
           </div>
         </div>
       )}
