@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Github, Folder, FolderOpen, ArrowLeft, X, Loader2, Search, GitBranch } from 'lucide-react';
 import { githubApi, type GitHubRepo, type GitHubFile } from '../github/api';
 
-const API_BASE = import.meta.env.VITE_RUNNER_API_URL || 'http://localhost:3003';
+const API_BASE = import.meta.env.VITE_RUNNER_API_URL || '';
 
 interface GitHubConnectProps {
   onConnect: (installationId: number, owner: string, repo: string, path: string, branch: string) => Promise<void>;
@@ -154,8 +154,6 @@ export default function GitHubConnect({ onConnect, onClose, installationId }: Gi
               </p>
               <a
                 href={`${API_BASE}/github/install`}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded transition-colors"
               >
                 <Github className="w-4 h-4" />
