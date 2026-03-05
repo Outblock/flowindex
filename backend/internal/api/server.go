@@ -41,25 +41,59 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		s.statusCache.mu.Unlock()
 	}
 
-	payload, err := s.buildStatusPayload(r.Context(), includeRanges)
+	// Use singleflight to prevent thundering herd when cache expires.
+	flightKey := "status"
+	if includeRanges {
+		flightKey = "status_ranges"
+	}
+	result, err, _ := s.statusFlight.Do(flightKey, func() (interface{}, error) {
+		// Double-check cache inside singleflight (another goroutine may have populated it).
+		now2 := time.Now()
+		if includeRanges {
+			s.statusRangesCache.mu.Lock()
+			if now2.Before(s.statusRangesCache.expiresAt) && len(s.statusRangesCache.payload) > 0 {
+				cached := append([]byte(nil), s.statusRangesCache.payload...)
+				s.statusRangesCache.mu.Unlock()
+				return cached, nil
+			}
+			s.statusRangesCache.mu.Unlock()
+		} else {
+			s.statusCache.mu.Lock()
+			if now2.Before(s.statusCache.expiresAt) && len(s.statusCache.payload) > 0 {
+				cached := append([]byte(nil), s.statusCache.payload...)
+				s.statusCache.mu.Unlock()
+				return cached, nil
+			}
+			s.statusCache.mu.Unlock()
+		}
+
+		// Build with a bounded timeout so slow DB queries don't block all waiters.
+		buildCtx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+		defer cancel()
+		payload, err := s.buildStatusPayload(buildCtx, includeRanges)
+		if err != nil {
+			return nil, err
+		}
+
+		if includeRanges {
+			s.statusRangesCache.mu.Lock()
+			s.statusRangesCache.payload = payload
+			s.statusRangesCache.expiresAt = time.Now().Add(5 * time.Minute)
+			s.statusRangesCache.mu.Unlock()
+		} else {
+			s.statusCache.mu.Lock()
+			s.statusCache.payload = payload
+			s.statusCache.expiresAt = time.Now().Add(10 * time.Second)
+			s.statusCache.mu.Unlock()
+		}
+		return payload, nil
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if includeRanges {
-		s.statusRangesCache.mu.Lock()
-		s.statusRangesCache.payload = payload
-		s.statusRangesCache.expiresAt = time.Now().Add(5 * time.Minute)
-		s.statusRangesCache.mu.Unlock()
-	} else {
-		s.statusCache.mu.Lock()
-		s.statusCache.payload = payload
-		s.statusCache.expiresAt = time.Now().Add(10 * time.Second)
-		s.statusCache.mu.Unlock()
-	}
-
-	w.Write(payload)
+	w.Write(result.([]byte))
 }
 
 func (s *Server) buildStatusPayload(ctx context.Context, includeRanges bool) ([]byte, error) {

@@ -482,7 +482,8 @@ function Home() {
             }
         };
 
-        // Immediate fetch on mount (SSR may have failed if no local backend)
+        // Immediate fetch on mount (SSR may have failed or timed out)
+        if (!statusRaw) refreshStatus();
         if (!networkStats) refreshNetworkStats();
         if (!initialBlocks?.length) loadBlocks();
         loadTransactions();
