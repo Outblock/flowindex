@@ -153,8 +153,12 @@ export function Chat() {
               </div>
             </ConversationEmptyState>
           ) : (
-            messages.map((msg) => (
-              <ChatMessage key={msg.id} message={msg} />
+            messages.map((msg, idx) => (
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                isStreaming={status === "streaming" && idx === messages.length - 1}
+              />
             ))
           )}
         </ConversationContent>
@@ -262,7 +266,7 @@ function CollapsibleUserMessage({ text }: { text: string }) {
   );
 }
 
-function ChatMessage({ message }: { message: UIMessage }) {
+function ChatMessage({ message, isStreaming: isMessageStreaming = false }: { message: UIMessage; isStreaming?: boolean }) {
   if (message.role === "user") {
     const text = message.parts
       .filter((p) => p.type === "text")
@@ -289,7 +293,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
             if (part.type === "reasoning") {
               const reasoningPart = part as any;
               return (
-                <Reasoning key={i} isStreaming={!reasoningPart.reasoning}>
+                <Reasoning key={i} isStreaming={isMessageStreaming && !!reasoningPart.reasoning}>
                   <ReasoningTrigger />
                   <ReasoningContent>{reasoningPart.reasoning || ""}</ReasoningContent>
                 </Reasoning>
