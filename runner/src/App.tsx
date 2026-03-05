@@ -20,6 +20,7 @@ import { useAuth } from './auth/AuthContext';
 import { useKeys } from './auth/useKeys';
 import { useLocalKeys } from './auth/useLocalKeys';
 import KeyManager from './components/KeyManager';
+import { PasswordPrompt } from './components/PasswordPrompt';
 import SignerSelector, { type SignerOption } from './components/SignerSelector';
 import {
   loadProject, saveProject, updateFileContent, createFile, createFolder, deleteFile,
@@ -288,6 +289,17 @@ export default function App() {
   } = useLocalKeys();
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'fcl' });
+  const [passwordPrompt, setPasswordPrompt] = useState<{
+    keyLabel: string;
+    resolve: (password: string) => void;
+    reject: () => void;
+  } | null>(null);
+
+  const promptForPassword = useCallback((keyLabel: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      setPasswordPrompt({ keyLabel, resolve, reject });
+    });
+  }, []);
 
   // Auto-select first local key+account as default signer when available
   useEffect(() => {
@@ -498,7 +510,17 @@ export default function App() {
         paramValues,
         account.flowAddress,
         account.keyIndex,
-        (message) => signWithLocalKey(key.id, message, account.hashAlgo, undefined, account.sigAlgo),
+        async (message) => {
+          try {
+            return await signWithLocalKey(key.id, message, account.hashAlgo, undefined, account.sigAlgo);
+          } catch (e: any) {
+            if (e.message === 'PASSWORD_REQUIRED') {
+              const password = await promptForPassword(key.label);
+              return signWithLocalKey(key.id, message, account.hashAlgo, password, account.sigAlgo);
+            }
+            throw e;
+          }
+        },
         (result) => {
           setResults((prev) => [...prev, result]);
         },
@@ -519,7 +541,7 @@ export default function App() {
     }
 
     setLoading(false);
-  }, [activeCode, codeType, paramValues, loading, selectedSigner, signMessage, signWithLocalKey]);
+  }, [activeCode, codeType, paramValues, loading, selectedSigner, signMessage, signWithLocalKey, promptForPassword]);
 
   const handleInsertCode = useCallback((newCode: string) => {
     setProject((prev) => updateFileContent(prev, prev.activeFile, newCode));
@@ -1331,6 +1353,13 @@ export default function App() {
             />
           </div>
         </div>
+      )}
+      {passwordPrompt && (
+        <PasswordPrompt
+          keyLabel={passwordPrompt.keyLabel}
+          onSubmit={(pw) => { passwordPrompt.resolve(pw); setPasswordPrompt(null); }}
+          onCancel={() => { passwordPrompt.reject(); setPasswordPrompt(null); }}
+        />
       )}
     </div>
   );
