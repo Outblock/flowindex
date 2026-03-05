@@ -42,13 +42,32 @@ func (w *TokenWorker) Name() string {
 	return "token_worker"
 }
 
-func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint64) error {
-	// 1. Fetch Raw Events
-	events, err := w.repo.GetRawEventsInRange(ctx, fromHeight, toHeight)
-	if err != nil {
-		return fmt.Errorf("failed to fetch raw events: %w", err)
-	}
+// wrapperInfo holds metadata from FungibleToken/NonFungibleToken wrapper events
+// used to enrich token-specific legs, and to create legs for tokens that only
+// emit wrapper events (e.g. EVMVMBridgedToken).
+type wrapperInfo struct {
+	addr          string
+	amount        string
+	tokenContract string // "contractAddr:contractName"
+	blockHeight   uint64
+	eventIndex    int
+	timestamp     time.Time
+	resourceID    string
+	direction     string // "deposit" or "withdraw"
+}
 
+// processTokenEventsResult holds the output of processTokenEvents.
+type processTokenEventsResult struct {
+	ftTransfers    []models.TokenTransfer
+	nftTransfers   []models.TokenTransfer
+	ftTokens       map[string]models.FTToken
+	nftCollections map[string]models.NFTCollection
+	contracts      map[string]models.SmartContract
+}
+
+// processTokenEvents is the pure logic extracted from ProcessRange.
+// It takes raw events and returns parsed token transfers and discovered tokens/contracts.
+func processTokenEvents(events []models.Event) processTokenEventsResult {
 	var ftTransfers []models.TokenTransfer
 	var nftTransfers []models.TokenTransfer
 	ftTokens := make(map[string]models.FTToken)
@@ -58,11 +77,6 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 
 	// Wrapper events (FungibleToken/NonFungibleToken) carry recipient addresses
 	// that mint/burn events from specific contracts may lack. Collect them for enrichment.
-	type wrapperInfo struct {
-		addr          string
-		amount        string
-		tokenContract string // "contractAddr:contractName"
-	}
 	wrapperDepositsByTx := make(map[string][]wrapperInfo)
 	wrapperWithdrawalsByTx := make(map[string][]wrapperInfo)
 
@@ -74,6 +88,8 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	}
 	evmWithdrawalsByTx := make(map[string][]evmBridgeInfo) // FLOW left EVM → Cadence deposit
 	evmDepositsByTx := make(map[string][]evmBridgeInfo)    // FLOW entered EVM → Cadence withdrawal
+
+	w := &TokenWorker{} // parseTokenLeg only uses fields, no repo needed
 
 	// 2. Parse Events
 	for _, evt := range events {
@@ -109,12 +125,22 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 					parts := strings.Split(vaultType, ".")
 					if len(parts) >= 3 {
 						tokenContract := normalizeFlowAddress(parts[1]) + ":" + parts[2]
+						wi := wrapperInfo{
+							amount:        leg.Amount,
+							tokenContract: tokenContract,
+							blockHeight:   leg.BlockHeight,
+							eventIndex:    leg.EventIndex,
+							timestamp:     leg.Timestamp,
+							resourceID:    leg.ResourceID,
+						}
 						if leg.Direction == "deposit" && leg.To != "" {
-							wrapperDepositsByTx[leg.TransactionID] = append(wrapperDepositsByTx[leg.TransactionID],
-								wrapperInfo{addr: leg.To, amount: leg.Amount, tokenContract: tokenContract})
+							wi.addr = leg.To
+							wi.direction = "deposit"
+							wrapperDepositsByTx[leg.TransactionID] = append(wrapperDepositsByTx[leg.TransactionID], wi)
 						} else if leg.Direction == "withdraw" && leg.From != "" {
-							wrapperWithdrawalsByTx[leg.TransactionID] = append(wrapperWithdrawalsByTx[leg.TransactionID],
-								wrapperInfo{addr: leg.From, amount: leg.Amount, tokenContract: tokenContract})
+							wi.addr = leg.From
+							wi.direction = "withdraw"
+							wrapperWithdrawalsByTx[leg.TransactionID] = append(wrapperWithdrawalsByTx[leg.TransactionID], wi)
 						}
 					}
 				}
@@ -124,24 +150,37 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 		}
 	}
 
+	// Track which wrapper events get consumed during enrichment so we can
+	// promote unconsumed ones to real transfer legs later.
+	consumedDeposits := make(map[string]map[int]bool)  // txID → set of indices consumed
+	consumedWithdrawals := make(map[string]map[int]bool)
+
 	// Enrich mint/burn legs with addresses from wrapper events
 	for txID, legs := range legsByTx {
 		for i := range legs {
 			leg := &legs[i]
 			legKey := leg.ContractAddr + ":" + leg.ContractName
 			if leg.Direction == "deposit" && leg.Owner == "" {
-				for _, wd := range wrapperDepositsByTx[txID] {
+				for j, wd := range wrapperDepositsByTx[txID] {
 					if wd.tokenContract == legKey && wd.amount == leg.Amount {
 						leg.To = wd.addr
 						leg.Owner = wd.addr
+						if consumedDeposits[txID] == nil {
+							consumedDeposits[txID] = make(map[int]bool)
+						}
+						consumedDeposits[txID][j] = true
 						break
 					}
 				}
 			} else if leg.Direction == "withdraw" && leg.Owner == "" {
-				for _, ww := range wrapperWithdrawalsByTx[txID] {
+				for j, ww := range wrapperWithdrawalsByTx[txID] {
 					if ww.tokenContract == legKey && ww.amount == leg.Amount {
 						leg.From = ww.addr
 						leg.Owner = ww.addr
+						if consumedWithdrawals[txID] == nil {
+							consumedWithdrawals[txID] = make(map[int]bool)
+						}
+						consumedWithdrawals[txID][j] = true
 						break
 					}
 				}
@@ -184,6 +223,77 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 		}
 
 		legsByTx[txID] = legs
+	}
+
+	// Promote unconsumed wrapper events to real transfer legs.
+	// This handles tokens like EVMVMBridgedToken that only emit FungibleToken
+	// wrapper events and no token-specific events.
+	//
+	// First, collect all txID:contract pairs that already have token-specific legs.
+	// We check against original legs only (before promotion) to avoid one promoted
+	// wrapper blocking promotion of its counterpart (e.g. withdrawal blocking deposit).
+	existingTokenLegs := make(map[string]bool) // "txID:contractAddr:contractName"
+	for txID, legs := range legsByTx {
+		for _, leg := range legs {
+			existingTokenLegs[txID+":"+leg.ContractAddr+":"+leg.ContractName] = true
+		}
+	}
+
+	for txID, wds := range wrapperDepositsByTx {
+		for j, wd := range wds {
+			if consumedDeposits[txID] != nil && consumedDeposits[txID][j] {
+				continue // already used for enrichment
+			}
+			parts := strings.SplitN(wd.tokenContract, ":", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			contractAddr, contractName := parts[0], parts[1]
+			if existingTokenLegs[txID+":"+contractAddr+":"+contractName] {
+				continue
+			}
+			legsByTx[txID] = append(legsByTx[txID], tokenLeg{
+				TransactionID: txID,
+				BlockHeight:   wd.blockHeight,
+				EventIndex:    wd.eventIndex,
+				Timestamp:     wd.timestamp,
+				ContractAddr:  contractAddr,
+				ContractName:  contractName,
+				Amount:        wd.amount,
+				Direction:     "deposit",
+				ResourceID:    wd.resourceID,
+				To:            wd.addr,
+				Owner:         wd.addr,
+			})
+		}
+	}
+	for txID, wws := range wrapperWithdrawalsByTx {
+		for j, ww := range wws {
+			if consumedWithdrawals[txID] != nil && consumedWithdrawals[txID][j] {
+				continue
+			}
+			parts := strings.SplitN(ww.tokenContract, ":", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			contractAddr, contractName := parts[0], parts[1]
+			if existingTokenLegs[txID+":"+contractAddr+":"+contractName] {
+				continue
+			}
+			legsByTx[txID] = append(legsByTx[txID], tokenLeg{
+				TransactionID: txID,
+				BlockHeight:   ww.blockHeight,
+				EventIndex:    ww.eventIndex,
+				Timestamp:     ww.timestamp,
+				ContractAddr:  contractAddr,
+				ContractName:  contractName,
+				Amount:        ww.amount,
+				Direction:     "withdraw",
+				ResourceID:    ww.resourceID,
+				From:          ww.addr,
+				Owner:         ww.addr,
+			})
+		}
 	}
 
 	for _, legs := range legsByTx {
@@ -238,6 +348,29 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 			}
 		}
 	}
+
+	return processTokenEventsResult{
+		ftTransfers:    ftTransfers,
+		nftTransfers:   nftTransfers,
+		ftTokens:       ftTokens,
+		nftCollections: nftCollections,
+		contracts:      contracts,
+	}
+}
+
+func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint64) error {
+	// 1. Fetch Raw Events
+	events, err := w.repo.GetRawEventsInRange(ctx, fromHeight, toHeight)
+	if err != nil {
+		return fmt.Errorf("failed to fetch raw events: %w", err)
+	}
+
+	result := processTokenEvents(events)
+	ftTransfers := result.ftTransfers
+	nftTransfers := result.nftTransfers
+	ftTokens := result.ftTokens
+	nftCollections := result.nftCollections
+	contracts := result.contracts
 
 	// 3. Upsert to App DB
 	if len(ftTransfers) > 0 || len(nftTransfers) > 0 {
