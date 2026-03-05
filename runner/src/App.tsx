@@ -589,6 +589,14 @@ export default function App() {
 
   const handleRun = useCallback(async () => {
     if (loading) return;
+
+    // If auto-sign is off and this is a transaction/contract, confirm first
+    if (!autoSign && codeType !== 'script') {
+      const action = codeType === 'contract' ? 'deploy this contract' : 'send this transaction';
+      const confirmed = window.confirm(`Are you sure you want to ${action}?\n\nThis will sign and submit on-chain.`);
+      if (!confirmed) return;
+    }
+
     setLoading(true);
     setResults([]);
 
@@ -626,7 +634,7 @@ export default function App() {
     }
 
     setLoading(false);
-  }, [activeCode, codeType, paramValues, loading, selectedSigner, signWithLocalKey, promptForPassword]);
+  }, [activeCode, codeType, paramValues, loading, selectedSigner, signWithLocalKey, promptForPassword, autoSign]);
 
   const handleInsertCode = useCallback((newCode: string) => {
     setProject((prev) => updateFileContent(prev, prev.activeFile, newCode));
