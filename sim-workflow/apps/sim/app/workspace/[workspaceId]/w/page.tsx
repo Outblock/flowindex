@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createLogger } from '@sim/logger'
 import { useParams, useRouter } from 'next/navigation'
 import { ReactFlowProvider } from 'reactflow'
@@ -16,18 +16,11 @@ export default function WorkflowsPage() {
   const params = useParams()
   const workspaceId = params.workspaceId as string
   const [isMounted, setIsMounted] = useState(false)
-  const [isCreatingDefaultWorkflow, setIsCreatingDefaultWorkflow] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const defaultWorkflowRequestStartedRef = useRef(false)
 
   // Fetch workflows using React Query (also syncs to registry store)
   const { isError } = useWorkflows(workspaceId)
-
-  // Use the registry's hydration phase to know when workflows are actually in the store.
-  // React Query's isLoading can flip to false before the sync useEffect populates the store.
-  const isRegistryReady =
-    hydration.phase === 'metadata-ready' ||
-    hydration.phase === 'state-loading' ||
-    hydration.phase === 'ready'
 
   // Track when component is mounted to avoid hydration issues
   useEffect(() => {
@@ -47,8 +40,9 @@ export default function WorkflowsPage() {
       return
     }
 
-    // Wait until the registry store is actually populated (not just React Query done)
-    if (!isRegistryReady) return
+    // Only act after metadata has been fully synced to registry for this workspace.
+    // Prevents creating defaults during intermediate hydration phases.
+    if (hydration.phase !== 'metadata-ready') return
 
     const workflowIds = Object.keys(workflows)
 
@@ -65,10 +59,10 @@ export default function WorkflowsPage() {
       return
     }
 
-    if (isCreatingDefaultWorkflow) return
+    if (defaultWorkflowRequestStartedRef.current) return
 
     const ensureDefaultWorkflow = async () => {
-      setIsCreatingDefaultWorkflow(true)
+      defaultWorkflowRequestStartedRef.current = true
       try {
         const response = await fetch('/api/workflows', {
           method: 'POST',
@@ -78,6 +72,7 @@ export default function WorkflowsPage() {
             description: 'Auto-created default workflow',
             color: '#3972F6',
             workspaceId,
+            ifEmpty: true,
           }),
         })
 
@@ -94,23 +89,20 @@ export default function WorkflowsPage() {
 
         router.replace(`/workspace/${workspaceId}/w/${workflowId}`)
       } catch (error) {
+        defaultWorkflowRequestStartedRef.current = false
         logger.error('Failed to create default workflow', { workspaceId, error })
         setLoadError('该 workspace 当前没有可用 workflow，且自动创建失败。请刷新后重试。')
-      } finally {
-        setIsCreatingDefaultWorkflow(false)
       }
     }
 
     void ensureDefaultWorkflow()
   }, [
     isMounted,
-    isRegistryReady,
     hydration.phase,
     workflows,
     workspaceId,
     router,
     isError,
-    isCreatingDefaultWorkflow,
   ])
 
   if (loadError) {

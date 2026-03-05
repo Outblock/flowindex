@@ -19,6 +19,7 @@ const CreateWorkflowSchema = z.object({
   workspaceId: z.string().optional(),
   folderId: z.string().nullable().optional(),
   sortOrder: z.number().int().optional(),
+  ifEmpty: z.boolean().optional().default(false),
 })
 
 // GET /api/workflows - Get workflows for user (optionally filtered by workspaceId)
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
       workspaceId,
       folderId,
       sortOrder: providedSortOrder,
+      ifEmpty,
     } = CreateWorkflowSchema.parse(body)
 
     if (!workspaceId) {
@@ -138,6 +140,32 @@ export async function POST(req: NextRequest) {
         { error: 'Write or Admin access required to create workflows in this workspace' },
         { status: 403 }
       )
+    }
+
+    if (ifEmpty) {
+      const [existingWorkflow] = await db
+        .select()
+        .from(workflow)
+        .where(eq(workflow.workspaceId, workspaceId))
+        .orderBy(asc(workflow.sortOrder), asc(workflow.createdAt), asc(workflow.id))
+        .limit(1)
+
+      if (existingWorkflow) {
+        logger.info(
+          `[${requestId}] Reusing existing workflow ${existingWorkflow.id} in workspace ${workspaceId} (ifEmpty=true)`
+        )
+        return NextResponse.json({
+          id: existingWorkflow.id,
+          name: existingWorkflow.name,
+          description: existingWorkflow.description,
+          color: existingWorkflow.color,
+          workspaceId: existingWorkflow.workspaceId,
+          folderId: existingWorkflow.folderId,
+          sortOrder: existingWorkflow.sortOrder ?? 0,
+          createdAt: existingWorkflow.createdAt,
+          updatedAt: existingWorkflow.updatedAt,
+        })
+      }
     }
 
     const workflowId = crypto.randomUUID()
