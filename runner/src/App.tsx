@@ -298,15 +298,56 @@ export default function App() {
     reject: () => void;
   } | null>(null);
 
+  // Persist signer selection to localStorage
+  const persistSigner = useCallback((signer: SignerOption) => {
+    setSelectedSigner(signer);
+    try {
+      if (signer.type === 'local') {
+        localStorage.setItem('flow-selected-signer', JSON.stringify({
+          type: 'local',
+          keyId: signer.key.id,
+          address: signer.account.flowAddress,
+          keyIndex: signer.account.keyIndex,
+        }));
+      } else {
+        localStorage.setItem('flow-selected-signer', JSON.stringify({ type: 'fcl' }));
+      }
+    } catch {}
+  }, []);
+
   const promptForPassword = useCallback((keyLabel: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       setPasswordPrompt({ keyLabel, resolve, reject });
     });
   }, []);
 
-  // Auto-select first local key+account as default signer when available
+  // Restore saved signer from localStorage, or auto-select first local account
+  const hasRestoredSigner = useRef(false);
   useEffect(() => {
-    if (selectedSigner.type !== 'fcl') return; // user already chose something
+    if (hasRestoredSigner.current) return;
+    // Need at least one key with accounts to restore a local signer
+    const hasLocalAccounts = localKeys.some(k => (accountsMap[k.id] || []).length > 0);
+    if (!hasLocalAccounts && localKeys.length > 0) return; // still loading accounts
+
+    hasRestoredSigner.current = true;
+    try {
+      const saved = localStorage.getItem('flow-selected-signer');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.type === 'local') {
+          const key = localKeys.find(k => k.id === parsed.keyId);
+          const accounts = key ? (accountsMap[key.id] || []) : [];
+          const account = accounts.find(a => a.flowAddress === parsed.address && a.keyIndex === parsed.keyIndex);
+          if (key && account) {
+            setSelectedSigner({ type: 'local', key, account });
+            return;
+          }
+        } else if (parsed.type === 'fcl') {
+          return; // already default
+        }
+      }
+    } catch {}
+    // Fallback: auto-select first local account
     for (const key of localKeys) {
       const accounts = accountsMap[key.id];
       if (accounts && accounts.length > 0) {
@@ -314,7 +355,7 @@ export default function App() {
         return;
       }
     }
-  }, [localKeys, accountsMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [localKeys, accountsMap]);
 
   const {
     projects: cloudProjects,
@@ -891,23 +932,23 @@ export default function App() {
           {localKeys.some(k => (accountsMap[k.id] || []).length > 0) && (
             <SignerSelector
               selected={selectedSigner}
-              onSelect={setSelectedSigner}
+              onSelect={persistSigner}
               localKeys={localKeys}
               accountsMap={accountsMap}
               onViewAccount={handleViewAccount}
             />
           )}
 
-          {/* Account button — show only when no local signer selected (avoids duplicate) */}
-          {!isMobile && selectedSigner.type !== 'local' && (
+          {/* Account button — show only when no local accounts exist (SignerSelector handles everything otherwise) */}
+          {!isMobile && !localKeys.some(k => (accountsMap[k.id] || []).length > 0) && (
             <WalletButton
               localKeys={localKeys}
               accountsMap={accountsMap}
               selectedLocalAccount={null}
               network={network}
               onOpenKeyManager={() => setShowKeyManager(true)}
-              onSelectLocalAccount={(key, account) => setSelectedSigner({ type: 'local', key, account })}
-              onDisconnectLocal={() => setSelectedSigner({ type: 'fcl' })}
+              onSelectLocalAccount={(key, account) => persistSigner({ type: 'local', key, account })}
+              onDisconnectLocal={() => persistSigner({ type: 'fcl' })}
               onViewAccount={handleViewAccount}
             />
           )}
@@ -1384,7 +1425,7 @@ export default function App() {
               onCreateAccount={createAccount}
               onViewAccount={handleViewAccount}
               selectedAccount={selectedSigner.type === 'local' ? { keyId: selectedSigner.key.id, address: selectedSigner.account.flowAddress, keyIndex: selectedSigner.account.keyIndex } : null}
-              onSelectAccount={(key, account) => setSelectedSigner({ type: 'local', key, account })}
+              onSelectAccount={(key, account) => persistSigner({ type: 'local', key, account })}
             />
           </div>
         </div>
@@ -1400,7 +1441,7 @@ export default function App() {
               network={network}
               onClose={() => setAccountPanelAddress(null)}
               onDisconnect={() => {
-                if (selectedSigner.type === 'local') setSelectedSigner({ type: 'fcl' });
+                if (selectedSigner.type === 'local') persistSigner({ type: 'fcl' });
               }}
             />
           </div>
