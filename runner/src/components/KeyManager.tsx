@@ -272,6 +272,30 @@ function LocalKeysTab({
   onCreateAccount,
 }: Omit<KeyManagerProps, 'onClose' | 'activeTab'>) {
   const [importMode, setImportMode] = useState<LocalImportMode>('generate');
+  const [autoCreate, setAutoCreate] = useState(() => {
+    try {
+      return localStorage.getItem('flow-auto-create-account') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleAutoCreate = () => {
+    setAutoCreate((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('flow-auto-create-account', String(next)); } catch {}
+      return next;
+    });
+  };
+
+  /** After key creation, auto-create accounts on both networks if toggle is on. */
+  const autoCreateAccounts = async (keyId: string) => {
+    if (!autoCreate) return;
+    await Promise.allSettled([
+      onCreateAccount(keyId, 'ECDSA_secp256k1', 'SHA3_256', 'testnet'),
+      onCreateAccount(keyId, 'ECDSA_secp256k1', 'SHA3_256', 'mainnet'),
+    ]);
+  };
 
   return (
     <div className="flex-1 overflow-y-auto p-3 space-y-4">
@@ -281,6 +305,28 @@ function LocalKeysTab({
           Loading WASM crypto module...
         </div>
       )}
+
+      {/* Auto-create account toggle */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autoCreate}
+          onClick={toggleAutoCreate}
+          className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${
+            autoCreate ? 'bg-emerald-600' : 'bg-zinc-600'
+          }`}
+        >
+          <span
+            className={`inline-block h-3 w-3 rounded-full bg-white transition-transform mt-0.5 ${
+              autoCreate ? 'translate-x-3.5 ml-0' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+        <span className="text-[11px] text-zinc-300">
+          Auto-create account on testnet & mainnet
+        </span>
+      </label>
 
       {/* Import mode selector */}
       <div className="space-y-2">
@@ -312,24 +358,28 @@ function LocalKeysTab({
           <GenerateForm
             wasmReady={wasmReady}
             onGenerateKey={onGenerateKey}
+            onAutoCreate={autoCreateAccounts}
           />
         )}
         {importMode === 'mnemonic' && (
           <ImportMnemonicForm
             wasmReady={wasmReady}
             onImportMnemonic={onImportMnemonic}
+            onAutoCreate={autoCreateAccounts}
           />
         )}
         {importMode === 'privateKey' && (
           <ImportPrivateKeyForm
             wasmReady={wasmReady}
             onImportPrivateKey={onImportPrivateKey}
+            onAutoCreate={autoCreateAccounts}
           />
         )}
         {importMode === 'keystore' && (
           <ImportKeystoreForm
             wasmReady={wasmReady}
             onImportKeystore={onImportKeystore}
+            onAutoCreate={autoCreateAccounts}
           />
         )}
       </div>
@@ -372,9 +422,11 @@ function LocalKeysTab({
 function GenerateForm({
   wasmReady,
   onGenerateKey,
+  onAutoCreate,
 }: {
   wasmReady: boolean;
   onGenerateKey: KeyManagerProps['onGenerateKey'];
+  onAutoCreate: (keyId: string) => Promise<void>;
 }) {
   const [label, setLabel] = useState('');
   const [wordCount, setWordCount] = useState<12 | 24>(12);
@@ -397,6 +449,7 @@ function GenerateForm({
       setMnemonic(result.mnemonic);
       setLabel('');
       setPassword('');
+      onAutoCreate(result.key.id).catch(() => {});
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'Failed to generate key',
@@ -518,9 +571,11 @@ function GenerateForm({
 function ImportMnemonicForm({
   wasmReady,
   onImportMnemonic,
+  onAutoCreate,
 }: {
   wasmReady: boolean;
   onImportMnemonic: KeyManagerProps['onImportMnemonic'];
+  onAutoCreate: (keyId: string) => Promise<void>;
 }) {
   const [mnemonic, setMnemonic] = useState('');
   const [label, setLabel] = useState('');
@@ -541,7 +596,7 @@ function ImportMnemonicForm({
     }
     setImporting(true);
     try {
-      await onImportMnemonic(
+      const key = await onImportMnemonic(
         mnemonic.trim(),
         label || 'Imported Mnemonic',
         passphrase || undefined,
@@ -554,6 +609,7 @@ function ImportMnemonicForm({
       setPassword('');
       setSuccess('Key imported successfully');
       setTimeout(() => setSuccess(''), 3000);
+      onAutoCreate(key.id).catch(() => {});
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'Failed to import mnemonic',
@@ -638,9 +694,11 @@ function ImportMnemonicForm({
 function ImportPrivateKeyForm({
   wasmReady,
   onImportPrivateKey,
+  onAutoCreate,
 }: {
   wasmReady: boolean;
   onImportPrivateKey: KeyManagerProps['onImportPrivateKey'];
+  onAutoCreate: (keyId: string) => Promise<void>;
 }) {
   const [hex, setHex] = useState('');
   const [label, setLabel] = useState('');
@@ -659,7 +717,7 @@ function ImportPrivateKeyForm({
     }
     setImporting(true);
     try {
-      await onImportPrivateKey(
+      const key = await onImportPrivateKey(
         hex.trim(),
         label || 'Imported Key',
         password || undefined,
@@ -669,6 +727,7 @@ function ImportPrivateKeyForm({
       setPassword('');
       setSuccess('Key imported successfully');
       setTimeout(() => setSuccess(''), 3000);
+      onAutoCreate(key.id).catch(() => {});
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'Failed to import private key',
@@ -739,9 +798,11 @@ function ImportPrivateKeyForm({
 function ImportKeystoreForm({
   wasmReady,
   onImportKeystore,
+  onAutoCreate,
 }: {
   wasmReady: boolean;
   onImportKeystore: KeyManagerProps['onImportKeystore'];
+  onAutoCreate: (keyId: string) => Promise<void>;
 }) {
   const [json, setJson] = useState('');
   const [keystorePassword, setKeystorePassword] = useState('');
@@ -776,7 +837,7 @@ function ImportKeystoreForm({
     }
     setImporting(true);
     try {
-      await onImportKeystore(
+      const key = await onImportKeystore(
         json.trim(),
         keystorePassword,
         label || 'Imported Keystore',
@@ -789,6 +850,7 @@ function ImportKeystoreForm({
       if (fileInputRef.current) fileInputRef.current.value = '';
       setSuccess('Keystore imported successfully');
       setTimeout(() => setSuccess(''), 3000);
+      onAutoCreate(key.id).catch(() => {});
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : 'Failed to import keystore',
@@ -931,7 +993,7 @@ function LocalKeyCard({
     try {
       const result = await onCreateAccount(
         localKey.id,
-        'ECDSA_P256',
+        'ECDSA_secp256k1',
         'SHA3_256',
         network,
       );
