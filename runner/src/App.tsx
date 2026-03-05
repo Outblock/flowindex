@@ -1381,6 +1381,8 @@ export default function App() {
               onRefreshAccounts={refreshAccounts}
               onCreateAccount={createAccount}
               onViewAccount={handleViewAccount}
+              selectedAccount={selectedSigner.type === 'local' ? { keyId: selectedSigner.key.id, address: selectedSigner.account.flowAddress, keyIndex: selectedSigner.account.keyIndex } : null}
+              onSelectAccount={(key, account) => setSelectedSigner({ type: 'local', key, account })}
             />
           </div>
         </div>

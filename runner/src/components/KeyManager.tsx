@@ -66,6 +66,8 @@ interface KeyManagerProps {
     network: 'mainnet' | 'testnet',
   ) => Promise<{ txId: string }>;
   onViewAccount?: (address: string) => void;
+  selectedAccount?: { keyId: string; address: string; keyIndex: number } | null;
+  onSelectAccount?: (key: LocalKey, account: KeyAccount) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +166,10 @@ export default function KeyManager({
   onRefreshAccounts,
   onCreateAccount,
   onViewAccount,
+  selectedAccount,
+  onSelectAccount,
 }: KeyManagerProps) {
+  const [tab, setTab] = useState<'accounts' | 'keys'>('accounts');
   const [mode, setMode] = useState<'idle' | 'create' | 'import'>('idle');
   const [importType, setImportType] = useState<ImportType>('mnemonic');
   const [importDropdownOpen, setImportDropdownOpen] = useState(false);
@@ -234,16 +239,48 @@ export default function KeyManager({
     ]);
   };
 
+  // Build flat account list for Accounts tab
+  const allAccounts: { key: LocalKey; account: KeyAccount }[] = [];
+  for (const key of localKeys) {
+    for (const acc of accountsMap[key.id] || []) {
+      allAccounts.push({ key, account: acc });
+    }
+  }
+
   return (
     <div className="flex flex-col h-full bg-zinc-900 border-l border-zinc-700">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700">
         <div className="flex items-center gap-2">
           <Key className="w-4 h-4 text-zinc-400" />
-          <span className="text-sm font-medium text-zinc-100">My Keys</span>
+          <span className="text-sm font-medium text-zinc-100">Wallet</span>
         </div>
         <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 p-0.5">
           <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-zinc-700 shrink-0">
+        <button
+          onClick={() => setTab('accounts')}
+          className={`flex-1 py-2 text-xs font-medium transition-colors ${
+            tab === 'accounts'
+              ? 'text-emerald-400 border-b-2 border-emerald-400'
+              : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          Accounts ({allAccounts.length})
+        </button>
+        <button
+          onClick={() => setTab('keys')}
+          className={`flex-1 py-2 text-xs font-medium transition-colors ${
+            tab === 'keys'
+              ? 'text-emerald-400 border-b-2 border-emerald-400'
+              : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          Keys ({localKeys.length})
         </button>
       </div>
 
@@ -256,141 +293,210 @@ export default function KeyManager({
           </div>
         )}
 
-        {/* Action buttons: Create + Import */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setMode(mode === 'create' ? 'idle' : 'create')}
-            className={mode === 'create' ? btnPrimary : btnSecondary}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Create
-          </button>
-
-          <div ref={dropdownRef} className="relative">
-            <button
-              onClick={() => {
-                if (mode === 'import') {
-                  setMode('idle');
-                } else {
-                  setImportDropdownOpen(!importDropdownOpen);
-                }
-              }}
-              className={mode === 'import' ? btnPrimary : btnSecondary}
-            >
-              <Download className="w-3.5 h-3.5" />
-              Import
-              <ChevronDown className="w-3 h-3" />
-            </button>
-            {importDropdownOpen && (
-              <div className="absolute left-0 top-full mt-1 w-40 bg-zinc-800 border border-zinc-700 rounded shadow-lg z-50">
-                {([
-                  ['mnemonic', 'Mnemonic'],
-                  ['privateKey', 'Private Key'],
-                  ['keystore', 'Keystore'],
-                ] as [ImportType, string][]).map(([type, label]) => (
-                  <button
-                    key={type}
-                    onClick={() => {
-                      setImportType(type);
-                      setMode('import');
-                      setImportDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
-                  >
-                    {label}
-                  </button>
-                ))}
+        {/* ── Accounts Tab ── */}
+        {tab === 'accounts' && (
+          <div className="space-y-1.5">
+            {allAccounts.length === 0 ? (
+              <div className="text-center py-8 space-y-2">
+                <p className="text-zinc-500 text-xs">No accounts yet.</p>
+                <button onClick={() => setTab('keys')} className={btnSecondary}>
+                  <Plus className="w-3.5 h-3.5" />
+                  Create or Import Key
+                </button>
               </div>
+            ) : (
+              allAccounts.map(({ key, account }) => {
+                const isSelected =
+                  selectedAccount?.keyId === key.id &&
+                  selectedAccount?.address === account.flowAddress &&
+                  selectedAccount?.keyIndex === account.keyIndex;
+                return (
+                  <div
+                    key={`${key.id}-${account.flowAddress}-${account.keyIndex}`}
+                    className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-500/10 border border-emerald-500/30'
+                        : 'bg-zinc-800 border border-zinc-700 hover:border-zinc-600'
+                    }`}
+                    onClick={() => onSelectAccount?.(key, account)}
+                  >
+                    <Avatar
+                      size={28}
+                      name={account.flowAddress}
+                      variant="beam"
+                      colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs font-mono ${isSelected ? 'text-emerald-300' : 'text-zinc-200'}`}>
+                          0x{account.flowAddress}
+                        </span>
+                        <CopyButton text={`0x${account.flowAddress}`} />
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-zinc-500">{key.label}</span>
+                        <span className="text-[10px] text-zinc-600">key #{account.keyIndex}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isSelected && (
+                        <span className="text-[10px] text-emerald-400 font-medium">Active</span>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onViewAccount?.(account.flowAddress); }}
+                        className="text-zinc-600 hover:text-zinc-300 p-1 transition-colors"
+                        title="View account details"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
-        </div>
+        )}
 
-        {/* Auto-create toggle — only shown in Create mode */}
-        {mode === 'create' && (
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={autoCreate}
-              onClick={toggleAutoCreate}
-              className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${
-                autoCreate ? 'bg-emerald-600' : 'bg-zinc-600'
-              }`}
-            >
-              <span
-                className={`inline-block h-3 w-3 rounded-full bg-white transition-transform mt-0.5 ${
-                  autoCreate ? 'translate-x-3.5 ml-0' : 'translate-x-0.5'
-                }`}
+        {/* ── Keys Tab ── */}
+        {tab === 'keys' && (
+          <>
+            {/* Action buttons: Create + Import */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMode(mode === 'create' ? 'idle' : 'create')}
+                className={mode === 'create' ? btnPrimary : btnSecondary}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Create
+              </button>
+
+              <div ref={dropdownRef} className="relative">
+                <button
+                  onClick={() => {
+                    if (mode === 'import') {
+                      setMode('idle');
+                    } else {
+                      setImportDropdownOpen(!importDropdownOpen);
+                    }
+                  }}
+                  className={mode === 'import' ? btnPrimary : btnSecondary}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Import
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {importDropdownOpen && (
+                  <div className="absolute left-0 top-full mt-1 w-40 bg-zinc-800 border border-zinc-700 rounded shadow-lg z-50">
+                    {([
+                      ['mnemonic', 'Mnemonic'],
+                      ['privateKey', 'Private Key'],
+                      ['keystore', 'Keystore'],
+                    ] as [ImportType, string][]).map(([type, label]) => (
+                      <button
+                        key={type}
+                        onClick={() => {
+                          setImportType(type);
+                          setMode('import');
+                          setImportDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Auto-create toggle — only shown in Create mode */}
+            {mode === 'create' && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoCreate}
+                  onClick={toggleAutoCreate}
+                  className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${
+                    autoCreate ? 'bg-emerald-600' : 'bg-zinc-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3 w-3 rounded-full bg-white transition-transform mt-0.5 ${
+                      autoCreate ? 'translate-x-3.5 ml-0' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+                <span className="text-[11px] text-zinc-300">
+                  Auto-create account on testnet & mainnet
+                </span>
+              </label>
+            )}
+
+            {/* Create form */}
+            {mode === 'create' && (
+              <GenerateForm
+                wasmReady={wasmReady}
+                onGenerateKey={onGenerateKey}
+                onAutoCreate={autoCreateAccounts}
               />
-            </button>
-            <span className="text-[11px] text-zinc-300">
-              Auto-create account on testnet & mainnet
-            </span>
-          </label>
-        )}
+            )}
 
-        {/* Create form */}
-        {mode === 'create' && (
-          <GenerateForm
-            wasmReady={wasmReady}
-            onGenerateKey={onGenerateKey}
-            onAutoCreate={autoCreateAccounts}
-          />
-        )}
-
-        {/* Import forms */}
-        {mode === 'import' && importType === 'mnemonic' && (
-          <ImportMnemonicForm
-            wasmReady={wasmReady}
-            onImportMnemonic={onImportMnemonic}
-            onAutoRefresh={autoRefreshAfterImport}
-          />
-        )}
-        {mode === 'import' && importType === 'privateKey' && (
-          <ImportPrivateKeyForm
-            wasmReady={wasmReady}
-            onImportPrivateKey={onImportPrivateKey}
-            onAutoRefresh={autoRefreshAfterImport}
-          />
-        )}
-        {mode === 'import' && importType === 'keystore' && (
-          <ImportKeystoreForm
-            wasmReady={wasmReady}
-            onImportKeystore={onImportKeystore}
-            onAutoRefresh={autoRefreshAfterImport}
-          />
-        )}
-
-        {/* Divider */}
-        {(mode !== 'idle' || localKeys.length > 0) && (
-          <div className="border-t border-zinc-700" />
-        )}
-
-        {/* Local keys list */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-medium text-zinc-300">
-            Stored Keys ({localKeys.length})
-          </h3>
-          {localKeys.length === 0 ? (
-            <p className="text-zinc-500 text-xs text-center py-6">
-              No local keys yet. Create or import one above.
-            </p>
-          ) : (
-            localKeys.map((key) => (
-              <LocalKeyCard
-                key={key.id}
-                localKey={key}
-                accounts={accountsMap[key.id] || []}
-                network={network}
-                onDelete={onDeleteLocalKey}
-                onExportKeystore={onExportKeystore}
-                onRefreshAccounts={onRefreshAccounts}
-                onCreateAccount={onCreateAccount}
-                onViewAccount={onViewAccount}
+            {/* Import forms */}
+            {mode === 'import' && importType === 'mnemonic' && (
+              <ImportMnemonicForm
+                wasmReady={wasmReady}
+                onImportMnemonic={onImportMnemonic}
+                onAutoRefresh={autoRefreshAfterImport}
               />
-            ))
-          )}
-        </div>
+            )}
+            {mode === 'import' && importType === 'privateKey' && (
+              <ImportPrivateKeyForm
+                wasmReady={wasmReady}
+                onImportPrivateKey={onImportPrivateKey}
+                onAutoRefresh={autoRefreshAfterImport}
+              />
+            )}
+            {mode === 'import' && importType === 'keystore' && (
+              <ImportKeystoreForm
+                wasmReady={wasmReady}
+                onImportKeystore={onImportKeystore}
+                onAutoRefresh={autoRefreshAfterImport}
+              />
+            )}
+
+            {/* Divider */}
+            {(mode !== 'idle' || localKeys.length > 0) && (
+              <div className="border-t border-zinc-700" />
+            )}
+
+            {/* Local keys list */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-zinc-300">
+                Stored Keys ({localKeys.length})
+              </h3>
+              {localKeys.length === 0 ? (
+                <p className="text-zinc-500 text-xs text-center py-6">
+                  No local keys yet. Create or import one above.
+                </p>
+              ) : (
+                localKeys.map((key) => (
+                  <LocalKeyCard
+                    key={key.id}
+                    localKey={key}
+                    accounts={accountsMap[key.id] || []}
+                    network={network}
+                    onDelete={onDeleteLocalKey}
+                    onExportKeystore={onExportKeystore}
+                    onRefreshAccounts={onRefreshAccounts}
+                    onCreateAccount={onCreateAccount}
+                    onViewAccount={onViewAccount}
+                  />
+                ))
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -927,21 +1033,25 @@ function LocalKeyCard({
 
           {/* Export password input */}
           {showExportInput && (
-            <div className="flex gap-1.5 items-center">
-              <input
-                type="password"
-                value={exportPassword}
-                onChange={(e) => setExportPassword(e.target.value)}
-                placeholder="Export password"
-                className={`${inputClass} flex-1`}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleExport(); }}
-              />
-              <button onClick={handleExport} disabled={exporting} className={btnPrimary}>
-                {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-              </button>
-              <button onClick={() => { setShowExportInput(false); setExportPassword(''); }} className="text-zinc-500 hover:text-zinc-300 p-1">
-                <X className="w-3 h-3" />
-              </button>
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-zinc-400">Create a password to protect your keystore:</p>
+              <div className="flex gap-1.5 items-center">
+                <input
+                  type="password"
+                  value={exportPassword}
+                  onChange={(e) => setExportPassword(e.target.value)}
+                  placeholder="Encryption password"
+                  className={`${inputClass} flex-1`}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleExport(); }}
+                  autoFocus
+                />
+                <button onClick={handleExport} disabled={exporting || !exportPassword} className={btnPrimary}>
+                  {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                </button>
+                <button onClick={() => { setShowExportInput(false); setExportPassword(''); }} className="text-zinc-500 hover:text-zinc-300 p-1">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           )}
 
