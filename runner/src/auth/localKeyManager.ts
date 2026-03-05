@@ -521,12 +521,19 @@ function normalizeSigAlgo(
   val: unknown,
 ): 'ECDSA_P256' | 'ECDSA_secp256k1' {
   const s = String(val).toUpperCase();
-  if (s.includes('SECP256K1') || s === '3') return 'ECDSA_secp256k1';
+  if (s.includes('SECP256K1')) return 'ECDSA_secp256k1';
+  // FlowIndex API: 1=P256, 2=secp256k1
+  // Flow SDK:      2=P256, 3=secp256k1
+  if (s === '2') return 'ECDSA_secp256k1';
+  if (s === '3') return 'ECDSA_secp256k1';
   return 'ECDSA_P256';
 }
 
 function normalizeHashAlgo(val: unknown): 'SHA2_256' | 'SHA3_256' {
   const s = String(val).toUpperCase();
-  if (s.includes('SHA2') || s === '1') return 'SHA2_256';
+  if (s.includes('SHA2')) return 'SHA2_256';
+  // FlowIndex API: 1=SHA2_256, 3=SHA3_256
+  // Flow SDK:      1=SHA2_256, 3=SHA3_256
+  if (s === '1') return 'SHA2_256';
   return 'SHA3_256';
 }
