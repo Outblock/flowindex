@@ -35,7 +35,7 @@ import { useGitHub } from './github/useGitHub';
 import GitHubConnect from './components/GitHubConnect';
 import GitCommitPanel from './components/GitCommitPanel';
 import DeployStatus from './components/DeployStatus';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe, Sparkles } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe, Sparkles, Github } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
 const AIPanel = lazy(() => import('./components/AIPanel'));
@@ -1277,24 +1277,6 @@ export default function App() {
             network={network}
           />
 
-          {/* GitHub integration */}
-          {github.connection ? (
-            <DeployStatus
-              runs={github.latestRuns}
-              repoOwner={github.connection.repo_owner}
-              repoName={github.connection.repo_name}
-              workflowConfigured={github.connection.workflow_configured}
-              onSetupWorkflow={() => github.setupWorkflow(network)}
-            />
-          ) : user && cloudMeta.id && (
-            <button
-              onClick={() => setShowGitHubConnect(true)}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs px-2 py-1 rounded border border-zinc-700 transition-colors"
-            >
-              <span className="text-xs">Connect GitHub</span>
-            </button>
-          )}
-
           {/* Desktop run button */}
           {!isMobile && (
             <button
@@ -1485,6 +1467,34 @@ export default function App() {
                         <span>Manage Keys</span>
                       </button>
                     </div>
+                  )}
+                </div>
+              )}
+              {/* GitHub integration */}
+              {user && cloudMeta.id && (
+                <div className="shrink-0 border-t border-zinc-700">
+                  {github.connection ? (
+                    <>
+                      <div className="flex items-center gap-1.5 px-3 py-2">
+                        <Github className="w-3 h-3 text-zinc-500" />
+                        <span className="text-[10px] text-zinc-400 truncate">{github.connection.repo_owner}/{github.connection.repo_name}</span>
+                      </div>
+                      <DeployStatus
+                        runs={github.latestRuns}
+                        repoOwner={github.connection.repo_owner}
+                        repoName={github.connection.repo_name}
+                        workflowConfigured={github.connection.workflow_configured}
+                        onSetupWorkflow={() => github.setupWorkflow(network)}
+                      />
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setShowGitHubConnect(true)}
+                      className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                    >
+                      <Github className="w-3 h-3" />
+                      <span>Connect GitHub</span>
+                    </button>
                   )}
                 </div>
               )}
