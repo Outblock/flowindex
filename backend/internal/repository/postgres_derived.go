@@ -254,30 +254,22 @@ func (r *Repository) UpsertContractRegistry(ctx context.Context, rows []models.S
 		)
 	}
 
-	// Retry once on duplicate-key errors from concurrent chunk processing.
-	for attempt := 0; attempt < 2; attempt++ {
-		br := r.db.SendBatch(ctx, batch)
-		var batchErr error
-		for i := 0; i < len(deduped); i++ {
-			if _, err := br.Exec(); err != nil {
+	br := r.db.SendBatch(ctx, batch)
+	var batchErr error
+	for i := 0; i < len(deduped); i++ {
+		if _, err := br.Exec(); err != nil {
+			// Ignore duplicate-key errors from concurrent chunk processing —
+			// another goroutine inserted the same contract simultaneously.
+			if !strings.Contains(err.Error(), "SQLSTATE 23505") {
 				batchErr = err
 			}
 		}
-		br.Close()
-		if batchErr == nil {
-			return nil
-		}
-		if attempt == 0 && isDuplicateKeyError(batchErr) {
-			continue // retry — rows now exist, ON CONFLICT will succeed
-		}
+	}
+	br.Close()
+	if batchErr != nil {
 		return fmt.Errorf("upsert contract registry: %w", batchErr)
 	}
 	return nil
-}
-
-// isDuplicateKeyError checks for PostgreSQL unique constraint violation (23505).
-func isDuplicateKeyError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "SQLSTATE 23505")
 }
 
 // UpsertAddressTransactions inserts address->tx relations.
