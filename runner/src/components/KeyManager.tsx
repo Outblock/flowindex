@@ -216,9 +216,8 @@ export default function KeyManager({
   }, [localKeys, accountsMap, network, onRefreshAccounts]);
 
   /** After key creation, auto-create accounts on selected networks + auto-refresh after delay. */
-  const autoCreateAccounts = async (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', networks: ('mainnet' | 'testnet')[]) => {
+  const autoCreateAccounts = async (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', hashAlgo: 'SHA2_256' | 'SHA3_256', networks: ('mainnet' | 'testnet')[]) => {
     if (!autoCreate || networks.length === 0) return;
-    const hashAlgo = sigAlgo === 'ECDSA_P256' ? 'SHA3_256' : 'SHA3_256';
     await Promise.allSettled(
       networks.map(net => onCreateAccount(keyId, sigAlgo, hashAlgo, net)),
     );
@@ -492,7 +491,7 @@ function GenerateForm({
 }: {
   wasmReady: boolean;
   onGenerateKey: KeyManagerProps['onGenerateKey'];
-  onAutoCreate: (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', networks: ('mainnet' | 'testnet')[]) => Promise<void>;
+  onAutoCreate: (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', hashAlgo: 'SHA2_256' | 'SHA3_256', networks: ('mainnet' | 'testnet')[]) => Promise<void>;
   autoCreate: boolean;
   onToggleAutoCreate: () => void;
 }) {
@@ -500,7 +499,8 @@ function GenerateForm({
   const [wordCount, setWordCount] = useState<12 | 24>(12);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [sigAlgo, setSigAlgo] = useState<'ECDSA_P256' | 'ECDSA_secp256k1'>('ECDSA_P256');
+  const [sigAlgo, setSigAlgo] = useState<'ECDSA_P256' | 'ECDSA_secp256k1'>('ECDSA_secp256k1');
+  const [hashAlgo, setHashAlgo] = useState<'SHA2_256' | 'SHA3_256'>('SHA2_256');
   const [createMainnet, setCreateMainnet] = useState(true);
   const [createTestnet, setCreateTestnet] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -526,7 +526,7 @@ function GenerateForm({
       if (createTestnet) networks.push('testnet');
       if (autoCreate && networks.length > 0) {
         setAutoStatus('Creating accounts...');
-        onAutoCreate(result.key.id, sigAlgo, networks)
+        onAutoCreate(result.key.id, sigAlgo, hashAlgo, networks)
           .then(() => setAutoStatus('Accounts created'))
           .catch(() => setAutoStatus(''))
           .finally(() => setTimeout(() => setAutoStatus(''), 3000));
@@ -615,17 +615,30 @@ function GenerateForm({
         </div>
       </div>
 
-      {/* Signature algorithm */}
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-zinc-400 shrink-0">Sig Algo:</span>
-        <select
-          value={sigAlgo}
-          onChange={(e) => setSigAlgo(e.target.value as 'ECDSA_P256' | 'ECDSA_secp256k1')}
-          className={`${inputClass} w-auto`}
-        >
-          <option value="ECDSA_P256">ECDSA_P256</option>
-          <option value="ECDSA_secp256k1">ECDSA_secp256k1</option>
-        </select>
+      {/* Signature & hash algorithm */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-zinc-400 shrink-0">Curve:</span>
+          <select
+            value={sigAlgo}
+            onChange={(e) => setSigAlgo(e.target.value as 'ECDSA_P256' | 'ECDSA_secp256k1')}
+            className={`${inputClass} w-auto`}
+          >
+            <option value="ECDSA_secp256k1">secp256k1</option>
+            <option value="ECDSA_P256">P256</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-zinc-400 shrink-0">Hash:</span>
+          <select
+            value={hashAlgo}
+            onChange={(e) => setHashAlgo(e.target.value as 'SHA2_256' | 'SHA3_256')}
+            className={`${inputClass} w-auto`}
+          >
+            <option value="SHA2_256">SHA2_256</option>
+            <option value="SHA3_256">SHA3_256</option>
+          </select>
+        </div>
       </div>
 
       {/* Auto-create toggle + network checkboxes */}
