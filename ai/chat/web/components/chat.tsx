@@ -51,6 +51,12 @@ import {
   ReasoningTrigger,
   ReasoningContent,
 } from "@/components/ai-elements/reasoning";
+import {
+  Sources,
+  SourcesTrigger,
+  SourcesContent,
+  Source,
+} from "@/components/ai-elements/sources";
 
 import { SqlResultTable } from "./sql-result-table";
 import { ChartArtifact } from "./chart-artifact";
@@ -309,6 +315,38 @@ function ChatMessage({ message }: { message: UIMessage }) {
 
             return null;
           })}
+          {(() => {
+            const sources: { title: string; url: string }[] = [];
+            for (const part of message.parts) {
+              const toolPart = part as any;
+              if (
+                (part.type === "tool-invocation" || part.type === "dynamic-tool" || part.type.startsWith("tool-")) &&
+                (toolPart.toolName === "web_search" || toolPart.toolName === "web_search_20250305")
+              ) {
+                const output = toolPart.output ?? toolPart.result;
+                if (output) {
+                  const items = Array.isArray(output) ? output : output.results || output.search_results || [];
+                  for (const item of items) {
+                    if (item.url && item.title) {
+                      sources.push({ title: item.title, url: item.url });
+                    }
+                  }
+                }
+              }
+            }
+            if (sources.length === 0) return null;
+            const unique = [...new Map(sources.map((s) => [s.url, s])).values()];
+            return (
+              <Sources>
+                <SourcesTrigger count={unique.length} />
+                <SourcesContent>
+                  {unique.map((s) => (
+                    <Source key={s.url} href={s.url} title={s.title} />
+                  ))}
+                </SourcesContent>
+              </Sources>
+            );
+          })()}
         </MessageContent>
       </div>
     </Message>
