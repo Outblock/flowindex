@@ -235,7 +235,6 @@ export function Chat() {
               <PromptInputTools>
                 <PromptInputActionMenu>
                   <PromptInputActionMenuTrigger
-                    tooltip="Attach"
                     className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                   >
                     <Paperclip size={15} />
