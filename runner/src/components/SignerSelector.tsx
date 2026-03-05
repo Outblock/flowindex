@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Wallet, ChevronDown, LogOut, Key, Zap } from 'lucide-react';
+import { Wallet, ChevronDown, LogOut, Key, Zap, Droplets } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import { fcl } from '../flow/fclConfig';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
@@ -18,6 +18,7 @@ interface SignerSelectorProps {
   onOpenKeyManager?: () => void;
   autoSign: boolean;
   onToggleAutoSign: (value: boolean) => void;
+  network: 'mainnet' | 'testnet';
 }
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
@@ -52,7 +53,7 @@ function useFlowBalance(address: string | null) {
   return balance;
 }
 
-export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, onViewAccount, onOpenKeyManager, autoSign, onToggleAutoSign }: SignerSelectorProps) {
+export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, onViewAccount, onOpenKeyManager, autoSign, onToggleAutoSign, network }: SignerSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -232,6 +233,23 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
               />
             </div>
           </button>
+
+          {/* Testnet faucet */}
+          {network === 'testnet' && (
+            <>
+              <div className="border-t border-zinc-700" />
+              <a
+                href="https://faucet.flow.com/fund-account"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-400 hover:bg-zinc-700 transition-colors"
+                onClick={() => setOpen(false)}
+              >
+                <Droplets className="w-3.5 h-3.5" />
+                Testnet Faucet
+              </a>
+            </>
+          )}
 
           {/* Disconnect option — show when connected */}
           {isConnected && (

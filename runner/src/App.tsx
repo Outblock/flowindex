@@ -1022,6 +1022,7 @@ export default function App() {
             onOpenKeyManager={() => setShowKeyManager(true)}
             autoSign={autoSign}
             onToggleAutoSign={handleToggleAutoSign}
+            network={network}
           />
 
           {/* Desktop run button */}
