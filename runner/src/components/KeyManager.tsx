@@ -232,17 +232,32 @@ export default function KeyManager({
   }, [localKeys, accountsMap, network, onRefreshAccounts]);
 
   /** After key creation, auto-create accounts on selected networks + auto-refresh after delay. */
+  /** Poll refreshAccounts until a new account appears or timeout (max ~30s). */
+  const pollForAccount = async (keyId: string, net: 'mainnet' | 'testnet', existingCount: number): Promise<KeyAccount[]> => {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      const accounts = await onRefreshAccounts(keyId, net).catch(() => [] as KeyAccount[]);
+      if (accounts.length > existingCount) return accounts;
+    }
+    return [];
+  };
+
   const autoCreateAccounts = async (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', hashAlgo: 'SHA2_256' | 'SHA3_256', networks: ('mainnet' | 'testnet')[]) => {
     if (!autoCreate || networks.length === 0) return;
+    const existingCounts: Record<string, number> = {};
+    for (const net of networks) {
+      existingCounts[net] = (accountsMap[keyId] || []).filter(a => {
+        // Count accounts on this network (rough heuristic: all existing ones)
+        return true;
+      }).length;
+    }
     await Promise.allSettled(
       networks.map(net => onCreateAccount(keyId, sigAlgo, hashAlgo, net)),
     );
-    // Wait a bit for the chain to process, then refresh
-    setTimeout(async () => {
-      await Promise.allSettled(
-        networks.map(net => onRefreshAccounts(keyId, net)),
-      );
-    }, 5000);
+    // Poll until accounts appear
+    await Promise.allSettled(
+      networks.map(net => pollForAccount(keyId, net, existingCounts[net] || 0)),
+    );
   };
 
   /** After import, auto-refresh accounts on both networks. */
@@ -1076,10 +1091,21 @@ function LocalKeyCard({
     setActionError('');
     setCreateResult(null);
     try {
+      const existingCount = accounts.length;
       const result = await onCreateAccount(localKey.id, createSigAlgo, createHashAlgo, targetNetwork);
-      setCreateResult(`Account created on ${targetNetwork} (tx: ${result.txId.slice(0, 8)}...)`);
-      // Auto-refresh accounts after a short delay
-      setTimeout(() => onRefreshAccounts(localKey.id, targetNetwork).catch(() => {}), 3000);
+      setCreateResult(`Waiting for ${targetNetwork} account (tx: ${result.txId.slice(0, 8)}...)...`);
+      // Poll until account appears
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const refreshed = await onRefreshAccounts(localKey.id, targetNetwork).catch(() => [] as KeyAccount[]);
+        if (refreshed.length > existingCount) {
+          const newAcc = refreshed[refreshed.length - 1];
+          setCreateResult(`Account created: ${newAcc.flowAddress}`);
+          setShowCreateAccount(false);
+          return;
+        }
+      }
+      setCreateResult('Account created but not indexed yet. Try refreshing later.');
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
