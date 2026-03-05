@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Wallet, Key, Zap, Droplets, X, ExternalLink, Shield, MonitorSmartphone } from 'lucide-react';
+import { Wallet, Key, Zap, Droplets, X, ExternalLink, Plus, Download } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import { fcl } from '../flow/fclConfig';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
@@ -15,6 +15,20 @@ interface ConnectModalProps {
   onToggleAutoSign: (value: boolean) => void;
   network: 'mainnet' | 'testnet';
   onOpenKeyManager?: () => void;
+}
+
+/** Flow logo SVG */
+function FlowLogo({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="50" fill="#00EF8B" />
+      <path d="M58.75 44.375H69.375V55H58.75V44.375Z" fill="white" />
+      <path d="M48.125 55H58.75V59.6875C58.75 62.6172 56.3672 65 53.4375 65C50.5078 65 48.125 62.6172 48.125 59.6875V55Z" fill="white" />
+      <path d="M48.125 44.375H58.75V55H48.125V44.375Z" fill="white" fillOpacity="0.72" />
+      <path d="M37.5 49.6875C37.5 46.7578 39.8828 44.375 42.8125 44.375H48.125V55H37.5V49.6875Z" fill="white" />
+      <path d="M58.75 33.75H69.375V44.375H58.75V33.75Z" fill="white" fillOpacity="0.72" />
+    </svg>
+  );
 }
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
@@ -52,7 +66,7 @@ function useFlowBalance(address: string | null) {
   return balance;
 }
 
-type HoveredEntry = { key: LocalKey; account: KeyAccount } | 'fcl' | null;
+type HoveredEntry = { key: LocalKey; account: KeyAccount } | 'local-wallet' | 'fcl' | null;
 
 export default function ConnectModal({
   open, onClose, onSelect, localKeys, accountsMap,
@@ -69,8 +83,11 @@ export default function ConnectModal({
     }
   }
 
+  const hasLocalKeys = localEntries.length > 0;
+
   // Get address for balance lookup
-  const hoveredAddress = hovered && hovered !== 'fcl' ? hovered.account.flowAddress : null;
+  const hoveredAddress = hovered && hovered !== 'fcl' && hovered !== 'local-wallet'
+    ? hovered.account.flowAddress : null;
   const balance = useFlowBalance(hoveredAddress);
 
   // Close on Escape
@@ -117,15 +134,16 @@ export default function ConnectModal({
             <p className="text-[10px] text-zinc-500 mt-0.5">Choose a wallet to sign transactions</p>
           </div>
 
-          {/* Local Keys group */}
-          {localEntries.length > 0 && (
-            <div className="px-2 pb-1">
-              <div className="px-2 py-1.5 text-[10px] text-zinc-500 uppercase tracking-wider font-medium">
-                Local Keys
-              </div>
-              {localEntries.map((entry) => {
+          {/* Local Wallet group */}
+          <div className="px-2 pb-1">
+            <div className="px-2 py-1.5 text-[10px] text-zinc-500 uppercase tracking-wider font-medium">
+              Local Wallet
+            </div>
+            {hasLocalKeys ? (
+              // Show existing local key accounts
+              localEntries.map((entry) => {
                 const colors = colorsFromAddress(entry.account.flowAddress);
-                const isHovered = hovered && hovered !== 'fcl' &&
+                const isHovered = hovered && hovered !== 'fcl' && hovered !== 'local-wallet' &&
                   hovered.key.id === entry.key.id &&
                   hovered.account.flowAddress === entry.account.flowAddress &&
                   hovered.account.keyIndex === entry.account.keyIndex;
@@ -147,9 +165,23 @@ export default function ConnectModal({
                     </div>
                   </button>
                 );
-              })}
-            </div>
-          )}
+              })
+            ) : (
+              // No local keys — show a single "Local Wallet" item
+              <button
+                onClick={() => setHovered('local-wallet')}
+                onMouseEnter={() => setHovered('local-wallet')}
+                className={`w-full flex items-center gap-2 px-2 py-2 text-xs rounded-lg transition-colors ${
+                  hovered === 'local-wallet' ? 'bg-zinc-700/80 text-emerald-400' : 'text-zinc-300 hover:bg-zinc-800'
+                }`}
+              >
+                <div className="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                  <Key className="w-3 h-3 text-emerald-400" />
+                </div>
+                <span>Local Wallet</span>
+              </button>
+            )}
+          </div>
 
           {/* FCL Wallet group */}
           <div className="px-2 pb-1">
@@ -163,10 +195,10 @@ export default function ConnectModal({
                 hovered === 'fcl' ? 'bg-zinc-700/80 text-emerald-400' : 'text-zinc-300 hover:bg-zinc-800'
               }`}
             >
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center flex-shrink-0">
-                <Wallet className="w-3 h-3 text-white" />
+              <div className="w-5 h-5 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
+                <FlowLogo size={20} />
               </div>
-              <span>FCL Wallet</span>
+              <span>Flow Wallet</span>
             </button>
           </div>
 
@@ -223,8 +255,8 @@ export default function ConnectModal({
         </div>
 
         {/* ── Right Panel ── */}
-        <div className="flex-1 bg-zinc-850 bg-[#1a1a1e] flex flex-col items-center justify-center p-6 min-h-[360px]">
-          {hovered && hovered !== 'fcl' ? (
+        <div className="flex-1 bg-[#1a1a1e] flex flex-col items-center justify-center p-6 min-h-[360px]">
+          {hovered && hovered !== 'fcl' && hovered !== 'local-wallet' ? (
             // Show selected local key details
             <div className="flex flex-col items-center gap-4 animate-in fade-in duration-150">
               <Avatar
@@ -235,7 +267,7 @@ export default function ConnectModal({
               />
               <div className="text-center">
                 <div className="text-sm font-medium text-zinc-200">
-                  {hovered.key.label || 'Local Key'}
+                  {hovered.key.label || 'Local Wallet'}
                 </div>
                 <div className="text-xs text-zinc-500 mt-1 font-mono">
                   0x{hovered.account.flowAddress}
@@ -260,21 +292,50 @@ export default function ConnectModal({
                 Connect
               </button>
             </div>
-          ) : hovered === 'fcl' ? (
-            // Show FCL wallet info
-            <div className="flex flex-col items-center gap-4 animate-in fade-in duration-150">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center">
-                <Wallet className="w-8 h-8 text-white" />
+          ) : hovered === 'local-wallet' ? (
+            // No local keys — show Create / Import options
+            <div className="flex flex-col items-center gap-5 max-w-[260px] animate-in fade-in duration-150">
+              <div className="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <Key className="w-7 h-7 text-emerald-400" />
               </div>
               <div className="text-center">
-                <div className="text-sm font-medium text-zinc-200">FCL Wallet</div>
-                <div className="text-xs text-zinc-500 mt-1 max-w-[220px]">
-                  Connect an external wallet like Lilico, Flow Wallet, or any FCL-compatible wallet.
+                <div className="text-sm font-medium text-zinc-200">Local Wallet</div>
+                <div className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
+                  Browser-side keys. Auto-sign. Great for playing.
+                </div>
+              </div>
+              <div className="w-full space-y-2">
+                <button
+                  onClick={() => { if (onOpenKeyManager) { onOpenKeyManager(); onClose(); } }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Create New Wallet
+                </button>
+                <button
+                  onClick={() => { if (onOpenKeyManager) { onOpenKeyManager(); onClose(); } }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-lg border border-zinc-700 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Import Existing Key
+                </button>
+              </div>
+            </div>
+          ) : hovered === 'fcl' ? (
+            // Show FCL / Flow Wallet info
+            <div className="flex flex-col items-center gap-4 animate-in fade-in duration-150">
+              <div className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center">
+                <FlowLogo size={64} />
+              </div>
+              <div className="text-center">
+                <div className="text-sm font-medium text-zinc-200">Flow Wallet</div>
+                <div className="text-xs text-zinc-500 mt-1 max-w-[220px] leading-relaxed">
+                  Connect an external wallet like Flow Wallet, Lilico, or any FCL-compatible wallet.
                 </div>
               </div>
               <button
                 onClick={handleFclConnect}
-                className="mt-2 px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-colors"
+                className="mt-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors"
               >
                 Connect Wallet
               </button>
@@ -293,20 +354,20 @@ export default function ConnectModal({
               </div>
               <div className="w-full space-y-3 text-left">
                 <div className="flex items-start gap-2.5">
-                  <Shield className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                  <Key className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <div className="text-xs text-zinc-300 font-medium">Local Keys</div>
+                    <div className="text-xs text-zinc-300 font-medium">Local Wallet</div>
                     <div className="text-[10px] text-zinc-500 leading-relaxed">
-                      Browser-side keys. No extension needed. Great for testnet.
+                      Browser-side keys. Auto-sign. Great for playing.
                     </div>
                   </div>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <MonitorSmartphone className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+                  <div className="w-4 h-4 mt-0.5 flex-shrink-0"><FlowLogo size={16} /></div>
                   <div>
-                    <div className="text-xs text-zinc-300 font-medium">FCL Wallet</div>
+                    <div className="text-xs text-zinc-300 font-medium">Flow Wallet</div>
                     <div className="text-[10px] text-zinc-500 leading-relaxed">
-                      External wallet like Lilico or Flow Wallet for mainnet use.
+                      External wallet like Lilico or Flow Wallet.
                     </div>
                   </div>
                 </div>

@@ -242,22 +242,19 @@ export default function KeyManager({
     return [];
   };
 
-  const autoCreateAccounts = async (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', hashAlgo: 'SHA2_256' | 'SHA3_256', networks: ('mainnet' | 'testnet')[]) => {
-    if (!autoCreate || networks.length === 0) return;
-    const existingCounts: Record<string, number> = {};
-    for (const net of networks) {
-      existingCounts[net] = (accountsMap[keyId] || []).filter(a => {
-        // Count accounts on this network (rough heuristic: all existing ones)
-        return true;
-      }).length;
+  const autoCreateAccounts = async (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', hashAlgo: 'SHA2_256' | 'SHA3_256', network: 'mainnet' | 'testnet'): Promise<KeyAccount | null> => {
+    const existingCount = (accountsMap[keyId] || []).length;
+
+    // Actually call the account creation API — let errors propagate
+    await onCreateAccount(keyId, sigAlgo, hashAlgo, network);
+
+    // Poll until the new account appears
+    const accounts = await pollForAccount(keyId, network, existingCount);
+    if (accounts.length > existingCount) {
+      // Return the newly created account
+      return accounts[accounts.length - 1];
     }
-    await Promise.allSettled(
-      networks.map(net => onCreateAccount(keyId, sigAlgo, hashAlgo, net)),
-    );
-    // Poll until accounts appear
-    await Promise.allSettled(
-      networks.map(net => pollForAccount(keyId, net, existingCounts[net] || 0)),
-    );
+    return null;
   };
 
   /** After import, auto-refresh accounts on both networks. */
@@ -446,6 +443,12 @@ export default function KeyManager({
                 onAutoCreate={autoCreateAccounts}
                 autoCreate={autoCreate}
                 onToggleAutoCreate={toggleAutoCreate}
+                localKeys={localKeys}
+                onSelectAccount={(key, account) => {
+                  if (onSelectAccount) onSelectAccount(key, account);
+                  setMode('idle');
+                  setTab('accounts');
+                }}
               />
             )}
 
@@ -520,12 +523,16 @@ function GenerateForm({
   onAutoCreate,
   autoCreate,
   onToggleAutoCreate,
+  localKeys,
+  onSelectAccount,
 }: {
   wasmReady: boolean;
   onGenerateKey: KeyManagerProps['onGenerateKey'];
-  onAutoCreate: (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', hashAlgo: 'SHA2_256' | 'SHA3_256', networks: ('mainnet' | 'testnet')[]) => Promise<void>;
+  onAutoCreate: (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', hashAlgo: 'SHA2_256' | 'SHA3_256', network: 'mainnet' | 'testnet') => Promise<KeyAccount | null>;
   autoCreate: boolean;
   onToggleAutoCreate: () => void;
+  localKeys: LocalKey[];
+  onSelectAccount?: (key: LocalKey, account: KeyAccount) => void;
 }) {
   const [label, setLabel] = useState('');
   const [wordCount, setWordCount] = useState<12 | 24>(12);
@@ -556,17 +563,35 @@ function GenerateForm({
       setLabel('');
       setPassword('');
       if (autoCreate) {
-        if (createMainnet) {
-          setAutoStatusMainnet('creating');
-          onAutoCreate(result.key.id, sigAlgo, hashAlgo, ['mainnet'])
-            .then(() => setAutoStatusMainnet('done'))
-            .catch(() => setAutoStatusMainnet('error'));
-        }
-        if (createTestnet) {
-          setAutoStatusTestnet('creating');
-          onAutoCreate(result.key.id, sigAlgo, hashAlgo, ['testnet'])
-            .then(() => setAutoStatusTestnet('done'))
-            .catch(() => setAutoStatusTestnet('error'));
+        // Track the first successfully created account to auto-select
+        let selectedAccount: KeyAccount | null = null;
+
+        const createOnNetwork = async (net: 'mainnet' | 'testnet', setStatus: (s: 'idle' | 'creating' | 'done' | 'error') => void) => {
+          setStatus('creating');
+          try {
+            const account = await onAutoCreate(result.key.id, sigAlgo, hashAlgo, net);
+            setStatus('done');
+            return account;
+          } catch {
+            setStatus('error');
+            return null;
+          }
+        };
+
+        // Create accounts in parallel
+        const promises: Promise<KeyAccount | null>[] = [];
+        if (createTestnet) promises.push(createOnNetwork('testnet', setAutoStatusTestnet));
+        if (createMainnet) promises.push(createOnNetwork('mainnet', setAutoStatusMainnet));
+
+        const results = await Promise.all(promises);
+        selectedAccount = results.find(a => a !== null) ?? null;
+
+        // Auto-select the first created account
+        if (selectedAccount && onSelectAccount) {
+          const key = localKeys.find(k => k.id === result.key.id);
+          if (key) {
+            onSelectAccount(key, selectedAccount);
+          }
         }
       }
     } catch (err: unknown) {

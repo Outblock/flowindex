@@ -184,10 +184,10 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
             </>
           )}
 
-          {/* FCL Wallet group */}
+          {/* External Wallet group */}
           <>
             <div className="px-3 py-1 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-700">
-              FCL Wallet
+              External Wallet
             </div>
             <button
               onClick={() => {
@@ -200,7 +200,7 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
               }`}
             >
               <Wallet className="w-3.5 h-3.5" />
-              Connect Wallet
+              Flow Wallet
             </button>
           </>
 
