@@ -326,6 +326,65 @@ export type MessageResponseProps = HTMLAttributes<HTMLDivElement> & {
   children: string;
 };
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Custom component overrides for AnimatedMarkdown — matches frontend AIChatWidget styling.
+// flowtoken passes { animateText, node, children, ...props } to each custom component.
+const mdComponents: Record<string, any> = {
+  h1: ({ animateText, children }: any) => <h1 className="text-base font-bold text-white mt-3 mb-1">{animateText(children)}</h1>,
+  h2: ({ animateText, children }: any) => <h2 className="text-sm font-bold text-white mt-3 mb-1">{animateText(children)}</h2>,
+  h3: ({ animateText, children }: any) => <h3 className="text-[13px] font-bold text-white mt-2 mb-1">{animateText(children)}</h3>,
+  h4: ({ animateText, children }: any) => <h4 className="text-[13px] font-semibold text-zinc-100 mt-2 mb-0.5">{animateText(children)}</h4>,
+  p: ({ animateText, children }: any) => <p className="mb-2 last:mb-0">{animateText(children)}</p>,
+  strong: ({ animateText, children }: any) => <strong className="font-bold text-white">{animateText(children)}</strong>,
+  em: ({ animateText, children }: any) => <em className="italic">{animateText(children)}</em>,
+  a: ({ animateText, children, href }: any) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--flow-green)] hover:underline">{animateText(children)}</a>
+  ),
+  ul: ({ children }: any) => <ul className="ml-3 mb-2 space-y-0.5">{children}</ul>,
+  ol: ({ children }: any) => <ol className="ml-3 mb-2 space-y-0.5 list-decimal list-inside">{children}</ol>,
+  li: ({ animateText, children }: any) => (
+    <li className="flex gap-1.5">
+      <span className="text-[var(--flow-green)] shrink-0 mt-[1px]">-</span>
+      <span className="flex-1">{animateText(children)}</span>
+    </li>
+  ),
+  blockquote: ({ children }: any) => (
+    <blockquote className="border-l-2 border-[var(--flow-green)]/40 pl-3 my-2 text-zinc-400 italic">{children}</blockquote>
+  ),
+  hr: () => <hr className="my-3 border-white/10" />,
+  table: ({ children }: any) => (
+    <div className="overflow-x-auto my-2 rounded-sm border border-white/10">
+      <table className="w-full text-left border-collapse text-[12px]">{children}</table>
+    </div>
+  ),
+  thead: ({ children }: any) => <thead className="bg-white/[0.03]">{children}</thead>,
+  th: ({ animateText, children }: any) => (
+    <th className="px-3 py-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-white/10 whitespace-nowrap">{animateText(children)}</th>
+  ),
+  td: ({ animateText, children }: any) => (
+    <td className="px-3 py-1.5 text-zinc-400 border-b border-white/5 font-mono">{animateText(children)}</td>
+  ),
+  code: ({ className, children }: any) => {
+    const match = /language-(\w+)/.exec(className || "");
+    const lang = match ? match[1] : "";
+    const codeString = String(children).replace(/\n$/, "");
+    if (lang || codeString.includes("\n")) {
+      return (
+        <pre className="bg-black/40 border border-[var(--border-subtle)] rounded-lg p-3 overflow-x-auto my-2">
+          <code className="text-[12px] font-mono">{codeString}</code>
+        </pre>
+      );
+    }
+    return (
+      <code className="text-[11px] bg-white/10 px-1 py-0.5 rounded font-mono text-purple-400">
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }: any) => <>{children}</>,
+};
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export const MessageResponse = memo(
   ({ className, children, ...props }: MessageResponseProps) => (
     <div
@@ -341,6 +400,7 @@ export const MessageResponse = memo(
         animationDuration="0.6s"
         animationTimingFunction="ease-out"
         sep="diff"
+        customComponents={mdComponents}
       />
     </div>
   ),
