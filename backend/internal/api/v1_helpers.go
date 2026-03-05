@@ -783,6 +783,9 @@ func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[s
 			if m.Logo != "" {
 				item["logo"] = m.Logo
 			}
+			if m.BannerImage != "" {
+				item["banner_image"] = m.BannerImage
+			}
 		}
 		nft = append(nft, item)
 	}

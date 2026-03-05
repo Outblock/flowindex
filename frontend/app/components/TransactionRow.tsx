@@ -193,7 +193,18 @@ export function extractLogoUrl(logo: any): string | null {
     if (!logo) return null;
     if (typeof logo === 'string') {
         if (logo.startsWith('http')) return logo;
-        return null;
+        // Try parsing JSON strings (e.g. JSONB::text from Postgres like '{"url":"https://..."}')
+        try {
+            const parsed = JSON.parse(logo);
+            if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
+            if (parsed && typeof parsed === 'object') {
+                logo = parsed; // fall through to object extraction below
+            } else {
+                return null;
+            }
+        } catch {
+            return null;
+        }
     }
     try {
         const json = typeof logo === 'string' ? JSON.parse(logo) : logo;
@@ -1125,7 +1136,9 @@ function findNftBannerImage(tx: any, tokenMeta?: Map<string, TokenMetaEntry>): s
     const imports: string[] = tx.contract_imports || [];
     for (const imp of imports) {
         const meta = tokenMeta.get(imp);
-        if (meta?.type === 'nft' && meta.banner_image) return meta.banner_image;
+        if (meta?.type === 'nft' && meta.banner_image) {
+            return extractLogoUrl(meta.banner_image);
+        }
     }
     return null;
 }

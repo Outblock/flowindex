@@ -587,6 +587,7 @@ type TokenMetadataInfo struct {
 	Logo         string `json:"logo,omitempty"`
 	Description  string `json:"description,omitempty"`
 	MarketSymbol string `json:"market_symbol,omitempty"`
+	BannerImage  string `json:"banner_image,omitempty"`
 }
 
 // GetFTTokenMetadataByIdentifiers returns display metadata for a set of token identifiers (e.g. "A.1654653399040a61.FlowToken").
@@ -650,17 +651,17 @@ func (r *Repository) GetNFTCollectionMetadataByIdentifiers(ctx context.Context, 
 	}
 
 	for k, origIDs := range seen {
-		var name, symbol, description, squareImage string
+		var name, symbol, description, squareImage, bannerImage string
 		err := r.db.QueryRow(ctx, `
 			SELECT COALESCE(name,''), COALESCE(symbol,''), COALESCE(description,''),
-			       COALESCE(square_image::text, '')
+			       COALESCE(square_image::text, ''), COALESCE(banner_image::text, '')
 			FROM app.nft_collections
 			WHERE contract_address = $1 AND contract_name = $2`, hexToBytes(k.addr), k.name).
-			Scan(&name, &symbol, &description, &squareImage)
+			Scan(&name, &symbol, &description, &squareImage, &bannerImage)
 		if err != nil {
 			continue
 		}
-		info := TokenMetadataInfo{Name: name, Symbol: symbol, Description: description, Logo: squareImage}
+		info := TokenMetadataInfo{Name: name, Symbol: symbol, Description: description, Logo: squareImage, BannerImage: bannerImage}
 		for _, origID := range origIDs {
 			out[origID] = info
 		}
