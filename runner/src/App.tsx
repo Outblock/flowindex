@@ -35,6 +35,9 @@ import { useGitHub } from './github/useGitHub';
 import GitHubConnect from './components/GitHubConnect';
 import GitCommitPanel from './components/GitCommitPanel';
 import DeployStatus from './components/DeployStatus';
+import DeployPanel from './components/DeployPanel';
+import DeploySettings from './components/DeploySettings';
+import { useDeployEvents } from './github/useDeployEvents';
 import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe, Sparkles, Github } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
@@ -478,11 +481,16 @@ export default function App() {
     return saved ? Number(saved) : undefined;
   });
   const [showGitHubConnect, setShowGitHubConnect] = useState(false);
+  const [showDeploySettings, setShowDeploySettings] = useState(false);
   const [gitPushing, setGitPushing] = useState(false);
   const [lastPulledFiles, setLastPulledFiles] = useState<Map<string, string>>(new Map());
   const [hasPulled, setHasPulled] = useState(false);
 
   const github = useGitHub(cloudMeta.id);
+  useDeployEvents(cloudMeta.id, () => {
+    github.fetchDeployments();
+    github.fetchRuns();
+  });
 
   const [monacoInstance, setMonacoInstance] = useState<typeof MonacoNS | null>(null);
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
@@ -1500,19 +1508,15 @@ export default function App() {
               {user && cloudMeta.id && (
                 <div className="shrink-0 border-t border-zinc-700">
                   {github.connection ? (
-                    <>
-                      <div className="flex items-center gap-1.5 px-3 py-2">
-                        <Github className="w-3 h-3 text-zinc-500" />
-                        <span className="text-[10px] text-zinc-400 truncate">{github.connection.repo_owner}/{github.connection.repo_name}</span>
-                      </div>
-                      <DeployStatus
-                        runs={github.latestRuns}
-                        repoOwner={github.connection.repo_owner}
-                        repoName={github.connection.repo_name}
-                        workflowConfigured={github.connection.workflow_configured}
-                        onSetupWorkflow={() => github.setupWorkflow(network)}
-                      />
-                    </>
+                    <DeployPanel
+                      connection={github.connection}
+                      environments={github.environments}
+                      deployments={github.deployments}
+                      onPromote={github.promote}
+                      onDispatch={github.dispatchWorkflow}
+                      onRefresh={() => { github.fetchDeployments(); github.fetchRuns(); }}
+                      onOpenSettings={() => setShowDeploySettings(true)}
+                    />
                   ) : (
                     <button
                       onClick={() => setShowGitHubConnect(true)}
@@ -1846,6 +1850,25 @@ export default function App() {
           installationId={ghInstallationId ?? github.connection?.installation_id}
           onConnect={handleGitHubConnect}
           onClose={() => { setShowGitHubConnect(false); }}
+        />
+      )}
+
+      {/* Deploy Settings Modal */}
+      {showDeploySettings && github.connection && (
+        <DeploySettings
+          connection={github.connection}
+          environments={github.environments}
+          onUpsertEnv={github.upsertEnvironment}
+          onDeleteEnv={github.deleteEnvironment}
+          onConfigureSecrets={github.configureSecrets}
+          onSetupWorkflow={async (net) => {
+            await github.setupWorkflow(net);
+          }}
+          onDisconnect={async () => {
+            await github.disconnect();
+            setShowDeploySettings(false);
+          }}
+          onClose={() => setShowDeploySettings(false)}
         />
       )}
 
