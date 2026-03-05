@@ -17,11 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AnimatedMarkdown } from "@outblock/flowtoken";
 import "@outblock/flowtoken/styles.css";
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Check, ChevronLeftIcon, ChevronRightIcon, Copy } from "lucide-react";
 import {
   createContext,
   memo,
@@ -31,7 +27,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -326,15 +323,103 @@ export type MessageResponseProps = HTMLAttributes<HTMLDivElement> & {
   children: string;
 };
 
+/* ── Auto-link hex addresses/hashes ── */
+
+const HEX_RE = /\b(0x[0-9a-fA-F]{16}|0x[0-9a-fA-F]{40}|0x[0-9a-fA-F]{64}|[0-9a-fA-F]{64})\b/g;
+
+function classifyHex(val: string): { url: string | null } {
+  const hex = val.toLowerCase();
+  const has0x = hex.startsWith("0x");
+  const bare = has0x ? hex.slice(2) : hex;
+  if (bare.length === 16 && /^[0-9a-f]+$/.test(bare)) {
+    return { url: `https://flowindex.io/accounts/${has0x ? val : `0x${val}`}` };
+  }
+  if (bare.length === 40 && /^[0-9a-f]+$/.test(bare)) {
+    return { url: `https://evm.flowindex.io/address/${has0x ? val : `0x${val}`}` };
+  }
+  if (bare.length === 64 && /^[0-9a-f]+$/.test(bare)) {
+    return has0x
+      ? { url: `https://evm.flowindex.io/tx/${val}` }
+      : { url: `https://flowindex.io/txs/${val}` };
+  }
+  return { url: null };
+}
+
+function LinkedHex({ val }: { val: string }) {
+  const { url } = classifyHex(val);
+  if (!url) return <span className="text-[var(--flow-green)]/70">{val}</span>;
+  const short = val.length > 20 ? `${val.slice(0, 10)}...${val.slice(-8)}` : val;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="text-[var(--flow-green)]/90 hover:text-[var(--flow-green)] hover:underline" title={val}>
+      {short}
+    </a>
+  );
+}
+
+function AutoLinkText({ children }: { children: React.ReactNode }): React.ReactNode {
+  return processChildren(children);
+}
+
+function processChildren(children: React.ReactNode): React.ReactNode {
+  if (typeof children === "string") return linkifyHex(children);
+  if (Array.isArray(children)) return children.map((c, i) => <span key={i}>{processChildren(c)}</span>);
+  return children;
+}
+
+function linkifyHex(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  HEX_RE.lastIndex = 0;
+  while ((m = HEX_RE.exec(text)) !== null) {
+    if (m.index > lastIdx) parts.push(text.slice(lastIdx, m.index));
+    parts.push(<LinkedHex key={m.index} val={m[1]} />);
+    lastIdx = m.index + m[0].length;
+  }
+  if (lastIdx < text.length) parts.push(text.slice(lastIdx));
+  return parts.length === 1 ? parts[0] : <>{parts}</>;
+}
+
+/* ── Code Block with syntax highlighting ── */
+
+function MarkdownCodeBlock({ code: codeStr, language }: { code: string; language: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codeStr);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  const langMap: Record<string, string> = { cadence: "swift", sh: "bash", zsh: "bash", shell: "bash", ts: "typescript", js: "javascript", py: "python", yml: "yaml", Dockerfile: "docker" };
+  const prismLang = langMap[language] || language || "text";
+
+  return (
+    <div className="relative rounded-sm border border-white/10 overflow-hidden my-2">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03] border-b border-white/10">
+        <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold">{language || "code"}</span>
+        <button onClick={handleCopy} className="text-zinc-400 hover:text-white transition-colors">
+          {copied ? <Check size={12} className="text-[var(--flow-green)]" /> : <Copy size={12} />}
+        </button>
+      </div>
+      <SyntaxHighlighter
+        language={prismLang}
+        style={vscDarkPlus}
+        customStyle={{ margin: 0, padding: "12px", fontSize: "12px", lineHeight: "1.6", background: "#18181b", borderRadius: 0 }}
+        wrapLongLines
+      >
+        {codeStr}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// Custom component overrides for AnimatedMarkdown — matches frontend AIChatWidget styling.
-// flowtoken passes { animateText, node, children, ...props } to each custom component.
+// Custom components for AnimatedMarkdown — matches frontend AIChatWidget exactly.
 const mdComponents: Record<string, any> = {
   h1: ({ animateText, children }: any) => <h1 className="text-base font-bold text-white mt-3 mb-1">{animateText(children)}</h1>,
   h2: ({ animateText, children }: any) => <h2 className="text-sm font-bold text-white mt-3 mb-1">{animateText(children)}</h2>,
   h3: ({ animateText, children }: any) => <h3 className="text-[13px] font-bold text-white mt-2 mb-1">{animateText(children)}</h3>,
   h4: ({ animateText, children }: any) => <h4 className="text-[13px] font-semibold text-zinc-100 mt-2 mb-0.5">{animateText(children)}</h4>,
-  p: ({ animateText, children }: any) => <p className="mb-2 last:mb-0">{animateText(children)}</p>,
+  p: ({ animateText, children }: any) => <p className="mb-2 last:mb-0"><AutoLinkText>{animateText(children)}</AutoLinkText></p>,
   strong: ({ animateText, children }: any) => <strong className="font-bold text-white">{animateText(children)}</strong>,
   em: ({ animateText, children }: any) => <em className="italic">{animateText(children)}</em>,
   a: ({ animateText, children, href }: any) => (
@@ -345,7 +430,7 @@ const mdComponents: Record<string, any> = {
   li: ({ animateText, children }: any) => (
     <li className="flex gap-1.5">
       <span className="text-[var(--flow-green)] shrink-0 mt-[1px]">-</span>
-      <span className="flex-1">{animateText(children)}</span>
+      <span className="flex-1"><AutoLinkText>{animateText(children)}</AutoLinkText></span>
     </li>
   ),
   blockquote: ({ children }: any) => (
@@ -362,18 +447,14 @@ const mdComponents: Record<string, any> = {
     <th className="px-3 py-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-white/10 whitespace-nowrap">{animateText(children)}</th>
   ),
   td: ({ animateText, children }: any) => (
-    <td className="px-3 py-1.5 text-zinc-400 border-b border-white/5 font-mono">{animateText(children)}</td>
+    <td className="px-3 py-1.5 text-zinc-400 border-b border-white/5 font-mono"><AutoLinkText>{animateText(children)}</AutoLinkText></td>
   ),
   code: ({ className, children }: any) => {
     const match = /language-(\w+)/.exec(className || "");
     const lang = match ? match[1] : "";
     const codeString = String(children).replace(/\n$/, "");
     if (lang || codeString.includes("\n")) {
-      return (
-        <pre className="bg-black/40 border border-[var(--border-subtle)] rounded-lg p-3 overflow-x-auto my-2">
-          <code className="text-[12px] font-mono">{codeString}</code>
-        </pre>
-      );
+      return <MarkdownCodeBlock code={codeString} language={lang || "text"} />;
     }
     return (
       <code className="text-[11px] bg-white/10 px-1 py-0.5 rounded font-mono text-purple-400">

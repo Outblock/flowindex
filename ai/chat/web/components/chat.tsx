@@ -23,8 +23,14 @@ import {
   Bot,
   Download,
   ChevronRight,
+  Copy,
+  Check,
+  Loader2,
+  X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 import {
   Conversation,
@@ -37,20 +43,6 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
-import {
-  Tool,
-  ToolHeader,
-  ToolContent,
-  ToolOutput,
-} from "@/components/ai-elements/tool";
-import {
-  CodeBlock,
-  CodeBlockHeader,
-  CodeBlockTitle,
-  CodeBlockFilename,
-  CodeBlockActions,
-  CodeBlockCopyButton,
-} from "@/components/ai-elements/code-block";
 import {
   PromptInput,
   PromptInputTextarea,
@@ -68,7 +60,6 @@ import {
   SourcesContent,
   Source,
 } from "@/components/ai-elements/sources";
-import { useArtifactPanel } from "@/components/artifact-panel";
 
 import { SqlResultTable } from "./sql-result-table";
 import { ChartArtifact } from "./chart-artifact";
@@ -87,8 +78,58 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-const SQL_INLINE_MAX_ROWS = 5;
-const CADENCE_INLINE_MAX_LINES = 10;
+/* ── Collapsible Code Block for tool outputs (matches frontend widget) ── */
+
+function CollapsibleCode({ code, language, label, icon }: { code: string; language: string; label: string; icon: React.ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  const langMap: Record<string, string> = { cadence: "swift", sh: "bash", zsh: "bash", shell: "bash", ts: "typescript", js: "javascript", py: "python" };
+  const prismLang = langMap[language] || language || "text";
+
+  return (
+    <div className="rounded-sm border border-white/10 overflow-hidden my-1.5">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-white/[0.02] hover:bg-white/[0.04] transition-colors text-left"
+      >
+        <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.15 }}>
+          <ChevronRight size={12} className="text-zinc-400" />
+        </motion.div>
+        {icon}
+        <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold flex-1">{label}</span>
+        <button onClick={handleCopy} className="text-zinc-400 hover:text-white transition-colors p-0.5">
+          {copied ? <Check size={10} className="text-[var(--flow-green)]" /> : <Copy size={10} />}
+        </button>
+      </button>
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <SyntaxHighlighter
+              language={prismLang}
+              style={vscDarkPlus}
+              customStyle={{ margin: 0, padding: "12px", fontSize: "12px", lineHeight: "1.6", background: "#18181b", borderRadius: 0 }}
+              wrapLongLines
+            >
+              {code}
+            </SyntaxHighlighter>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 const SUGGESTIONS = [
   {
@@ -639,30 +680,13 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
 function ChartToolPart({ part }: { part: any }) {
   const isDone =
     part.state === "output-available" || part.state === "result";
-  const { openArtifact } = useArtifactPanel();
-  const hasAutoOpened = useRef(false);
-
-  useEffect(() => {
-    if (isDone && part.output && !hasAutoOpened.current) {
-      hasAutoOpened.current = true;
-      openArtifact({
-        type: "chart",
-        title: part.output.title || "Chart",
-        data: part.output,
-      });
-    }
-  }, [isDone, openArtifact, part.output]);
 
   if (!isDone) {
     return (
-      <Tool>
-        <ToolHeader
-          title="Creating Chart"
-          type={part.type}
-          state={part.state}
-          toolName="createChart"
-        />
-      </Tool>
+      <div className="flex items-center gap-2 py-1.5 px-2.5 my-1 text-[11px] text-zinc-500 bg-white/[0.03] border border-white/5 rounded-sm">
+        <Loader2 size={10} className="animate-spin" />
+        <span>Creating chart...</span>
+      </div>
     );
   }
 
@@ -670,162 +694,86 @@ function ChartToolPart({ part }: { part: any }) {
 }
 
 function SqlToolPart({ part }: { part: any }) {
-  const { openArtifact } = useArtifactPanel();
-
   const toolName = part.toolName ?? part.type?.split("-").slice(1).join("-") ?? "";
   if (toolName !== "runSQL" && toolName !== "run_sql" && toolName !== "run_flowindex_sql" && toolName !== "run_evm_sql") return null;
 
-  const isDone =
-    part.state === "output-available" || part.state === "result";
+  const isDone = part.state === "output-available" || part.state === "result";
   const isError = part.state === "output-error";
   const result = isDone ? part.output : null;
   const hasError = isError || result?.error;
   const hasData = result?.rows && result?.columns;
-
-  const sql: string | undefined =
-    (part.input?.sql as string) ?? (part.args?.sql as string);
+  const sql: string | undefined = (part.input?.sql as string) ?? (part.args?.sql as string);
+  const isEvm = toolName === "run_evm_sql";
 
   return (
-    <div className="space-y-3">
-      <Tool>
-        <ToolHeader
-          title="SQL Query"
-          type={part.type}
-          state={part.state}
-          toolName={toolName}
+    <div className="space-y-1">
+      {sql && (
+        <CollapsibleCode
+          code={sql}
+          language="sql"
+          label={isEvm ? "EVM SQL Query" : "SQL Query"}
+          icon={
+            <>
+              <Database size={11} className="text-[var(--flow-green)]" />
+              {!isDone && !isError && <Loader2 size={10} className="animate-spin text-zinc-400" />}
+            </>
+          }
         />
-        <ToolContent>
-          {sql && (
-            <CodeBlock code={sql} language="sql">
-              <CodeBlockHeader>
-                <CodeBlockTitle>
-                  <CodeBlockFilename>query.sql</CodeBlockFilename>
-                </CodeBlockTitle>
-                <CodeBlockActions>
-                  <CodeBlockCopyButton />
-                </CodeBlockActions>
-              </CodeBlockHeader>
-            </CodeBlock>
-          )}
-          {hasError && (
-            <ToolOutput
-              output={null}
-              errorText={
-                isError
-                  ? part.errorText || "Query execution failed"
-                  : result?.error
-              }
-            />
-          )}
-        </ToolContent>
-      </Tool>
-
-      {hasData && (
-        <div className="animate-in slide-in-from-top-2">
-          {result.rows.length > SQL_INLINE_MAX_ROWS ? (
-            <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-              <div className="flex items-center justify-between px-3.5 py-2.5 bg-[var(--bg-element)]/40">
-                <span className="text-[11px] text-[var(--text-tertiary)] font-medium tabular-nums">
-                  {result.rows.length} rows &middot; {result.columns.length} columns
-                </span>
-                <button
-                  onClick={() =>
-                    openArtifact({
-                      type: "sql",
-                      title: "SQL Query Result",
-                      data: result,
-                    })
-                  }
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-[var(--flow-green)] hover:text-[var(--flow-green-dim)] bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-md hover:border-[var(--flow-green)]/30 transition-all duration-150 cursor-pointer"
-                >
-                  <Maximize2 size={12} />
-                  Open in panel
-                </button>
-              </div>
-              <SqlResultTable result={{ columns: result.columns, rows: result.rows.slice(0, SQL_INLINE_MAX_ROWS) }} />
-            </div>
-          ) : (
-            <SqlResultTable result={result} />
-          )}
+      )}
+      {!sql && !isDone && !isError && (
+        <div className="flex items-center gap-2 py-1">
+          <Database size={12} className="text-[var(--flow-green)]" />
+          <Loader2 size={12} className="animate-spin text-zinc-400" />
         </div>
       )}
+      {hasError && (
+        <div className="px-3 py-2 text-[12px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
+          {isError ? (part.errorText || "Query failed") : result?.error}
+        </div>
+      )}
+      {hasData && <SqlResultTable result={result} />}
     </div>
   );
 }
 
 function CadenceToolPart({ part }: { part: any }) {
-  const { openArtifact } = useArtifactPanel();
-
-  const isDone =
-    part.state === "output-available" || part.state === "result";
+  const isDone = part.state === "output-available" || part.state === "result";
   const isError = part.state === "output-error";
   const result = isDone ? part.output : null;
   const hasError = isError || result?.error;
-
-  const script: string | undefined =
-    (part.input?.script as string) ?? (part.args?.script as string);
+  const script: string | undefined = (part.input?.script as string) ?? (part.args?.script as string);
 
   return (
-    <div className="space-y-3">
-      <Tool>
-        <ToolHeader
-          title="Cadence Script"
-          type={part.type}
-          state={part.state}
-          toolName="run_cadence"
+    <div className="space-y-1">
+      {script && (
+        <CollapsibleCode
+          code={script}
+          language="cadence"
+          label="Cadence Script"
+          icon={
+            <>
+              <Sparkles size={11} className="text-purple-400" />
+              {!isDone && !isError && <Loader2 size={10} className="animate-spin text-zinc-400" />}
+            </>
+          }
         />
-        <ToolContent>
-          {script && (
-            <CodeBlock code={script} language="swift">
-              <CodeBlockHeader>
-                <CodeBlockTitle>
-                  <CodeBlockFilename>script.cdc</CodeBlockFilename>
-                </CodeBlockTitle>
-                <CodeBlockActions>
-                  <CodeBlockCopyButton />
-                </CodeBlockActions>
-              </CodeBlockHeader>
-            </CodeBlock>
-          )}
-          {hasError && (
-            <ToolOutput
-              output={null}
-              errorText={
-                isError
-                  ? part.errorText || "Script execution failed"
-                  : result?.error
-              }
-            />
-          )}
-          {isDone && !hasError && result?.result && (() => {
-            const outputStr = JSON.stringify(result.result, null, 2);
-            const lineCount = outputStr.split("\n").length;
-            if (lineCount > CADENCE_INLINE_MAX_LINES) {
-              return (
-                <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg-element)]/40 rounded-md">
-                  <span className="text-[11px] text-[var(--text-tertiary)]">
-                    Output: {lineCount} lines
-                  </span>
-                  <button
-                    onClick={() =>
-                      openArtifact({
-                        type: "cadence",
-                        title: "Cadence Script Result",
-                        data: { script: script || "", result: result.result },
-                      })
-                    }
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-[var(--flow-green)] hover:text-[var(--flow-green-dim)] bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-md hover:border-[var(--flow-green)]/30 transition-all duration-150 cursor-pointer"
-                  >
-                    <Maximize2 size={12} />
-                    Open in panel
-                  </button>
-                </div>
-              );
-            }
-            return <ToolOutput output={outputStr} errorText={undefined} />;
-          })()}
-        </ToolContent>
-      </Tool>
+      )}
+      {!script && !isDone && !isError && (
+        <div className="flex items-center gap-2 py-1">
+          <Sparkles size={12} className="text-purple-400" />
+          <Loader2 size={12} className="animate-spin text-zinc-400" />
+        </div>
+      )}
+      {hasError && (
+        <div className="px-3 py-2 text-[12px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm">
+          {isError ? (part.errorText || "Script failed") : result?.error}
+        </div>
+      )}
+      {isDone && !hasError && result?.result && (
+        <div className="px-3 py-2 text-[12px] text-zinc-300 bg-zinc-900 border border-white/10 rounded-sm font-mono whitespace-pre-wrap">
+          {typeof result.result === "string" ? result.result : JSON.stringify(result.result, null, 2)}
+        </div>
+      )}
     </div>
   );
 }
