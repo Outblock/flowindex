@@ -12,6 +12,7 @@ import (
 	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/sync/singleflight"
 )
 
 // BuildCommit is set by main to the git commit hash baked in at build time.
@@ -139,6 +140,7 @@ type Server struct {
 		payload   []byte
 		expiresAt time.Time
 	}
+	statusFlight singleflight.Group
 	latestHeightCache struct {
 		mu        sync.Mutex
 		height    uint64
