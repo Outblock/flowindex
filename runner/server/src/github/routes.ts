@@ -228,67 +228,158 @@ router.post('/commit', async (req: Request, res: Response) => {
   }
 });
 
-function generateWorkflowYaml(branch: string, path: string, network: string): string {
+interface WorkflowEnvironment {
+  name: string;
+  branch: string;
+  network: string;
+}
+
+function generateWorkflowYaml(deployPath: string, environments: WorkflowEnvironment[]): string {
+  const branches = environments.map(e => e.branch);
+  const branchList = branches.map(b => `'${b}'`).join(', ');
+
+  // Build case statement to determine environment from branch
+  const caseEntries = environments.map(e => {
+    const suffix = e.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    return `            ${e.branch})
+              ENV_NAME="${e.name}"
+              NETWORK="${e.network}"
+              FLOW_PRIVATE_KEY="\$FLOW_PRIVATE_KEY_${suffix}"
+              FLOW_ADDRESS="\$FLOW_ADDRESS_${suffix}"
+              FLOW_KEY_INDEX="\$FLOW_KEY_INDEX_${suffix}"
+              ;;`;
+  }).join('\n');
+
+  // Build secrets env block — one set per environment
+  const secretsEnv = environments.map(e => {
+    const suffix = e.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    return `          FLOW_PRIVATE_KEY_${suffix}: \${{ secrets.FLOW_PRIVATE_KEY_${suffix} }}
+          FLOW_ADDRESS_${suffix}: \${{ secrets.FLOW_ADDRESS_${suffix} }}
+          FLOW_KEY_INDEX_${suffix}: \${{ secrets.FLOW_KEY_INDEX_${suffix} }}`;
+  }).join('\n');
+
   return `name: Deploy Cadence Contracts
 on:
   push:
-    branches: [${branch}]
+    branches: [${branchList}]
     paths:
-      - '${path}/**/*.cdc'
+      - '${deployPath}/**/*.cdc'
+      - 'flow.json'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Deployment action'
+        required: true
+        type: choice
+        options:
+          - deploy
+          - dry-run
+          - rollback
+        default: deploy
+      commit_sha:
+        description: 'Commit SHA (for rollback)'
+        required: false
+        type: string
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.event.inputs.commit_sha || github.sha }}
       - name: Install Flow CLI
         run: sh -ci "$(curl -fsSL https://raw.githubusercontent.com/onflow/flow-cli/master/install.sh)"
-      - name: Deploy contracts
+      - name: Determine environment
+        id: env
         env:
-          FLOW_PRIVATE_KEY: \${{ secrets.FLOW_PRIVATE_KEY }}
-          FLOW_ADDRESS: \${{ secrets.FLOW_ADDRESS }}
-          FLOW_KEY_INDEX: \${{ secrets.FLOW_KEY_INDEX }}
+${secretsEnv}
         run: |
-          for file in ${path}/**/*.cdc; do
-            if head -5 "$file" | grep -q "contract"; then
-              CONTRACT_NAME=$(grep -oP '(?:access\\(all\\)|pub)\\s+contract\\s+\\K\\w+' "$file" | head -1)
-              if [ -n "$CONTRACT_NAME" ]; then
-                echo "Deploying $CONTRACT_NAME from $file..."
-                flow accounts update-contract "$CONTRACT_NAME" "$file" \\
-                  --signer deployer \\
-                  --network ${network} \\
-                  --key "$FLOW_PRIVATE_KEY" \\
-                  --address "$FLOW_ADDRESS" \\
-                  --key-index "$FLOW_KEY_INDEX" || true
-              fi
-            fi
-          done
+          BRANCH="\${{ github.ref_name }}"
+          ACTION="\${{ github.event.inputs.action || 'deploy' }}"
+          case "$BRANCH" in
+${caseEntries}
+            *)
+              echo "Unknown branch: $BRANCH"
+              exit 1
+              ;;
+          esac
+          echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
+          echo "network=$NETWORK" >> $GITHUB_OUTPUT
+          echo "action=$ACTION" >> $GITHUB_OUTPUT
+          echo "flow_private_key=$FLOW_PRIVATE_KEY" >> $GITHUB_OUTPUT
+          echo "flow_address=$FLOW_ADDRESS" >> $GITHUB_OUTPUT
+          echo "flow_key_index=$FLOW_KEY_INDEX" >> $GITHUB_OUTPUT
+      - name: Deploy contracts
+        run: |
+          ACTION="\${{ steps.env.outputs.action }}"
+          NETWORK="\${{ steps.env.outputs.network }}"
+          if [ "$ACTION" = "dry-run" ]; then
+            echo "Dry-run deploy to $NETWORK..."
+            flow project deploy --network="$NETWORK" --update=false
+          else
+            echo "Deploying to $NETWORK..."
+            flow project deploy --network="$NETWORK" --update
+          fi
+        env:
+          FLOW_PRIVATE_KEY: \${{ steps.env.outputs.flow_private_key }}
+          FLOW_ADDRESS: \${{ steps.env.outputs.flow_address }}
+          FLOW_KEY_INDEX: \${{ steps.env.outputs.flow_key_index }}
+      - name: Notify Runner
+        if: always()
+        run: |
+          curl -s -X POST "\${{ secrets.RUNNER_WEBHOOK_URL }}" \\
+            -H "Content-Type: application/json" \\
+            -d '{
+              "status": "'\${{ job.status }}'",
+              "sha": "'\${{ github.sha }}'",
+              "branch": "'\${{ github.ref_name }}'",
+              "network": "'\${{ steps.env.outputs.network }}'",
+              "run_id": "'\${{ github.run_id }}'",
+              "action": "'\${{ steps.env.outputs.action }}'"
+            }' || true
 `;
 }
 
 // POST /workflow — Generate and push a Cadence deploy workflow
 router.post('/workflow', async (req: Request, res: Response) => {
   try {
-    const { installation_id, owner, repo, branch, path, network } = req.body as {
+    const { installation_id, owner, repo, branch, path, network, environments } = req.body as {
       installation_id: number;
       owner: string;
       repo: string;
-      branch: string;
+      branch?: string;
       path: string;
-      network: string;
+      network?: string;
+      environments?: WorkflowEnvironment[];
     };
 
-    if (!installation_id || !owner || !repo || !branch || !path || !network) {
+    if (!installation_id || !owner || !repo || !path) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
     }
 
+    // Build environments list — use provided array or fall back to single branch/network
+    const envs: WorkflowEnvironment[] = environments && environments.length > 0
+      ? environments
+      : (branch && network)
+        ? [{ name: network, branch, network }]
+        : [];
+
+    if (envs.length === 0) {
+      res.status(400).json({ error: 'Either environments array or branch+network params required' });
+      return;
+    }
+
+    // Commit to the first environment's branch (or default branch)
+    const targetBranch = envs[0].branch;
+
     const octokit = await getInstallationOctokit(installation_id);
     const workflowPath = '.github/workflows/cadence-deploy.yml';
-    const workflowContent = generateWorkflowYaml(branch, path, network);
+    const workflowContent = generateWorkflowYaml(path, envs);
 
     const { data: refData } = await octokit.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
-      owner, repo, ref: `heads/${branch}`,
+      owner, repo, ref: `heads/${targetBranch}`,
     });
     const parentSha = refData.object.sha;
 
@@ -305,19 +396,27 @@ router.post('/workflow', async (req: Request, res: Response) => {
       tree: [{ path: workflowPath, mode: '100644', type: 'blob', sha: blobData.sha }],
     });
 
+    const networkNames = envs.map(e => e.network).join(', ');
     const { data: newCommit } = await octokit.request('POST /repos/{owner}/{repo}/git/commits', {
-      owner, repo, message: `Add Cadence deploy workflow for ${network}`,
+      owner, repo, message: `Add Cadence deploy workflow for ${networkNames}`,
       tree: newTree.sha, parents: [parentSha],
     });
 
     await octokit.request('PATCH /repos/{owner}/{repo}/git/refs/{ref}', {
-      owner, repo, ref: `heads/${branch}`, sha: newCommit.sha,
+      owner, repo, ref: `heads/${targetBranch}`, sha: newCommit.sha,
     });
+
+    // Build secrets list from all environments
+    const secretsNeeded = envs.flatMap(e => {
+      const suffix = e.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+      return [`FLOW_PRIVATE_KEY_${suffix}`, `FLOW_ADDRESS_${suffix}`, `FLOW_KEY_INDEX_${suffix}`];
+    });
+    secretsNeeded.push('RUNNER_WEBHOOK_URL');
 
     res.json({
       sha: newCommit.sha,
       workflow_path: workflowPath,
-      secrets_needed: ['FLOW_PRIVATE_KEY', 'FLOW_ADDRESS', 'FLOW_KEY_INDEX'],
+      secrets_needed: secretsNeeded,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
