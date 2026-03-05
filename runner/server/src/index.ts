@@ -5,8 +5,10 @@ import { mkdir } from 'node:fs/promises';
 import { CadenceLSPClient } from './lspClient.js';
 import { DepsWorkspace, type FlowNetwork } from './depsWorkspace.js';
 import { hasAddressImports, extractAddressImports, rewriteToStringImports } from './importUtils.js';
+import { app as httpApp } from './http.js';
 
 const PORT = parseInt(process.env.LSP_PORT || '3002', 10);
+const HTTP_PORT = parseInt(process.env.HTTP_PORT || '3003', 10);
 const FLOW_COMMAND = process.env.FLOW_COMMAND || 'flow';
 
 // One LSP client + workspace per network
@@ -395,6 +397,11 @@ wss.on('listening', () => {
   console.log(`[LSP Server] WebSocket listening on :${PORT}/lsp`);
 });
 
+// Start HTTP server
+const httpServer = httpApp.listen(HTTP_PORT, () => {
+  console.log(`[HTTP Server] Listening on :${HTTP_PORT}`);
+});
+
 wss.on('connection', (socket: WebSocket) => {
   console.log('[LSP Server] Client connected');
   let state: ConnectionState | null = null;
@@ -576,6 +583,7 @@ process.on('SIGTERM', async () => {
   for (const client of clients.values()) {
     await client.shutdown();
   }
+  httpServer.close();
   wss.close();
   process.exit(0);
 });
