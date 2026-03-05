@@ -13,7 +13,7 @@
 // Types
 // ---------------------------------------------------------------------------
 
-export type CodegenLanguage = 'typescript' | 'swift' | 'go';
+export type CodegenLanguage = 'typescript' | 'swift' | 'go' | 'python' | 'kotlin';
 
 export interface CodegenResult {
   code: string;

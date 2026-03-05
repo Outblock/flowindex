@@ -23,12 +23,16 @@ const LANGUAGES: { key: CodegenLanguage; label: string; ext: string }[] = [
   { key: 'typescript', label: 'TypeScript', ext: '.ts' },
   { key: 'swift', label: 'Swift', ext: '.swift' },
   { key: 'go', label: 'Go', ext: '.go' },
+  { key: 'python', label: 'Python', ext: '.py' },
+  { key: 'kotlin', label: 'Kotlin', ext: '.kt' },
 ];
 
 const SHIKI_LANG_MAP: Record<CodegenLanguage, string> = {
   typescript: 'typescript',
   swift: 'swift',
   go: 'go',
+  python: 'python',
+  kotlin: 'kotlin',
 };
 
 // ---------------------------------------------------------------------------
