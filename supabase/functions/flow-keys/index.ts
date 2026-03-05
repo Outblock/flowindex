@@ -151,7 +151,7 @@ async function createFlowAccount(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${Deno.env.get('LILICO_API_KEY') || ''}`,
+      Authorization: Deno.env.get('LILICO_API_KEY') || '',
     },
     body: JSON.stringify({
       publicKey: publicKeyHex,
