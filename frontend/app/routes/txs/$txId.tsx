@@ -1637,25 +1637,29 @@ function TransactionDetail() {
                                             {(() => {
                                                 // Detect Flow (0x + 16 hex) or EVM (0x + 40 hex) addresses in values
                                                 const ADDRESS_RE = /^0x[a-fA-F0-9]{16}$|^0x[a-fA-F0-9]{40}$/;
-                                                const CONTRACT_ID_RE = /^A\.[a-f0-9]{16}\.\w+$/;
+                                                // Matches A.{16hex}.{ContractName} optionally followed by .Vault, .Collection, etc.
+                                                const CONTRACT_ID_RE = /^A\.[a-f0-9]{16}\.\w+(\.\w+)?$/;
 
                                                 const renderArgValue = (decoded: any): React.ReactNode => {
                                                     if (typeof decoded === 'string' && ADDRESS_RE.test(decoded)) {
                                                         return <AddressLink address={decoded.replace(/^0x/, '')} prefixLen={20} suffixLen={0} className="text-xs" />;
                                                     }
                                                     if (typeof decoded === 'string' && CONTRACT_ID_RE.test(decoded)) {
-                                                        const meta = contractMeta.get(decoded);
                                                         const parts = decoded.split('.');
+                                                        // Extract base contract ID (A.{addr}.{ContractName}) for metadata lookup
                                                         const addr = parts[1];
-                                                        const contractName = parts.slice(2).join('.');
+                                                        const contractName = parts.slice(2, parts.length > 3 ? -1 : undefined).join('.');
+                                                        const suffix = parts.length > 3 ? `.${parts[parts.length - 1]}` : '';
+                                                        const contractId = `A.${addr}.${contractName}`;
+                                                        const meta = contractMeta.get(contractId) || contractMeta.get(decoded);
                                                         return (
-                                                            <Link to={`/contract/A.${addr}.${contractName}`} className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline" title={meta ? `${meta.name}${meta.symbol ? ` (${meta.symbol})` : ''}` : contractName}>
+                                                            <Link to={`/contract/${contractId}`} className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline" title={meta ? `${meta.name}${meta.symbol ? ` (${meta.symbol})` : ''}` : contractName}>
                                                                 {meta?.logo ? (
                                                                     <img src={meta.logo} alt="" className="w-4 h-4 rounded-full" />
                                                                 ) : (
                                                                     <FileText className="w-3.5 h-3.5 text-zinc-400" />
                                                                 )}
-                                                                <span>{meta ? `${contractName}${meta.symbol ? ` (${meta.symbol})` : ''}` : decoded}</span>
+                                                                <span>{meta ? `${contractName}${meta.symbol ? ` (${meta.symbol})` : ''}${suffix}` : decoded}</span>
                                                             </Link>
                                                         );
                                                     }
