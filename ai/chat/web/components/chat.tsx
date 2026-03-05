@@ -366,16 +366,18 @@ function ChartToolPart({ part }: { part: any }) {
   const isDone =
     part.state === "output-available" || part.state === "result";
   const { openArtifact } = useArtifactPanel();
+  const hasAutoOpened = useRef(false);
 
   useEffect(() => {
-    if (isDone && part.output) {
+    if (isDone && part.output && !hasAutoOpened.current) {
+      hasAutoOpened.current = true;
       openArtifact({
         type: "chart",
         title: part.output.title || "Chart",
         data: part.output,
       });
     }
-  }, [isDone]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isDone, openArtifact, part.output]);
 
   if (!isDone) {
     return (
