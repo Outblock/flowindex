@@ -509,7 +509,12 @@ CREATE TABLE IF NOT EXISTS app.address_transactions (
     PRIMARY KEY (address, block_height, transaction_id, role)
 );
 CREATE INDEX IF NOT EXISTS idx_address_txs_address_height ON app.address_transactions(address, block_height DESC);
-CREATE INDEX IF NOT EXISTS idx_address_txs_cursor ON app.address_transactions(address, block_height DESC, transaction_id DESC);
+COMMIT;
+-- Build concurrently to avoid blocking writes on large existing tables.
+-- Must run outside explicit BEGIN/COMMIT blocks.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_address_txs_cursor
+  ON app.address_transactions(address, block_height DESC, transaction_id DESC);
+BEGIN;
 
 
 CREATE TABLE IF NOT EXISTS app.daily_stats (
