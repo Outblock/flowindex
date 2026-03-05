@@ -70,7 +70,9 @@ export async function activateCadenceTextmate(
   if (registered) return;
   registered = true;
 
+  console.log('[cadence-textmate] Loading oniguruma WASM...');
   await ensureWasm();
+  console.log('[cadence-textmate] WASM loaded, creating grammar registry');
 
   const registry = new Registry({
     onigLib: Promise.resolve({ createOnigScanner, createOnigString }),
@@ -88,19 +90,15 @@ export async function activateCadenceTextmate(
     return;
   }
 
-  // Create a token provider that delegates to the TM grammar
-  const tokensProvider: languages.EncodedTokensProvider = {
+  console.log('[cadence-textmate] Grammar loaded, registering token provider');
+
+  // Use TokensProvider (NOT EncodedTokensProvider) so Monaco maps our
+  // string token names through its own theme system.  EncodedTokensProvider
+  // returns binary tokens that need the TM registry to carry a theme —
+  // without that every token renders as mtk1 (white).
+  const tokensProvider: languages.TokensProvider = {
     getInitialState(): languages.IState {
       return INITIAL as unknown as languages.IState;
-    },
-
-    tokenizeEncoded(line: string, state: languages.IState): languages.IEncodedLineTokens {
-      const tmState = state as ReturnType<typeof INITIAL.clone>;
-      const result = grammar.tokenizeLine2(line, tmState);
-      return {
-        tokens: result.tokens,
-        endState: result.ruleStack as unknown as languages.IState,
-      };
     },
 
     tokenize(line: string, state: languages.IState): languages.ILineTokens {
@@ -119,4 +117,5 @@ export async function activateCadenceTextmate(
 
   // Register — this overrides the Monarch tokenizer for 'cadence'
   monaco.languages.setTokensProvider(CADENCE_LANGUAGE_ID, tokensProvider);
+  console.log('[cadence-textmate] Token provider registered for', CADENCE_LANGUAGE_ID);
 }

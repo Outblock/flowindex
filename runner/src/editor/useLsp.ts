@@ -172,7 +172,6 @@ export function useLsp(
         // WASM v2 (Web Worker)
         try {
           console.log('[LSP] Initializing WASM v2...');
-          preloadV2Cache(project.files);
 
           const editableFiles = project.files.filter((f) => !f.readOnly);
           const allCode = editableFiles.map((f) => f.content).join('\n');
@@ -183,6 +182,8 @@ export function useLsp(
           }
 
           bridge = await createV2LSPBridge(() => {});
+          // Preload AFTER instance is created so address code is pushed into the worker
+          preloadV2Cache(projectRef.current.files);
           console.log('[LSP] WASM v2 initialized');
         } catch (err) {
           console.error('[LSP] WASM v2 failed:', err);
@@ -229,6 +230,28 @@ export function useLsp(
     if (!allCode.includes('import ')) return;
     void prefetchForCode(allCode);
   }, [isReady, project.files, prefetchForCode]);
+
+  // Push updated files to v2 cache whenever project files change (e.g. new deps added),
+  // then nudge LSP to re-check open documents so import errors clear.
+  useEffect(() => {
+    if (lspMode === 'wasm') {
+      const depFiles = project.files.filter(f => f.path.startsWith('deps/'));
+      if (depFiles.length > 0) {
+        preloadV2Cache(project.files);
+        // Re-send open editable docs to trigger LSP re-analysis with new deps
+        const adapter = adapterRef.current;
+        if (adapter) {
+          for (const file of project.files) {
+            if (file.readOnly) continue;
+            const uri = `file:///${file.path}`;
+            if (openDocsRef.current.has(uri)) {
+              adapter.changeDocument(uri, file.content);
+            }
+          }
+        }
+      }
+    }
+  }, [project.files, lspMode]);
 
   // Sync documents with LSP when project files change (after init)
   useEffect(() => {

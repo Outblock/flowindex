@@ -25,7 +25,13 @@ let _stringResolver: ((location: string) => string | undefined) | null = null;
 
 /** Pre-populate address code cache from dependency files */
 export function preloadV2Cache(files: { path: string; content: string }[]) {
-  if (!instance) return;
+  if (!instance) {
+    console.debug('[LSP v2 cache] No instance yet, skipping preload');
+    return;
+  }
+
+  const depFiles = files.filter(f => f.path.startsWith('deps/'));
+  console.debug(`[LSP v2 cache] Preloading ${files.length} files (${depFiles.length} deps)`);
 
   // Push string code for local files
   instance.clearStringCode();
@@ -38,6 +44,7 @@ export function preloadV2Cache(files: { path: string; content: string }[]) {
     // Also check for deps format: deps/0xADDR/ContractName.cdc
     const match = file.path.match(/^deps\/(0x[0-9a-fA-F]+)\/([^/]+)\.cdc$/);
     if (match) {
+      console.debug(`[LSP v2 cache] preloadAddressCode(${match[1]}, ${match[2]}, ${file.content.length} bytes)`);
       instance.preloadAddressCode(match[1], match[2], file.content);
     }
   }
