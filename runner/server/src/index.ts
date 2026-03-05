@@ -6,6 +6,7 @@ import { CadenceLSPClient } from './lspClient.js';
 import { DepsWorkspace, type FlowNetwork } from './depsWorkspace.js';
 import { hasAddressImports, extractAddressImports, rewriteToStringImports } from './importUtils.js';
 import { app as httpApp } from './http.js';
+import { setBroadcast } from './github/webhook.js';
 
 const PORT = parseInt(process.env.LSP_PORT || '3002', 10);
 const HTTP_PORT = parseInt(process.env.HTTP_PORT || '3003', 10);
@@ -402,6 +403,20 @@ const httpServer = httpApp.listen(HTTP_PORT, () => {
   console.log(`[HTTP Server] Listening on :${HTTP_PORT}`);
 });
 
+// Deploy event subscriptions: projectId -> Set<WebSocket>
+const deploySubscriptions = new Map<string, Set<WebSocket>>();
+
+setBroadcast((projectId: string, event: unknown) => {
+  const subs = deploySubscriptions.get(projectId);
+  if (!subs) return;
+  const msg = JSON.stringify(event);
+  for (const ws of subs) {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(msg);
+    }
+  }
+});
+
 wss.on('connection', (socket: WebSocket) => {
   console.log('[LSP Server] Client connected');
   let state: ConnectionState | null = null;
@@ -411,6 +426,16 @@ wss.on('connection', (socket: WebSocket) => {
     try {
       msg = JSON.parse(raw.toString());
     } catch {
+      return;
+    }
+
+    // Deploy subscription (non-LSP): { type: "subscribe:deploy", project_id: "..." }
+    if (msg.type === 'subscribe:deploy' && msg.project_id) {
+      const pid = msg.project_id as string;
+      if (!deploySubscriptions.has(pid)) {
+        deploySubscriptions.set(pid, new Set());
+      }
+      deploySubscriptions.get(pid)!.add(socket);
       return;
     }
 
@@ -562,6 +587,11 @@ wss.on('connection', (socket: WebSocket) => {
 
   socket.on('close', () => {
     console.log('[LSP Server] Client disconnected');
+    // Clean up deploy subscriptions
+    for (const [pid, subs] of deploySubscriptions) {
+      subs.delete(socket);
+      if (subs.size === 0) deploySubscriptions.delete(pid);
+    }
     if (state) {
       // Close documents opened by this connection
       for (const uri of state.openDocs.keys()) {
