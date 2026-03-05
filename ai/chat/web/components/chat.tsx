@@ -12,6 +12,7 @@ import {
   Layers,
   Sparkles,
   ChevronDown,
+  Maximize2,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -46,10 +47,25 @@ import {
   PromptInputFooter,
   PromptInputSubmit,
 } from "@/components/ai-elements/prompt-input";
+import {
+  Reasoning,
+  ReasoningTrigger,
+  ReasoningContent,
+} from "@/components/ai-elements/reasoning";
+import {
+  Sources,
+  SourcesTrigger,
+  SourcesContent,
+  Source,
+} from "@/components/ai-elements/sources";
+import { useArtifactPanel } from "@/components/artifact-panel";
 
 import { SqlResultTable } from "./sql-result-table";
 import { ChartArtifact } from "./chart-artifact";
 import { FlowLogo } from "./flow-logo";
+
+const SQL_INLINE_MAX_ROWS = 5;
+const CADENCE_INLINE_MAX_LINES = 10;
 
 const SUGGESTIONS = [
   {
@@ -137,8 +153,12 @@ export function Chat() {
               </div>
             </ConversationEmptyState>
           ) : (
-            messages.map((msg) => (
-              <ChatMessage key={msg.id} message={msg} />
+            messages.map((msg, idx) => (
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                isStreaming={status === "streaming" && idx === messages.length - 1}
+              />
             ))
           )}
         </ConversationContent>
@@ -246,7 +266,7 @@ function CollapsibleUserMessage({ text }: { text: string }) {
   );
 }
 
-function ChatMessage({ message }: { message: UIMessage }) {
+function ChatMessage({ message, isStreaming: isMessageStreaming = false }: { message: UIMessage; isStreaming?: boolean }) {
   if (message.role === "user") {
     const text = message.parts
       .filter((p) => p.type === "text")
@@ -270,6 +290,16 @@ function ChatMessage({ message }: { message: UIMessage }) {
         </div>
         <MessageContent>
           {message.parts.map((part, i) => {
+            if (part.type === "reasoning") {
+              const reasoningPart = part as any;
+              return (
+                <Reasoning key={i} isStreaming={isMessageStreaming && !!reasoningPart.reasoning}>
+                  <ReasoningTrigger />
+                  <ReasoningContent>{reasoningPart.reasoning || ""}</ReasoningContent>
+                </Reasoning>
+              );
+            }
+
             if (part.type === "text") {
               if (!part.text.trim()) return null;
               return <MessageResponse key={i}>{part.text}</MessageResponse>;
@@ -294,6 +324,38 @@ function ChatMessage({ message }: { message: UIMessage }) {
 
             return null;
           })}
+          {(() => {
+            const sources: { title: string; url: string }[] = [];
+            for (const part of message.parts) {
+              const toolPart = part as any;
+              if (
+                (part.type === "tool-invocation" || part.type === "dynamic-tool" || part.type.startsWith("tool-")) &&
+                (toolPart.toolName === "web_search" || toolPart.toolName === "web_search_20250305")
+              ) {
+                const output = toolPart.output ?? toolPart.result;
+                if (output) {
+                  const items = Array.isArray(output) ? output : output.results || output.search_results || [];
+                  for (const item of items) {
+                    if (item.url && item.title) {
+                      sources.push({ title: item.title, url: item.url });
+                    }
+                  }
+                }
+              }
+            }
+            if (sources.length === 0) return null;
+            const unique = [...new Map(sources.map((s) => [s.url, s])).values()];
+            return (
+              <Sources>
+                <SourcesTrigger count={unique.length} />
+                <SourcesContent>
+                  {unique.map((s) => (
+                    <Source key={s.url} href={s.url} title={s.title} />
+                  ))}
+                </SourcesContent>
+              </Sources>
+            );
+          })()}
         </MessageContent>
       </div>
     </Message>
@@ -303,6 +365,19 @@ function ChatMessage({ message }: { message: UIMessage }) {
 function ChartToolPart({ part }: { part: any }) {
   const isDone =
     part.state === "output-available" || part.state === "result";
+  const { openArtifact } = useArtifactPanel();
+  const hasAutoOpened = useRef(false);
+
+  useEffect(() => {
+    if (isDone && part.output && !hasAutoOpened.current) {
+      hasAutoOpened.current = true;
+      openArtifact({
+        type: "chart",
+        title: part.output.title || "Chart",
+        data: part.output,
+      });
+    }
+  }, [isDone, openArtifact, part.output]);
 
   if (!isDone) {
     return (
@@ -321,6 +396,8 @@ function ChartToolPart({ part }: { part: any }) {
 }
 
 function SqlToolPart({ part }: { part: any }) {
+  const { openArtifact } = useArtifactPanel();
+
   const toolName = part.toolName ?? part.type.split("-").slice(1).join("-");
   if (toolName !== "runSQL" && toolName !== "run_sql") return null;
 
@@ -371,7 +448,31 @@ function SqlToolPart({ part }: { part: any }) {
 
       {hasData && (
         <div className="animate-in slide-in-from-top-2">
-          <SqlResultTable result={result} />
+          {result.rows.length > SQL_INLINE_MAX_ROWS ? (
+            <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+              <div className="flex items-center justify-between px-3.5 py-2.5 bg-[var(--bg-element)]/40">
+                <span className="text-[11px] text-[var(--text-tertiary)] font-medium tabular-nums">
+                  {result.rows.length} rows &middot; {result.columns.length} columns
+                </span>
+                <button
+                  onClick={() =>
+                    openArtifact({
+                      type: "sql",
+                      title: "SQL Query Result",
+                      data: result,
+                    })
+                  }
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-[var(--flow-green)] hover:text-[var(--flow-green-dim)] bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-md hover:border-[var(--flow-green)]/30 transition-all duration-150 cursor-pointer"
+                >
+                  <Maximize2 size={12} />
+                  Open in panel
+                </button>
+              </div>
+              <SqlResultTable result={{ columns: result.columns, rows: result.rows.slice(0, SQL_INLINE_MAX_ROWS) }} />
+            </div>
+          ) : (
+            <SqlResultTable result={result} />
+          )}
         </div>
       )}
     </div>
@@ -379,6 +480,8 @@ function SqlToolPart({ part }: { part: any }) {
 }
 
 function CadenceToolPart({ part }: { part: any }) {
+  const { openArtifact } = useArtifactPanel();
+
   const isDone =
     part.state === "output-available" || part.state === "result";
   const isError = part.state === "output-error";
@@ -420,9 +523,33 @@ function CadenceToolPart({ part }: { part: any }) {
               }
             />
           )}
-          {isDone && !hasError && result?.result && (
-            <ToolOutput output={JSON.stringify(result.result, null, 2)} errorText={undefined} />
-          )}
+          {isDone && !hasError && result?.result && (() => {
+            const outputStr = JSON.stringify(result.result, null, 2);
+            const lineCount = outputStr.split("\n").length;
+            if (lineCount > CADENCE_INLINE_MAX_LINES) {
+              return (
+                <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg-element)]/40 rounded-md">
+                  <span className="text-[11px] text-[var(--text-tertiary)]">
+                    Output: {lineCount} lines
+                  </span>
+                  <button
+                    onClick={() =>
+                      openArtifact({
+                        type: "cadence",
+                        title: "Cadence Script Result",
+                        data: { script: script || "", result: result.result },
+                      })
+                    }
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-[var(--flow-green)] hover:text-[var(--flow-green-dim)] bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-md hover:border-[var(--flow-green)]/30 transition-all duration-150 cursor-pointer"
+                  >
+                    <Maximize2 size={12} />
+                    Open in panel
+                  </button>
+                </div>
+              );
+            }
+            return <ToolOutput output={outputStr} errorText={undefined} />;
+          })()}
         </ToolContent>
       </Tool>
     </div>

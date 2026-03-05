@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Chat } from "@/components/chat";
 import { Sidebar } from "@/components/sidebar";
+import { ArtifactPanelProvider, ArtifactPanel } from "@/components/artifact-panel";
 
 function generateId() {
   return crypto.randomUUID();
@@ -48,16 +49,21 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
-      <Sidebar
-        activeSessionId={sessionId}
-        onSelectSession={handleSelectSession}
-        onNewChat={handleNewChat}
-        refreshKey={sidebarRefresh}
-      />
-      <main className="flex-1 flex flex-col relative overflow-hidden">
-        <Chat key={sessionId} />
-      </main>
-    </div>
+    <ArtifactPanelProvider>
+      <div className="flex h-screen w-screen overflow-hidden">
+        <Sidebar
+          activeSessionId={sessionId}
+          onSelectSession={handleSelectSession}
+          onNewChat={handleNewChat}
+          refreshKey={sidebarRefresh}
+        />
+        <main className="flex-1 flex relative overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <Chat key={sessionId} />
+          </div>
+          <ArtifactPanel />
+        </main>
+      </div>
+    </ArtifactPanelProvider>
   );
 }
