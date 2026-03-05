@@ -12,10 +12,12 @@
     "@octokit/app": "^16.1.2",
     "@octokit/rest": "^22.0.1",
     "express": "^5.2.1",
+    "libsodium-wrappers": "^0.8.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
     "typescript": "^5.9.3"

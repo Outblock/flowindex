@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { getInstallationOctokit } from './auth.js';
+import { setRepoSecret } from './secrets.js';
 
 const router = Router();
 
@@ -378,6 +379,49 @@ router.get('/runs/:owner/:repo', async (req: Request, res: Response) => {
     }
 
     res.json({ runs });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: message });
+  }
+});
+
+// POST /secrets — Write Flow deploy secrets to GitHub repo
+router.post('/secrets', async (req: Request, res: Response) => {
+  try {
+    const {
+      installation_id, owner, repo, environment_name,
+      flow_address, flow_private_key, flow_key_index,
+    } = req.body as {
+      installation_id: number;
+      owner: string;
+      repo: string;
+      environment_name: string;
+      flow_address: string;
+      flow_private_key: string;
+      flow_key_index: string;
+    };
+
+    if (!installation_id || !owner || !repo || !environment_name || !flow_address || !flow_private_key) {
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+
+    const suffix = environment_name.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+
+    await Promise.all([
+      setRepoSecret(installation_id, owner, repo, `FLOW_PRIVATE_KEY_${suffix}`, flow_private_key),
+      setRepoSecret(installation_id, owner, repo, `FLOW_ADDRESS_${suffix}`, flow_address),
+      setRepoSecret(installation_id, owner, repo, `FLOW_KEY_INDEX_${suffix}`, flow_key_index || '0'),
+    ]);
+
+    // Also set RUNNER_WEBHOOK_URL for post-deploy notifications
+    const webhookUrl = process.env.RUNNER_WEBHOOK_URL || `${process.env.PUBLIC_URL || 'https://run.flowindex.io'}/github/webhook/deploy`;
+    await setRepoSecret(installation_id, owner, repo, 'RUNNER_WEBHOOK_URL', webhookUrl);
+
+    res.json({
+      success: true,
+      secrets: [`FLOW_PRIVATE_KEY_${suffix}`, `FLOW_ADDRESS_${suffix}`, `FLOW_KEY_INDEX_${suffix}`, 'RUNNER_WEBHOOK_URL'],
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     res.status(500).json({ error: message });
