@@ -36,8 +36,8 @@ const TRIGGER_TO_EVENT_TYPE: Record<string, string> = {
   flow_defi_event: 'defi.swap',
   flow_large_transfer: 'ft.large_transfer',
   flow_whale_activity: 'address.activity',
-  flow_contract_deploy: 'account.key_change',
-  flow_new_account: 'account.key_change',
+  flow_contract_deploy: 'contract.event', // contract deployments emit contract events
+  flow_new_account: 'account.key_change', // new accounts always get a key added
   // flow_schedule is handled by cron, not webhook subscriptions
 }
 
@@ -372,87 +372,100 @@ export function extractFlowConditions(
 ): Record<string, unknown> {
   const conditions: Record<string, unknown> = {}
 
+  // Helper: normalize address to lowercase hex without 0x prefix
+  const normalizeAddr = (v: unknown): string =>
+    String(v).trim().replace(/^0x/, '').toLowerCase()
+
   switch (triggerId) {
     case 'flow_ft_transfer':
     case 'flow_large_transfer':
+      // Go matcher: token_contract (string), min_amount (float), addresses (flex array), direction
       if (subBlockValues.token && subBlockValues.token !== 'any') {
-        conditions.token = subBlockValues.token
+        conditions.token_contract = subBlockValues.token
       }
       if (subBlockValues.minAmount) {
-        conditions.min_amount = subBlockValues.minAmount
+        conditions.min_amount = Number(subBlockValues.minAmount)
       }
       if (subBlockValues.threshold) {
-        conditions.min_amount = subBlockValues.threshold
+        conditions.min_amount = Number(subBlockValues.threshold)
       }
       if (subBlockValues.addressFilter) {
-        conditions.address = String(subBlockValues.addressFilter).replace(/^0x/, '').toLowerCase()
+        conditions.addresses = [normalizeAddr(subBlockValues.addressFilter)]
       }
       break
 
     case 'flow_nft_transfer':
+      // Go matcher: collection (string), addresses (array), direction, token_ids
       if (subBlockValues.collection) {
-        conditions.nft_type = subBlockValues.collection
+        conditions.collection = subBlockValues.collection
       }
       if (subBlockValues.addressFilter) {
-        conditions.address = String(subBlockValues.addressFilter).replace(/^0x/, '').toLowerCase()
+        conditions.addresses = [normalizeAddr(subBlockValues.addressFilter)]
       }
       break
 
     case 'flow_tx_sealed':
     case 'flow_whale_activity':
+      // Go matcher: addresses (array), roles (array)
       if (subBlockValues.addressFilter) {
-        conditions.address = String(subBlockValues.addressFilter).replace(/^0x/, '').toLowerCase()
+        conditions.addresses = [normalizeAddr(subBlockValues.addressFilter)]
       }
       if (subBlockValues.addressList) {
-        conditions.addresses = String(subBlockValues.addressList)
+        const addrs = String(subBlockValues.addressList)
           .split('\n')
           .map((a) => a.trim().replace(/^0x/, '').toLowerCase())
           .filter(Boolean)
+        // Merge with any addressFilter
+        const existing = (conditions.addresses as string[]) || []
+        conditions.addresses = [...existing, ...addrs]
       }
       break
 
     case 'flow_contract_event':
+      // Go matcher: contract_address (string), event_names (array)
       if (subBlockValues.eventType) {
-        conditions.event_type = subBlockValues.eventType
+        conditions.event_names = [subBlockValues.eventType]
+      }
+      if (subBlockValues.contractAddress) {
+        conditions.contract_address = normalizeAddr(subBlockValues.contractAddress)
       }
       break
 
     case 'flow_account_event':
-      if (subBlockValues.eventCategory && subBlockValues.eventCategory !== 'any') {
-        conditions.event_category = subBlockValues.eventCategory
-      }
+      // Go matcher: addresses (array) — matches KeyAdded/KeyRevoked events
       if (subBlockValues.addressFilter) {
-        conditions.address = String(subBlockValues.addressFilter).replace(/^0x/, '').toLowerCase()
+        conditions.addresses = [normalizeAddr(subBlockValues.addressFilter)]
       }
       break
 
     case 'flow_balance_change':
+      // Go matcher (ft.transfer): addresses (flex array), token_contract, min_amount, direction
       if (subBlockValues.addressFilter) {
-        conditions.address = String(subBlockValues.addressFilter).replace(/^0x/, '').toLowerCase()
+        conditions.addresses = [normalizeAddr(subBlockValues.addressFilter)]
       }
-      if (subBlockValues.token) {
-        conditions.token = subBlockValues.token
+      if (subBlockValues.token && subBlockValues.token !== 'any') {
+        conditions.token_contract = subBlockValues.token
       }
       if (subBlockValues.threshold) {
-        conditions.threshold = subBlockValues.threshold
+        conditions.min_amount = Number(subBlockValues.threshold)
       }
-      if (subBlockValues.direction) {
+      if (subBlockValues.direction && subBlockValues.direction !== 'any') {
         conditions.direction = subBlockValues.direction
       }
       break
 
     case 'flow_staking_event':
+      // Go matcher: event_types (array), node_id, min_amount
       if (subBlockValues.delegatorAddress) {
-        conditions.address = String(subBlockValues.delegatorAddress)
-          .replace(/^0x/, '')
-          .toLowerCase()
+        conditions.node_id = normalizeAddr(subBlockValues.delegatorAddress)
       }
       if (subBlockValues.stakingEventType && subBlockValues.stakingEventType !== 'any') {
-        conditions.event_type = subBlockValues.stakingEventType
+        conditions.event_types = [subBlockValues.stakingEventType]
       }
       break
 
     case 'flow_evm_tx':
+      // Go matcher: from (string), to (string), min_value
       if (subBlockValues.fromAddress) {
         conditions.from = String(subBlockValues.fromAddress).toLowerCase()
       }
@@ -462,23 +475,26 @@ export function extractFlowConditions(
       break
 
     case 'flow_defi_event':
+      // Go matcher (defi.swap): pair_id, min_amount, addresses
       if (subBlockValues.pool) {
-        conditions.pool = subBlockValues.pool
+        conditions.pair_id = subBlockValues.pool
       }
       if (subBlockValues.defiDirection && subBlockValues.defiDirection !== 'any') {
-        conditions.direction = subBlockValues.defiDirection
+        conditions.event_type = subBlockValues.defiDirection
       }
       break
 
     case 'flow_contract_deploy':
+      // Go matcher (contract.event): contract_address (string), event_names (array)
       if (subBlockValues.addressFilter) {
-        conditions.address = String(subBlockValues.addressFilter).replace(/^0x/, '').toLowerCase()
+        conditions.contract_address = normalizeAddr(subBlockValues.addressFilter)
       }
-      conditions.event_category = 'account.contract.added'
+      conditions.event_names = ['AccountContractAdded', 'AccountContractUpdated']
       break
 
     case 'flow_new_account':
-      conditions.event_category = 'account.created'
+      // Go matcher (account.key_change): addresses (array)
+      // New accounts always get a key added, so account.key_change catches them
       break
   }
 
