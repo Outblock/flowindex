@@ -149,7 +149,7 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
           {localEntries.length > 0 && (
             <>
               <div className="px-3 py-1 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-700">
-                Local Keys
+                Local Wallet
               </div>
               {localEntries.map((entry) => {
                 const isSelected =
