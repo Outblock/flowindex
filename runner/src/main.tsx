@@ -4,6 +4,9 @@ import App from './App';
 import { AuthProvider } from './auth/AuthContext';
 import './index.css';
 
+// Remove the static HTML loading indicator
+document.getElementById('loading')?.remove();
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AuthProvider>

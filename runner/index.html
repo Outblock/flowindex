@@ -4,9 +4,45 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Cadence Runner — FlowIndex</title>
+  <meta name="description" content="Write, test, and deploy Cadence smart contracts on Flow. Interactive editor with AI assistance, wallet integration, and real-time execution." />
+  <meta name="theme-color" content="#18181B" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Cadence Runner — FlowIndex" />
+  <meta property="og:description" content="Write, test, and deploy Cadence smart contracts on Flow. Interactive editor with AI assistance and wallet integration." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://run.flowindex.io/" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Cadence Runner — FlowIndex" />
+  <meta name="twitter:description" content="Write, test, and deploy Cadence smart contracts on Flow." />
+
   <script defer src="https://analytics.flowindex.io/script.js" data-website-id="b2985886-d185-446e-9b5e-f015814b2577"></script>
+
+  <style>
+    body { margin: 0; background: #18181B; }
+    #loading {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      background: #18181B;
+      font-family: 'GeistMono', 'SF Mono', monospace;
+      color: #a1a1aa;
+      gap: 10px;
+    }
+    #loading .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid #3f3f46;
+      border-top-color: #10B981;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body class="h-screen overflow-hidden">
+  <div id="loading"><div class="spinner"></div><span>Loading…</span></div>
   <div id="root" class="h-full"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
