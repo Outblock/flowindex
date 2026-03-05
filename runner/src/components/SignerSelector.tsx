@@ -101,7 +101,7 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
       const colors = colorsFromAddress(selected.account.flowAddress);
       return (
         <>
-          <Avatar size={16} name={selected.account.flowAddress} variant="beam" colors={colors} />
+          <Avatar size={16} name={`0x${selected.account.flowAddress}`} variant="beam" colors={colors} />
           {balance !== null ? (
             <span className="text-xs text-emerald-400 font-medium">{balance} FLOW</span>
           ) : (
@@ -166,7 +166,7 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
                       isSelected ? 'text-emerald-400' : 'text-zinc-300'
                     }`}
                   >
-                    <Avatar size={16} name={entry.account.flowAddress} variant="beam" colors={colors} />
+                    <Avatar size={16} name={`0x${entry.account.flowAddress}`} variant="beam" colors={colors} />
                     <span className="truncate">{entry.key.label || 'Key'}</span>
                     <span className="text-zinc-500 ml-auto flex-shrink-0">
                       {truncateAddress(entry.account.flowAddress)}
