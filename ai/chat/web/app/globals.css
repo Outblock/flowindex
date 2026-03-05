@@ -140,6 +140,15 @@ code, pre, .font-mono, .mono-font {
   animation: shimmer 2s infinite;
 }
 
+@keyframes shine {
+  0% { background-position: 100%; }
+  100% { background-position: -100%; }
+}
+
+.animate-shine {
+  animation: shine 5s linear infinite;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }

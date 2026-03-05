@@ -207,18 +207,27 @@ export function Chat() {
                   hideTools={hideTools}
                 />
               ))}
-              {/* Pending indicator: avatar + shimmer while waiting for first token */}
+              {/* Pending indicator: avatar + shiny text while waiting for first token */}
               {(status === "streaming" || status === "submitted") &&
                 messages.length > 0 &&
                 messages[messages.length - 1].role === "user" && (
                   <Message from="assistant">
-                    <div className="flex items-center gap-3">
-                      <div className="shrink-0">
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0 mt-0.5">
                         <FlowLogo size={22} />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="h-4 w-32 rounded animate-shimmer" />
-                        <div className="h-4 w-20 rounded animate-shimmer [animation-delay:0.3s]" />
+                      <div
+                        className="inline-block bg-clip-text animate-shine text-[13px]"
+                        style={{
+                          backgroundImage: "linear-gradient(120deg, rgba(255,255,255,0.3) 40%, #1c9c4d 50%, rgba(255,255,255,0.3) 60%)",
+                          backgroundSize: "200% 100%",
+                          WebkitBackgroundClip: "text",
+                          backgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          color: "transparent",
+                        }}
+                      >
+                        Thinking...
                       </div>
                     </div>
                   </Message>
