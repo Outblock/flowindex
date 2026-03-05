@@ -168,13 +168,31 @@ export function Chat() {
               </div>
             </ConversationEmptyState>
           ) : (
-            messages.map((msg, idx) => (
-              <ChatMessage
-                key={msg.id}
-                message={msg}
-                isStreaming={status === "streaming" && idx === messages.length - 1}
-              />
-            ))
+            <>
+              {messages.map((msg, idx) => (
+                <ChatMessage
+                  key={msg.id}
+                  message={msg}
+                  isStreaming={(status === "streaming" || status === "submitted") && idx === messages.length - 1}
+                />
+              ))}
+              {/* Pending indicator: avatar + shimmer while waiting for first token */}
+              {(status === "streaming" || status === "submitted") &&
+                messages.length > 0 &&
+                messages[messages.length - 1].role === "user" && (
+                  <Message from="assistant">
+                    <div className="flex items-center gap-3">
+                      <div className="shrink-0">
+                        <FlowLogo size={22} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-32 rounded animate-shimmer" />
+                        <div className="h-4 w-20 rounded animate-shimmer [animation-delay:0.3s]" />
+                      </div>
+                    </div>
+                  </Message>
+                )}
+            </>
           )}
         </ConversationContent>
         <ConversationScrollButton />
