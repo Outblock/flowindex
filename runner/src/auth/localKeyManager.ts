@@ -291,14 +291,17 @@ export async function decryptFromKeystore(
 
   // Check if this is a mnemonic-based keystore by trying to decrypt mnemonic
   const mnemonic = storedKey.decryptMnemonic(pwBytes);
+  console.log('[decryptFromKeystore] mnemonic result:', mnemonic ? `"${mnemonic.substring(0, 20)}..." (len=${mnemonic.length})` : 'null/empty');
   if (mnemonic && mnemonic.length > 0) {
     storedKey.delete();
     // Re-derive the Flow private key from the mnemonic
     const derived = await deriveFromMnemonic(mnemonic);
+    console.log('[decryptFromKeystore] re-derived secp256k1 pubkey:', derived.publicKeySecp256k1.substring(0, 20) + '...');
     return derived.privateKeyHex;
   }
 
   // Private key-based keystore: decrypt directly
+  console.log('[decryptFromKeystore] falling through to decryptPrivateKey (mnemonic not found)');
   const privateKeyBytes = storedKey.decryptPrivateKey(pwBytes);
 
   if (!privateKeyBytes || privateKeyBytes.length === 0) {
