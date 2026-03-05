@@ -215,19 +215,18 @@ export default function KeyManager({
     }
   }, [localKeys, accountsMap, network, onRefreshAccounts]);
 
-  /** After key creation, auto-create accounts on both networks + auto-refresh after delay. */
-  const autoCreateAccounts = async (keyId: string) => {
-    if (!autoCreate) return;
-    await Promise.allSettled([
-      onCreateAccount(keyId, 'ECDSA_secp256k1', 'SHA3_256', 'testnet'),
-      onCreateAccount(keyId, 'ECDSA_secp256k1', 'SHA3_256', 'mainnet'),
-    ]);
+  /** After key creation, auto-create accounts on selected networks + auto-refresh after delay. */
+  const autoCreateAccounts = async (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', networks: ('mainnet' | 'testnet')[]) => {
+    if (!autoCreate || networks.length === 0) return;
+    const hashAlgo = sigAlgo === 'ECDSA_P256' ? 'SHA3_256' : 'SHA3_256';
+    await Promise.allSettled(
+      networks.map(net => onCreateAccount(keyId, sigAlgo, hashAlgo, net)),
+    );
     // Wait a bit for the chain to process, then refresh
     setTimeout(async () => {
-      await Promise.allSettled([
-        onRefreshAccounts(keyId, 'testnet'),
-        onRefreshAccounts(keyId, 'mainnet'),
-      ]);
+      await Promise.allSettled(
+        networks.map(net => onRefreshAccounts(keyId, net)),
+      );
     }, 5000);
   };
 
@@ -409,36 +408,14 @@ export default function KeyManager({
               </div>
             </div>
 
-            {/* Auto-create toggle — only shown in Create mode */}
-            {mode === 'create' && (
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={autoCreate}
-                  onClick={toggleAutoCreate}
-                  className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${
-                    autoCreate ? 'bg-emerald-600' : 'bg-zinc-600'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3 w-3 rounded-full bg-white transition-transform mt-0.5 ${
-                      autoCreate ? 'translate-x-3.5 ml-0' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-                <span className="text-[11px] text-zinc-300">
-                  Auto-create account on testnet & mainnet
-                </span>
-              </label>
-            )}
-
             {/* Create form */}
             {mode === 'create' && (
               <GenerateForm
                 wasmReady={wasmReady}
                 onGenerateKey={onGenerateKey}
                 onAutoCreate={autoCreateAccounts}
+                autoCreate={autoCreate}
+                onToggleAutoCreate={toggleAutoCreate}
               />
             )}
 
@@ -510,15 +487,22 @@ function GenerateForm({
   wasmReady,
   onGenerateKey,
   onAutoCreate,
+  autoCreate,
+  onToggleAutoCreate,
 }: {
   wasmReady: boolean;
   onGenerateKey: KeyManagerProps['onGenerateKey'];
-  onAutoCreate: (keyId: string) => Promise<void>;
+  onAutoCreate: (keyId: string, sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1', networks: ('mainnet' | 'testnet')[]) => Promise<void>;
+  autoCreate: boolean;
+  onToggleAutoCreate: () => void;
 }) {
   const [label, setLabel] = useState('');
   const [wordCount, setWordCount] = useState<12 | 24>(12);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [sigAlgo, setSigAlgo] = useState<'ECDSA_P256' | 'ECDSA_secp256k1'>('ECDSA_P256');
+  const [createMainnet, setCreateMainnet] = useState(true);
+  const [createTestnet, setCreateTestnet] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [mnemonic, setMnemonic] = useState<string | null>(null);
@@ -537,11 +521,16 @@ function GenerateForm({
       setMnemonic(result.mnemonic);
       setLabel('');
       setPassword('');
-      setAutoStatus('Creating accounts...');
-      onAutoCreate(result.key.id)
-        .then(() => setAutoStatus('Accounts created'))
-        .catch(() => setAutoStatus(''))
-        .finally(() => setTimeout(() => setAutoStatus(''), 3000));
+      const networks: ('mainnet' | 'testnet')[] = [];
+      if (createMainnet) networks.push('mainnet');
+      if (createTestnet) networks.push('testnet');
+      if (autoCreate && networks.length > 0) {
+        setAutoStatus('Creating accounts...');
+        onAutoCreate(result.key.id, sigAlgo, networks)
+          .then(() => setAutoStatus('Accounts created'))
+          .catch(() => setAutoStatus(''))
+          .finally(() => setTimeout(() => setAutoStatus(''), 3000));
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to generate key');
     } finally {
@@ -625,6 +614,64 @@ function GenerateForm({
           </button>
         </div>
       </div>
+
+      {/* Signature algorithm */}
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-zinc-400 shrink-0">Sig Algo:</span>
+        <select
+          value={sigAlgo}
+          onChange={(e) => setSigAlgo(e.target.value as 'ECDSA_P256' | 'ECDSA_secp256k1')}
+          className={`${inputClass} w-auto`}
+        >
+          <option value="ECDSA_P256">ECDSA_P256</option>
+          <option value="ECDSA_secp256k1">ECDSA_secp256k1</option>
+        </select>
+      </div>
+
+      {/* Auto-create toggle + network checkboxes */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoCreate}
+            onClick={onToggleAutoCreate}
+            className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${
+              autoCreate ? 'bg-emerald-600' : 'bg-zinc-600'
+            }`}
+          >
+            <span
+              className={`inline-block h-3 w-3 rounded-full bg-white transition-transform mt-0.5 ${
+                autoCreate ? 'translate-x-3.5 ml-0' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+          <span className="text-[11px] text-zinc-300">Auto-create account</span>
+        </label>
+        {autoCreate && (
+          <div className="flex items-center gap-3 ml-9">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createMainnet}
+                onChange={(e) => setCreateMainnet(e.target.checked)}
+                className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500"
+              />
+              <span className="text-[11px] text-zinc-300">Mainnet</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createTestnet}
+                onChange={(e) => setCreateTestnet(e.target.checked)}
+                className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500"
+              />
+              <span className="text-[11px] text-zinc-300">Testnet</span>
+            </label>
+          </div>
+        )}
+      </div>
+
       <button onClick={handleGenerate} disabled={generating || !wasmReady} className={btnPrimary}>
         {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
         Generate
