@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, type LucideIcon } from "react";
-import { Zap, Scale, Brain } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Zap, Scale, Brain, type LucideIcon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
