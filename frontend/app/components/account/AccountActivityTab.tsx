@@ -230,13 +230,15 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
 
     // If loader didn't provide data, fetch page 1 client-side.
     // Only fetch when viewing 'all' activity — subtabs have their own loaders.
+    // Skip if timeline mode — the timeline seed effect (below) handles its own fetch.
+    // viewMode is in deps so switching timeline→pages triggers a fetch.
     useEffect(() => {
-        if (!didFetchRef.current && filterMode === 'all') {
+        if (!didFetchRef.current && filterMode === 'all' && viewMode !== 'timeline') {
             didFetchRef.current = true;
             loadTransactions(1);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [normalizedAddress, filterMode]);
+    }, [normalizedAddress, filterMode, viewMode]);
 
     useEffect(() => {
         if (currentPage > 1) loadTransactions(currentPage);
