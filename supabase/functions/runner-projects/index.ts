@@ -489,6 +489,147 @@ serve(async (req: Request) => {
         break;
       }
 
+      // -------------------------------------------------------------------
+      // /github/connect — Upsert a GitHub connection for a project
+      // -------------------------------------------------------------------
+      case '/github/connect': {
+        const user = await getAuthUser(req, supabaseUrl);
+        if (!user) {
+          return new Response(
+            JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
+            {
+              status: 401,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              },
+            },
+          );
+        }
+        const {
+          project_id,
+          installation_id,
+          repo_owner,
+          repo_name,
+          repo_path,
+          branch,
+          network,
+        } = data as {
+          project_id: string;
+          installation_id: number;
+          repo_owner: string;
+          repo_name: string;
+          repo_path?: string;
+          branch?: string;
+          network?: string;
+        };
+        const { data: conn, error: connError } = await supabaseAdmin
+          .from('runner_github_connections')
+          .upsert(
+            {
+              user_id: user.id,
+              project_id,
+              installation_id,
+              repo_owner,
+              repo_name,
+              repo_path: repo_path || '/',
+              branch: branch || 'main',
+              network: network || 'testnet',
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'project_id' },
+          )
+          .select('*')
+          .single();
+        if (connError) {
+          result = error('DB_ERROR', connError.message);
+          break;
+        }
+        result = success({ connection: conn });
+        break;
+      }
+
+      // -------------------------------------------------------------------
+      // /github/disconnect — Remove a GitHub connection
+      // -------------------------------------------------------------------
+      case '/github/disconnect': {
+        const user = await getAuthUser(req, supabaseUrl);
+        if (!user) {
+          return new Response(
+            JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
+            {
+              status: 401,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              },
+            },
+          );
+        }
+        const { project_id } = data as { project_id: string };
+        await supabaseAdmin
+          .from('runner_github_connections')
+          .delete()
+          .eq('project_id', project_id)
+          .eq('user_id', user.id);
+        result = success({ disconnected: true });
+        break;
+      }
+
+      // -------------------------------------------------------------------
+      // /github/connection — Get connection for a specific project
+      // -------------------------------------------------------------------
+      case '/github/connection': {
+        const user = await getAuthUser(req, supabaseUrl);
+        if (!user) {
+          return new Response(
+            JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
+            {
+              status: 401,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              },
+            },
+          );
+        }
+        const { project_id: connProjectId } = data as { project_id: string };
+        const { data: connData } = await supabaseAdmin
+          .from('runner_github_connections')
+          .select('*')
+          .eq('project_id', connProjectId)
+          .eq('user_id', user.id)
+          .single();
+        result = success({ connection: connData || null });
+        break;
+      }
+
+      // -------------------------------------------------------------------
+      // /github/connections — List all user's GitHub connections
+      // -------------------------------------------------------------------
+      case '/github/connections': {
+        const user = await getAuthUser(req, supabaseUrl);
+        if (!user) {
+          return new Response(
+            JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
+            {
+              status: 401,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              },
+            },
+          );
+        }
+        const { data: conns } = await supabaseAdmin
+          .from('runner_github_connections')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false });
+        result = success({ connections: conns || [] });
+        break;
+      }
+
       default:
         result = error('NOT_FOUND', `Unknown endpoint: ${endpoint}`);
     }
