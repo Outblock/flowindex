@@ -455,26 +455,28 @@ export default function App() {
     configureFcl(network);
   }, [network]);
 
-  // Re-select signer account when network changes (same key, different network account)
-  const prevNetworkRef = useRef(network);
+  // Re-select signer when accountsMap updates and current address is stale.
+  // After a network switch, refreshAccounts replaces accountsMap entries with
+  // the new network's accounts.  If the selected address no longer appears in
+  // accountsMap we pick the first available account for the same key.
   useEffect(() => {
-    if (prevNetworkRef.current === network) return;
-    prevNetworkRef.current = network;
-
     if (selectedSigner.type !== 'local') return;
 
-    // Find accounts for the same key on the new network
     const accounts = accountsMap[selectedSigner.key.id] || [];
-    if (accounts.length > 0) {
-      // Pick account with same keyIndex if available, otherwise first
-      const sameIndex = accounts.find(a => a.keyIndex === selectedSigner.account.keyIndex);
-      const newAccount = sameIndex || accounts[0];
-      setSelectedSigner({ type: 'local', key: selectedSigner.key, account: newAccount });
-    } else {
-      // No accounts on new network yet — accounts may still be loading
-      // Don't disconnect; the effect will re-run when accountsMap updates
-    }
-  }, [network, accountsMap, selectedSigner]);
+    if (accounts.length === 0) return; // still loading
+
+    // Check if current selection is still valid in accountsMap
+    const stillValid = accounts.some(
+      a => a.flowAddress === selectedSigner.account.flowAddress &&
+           a.keyIndex === selectedSigner.account.keyIndex,
+    );
+    if (stillValid) return;
+
+    // Current address not found — pick best replacement
+    const sameIndex = accounts.find(a => a.keyIndex === selectedSigner.account.keyIndex);
+    const newAccount = sameIndex || accounts[0];
+    setSelectedSigner({ type: 'local', key: selectedSigner.key, account: newAccount });
+  }, [accountsMap, selectedSigner]);
 
   // Persist project to localStorage (debounced)
   useEffect(() => {
