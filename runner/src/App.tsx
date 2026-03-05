@@ -280,7 +280,7 @@ export default function App() {
   const [showMobileAI, setShowMobileAI] = useState(false);
   const [pendingDiffs, setPendingDiffs] = useState<PendingDiffMap>({});
   const { user, loading: authLoading, signOut } = useAuth();
-  const { keys, signMessage } = useKeys();
+  useKeys();
   const {
     localKeys, accountsMap, wasmReady,
     generateNewKey, importMnemonic, importPrivateKey: importLocalPrivateKey,
@@ -518,25 +518,18 @@ export default function App() {
       if (selectedSigner.type === 'local') {
         const { key, account } = selectedSigner;
         await deployContract(activeCode, account.flowAddress, account.keyIndex, buildLocalSignFn(key, account), onResult);
-      } else if (selectedSigner.type === 'custodial') {
-        const key = selectedSigner.key;
-        await deployContract(activeCode, key.flow_address, key.key_index, (msg) => signMessage(key.id, msg), onResult);
       } else {
-        setResults([{ type: 'error', data: 'Deploy requires a local or custodial key signer. Please select one.' }]);
+        setResults([{ type: 'error', data: 'Deploy requires a local key signer. Please select one.' }]);
       }
     } else if (selectedSigner.type === 'fcl') {
       await executeTransaction(activeCode, paramValues, onResult);
     } else if (selectedSigner.type === 'local') {
       const { key, account } = selectedSigner;
       await executeCustodialTransaction(activeCode, paramValues, account.flowAddress, account.keyIndex, buildLocalSignFn(key, account), onResult);
-    } else {
-      // Custodial signer
-      const key = selectedSigner.key;
-      await executeCustodialTransaction(activeCode, paramValues, key.flow_address, key.key_index, (msg) => signMessage(key.id, msg), onResult);
     }
 
     setLoading(false);
-  }, [activeCode, codeType, paramValues, loading, selectedSigner, signMessage, signWithLocalKey, promptForPassword]);
+  }, [activeCode, codeType, paramValues, loading, selectedSigner, signWithLocalKey, promptForPassword]);
 
   const handleInsertCode = useCallback((newCode: string) => {
     setProject((prev) => updateFileContent(prev, prev.activeFile, newCode));
@@ -892,9 +885,8 @@ export default function App() {
 
 
           {/* Signer selector - show when there are keys available and code is transaction or contract */}
-          {(codeType === 'transaction' || codeType === 'contract') && (keys.length > 0 || localKeys.some(k => (accountsMap[k.id] || []).length > 0)) && (
+          {(codeType === 'transaction' || codeType === 'contract') && localKeys.some(k => (accountsMap[k.id] || []).length > 0) && (
             <SignerSelector
-              keys={keys}
               selected={selectedSigner}
               onSelect={setSelectedSigner}
               localKeys={localKeys}
@@ -902,7 +894,17 @@ export default function App() {
             />
           )}
 
-          {!isMobile && <WalletButton />}
+          {!isMobile && (
+            <WalletButton
+              localKeys={localKeys}
+              accountsMap={accountsMap}
+              selectedLocalAccount={selectedSigner.type === 'local' ? { key: selectedSigner.key, account: selectedSigner.account } : null}
+              network={network}
+              onOpenKeyManager={() => setShowKeyManager(true)}
+              onSelectLocalAccount={(key, account) => setSelectedSigner({ type: 'local', key, account })}
+              onDisconnectLocal={() => setSelectedSigner({ type: 'fcl' })}
+            />
+          )}
 
           {/* Desktop run button */}
           {!isMobile && (

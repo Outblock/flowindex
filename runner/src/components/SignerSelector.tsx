@@ -1,26 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
-import { Wallet, Key, ChevronDown, HardDrive } from 'lucide-react';
-import type { UserKey } from '../auth/useKeys';
+import { Wallet, ChevronDown, HardDrive } from 'lucide-react';
+import Avatar from 'boring-avatars';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
 
 export type SignerOption =
   | { type: 'fcl' }
-  | { type: 'custodial'; key: UserKey }
   | { type: 'local'; key: LocalKey; account: KeyAccount };
 
 interface SignerSelectorProps {
-  keys: UserKey[];
   selected: SignerOption;
   onSelect: (option: SignerOption) => void;
   localKeys: LocalKey[];
   accountsMap: Record<string, KeyAccount[]>;
 }
 
-export default function SignerSelector({ keys, selected, onSelect, localKeys, accountsMap }: SignerSelectorProps) {
+export default function SignerSelector({ selected, onSelect, localKeys, accountsMap }: SignerSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on click outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -46,16 +43,12 @@ export default function SignerSelector({ keys, selected, onSelect, localKeys, ac
   const label =
     selected.type === 'fcl'
       ? 'FCL Wallet'
-      : selected.type === 'local'
-        ? `${selected.key.label || 'Key'} → ${truncateAddress(selected.account.flowAddress)}`
-        : `${selected.key.label || 'Key'} (${truncateAddress(selected.key.flow_address)})`;
+      : `${selected.key.label || 'Key'} → ${truncateAddress(selected.account.flowAddress)}`;
 
   const icon =
     selected.type === 'fcl'
       ? <Wallet className="w-3 h-3" />
-      : selected.type === 'local'
-        ? <HardDrive className="w-3 h-3" />
-        : <Key className="w-3 h-3" />;
+      : <Avatar size={14} name={selected.account.flowAddress} variant="beam" colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']} />;
 
   return (
     <div ref={ref} className="relative">
@@ -90,7 +83,7 @@ export default function SignerSelector({ keys, selected, onSelect, localKeys, ac
                       isSelected ? 'text-emerald-400' : 'text-zinc-300'
                     }`}
                   >
-                    <HardDrive className="w-3.5 h-3.5 flex-shrink-0" />
+                    <Avatar size={16} name={entry.account.flowAddress} variant="beam" colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']} />
                     <span className="truncate">{entry.key.label || 'Key'}</span>
                     <span className="text-zinc-500 ml-auto flex-shrink-0">
                       {truncateAddress(entry.account.flowAddress)} (key #{entry.account.keyIndex})
@@ -115,31 +108,9 @@ export default function SignerSelector({ keys, selected, onSelect, localKeys, ac
             Connected Wallet
           </button>
 
-          {/* Cloud Keys group */}
-          {keys.length > 0 && (
-            <>
-              <div className="px-3 py-1 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-700">
-                Cloud Keys
-              </div>
-              {keys.map((key) => (
-                <button
-                  key={key.id}
-                  onClick={() => { onSelect({ type: 'custodial', key }); setOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-zinc-700 transition-colors ${
-                    selected.type === 'custodial' && selected.key.id === key.id ? 'text-emerald-400' : 'text-zinc-300'
-                  }`}
-                >
-                  <Key className="w-3.5 h-3.5" />
-                  <span className="truncate">{key.label || 'Key'}</span>
-                  <span className="text-zinc-500 ml-auto">{truncateAddress(key.flow_address)}</span>
-                </button>
-              ))}
-            </>
-          )}
-
-          {keys.length === 0 && localEntries.length === 0 && (
+          {localEntries.length === 0 && (
             <div className="px-3 py-2 text-[10px] text-zinc-500">
-              No keys available. Open key manager to create one.
+              No local keys available. Open key manager to create one.
             </div>
           )}
         </div>

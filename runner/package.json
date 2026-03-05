@@ -19,6 +19,7 @@
     "@trustwallet/wallet-core": "^4.6.0",
     "ai": "^6.0.101",
     "axios": "^1.13.4",
+    "boring-avatars": "^2.0.4",
     "clsx": "^2.1.0",
     "framer-motion": "^12.34.3",
     "jszip": "^3.10.1",
