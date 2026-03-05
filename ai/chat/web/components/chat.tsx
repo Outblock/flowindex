@@ -1,8 +1,9 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import type { UIMessage } from "ai";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   Database,
   BarChart3,
@@ -114,9 +115,26 @@ const SUGGESTIONS = [
 
 export function Chat() {
   const { mode, selectMode } = useModelSelector();
-  const { messages, sendMessage, status, stop } = useChat({
-    body: { mode },
-  });
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+
+  const modeFetch = useCallback(async (url: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.body) {
+      try {
+        const parsed = JSON.parse(init.body as string);
+        parsed.mode = modeRef.current;
+        init = { ...init, body: JSON.stringify(parsed) };
+      } catch { /* not JSON */ }
+    }
+    return globalThis.fetch(url, init);
+  }, []);
+
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: "/api/chat", fetch: modeFetch as typeof globalThis.fetch }),
+    [modeFetch]
+  );
+
+  const { messages, sendMessage, status, stop } = useChat({ transport });
   const [input, setInput] = useState("");
 
   const handleSend = useCallback(
