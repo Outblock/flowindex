@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { Play, Loader2, Copy, Check, Download, AlertTriangle } from 'lucide-react';
-import { ensureCodegenLoaded, analyzeAndGenerate } from '../codegen/wasmLoader';
+import { ensureCodegenLoaded, analyzeCode, generateFromReport } from '../codegen/wasmLoader';
 import type { CodegenLanguage, CodegenResult } from '../codegen/wasmLoader';
 import { useShikiHighlighter, highlightCode } from '../hooks/useShiki';
 
@@ -131,10 +131,16 @@ export default function CodegenPanel({ code, filename }: CodegenPanelProps) {
     try {
       await ensureCodegenLoaded();
 
-      // Generate all 3 languages at once so switching is instant
+      // Analyze once, then generate for all 3 languages
+      const analysis = analyzeCode(code, filename);
+      if ('error' in analysis) {
+        setState({ status: 'error', message: analysis.error });
+        return;
+      }
+
       const results = {} as Record<CodegenLanguage, CodegenResult>;
       for (const lang of LANGUAGES) {
-        results[lang.key] = analyzeAndGenerate(code, lang.key, filename);
+        results[lang.key] = generateFromReport(analysis.report, lang.key);
       }
 
       setState({ status: 'done', results, sourceCode: code });

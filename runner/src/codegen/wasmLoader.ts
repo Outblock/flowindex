@@ -115,53 +115,55 @@ export async function ensureCodegenLoaded(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Analyze Cadence source code and generate typed bindings in the target language.
+ * Analyze Cadence source code and return the report JSON.
+ * Analyze once, then call generateFromReport() per language.
  *
  * Must be called after `await ensureCodegenLoaded()`.
- * Both WASM functions are synchronous (they operate on strings in Go memory),
- * so this wrapper is synchronous too.
- *
- * @param code     - Cadence source code
- * @param language - Target output language
- * @param filename - Optional virtual filename for error messages
- * @returns CodegenResult with generated code or an error message
  */
-export function analyzeAndGenerate(
+export function analyzeCode(
   code: string,
-  language: CodegenLanguage,
   filename?: string,
-): CodegenResult {
+): { report: string } | { error: string } {
   const analyze = globalThis.cadenceCodegenAnalyze;
-  const generate = globalThis.cadenceCodegenGenerate;
-
-  if (!analyze || !generate) {
-    return { code: '', error: 'Codegen WASM not loaded. Call ensureCodegenLoaded() first.' };
+  if (!analyze) {
+    return { error: 'Codegen WASM not loaded. Call ensureCodegenLoaded() first.' };
   }
 
-  // Step 1: Analyze
   const reportJSON = analyze(code, filename);
 
-  // The analyze function returns JSON. If it contains an error key, surface it.
   try {
     const parsed = JSON.parse(reportJSON);
     if (parsed && typeof parsed === 'object' && 'error' in parsed && typeof parsed.error === 'string') {
-      return { code: '', error: parsed.error };
+      return { error: parsed.error };
     }
   } catch {
-    // Not JSON or unexpected format -- treat reportJSON as opaque and pass to generate
+    // Not JSON error — treat as valid report
   }
 
-  // Step 2: Generate
+  return { report: reportJSON };
+}
+
+/**
+ * Generate code from a previously-obtained report JSON.
+ */
+export function generateFromReport(
+  reportJSON: string,
+  language: CodegenLanguage,
+): CodegenResult {
+  const generate = globalThis.cadenceCodegenGenerate;
+  if (!generate) {
+    return { code: '', error: 'Codegen WASM not loaded.' };
+  }
+
   const output = generate(reportJSON, language);
 
-  // Check if the output is a JSON error response
   try {
     const parsed = JSON.parse(output);
     if (parsed && typeof parsed === 'object' && 'error' in parsed && typeof parsed.error === 'string') {
       return { code: '', error: parsed.error };
     }
   } catch {
-    // Not JSON -- this means it's the actual generated code (success)
+    // Not JSON — this is the actual generated code (success)
   }
 
   return { code: output };
