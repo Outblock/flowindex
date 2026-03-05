@@ -515,7 +515,7 @@ async function findAccountsViaFlowIndex(
 
   if (Array.isArray(data)) {
     return data
-      .filter((item: Record<string, unknown>) => !item.revoked)
+      .filter((item: Record<string, unknown>) => !item.revoked && Number(item.weight ?? 1000) >= 1000)
       .map((item: Record<string, unknown>) => ({
         flowAddress: String(item.address || '').replace(/^0x/, ''),
         keyIndex: Number(item.key_index ?? 0),
@@ -541,7 +541,7 @@ async function findAccountsViaKeyIndexer(
 
   if (Array.isArray(accounts)) {
     return accounts
-      .filter((item: Record<string, unknown>) => !item.isRevoked)
+      .filter((item: Record<string, unknown>) => !item.isRevoked && Number(item.weight ?? 0) >= 1000)
       .map((item: Record<string, unknown>) => ({
         flowAddress: String(item.address || '').replace(/^0x/, ''),
         keyIndex: Number(item.keyId ?? 0),
