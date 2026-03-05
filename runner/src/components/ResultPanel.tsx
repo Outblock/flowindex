@@ -264,6 +264,9 @@ export default function ResultPanel({ results, loading, network, code, filename,
             }`}
           >
             {t.label}
+            {t.key === 'codegen' && (
+              <span className="ml-1 text-[9px] font-semibold px-1 py-px rounded bg-emerald-900/50 text-emerald-400 border border-emerald-700/50">beta</span>
+            )}
             {t.count !== undefined && t.count > 0 && (
               <span className="ml-1 text-[10px] text-zinc-500">({t.count})</span>
             )}
