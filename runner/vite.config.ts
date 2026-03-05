@@ -23,6 +23,9 @@ export default defineConfig({
         target: 'ws://localhost:3001',
         ws: true,
       },
+      '/github': {
+        target: 'http://localhost:3003',
+      },
     },
   },
 });
