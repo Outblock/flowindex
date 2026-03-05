@@ -303,6 +303,14 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showNetworkMenu]);
 
+  const [autoSign, setAutoSign] = useState(() => {
+    try { return localStorage.getItem('runner-auto-sign') !== 'false'; } catch { return true; }
+  });
+  const handleToggleAutoSign = useCallback((value: boolean) => {
+    setAutoSign(value);
+    try { localStorage.setItem('runner-auto-sign', String(value)); } catch { /* ignore */ }
+  }, []);
+
   const [accountPanelAddress, setAccountPanelAddress] = useState<string | null>(null);
   const handleViewAccount = useCallback((address: string) => setAccountPanelAddress(address), []);
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'none' });
@@ -1012,6 +1020,8 @@ export default function App() {
             accountsMap={accountsMap}
             onViewAccount={handleViewAccount}
             onOpenKeyManager={() => setShowKeyManager(true)}
+            autoSign={autoSign}
+            onToggleAutoSign={handleToggleAutoSign}
           />
 
           {/* Desktop run button */}
