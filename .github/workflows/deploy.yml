@@ -449,6 +449,9 @@ jobs:
             SHA="${{ github.sha }}"
             ANON_KEY="${{ steps.jwt-keys.outputs.anon_key }}"
             SERVICE_KEY="${{ steps.jwt-keys.outputs.service_key }}"
+            # Override LILICO_API_KEY from GitHub secret if provided
+            LILICO_SECRET="${{ secrets.LILICO_API_KEY }}"
+            [ -n "$LILICO_SECRET" ] && LILICO_API_KEY="$LILICO_SECRET"
 
             # Pull all edge function images
             for IMG in edge-passkey-auth edge-flow-keys edge-runner-projects supabase-gateway; do
