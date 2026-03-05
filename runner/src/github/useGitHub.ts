@@ -181,7 +181,9 @@ export function useGitHub(projectId: string | undefined) {
       }
     }
 
-    await walk(repo_path || '');
+    // Normalize: "/" means root, same as ""
+    const startPath = (!repo_path || repo_path === '/') ? '' : repo_path;
+    await walk(startPath);
     return files;
   }, [connection]);
 

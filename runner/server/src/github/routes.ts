@@ -57,7 +57,9 @@ router.get('/tree/:owner/:repo', async (req: Request, res: Response) => {
     }
     const owner = req.params.owner as string;
     const repo = req.params.repo as string;
-    const path = (req.query.path as string) || '';
+    // Strip leading slash — GitHub API treats "/" differently from "" (empty)
+    const rawPath = (req.query.path as string) || '';
+    const path = rawPath.replace(/^\/+/, '');
     const ref = (req.query.ref as string) || undefined;
 
     const octokit = await getInstallationOctokit(installationId);
@@ -83,12 +85,15 @@ router.get('/tree/:owner/:repo', async (req: Request, res: Response) => {
     res.json({ files });
   } catch (err: unknown) {
     // Empty repos return 404 from GitHub — return empty array instead of error
-    if (err instanceof Error && 'status' in err && (err as Record<string, unknown>).status === 404) {
+    const status = err instanceof Error && 'status' in err ? (err as Record<string, unknown>).status : undefined;
+    if (status === 404 || status === 409) {
       res.json({ files: [] });
       return;
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
-    res.status(500).json({ error: message });
+    // Don't pass through giant GitHub HTML error pages
+    const safeMessage = message.length > 500 ? 'GitHub API error' : message;
+    res.status(500).json({ error: safeMessage });
   }
 });
 
