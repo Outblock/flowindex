@@ -53,9 +53,9 @@ import onigWasmUrl from 'vscode-oniguruma/release/onig.wasm?url';
 
 function ensureWasm(): Promise<void> {
   if (!wasmReady) {
-    wasmReady = loadWASM({
-      data: fetch(onigWasmUrl).then((r) => r.arrayBuffer()) as any,
-    });
+    wasmReady = fetch(onigWasmUrl)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => loadWASM(buf as any));
   }
   return wasmReady;
 }
