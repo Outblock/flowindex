@@ -1,14 +1,20 @@
 package api
 
 import (
+	"context"
+	"encoding/hex"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 
 	"github.com/gorilla/mux"
+	cadjson "github.com/onflow/cadence/encoding/json"
+	flowsdk "github.com/onflow/flow-go-sdk"
 )
 
 func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +95,13 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 	id := mux.Vars(r)["id"]
 	tx, err := s.repo.GetTransactionByID(r.Context(), id)
 	if err != nil || tx == nil {
+		// DB miss — try RPC fallback
+		if s.client != nil {
+			if out, ok := s.fetchTransactionFromRPC(r.Context(), id); ok {
+				writeAPIResponse(w, []interface{}{out}, nil, nil)
+				return
+			}
+		}
 		writeAPIError(w, http.StatusNotFound, "transaction not found")
 		return
 	}
@@ -138,6 +151,128 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 	s.enrichTransactionOutput(r, out, tx)
 
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
+}
+
+// fetchTransactionFromRPC fetches a transaction and its result from the Flow access node.
+// Returns the formatted output and true on success, or nil and false if the RPC call fails.
+func (s *Server) fetchTransactionFromRPC(ctx context.Context, txID string) (map[string]interface{}, bool) {
+	// Normalize: strip 0x prefix if present
+	cleanID := strings.TrimPrefix(strings.ToLower(txID), "0x")
+	if len(cleanID) != 64 {
+		return nil, false
+	}
+	if _, err := hex.DecodeString(cleanID); err != nil {
+		return nil, false
+	}
+
+	flowID := flowsdk.HexToID(cleanID)
+
+	rpcCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	tx, err := s.client.GetTransaction(rpcCtx, flowID)
+	if err != nil || tx == nil {
+		return nil, false
+	}
+
+	result, err := s.client.GetTransactionResult(rpcCtx, flowID)
+	if err != nil {
+		result = nil // proceed with tx body only
+	}
+
+	out := rpcTransactionToOutput(tx, result)
+	return out, true
+}
+
+// rpcTransactionToOutput converts a Flow SDK Transaction + TransactionResult into the
+// same JSON shape as toFlowTransactionOutput, but without DB-derived enrichments.
+func rpcTransactionToOutput(tx *flowsdk.Transaction, result *flowsdk.TransactionResult) map[string]interface{} {
+	txID := tx.ID().Hex()
+
+	// Build authorizers list
+	authorizers := make([]string, 0, len(tx.Authorizers))
+	for _, a := range tx.Authorizers {
+		authorizers = append(authorizers, formatAddressV1(a.Hex()))
+	}
+
+	// Build arguments as JSON array
+	args := make([]json.RawMessage, 0, len(tx.Arguments))
+	for _, arg := range tx.Arguments {
+		if len(arg) > 0 {
+			args = append(args, json.RawMessage(arg))
+		}
+	}
+
+	status := "UNKNOWN"
+	errorMsg := ""
+	var gasUsed uint64
+	var blockHeight uint64
+	var eventsOut []map[string]interface{}
+
+	if result != nil {
+		status = result.Status.String()
+		blockHeight = result.BlockHeight
+		gasUsed = result.ComputationUsage
+		if result.Error != nil {
+			errorMsg = result.Error.Error()
+		}
+
+		eventsOut = make([]map[string]interface{}, 0, len(result.Events))
+		for _, e := range result.Events {
+			ev := map[string]interface{}{
+				"type":         e.Type,
+				"transaction":  e.TransactionID.Hex(),
+				"event_index":  e.EventIndex,
+				"block_height": blockHeight,
+			}
+			// Encode event value as JSON-CDC
+			if e.Value.EventType != nil {
+				b, err := cadjson.Encode(e.Value)
+				if err == nil {
+					ev["payload"] = json.RawMessage(b)
+				}
+			}
+			eventsOut = append(eventsOut, ev)
+		}
+	}
+
+	if eventsOut == nil {
+		eventsOut = []map[string]interface{}{}
+	}
+
+	out := map[string]interface{}{
+		"id":                       txID,
+		"block_height":             blockHeight,
+		"transaction_index":        0,
+		"timestamp":                "",
+		"payer":                    formatAddressV1(tx.Payer.Hex()),
+		"proposer":                 formatAddressV1(tx.ProposalKey.Address.Hex()),
+		"proposer_key_index":       tx.ProposalKey.KeyIndex,
+		"proposer_sequence_number": tx.ProposalKey.SequenceNumber,
+		"authorizers":              authorizers,
+		"status":                   status,
+		"error":                    errorMsg,
+		"gas_used":                 gasUsed,
+		"event_count":              len(eventsOut),
+		"events":                   eventsOut,
+		"script":                   string(tx.Script),
+		"contract_imports":         []string{},
+		"contract_outputs":         []string{},
+		"tags":                     []string{},
+		"fee":                      0,
+		"fee_usd":                  0.0,
+		"ft_transfers":             []interface{}{},
+		"nft_transfers":            []interface{}{},
+		"defi_events":              []interface{}{},
+		"evm_executions":           []interface{}{},
+		"from_rpc":                 true,
+	}
+
+	if len(args) > 0 {
+		out["arguments"] = args
+	}
+
+	return out
 }
 
 // enrichTransactionOutput adds FT transfers, NFT transfers, and DeFi events to the output map.
