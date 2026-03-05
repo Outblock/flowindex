@@ -31,7 +31,7 @@ router.get('/repos', async (req: Request, res: Response) => {
       return;
     }
     const octokit = await getInstallationOctokit(installationId);
-    const { data } = await octokit.apps.listReposAccessibleToInstallation({ per_page: 100 });
+    const { data } = await octokit.request('GET /installation/repositories', { per_page: 100 });
     const repos = data.repositories.map((r) => ({
       id: r.id,
       full_name: r.full_name,

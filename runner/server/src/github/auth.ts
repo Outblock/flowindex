@@ -1,5 +1,4 @@
 import { App } from '@octokit/app';
-import { Octokit } from '@octokit/rest';
 
 const GITHUB_APP_ID = process.env.GITHUB_APP_ID || '';
 const GITHUB_APP_PRIVATE_KEY = (process.env.GITHUB_APP_PRIVATE_KEY || '').replace(/\\n/g, '\n');
@@ -25,7 +24,8 @@ export function getGitHubApp(): App {
   return githubApp;
 }
 
-export async function getInstallationOctokit(installationId: number): Promise<Octokit> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getInstallationOctokit(installationId: number): Promise<any> {
   const app = getGitHubApp();
-  return app.getInstallationOctokit(installationId) as unknown as Octokit;
+  return app.getInstallationOctokit(installationId);
 }
