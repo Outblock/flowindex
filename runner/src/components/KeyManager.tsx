@@ -103,7 +103,8 @@ function formatDate(ts: number): string {
 
 function flowIndexUrl(address: string, network: 'mainnet' | 'testnet'): string {
   const base = network === 'testnet' ? 'https://testnet.flowindex.io' : 'https://flowindex.io';
-  return `${base}/${address}`;
+  const addr = address.startsWith('0x') ? address : `0x${address}`;
+  return `${base}/account/${addr}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +194,19 @@ export default function KeyManager({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Auto-refresh accounts for all keys on mount (discover addresses without manual click)
+  const hasAutoRefreshed = useRef(false);
+  useEffect(() => {
+    if (hasAutoRefreshed.current || localKeys.length === 0) return;
+    hasAutoRefreshed.current = true;
+    for (const key of localKeys) {
+      const existing = accountsMap[key.id];
+      if (!existing || existing.length === 0) {
+        onRefreshAccounts(key.id, network).catch(() => {});
+      }
+    }
+  }, [localKeys, accountsMap, network, onRefreshAccounts]);
 
   /** After key creation, auto-create accounts on both networks + auto-refresh after delay. */
   const autoCreateAccounts = async (keyId: string) => {
