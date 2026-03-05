@@ -9,8 +9,8 @@ interface AccountPanelProps {
 
 function buildUrl(address: string, network: 'mainnet' | 'testnet'): string {
   const base = network === 'testnet' ? 'https://testnet.flowindex.io' : 'https://flowindex.io';
-  const addr = address.startsWith('0x') ? address : `0x${address}`;
-  return `${base}/account/${addr}?tab=tokens`;
+  const bare = address.startsWith('0x') ? address.slice(2) : address;
+  return `${base}/accounts/${bare}?tab=tokens`;
 }
 
 function formatAddress(address: string): string {
