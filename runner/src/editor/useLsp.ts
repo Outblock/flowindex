@@ -12,16 +12,28 @@ import { MonacoLspAdapter, type DefinitionTarget } from './monacoLspAdapter';
 import type { ProjectState } from '../fs/fileSystem';
 import type { FlowNetwork } from '../flow/networks';
 
-export type LspMode = 'wasm' | 'server';
+export type LspMode = 'auto' | 'wasm' | 'server';
 
 const LSP_WASM_URL = '/cadence-language-server.wasm';
+
+/** Check if the WASM file is in the browser's HTTP cache.
+ *  Uses a HEAD request — fast and doesn't re-download. */
+async function isWasmCached(): Promise<boolean> {
+  try {
+    const resp = await fetch(LSP_WASM_URL, { method: 'HEAD', cache: 'only-if-cached', mode: 'same-origin' });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
 
 /** Pre-fetch the LSP WASM with progress tracking.
  *  The browser caches the response so the worker's subsequent fetch is instant. */
 async function prefetchWasmWithProgress(
   onProgress: (pct: number) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const resp = await fetch(LSP_WASM_URL);
+  const resp = await fetch(LSP_WASM_URL, { signal });
   const total = Number(resp.headers.get('content-length') || 0);
   if (!total || !resp.body) {
     // Can't track progress — just consume the response to cache it
@@ -31,13 +43,19 @@ async function prefetchWasmWithProgress(
   }
   const reader = resp.body.getReader();
   let loaded = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    loaded += value.byteLength;
-    onProgress(Math.min(99, Math.round((loaded / total) * 100)));
+  try {
+    for (;;) {
+      if (signal?.aborted) { reader.cancel(); return; }
+      const { done, value } = await reader.read();
+      if (done) break;
+      loaded += value.byteLength;
+      onProgress(Math.min(99, Math.round((loaded / total) * 100)));
+    }
+    onProgress(100);
+  } catch (err) {
+    reader.cancel();
+    throw err;
   }
-  onProgress(100);
 }
 
 function buildDependencyKey(code: string): string {
@@ -76,7 +94,9 @@ export function useLsp(
   const prefetchedDepsKeyRef = useRef('');
   const prefetchPromiseRef = useRef<Promise<void> | null>(null);
   const currentModeRef = useRef<LspMode | null>(null);
+  const wasmAbortRef = useRef<AbortController | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [lspError, setLspError] = useState(false);
   const [loadingDeps, setLoadingDeps] = useState(false);
   const [activeMode, setActiveMode] = useState<LspMode | null>(null);
   const [wasmProgress, setWasmProgress] = useState<number | null>(null);
@@ -151,6 +171,13 @@ export function useLsp(
 
   // Teardown current LSP adapter
   const teardown = useCallback(() => {
+    // Abort any in-progress WASM download
+    if (wasmAbortRef.current) {
+      wasmAbortRef.current.abort();
+      wasmAbortRef.current = null;
+    }
+    setWasmProgress(null);
+
     const adapter = adapterRef.current;
     if (adapter) {
       // Close all open documents
@@ -178,12 +205,18 @@ export function useLsp(
 
     if (initializingRef.current || adapterRef.current) return;
     initializingRef.current = true;
+    setLspError(false);
 
     (async () => {
       let bridge: LSPBridge;
       let useServerLsp = false;
 
-      if (lspMode === 'server') {
+      // Resolve 'auto' → check WASM cache, use wasm if cached, else server + background download
+      let resolvedMode: 'wasm' | 'server' = lspMode === 'auto'
+        ? (await isWasmCached() ? 'wasm' : 'server')
+        : (lspMode as 'wasm' | 'server');
+
+      if (resolvedMode === 'server') {
         // Server-side LSP via WebSocket
         try {
           console.log('[LSP] Connecting to server-side LSP...');
@@ -191,22 +224,37 @@ export function useLsp(
           useServerLsp = true;
           console.log('[LSP] Connected to server-side LSP');
         } catch (err) {
-          console.error('[LSP] Server LSP unavailable:', err);
-          initializingRef.current = false;
-          return;
+          console.error('[LSP] Server LSP unavailable, falling back to WASM:', err);
+          // If in auto mode and server fails, fall back to WASM
+          if (lspMode === 'auto') {
+            resolvedMode = 'wasm';
+          } else {
+            initializingRef.current = false;
+            setLspError(true);
+            return;
+          }
         }
-      } else {
+
+        // In auto mode with server: background-download WASM for next time
+        if (lspMode === 'auto' && useServerLsp) {
+          prefetchWasmWithProgress(() => {}).catch(() => {});
+        }
+      }
+
+      if (resolvedMode === 'wasm' && !useServerLsp) {
         // WASM v2 (Web Worker)
         try {
           console.log('[LSP] Initializing WASM v2...');
           setWasmProgress(0);
+          const abortCtrl = new AbortController();
+          wasmAbortRef.current = abortCtrl;
 
           // Pre-fetch WASM with progress tracking (browser caches it for the worker)
           // and pre-fetch contract dependencies in parallel
           const editableFiles = project.files.filter((f) => !f.readOnly);
           const allCode = editableFiles.map((f) => f.content).join('\n');
           const tasks: Promise<void>[] = [
-            prefetchWasmWithProgress((pct) => setWasmProgress(pct)),
+            prefetchWasmWithProgress((pct) => setWasmProgress(pct), abortCtrl.signal),
           ];
           if (allCode.includes('import ')) {
             console.log('[LSP v2] Pre-fetching dependencies...');
@@ -225,6 +273,7 @@ export function useLsp(
           console.error('[LSP] WASM v2 failed:', err);
           setWasmProgress(null);
           initializingRef.current = false;
+          setLspError(true);
           return;
         }
       }
@@ -243,8 +292,8 @@ export function useLsp(
         adapterRef.current = adapter;
         currentModeRef.current = lspMode;
         setIsReady(true);
-        setActiveMode(lspMode);
-        console.log(`[LSP] Cadence Language Server ready (${lspMode})`);
+        setActiveMode(useServerLsp ? 'server' : 'wasm');
+        console.log(`[LSP] Cadence Language Server ready (${lspMode}${lspMode === 'auto' ? ` → ${useServerLsp ? 'server' : 'wasm'}` : ''})`);
 
         // Open existing documents
         for (const file of project.files) {
@@ -255,6 +304,7 @@ export function useLsp(
       } catch (err) {
         console.error('[LSP] Failed to initialize adapter:', err);
         initializingRef.current = false;
+        setLspError(true);
       }
     })();
   }, [monacoInstance, lspMode, network, prefetchForCode, project.files, lspWsUrl, teardown]);
@@ -341,5 +391,5 @@ export function useLsp(
     return null;
   }, []);
 
-  return { notifyChange, goToDefinition, isReady, loadingDeps, activeMode, wasmProgress };
+  return { notifyChange, goToDefinition, isReady, lspError, loadingDeps, activeMode, wasmProgress };
 }

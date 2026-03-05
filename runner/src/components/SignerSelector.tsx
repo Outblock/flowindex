@@ -16,6 +16,7 @@ interface SignerSelectorProps {
   accountsMap: Record<string, KeyAccount[]>;
   onViewAccount?: (address: string) => void;
   onOpenKeyManager?: () => void;
+  onOpenConnectModal?: () => void;
   autoSign: boolean;
   onToggleAutoSign: (value: boolean) => void;
   network: 'mainnet' | 'testnet';
@@ -53,7 +54,7 @@ function useFlowBalance(address: string | null) {
   return balance;
 }
 
-export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, onViewAccount, onOpenKeyManager, autoSign, onToggleAutoSign, network }: SignerSelectorProps) {
+export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, onViewAccount, onOpenKeyManager, onOpenConnectModal, autoSign, onToggleAutoSign, network }: SignerSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -84,9 +85,11 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
 
   const isConnected = selected.type !== 'none';
 
-  // Click the main button: open account panel if local, toggle dropdown otherwise
+  // Click the main button: open modal if disconnected, open account panel if local, toggle dropdown otherwise
   const handleMainClick = () => {
-    if (selected.type === 'local' && onViewAccount) {
+    if (selected.type === 'none' && onOpenConnectModal) {
+      onOpenConnectModal();
+    } else if (selected.type === 'local' && onViewAccount) {
       onViewAccount(selected.account.flowAddress);
     } else {
       setOpen(!open);
@@ -187,7 +190,11 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
               FCL Wallet
             </div>
             <button
-              onClick={() => { fcl.authenticate(); onSelect({ type: 'fcl' }); setOpen(false); }}
+              onClick={() => {
+                setOpen(false);
+                if (onOpenConnectModal) { onOpenConnectModal(); }
+                else { fcl.authenticate(); onSelect({ type: 'fcl' }); }
+              }}
               className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-zinc-700 transition-colors ${
                 selected.type === 'fcl' ? 'text-emerald-400' : 'text-zinc-300'
               }`}
