@@ -291,7 +291,7 @@ export default function App() {
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [accountPanelAddress, setAccountPanelAddress] = useState<string | null>(null);
   const handleViewAccount = useCallback((address: string) => setAccountPanelAddress(address), []);
-  const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'fcl' });
+  const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'none' });
   const [passwordPrompt, setPasswordPrompt] = useState<{
     keyLabel: string;
     resolve: (password: string) => void;
@@ -309,8 +309,10 @@ export default function App() {
           address: signer.account.flowAddress,
           keyIndex: signer.account.keyIndex,
         }));
-      } else {
+      } else if (signer.type === 'fcl') {
         localStorage.setItem('flow-selected-signer', JSON.stringify({ type: 'fcl' }));
+      } else {
+        localStorage.removeItem('flow-selected-signer');
       }
     } catch {}
   }, []);
@@ -343,8 +345,8 @@ export default function App() {
     if (localKeys.length > 0 && !hasLocalAccounts) return;
 
     hasRestoredSigner.current = true;
+    const saved = localStorage.getItem('flow-selected-signer');
     try {
-      const saved = localStorage.getItem('flow-selected-signer');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.type === 'local') {
@@ -356,16 +358,20 @@ export default function App() {
             return;
           }
         } else if (parsed.type === 'fcl') {
-          return; // already default
+          setSelectedSigner({ type: 'fcl' });
+          return;
         }
       }
     } catch {}
-    // Fallback: auto-select first local account
-    for (const key of localKeys) {
-      const accounts = accountsMap[key.id];
-      if (accounts && accounts.length > 0) {
-        setSelectedSigner({ type: 'local', key, account: accounts[0] });
-        return;
+    // Auto-select first local account only if no prior preference was saved
+    // (i.e. first-time user). If saved was explicitly cleared (disconnect), stay as 'none'.
+    if (!saved) {
+      for (const key of localKeys) {
+        const accounts = accountsMap[key.id];
+        if (accounts && accounts.length > 0) {
+          setSelectedSigner({ type: 'local', key, account: accounts[0] });
+          return;
+        }
       }
     }
   }, [localKeys, accountsMap]);
@@ -578,7 +584,7 @@ export default function App() {
       } else {
         setResults([{ type: 'error', data: 'Deploy requires a local key signer. Please select one.' }]);
       }
-    } else if (selectedSigner.type === 'fcl') {
+    } else if (selectedSigner.type === 'fcl' || selectedSigner.type === 'none') {
       await executeTransaction(activeCode, paramValues, onResult);
     } else if (selectedSigner.type === 'local') {
       const { key, account } = selectedSigner;
@@ -961,7 +967,7 @@ export default function App() {
               network={network}
               onOpenKeyManager={() => setShowKeyManager(true)}
               onSelectLocalAccount={(key, account) => persistSigner({ type: 'local', key, account })}
-              onDisconnectLocal={() => persistSigner({ type: 'fcl' })}
+              onDisconnectLocal={() => persistSigner({ type: 'none' })}
               onViewAccount={handleViewAccount}
             />
           )}
@@ -1454,7 +1460,7 @@ export default function App() {
               network={network}
               onClose={() => setAccountPanelAddress(null)}
               onDisconnect={() => {
-                if (selectedSigner.type === 'local') persistSigner({ type: 'fcl' });
+                if (selectedSigner.type === 'local') persistSigner({ type: 'none' });
               }}
             />
           </div>

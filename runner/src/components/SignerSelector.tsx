@@ -4,6 +4,7 @@ import Avatar from 'boring-avatars';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
 
 export type SignerOption =
+  | { type: 'none' }
   | { type: 'fcl' }
   | { type: 'local'; key: LocalKey; account: KeyAccount };
 
@@ -42,16 +43,20 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
   }
 
   const label =
-    selected.type === 'fcl'
-      ? 'FCL Wallet'
-      : truncateAddress(selected.account.flowAddress);
+    selected.type === 'local'
+      ? truncateAddress(selected.account.flowAddress)
+      : selected.type === 'fcl'
+        ? 'FCL Wallet'
+        : 'Connect';
 
   const icon =
-    selected.type === 'fcl'
-      ? <Wallet className="w-3 h-3" />
-      : <Avatar size={14} name={selected.account.flowAddress} variant="beam" colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']} />;
+    selected.type === 'local'
+      ? <Avatar size={14} name={selected.account.flowAddress} variant="beam" colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']} />
+      : <Wallet className="w-3 h-3" />;
 
-  // Click the main button: open account panel if local, toggle dropdown if FCL
+  const isConnected = selected.type !== 'none';
+
+  // Click the main button: open account panel if local, toggle dropdown otherwise
   const handleMainClick = () => {
     if (selected.type === 'local' && onViewAccount) {
       onViewAccount(selected.account.flowAddress);
@@ -64,7 +69,9 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
     <div ref={ref} className="relative flex">
       <button
         onClick={handleMainClick}
-        className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-emerald-400 text-xs px-2 py-1 rounded-l border border-zinc-700 transition-colors"
+        className={`flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-xs px-2 py-1 rounded-l border border-zinc-700 transition-colors ${
+          isConnected ? 'text-emerald-400' : 'text-zinc-400'
+        }`}
       >
         {icon}
         <span className="max-w-[120px] truncate font-mono">{label}</span>
