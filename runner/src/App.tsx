@@ -468,7 +468,13 @@ export default function App() {
   const [ghInstallationId, setGhInstallationId] = useState<number | undefined>(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('github_installation_id');
-    return id ? Number(id) : undefined;
+    if (id) {
+      localStorage.setItem('github_installation_id', id);
+      return Number(id);
+    }
+    // Fall back to previously saved installation ID
+    const saved = localStorage.getItem('github_installation_id');
+    return saved ? Number(saved) : undefined;
   });
   const [showGitHubConnect, setShowGitHubConnect] = useState(false);
   const [gitPushing, setGitPushing] = useState(false);
@@ -1104,6 +1110,8 @@ export default function App() {
   // Handle GitHub connect: link repo and pull files
   const handleGitHubConnect = async (installationId: number, owner: string, repo: string, path: string, branch: string) => {
     await github.connect(installationId, owner, repo, path, branch);
+    // Persist installation ID for future sessions
+    localStorage.setItem('github_installation_id', String(installationId));
     const files = await github.pullFiles();
     const pulled = new Map<string, string>();
     const newProjectFiles = files.map(f => {
@@ -1120,7 +1128,7 @@ export default function App() {
     }
     setLastPulledFiles(pulled);
     setShowGitHubConnect(false);
-    setGhInstallationId(undefined);
+    setGhInstallationId(installationId);
     // Clean URL params
     const url = new URL(window.location.href);
     url.searchParams.delete('github_installation_id');
@@ -1817,9 +1825,9 @@ export default function App() {
       {/* GitHub Connect Modal */}
       {showGitHubConnect && (
         <GitHubConnect
-          installationId={ghInstallationId}
+          installationId={ghInstallationId ?? github.connection?.installation_id}
           onConnect={handleGitHubConnect}
-          onClose={() => { setShowGitHubConnect(false); setGhInstallationId(undefined); }}
+          onClose={() => { setShowGitHubConnect(false); }}
         />
       )}
 
