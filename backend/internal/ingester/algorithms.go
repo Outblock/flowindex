@@ -7,6 +7,8 @@ import (
 
 var algoDigits = regexp.MustCompile(`\d+`)
 
+// normalizeSignatureAlgorithm maps to Flow SDK numbering:
+// 2 = ECDSA_P256, 3 = ECDSA_secp256k1
 func normalizeSignatureAlgorithm(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -17,9 +19,9 @@ func normalizeSignatureAlgorithm(raw string) string {
 	}
 	switch strings.ToUpper(raw) {
 	case "ECDSA_P256":
-		return "1"
-	case "ECDSA_SECP256K1":
 		return "2"
+	case "ECDSA_SECP256K1":
+		return "3"
 	default:
 		return raw
 	}
