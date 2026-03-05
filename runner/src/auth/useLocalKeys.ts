@@ -39,6 +39,11 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 // Types
 // ---------------------------------------------------------------------------
 
+/** Result of revealing a secret — mnemonic keys include derived private keys + path. */
+export type RevealedSecret =
+  | { type: 'mnemonic'; value: string; privateKeyP256: string; privateKeySecp256k1: string; path: string }
+  | { type: 'privateKey'; value: string };
+
 /** Signer option for the dropdown — represents a local key + on-chain account. */
 export interface LocalSignerOption {
   type: 'local';
@@ -100,8 +105,8 @@ export interface UseLocalKeysReturn {
   ) => Promise<{ txId: string }>;
   // Private key access
   getPrivateKey: (keyId: string, password?: string, sigAlgo?: 'ECDSA_P256' | 'ECDSA_secp256k1') => Promise<string>;
-  // Reveal secret — returns { type: 'mnemonic', value } or { type: 'privateKey', value }
-  revealSecret: (keyId: string, password?: string) => Promise<{ type: 'mnemonic' | 'privateKey'; value: string }>;
+  // Reveal secret — returns { type: 'mnemonic', value, privateKeys, path } or { type: 'privateKey', value }
+  revealSecret: (keyId: string, password?: string) => Promise<RevealedSecret>;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +231,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
   // -------------------------------------------------------------------------
 
   const revealSecret = useCallback(
-    async (keyId: string, password?: string): Promise<{ type: 'mnemonic' | 'privateKey'; value: string }> => {
+    async (keyId: string, password?: string): Promise<RevealedSecret> => {
       await ensureWasmReady();
       const key = localKeys.find((k) => k.id === keyId);
       if (!key) throw new Error(`Local key not found: ${keyId}`);
@@ -234,10 +239,20 @@ export function useLocalKeys(): UseLocalKeysReturn {
       const pw = key.autoPassword ?? password;
       if (!pw && key.hasPassword && !password) throw new Error('PASSWORD_REQUIRED');
 
-      // For mnemonic-based keys, try to decrypt the mnemonic
+      // For mnemonic-based keys, decrypt the mnemonic and derive private keys
       if (key.source === 'mnemonic') {
         const mnemonic = await decryptMnemonicFromKeystore(key.encryptedKey, pw ?? '');
-        if (mnemonic) return { type: 'mnemonic', value: mnemonic };
+        if (mnemonic) {
+          const path = "m/44'/539'/0'/0/0";
+          const derived = await deriveFromMnemonic(mnemonic);
+          return {
+            type: 'mnemonic',
+            value: mnemonic,
+            privateKeyP256: derived.privateKeyHex,
+            privateKeySecp256k1: derived.privateKeyHexSecp256k1,
+            path,
+          };
+        }
       }
 
       // Fallback to private key

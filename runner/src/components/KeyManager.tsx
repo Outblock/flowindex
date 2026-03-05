@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
+import type { RevealedSecret } from '../auth/useLocalKeys';
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
 function colorsFromAddress(addr: string): string[] {
@@ -79,7 +80,7 @@ interface KeyManagerProps {
     hashAlgo: 'SHA2_256' | 'SHA3_256',
     network: 'mainnet' | 'testnet',
   ) => Promise<{ txId: string }>;
-  onRevealSecret?: (keyId: string, password?: string) => Promise<{ type: 'mnemonic' | 'privateKey'; value: string }>;
+  onRevealSecret?: (keyId: string, password?: string) => Promise<RevealedSecret>;
   onViewAccount?: (address: string) => void;
   selectedAccount?: { keyId: string; address: string; keyIndex: number } | null;
   onSelectAccount?: (key: LocalKey, account: KeyAccount) => void;
@@ -1093,7 +1094,7 @@ function LocalKeyCard({
     hashAlgo: 'SHA2_256' | 'SHA3_256',
     network: 'mainnet' | 'testnet',
   ) => Promise<{ txId: string }>;
-  onRevealSecret?: (keyId: string, password?: string) => Promise<{ type: 'mnemonic' | 'privateKey'; value: string }>;
+  onRevealSecret?: (keyId: string, password?: string) => Promise<RevealedSecret>;
   onViewAccount?: (address: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -1102,7 +1103,7 @@ function LocalKeyCard({
   const [exporting, setExporting] = useState(false);
   const [exportPassword, setExportPassword] = useState('');
   const [showExportInput, setShowExportInput] = useState(false);
-  const [revealedSecret, setRevealedSecret] = useState<{ type: 'mnemonic' | 'privateKey'; value: string } | null>(null);
+  const [revealedSecret, setRevealedSecret] = useState<RevealedSecret | null>(null);
   const [revealingKey, setRevealingKey] = useState(false);
   const [secretCopied, setSecretCopied] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -1295,34 +1296,77 @@ function LocalKeyCard({
 
           {/* Revealed secret (mnemonic or private key) */}
           {revealedSecret && (
-            <div className="bg-red-500/5 border border-red-500/20 rounded px-2 py-1.5 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-red-400 font-medium">
-                  {revealedSecret.type === 'mnemonic' ? 'Recovery Phrase' : 'Private Key'}
-                </span>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(revealedSecret.value);
-                    setSecretCopied(true);
-                    setTimeout(() => setSecretCopied(false), 2000);
-                  }}
-                  className="text-zinc-500 hover:text-zinc-300 p-0.5"
-                >
-                  {secretCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                </button>
-              </div>
-              {revealedSecret.type === 'mnemonic' ? (
-                <div className="grid grid-cols-3 gap-1">
-                  {revealedSecret.value.split(' ').map((word, i) => (
-                    <div key={i} className="bg-zinc-800 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-200">
-                      <span className="text-zinc-500 mr-1">{i + 1}.</span>{word}
-                    </div>
-                  ))}
+            <div className="bg-red-500/5 border border-red-500/20 rounded px-2 py-1.5 space-y-2">
+              {/* Mnemonic / Recovery Phrase */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-red-400 font-medium">
+                    {revealedSecret.type === 'mnemonic' ? 'Recovery Phrase' : 'Private Key'}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(revealedSecret.value);
+                      setSecretCopied(true);
+                      setTimeout(() => setSecretCopied(false), 2000);
+                    }}
+                    className="text-zinc-500 hover:text-zinc-300 p-0.5"
+                  >
+                    {secretCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  </button>
                 </div>
-              ) : (
-                <p className="text-[10px] text-zinc-300 font-mono break-all select-all leading-relaxed">
-                  {revealedSecret.value}
-                </p>
+                {revealedSecret.type === 'mnemonic' ? (
+                  <div className="grid grid-cols-3 gap-1">
+                    {revealedSecret.value.split(' ').map((word, i) => (
+                      <div key={i} className="bg-zinc-800 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-200">
+                        <span className="text-zinc-500 mr-1">{i + 1}.</span>{word}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-zinc-300 font-mono break-all select-all leading-relaxed">
+                    {revealedSecret.value}
+                  </p>
+                )}
+              </div>
+
+              {/* BIP44 path + derived private keys (mnemonic only) */}
+              {revealedSecret.type === 'mnemonic' && (
+                <div className="space-y-1.5 border-t border-red-500/10 pt-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500">BIP44 Path:</span>
+                    <span className="text-[10px] text-zinc-300 font-mono">{revealedSecret.path}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-red-400/80 font-medium">Private Key (P256)</span>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(revealedSecret.privateKeyP256)}
+                        className="text-zinc-500 hover:text-zinc-300 p-0.5"
+                        title="Copy P256 private key"
+                      >
+                        <Copy className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-mono break-all select-all leading-relaxed bg-zinc-800/50 rounded px-1.5 py-1">
+                      {revealedSecret.privateKeyP256}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-red-400/80 font-medium">Private Key (secp256k1)</span>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(revealedSecret.privateKeySecp256k1)}
+                        className="text-zinc-500 hover:text-zinc-300 p-0.5"
+                        title="Copy secp256k1 private key"
+                      >
+                        <Copy className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-mono break-all select-all leading-relaxed bg-zinc-800/50 rounded px-1.5 py-1">
+                      {revealedSecret.privateKeySecp256k1}
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
           )}
