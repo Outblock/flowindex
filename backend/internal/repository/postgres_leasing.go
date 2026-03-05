@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"flowscan-clone/internal/models"
@@ -197,6 +198,72 @@ func (r *Repository) SetCheckpoint(ctx context.Context, serviceName string, heig
 		serviceName, height,
 	)
 	return err
+}
+
+// SetCheckpointWithConfig sets a checkpoint and stores job config in the subcursor JSONB field.
+func (r *Repository) SetCheckpointWithConfig(ctx context.Context, serviceName string, height uint64, config map[string]interface{}) error {
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	_, err = r.db.Exec(ctx, `
+		INSERT INTO app.indexing_checkpoints (service_name, last_height, subcursor, updated_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (service_name) DO UPDATE SET
+			last_height = EXCLUDED.last_height,
+			subcursor = EXCLUDED.subcursor,
+			updated_at = NOW()`,
+		serviceName, height, configJSON,
+	)
+	return err
+}
+
+// GetActiveReprocessJobs returns all reprocess_* checkpoints that have a subcursor config
+// with a to_height greater than the current last_height (i.e., unfinished jobs).
+func (r *Repository) GetActiveReprocessJobs(ctx context.Context) ([]ReprocessJob, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT service_name, last_height, subcursor
+		FROM app.indexing_checkpoints
+		WHERE service_name LIKE 'reprocess_%'
+		  AND subcursor IS NOT NULL
+		  AND (subcursor->>'to_height')::bigint > last_height`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var jobs []ReprocessJob
+	for rows.Next() {
+		var j ReprocessJob
+		var subcursor []byte
+		if err := rows.Scan(&j.CheckpointKey, &j.CurrentHeight, &subcursor); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(subcursor, &j); err != nil {
+			continue // skip malformed entries
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
+// ClearReprocessConfig removes the subcursor config from a reprocess checkpoint,
+// marking the job as finished.
+func (r *Repository) ClearReprocessConfig(ctx context.Context, serviceName string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE app.indexing_checkpoints SET subcursor = NULL, updated_at = NOW()
+		WHERE service_name = $1`, serviceName)
+	return err
+}
+
+// ReprocessJob represents an active reprocess job stored in the checkpoint subcursor.
+type ReprocessJob struct {
+	CheckpointKey string `json:"-"`
+	CurrentHeight uint64 `json:"-"`
+	Worker        string `json:"worker"`
+	ToHeight      uint64 `json:"to_height"`
+	ChunkSize     uint64 `json:"chunk_size"`
+	Concurrency   int    `json:"concurrency"`
 }
 
 // AdvanceCheckpointSafe moves the checkpoint to the highest contiguous completed height

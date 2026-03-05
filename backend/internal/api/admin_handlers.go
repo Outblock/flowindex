@@ -1389,6 +1389,17 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 	log.Printf("[admin] reprocess-worker: %s from %d to %d (%d chunks, concurrency=%d)",
 		req.Worker, req.FromHeight, req.ToHeight, totalChunks, req.Concurrency)
 
+	// Save job config alongside checkpoint so it can auto-resume on restart.
+	jobConfig := map[string]interface{}{
+		"worker":      req.Worker,
+		"to_height":   req.ToHeight,
+		"chunk_size":  req.ChunkSize,
+		"concurrency": req.Concurrency,
+	}
+	if err := s.repo.SetCheckpointWithConfig(r.Context(), checkpointKey, req.FromHeight, jobConfig); err != nil {
+		log.Printf("[admin] reprocess-worker: failed to save job config: %v", err)
+	}
+
 	// Process in parallel with bounded concurrency.
 	// Run in background goroutine so the HTTP response returns immediately.
 	// Track completed chunks to maintain a contiguous checkpoint.
@@ -1463,6 +1474,17 @@ func (s *Server) handleAdminReprocessWorker(w http.ResponseWriter, r *http.Reque
 		elapsed := time.Since(startTime).Round(time.Second)
 		log.Printf("[admin] reprocess-worker: %s DONE processed=%d errored=%d total=%d elapsed=%s",
 			req.Worker, processed, errored, totalChunks, elapsed)
+
+		// Clear job config if all chunks succeeded (no need to resume).
+		if errored == 0 {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := s.repo.ClearReprocessConfig(ctx, checkpointKey); err != nil {
+				log.Printf("[admin] reprocess-worker: failed to clear job config: %v", err)
+			} else {
+				log.Printf("[admin] reprocess-worker: %s job config cleared (complete)", req.Worker)
+			}
+		}
 	}()
 
 	writeAPIResponse(w, map[string]interface{}{

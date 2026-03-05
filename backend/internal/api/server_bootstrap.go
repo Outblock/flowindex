@@ -2,12 +2,14 @@ package api
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"flowscan-clone/internal/ingester"
 	"flowscan-clone/internal/market"
 	"flowscan-clone/internal/repository"
 
@@ -232,6 +234,10 @@ func (s *Server) Start() error {
 	// Pre-warm the indexed_ranges cache in the background so the first
 	// request doesn't have to wait for the expensive bucket query.
 	go s.refreshRangesCacheLoop()
+
+	// Auto-resume any unfinished reprocess jobs from before a restart.
+	go s.autoResumeReprocessJobs()
+
 	return s.httpServer.ListenAndServe()
 }
 
@@ -248,6 +254,162 @@ func (s *Server) refreshRangesCacheLoop() {
 		}
 		time.Sleep(5 * time.Minute)
 	}
+}
+
+func (s *Server) autoResumeReprocessJobs() {
+	// Wait a bit for the server to be fully ready before resuming background jobs.
+	time.Sleep(10 * time.Second)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	jobs, err := s.repo.GetActiveReprocessJobs(ctx)
+	if err != nil {
+		log.Printf("[auto-resume] failed to check for active reprocess jobs: %v", err)
+		return
+	}
+	if len(jobs) == 0 {
+		return
+	}
+
+	for _, job := range jobs {
+		log.Printf("[auto-resume] found unfinished reprocess job: %s (checkpoint=%d, target=%d, chunk=%d, concurrency=%d)",
+			job.Worker, job.CurrentHeight, job.ToHeight, job.ChunkSize, job.Concurrency)
+		s.resumeReprocessJob(job)
+	}
+}
+
+func (s *Server) resumeReprocessJob(job repository.ReprocessJob) {
+	// Instantiate the worker
+	var proc ingester.Processor
+	switch job.Worker {
+	case "token_worker":
+		proc = ingester.NewTokenWorker(s.repo)
+	case "evm_worker":
+		proc = ingester.NewEVMWorker(s.repo)
+	case "proposer_key_backfill":
+		flowCli := s.historyClient
+		if flowCli == nil {
+			flowCli = s.client
+		}
+		if flowCli == nil {
+			log.Printf("[auto-resume] cannot resume %s: no Flow client configured", job.Worker)
+			return
+		}
+		proc = ingester.NewProposerKeyBackfillWorker(s.repo, flowCli)
+	default:
+		log.Printf("[auto-resume] unsupported worker type: %s", job.Worker)
+		return
+	}
+
+	chunkSize := job.ChunkSize
+	if chunkSize == 0 {
+		chunkSize = 2000
+	}
+	concurrency := job.Concurrency
+	if concurrency < 1 {
+		concurrency = 4
+	}
+	if concurrency > 16 {
+		concurrency = 16
+	}
+
+	fromHeight := job.CurrentHeight
+	toHeight := job.ToHeight
+	checkpointKey := job.CheckpointKey
+
+	type chunk struct{ from, to uint64 }
+	var chunks []chunk
+	for h := fromHeight; h < toHeight; h += chunkSize {
+		end := h + chunkSize
+		if end > toHeight {
+			end = toHeight
+		}
+		chunks = append(chunks, chunk{from: h, to: end})
+	}
+
+	totalChunks := len(chunks)
+	log.Printf("[auto-resume] resuming %s from %d to %d (%d chunks, concurrency=%d)",
+		job.Worker, fromHeight, toHeight, totalChunks, concurrency)
+
+	go func() {
+		sem := make(chan struct{}, concurrency)
+		var mu sync.Mutex
+		processed := 0
+		errored := 0
+		startTime := time.Now()
+
+		chunkDone := make([]bool, len(chunks))
+		checkpointIdx := -1
+
+		advanceCheckpoint := func() {
+			advanced := false
+			for checkpointIdx+1 < len(chunks) && chunkDone[checkpointIdx+1] {
+				checkpointIdx++
+				advanced = true
+			}
+			if advanced {
+				cpHeight := chunks[checkpointIdx].to
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := s.repo.SetCheckpoint(ctx, checkpointKey, cpHeight); err != nil {
+					log.Printf("[auto-resume] checkpoint save error: %v", err)
+				}
+			}
+		}
+
+		for i, c := range chunks {
+			sem <- struct{}{}
+			go func(idx int, ch chunk) {
+				defer func() { <-sem }()
+				chunkTimeout := 2 * time.Minute
+				if job.Worker == "proposer_key_backfill" {
+					chunkTimeout = 30 * time.Minute
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), chunkTimeout)
+				defer cancel()
+				if err := proc.ProcessRange(ctx, ch.from, ch.to); err != nil {
+					mu.Lock()
+					errored++
+					mu.Unlock()
+					log.Printf("[auto-resume] %s chunk [%d,%d) FAILED: %v", job.Worker, ch.from, ch.to, err)
+				} else {
+					mu.Lock()
+					processed++
+					chunkDone[idx] = true
+					p := processed
+					e := errored
+					advanceCheckpoint()
+					mu.Unlock()
+					if p%100 == 0 || p+e == totalChunks {
+						elapsed := time.Since(startTime).Round(time.Second)
+						log.Printf("[auto-resume] %s progress %d/%d (errors=%d) elapsed=%s",
+							job.Worker, p, totalChunks, e, elapsed)
+					}
+				}
+			}(i, c)
+		}
+		for i := 0; i < concurrency; i++ {
+			sem <- struct{}{}
+		}
+		mu.Lock()
+		advanceCheckpoint()
+		mu.Unlock()
+
+		elapsed := time.Since(startTime).Round(time.Second)
+		log.Printf("[auto-resume] %s DONE processed=%d errored=%d total=%d elapsed=%s",
+			job.Worker, processed, errored, totalChunks, elapsed)
+
+		if errored == 0 {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := s.repo.ClearReprocessConfig(ctx, checkpointKey); err != nil {
+				log.Printf("[auto-resume] failed to clear job config: %v", err)
+			} else {
+				log.Printf("[auto-resume] %s job config cleared (complete)", job.Worker)
+			}
+		}
+	}()
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
