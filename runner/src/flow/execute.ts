@@ -105,19 +105,13 @@ export async function executeCustodialTransaction(
 
     // Custom FCL authorization function using custodial key
     const authz = (account: any) => {
-      console.log('[authz] account:', JSON.stringify(account, null, 2));
-      console.log('[authz] addr:', fcl.sansPrefix(signerAddress), 'keyId:', keyIndex);
-      console.log('[authz] hashAlgorithm:', hashAlgorithm, 'signatureAlgorithm:', signatureAlgorithm);
       return {
         ...account,
         tempId: `${signerAddress}-${keyIndex}`,
         addr: fcl.sansPrefix(signerAddress),
         keyId: keyIndex,
         signingFunction: async (signable: { message: string }) => {
-          console.log('[signingFunction] signable.message:', signable.message?.substring(0, 80) + '...');
-          console.log('[signingFunction] signable keys:', Object.keys(signable));
           const sig = await signFn(signable.message);
-          console.log('[signingFunction] signature:', sig?.substring(0, 40) + '...');
           return {
             addr: fcl.withPrefix(signerAddress),
             keyId: keyIndex,
