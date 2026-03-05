@@ -433,6 +433,11 @@ export function useLocalKeys(): UseLocalKeysReturn {
         ),
       ]);
 
+      // Override sigAlgo based on which public key search found the account
+      // (more reliable than trusting the API's numeric value)
+      for (const acc of p256Accounts) acc.sigAlgo = 'ECDSA_P256';
+      for (const acc of secpAccounts) acc.sigAlgo = 'ECDSA_secp256k1';
+
       // Merge and deduplicate by address + keyIndex
       const seen = new Set<string>();
       const merged: KeyAccount[] = [];
