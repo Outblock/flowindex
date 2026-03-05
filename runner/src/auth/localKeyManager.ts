@@ -337,27 +337,38 @@ export async function decryptMnemonicFromKeystore(
 // ---------------------------------------------------------------------------
 
 /**
- * Sign a hex-encoded message with a P256 private key.
+ * Sign a hex-encoded message using wallet-core.
  *
- * FCL sends `signable.message` as a hex string of the already-hashed
- * transaction envelope. We sign the raw bytes directly — no additional
- * hashing is performed here, matching the custodial signing behaviour
- * in execute.ts.
+ * FCL sends `signable.message` as a hex string of the RLP-encoded,
+ * domain-tagged transaction payload (NOT pre-hashed). We must:
+ *   1. Hash the message with the account's hash algorithm (SHA2_256 or SHA3_256)
+ *   2. Sign the 32-byte digest with the private key (wallet-core expects a digest)
+ *   3. Strip the recovery byte (v) — FCL expects raw r||s (64 bytes)
+ *
+ * Reference: Flow-Wallet-Tool signWithKey implementation.
  *
  * @param privateKeyHex  Hex-encoded private key
- * @param messageHex     Hex-encoded message (already hashed by FCL)
- * @param sigAlgo        Signature algorithm, defaults to P256
- * @returns Hex-encoded signature
+ * @param messageHex     Hex-encoded message (unhashed, from FCL signable.message)
+ * @param sigAlgo        Signature algorithm
+ * @param hashAlgo       Hash algorithm matching the on-chain key configuration
+ * @returns Hex-encoded signature (r||s, 64 bytes)
  */
 export async function signMessage(
   privateKeyHex: string,
   messageHex: string,
-  sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_P256',
+  sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_secp256k1',
+  hashAlgo: 'SHA2_256' | 'SHA3_256' = 'SHA2_256',
 ): Promise<string> {
   const core = await getWalletCore();
   const pkBytes = hexToBytes(privateKeyHex);
   const msgBytes = hexToBytes(messageHex);
 
+  // 1. Hash the message with the correct algorithm
+  const messageHash = hashAlgo === 'SHA3_256'
+    ? core.Hash.sha3_256(msgBytes)
+    : core.Hash.sha256(msgBytes);
+
+  // 2. Sign the hash digest
   const privateKey = core.PrivateKey.createWithData(pkBytes);
   if (!privateKey) {
     throw new Error('Failed to load private key — the key data may be corrupt or invalid');
@@ -365,25 +376,16 @@ export async function signMessage(
   const curve =
     sigAlgo === 'ECDSA_secp256k1' ? core.Curve.secp256k1 : core.Curve.nist256p1;
 
-  const signature = privateKey.sign(msgBytes, curve);
+  const signature = privateKey.sign(messageHash, curve);
   privateKey.delete();
 
   if (!signature || signature.length === 0) {
     throw new Error('Signing failed');
   }
 
-  // wallet-core returns different signature formats per curve:
-  // - secp256k1: raw r(32) || s(32) || v(1) = 65 bytes → drop v, take first 64
-  // - nist256p1 (P256): DER-encoded → convert to raw r || s via AsnParser
-  // FCL expects a raw (r || s) signature (64 bytes).
-  if (signature.length === 65) {
-    // secp256k1: drop recovery byte (v)
-    return bytesToHex(signature.slice(0, 64));
-  }
-
-  // P256: DER → raw r||s
-  const rawSig = core.AsnParser.ecdsaSignatureFromDer(signature);
-  return bytesToHex(rawSig);
+  // 3. Strip recovery byte — FCL expects raw r||s (64 bytes)
+  // Both curves return r(32) || s(32) || v(1) = 65 bytes when signing a 32-byte digest
+  return bytesToHex(signature.subarray(0, signature.length - 1));
 }
 
 // ---------------------------------------------------------------------------

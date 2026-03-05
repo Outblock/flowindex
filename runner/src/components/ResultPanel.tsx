@@ -7,6 +7,14 @@ import 'react-json-view-lite/dist/index.css';
 interface ResultPanelProps {
   results: ExecutionResult[];
   loading: boolean;
+  network?: 'mainnet' | 'testnet';
+}
+
+function txExplorerUrl(txId: string, network?: 'mainnet' | 'testnet'): string {
+  const base = network === 'testnet'
+    ? 'https://testnet.flowindex.io'
+    : 'https://flowindex.io';
+  return `${base}/txs/${txId}`;
 }
 
 type Tab = 'result' | 'events' | 'logs';
@@ -223,7 +231,7 @@ function DataDisplay({ data, isError }: { data: any; isError?: boolean }) {
   );
 }
 
-export default function ResultPanel({ results, loading }: ResultPanelProps) {
+export default function ResultPanel({ results, loading, network }: ResultPanelProps) {
   const [tab, setTab] = useState<Tab>('result');
 
   const lastResult = results.length > 0 ? results[results.length - 1] : null;
@@ -276,7 +284,14 @@ export default function ResultPanel({ results, loading }: ResultPanelProps) {
                 {lastResult.type.replace('_', ' ')}
               </Badge>
               {lastResult.txId && (
-                <span className="ml-2 text-zinc-500">tx: {lastResult.txId}</span>
+                <a
+                  href={txExplorerUrl(lastResult.txId, network)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-2 text-blue-400 hover:text-blue-300 hover:underline"
+                >
+                  tx: {lastResult.txId}
+                </a>
               )}
               <div className="mt-2">
                 <DataDisplay
@@ -309,13 +324,26 @@ export default function ResultPanel({ results, loading }: ResultPanelProps) {
                 <Badge variant={resultVariant(r.type)}>
                   {r.type.replace('_', ' ')}
                 </Badge>
-                <span
-                  className={`flex-1 break-all ${
-                    r.type === 'error' ? 'text-red-400' : 'text-zinc-300'
-                  }`}
-                >
-                  {typeof r.data === 'string' ? r.data : JSON.stringify(r.data)}
-                </span>
+                {r.txId ? (
+                  <a
+                    href={txExplorerUrl(r.txId, network)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex-1 break-all ${
+                      r.type === 'error' ? 'text-red-400' : 'text-blue-400 hover:text-blue-300 hover:underline'
+                    }`}
+                  >
+                    {typeof r.data === 'string' ? r.data : JSON.stringify(r.data)}
+                  </a>
+                ) : (
+                  <span
+                    className={`flex-1 break-all ${
+                      r.type === 'error' ? 'text-red-400' : 'text-zinc-300'
+                    }`}
+                  >
+                    {typeof r.data === 'string' ? r.data : JSON.stringify(r.data)}
+                  </span>
+                )}
               </div>
             ))}
           </div>

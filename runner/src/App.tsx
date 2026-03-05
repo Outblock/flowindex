@@ -592,7 +592,7 @@ export default function App() {
       // Deploy contract — requires a signer
       if (selectedSigner.type === 'local') {
         const { key, account } = selectedSigner;
-        await deployContract(activeCode, account.flowAddress, account.keyIndex, buildLocalSignFn(key, account), onResult);
+        await deployContract(activeCode, account.flowAddress, account.keyIndex, buildLocalSignFn(key, account), onResult, account.sigAlgo, account.hashAlgo);
       } else {
         setResults([{ type: 'error', data: 'Deploy requires a local key signer. Please select one.' }]);
       }
@@ -600,7 +600,7 @@ export default function App() {
       await executeTransaction(activeCode, paramValues, onResult);
     } else if (selectedSigner.type === 'local') {
       const { key, account } = selectedSigner;
-      await executeCustodialTransaction(activeCode, paramValues, account.flowAddress, account.keyIndex, buildLocalSignFn(key, account), onResult);
+      await executeCustodialTransaction(activeCode, paramValues, account.flowAddress, account.keyIndex, buildLocalSignFn(key, account), onResult, account.sigAlgo, account.hashAlgo);
     }
 
     setLoading(false);
@@ -1285,7 +1285,7 @@ export default function App() {
                   />
                 </div>
                 <div className="flex-1 min-h-0">
-                  <ResultPanel results={results} loading={loading} />
+                  <ResultPanel results={results} loading={loading} network={network} />
                 </div>
               </div>
             </>

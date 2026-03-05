@@ -401,12 +401,12 @@ export function useLocalKeys(): UseLocalKeysReturn {
     async (
       keyId: string,
       message: string,
-      _hashAlgo?: 'SHA2_256' | 'SHA3_256',
+      hashAlgo: 'SHA2_256' | 'SHA3_256' = 'SHA2_256',
       password?: string,
-      sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_P256',
+      sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_secp256k1',
     ): Promise<string> => {
       const privateKeyHex = await getPrivateKey(keyId, password);
-      return signMessage(privateKeyHex, message, sigAlgo);
+      return signMessage(privateKeyHex, message, sigAlgo, hashAlgo);
     },
     [getPrivateKey],
   );

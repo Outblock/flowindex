@@ -92,21 +92,30 @@ export async function executeCustodialTransaction(
   keyIndex: number,
   signFn: (message: string) => Promise<string>,
   onResult: (result: ExecutionResult) => void,
+  sigAlgo?: 'ECDSA_P256' | 'ECDSA_secp256k1',
+  hashAlgo?: 'SHA2_256' | 'SHA3_256',
 ): Promise<void> {
   try {
     const params = parseMainParams(code);
     const args = params.length > 0 ? buildFclArgs(params, paramValues) : undefined;
 
+    // Map algo names to FCL numeric constants
+    const hashAlgorithm = hashAlgo === 'SHA2_256' ? 1 : 3; // SHA2_256=1, SHA3_256=3
+    const signatureAlgorithm = sigAlgo === 'ECDSA_secp256k1' ? 3 : 2; // ECDSA_P256=2, ECDSA_secp256k1=3
+
     // Custom FCL authorization function using custodial key
     const authz = (account: any) => ({
       ...account,
+      tempId: `${signerAddress}-${keyIndex}`,
       addr: fcl.sansPrefix(signerAddress),
       keyId: keyIndex,
       signingFunction: async (signable: { message: string }) => ({
-        addr: fcl.sansPrefix(signerAddress),
+        addr: fcl.withPrefix(signerAddress),
         keyId: keyIndex,
         signature: await signFn(signable.message),
       }),
+      hashAlgorithm,
+      signatureAlgorithm,
     });
 
     const txId = await fcl.mutate({
@@ -150,6 +159,8 @@ export async function deployContract(
   keyIndex: number,
   signFn: (message: string) => Promise<string>,
   onResult: (result: ExecutionResult) => void,
+  sigAlgo?: 'ECDSA_P256' | 'ECDSA_secp256k1',
+  hashAlgo?: 'SHA2_256' | 'SHA3_256',
 ): Promise<void> {
   try {
     const contractName = extractContractName(code);
@@ -164,15 +175,21 @@ transaction(name: String, code: String) {
   }
 }`;
 
+    const hashAlgorithm = hashAlgo === 'SHA2_256' ? 1 : 3;
+    const signatureAlgorithm = sigAlgo === 'ECDSA_secp256k1' ? 3 : 2;
+
     const authz = (account: any) => ({
       ...account,
+      tempId: `${signerAddress}-${keyIndex}`,
       addr: fcl.sansPrefix(signerAddress),
       keyId: keyIndex,
       signingFunction: async (signable: { message: string }) => ({
-        addr: fcl.sansPrefix(signerAddress),
+        addr: fcl.withPrefix(signerAddress),
         keyId: keyIndex,
         signature: await signFn(signable.message),
       }),
+      hashAlgorithm,
+      signatureAlgorithm,
     });
 
     const txId = await fcl.mutate({
