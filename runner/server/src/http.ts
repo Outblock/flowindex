@@ -4,8 +4,12 @@ import { webhookRouter } from './github/webhook.js';
 
 const app = express();
 
-// JSON body parsing
-app.use(express.json());
+// JSON body parsing — capture raw body for webhook signature verification
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    (req as any).rawBody = buf;
+  },
+}));
 
 // CORS middleware
 app.use((_req, res, next) => {

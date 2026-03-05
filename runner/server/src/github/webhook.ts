@@ -59,13 +59,14 @@ async function findEnvironmentByBranch(connectionId: string, branch: string): Pr
   } catch { return null; }
 }
 
-// Verify webhook signature
-function verifySignature(payload: string, signature: string): boolean {
+// Verify webhook signature using raw body bytes
+function verifySignature(payload: Buffer, signature: string): boolean {
   if (!WEBHOOK_SECRET) return true;
   const expected = `sha256=${crypto.createHmac('sha256', WEBHOOK_SECRET).update(payload).digest('hex')}`;
-  try {
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-  } catch { return false; }
+  const sigBuf = Buffer.from(signature);
+  const expBuf = Buffer.from(expected);
+  if (sigBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expBuf);
 }
 
 // Main webhook handler
@@ -74,9 +75,10 @@ webhookRouter.post('/', async (req: Request, res: Response) => {
     const signature = req.headers['x-hub-signature-256'] as string;
     const event = req.headers['x-github-event'] as string;
 
-    if (WEBHOOK_SECRET && signature) {
-      const payload = JSON.stringify(req.body);
-      if (!verifySignature(payload, signature)) {
+    // When webhook secret is configured, REQUIRE valid signature
+    if (WEBHOOK_SECRET) {
+      const rawBody = (req as any).rawBody as Buffer | undefined;
+      if (!signature || !rawBody || !verifySignature(rawBody, signature)) {
         res.status(401).json({ error: 'Invalid signature' });
         return;
       }
