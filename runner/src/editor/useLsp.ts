@@ -14,6 +14,32 @@ import type { FlowNetwork } from '../flow/networks';
 
 export type LspMode = 'wasm' | 'server';
 
+const LSP_WASM_URL = '/cadence-language-server.wasm';
+
+/** Pre-fetch the LSP WASM with progress tracking.
+ *  The browser caches the response so the worker's subsequent fetch is instant. */
+async function prefetchWasmWithProgress(
+  onProgress: (pct: number) => void,
+): Promise<void> {
+  const resp = await fetch(LSP_WASM_URL);
+  const total = Number(resp.headers.get('content-length') || 0);
+  if (!total || !resp.body) {
+    // Can't track progress — just consume the response to cache it
+    await resp.arrayBuffer();
+    onProgress(100);
+    return;
+  }
+  const reader = resp.body.getReader();
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    loaded += value.byteLength;
+    onProgress(Math.min(99, Math.round((loaded / total) * 100)));
+  }
+  onProgress(100);
+}
+
 function buildDependencyKey(code: string): string {
   const re = /import\s+([\w,\s]+?)\s+from\s+(0x[0-9a-fA-F]+)/g;
   const keys = new Set<string>();
@@ -53,6 +79,7 @@ export function useLsp(
   const [isReady, setIsReady] = useState(false);
   const [loadingDeps, setLoadingDeps] = useState(false);
   const [activeMode, setActiveMode] = useState<LspMode | null>(null);
+  const [wasmProgress, setWasmProgress] = useState<number | null>(null);
 
   const prefetchForCode = useCallback(async (code: string) => {
     const depKey = buildDependencyKey(code);
@@ -172,21 +199,31 @@ export function useLsp(
         // WASM v2 (Web Worker)
         try {
           console.log('[LSP] Initializing WASM v2...');
+          setWasmProgress(0);
 
+          // Pre-fetch WASM with progress tracking (browser caches it for the worker)
+          // and pre-fetch contract dependencies in parallel
           const editableFiles = project.files.filter((f) => !f.readOnly);
           const allCode = editableFiles.map((f) => f.content).join('\n');
+          const tasks: Promise<void>[] = [
+            prefetchWasmWithProgress((pct) => setWasmProgress(pct)),
+          ];
           if (allCode.includes('import ')) {
             console.log('[LSP v2] Pre-fetching dependencies...');
-            await prefetchForCode(allCode);
-            console.log('[LSP v2] Dependencies pre-fetched');
+            tasks.push(prefetchForCode(allCode).then(() => {
+              console.log('[LSP v2] Dependencies pre-fetched');
+            }));
           }
+          await Promise.all(tasks);
 
           bridge = await createV2LSPBridge(() => {});
           // Preload AFTER instance is created so address code is pushed into the worker
           preloadV2Cache(projectRef.current.files);
+          setWasmProgress(null);
           console.log('[LSP] WASM v2 initialized');
         } catch (err) {
           console.error('[LSP] WASM v2 failed:', err);
+          setWasmProgress(null);
           initializingRef.current = false;
           return;
         }
@@ -304,5 +341,5 @@ export function useLsp(
     return null;
   }, []);
 
-  return { notifyChange, goToDefinition, isReady, loadingDeps, activeMode };
+  return { notifyChange, goToDefinition, isReady, loadingDeps, activeMode, wasmProgress };
 }

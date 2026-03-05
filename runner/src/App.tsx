@@ -565,7 +565,7 @@ export default function App() {
     setProject((prev) => addDependencyFile(prev, address, contractName, code));
   }, []);
 
-  const { notifyChange, goToDefinition, loadingDeps, activeMode } = useLsp(monacoInstance, project, network, lspMode, handleDependency);
+  const { notifyChange, goToDefinition, loadingDeps, activeMode, wasmProgress } = useLsp(monacoInstance, project, network, lspMode, handleDependency);
 
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const codeType = useMemo(() => detectCodeType(activeCode), [activeCode]);
@@ -1360,6 +1360,27 @@ export default function App() {
               onCloseFile={handleCloseTab}
               pendingDiffPaths={Object.keys(pendingDiffs)}
             />
+            {wasmProgress !== null && wasmProgress < 100 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/80 border-b border-zinc-700/50 shrink-0">
+                <div className="flex-1 flex items-center gap-2 min-w-0">
+                  <div className="flex-1 h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                      style={{ width: `${wasmProgress}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-zinc-400 tabular-nums whitespace-nowrap">
+                    LSP {wasmProgress}%
+                  </span>
+                </div>
+                <button
+                  onClick={() => setLspMode('server')}
+                  className="text-[10px] px-2 py-0.5 rounded border border-zinc-600 text-zinc-400 hover:text-blue-400 hover:border-blue-500/50 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  Switch to Server
+                </button>
+              </div>
+            )}
             {loadingDeps && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 shrink-0">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
