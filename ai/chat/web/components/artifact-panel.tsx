@@ -54,11 +54,7 @@ interface ArtifactPanelContextType {
   closeArtifact: () => void;
 }
 
-const ArtifactPanelContext = createContext<ArtifactPanelContextType>({
-  artifact: null,
-  openArtifact: () => {},
-  closeArtifact: () => {},
-});
+const ArtifactPanelContext = createContext<ArtifactPanelContextType | null>(null);
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -96,7 +92,9 @@ export function ArtifactPanelProvider({
 // ---------------------------------------------------------------------------
 
 export function useArtifactPanel() {
-  return useContext(ArtifactPanelContext);
+  const ctx = useContext(ArtifactPanelContext);
+  if (!ctx) throw new Error("useArtifactPanel must be used within ArtifactPanelProvider");
+  return ctx;
 }
 
 // ---------------------------------------------------------------------------
