@@ -89,7 +89,7 @@ export function useGitHub(projectId: string | undefined) {
       repoName: string,
       repoPath: string,
       branch: string,
-    ) => {
+    ): Promise<GitHubConnection> => {
       if (!projectId) throw new Error('No project selected');
       await callEdge(
         '/github/connect',
@@ -103,9 +103,19 @@ export function useGitHub(projectId: string | undefined) {
         },
         accessToken,
       );
-      await fetchConnection();
+      // Fetch and return the new connection (state update is async,
+      // so callers that need the connection immediately should use the return value)
+      const result = await callEdge<{ connection: GitHubConnection | null }>(
+        '/github/connection',
+        { project_id: projectId },
+        accessToken,
+      );
+      const conn = result.connection;
+      setConnection(conn);
+      if (!conn) throw new Error('Connection not found after save');
+      return conn;
     },
-    [projectId, accessToken, fetchConnection],
+    [projectId, accessToken],
   );
 
   const disconnect = useCallback(async () => {
@@ -121,13 +131,16 @@ export function useGitHub(projectId: string | undefined) {
 
   // ---- pull files ----------------------------------------------------------
 
-  const pullFiles = useCallback(async (): Promise<
+  const pullFiles = useCallback(async (
+    connOverride?: GitHubConnection,
+  ): Promise<
     { path: string; content: string }[]
   > => {
-    if (!connection) throw new Error('No GitHub connection');
+    const conn = connOverride ?? connection;
+    if (!conn) throw new Error('No GitHub connection');
 
     const { installation_id, repo_owner, repo_name, repo_path, branch } =
-      connection;
+      conn;
 
     const files: { path: string; content: string }[] = [];
 

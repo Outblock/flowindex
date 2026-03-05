@@ -1110,10 +1110,10 @@ export default function App() {
 
   // Handle GitHub connect: link repo and pull files
   const handleGitHubConnect = async (installationId: number, owner: string, repo: string, path: string, branch: string) => {
-    await github.connect(installationId, owner, repo, path, branch);
+    const conn = await github.connect(installationId, owner, repo, path, branch);
     // Persist installation ID for future sessions
     localStorage.setItem('github_installation_id', String(installationId));
-    const files = await github.pullFiles();
+    const files = await github.pullFiles(conn);
     const pulled = new Map<string, string>();
     const newProjectFiles = files.map(f => {
       pulled.set(f.path, f.content);
