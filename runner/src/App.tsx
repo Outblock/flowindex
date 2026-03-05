@@ -32,7 +32,7 @@ import {
 import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';
 import ProjectSelector from './components/ProjectSelector';
 import ShareModal from './components/ShareModal';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, Check } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
 /* ── Detect if we're in an iframe ── */
@@ -405,6 +405,7 @@ export default function App() {
   const autoCreatingRef = useRef(false);
   const [viewingShared, setViewingShared] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const [monacoInstance, setMonacoInstance] = useState<typeof MonacoNS | null>(null);
   const editorRef = useRef<MonacoNS.editor.IStandaloneCodeEditor | null>(null);
@@ -413,7 +414,7 @@ export default function App() {
 
   // Resize hooks
   const explorer = useHorizontalResize(220, 150, 400, 'left');
-  const aiPanel = useHorizontalResize(360, 260, 600, 'right');
+  const aiPanel = useHorizontalResize(500, 260, 700, 'right');
   const vertSplit = useVerticalResize(editorContainerRef, 0.7, 80);
 
   // Current active file content
@@ -939,14 +940,30 @@ export default function App() {
           <h1 className="text-sm font-semibold tracking-tight">{isMobile ? 'Runner' : 'Cadence Runner'}</h1>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
-          {!isMobile && user && cloudMeta.id && cloudMeta.id !== '_dismissed' && (
+          {!isMobile && (
             <button
-              onClick={() => setShowShareModal(true)}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded border border-zinc-700 transition-colors"
-              title="Share project"
+              onClick={() => {
+                // If logged in with cloud project, show the full share modal
+                if (user && cloudMeta.id && cloudMeta.id !== '_dismissed') {
+                  setShowShareModal(true);
+                  return;
+                }
+                // Otherwise, copy a share link with the code encoded
+                const code = getFileContent(project, project.activeFile) || '';
+                const url = `${window.location.origin}${window.location.pathname}?code=${btoa(code)}`;
+                navigator.clipboard.writeText(url);
+                setShareCopied(true);
+                setTimeout(() => setShareCopied(false), 2000);
+              }}
+              className={`flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors ${
+                shareCopied
+                  ? 'text-emerald-400 border-emerald-600/30 bg-emerald-600/10'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border-zinc-700'
+              }`}
+              title="Share code"
             >
-              <Share2 className="w-3 h-3" />
-              <span>Share</span>
+              {shareCopied ? <Check className="w-3 h-3" /> : <Share2 className="w-3 h-3" />}
+              <span>{shareCopied ? 'Copied!' : 'Share'}</span>
             </button>
           )}
           <select
