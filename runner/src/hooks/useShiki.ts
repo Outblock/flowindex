@@ -4,7 +4,7 @@ import type { Highlighter } from 'shiki';
 let highlighterPromise: Promise<Highlighter> | null = null;
 let cachedHighlighter: Highlighter | null = null;
 
-const PRELOAD_LANGS = ['cadence', 'javascript', 'typescript', 'json', 'bash', 'python', 'go', 'html', 'css', 'yaml', 'sql', 'markdown', 'swift', 'kotlin'];
+const PRELOAD_LANGS = ['cadence', 'javascript', 'typescript', 'json', 'bash'];
 
 /** Custom dark theme matching the Cadence editor color scheme */
 const cadenceEditorTheme = {
@@ -43,9 +43,6 @@ function getHighlighter() {
   }
   return highlighterPromise;
 }
-
-// Start loading immediately on import
-getHighlighter();
 
 export function useShikiHighlighter() {
   const [highlighter, setHighlighter] = useState<Highlighter | null>(cachedHighlighter);

@@ -5,7 +5,6 @@
  * private keys never leave the client.
  */
 
-import { initWasm } from '@trustwallet/wallet-core';
 import type { WalletCore } from '@trustwallet/wallet-core';
 
 // ---------------------------------------------------------------------------
@@ -49,7 +48,7 @@ let walletCorePromise: Promise<WalletCore> | null = null;
 export async function getWalletCore(): Promise<WalletCore> {
   if (walletCoreInstance) return walletCoreInstance;
   if (!walletCorePromise) {
-    walletCorePromise = initWasm().then((core) => {
+    walletCorePromise = import('@trustwallet/wallet-core').then(({ initWasm }) => initWasm()).then((core) => {
       walletCoreInstance = core;
       return core;
     });

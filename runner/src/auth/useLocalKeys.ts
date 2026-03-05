@@ -51,6 +51,7 @@ export interface UseLocalKeysReturn {
   accountsMap: Record<string, KeyAccount[]>; // keyId -> accounts
   loading: boolean;
   wasmReady: boolean;
+  ensureWasmReady: () => Promise<void>;
   // Key operations
   generateNewKey: (
     label: string,
@@ -127,18 +128,25 @@ export function useLocalKeys(): UseLocalKeysReturn {
   const keyCache = useRef<Map<string, string>>(new Map());
 
   // -------------------------------------------------------------------------
-  // Init: load keys from localStorage + init WASM
+  // Init: load keys from localStorage
   // -------------------------------------------------------------------------
 
   useEffect(() => {
     const keys = loadLocalKeys();
     setLocalKeys(keys);
-
-    getWalletCore()
-      .then(() => setWasmReady(true))
-      .catch((err) => console.error('Failed to init wallet-core WASM:', err))
-      .finally(() => setLoading(false));
+    setLoading(false);
   }, []);
+
+  const ensureWasmReady = useCallback(async () => {
+    if (wasmReady) return;
+    try {
+      await getWalletCore();
+      setWasmReady(true);
+    } catch (err) {
+      console.error('Failed to init wallet-core WASM:', err);
+      throw err;
+    }
+  }, [wasmReady]);
 
   // -------------------------------------------------------------------------
   // Persist keys to localStorage whenever they change
@@ -177,6 +185,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       password?: string,
       sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_P256',
     ): Promise<string> => {
+      await ensureWasmReady();
       // Cache key includes sigAlgo because mnemonic keys have different
       // private keys per curve (HD derivation with different curves)
       const cacheKey = `${keyId}:${sigAlgo}`;
@@ -205,7 +214,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       keyCache.current.set(cacheKey, hex);
       return hex;
     },
-    [localKeys],
+    [ensureWasmReady, localKeys],
   );
 
   // -------------------------------------------------------------------------
@@ -214,6 +223,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
 
   const revealSecret = useCallback(
     async (keyId: string, password?: string): Promise<{ type: 'mnemonic' | 'privateKey'; value: string }> => {
+      await ensureWasmReady();
       const key = localKeys.find((k) => k.id === keyId);
       if (!key) throw new Error(`Local key not found: ${keyId}`);
 
@@ -230,7 +240,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       const hex = await getPrivateKey(keyId, password);
       return { type: 'privateKey', value: hex };
     },
-    [localKeys, getPrivateKey],
+    [ensureWasmReady, localKeys, getPrivateKey],
   );
 
   // -------------------------------------------------------------------------
@@ -284,6 +294,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       wordCount: 12 | 24 = 12,
       password: string = '',
     ): Promise<{ mnemonic: string; key: LocalKey }> => {
+      await ensureWasmReady();
       const mnemonic = await generateMnemonic(wordCount);
       const derived = await deriveFromMnemonic(mnemonic);
 
@@ -313,7 +324,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       setLocalKeys((prev) => [...prev, key]);
       return { mnemonic, key };
     },
-    [],
+    [ensureWasmReady],
   );
 
   const importMnemonic = useCallback(
@@ -324,6 +335,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       path?: string,
       password: string = '',
     ): Promise<LocalKey> => {
+      await ensureWasmReady();
       const derived = await deriveFromMnemonic(mnemonic, passphrase, path);
 
       const autoPass = password.length === 0 ? generateRandomPassword() : undefined;
@@ -348,7 +360,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       setLocalKeys((prev) => [...prev, key]);
       return key;
     },
-    [],
+    [ensureWasmReady],
   );
 
   const importPrivateKey = useCallback(
@@ -357,6 +369,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       label: string,
       password: string = '',
     ): Promise<LocalKey> => {
+      await ensureWasmReady();
       const derived = await deriveFromPrivateKey(hex);
       const key = await buildLocalKey(derived, label, 'privateKey', password);
       setLocalKeys((prev) => [...prev, key]);
@@ -372,6 +385,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       label: string,
       newPassword: string = '',
     ): Promise<LocalKey> => {
+      await ensureWasmReady();
       // Decrypt from the imported keystore
       const privateKeyHex = await decryptFromKeystore(json, keystorePassword);
       const derived = await deriveFromPrivateKey(privateKeyHex);
@@ -381,7 +395,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
       setLocalKeys((prev) => [...prev, key]);
       return key;
     },
-    [buildLocalKey],
+    [buildLocalKey, ensureWasmReady],
   );
 
   const deleteLocalKey = useCallback((id: string) => {
@@ -397,12 +411,13 @@ export function useLocalKeys(): UseLocalKeysReturn {
 
   const exportKeystore = useCallback(
     async (id: string, exportPassword: string = ''): Promise<string> => {
+      await ensureWasmReady();
       // Decrypt using autoPassword or user password
       const privateKeyHex = await getPrivateKey(id, exportPassword);
       // Re-encrypt with the user-provided export password (never leak autoPassword)
       return encryptToKeystore(privateKeyHex, exportPassword);
     },
-    [getPrivateKey],
+    [ensureWasmReady, getPrivateKey],
   );
 
   // -------------------------------------------------------------------------
@@ -417,10 +432,11 @@ export function useLocalKeys(): UseLocalKeysReturn {
       password?: string,
       sigAlgo: 'ECDSA_P256' | 'ECDSA_secp256k1' = 'ECDSA_secp256k1',
     ): Promise<string> => {
+      await ensureWasmReady();
       const privateKeyHex = await getPrivateKey(keyId, password, sigAlgo);
       return signMessage(privateKeyHex, message, sigAlgo, hashAlgo);
     },
-    [getPrivateKey],
+    [ensureWasmReady, getPrivateKey],
   );
 
   // -------------------------------------------------------------------------
@@ -510,6 +526,7 @@ export function useLocalKeys(): UseLocalKeysReturn {
     accountsMap,
     loading,
     wasmReady,
+    ensureWasmReady,
     generateNewKey,
     importMnemonic,
     importPrivateKey,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import type * as MonacoNS from 'monaco-editor';
 import JSZip from 'jszip';
 import axios from 'axios';
@@ -8,7 +8,6 @@ import { useLsp } from './editor/useLsp';
 import ResultPanel from './components/ResultPanel';
 import ParamPanel from './components/ParamPanel';
 import WalletButton from './components/WalletButton';
-import AIPanel from './components/AIPanel';
 import FileExplorer from './components/FileExplorer';
 import TabBar from './components/TabBar';
 import { configureFcl } from './flow/fclConfig';
@@ -20,8 +19,6 @@ import type { FlowNetwork } from './flow/networks';
 import { useAuth } from './auth/AuthContext';
 import { useKeys } from './auth/useKeys';
 import { useLocalKeys } from './auth/useLocalKeys';
-import KeyManager from './components/KeyManager';
-import AccountPanel from './components/AccountPanel';
 import { PasswordPrompt } from './components/PasswordPrompt';
 import SignerSelector, { type SignerOption } from './components/SignerSelector';
 import ConnectModal from './components/ConnectModal';
@@ -36,6 +33,10 @@ import ProjectSelector from './components/ProjectSelector';
 import ShareModal from './components/ShareModal';
 import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe, Sparkles } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
+
+const AIPanel = lazy(() => import('./components/AIPanel'));
+const KeyManager = lazy(() => import('./components/KeyManager'));
+const AccountPanel = lazy(() => import('./components/AccountPanel'));
 
 /* ── Detect if we're in an iframe ── */
 let isIframe = false;
@@ -279,14 +280,22 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
   const [showExplorer, setShowExplorer] = useState(!isIframe);
-  const [showAI, setShowAI] = useState(true);
+  const [showAI, setShowAI] = useState(() => {
+    try {
+      const stored = localStorage.getItem('runner:show-ai');
+      if (stored === null) return true;
+      return stored === 'true';
+    } catch {
+      return true;
+    }
+  });
   const [showMobileAI, setShowMobileAI] = useState(false);
   const [aiPendingMessage, setAiPendingMessage] = useState<string | undefined>();
   const [pendingDiffs, setPendingDiffs] = useState<PendingDiffMap>({});
   const { user, loading: authLoading, signOut } = useAuth();
   useKeys();
   const {
-    localKeys, accountsMap, wasmReady,
+    localKeys, accountsMap, wasmReady, ensureWasmReady,
     generateNewKey, importMnemonic, importPrivateKey: importLocalPrivateKey,
     importKeystore, deleteLocalKey, exportKeystore,
     signWithLocalKey, refreshAccounts, createAccount, getPrivateKey, revealSecret,
@@ -294,6 +303,17 @@ export default function App() {
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [showNetworkMenu, setShowNetworkMenu] = useState(false);
   const networkMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    try {
+      localStorage.setItem('runner:show-ai', String(showAI));
+    } catch {
+      // ignore localStorage write errors
+    }
+  }, [showAI]);
+  useEffect(() => {
+    if (!showKeyManager) return;
+    ensureWasmReady().catch(() => {});
+  }, [showKeyManager, ensureWasmReady]);
   // Close network menu on outside click
   useEffect(() => {
     if (!showNetworkMenu) return;
@@ -1512,31 +1532,39 @@ export default function App() {
             <>
               <DragBar direction="horizontal" onMouseDown={aiPanel.onMouseDown} />
               <div className="shrink-0 overflow-hidden" style={{ width: aiPanel.width }}>
-                <AIPanel
-                  onInsertCode={handleInsertCode}
-                  onApplyCodeToFile={handleApplyCodeToFile}
-                  onAutoApplyEdits={handleAutoApplyEdits}
-                  onLoadTemplate={handleLoadTemplate}
-                  onCreateFile={handleAICreateFile}
-                  onDeleteFile={handleAIDeleteFile}
-                  onSetActiveFile={handleAISetActiveFile}
-                  editorCode={activeCode}
-                  projectFiles={getUserFiles(project)}
-                  activeFile={project.activeFile}
-                  network={network}
-                  onClose={() => setShowAI(false)}
-                  selectedSigner={selectedSigner}
-                  signWithLocalKey={signWithLocalKey}
-                  promptForPassword={promptForPassword}
-                  localKeys={localKeys}
-                  accountsMap={accountsMap}
-                  onCreateAccount={createAccount}
-                  onRefreshAccounts={refreshAccounts}
-                  onSwitchNetwork={(n) => setNetwork(n as FlowNetwork)}
-                  onViewAccount={handleViewAccount}
-                  pendingMessage={aiPendingMessage}
-                  onPendingMessageConsumed={() => setAiPendingMessage(undefined)}
-                />
+                <Suspense
+                  fallback={
+                    <div className="h-full flex items-center justify-center text-xs text-zinc-500 bg-zinc-900 border-l border-zinc-700">
+                      Loading AI...
+                    </div>
+                  }
+                >
+                  <AIPanel
+                    onInsertCode={handleInsertCode}
+                    onApplyCodeToFile={handleApplyCodeToFile}
+                    onAutoApplyEdits={handleAutoApplyEdits}
+                    onLoadTemplate={handleLoadTemplate}
+                    onCreateFile={handleAICreateFile}
+                    onDeleteFile={handleAIDeleteFile}
+                    onSetActiveFile={handleAISetActiveFile}
+                    editorCode={activeCode}
+                    projectFiles={getUserFiles(project)}
+                    activeFile={project.activeFile}
+                    network={network}
+                    onClose={() => setShowAI(false)}
+                    selectedSigner={selectedSigner}
+                    signWithLocalKey={signWithLocalKey}
+                    promptForPassword={promptForPassword}
+                    localKeys={localKeys}
+                    accountsMap={accountsMap}
+                    onCreateAccount={createAccount}
+                    onRefreshAccounts={refreshAccounts}
+                    onSwitchNetwork={(n) => setNetwork(n as FlowNetwork)}
+                    onViewAccount={handleViewAccount}
+                    pendingMessage={aiPendingMessage}
+                    onPendingMessageConsumed={() => setAiPendingMessage(undefined)}
+                  />
+                </Suspense>
               </div>
             </>
           ) : (
@@ -1593,31 +1621,39 @@ export default function App() {
             </button>
           </div>
           <div className="flex-1 min-h-0">
-            <AIPanel
-              onInsertCode={(code) => { handleInsertCode(code); setShowMobileAI(false); }}
-              onApplyCodeToFile={(path, code) => { handleApplyCodeToFile(path, code); setShowMobileAI(false); }}
-              onAutoApplyEdits={handleAutoApplyEdits}
-              onLoadTemplate={(t) => { handleLoadTemplate(t); setShowMobileAI(false); }}
-              onCreateFile={handleAICreateFile}
-              onDeleteFile={handleAIDeleteFile}
-              onSetActiveFile={handleAISetActiveFile}
-              editorCode={activeCode}
-              projectFiles={getUserFiles(project)}
-              activeFile={project.activeFile}
-              network={network}
-              onClose={() => setShowMobileAI(false)}
-              selectedSigner={selectedSigner}
-              signWithLocalKey={signWithLocalKey}
-              promptForPassword={promptForPassword}
-              localKeys={localKeys}
-              accountsMap={accountsMap}
-              onCreateAccount={createAccount}
-              onRefreshAccounts={refreshAccounts}
-              onSwitchNetwork={(n) => setNetwork(n as FlowNetwork)}
-              onViewAccount={handleViewAccount}
-              pendingMessage={aiPendingMessage}
-              onPendingMessageConsumed={() => setAiPendingMessage(undefined)}
-            />
+            <Suspense
+              fallback={
+                <div className="h-full flex items-center justify-center text-xs text-zinc-500">
+                  Loading AI...
+                </div>
+              }
+            >
+              <AIPanel
+                onInsertCode={(code) => { handleInsertCode(code); setShowMobileAI(false); }}
+                onApplyCodeToFile={(path, code) => { handleApplyCodeToFile(path, code); setShowMobileAI(false); }}
+                onAutoApplyEdits={handleAutoApplyEdits}
+                onLoadTemplate={(t) => { handleLoadTemplate(t); setShowMobileAI(false); }}
+                onCreateFile={handleAICreateFile}
+                onDeleteFile={handleAIDeleteFile}
+                onSetActiveFile={handleAISetActiveFile}
+                editorCode={activeCode}
+                projectFiles={getUserFiles(project)}
+                activeFile={project.activeFile}
+                network={network}
+                onClose={() => setShowMobileAI(false)}
+                selectedSigner={selectedSigner}
+                signWithLocalKey={signWithLocalKey}
+                promptForPassword={promptForPassword}
+                localKeys={localKeys}
+                accountsMap={accountsMap}
+                onCreateAccount={createAccount}
+                onRefreshAccounts={refreshAccounts}
+                onSwitchNetwork={(n) => setNetwork(n as FlowNetwork)}
+                onViewAccount={handleViewAccount}
+                pendingMessage={aiPendingMessage}
+                onPendingMessageConsumed={() => setAiPendingMessage(undefined)}
+              />
+            </Suspense>
           </div>
         </div>
       )}
@@ -1643,25 +1679,31 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowKeyManager(false)} />
           <div className="relative w-[480px] max-w-[90vw] max-h-[80vh] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-y-auto">
-            <KeyManager
-              onClose={() => setShowKeyManager(false)}
-              network={network}
-              localKeys={localKeys}
-              accountsMap={accountsMap}
-              wasmReady={wasmReady}
-              onGenerateKey={generateNewKey}
-              onImportMnemonic={importMnemonic}
-              onImportPrivateKey={importLocalPrivateKey}
-              onImportKeystore={importKeystore}
-              onDeleteLocalKey={deleteLocalKey}
-              onExportKeystore={exportKeystore}
-              onRefreshAccounts={refreshAccounts}
-              onCreateAccount={createAccount}
-              onRevealSecret={revealSecret}
-              onViewAccount={handleViewAccount}
-              selectedAccount={selectedSigner.type === 'local' ? { keyId: selectedSigner.key.id, address: selectedSigner.account.flowAddress, keyIndex: selectedSigner.account.keyIndex } : null}
-              onSelectAccount={(key, account) => { persistSigner({ type: 'local', key, account }); setShowKeyManager(false); }}
-            />
+            <Suspense
+              fallback={
+                <div className="p-6 text-center text-xs text-zinc-500">Loading wallet...</div>
+              }
+            >
+              <KeyManager
+                onClose={() => setShowKeyManager(false)}
+                network={network}
+                localKeys={localKeys}
+                accountsMap={accountsMap}
+                wasmReady={wasmReady}
+                onGenerateKey={generateNewKey}
+                onImportMnemonic={importMnemonic}
+                onImportPrivateKey={importLocalPrivateKey}
+                onImportKeystore={importKeystore}
+                onDeleteLocalKey={deleteLocalKey}
+                onExportKeystore={exportKeystore}
+                onRefreshAccounts={refreshAccounts}
+                onCreateAccount={createAccount}
+                onRevealSecret={revealSecret}
+                onViewAccount={handleViewAccount}
+                selectedAccount={selectedSigner.type === 'local' ? { keyId: selectedSigner.key.id, address: selectedSigner.account.flowAddress, keyIndex: selectedSigner.account.keyIndex } : null}
+                onSelectAccount={(key, account) => { persistSigner({ type: 'local', key, account }); setShowKeyManager(false); }}
+              />
+            </Suspense>
           </div>
         </div>
       )}
@@ -1671,14 +1713,22 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex">
           <div className="flex-1" onClick={() => setAccountPanelAddress(null)} />
           <div className="w-[480px] max-w-full shrink-0 shadow-2xl">
-            <AccountPanel
-              address={accountPanelAddress}
-              network={network}
-              onClose={() => setAccountPanelAddress(null)}
-              onDisconnect={() => {
-                if (selectedSigner.type === 'local') persistSigner({ type: 'none' });
-              }}
-            />
+            <Suspense
+              fallback={
+                <div className="h-full flex items-center justify-center bg-zinc-900 text-xs text-zinc-500">
+                  Loading account...
+                </div>
+              }
+            >
+              <AccountPanel
+                address={accountPanelAddress}
+                network={network}
+                onClose={() => setAccountPanelAddress(null)}
+                onDisconnect={() => {
+                  if (selectedSigner.type === 'local') persistSigner({ type: 'none' });
+                }}
+              />
+            </Suspense>
           </div>
         </div>
       )}
