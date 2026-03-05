@@ -30,10 +30,8 @@ import {
 // Config
 // ---------------------------------------------------------------------------
 
-const INDEXER_BASE_URL =
-  import.meta.env.VITE_INDEXER_URL || 'https://api.flowindex.io';
-const ACCOUNT_API_BASE_URL =
-  import.meta.env.VITE_ACCOUNT_API_URL || 'https://api.flowindex.io';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -380,14 +378,12 @@ export function useLocalKeys(): UseLocalKeysReturn {
 
       // Query both P256 and secp256k1 public keys in parallel
       const [p256Accounts, secpAccounts] = await Promise.all([
-        findAccountsForKey(key.publicKeyP256, network, INDEXER_BASE_URL).catch(
+        findAccountsForKey(key.publicKeyP256, network).catch(
           () => [] as KeyAccount[],
         ),
-        findAccountsForKey(
-          key.publicKeySecp256k1,
-          network,
-          INDEXER_BASE_URL,
-        ).catch(() => [] as KeyAccount[]),
+        findAccountsForKey(key.publicKeySecp256k1, network).catch(
+          () => [] as KeyAccount[],
+        ),
       ]);
 
       // Merge and deduplicate by address + keyIndex
@@ -431,7 +427,8 @@ export function useLocalKeys(): UseLocalKeysReturn {
         sigAlgo,
         hashAlgo,
         network,
-        ACCOUNT_API_BASE_URL,
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
       );
 
       // Refresh accounts after creation
