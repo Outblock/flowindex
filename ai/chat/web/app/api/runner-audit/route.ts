@@ -1,42 +1,51 @@
-import { createMCPClient } from "@ai-sdk/mcp";
 import { anthropic } from "@ai-sdk/anthropic";
-import { streamText, stepCountIs, convertToModelMessages, type UIMessage } from "ai";
+import { streamText, convertToModelMessages, type UIMessage } from "ai";
 
-const CADENCE_MCP_URL =
-  process.env.CADENCE_MCP_URL || "https://cadence-mcp.up.railway.app/mcp";
+const CADENCE_MCP_BASE =
+  process.env.CADENCE_MCP_BASE_URL || "https://cadence-mcp.up.railway.app";
 
-async function safeMcpTools(
-  url: string
-): Promise<{
-  tools: Record<string, any>;
-  client: Awaited<ReturnType<typeof createMCPClient>> | null;
-}> {
+// Pre-fetch security scan + type check via REST (no MCP, no Claude tool calls)
+async function prefetchScan(
+  code: string,
+  network: string,
+): Promise<{ scan: string; diagnostics: string }> {
   try {
-    const client = await createMCPClient({ transport: { type: "http", url } });
-    const tools = await client.tools();
-    return { tools, client };
+    const res = await fetch(`${CADENCE_MCP_BASE}/api/security-scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, network }),
+    });
+    if (!res.ok) {
+      console.error(`[runner-audit] security-scan HTTP ${res.status}`);
+      return { scan: "Security scan unavailable", diagnostics: "Type check unavailable" };
+    }
+    const data = await res.json();
+    // Format scan findings for prompt
+    const scanFindings = data.scan?.findings ?? [];
+    const scanSummary = data.scan?.summary ?? {};
+    const scanText = scanFindings.length > 0
+      ? `Found ${scanFindings.length} issue(s): ${scanSummary.high ?? 0} high, ${scanSummary.medium ?? 0} medium, ${scanSummary.low ?? 0} low, ${scanSummary.info ?? 0} info\n\n${scanFindings
+          .map((f: any) => `- [${(f.severity || "info").toUpperCase()}] Line ${f.line}: (${f.rule || "unknown"}) ${f.message}`)
+          .join("\n")}`
+      : "No security issues found.";
+    const diagText = data.diagnostics || "No type errors found.";
+    return { scan: scanText, diagnostics: diagText };
   } catch (e) {
-    console.error(`[runner-audit] MCP connection failed (${url}):`, e);
-    return { tools: {}, client: null };
+    console.error("[runner-audit] prefetch failed:", e);
+    return { scan: "Security scan unavailable", diagnostics: "Type check unavailable" };
   }
 }
 
-const AUDIT_SYSTEM_PROMPT = `You are a Cadence smart contract security auditor. You perform thorough security analysis of Cadence contracts on the Flow blockchain.
+const AUDIT_SYSTEM_PROMPT = `You are a Cadence smart contract security auditor for deployed contracts on the Flow blockchain.
 
-## Your Role
+## Your Task
 
-You audit Cadence smart contracts for security vulnerabilities, type errors, best practice violations, and potential exploits. You have access to Cadence LSP tools for static analysis and Flow documentation for reference.
-
-## Audit Process
-
-1. **First**, use \`cadence_security_scan\` to run static security analysis on the contract code.
-2. **Then**, use \`cadence_check\` to run type checking and catch type errors.
-3. **Optionally**, use \`search_docs\` or \`get_doc\` to look up Cadence best practices relevant to any findings.
-4. **Optionally**, use \`cadence_hover\` on specific symbols to get type information if needed.
+Analyze the contract code and the pre-fetched tool results below, then output a structured JSON audit.
+The security scan and type check have ALREADY been run — their results are included below. Do NOT call any tools. Just analyze and output.
 
 ## Output Format
 
-After running your tools and analysis, output your findings in this EXACT JSON format. This is critical — the frontend parses this to render inline annotations.
+Output ONLY this JSON block. No extra text before or after.
 
 \`\`\`json
 {
@@ -45,7 +54,7 @@ After running your tools and analysis, output your findings in this EXACT JSON f
       "severity": "high|medium|low|info",
       "line": 42,
       "column": 10,
-      "rule": "rule-id-if-any",
+      "rule": "rule-id",
       "message": "Clear description of the issue",
       "suggestion": "How to fix this issue",
       "source": "security|typecheck|best-practice|ai-review"
@@ -58,39 +67,18 @@ After running your tools and analysis, output your findings in this EXACT JSON f
 
 ## Severity Guidelines
 
-- **high**: Exploitable vulnerabilities, resource loss, unauthorized access, reentrancy
-- **medium**: Access control issues, missing checks, unsafe patterns that could be exploited
-- **low**: Code quality issues, gas inefficiency, non-standard patterns
-- **info**: Style suggestions, documentation, naming conventions
-
-## What to Look For
-
-### Critical Security Issues
-- Unauthorized access to resources or capabilities
-- Missing access control on sensitive functions
-- Resource loss (resources that can be destroyed or orphaned)
-- Capability leaks or over-broad capability exposure
-- auth(…) &Account exposure without scoping
-- Missing input validation on public functions
-
-### Type Safety
-- Interface misuse (interfaces used as types directly)
-- Missing type casts or unsafe force-casts
-- Incorrect entitlement usage
-
-### Best Practices
-- Modern Cadence 1.0 patterns (access(all) vs pub, capabilities vs links)
-- Proper event emission for state changes
-- Correct resource lifecycle management
-- Standard interface conformance (NonFungibleToken, FungibleToken, MetadataViews)
+- **high**: Exploitable vulnerabilities, resource loss, unauthorized access, capability leaks
+- **medium**: Access control issues, missing checks, unsafe patterns (force-unwrap, etc.)
+- **low**: Code quality issues, non-standard patterns
+- **info**: Style suggestions, naming conventions
 
 ## Important Notes
 
-- Always run the MCP tools FIRST before giving your analysis. Do not skip the automated scans.
-- Include findings from both automated scans AND your own manual review.
-- Be specific about line numbers — every finding MUST have a line number.
+- Every finding MUST have a line number.
+- Include findings from the automated scan AND your own manual review.
+- Deduplicate — if the scan and your review find the same issue, report it once.
 - If the contract looks clean, say so honestly. Don't invent issues.
-- After all tool calls complete, output ONLY the JSON block described above. No extra text.`;
+- Output ONLY the JSON block. No prose, no explanation.`;
 
 export async function POST(req: Request) {
   const {
@@ -105,9 +93,29 @@ export async function POST(req: Request) {
     network?: string;
   } = await req.json();
 
-  const cadenceMcp = await safeMcpTools(CADENCE_MCP_URL);
+  const net = network || "mainnet";
 
-  const systemWithContext = `${AUDIT_SYSTEM_PROMPT}\n\n## Contract to Audit\n\nContract: ${contractName || "Unknown"}\nNetwork: ${network || "mainnet"}\n\n\`\`\`cadence\n${code || "// No code provided"}\n\`\`\``;
+  // Pre-fetch scan results via REST (milliseconds, not seconds)
+  const { scan, diagnostics } = await prefetchScan(code || "", net);
+
+  const systemWithContext = `${AUDIT_SYSTEM_PROMPT}
+
+## Contract to Audit
+
+Contract: ${contractName || "Unknown"}
+Network: ${net}
+
+\`\`\`cadence
+${code || "// No code provided"}
+\`\`\`
+
+## Security Scan Results (pre-fetched)
+
+${scan}
+
+## Type Check Results (pre-fetched)
+
+${diagnostics}`;
 
   const result = streamText({
     model: anthropic("claude-opus-4-6"),
@@ -118,11 +126,7 @@ export async function POST(req: Request) {
     },
     system: systemWithContext,
     messages: await convertToModelMessages(messages),
-    tools: cadenceMcp.tools,
-    stopWhen: stepCountIs(8),
-    onFinish: async () => {
-      await cadenceMcp.client?.close();
-    },
+    // No tools — scan results are pre-fetched, Claude just analyzes
   });
 
   return result.toUIMessageStreamResponse();
