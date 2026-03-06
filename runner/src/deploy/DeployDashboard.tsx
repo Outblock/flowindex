@@ -2,13 +2,12 @@
 // DeployDashboard — main deploy page with address sidebar + contract grid
 // ---------------------------------------------------------------------------
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Link,
   useLocation,
   Routes,
   Route,
-  useParams,
 } from 'react-router-dom';
 import { Loader2, LogOut, User, Inbox } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -17,23 +16,7 @@ import { fetchContracts, fetchHolderCount } from './api';
 import type { ContractInfo, VerifiedAddress } from './api';
 import AddressSidebar from './AddressSidebar';
 import ContractCard from './ContractCard';
-
-// ---------------------------------------------------------------------------
-// Contract Detail placeholder (subroute :contractId)
-// ---------------------------------------------------------------------------
-
-function ContractDetail() {
-  const { contractId } = useParams<{ contractId: string }>();
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center">
-        <h2 className="text-sm font-medium text-zinc-300">Contract Detail</h2>
-        <p className="mt-1 text-xs text-zinc-500 font-mono">{contractId}</p>
-        <p className="mt-2 text-xs text-zinc-600">Coming soon</p>
-      </div>
-    </div>
-  );
-}
+import ContractDetail from './ContractDetail';
 
 // ---------------------------------------------------------------------------
 // ContractsGrid — main grid view (index route)
