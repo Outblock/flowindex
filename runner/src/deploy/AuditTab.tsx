@@ -395,15 +395,15 @@ export default function AuditTab({ code, contractName, network }: Props) {
           try {
             const evt = JSON.parse(data);
             switch (evt.type) {
-              // Thinking / reasoning
+              // Thinking / reasoning — field is `delta` not `textDelta`
               case 'reasoning-delta':
-                reasoningRef.current += evt.textDelta || '';
+                reasoningRef.current += evt.delta || evt.textDelta || '';
                 scheduleUpdate();
                 break;
 
-              // Response text
+              // Response text — field is `delta` not `textDelta`
               case 'text-delta':
-                textRef.current += evt.textDelta || '';
+                textRef.current += evt.delta || evt.textDelta || '';
                 scheduleUpdate();
                 break;
 
@@ -416,8 +416,8 @@ export default function AuditTab({ code, contractName, network }: Props) {
                 scheduleUpdate();
                 break;
 
-              // Tool call complete (full args available, about to execute)
-              case 'tool-call':
+              // Tool input fully available (args parsed, about to execute)
+              case 'tool-input-available':
                 if (!toolMapRef.current.has(evt.toolCallId)) {
                   toolMapRef.current.set(evt.toolCallId, {
                     name: evt.toolName,
@@ -427,7 +427,8 @@ export default function AuditTab({ code, contractName, network }: Props) {
                 }
                 break;
 
-              // Tool result received
+              // Tool output received — this is the result event
+              case 'tool-output-available':
               case 'tool-result': {
                 const existing = toolMapRef.current.get(evt.toolCallId);
                 if (existing) {
