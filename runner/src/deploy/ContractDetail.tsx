@@ -29,6 +29,7 @@ import {
   ChevronRight,
   FileCode,
   Play,
+  Shield,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -61,6 +62,7 @@ import ContractCharts from './ContractCharts';
 import DependencyGraph from './DependencyGraph';
 import SourceTab from './SourceTab';
 import DeploySection from './DeploySection';
+import AuditTab from './AuditTab';
 import { useShikiHighlighter, highlightCode } from '../hooks/useShiki';
 import Avatar from 'boring-avatars';
 
@@ -128,7 +130,7 @@ const socialMeta: Record<string, { icon: LucideIcon; label: string }> = {
 // Tab config
 // ---------------------------------------------------------------------------
 
-type TabId = 'overview' | 'source' | 'events' | 'holders' | 'nfts' | 'scripts' | 'transactions' | 'deployment';
+type TabId = 'overview' | 'source' | 'audit' | 'events' | 'holders' | 'nfts' | 'scripts' | 'transactions' | 'deployment';
 
 interface TabDef {
   id: TabId;
@@ -140,6 +142,7 @@ interface TabDef {
 const ALL_TABS: TabDef[] = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'source', label: 'Source', icon: Code2 },
+  { id: 'audit', label: 'AI Audit', icon: Shield },
   { id: 'events', label: 'Events', icon: Zap },
   { id: 'holders', label: 'Holders', icon: Users, condition: (c) => c?.kind === 'FT' || c?.kind === 'NFT' },
   { id: 'nfts', label: 'NFT Items', icon: Image, condition: (c) => c?.kind === 'NFT' },
@@ -502,6 +505,11 @@ export default function ContractDetail() {
               >
                 <tab.icon className="w-3.5 h-3.5 shrink-0" />
                 {tab.label}
+                {tab.id === 'audit' && (
+                  <span className="text-[8px] px-1 py-px rounded bg-amber-500/15 text-amber-400 font-medium ml-auto">
+                    Beta
+                  </span>
+                )}
               </button>
             );
           })}
@@ -565,6 +573,17 @@ export default function ContractDetail() {
                 contractName={contractName || ''}
                 contractId={contractId || ''}
                 versions={versions}
+                network={network}
+              />
+            </div>
+          )}
+
+          {/* ---- AI AUDIT ---- */}
+          {activeTab === 'audit' && (
+            <div className="p-6">
+              <AuditTab
+                code={contract?.code || ''}
+                contractName={contractName || ''}
                 network={network}
               />
             </div>
