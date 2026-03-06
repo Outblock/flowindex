@@ -72,8 +72,8 @@ export default function ContractCharts({ versions }: Props) {
               <Tooltip
                 contentStyle={tooltipStyle}
                 labelStyle={{ color: '#a1a1aa' }}
-                formatter={(value: number) => [
-                  value.toLocaleString(),
+                formatter={(value) => [
+                  (value ?? 0).toLocaleString(),
                   'Block Height',
                 ]}
               />

@@ -2,26 +2,49 @@
 // ContractStats — row of 4 stat cards for the contract detail page
 // ---------------------------------------------------------------------------
 
-import { Users, GitFork, Hash, Clock } from 'lucide-react';
+import { Users, GitFork, Hash, Clock, Coins, Image } from 'lucide-react';
 
 interface Props {
   holders: number;
   dependents: number;
   version: number;
   firstDeployed: string; // block height or date string
+  totalSupply?: number;
+  kind?: string;
 }
 
-const stats = (p: Props) => [
-  { label: 'Holders', value: p.holders.toLocaleString(), icon: Users },
-  { label: 'Dependents', value: p.dependents.toLocaleString(), icon: GitFork },
-  { label: 'Version', value: `v${p.version}`, icon: Hash },
-  { label: 'First Deployed', value: p.firstDeployed, icon: Clock },
-];
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+function buildStats(p: Props) {
+  const items: { label: string; value: string; icon: typeof Users }[] = [
+    { label: 'Holders', value: formatNumber(p.holders), icon: Users },
+  ];
+
+  if (p.totalSupply != null && p.totalSupply > 0) {
+    items.push({
+      label: p.kind === 'NFT' ? 'NFTs Minted' : 'Total Supply',
+      value: formatNumber(p.totalSupply),
+      icon: p.kind === 'NFT' ? Image : Coins,
+    });
+  }
+
+  items.push(
+    { label: 'Dependents', value: formatNumber(p.dependents), icon: GitFork },
+    { label: 'Version', value: `v${p.version}`, icon: Hash },
+    { label: 'First Deployed', value: p.firstDeployed, icon: Clock },
+  );
+
+  return items;
+}
 
 export default function ContractStats(props: Props) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-      {stats(props).map((s) => (
+      {buildStats(props).map((s) => (
         <div
           key={s.label}
           className="rounded-lg border border-zinc-800 bg-zinc-900 p-4"
