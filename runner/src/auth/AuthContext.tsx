@@ -16,10 +16,15 @@ export interface AuthUser {
   email: string;
 }
 
+type OAuthProvider = 'github' | 'google';
+
 export interface AuthContextValue {
   user: AuthUser | null;
   accessToken: string | null;
   loading: boolean;
+  signInWithProvider: (provider: OAuthProvider, redirectTo?: string) => void;
+  sendMagicLink: (email: string, redirectTo?: string) => Promise<void>;
+  verifyOtp: (email: string, token: string) => Promise<void>;
   signOut: () => void;
 }
 
@@ -138,26 +143,28 @@ function clearTokens() {
 }
 
 // ---------------------------------------------------------------------------
-// GoTrue refresh
+// GoTrue helpers
 // ---------------------------------------------------------------------------
 
-async function refreshAccessToken(
-  token: string,
-): Promise<{ access_token: string; refresh_token: string }> {
-  const res = await fetch(`${GOTRUE_URL}/token?grant_type=refresh_token`, {
+async function gotruePost(path: string, body?: Record<string, unknown>) {
+  const res = await fetch(`${GOTRUE_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: token }),
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ msg: res.statusText }));
-    throw new Error(
-      err.msg || err.error_description || err.error || 'Token refresh failed',
-    );
+    throw new Error(err.msg || err.error_description || err.error || 'Auth request failed');
   }
 
   return res.json();
+}
+
+async function refreshAccessToken(
+  token: string,
+): Promise<{ access_token: string; refresh_token: string }> {
+  return gotruePost('/token?grant_type=refresh_token', { refresh_token: token });
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +288,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const applyTokenResponse = useCallback(
+    (data: { access_token: string; refresh_token: string }) => {
+      const u = userFromToken(data.access_token);
+      persistTokens(data.access_token, data.refresh_token);
+      setUser(u);
+      setAccessToken(data.access_token);
+      refreshTokenRef.current = data.refresh_token;
+      scheduleRefresh(data.access_token, data.refresh_token);
+    },
+    [scheduleRefresh],
+  );
+
+  const signInWithProvider = useCallback((provider: OAuthProvider, redirectTo?: string) => {
+    // Route through the main frontend's callback which is already in GoTrue's allow list.
+    // The fi_auth cookie on .flowindex.io will be set there, then it redirects back to us.
+    const runnerUrl = redirectTo || (typeof window !== 'undefined' ? window.location.href : '/');
+    const FRONTEND_ORIGIN = import.meta.env.VITE_FRONTEND_ORIGIN || 'https://flowindex.io';
+    const callbackUrl = `${FRONTEND_ORIGIN}/developer/callback?redirect=${encodeURIComponent(runnerUrl)}`;
+    window.location.href = `${GOTRUE_URL}/authorize?provider=${provider}&redirect_to=${encodeURIComponent(callbackUrl)}`;
+  }, []);
+
+  const sendMagicLink = useCallback(async (email: string, redirectTo?: string) => {
+    const payload: Record<string, unknown> = { email };
+    if (redirectTo) {
+      payload.redirect_to = redirectTo;
+    }
+    await gotruePost('/magiclink', payload);
+  }, []);
+
+  const verifyOtp = useCallback(
+    async (email: string, token: string) => {
+      const data = await gotruePost('/verify', { type: 'email', token, email });
+      applyTokenResponse(data);
+    },
+    [applyTokenResponse],
+  );
+
   const signOut = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     clearTokens();
@@ -290,7 +334,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, loading, signOut }}>
+    <AuthContext.Provider value={{ user, accessToken, loading, signInWithProvider, sendMagicLink, verifyOtp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -12,6 +12,19 @@ import type { VerifiedAddress, AddressSource } from './api';
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Derive 5 colors from an address (matches frontend AddressLink). */
+function colorsFromAddress(addr: string): string[] {
+  let hex = addr.replace(/^0x/, '');
+  if (hex.length > 16) hex = hex.replace(/^0+/, '') || hex;
+  hex = hex.padEnd(16, '0').slice(0, 16);
+  const c1 = `#${hex.slice(0, 6)}`;
+  const c2 = `#${hex.slice(5, 11)}`;
+  const c3 = `#${hex.slice(10, 16)}`;
+  const c4 = `#${hex[1]}${hex[3]}${hex[7]}${hex[9]}${hex[13]}${hex[15]}`;
+  const c5 = `#${hex[0]}${hex[4]}${hex[8]}${hex[12]}${hex[2]}${hex[6]}`;
+  return [c1, c2, c3, c4, c5];
+}
+
 function truncateAddress(addr: string): string {
   const full = addr.startsWith('0x') ? addr : `0x${addr}`;
   if (full.length <= 13) return full;
@@ -167,7 +180,7 @@ export default function AddressSidebar({
                   }`}
                 >
                   <div className="shrink-0">
-                    <Avatar size={24} name={addr.address} variant="beam" colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']} />
+                    <Avatar size={24} name={addr.address} variant="beam" colors={colorsFromAddress(addr.address)} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">

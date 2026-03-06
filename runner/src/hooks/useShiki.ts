@@ -4,7 +4,7 @@ import type { Highlighter } from 'shiki';
 let highlighterPromise: Promise<Highlighter> | null = null;
 let cachedHighlighter: Highlighter | null = null;
 
-const PRELOAD_LANGS = ['cadence', 'javascript', 'typescript', 'json', 'bash'];
+const PRELOAD_LANGS = ['cadence', 'javascript', 'typescript', 'json', 'bash', 'swift', 'go', 'python', 'kotlin'];
 
 /** Custom dark theme matching the Cadence editor color scheme */
 const cadenceEditorTheme = {
@@ -31,14 +31,22 @@ const cadenceEditorTheme = {
 
 function getHighlighter() {
   if (!highlighterPromise) {
-    highlighterPromise = import('shiki').then(({ createHighlighter }) =>
+    highlighterPromise = Promise.all([
+      import('shiki'),
+      import('shiki/engine/javascript'),
+    ]).then(([{ createHighlighter }, { createJavaScriptRegexEngine }]) =>
       createHighlighter({
         themes: ['vitesse-dark', cadenceEditorTheme],
         langs: PRELOAD_LANGS,
+        engine: createJavaScriptRegexEngine({ forgiving: true }),
       })
     ).then((h) => {
       cachedHighlighter = h;
       return h;
+    }).catch((err) => {
+      console.warn('[shiki] Failed to load highlighter:', err);
+      highlighterPromise = null; // allow retry
+      throw err;
     });
   }
   return highlighterPromise;
@@ -52,7 +60,7 @@ export function useShikiHighlighter() {
       setHighlighter(cachedHighlighter);
       return;
     }
-    getHighlighter().then(setHighlighter);
+    getHighlighter().then(setHighlighter).catch(() => {});
   }, []);
 
   return highlighter;

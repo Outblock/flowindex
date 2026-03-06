@@ -24,6 +24,7 @@
     "dagre": "^0.8.5",
     "diff": "^8.0.3",
     "framer-motion": "^12.34.3",
+    "input-otp": "^1.4.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.563.0",
     "monaco-editor": "^0.50.0",

@@ -35,12 +35,13 @@ import { useGitHub } from './github/useGitHub';
 import GitHubConnect from './components/GitHubConnect';
 import GitCommitPanel from './components/GitCommitPanel';
 import { useDeployEvents } from './github/useDeployEvents';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe, Sparkles, Github } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe, Sparkles, Github, ExternalLink } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
 const AIPanel = lazy(() => import('./components/AIPanel'));
 const KeyManager = lazy(() => import('./components/KeyManager'));
 const AccountPanel = lazy(() => import('./components/AccountPanel'));
+const LoginModal = lazy(() => import('./components/LoginModal'));
 
 /* ── Detect if we're in an iframe ── */
 let isIframe = false;
@@ -297,6 +298,7 @@ export default function App() {
   const [aiPendingMessage, setAiPendingMessage] = useState<string | undefined>();
   const [pendingDiffs, setPendingDiffs] = useState<PendingDiffMap>({});
   const { user, loading: authLoading, signOut } = useAuth();
+  const openLogin = useCallback(() => setShowLoginModal(true), []);
   useKeys();
   const {
     localKeys, accountsMap, wasmReady, ensureWasmReady,
@@ -307,6 +309,7 @@ export default function App() {
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [keyManagerInitialMode, setKeyManagerInitialMode] = useState<'create' | 'import' | undefined>();
   const [showNetworkMenu, setShowNetworkMenu] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const networkMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     try {
@@ -1264,14 +1267,14 @@ export default function App() {
                 <span>Share</span>
               </button>
             ) : (
-              <a
-                href={`https://flowindex.io/developer/login?redirect=${encodeURIComponent(window.location.href)}`}
+              <button
+                onClick={openLogin}
                 className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs px-2 py-1 rounded border border-zinc-700 transition-colors"
                 title="Log in to share"
               >
                 <Share2 className="w-3 h-3" />
                 <span>Share</span>
-              </a>
+              </button>
             )
           )}
           {/* Network selector */}
@@ -1377,12 +1380,12 @@ export default function App() {
               Fork
             </button>
           ) : (
-            <a
-              href={`https://flowindex.io/developer/login?redirect=${encodeURIComponent(window.location.href)}`}
+            <button
+              onClick={openLogin}
               className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors"
             >
               Sign in to fork
-            </a>
+            </button>
           )}
         </div>
       )}
@@ -1464,68 +1467,40 @@ export default function App() {
               {!authLoading && (
                 <div className="shrink-0 border-t border-zinc-700">
                   {user ? (
-                    <div className="group">
-                      <div className="flex items-center justify-between px-3 py-2">
-                        <span className="text-[10px] text-zinc-500 truncate">{user.email}</span>
-                        <button
-                          onClick={() => signOut()}
-                          className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                        >
-                          Sign out
-                        </button>
-                      </div>
-                      {/* Key management - appears on hover */}
-                      <div className="max-h-0 overflow-hidden group-hover:max-h-10 transition-all duration-200 ease-in-out">
-                        <button
-                          onClick={() => setShowKeyManager(!showKeyManager)}
-                          className={`flex items-center gap-1.5 w-full px-3 py-1.5 text-[11px] transition-colors ${
-                            showKeyManager ? 'text-emerald-400 bg-emerald-600/10' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
-                          }`}
-                        >
-                          <KeyIcon className="w-3 h-3" />
-                          <span>Manage Keys</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <a
-                        href={`https://flowindex.io/developer/login?redirect=${encodeURIComponent(window.location.origin)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors px-3 py-2"
-                      >
-                        <LogIn className="w-3 h-3" />
-                        <span>Sign in</span>
-                      </a>
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-[10px] text-zinc-500 truncate">{user.email}</span>
                       <button
-                        onClick={() => setShowKeyManager(!showKeyManager)}
-                        className={`flex items-center gap-1.5 w-full px-3 py-1.5 text-[11px] transition-colors ${
-                          showKeyManager ? 'text-emerald-400 bg-emerald-600/10' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
-                        }`}
+                        onClick={() => signOut()}
+                        className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
                       >
-                        <KeyIcon className="w-3 h-3" />
-                        <span>Manage Keys</span>
+                        Sign out
                       </button>
                     </div>
+                  ) : (
+                    <button
+                      onClick={openLogin}
+                      className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors px-3 py-2 w-full text-left"
+                    >
+                      <LogIn className="w-3 h-3" />
+                      <span>Sign in</span>
+                    </button>
                   )}
                 </div>
               )}
-              {/* GitHub integration — compact link to deploy page */}
-              {user && cloudMeta.id && github.connection && (
-                <div className="shrink-0 border-t border-zinc-700">
+              {/* GitHub integration */}
+              <div className="shrink-0 border-t border-zinc-700">
+                {github.connection ? (
                   <a
-                    href="/deploy"
+                    href={`https://github.com/${github.connection.repo_owner}/${github.connection.repo_name}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
                   >
                     <Github className="w-3 h-3" />
                     <span className="truncate">{github.connection.repo_owner}/{github.connection.repo_name}</span>
-                    <span className="ml-auto text-emerald-500 text-[9px]">&#9679;</span>
+                    <ExternalLink className="w-2.5 h-2.5 ml-auto shrink-0 opacity-50" />
                   </a>
-                </div>
-              )}
-              {user && cloudMeta.id && !github.connection && (
-                <div className="shrink-0 border-t border-zinc-700">
+                ) : user && cloudMeta.id ? (
                   <button
                     onClick={() => setShowGitHubConnect(true)}
                     className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
@@ -1533,8 +1508,16 @@ export default function App() {
                     <Github className="w-3 h-3" />
                     <span>GitHub</span>
                   </button>
-                </div>
-              )}
+                ) : (
+                  <button
+                    onClick={openLogin}
+                    className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors text-left"
+                  >
+                    <Github className="w-3 h-3" />
+                    <span>GitHub</span>
+                  </button>
+                )}
+              </div>
               {/* Settings */}
               <div className="shrink-0 border-t border-zinc-700">
                 <button
@@ -1625,6 +1608,16 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+                    {/* Manage Keys */}
+                    <button
+                      onClick={() => { setShowKeyManager(true); setShowLspMenu(false); }}
+                      className={`flex items-center gap-1.5 w-full px-0 py-1.5 text-[11px] transition-colors ${
+                        showKeyManager ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      <KeyIcon className="w-3 h-3" />
+                      <span>Manage Keys</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1943,6 +1936,9 @@ export default function App() {
         onCreateAccount={createAccount}
         onRefreshAccounts={refreshAccounts}
       />
+      <Suspense fallback={null}>
+        <LoginModal open={showLoginModal} onClose={() => setShowLoginModal(false)} />
+      </Suspense>
     </div>
   );
 }

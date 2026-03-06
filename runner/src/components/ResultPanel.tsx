@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import type { ExecutionResult } from '../flow/execute';
-import { Loader2, Code2, List, Copy, Check } from 'lucide-react';
+import { Loader2, Code2, List, Copy, Check, Sparkles } from 'lucide-react';
 import { JsonView, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
 
@@ -206,7 +206,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
 }
 
 /** Render data with view mode toggle and copy button */
-function DataDisplay({ data, isError }: { data: any; isError?: boolean }) {
+function DataDisplay({ data, isError, onFixWithAI }: { data: any; isError?: boolean; onFixWithAI?: (msg: string) => void }) {
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
   const jsonObj = useMemo(() => toJsonObject(data), [data]);
   const hasTreeView = jsonObj !== null && !isError;
@@ -215,6 +215,15 @@ function DataDisplay({ data, isError }: { data: any; isError?: boolean }) {
   return (
     <div>
       <div className="flex items-center justify-end gap-2 mb-2">
+        {isError && onFixWithAI && (
+          <button
+            onClick={() => onFixWithAI(copyText)}
+            className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded border transition-colors bg-emerald-900/40 text-emerald-400 border-emerald-700 hover:bg-emerald-800/50 hover:text-emerald-300"
+          >
+            <Sparkles className="w-3 h-3" />
+            Fix with AI
+          </button>
+        )}
         <CopyButton text={copyText} />
         {hasTreeView && (
           <ViewToggle mode={viewMode} onChange={setViewMode} />
@@ -324,6 +333,7 @@ export default function ResultPanel({ results, loading, network, code, filename,
                 <DataDisplay
                   data={lastResult.data}
                   isError={lastResult.type === 'error'}
+                  onFixWithAI={lastResult.type === 'error' ? onFixWithAI : undefined}
                 />
               </div>
             </div>

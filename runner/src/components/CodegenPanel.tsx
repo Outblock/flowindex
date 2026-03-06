@@ -280,10 +280,14 @@ export default function CodegenPanel({ code, filename, codeType, onFixWithAI }: 
         )}
 
         {!loading && !error && hasOutput && (
-          <div
-            className="shiki-output [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!m-0 [&_code]:!text-xs leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: highlightedHtml || escapeHtml(currentResult!.code) }}
-          />
+          highlightedHtml ? (
+            <div
+              className="shiki-output [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!m-0 [&_code]:!text-xs leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+            />
+          ) : (
+            <pre className="whitespace-pre-wrap break-all text-zinc-300 leading-relaxed">{currentResult!.code}</pre>
+          )
         )}
 
         {!loading && !error && !hasOutput && !hasError && !currentResult && (
