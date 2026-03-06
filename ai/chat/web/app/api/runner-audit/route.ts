@@ -1,6 +1,6 @@
 import { createMCPClient } from "@ai-sdk/mcp";
 import { anthropic } from "@ai-sdk/anthropic";
-import { streamText, convertToModelMessages, type UIMessage } from "ai";
+import { streamText, stepCountIs, convertToModelMessages, type UIMessage } from "ai";
 
 const CADENCE_MCP_URL =
   process.env.CADENCE_MCP_URL || "https://cadence-mcp.up.railway.app/mcp";
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     system: systemWithContext,
     messages: await convertToModelMessages(messages),
     tools: cadenceMcp.tools,
-    maxSteps: 8,
+    stopWhen: stepCountIs(8),
     onFinish: async () => {
       await cadenceMcp.client?.close();
     },
