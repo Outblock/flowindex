@@ -73,73 +73,17 @@ function TokenDetailSkeleton() {
 export const Route = createFileRoute('/tokens/$token')({
   component: TokenDetail,
   pendingComponent: TokenDetailSkeleton,
-  loader: async ({ params, location }: any) => {
+  loader: async ({ params }: any) => {
     const token = params.token;
-    const sp = new URLSearchParams(location?.search ?? '');
-    const holdersPage = Number(sp.get('holdersPage') || '1') || 1;
-    const transfersPage = Number(sp.get('transfersPage') || '1') || 1;
-    const holdersLimit = 25;
-    const transfersLimit = 25;
-    const holdersOffset = (holdersPage - 1) * holdersLimit;
-    const transfersOffset = (transfersPage - 1) * transfersLimit;
-
     try {
       await ensureHeyApiConfigured();
-      const [tokenRes, holdersRes, transfersRes] = await Promise.all([
-        getFlowV1FtByToken({ path: { token } }),
-        getFlowV1FtByTokenHolding({ path: { token }, query: { limit: holdersLimit, offset: holdersOffset } }),
-        getFlowV1FtTransfer({ query: { limit: transfersLimit, offset: transfersOffset, token } }),
-      ]);
-
+      const tokenRes = await getFlowV1FtByToken({ path: { token } });
       const tokenPayload: any = tokenRes?.data;
-      const holdersPayload: any = holdersRes?.data;
-      const transfersPayload: any = transfersRes?.data;
       const tokenRow = (tokenPayload?.data && tokenPayload.data[0]) || null;
-
-      // Fetch price history if token has market_symbol
-      let priceHistory: { date: string; price: number }[] = [];
-      let currentPrice: number | null = null;
-      const marketSymbol = tokenRow?.market_symbol;
-      if (marketSymbol) {
-        try {
-          const priceRes = await fetch(`${getBaseURL()}/flow/ft/prices?days=90`);
-          if (priceRes.ok) {
-            const priceJson = await priceRes.json();
-            const symbolData = priceJson?.data?.[marketSymbol.toUpperCase()];
-            if (symbolData) {
-              priceHistory = symbolData.history || [];
-              currentPrice = symbolData.current ?? null;
-            }
-          }
-        } catch { /* ignore */ }
-      }
-
-      return {
-        token: tokenRow,
-        holders: holdersPayload?.data || [],
-        holdersMeta: holdersPayload?._meta || null,
-        transfers: transfersPayload?.data || [],
-        transfersMeta: transfersPayload?._meta || null,
-        tokenParam: token,
-        holdersPage,
-        transfersPage,
-        priceHistory,
-        currentPrice,
-      };
+      return { token: tokenRow, tokenParam: token };
     } catch (e) {
       console.error('Failed to load token detail', e);
-      return {
-        token: null,
-        holders: [],
-        holdersMeta: null,
-        transfers: [],
-        transfersMeta: null,
-        tokenParam: token,
-        holdersPage,
-        transfersPage,
-        priceHistory: [],
-        currentPrice: null,
-      };
+      return { token: null, tokenParam: token };
     }
   },
   head: ({ params }) => ({
@@ -159,17 +103,48 @@ function TokenDetail() {
   );
 }
 
+function TableSkeleton({ rows = 5, cols = 3 }: { rows?: number; cols?: number }) {
+  return (
+    <>
+      {[...Array(rows)].map((_, i) => (
+        <tr key={i} className="border-b border-zinc-100 dark:border-white/5">
+          {[...Array(cols)].map((_, j) => (
+            <td key={j} className="p-4">
+              <div className={`h-3 ${j === 0 ? 'w-6' : j === cols - 1 ? 'w-20 ml-auto' : 'w-32'} bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse`} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function PriceChartSkeleton() {
+  return (
+    <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm shadow-sm dark:shadow-none overflow-hidden p-5 flex flex-col">
+      <div className="flex items-baseline gap-3 mb-4">
+        <div className="h-8 w-32 bg-zinc-200 dark:bg-white/10 rounded-sm animate-pulse" />
+        <div className="h-4 w-16 bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+      </div>
+      <div className="flex-1 min-h-[200px] bg-zinc-100 dark:bg-white/5 rounded-sm animate-pulse" />
+    </div>
+  );
+}
+
 function TokenDetailInner() {
-  const { token, holders, holdersMeta, transfers, transfersMeta, tokenParam, holdersPage, transfersPage, priceHistory, currentPrice } =
-    Route.useLoaderData();
+  const { token, tokenParam } = Route.useLoaderData();
   const navigate = Route.useNavigate();
   const location = useRouterState({ select: (s) => s.location });
 
-  const [holdersState, setHoldersState] = useState(holders);
-  const [holdersMetaState, setHoldersMetaState] = useState(holdersMeta);
-  const [transfersState, setTransfersState] = useState(transfers);
-  const [transfersMetaState, setTransfersMetaState] = useState(transfersMeta);
-  const [isLoading, setIsLoading] = useState(false);
+  const [holdersState, setHoldersState] = useState<any[]>([]);
+  const [holdersMetaState, setHoldersMetaState] = useState<any>(null);
+  const [transfersState, setTransfersState] = useState<any[]>([]);
+  const [transfersMetaState, setTransfersMetaState] = useState<any>(null);
+  const [holdersLoading, setHoldersLoading] = useState(true);
+  const [transfersLoading, setTransfersLoading] = useState(true);
+  const [priceHistory, setPriceHistory] = useState<{ date: string; price: number }[]>([]);
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
   const lastKeyRef = useRef<string>('');
 
   const normalizeHex = (value: any) => {
@@ -205,8 +180,8 @@ function TokenDetailInner() {
   const socials = parseSocials();
 
   const sp = new URLSearchParams(location?.search as string ?? '');
-  const holdersPageFromUrl = Number(sp.get('holdersPage') || holdersPage || 1) || 1;
-  const transfersPageFromUrl = Number(sp.get('transfersPage') || transfersPage || 1) || 1;
+  const holdersPageFromUrl = Number(sp.get('holdersPage') || '1') || 1;
+  const transfersPageFromUrl = Number(sp.get('transfersPage') || '1') || 1;
 
   const holdersLimit = 25;
   const holdersOffset = (holdersPageFromUrl - 1) * holdersLimit;
@@ -228,21 +203,16 @@ function TokenDetailInner() {
     navigate({ search: { holdersPage: holdersPageFromUrl, transfersPage: newPage } });
   };
 
-  useEffect(() => {
-    setHoldersState(holders);
-    setHoldersMetaState(holdersMeta);
-    setTransfersState(transfers);
-    setTransfersMetaState(transfersMeta);
-  }, [holders, holdersMeta, transfers, transfersMeta, tokenParam]);
-
+  // Client-side: fetch holders + transfers
   useEffect(() => {
     const key = `${tokenParam}|${holdersPageFromUrl}|${transfersPageFromUrl}`;
     if (lastKeyRef.current === key) return;
     lastKeyRef.current = key;
     let cancelled = false;
-    const fetchPage = async () => {
+    const fetchData = async () => {
       try {
-        setIsLoading(true);
+        setHoldersLoading(true);
+        setTransfersLoading(true);
         await ensureHeyApiConfigured();
         const [holdersRes, transfersRes] = await Promise.all([
           getFlowV1FtByTokenHolding({ path: { token: tokenParam }, query: { limit: holdersLimit, offset: holdersOffset } }),
@@ -254,16 +224,42 @@ function TokenDetailInner() {
         setTransfersState(transfersRes?.data?.data || []);
         setTransfersMetaState(transfersRes?.data?._meta || null);
       } catch (e) {
-        console.error('Failed to refresh token data', e);
+        console.error('Failed to fetch token data', e);
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setHoldersLoading(false);
+          setTransfersLoading(false);
+        }
       }
     };
-    fetchPage();
-    return () => {
-      cancelled = true;
-    };
+    fetchData();
+    return () => { cancelled = true; };
   }, [tokenParam, holdersPageFromUrl, transfersPageFromUrl]);
+
+  // Client-side: fetch price data (only once per token)
+  useEffect(() => {
+    const marketSymbol = token?.market_symbol;
+    if (!marketSymbol) {
+      setPriceHistory([]);
+      setCurrentPrice(null);
+      return;
+    }
+    let cancelled = false;
+    setPriceLoading(true);
+    fetch(`${getBaseURL()}/flow/ft/prices?days=90`)
+      .then(res => res.ok ? res.json() : null)
+      .then(json => {
+        if (cancelled || !json) return;
+        const symbolData = json?.data?.[marketSymbol.toUpperCase()];
+        if (symbolData) {
+          setPriceHistory(symbolData.history || []);
+          setCurrentPrice(symbolData.current ?? null);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setPriceLoading(false); });
+    return () => { cancelled = true; };
+  }, [token?.market_symbol]);
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
@@ -271,11 +267,6 @@ function TokenDetailInner() {
         <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
         <span className="text-xs uppercase tracking-widest">Back</span>
       </button>
-      {isLoading && (
-        <div className="text-xs uppercase tracking-widest text-nothing-green-dark dark:text-nothing-green">
-          Loading...
-        </div>
-      )}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -329,7 +320,7 @@ function TokenDetailInner() {
         className="space-y-6"
       >
         {/* Info table + Price chart side by side */}
-        <div className={`grid gap-6 ${priceHistory.length >= 2 && currentPrice != null ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-6 ${(priceLoading && token?.market_symbol) || (priceHistory.length >= 2 && currentPrice != null) ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
           {/* Info table */}
           <div className="bg-white dark:bg-nothing-dark border border-zinc-200 dark:border-white/10 rounded-sm shadow-sm dark:shadow-none overflow-hidden">
             <div className="grid grid-cols-[auto_1fr] text-sm">
@@ -362,7 +353,8 @@ function TokenDetailInner() {
           </div>
 
           {/* Price chart — large panel */}
-          {priceHistory.length >= 2 && currentPrice != null && (() => {
+          {priceLoading && token?.market_symbol && <PriceChartSkeleton />}
+          {!priceLoading && priceHistory.length >= 2 && currentPrice != null && (() => {
             const first = priceHistory[0].price;
             const last = priceHistory[priceHistory.length - 1].price;
             const pct = first > 0 ? ((last - first) / first) * 100 : 0;
@@ -521,8 +513,9 @@ function TokenDetailInner() {
                 </tr>
               </thead>
               <tbody>
+                {holdersLoading && <TableSkeleton rows={5} cols={3} />}
                 <AnimatePresence mode="popLayout">
-                  {[...holdersState].sort((a: any, b: any) => Number(b?.balance || 0) - Number(a?.balance || 0)).map((h: any, idx: number) => {
+                  {!holdersLoading && [...holdersState].sort((a: any, b: any) => Number(b?.balance || 0) - Number(a?.balance || 0)).map((h: any, idx: number) => {
                     const a = normalizeHex(h?.address);
                     const bal = Math.max(Number(h?.balance || 0), 0);
                     const rank = holdersOffset + idx + 1;
@@ -580,8 +573,9 @@ function TokenDetailInner() {
                 </tr>
               </thead>
               <tbody>
+                {transfersLoading && <TableSkeleton rows={5} cols={4} />}
                 <AnimatePresence mode="popLayout">
-                  {transfersState.map((t: any) => {
+                  {!transfersLoading && transfersState.map((t: any) => {
                     const tx = String(t?.transaction_hash || '');
                     const from = normalizeHex(t?.sender);
                     const to = normalizeHex(t?.receiver);
