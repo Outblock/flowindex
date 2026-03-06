@@ -25,6 +25,7 @@ export interface AuthContextValue {
   signInWithProvider: (provider: OAuthProvider, redirectTo?: string) => void;
   sendMagicLink: (email: string, redirectTo?: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
+  applyTokenData: (data: { access_token: string; refresh_token: string }) => void;
   signOut: () => void;
 }
 
@@ -334,7 +335,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, loading, signInWithProvider, sendMagicLink, verifyOtp, signOut }}>
+    <AuthContext.Provider value={{ user, accessToken, loading, signInWithProvider, sendMagicLink, verifyOtp, applyTokenData: applyTokenResponse, signOut }}>
       {children}
     </AuthContext.Provider>
   );
