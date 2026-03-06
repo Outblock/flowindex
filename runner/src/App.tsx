@@ -34,7 +34,6 @@ import ShareModal from './components/ShareModal';
 import { useGitHub } from './github/useGitHub';
 import GitHubConnect from './components/GitHubConnect';
 import GitCommitPanel from './components/GitCommitPanel';
-import DeployStatus from './components/DeployStatus';
 import { useDeployEvents } from './github/useDeployEvents';
 import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe, Sparkles, Github } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
