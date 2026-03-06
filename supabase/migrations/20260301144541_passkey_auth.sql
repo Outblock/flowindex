@@ -169,3 +169,11 @@ REVOKE ALL ON FUNCTION public.log_passkey_audit_event(public.passkey_audit_event
 GRANT EXECUTE ON FUNCTION public.cleanup_expired_passkey_challenges() TO service_role;
 GRANT EXECUTE ON FUNCTION public.check_passkey_rate_limit(TEXT, VARCHAR, VARCHAR, INTEGER, INTEGER) TO service_role;
 GRANT EXECUTE ON FUNCTION public.log_passkey_audit_event(public.passkey_audit_event, UUID, TEXT, TEXT, INET, TEXT, TEXT, JSONB, TEXT, TEXT) TO service_role;
+
+-- Passkey wallet: Flow account association
+ALTER TABLE public.passkey_credentials
+  ADD COLUMN IF NOT EXISTS public_key_sec1_hex TEXT,
+  ADD COLUMN IF NOT EXISTS flow_address TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_passkey_credentials_flow_address
+  ON public.passkey_credentials(flow_address);
