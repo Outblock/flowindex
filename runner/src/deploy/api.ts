@@ -17,12 +17,20 @@ export interface ContractInfo {
   first_seen_height: number;
   last_seen_height: number;
   dependent_count: number;
+  // Rich metadata from FlowIndex
+  token_logo?: string;
+  token_name?: string;
+  token_symbol?: string;
+  tags?: string[];
+  is_verified?: boolean;
+  import_count?: number;
 }
 
 export interface ContractVersion {
   version: number;
   block_height: number;
   created_at: string;
+  transaction_id?: string;
 }
 
 export interface ContractEvent {
@@ -33,6 +41,30 @@ export interface ContractEvent {
 export interface ContractDependency {
   address: string;
   name: string;
+  identifier?: string;
+}
+
+export interface TokenMetadata {
+  name: string;
+  description?: string;
+  logo?: string;
+  banner?: string;
+  external_url?: string;
+  holder_count: number;
+  total_supply?: number;
+  socials?: Record<string, string>;
+  is_verified?: boolean;
+}
+
+export interface ContractTransaction {
+  id: string;
+  timestamp: string;
+  status: string;
+  payer: string;
+  proposer: string;
+  authorizers: string[];
+  event_count: number;
+  fee: number;
 }
 
 export type AddressSource = 'manual' | 'fcl' | 'local-key';
@@ -56,79 +88,182 @@ function normalizeAddress(address: string): string {
   return address.replace(/^0x/i, '').toLowerCase();
 }
 
-/** Base URL for the FlowIndex public API by network */
-function apiBase(network: string): string {
-  if (network === 'testnet') return 'https://testnet.flowindex.io';
-  return 'https://flowindex.io';
+/** Fetch with timeout to avoid hanging requests */
+function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+/** FlowIndex API base URL by network */
+function flowIndexBase(network: string): string {
+  return network === 'testnet'
+    ? 'https://testnet.flowindex.io/api'
+    : 'https://flowindex.io/api';
+}
+
+/** Flow Access Node REST API base URL by network (fallback) */
+function accessNodeBase(network: string): string {
+  return network === 'testnet'
+    ? 'https://rest-testnet.onflow.org'
+    : 'https://rest-mainnet.onflow.org';
 }
 
 // ---------------------------------------------------------------------------
-// FlowIndex public API — contract data (no auth)
+// Contract data — FlowIndex primary, Flow Access Node RPC fallback
 // ---------------------------------------------------------------------------
 
+function mapContract(c: Record<string, unknown>, fallbackAddr: string): ContractInfo {
+  return {
+    address: (c.address as string) || fallbackAddr,
+    name: (c.name as string) || '',
+    code: (c.body as string) || (c.code as string) || undefined,
+    kind: (c.kind as string) || undefined,
+    version: (c.version as number) || 1,
+    first_seen_height: (c.first_seen_height as number) || (c.valid_from as number) || 0,
+    last_seen_height: (c.last_seen_height as number) || 0,
+    dependent_count: (c.dependent_count as number) || (c.import_count as number) || 0,
+    token_logo: (c.token_logo as string) || undefined,
+    token_name: (c.token_name as string) || undefined,
+    token_symbol: (c.token_symbol as string) || undefined,
+    tags: (c.tags as string[]) || undefined,
+    is_verified: (c.is_verified as boolean) || undefined,
+    import_count: (c.import_count as number) || 0,
+  };
+}
+
+/** Fetch contracts from FlowIndex API */
+async function fetchContractsFromFlowIndex(
+  addr: string,
+  network: string,
+): Promise<ContractInfo[]> {
+  const res = await fetchWithTimeout(
+    `${flowIndexBase(network)}/flow/contract?address=${addr}&limit=100`,
+  );
+  if (!res.ok) throw new Error(`FlowIndex API error: ${res.status}`);
+  const json = await res.json();
+  const items = (json.data ?? json.contracts ?? json) as Array<Record<string, unknown>>;
+  return items.map((c) => mapContract(c, addr));
+}
+
+/** Fetch contracts from Flow Access Node RPC (fallback) */
+async function fetchContractsFromRPC(
+  addr: string,
+  network: string,
+): Promise<ContractInfo[]> {
+  const fullAddr = `0x${addr}`;
+  const res = await fetch(
+    `${accessNodeBase(network)}/v1/accounts/${fullAddr}?expand=contracts`,
+  );
+  if (!res.ok) throw new Error(`Flow RPC error: ${res.status}`);
+  const json = await res.json();
+  const contracts = json.contracts || {};
+  return Object.entries(contracts).map(([name, codeBase64]) => ({
+    address: addr,
+    name,
+    code: atob(codeBase64 as string),
+    version: 1,
+    first_seen_height: 0,
+    last_seen_height: 0,
+    dependent_count: 0,
+  }));
+}
+
+/** Fetch all contracts — FlowIndex first, RPC fallback */
 export async function fetchContracts(
   address: string,
   network: string,
 ): Promise<ContractInfo[]> {
   const addr = normalizeAddress(address);
-  const res = await fetch(
-    `${apiBase(network)}/flow/v1/contract?address=${addr}&limit=100`,
-  );
-  if (!res.ok) throw new Error(`Failed to fetch contracts: ${res.status}`);
-  const json = await res.json();
-  return (json.data ?? json.contracts ?? json) as ContractInfo[];
+  try {
+    return await fetchContractsFromFlowIndex(addr, network);
+  } catch {
+    console.warn('[deploy/api] FlowIndex unavailable, falling back to RPC');
+    return fetchContractsFromRPC(addr, network);
+  }
 }
 
+/** Fetch contract detail — FlowIndex first, RPC fallback */
 export async function fetchContractDetail(
   identifier: string,
   network: string,
 ): Promise<ContractInfo> {
-  const res = await fetch(
-    `${apiBase(network)}/flow/v1/contract/${identifier}`,
-  );
-  if (!res.ok)
-    throw new Error(`Failed to fetch contract detail: ${res.status}`);
-  const json = await res.json();
-  return (json.data ?? json) as ContractInfo;
+  // Try FlowIndex first
+  try {
+    const res = await fetchWithTimeout(
+      `${flowIndexBase(network)}/flow/contract/${identifier}`,
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const items = json.data;
+      const c = (Array.isArray(items) ? items[0] : items ?? json) as Record<string, unknown>;
+      return mapContract(c, '');
+    }
+  } catch { /* fall through */ }
+
+  // Fallback: parse identifier (A.address.Name) and fetch from RPC
+  const parts = identifier.split('.');
+  const addr = normalizeAddress(parts[1] || identifier);
+  const name = parts[2] || '';
+  const contracts = await fetchContractsFromRPC(addr, network);
+  const found = contracts.find((c) => c.name === name);
+  if (!found) throw new Error(`Contract ${name} not found on ${addr}`);
+  return found;
 }
 
 export async function fetchContractVersions(
   identifier: string,
   network: string,
 ): Promise<ContractVersion[]> {
-  const res = await fetch(
-    `${apiBase(network)}/flow/v1/contract/${identifier}/version`,
-  );
-  if (!res.ok)
-    throw new Error(`Failed to fetch contract versions: ${res.status}`);
-  const json = await res.json();
-  return (json.data ?? json.versions ?? json) as ContractVersion[];
+  try {
+    const res = await fetchWithTimeout(
+      `${flowIndexBase(network)}/flow/contract/${identifier}/version`,
+    );
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.data ?? json.versions ?? json) as ContractVersion[];
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchContractEvents(
   identifier: string,
   network: string,
 ): Promise<ContractEvent[]> {
-  const res = await fetch(
-    `${apiBase(network)}/flow/v1/contract/${identifier}/events`,
-  );
-  if (!res.ok)
-    throw new Error(`Failed to fetch contract events: ${res.status}`);
-  const json = await res.json();
-  return (json.data ?? json.events ?? json) as ContractEvent[];
+  try {
+    const res = await fetchWithTimeout(
+      `${flowIndexBase(network)}/flow/contract/${identifier}/events`,
+    );
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.data ?? json.events ?? json) as ContractEvent[];
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchContractDependencies(
   identifier: string,
   network: string,
 ): Promise<ContractDependency[]> {
-  const res = await fetch(
-    `${apiBase(network)}/flow/v1/contract/${identifier}/dependencies`,
-  );
-  if (!res.ok)
-    throw new Error(`Failed to fetch contract dependencies: ${res.status}`);
-  const json = await res.json();
-  return (json.data ?? json.dependencies ?? json) as ContractDependency[];
+  try {
+    const res = await fetchWithTimeout(
+      `${flowIndexBase(network)}/flow/contract/${identifier}/dependencies`,
+    );
+    if (!res.ok) return [];
+    const json = await res.json();
+    // API returns { data: [{ imports: [...], dependents: [...], graph: {...} }] }
+    const d = Array.isArray(json.data) ? json.data[0] : json.data ?? json;
+    const imports = (d?.imports ?? []) as Array<Record<string, unknown>>;
+    return imports.map((i) => ({
+      address: (i.address as string) || '',
+      name: (i.name as string) || '',
+      identifier: (i.identifier as string) || undefined,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchHolderCount(
@@ -137,16 +272,72 @@ export async function fetchHolderCount(
   network: string,
 ): Promise<number> {
   try {
-    const path =
-      kind === 'FT'
-        ? `/flow/v1/ft/${identifier}/top-account?limit=1`
-        : `/flow/v1/nft/${identifier}/top-account?limit=1`;
-    const res = await fetch(`${apiBase(network)}${path}`);
+    // Use the token metadata endpoint which has holder_count
+    const path = kind === 'FT' ? `/flow/ft/${identifier}` : `/flow/nft/${identifier}`;
+    const res = await fetchWithTimeout(`${flowIndexBase(network)}${path}`);
     if (!res.ok) return 0;
     const json = await res.json();
-    return json.total ?? json.count ?? 0;
+    const d = Array.isArray(json.data) ? json.data[0] : json.data ?? json;
+    return d?.holder_count ?? 0;
   } catch {
     return 0;
+  }
+}
+
+/** Fetch NFT or FT token metadata (logo, banner, description, holders, socials) */
+export async function fetchTokenMetadata(
+  identifier: string,
+  kind: string,
+  network: string,
+): Promise<TokenMetadata | null> {
+  try {
+    const path = kind === 'FT' ? `/flow/ft/${identifier}` : `/flow/nft/${identifier}`;
+    const res = await fetchWithTimeout(`${flowIndexBase(network)}${path}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const d = Array.isArray(json.data) ? json.data[0] : json.data ?? json;
+    if (!d) return null;
+    return {
+      name: d.display_name || d.name || '',
+      description: d.description || undefined,
+      logo: d.square_image || d.logo || undefined,
+      banner: d.banner_image || undefined,
+      external_url: d.external_url || undefined,
+      holder_count: d.holder_count || 0,
+      total_supply: d.number_of_tokens || d.total_supply || undefined,
+      socials: d.socials || undefined,
+      is_verified: d.is_verified || false,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch recent transactions for a contract */
+export async function fetchContractTransactions(
+  identifier: string,
+  network: string,
+  limit = 10,
+): Promise<ContractTransaction[]> {
+  try {
+    const res = await fetchWithTimeout(
+      `${flowIndexBase(network)}/flow/contract/${identifier}/transaction?limit=${limit}`,
+    );
+    if (!res.ok) return [];
+    const json = await res.json();
+    const items = (json.data ?? []) as Array<Record<string, unknown>>;
+    return items.map((t) => ({
+      id: (t.id as string) || '',
+      timestamp: (t.timestamp as string) || '',
+      status: (t.status as string) || '',
+      payer: (t.payer as string) || '',
+      proposer: (t.proposer as string) || '',
+      authorizers: (t.authorizers as string[]) || [],
+      event_count: (t.event_count as number) || 0,
+      fee: (t.fee as number) || 0,
+    }));
+  } catch {
+    return [];
   }
 }
 

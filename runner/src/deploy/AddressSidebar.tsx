@@ -3,7 +3,8 @@
 // ---------------------------------------------------------------------------
 
 import { useState, useCallback, useEffect } from 'react';
-import { Plus, Trash2, Loader2, Type, Key as KeyIcon, Rocket, Eye } from 'lucide-react';
+import { Plus, Trash2, Loader2, Type, Rocket, Eye } from 'lucide-react';
+import Avatar from 'boring-avatars';
 import { useLocalKeys } from '../auth/useLocalKeys';
 import type { VerifiedAddress, AddressSource } from './api';
 
@@ -67,7 +68,7 @@ export default function AddressSidebar({
   const localAccountAddrs = localKeys
     .flatMap((key) => (accountsMap[key.id] || []).map((acc) => ({
       address: acc.flowAddress,
-      label: key.name || `Key ${key.id.slice(0, 6)}`,
+      label: key.label || `Key ${key.id.slice(0, 6)}`,
     })))
     .filter((v, i, arr) => arr.findIndex((a) => a.address === v.address) === i);
 
@@ -165,18 +166,21 @@ export default function AddressSidebar({
                       : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                   }`}
                 >
+                  <div className="shrink-0">
+                    <Avatar size={24} name={addr.address} variant="beam" colors={['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444']} />
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      {deployable ? (
-                        <KeyIcon className="w-3 h-3 text-emerald-500 shrink-0" />
-                      ) : (
-                        <Eye className="w-3 h-3 text-zinc-600 shrink-0" />
-                      )}
+                    <div className="flex items-center gap-1">
                       <span className="text-xs font-mono truncate">
                         {truncateAddress(addr.address)}
                       </span>
+                      {deployable ? (
+                        <Rocket className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <Eye className="w-2.5 h-2.5 text-zinc-600 shrink-0" />
+                      )}
                     </div>
-                    <div className="flex items-center gap-1.5 mt-0.5 ml-[18px]">
+                    <div className="flex items-center gap-1.5 mt-0.5">
                       <span
                         className={`inline-block w-1.5 h-1.5 rounded-full ${
                           addr.network === 'mainnet'
@@ -192,17 +196,15 @@ export default function AddressSidebar({
                           {addr.label}
                         </span>
                       )}
-                      {deployable && (
-                        <Rocket className="w-2.5 h-2.5 text-emerald-600 shrink-0" title="Can deploy" />
-                      )}
                     </div>
                   </div>
 
                   {/* Delete button (hover) */}
-                  <button
-                    onClick={(e) => handleRemove(e, addr.id)}
-                    disabled={isRemoving}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 text-zinc-500 hover:text-red-400 transition-opacity"
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => handleRemove(e as unknown as React.MouseEvent, addr.id)}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 text-zinc-500 hover:text-red-400 transition-opacity cursor-pointer"
                     title="Remove address"
                   >
                     {isRemoving ? (
@@ -210,7 +212,7 @@ export default function AddressSidebar({
                     ) : (
                       <Trash2 className="w-3 h-3" />
                     )}
-                  </button>
+                  </span>
                 </button>
               );
             })}
