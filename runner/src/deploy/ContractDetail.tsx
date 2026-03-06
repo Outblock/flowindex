@@ -677,89 +677,86 @@ export default function ContractDetail() {
                     ];
 
                     return (
-                      <div className="space-y-3">
-                        {/* KPI cards row */}
-                        <div className="grid grid-cols-4 gap-3">
+                      <div className="flex items-start gap-4">
+                        {/* KPI cards */}
+                        <div className="shrink-0 grid grid-cols-2 gap-2 w-[240px]">
                           {tokenMeta?.holder_count != null && tokenMeta.holder_count > 0 && (
-                            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-                              <div className="text-[10px] text-zinc-500 mb-1">Total Holders</div>
-                              <div className="text-lg font-semibold text-zinc-100">{formatNumber(tokenMeta.holder_count)}</div>
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-2.5">
+                              <div className="text-[10px] text-zinc-500 mb-0.5">Total Holders</div>
+                              <div className="text-base font-semibold text-zinc-100">{formatNumber(tokenMeta.holder_count)}</div>
                             </div>
                           )}
                           {tokenMeta?.total_supply != null && tokenMeta.total_supply > 0 && (
-                            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-                              <div className="text-[10px] text-zinc-500 mb-1">Total Supply</div>
-                              <div className="text-lg font-semibold text-zinc-100">{formatNumber(tokenMeta.total_supply)}</div>
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-2.5">
+                              <div className="text-[10px] text-zinc-500 mb-0.5">Total Supply</div>
+                              <div className="text-base font-semibold text-zinc-100">{formatNumber(tokenMeta.total_supply)}</div>
                             </div>
                           )}
-                          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-                            <div className="text-[10px] text-zinc-500 mb-1">Top {chartTopN} Concentration</div>
-                            <div className="text-lg font-semibold text-emerald-400">{((topPct) * 100).toFixed(1)}%</div>
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-2.5">
+                            <div className="text-[10px] text-zinc-500 mb-0.5">Top {chartTopN}</div>
+                            <div className="text-base font-semibold text-emerald-400">{((topPct) * 100).toFixed(1)}%</div>
                           </div>
-                          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-                            <div className="text-[10px] text-zinc-500 mb-1">Others</div>
-                            <div className="text-lg font-semibold text-zinc-400">{((othersPct) * 100).toFixed(1)}%</div>
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-2.5">
+                            <div className="text-[10px] text-zinc-500 mb-0.5">Others</div>
+                            <div className="text-base font-semibold text-zinc-400">{((othersPct) * 100).toFixed(1)}%</div>
                           </div>
                         </div>
 
-                        {/* Pie chart + Legend side by side */}
-                        <div className="flex items-start gap-4">
-                          {/* Pie chart */}
-                          <div className="w-[220px] h-[220px] shrink-0">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <PieChart>
-                                <Pie
-                                  data={pieData}
-                                  dataKey="value"
-                                  nameKey="name"
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={50}
-                                  outerRadius={100}
-                                  paddingAngle={1}
-                                  stroke="none"
-                                >
-                                  {pieData.map((entry, idx) => (
-                                    <Cell key={idx} fill={entry.fill} />
-                                  ))}
-                                </Pie>
-                                <Tooltip
-                                  contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8, fontSize: 11 }}
-                                  itemStyle={{ color: '#d4d4d8' }}
-                                  formatter={(value: number | undefined) => `${value ?? 0}%`}
-                                />
-                              </PieChart>
-                            </ResponsiveContainer>
-                          </div>
+                        {/* Pie chart */}
+                        <div className="w-[180px] h-[180px] shrink-0">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={pieData}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={40}
+                                outerRadius={80}
+                                paddingAngle={1}
+                                stroke="none"
+                              >
+                                {pieData.map((entry, idx) => (
+                                  <Cell key={idx} fill={entry.fill} />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8, fontSize: 11 }}
+                                itemStyle={{ color: '#d4d4d8' }}
+                                formatter={(value: number | undefined) => `${value ?? 0}%`}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
 
-                          {/* Legend + Top N selector */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1 mb-2">
-                              <span className="text-xs text-zinc-500 mr-2">Distribution</span>
-                              {([50, 100, 200] as const).map((n) => (
-                                <button
-                                  key={n}
-                                  onClick={() => loadChartHolders(n)}
-                                  className={`px-2.5 py-1 text-[10px] font-medium rounded-full transition-colors ${
-                                    chartTopN === n
-                                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                      : 'text-zinc-500 hover:text-zinc-300 border border-zinc-700 hover:border-zinc-600'
-                                  }`}
-                                >
-                                  Top {n}
-                                </button>
-                              ))}
-                              {chartHoldersLoading && <Loader2 className="w-3 h-3 text-zinc-500 animate-spin ml-2" />}
-                            </div>
-                            <div className="space-y-1 max-h-[190px] overflow-y-auto">
-                              {pieData.map((entry, i) => (
-                                <div key={i} className="flex items-center gap-2 text-xs">
-                                  <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: entry.fill }} />
-                                  <span className="text-zinc-400 font-mono truncate">{entry.name}</span>
-                                  <span className="text-zinc-500 ml-auto shrink-0">{entry.value}%</span>
-                                </div>
-                              ))}
-                            </div>
+                        {/* Distribution list */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1 mb-2">
+                            <span className="text-xs text-zinc-500 mr-1">Distribution</span>
+                            {([50, 100, 200] as const).map((n) => (
+                              <button
+                                key={n}
+                                onClick={() => loadChartHolders(n)}
+                                className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${
+                                  chartTopN === n
+                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                    : 'text-zinc-500 hover:text-zinc-300 border border-zinc-700 hover:border-zinc-600'
+                                }`}
+                              >
+                                Top {n}
+                              </button>
+                            ))}
+                            {chartHoldersLoading && <Loader2 className="w-3 h-3 text-zinc-500 animate-spin ml-1" />}
+                          </div>
+                          <div className="space-y-0.5 max-h-[155px] overflow-y-auto">
+                            {pieData.map((entry, i) => (
+                              <div key={i} className="flex items-center gap-2 text-xs">
+                                <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: entry.fill }} />
+                                <span className="text-zinc-400 font-mono truncate">{entry.name}</span>
+                                <span className="text-zinc-500 ml-auto shrink-0">{entry.value}%</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>
