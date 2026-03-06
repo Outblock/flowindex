@@ -802,6 +802,7 @@ ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS receiver_path TEXT;
 ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS balance_path TEXT;
 ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS socials JSONB;
 ALTER TABLE app.ft_tokens ADD COLUMN IF NOT EXISTS evm_address TEXT;
+ALTER TABLE app.nft_collections ADD COLUMN IF NOT EXISTS evm_address TEXT;
 
 -- NFT collection stats (materialized view — refreshed periodically by backend)
 CREATE MATERIALIZED VIEW IF NOT EXISTS app.nft_collection_stats AS
