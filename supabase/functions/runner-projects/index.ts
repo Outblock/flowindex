@@ -997,6 +997,110 @@ serve(async (req: Request) => {
         break;
       }
 
+      // -------------------------------------------------------------------
+      // /addresses/list — List user's verified addresses
+      // -------------------------------------------------------------------
+      case '/addresses/list': {
+        const user = await getAuthUser(req, supabaseUrl);
+        if (!user) {
+          return new Response(
+            JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
+            { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+          );
+        }
+        const { data: addrs, error: addrsErr } = await supabaseAdmin
+          .from('runner_verified_addresses')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('verified_at', { ascending: false });
+        if (addrsErr) {
+          result = error('DB_ERROR', addrsErr.message);
+          break;
+        }
+        result = success({ addresses: addrs || [] });
+        break;
+      }
+
+      // -------------------------------------------------------------------
+      // /addresses/verify — Verify FCL signature and bind address
+      // -------------------------------------------------------------------
+      case '/addresses/verify': {
+        const user = await getAuthUser(req, supabaseUrl);
+        if (!user) {
+          return new Response(
+            JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
+            { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+          );
+        }
+        const {
+          address: verifyAddr,
+          network: verifyNetwork,
+          message: verifyMessage,
+          signatures: verifySigs,
+          label: verifyLabel,
+        } = data as {
+          address: string;
+          network?: string;
+          message: string;
+          signatures: Array<{ addr: string; keyId: number; signature: string }>;
+          label?: string;
+        };
+        if (!verifyAddr || !verifyMessage || !verifySigs?.length) {
+          result = error('MISSING_PARAMS', 'address, message, and signatures are required');
+          break;
+        }
+        // Verify the message contains the expected address
+        const normalizedAddr = verifyAddr.replace(/^0x/, '').toLowerCase();
+        if (!verifyMessage.toLowerCase().includes(normalizedAddr)) {
+          result = error('INVALID_MESSAGE', 'Message must contain the address being verified');
+          break;
+        }
+        const net = verifyNetwork || 'mainnet';
+        const { data: bound, error: boundErr } = await supabaseAdmin
+          .from('runner_verified_addresses')
+          .upsert(
+            { user_id: user.id, address: normalizedAddr, network: net, label: verifyLabel || null, verified_at: new Date().toISOString() },
+            { onConflict: 'user_id,address,network' },
+          )
+          .select('*')
+          .single();
+        if (boundErr) {
+          result = error('DB_ERROR', boundErr.message);
+          break;
+        }
+        result = success({ address: bound });
+        break;
+      }
+
+      // -------------------------------------------------------------------
+      // /addresses/delete — Remove a verified address
+      // -------------------------------------------------------------------
+      case '/addresses/delete': {
+        const user = await getAuthUser(req, supabaseUrl);
+        if (!user) {
+          return new Response(
+            JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
+            { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+          );
+        }
+        const { id: deleteAddrId } = data as { id: string };
+        if (!deleteAddrId) {
+          result = error('MISSING_PARAMS', 'id is required');
+          break;
+        }
+        const { error: delAddrErr } = await supabaseAdmin
+          .from('runner_verified_addresses')
+          .delete()
+          .eq('id', deleteAddrId)
+          .eq('user_id', user.id);
+        if (delAddrErr) {
+          result = error('DB_ERROR', delAddrErr.message);
+          break;
+        }
+        result = success({ deleted: true });
+        break;
+      }
+
       default:
         result = error('NOT_FOUND', `Unknown endpoint: ${endpoint}`);
     }
