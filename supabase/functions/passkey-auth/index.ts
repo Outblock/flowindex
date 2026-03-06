@@ -593,7 +593,9 @@ serve(async (req: Request) => {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (e) {
-    return new Response(JSON.stringify(error('UNKNOWN_ERROR', 'Internal server error')), {
+    console.error('[passkey-auth] Unhandled error:', e);
+    const msg = e instanceof Error ? e.message : String(e);
+    return new Response(JSON.stringify(error('UNKNOWN_ERROR', msg)), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
