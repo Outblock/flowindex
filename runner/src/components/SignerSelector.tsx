@@ -7,13 +7,15 @@ import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
 export type SignerOption =
   | { type: 'none' }
   | { type: 'fcl' }
-  | { type: 'local'; key: LocalKey; account: KeyAccount };
+  | { type: 'local'; key: LocalKey; account: KeyAccount }
+  | { type: 'passkey'; credentialId: string; flowAddress: string; publicKeySec1Hex: string };
 
 interface SignerSelectorProps {
   selected: SignerOption;
   onSelect: (option: SignerOption) => void;
   localKeys: LocalKey[];
   accountsMap: Record<string, KeyAccount[]>;
+  passkeyAccounts?: Array<{ credentialId: string; flowAddress: string; publicKeySec1Hex: string; authenticatorName?: string }>;
   onViewAccount?: (address: string) => void;
   onOpenKeyManager?: () => void;
   onOpenConnectModal?: () => void;
@@ -54,11 +56,13 @@ function useFlowBalance(address: string | null) {
   return balance;
 }
 
-export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, onViewAccount, onOpenKeyManager, onOpenConnectModal, autoSign, onToggleAutoSign, network }: SignerSelectorProps) {
+export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, passkeyAccounts = [], onViewAccount, onOpenKeyManager, onOpenConnectModal, autoSign, onToggleAutoSign, network }: SignerSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const selectedAddress = selected.type === 'local' ? selected.account.flowAddress : null;
+  const selectedAddress = selected.type === 'local' ? selected.account.flowAddress
+    : selected.type === 'passkey' ? selected.flowAddress
+    : null;
   const balance = useFlowBalance(selectedAddress);
 
   useEffect(() => {
@@ -91,6 +95,8 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
       onOpenConnectModal();
     } else if (selected.type === 'local' && onViewAccount) {
       onViewAccount(selected.account.flowAddress);
+    } else if (selected.type === 'passkey' && onViewAccount) {
+      onViewAccount(selected.flowAddress);
     } else {
       setOpen(!open);
     }
@@ -109,6 +115,20 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
         <>
           {autoSign && <Zap className="w-3 h-3 text-amber-400" />}
           <Avatar size={16} name={`0x${selected.account.flowAddress}`} variant="beam" colors={colors} />
+          {balance !== null ? (
+            <span className="text-xs text-emerald-400 font-medium">{balance} FLOW</span>
+          ) : (
+            <span className="text-xs text-zinc-500">...</span>
+          )}
+        </>
+      );
+    }
+    if (selected.type === 'passkey') {
+      const colors = colorsFromAddress(selected.flowAddress);
+      return (
+        <>
+          {autoSign && <Zap className="w-3 h-3 text-amber-400" />}
+          <Avatar size={16} name={`0x${selected.flowAddress}`} variant="beam" colors={colors} />
           {balance !== null ? (
             <span className="text-xs text-emerald-400 font-medium">{balance} FLOW</span>
           ) : (
@@ -177,6 +197,37 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
                     <span className="truncate">{entry.key.label || 'Key'}</span>
                     <span className="text-zinc-500 ml-auto flex-shrink-0">
                       {truncateAddress(entry.account.flowAddress)}
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+
+          {/* Passkey Wallet group */}
+          {passkeyAccounts.length > 0 && (
+            <>
+              <div className="px-3 py-1 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-700">
+                Passkey Wallet
+              </div>
+              {passkeyAccounts.map((acct) => {
+                const isSelected = selected.type === 'passkey' && selected.credentialId === acct.credentialId;
+                const colors = colorsFromAddress(acct.flowAddress);
+                return (
+                  <button
+                    key={acct.credentialId}
+                    onClick={() => {
+                      onSelect({ type: 'passkey', credentialId: acct.credentialId, flowAddress: acct.flowAddress, publicKeySec1Hex: acct.publicKeySec1Hex });
+                      setOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-zinc-700 transition-colors ${
+                      isSelected ? 'text-emerald-400' : 'text-zinc-300'
+                    }`}
+                  >
+                    <Avatar size={16} name={`0x${acct.flowAddress}`} variant="beam" colors={colors} />
+                    <span className="truncate">{acct.authenticatorName || 'Passkey'}</span>
+                    <span className="text-zinc-500 ml-auto flex-shrink-0">
+                      {truncateAddress(acct.flowAddress)}
                     </span>
                   </button>
                 );
