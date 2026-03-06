@@ -486,6 +486,7 @@ export default function AuditTab({ code, contractName, network }: Props) {
               }
 
               case 'tool-input-start': {
+                console.log('[audit] tool-input-start', evt.toolCallId, evt.toolName);
                 const toolPart: StreamPart = {
                   kind: 'tool',
                   toolCallId: evt.toolCallId,
@@ -523,6 +524,7 @@ export default function AuditTab({ code, contractName, network }: Props) {
                 } else if (typeof evt.output === 'string') {
                   outputText = evt.output;
                 }
+                console.log('[audit] tool-output-available', evt.toolCallId, 'output length:', outputText.length, 'preview:', outputText.slice(0, 80));
 
                 const idx = toolIndexMap.get(evt.toolCallId);
                 if (idx !== undefined) {
@@ -539,7 +541,9 @@ export default function AuditTab({ code, contractName, network }: Props) {
                   partsRef.current.push(toolPart);
                   toolIndexMap.set(evt.toolCallId, partsRef.current.length - 1);
                 }
-                scheduleUpdate();
+                // Force immediate update for tool output (important state change)
+                if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+                setStreamParts([...partsRef.current]);
                 break;
               }
             }
