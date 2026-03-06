@@ -35,7 +35,24 @@ export interface ContractVersion {
 
 export interface ContractEvent {
   type: string;
-  name: string;
+  event_name: string;
+  count: number;
+  last_seen?: string;
+}
+
+export interface ContractHolder {
+  address: string;
+  balance?: number;
+  percentage?: number;
+}
+
+export interface NFTItem {
+  id: string;
+  serial_number?: number;
+  name?: string;
+  description?: string;
+  image?: string;
+  owner?: string;
 }
 
 export interface ContractDependency {
@@ -114,6 +131,11 @@ export interface VerifiedAddress {
 /** Strip 0x prefix and lowercase */
 function normalizeAddress(address: string): string {
   return address.replace(/^0x/i, '').toLowerCase();
+}
+
+/** Normalize contract identifier — strip 0x from address part (A.0xABC.Name → A.ABC.Name) */
+function normalizeIdentifier(identifier: string): string {
+  return identifier.replace(/\.0x/i, '.');
 }
 
 /** Fetch with timeout to avoid hanging requests */
@@ -217,9 +239,10 @@ export async function fetchContractDetail(
   network: string,
 ): Promise<ContractInfo> {
   // Try FlowIndex first
+  const id = normalizeIdentifier(identifier);
   try {
     const res = await fetchWithTimeout(
-      `${flowIndexBase(network)}/flow/contract/${identifier}`,
+      `${flowIndexBase(network)}/flow/contract/${id}`,
     );
     if (res.ok) {
       const json = await res.json();
@@ -244,8 +267,9 @@ export async function fetchContractVersions(
   network: string,
 ): Promise<ContractVersion[]> {
   try {
+    const id = normalizeIdentifier(identifier);
     const res = await fetchWithTimeout(
-      `${flowIndexBase(network)}/flow/contract/${identifier}/version`,
+      `${flowIndexBase(network)}/flow/contract/${id}/version`,
     );
     if (!res.ok) return [];
     const json = await res.json();
@@ -262,8 +286,9 @@ export async function fetchVersionCode(
   network: string,
 ): Promise<string> {
   try {
+    const id = normalizeIdentifier(identifier);
     const res = await fetchWithTimeout(
-      `${flowIndexBase(network)}/flow/contract/${encodeURIComponent(identifier)}/version/${version}`,
+      `${flowIndexBase(network)}/flow/contract/${encodeURIComponent(id)}/version/${version}`,
     );
     if (!res.ok) return '';
     const json = await res.json();
@@ -282,14 +307,82 @@ export async function fetchContractEvents(
   network: string,
 ): Promise<ContractEvent[]> {
   try {
+    // This query can be slow — give it more time
+    const id = normalizeIdentifier(identifier);
     const res = await fetchWithTimeout(
-      `${flowIndexBase(network)}/flow/contract/${identifier}/events`,
+      `${flowIndexBase(network)}/flow/contract/${id}/events`,
+      15000,
     );
     if (!res.ok) return [];
     const json = await res.json();
-    return (json.data ?? json.events ?? json) as ContractEvent[];
+    const items = (json.data ?? json.events ?? json) as Array<Record<string, unknown>>;
+    return items.map((e) => ({
+      type: (e.type as string) || '',
+      event_name: (e.event_name as string) || '',
+      count: (e.count as number) || 0,
+      last_seen: (e.last_seen as string) || undefined,
+    }));
   } catch {
     return [];
+  }
+}
+
+/** Fetch holders for a token contract — endpoint is /holding (not /holder) */
+export async function fetchTokenHolders(
+  identifier: string,
+  kind: string,
+  network: string,
+  limit = 25,
+  offset = 0,
+): Promise<{ holders: ContractHolder[]; hasMore: boolean }> {
+  try {
+    const id = normalizeIdentifier(identifier);
+    const path = kind === 'FT'
+      ? `/flow/ft/${id}/holding?limit=${limit}&offset=${offset}`
+      : `/flow/nft/${id}/holding?limit=${limit}&offset=${offset}`;
+    const res = await fetchWithTimeout(`${flowIndexBase(network)}${path}`);
+    if (!res.ok) return { holders: [], hasMore: false };
+    const json = await res.json();
+    const items = (json.data ?? []) as Array<Record<string, unknown>>;
+    const hasMore = json._meta?.has_more ?? items.length >= limit;
+    const holders = items.map((h) => ({
+      address: (h.owner as string) || (h.address as string) || '',
+      balance: (h.count as number) || (h.balance as number) || 0,
+      percentage: (h.percentage as number) || 0,
+    }));
+    return { holders, hasMore };
+  } catch {
+    return { holders: [], hasMore: false };
+  }
+}
+
+/** Fetch NFT items for a collection */
+export async function fetchNFTItems(
+  identifier: string,
+  network: string,
+  limit = 20,
+  offset = 0,
+): Promise<{ items: NFTItem[]; hasMore: boolean }> {
+  try {
+    const id = normalizeIdentifier(identifier);
+    const res = await fetchWithTimeout(
+      `${flowIndexBase(network)}/flow/nft/${id}/item?limit=${limit}&offset=${offset}`,
+    );
+    if (!res.ok) return { items: [], hasMore: false };
+    const json = await res.json();
+    const data = (json.data ?? []) as Array<Record<string, unknown>>;
+    const hasMore = json._meta?.has_more ?? data.length >= limit;
+    const items = data.map((n) => ({
+      id: String(n.id ?? n.nft_id ?? ''),
+      serial_number: (n.serial_number as number) || undefined,
+      name: (n.name as string) || (n.edition_name as string) || undefined,
+      description: (n.description as string) || undefined,
+      image: (n.image as string) || (n.thumbnail as string) || undefined,
+      owner: (n.current_owner as string) || (n.owner as string) || undefined,
+    }));
+    return { items, hasMore };
+  } catch {
+    return { items: [], hasMore: false };
   }
 }
 
@@ -299,8 +392,9 @@ export async function fetchContractDependencies(
 ): Promise<DependencyData> {
   const empty: DependencyData = { imports: [], dependents: [] };
   try {
+    const id = normalizeIdentifier(identifier);
     const res = await fetchWithTimeout(
-      `${flowIndexBase(network)}/flow/contract/${identifier}/dependencies?depth=3`,
+      `${flowIndexBase(network)}/flow/contract/${id}/dependencies?depth=3`,
     );
     if (!res.ok) return empty;
     const json = await res.json();
@@ -330,7 +424,8 @@ export async function fetchHolderCount(
 ): Promise<number> {
   try {
     // Use the token metadata endpoint which has holder_count
-    const path = kind === 'FT' ? `/flow/ft/${identifier}` : `/flow/nft/${identifier}`;
+    const id = normalizeIdentifier(identifier);
+    const path = kind === 'FT' ? `/flow/ft/${id}` : `/flow/nft/${id}`;
     const res = await fetchWithTimeout(`${flowIndexBase(network)}${path}`);
     if (!res.ok) return 0;
     const json = await res.json();
@@ -348,7 +443,8 @@ export async function fetchTokenMetadata(
   network: string,
 ): Promise<TokenMetadata | null> {
   try {
-    const path = kind === 'FT' ? `/flow/ft/${identifier}` : `/flow/nft/${identifier}`;
+    const id = normalizeIdentifier(identifier);
+    const path = kind === 'FT' ? `/flow/ft/${id}` : `/flow/nft/${id}`;
     const res = await fetchWithTimeout(`${flowIndexBase(network)}${path}`);
     if (!res.ok) return null;
     const json = await res.json();
@@ -377,8 +473,9 @@ export async function fetchContractTransactions(
   limit = 10,
 ): Promise<ContractTransaction[]> {
   try {
+    const id = normalizeIdentifier(identifier);
     const res = await fetchWithTimeout(
-      `${flowIndexBase(network)}/flow/contract/${identifier}/transaction?limit=${limit}`,
+      `${flowIndexBase(network)}/flow/contract/${id}/transaction?limit=${limit}`,
     );
     if (!res.ok) return [];
     const json = await res.json();
