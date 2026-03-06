@@ -61,6 +61,66 @@ function hexToUint8Array(hex: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * Minimal CBOR decoder for COSE EC2 key maps.
+ * Extracts P-256 x,y coordinates from COSE public key bytes.
+ * COSE_Key for P-256: Map { 1: 2, 3: -7, -1: 1, -2: <x 32 bytes>, -3: <y 32 bytes> }
+ */
+function decodeCoseP256Key(bytes: Uint8Array): { x: Uint8Array; y: Uint8Array } | null {
+  let offset = 0;
+  const major = bytes[offset] >> 5;
+  const additional = bytes[offset] & 0x1f;
+  if (major !== 5) return null; // not a map
+  offset++;
+  let mapSize = additional;
+  if (additional === 24) { mapSize = bytes[offset++]; }
+
+  let x: Uint8Array | null = null;
+  let y: Uint8Array | null = null;
+
+  for (let i = 0; i < mapSize; i++) {
+    const keyByte = bytes[offset++];
+    const keyMajor = keyByte >> 5;
+    const keyAdditional = keyByte & 0x1f;
+
+    let keyValue: number;
+    if (keyMajor === 0) {
+      keyValue = keyAdditional;
+    } else if (keyMajor === 1) {
+      keyValue = -1 - keyAdditional;
+    } else {
+      return null;
+    }
+
+    const valByte = bytes[offset];
+    const valMajor = valByte >> 5;
+    const valAdditional = valByte & 0x1f;
+    offset++;
+
+    if (valMajor === 2) {
+      let len = valAdditional;
+      if (valAdditional === 24) { len = bytes[offset++]; }
+      const value = bytes.slice(offset, offset + len);
+      offset += len;
+      if (keyValue === -2) x = value;
+      else if (keyValue === -3) y = value;
+    }
+    // Skip integer values (kty, alg, crv) — already consumed the byte
+  }
+
+  if (!x || !y) return null;
+  return { x, y };
+}
+
+/**
+ * Convert COSE public key bytes to uncompressed SEC1 P-256 hex: "04" + hex(x) + hex(y)
+ */
+function coseToSec1Hex(coseBytes: Uint8Array): string | null {
+  const key = decodeCoseP256Key(coseBytes);
+  if (!key || key.x.length !== 32 || key.y.length !== 32) return null;
+  return '04' + uint8ArrayToHex(key.x) + uint8ArrayToHex(key.y);
+}
+
 function generateWebAuthnUserId(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -168,6 +228,7 @@ serve(async (req: Request) => {
           const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
           const publicKeyBytes = credential.publicKey;
           const publicKeyHex = '\\x' + uint8ArrayToHex(publicKeyBytes);
+          const sec1Hex = coseToSec1Hex(publicKeyBytes);
 
           let userId: string;
           const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
@@ -189,6 +250,7 @@ serve(async (req: Request) => {
             user_id: userId,
             webauthn_user_id: challenge.webauthn_user_id,
             public_key: publicKeyHex,
+            public_key_sec1_hex: sec1Hex,
             counter: credential.counter,
             device_type: credentialDeviceType,
             backed_up: credentialBackedUp,
@@ -207,6 +269,7 @@ serve(async (req: Request) => {
           result = success({
             verified: true,
             tokenHash: linkData.properties?.hashed_token,
+            publicKeySec1Hex: sec1Hex,
             passkey: insertedCred ? {
               id: insertedCred.id,
               authenticatorName: insertedCred.authenticator_name,
@@ -420,6 +483,105 @@ serve(async (req: Request) => {
         });
 
         result = success({ passkey: updated });
+        break;
+      }
+
+      case '/wallet/provision': {
+        const authHeader = req.headers.get('Authorization');
+        const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+        const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader || '' } }
+        });
+        const { data: { user } } = await userClient.auth.getUser();
+
+        if (!user) {
+          result = error('UNAUTHORIZED', 'Authentication required');
+          break;
+        }
+
+        const { credentialId: provCredId } = data as { credentialId: string };
+
+        const { data: cred } = await supabaseAdmin.from('passkey_credentials')
+          .select('public_key_sec1_hex, flow_address')
+          .eq('id', provCredId)
+          .eq('user_id', user.id)
+          .single();
+
+        if (!cred?.public_key_sec1_hex) {
+          result = error('NO_PUBLIC_KEY', 'Credential has no public key for wallet provisioning');
+          break;
+        }
+
+        if (cred.flow_address) {
+          result = success({ address: cred.flow_address });
+          break;
+        }
+
+        const ACCOUNT_API = Deno.env.get('FLOW_ACCOUNT_API') || 'https://lilico.app/api/proxy/account';
+        const trimmedKey = cred.public_key_sec1_hex.startsWith('04')
+          ? cred.public_key_sec1_hex.slice(2)
+          : cred.public_key_sec1_hex;
+
+        const accountRes = await fetch(ACCOUNT_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            publicKey: trimmedKey,
+            signatureAlgorithm: 'ECDSA_P256',
+            hashAlgorithm: 'SHA2_256',
+          }),
+        });
+
+        if (!accountRes.ok) {
+          const errBody = await accountRes.text();
+          result = error('PROVISION_FAILED', `Account creation failed: ${errBody}`);
+          break;
+        }
+
+        const accountJson = await accountRes.json();
+        const flowAddress = accountJson.address;
+
+        if (!flowAddress) {
+          result = error('PROVISION_FAILED', 'No address in account creation response');
+          break;
+        }
+
+        await supabaseAdmin.from('passkey_credentials')
+          .update({ flow_address: flowAddress })
+          .eq('id', provCredId);
+
+        result = success({ address: flowAddress });
+        break;
+      }
+
+      case '/wallet/accounts': {
+        const authHeader = req.headers.get('Authorization');
+        const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+        const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader || '' } }
+        });
+        const { data: { user } } = await userClient.auth.getUser();
+
+        if (!user) {
+          result = error('UNAUTHORIZED', 'Authentication required');
+          break;
+        }
+
+        const { data: credentials } = await supabaseAdmin.from('passkey_credentials')
+          .select('id, public_key_sec1_hex, flow_address, authenticator_name, created_at')
+          .eq('user_id', user.id)
+          .not('flow_address', 'is', null)
+          .order('created_at', { ascending: false });
+
+        result = success({
+          accounts: credentials?.map((c) => ({
+            credentialId: c.id,
+            publicKeySec1Hex: c.public_key_sec1_hex,
+            flowAddress: c.flow_address,
+            authenticatorName: c.authenticator_name,
+            createdAt: c.created_at,
+          })) || []
+        });
         break;
       }
 
