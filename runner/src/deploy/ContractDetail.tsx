@@ -9,7 +9,6 @@ import {
   Loader2,
   Zap,
   Package,
-  Rocket,
 } from 'lucide-react';
 import {
   fetchContractDetail,
@@ -26,6 +25,7 @@ import type {
 } from './api';
 import ContractStats from './ContractStats';
 import ContractCharts from './ContractCharts';
+import DeploySection from './DeploySection';
 
 // ---------------------------------------------------------------------------
 
@@ -224,14 +224,8 @@ export default function ContractDetail() {
         )}
       </div>
 
-      {/* CD Pipeline placeholder */}
-      <div className="rounded-lg border border-dashed border-zinc-800 bg-zinc-900/30 p-6 text-center">
-        <Rocket className="w-5 h-5 text-zinc-700 mx-auto mb-2" />
-        <h3 className="text-xs font-medium text-zinc-500">CD Pipeline</h3>
-        <p className="mt-1 text-[11px] text-zinc-600">
-          Continuous deployment configuration coming soon
-        </p>
-      </div>
+      {/* CD Pipeline */}
+      <DeploySection projectId={contractId || ''} />
     </div>
   );
 }
