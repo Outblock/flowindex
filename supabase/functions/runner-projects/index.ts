@@ -696,15 +696,17 @@ serve(async (req: Request) => {
         const {
           connection_id: upsertConnId,
           name: envName,
+          branch: envBranch,
           network: envNetwork,
           flow_address: envFlowAddress,
-          deploy_path: envDeployPath,
+          is_default: envIsDefault,
         } = data as {
           connection_id: string;
           name: string;
+          branch?: string;
           network?: string;
           flow_address?: string;
-          deploy_path?: string;
+          is_default?: boolean;
         };
         if (!upsertConnId || !envName) {
           result = error('MISSING_PARAMS', 'connection_id and name are required');
@@ -724,11 +726,11 @@ serve(async (req: Request) => {
         const upsertRow: Record<string, unknown> = {
           connection_id: upsertConnId,
           name: envName,
-          updated_at: new Date().toISOString(),
+          branch: envBranch || 'main',
         };
         if (envNetwork !== undefined) upsertRow.network = envNetwork;
         if (envFlowAddress !== undefined) upsertRow.flow_address = envFlowAddress;
-        if (envDeployPath !== undefined) upsertRow.deploy_path = envDeployPath;
+        if (envIsDefault !== undefined) upsertRow.is_default = envIsDefault;
         const { data: upsertedEnv, error: upsertEnvErr } = await supabaseAdmin
           .from('runner_deploy_environments')
           .upsert(upsertRow, { onConflict: 'connection_id,name' })

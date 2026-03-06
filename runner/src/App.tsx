@@ -474,11 +474,13 @@ export default function App() {
     const id = params.get('github_installation_id');
     if (id) {
       localStorage.setItem('github_installation_id', id);
+      // Clean the URL param so refresh doesn't re-trigger
+      const url = new URL(window.location.href);
+      url.searchParams.delete('github_installation_id');
+      window.history.replaceState({}, '', url.toString());
       return Number(id);
     }
-    // Fall back to previously saved installation ID
-    const saved = localStorage.getItem('github_installation_id');
-    return saved ? Number(saved) : undefined;
+    return undefined;
   });
   const [showGitHubConnect, setShowGitHubConnect] = useState(false);
   const [showDeploySettings, setShowDeploySettings] = useState(false);
@@ -1088,10 +1090,15 @@ export default function App() {
 
   // Auto-open GitHub connect modal when returning from GitHub app install
   useEffect(() => {
-    if (ghInstallationId && !github.connection) {
+    if (ghInstallationId && !github.connection && !github.loading) {
       setShowGitHubConnect(true);
     }
-  }, [ghInstallationId, github.connection]);
+    // Clear installation ID once connection is established
+    if (github.connection && ghInstallationId) {
+      localStorage.removeItem('github_installation_id');
+      setGhInstallationId(undefined);
+    }
+  }, [ghInstallationId, github.connection, github.loading]);
 
   // Auto-pull files when connection exists on page load
   useEffect(() => {
