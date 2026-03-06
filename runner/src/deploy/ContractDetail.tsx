@@ -480,7 +480,7 @@ export default function ContractDetail() {
               )}
               <div className="text-right">
                 <div className="text-[10px] text-zinc-500">Version</div>
-                <div className="text-xs font-medium text-zinc-200">v{versions.length > 0 ? [...versions].sort((a, b) => (b.block_height ?? 0) - (a.block_height ?? 0))[0].version : (contract?.version ?? 1)}</div>
+                <div className="text-xs font-medium text-zinc-200">v{versions.length > 0 ? Math.max(...versions.map(v => v.version)) : (contract?.version ?? 1)}</div>
               </div>
             </div>
           </div>

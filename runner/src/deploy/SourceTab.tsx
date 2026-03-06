@@ -210,14 +210,13 @@ export default function SourceTab({ contract, contractName, contractId, versions
   const [diffCodeB, setDiffCodeB] = useState('');
   const [diffLoading, setDiffLoading] = useState(false);
 
-  // Sort versions by block_height descending (most recently deployed first)
-  // Version numbers from the API are unreliable — use block_height/time as source of truth
+  // Sort versions descending by version number (highest = latest)
   const sortedVersions = useMemo(
-    () => [...versions].sort((a, b) => (b.block_height ?? 0) - (a.block_height ?? 0)),
+    () => [...versions].sort((a, b) => b.version - a.version),
     [versions],
   );
 
-  // Latest = most recently deployed (highest block_height), not highest version number
+  // Latest = highest version number
   const latestVersion = sortedVersions.length > 0 ? sortedVersions[0].version : (contract?.version ?? 1);
 
   // Current code to display
