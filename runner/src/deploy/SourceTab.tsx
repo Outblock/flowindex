@@ -210,14 +210,23 @@ export default function SourceTab({ contract, contractName, contractId, versions
   const [diffCodeB, setDiffCodeB] = useState('');
   const [diffLoading, setDiffLoading] = useState(false);
 
-  // Sort versions descending by version number (highest = latest)
-  const sortedVersions = useMemo(
-    () => [...versions].sort((a, b) => b.version - a.version),
-    [versions],
-  );
+  // Sort by block_height ascending, then assign display version numbers (1 = oldest, N = newest)
+  const sortedVersions = useMemo(() => {
+    const byHeight = [...versions].sort((a, b) => (a.block_height ?? 0) - (b.block_height ?? 0));
+    // Assign sequential display version: v1 = oldest deploy, vN = newest deploy
+    const withDisplay = byHeight.map((v, i) => ({ ...v, displayVersion: i + 1 }));
+    // Return descending (newest first for sidebar)
+    return withDisplay.reverse();
+  }, [versions]);
 
-  // Latest = highest version number
-  const latestVersion = sortedVersions.length > 0 ? sortedVersions[0].version : (contract?.version ?? 1);
+  // Latest = the most recently deployed (first in sortedVersions)
+  const latestVersion = sortedVersions.length > 0 ? sortedVersions[0].displayVersion : (contract?.version ?? 1);
+
+  // Map backend version → display version for toolbar/diff labels
+  const toDisplayVersion = useCallback((backendVersion: number) => {
+    const found = sortedVersions.find(v => v.version === backendVersion);
+    return found ? found.displayVersion : backendVersion;
+  }, [sortedVersions]);
 
   // Current code to display
   const displayCode = selectedVersion != null && versionCode ? versionCode : (contract?.code || '');
@@ -324,7 +333,7 @@ export default function SourceTab({ contract, contractName, contractId, versions
             <div className="py-1">
               {sortedVersions.map((v) => {
                 const isSelected = !diffMode && selectedVersion === v.version;
-                const isLatest = v.version === latestVersion;
+                const isLatest = v.displayVersion === latestVersion;
                 const isDiffA = diffVersionA === v.version;
                 const isDiffB = diffVersionB === v.version;
 
@@ -351,7 +360,7 @@ export default function SourceTab({ contract, contractName, contractId, versions
                     <Layers className="w-3 h-3 shrink-0 text-zinc-500" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-mono font-medium">v{v.version}</span>
+                        <span className="text-xs font-mono font-medium">v{v.displayVersion}</span>
                         {isLatest && (
                           <span className="text-[9px] px-1 py-px rounded bg-blue-500/20 text-blue-400">
                             latest
@@ -406,7 +415,7 @@ export default function SourceTab({ contract, contractName, contractId, versions
               <>
                 <GitCompare className="w-3.5 h-3.5" />
                 <span>
-                  v{Math.min(diffVersionA, diffVersionB)} → v{Math.max(diffVersionA, diffVersionB)}
+                  v{toDisplayVersion(Math.min(diffVersionA, diffVersionB))} → v{toDisplayVersion(Math.max(diffVersionA, diffVersionB))}
                 </span>
               </>
             ) : (
@@ -414,7 +423,7 @@ export default function SourceTab({ contract, contractName, contractId, versions
                 <Code2 className="w-3.5 h-3.5" />
                 <span className="font-mono">{contractName}.cdc</span>
                 <span className="text-zinc-600">
-                  v{selectedVersion ?? latestVersion}
+                  v{selectedVersion != null ? toDisplayVersion(selectedVersion) : latestVersion}
                 </span>
               </>
             )}
