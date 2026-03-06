@@ -210,8 +210,14 @@ export default function SourceTab({ contract, contractName, contractId, versions
   const [diffCodeB, setDiffCodeB] = useState('');
   const [diffLoading, setDiffLoading] = useState(false);
 
-  // Default to latest version
-  const latestVersion = contract?.version ?? (versions.length > 0 ? versions[0].version : 1);
+  // Sort versions descending (latest first) for sidebar display
+  const sortedVersions = useMemo(
+    () => [...versions].sort((a, b) => b.version - a.version),
+    [versions],
+  );
+
+  // Default to latest version (highest version number)
+  const latestVersion = contract?.version ?? (sortedVersions.length > 0 ? sortedVersions[0].version : 1);
 
   // Current code to display
   const displayCode = selectedVersion != null && versionCode ? versionCode : (contract?.code || '');
@@ -314,9 +320,9 @@ export default function SourceTab({ contract, contractName, contractId, versions
 
         {/* Version list */}
         <div className="flex-1 overflow-y-auto">
-          {versions.length > 0 ? (
+          {sortedVersions.length > 0 ? (
             <div className="py-1">
-              {versions.map((v) => {
+              {sortedVersions.map((v) => {
                 const isSelected = !diffMode && selectedVersion === v.version;
                 const isLatest = v.version === latestVersion;
                 const isDiffA = diffVersionA === v.version;
