@@ -35,12 +35,15 @@ export interface ContractDependency {
   name: string;
 }
 
+export type AddressSource = 'manual' | 'fcl' | 'local-key';
+
 export interface VerifiedAddress {
   id: string;
   user_id: string;
   address: string;
   network: string;
   label: string | null;
+  source: AddressSource;
   verified_at: string;
 }
 
@@ -180,19 +183,18 @@ export async function listAddresses(
   return result.addresses;
 }
 
-export async function verifyAddress(
+export async function addAddress(
   token: string,
   address: string,
   network: string,
-  message: string,
-  signatures: unknown[],
+  source: AddressSource,
   label?: string,
 ): Promise<VerifiedAddress> {
   const addr = normalizeAddress(address);
   const result = await callEdgeFunction<{ address: VerifiedAddress }>(
     token,
-    '/addresses/verify',
-    { address: addr, network, message, signatures, label },
+    '/addresses/add',
+    { address: addr, network, source, label },
   );
   return result.address;
 }

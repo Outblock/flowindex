@@ -1,30 +1,24 @@
 // ---------------------------------------------------------------------------
-// AddressSidebar — verified address list + FCL wallet verification
+// AddressSidebar — auto-loads local key accounts + manual address input
 // ---------------------------------------------------------------------------
 
-import { useState, useCallback } from 'react';
-import { Plus, Trash2, Wallet, Loader2 } from 'lucide-react';
-import { fcl, configureFcl } from '../flow/fclConfig';
-import type { VerifiedAddress } from './api';
+import { useState, useCallback, useEffect } from 'react';
+import { Plus, Trash2, Loader2, Type, Key as KeyIcon, Rocket, Eye } from 'lucide-react';
+import { useLocalKeys } from '../auth/useLocalKeys';
+import type { VerifiedAddress, AddressSource } from './api';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Convert a string to hex (for FCL signUserMessage) */
-function toHex(str: string): string {
-  let hex = '';
-  for (let i = 0; i < str.length; i++) {
-    hex += str.charCodeAt(i).toString(16).padStart(2, '0');
-  }
-  return hex;
-}
-
-/** Truncate an address for display: 0x1234...abcd */
 function truncateAddress(addr: string): string {
   const full = addr.startsWith('0x') ? addr : `0x${addr}`;
   if (full.length <= 13) return full;
   return `${full.slice(0, 6)}...${full.slice(-4)}`;
+}
+
+function canDeploy(source: AddressSource): boolean {
+  return source === 'local-key';
 }
 
 // ---------------------------------------------------------------------------
@@ -38,8 +32,7 @@ interface Props {
   onAdd: (
     address: string,
     network: string,
-    message: string,
-    signatures: unknown[],
+    source: AddressSource,
     label?: string,
   ) => Promise<unknown>;
   onRemove: (id: string) => Promise<void>;
@@ -63,48 +56,53 @@ export default function AddressSidebar({
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Manual input
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualAddr, setManualAddr] = useState('');
+
+  // Local keys
+  const { localKeys, accountsMap } = useLocalKeys();
+
+  // Auto-register local key accounts when they become available
+  const localAccountAddrs = localKeys
+    .flatMap((key) => (accountsMap[key.id] || []).map((acc) => ({
+      address: acc.flowAddress,
+      label: key.name || `Key ${key.id.slice(0, 6)}`,
+    })))
+    .filter((v, i, arr) => arr.findIndex((a) => a.address === v.address) === i);
+
+  useEffect(() => {
+    if (localAccountAddrs.length === 0) return;
+    // Auto-add local key accounts that aren't already in the address list
+    for (const acc of localAccountAddrs) {
+      const normalized = acc.address.replace(/^0x/, '').toLowerCase();
+      const exists = addresses.some(
+        (a) => a.address === normalized && a.network === network,
+      );
+      if (!exists) {
+        onAdd(acc.address, network, 'local-key', acc.label).catch(() => {});
+      }
+    }
+  }, [localAccountAddrs.length, network]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // -----------------------------------------------------------------------
-  // Add address flow: FCL authenticate -> sign message -> verify on backend
+  // Add via manual input
   // -----------------------------------------------------------------------
-  const handleAddAddress = useCallback(async () => {
+  const handleManualAdd = useCallback(async () => {
+    const addr = manualAddr.trim();
+    if (!addr) return;
     setError(null);
     setAdding(true);
     try {
-      // 1. Configure FCL for selected network, then authenticate
-      configureFcl(network);
-      await fcl.authenticate();
-      const user = await fcl.currentUser.snapshot();
-      const addr = user.addr;
-      if (!addr) {
-        throw new Error('Wallet did not return an address');
-      }
-
-      // 2. Create verification message and sign it
-      const message = `Verify ownership of ${addr} on FlowIndex at ${Date.now()}`;
-      const msgHex = toHex(message);
-      const compositeSignatures = await fcl.currentUser.signUserMessage(msgHex);
-
-      if (
-        !compositeSignatures ||
-        !Array.isArray(compositeSignatures) ||
-        compositeSignatures.length === 0
-      ) {
-        throw new Error('Signing was cancelled or failed');
-      }
-
-      // 3. Send to backend
-      await onAdd(addr, network, message, compositeSignatures);
+      await onAdd(addr, network, 'manual');
+      setManualAddr('');
+      setShowManualInput(false);
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : 'Failed to verify address';
-      // Don't show error for user-cancelled actions
-      if (!msg.includes('cancel') && !msg.includes('declined')) {
-        setError(msg);
-      }
+      setError(err instanceof Error ? err.message : 'Failed to add address');
     } finally {
       setAdding(false);
     }
-  }, [network, onAdd]);
+  }, [manualAddr, network, onAdd]);
 
   // -----------------------------------------------------------------------
   // Remove address
@@ -144,10 +142,10 @@ export default function AddressSidebar({
           </div>
         ) : addresses.length === 0 ? (
           <div className="px-3 py-6 text-center">
-            <Wallet className="w-5 h-5 text-zinc-600 mx-auto mb-2" />
-            <p className="text-xs text-zinc-500">No verified addresses</p>
+            <Type className="w-5 h-5 text-zinc-600 mx-auto mb-2" />
+            <p className="text-xs text-zinc-500">No addresses yet</p>
             <p className="text-xs text-zinc-600 mt-1">
-              Connect a wallet to get started
+              Add an address to see contracts
             </p>
           </div>
         ) : (
@@ -155,6 +153,7 @@ export default function AddressSidebar({
             {addresses.map((addr) => {
               const isSelected = selectedAddress?.id === addr.id;
               const isRemoving = removingId === addr.id;
+              const deployable = canDeploy(addr.source);
 
               return (
                 <button
@@ -167,12 +166,17 @@ export default function AddressSidebar({
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    {/* Label or address */}
-                    <div className="text-xs font-mono truncate">
-                      {addr.label || truncateAddress(addr.address)}
+                    <div className="flex items-center gap-1.5">
+                      {deployable ? (
+                        <KeyIcon className="w-3 h-3 text-emerald-500 shrink-0" />
+                      ) : (
+                        <Eye className="w-3 h-3 text-zinc-600 shrink-0" />
+                      )}
+                      <span className="text-xs font-mono truncate">
+                        {truncateAddress(addr.address)}
+                      </span>
                     </div>
-                    {/* Network badge + address (if label shown) */}
-                    <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="flex items-center gap-1.5 mt-0.5 ml-[18px]">
                       <span
                         className={`inline-block w-1.5 h-1.5 rounded-full ${
                           addr.network === 'mainnet'
@@ -184,9 +188,12 @@ export default function AddressSidebar({
                         {addr.network}
                       </span>
                       {addr.label && (
-                        <span className="text-[10px] text-zinc-600 font-mono truncate">
-                          {truncateAddress(addr.address)}
+                        <span className="text-[10px] text-zinc-500 truncate">
+                          {addr.label}
                         </span>
+                      )}
+                      {deployable && (
+                        <Rocket className="w-2.5 h-2.5 text-emerald-600 shrink-0" title="Can deploy" />
                       )}
                     </div>
                   </div>
@@ -220,48 +227,73 @@ export default function AddressSidebar({
           </p>
         )}
 
-        {/* Network toggle */}
-        <div className="flex items-center gap-1 bg-zinc-800/50 rounded p-0.5">
-          <button
-            onClick={() => setNetwork('mainnet')}
-            className={`flex-1 text-[10px] py-1 rounded transition-colors ${
-              network === 'mainnet'
-                ? 'bg-zinc-700 text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            Mainnet
-          </button>
-          <button
-            onClick={() => setNetwork('testnet')}
-            className={`flex-1 text-[10px] py-1 rounded transition-colors ${
-              network === 'testnet'
-                ? 'bg-zinc-700 text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            Testnet
-          </button>
-        </div>
+        {/* Manual address input */}
+        {showManualInput ? (
+          <div className="space-y-1.5">
+            <input
+              value={manualAddr}
+              onChange={(e) => setManualAddr(e.target.value)}
+              placeholder="0x... or hex address"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 font-mono placeholder-zinc-600 focus:border-zinc-500 focus:outline-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleManualAdd();
+                if (e.key === 'Escape') { setShowManualInput(false); setManualAddr(''); }
+              }}
+              autoFocus
+            />
+            <div className="flex gap-1">
+              <button
+                onClick={handleManualAdd}
+                disabled={adding || !manualAddr.trim()}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10px] rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-200 disabled:opacity-50 transition-colors"
+              >
+                {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                Add (view only)
+              </button>
+              <button
+                onClick={() => { setShowManualInput(false); setManualAddr(''); }}
+                className="px-2 py-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Network toggle */}
+            <div className="flex items-center gap-1 bg-zinc-800/50 rounded p-0.5">
+              <button
+                onClick={() => setNetwork('mainnet')}
+                className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+                  network === 'mainnet'
+                    ? 'bg-zinc-700 text-zinc-100'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Mainnet
+              </button>
+              <button
+                onClick={() => setNetwork('testnet')}
+                className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+                  network === 'testnet'
+                    ? 'bg-zinc-700 text-zinc-100'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Testnet
+              </button>
+            </div>
 
-        {/* Add address button */}
-        <button
-          onClick={handleAddAddress}
-          disabled={adding}
-          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {adding ? (
-            <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Verifying...
-            </>
-          ) : (
-            <>
+            {/* Add address button */}
+            <button
+              onClick={() => setShowManualInput(true)}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
               <Plus className="w-3.5 h-3.5" />
               Add Address
-            </>
-          )}
-        </button>
+            </button>
+          </>
+        )}
       </div>
     </aside>
   );

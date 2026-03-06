@@ -6,9 +6,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import {
   listAddresses,
-  verifyAddress,
+  addAddress as addAddressApi,
   deleteAddress,
   type VerifiedAddress,
+  type AddressSource,
 } from './api';
 
 export function useAddresses() {
@@ -38,19 +39,11 @@ export function useAddresses() {
     async (
       address: string,
       network: string,
-      message: string,
-      signatures: unknown[],
+      source: AddressSource,
       label?: string,
     ): Promise<VerifiedAddress> => {
       if (!accessToken) throw new Error('Not authenticated');
-      const result = await verifyAddress(
-        accessToken,
-        address,
-        network,
-        message,
-        signatures,
-        label,
-      );
+      const result = await addAddressApi(accessToken, address, network, source, label);
       // Refresh the list after adding
       await fetchAddresses();
       return result;

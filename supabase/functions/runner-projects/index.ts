@@ -1022,6 +1022,51 @@ serve(async (req: Request) => {
       }
 
       // -------------------------------------------------------------------
+      // /addresses/add — Add address without signature (manual/fcl/local-key)
+      // -------------------------------------------------------------------
+      case '/addresses/add': {
+        const user = await getAuthUser(req, supabaseUrl);
+        if (!user) {
+          return new Response(
+            JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
+            { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+          );
+        }
+        const {
+          address: addAddr,
+          network: addNetwork,
+          label: addLabel,
+          source: addSource,
+        } = data as {
+          address: string;
+          network?: string;
+          label?: string;
+          source?: string;
+        };
+        if (!addAddr) {
+          result = error('MISSING_PARAMS', 'address is required');
+          break;
+        }
+        const addNormalized = addAddr.replace(/^0x/, '').toLowerCase();
+        const addNet = addNetwork || 'mainnet';
+        const addSrc = addSource || 'manual';
+        const { data: added, error: addErr } = await supabaseAdmin
+          .from('runner_verified_addresses')
+          .upsert(
+            { user_id: user.id, address: addNormalized, network: addNet, label: addLabel || null, source: addSrc, verified_at: new Date().toISOString() },
+            { onConflict: 'user_id,address,network' },
+          )
+          .select('*')
+          .single();
+        if (addErr) {
+          result = error('DB_ERROR', addErr.message);
+          break;
+        }
+        result = success({ address: added });
+        break;
+      }
+
+      // -------------------------------------------------------------------
       // /addresses/verify — Verify FCL signature and bind address
       // -------------------------------------------------------------------
       case '/addresses/verify': {
