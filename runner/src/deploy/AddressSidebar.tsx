@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useState, useCallback, useEffect } from 'react';
-import { Plus, Trash2, Loader2, Type, Rocket, Eye } from 'lucide-react';
+import { Plus, Trash2, Loader2, Type, Rocket, Eye, ExternalLink } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import { useLocalKeys } from '../auth/useLocalKeys';
 import type { VerifiedAddress, AddressSource } from './api';
@@ -199,20 +199,32 @@ export default function AddressSidebar({
                     </div>
                   </div>
 
-                  {/* Delete button (hover) */}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => handleRemove(e as unknown as React.MouseEvent, addr.id)}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 text-zinc-500 hover:text-red-400 transition-opacity cursor-pointer"
-                    title="Remove address"
-                  >
-                    {isRemoving ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-3 h-3" />
-                    )}
-                  </span>
+                  {/* Actions (hover) */}
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <a
+                      href={`https://${addr.network === 'testnet' ? 'testnet.' : ''}flowindex.io/account/0x${addr.address}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-0.5 text-zinc-500 hover:text-blue-400 cursor-pointer"
+                      title="View on FlowIndex"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => handleRemove(e as unknown as React.MouseEvent, addr.id)}
+                      className="p-0.5 text-zinc-500 hover:text-red-400 cursor-pointer"
+                      title="Remove address"
+                    >
+                      {isRemoving ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3 h-3" />
+                      )}
+                    </span>
+                  </div>
                 </button>
               );
             })}

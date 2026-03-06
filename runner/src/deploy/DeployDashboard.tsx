@@ -12,8 +12,8 @@ import {
 import { Loader2, LogOut, User, Inbox } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useAddresses } from './useAddresses';
-import { fetchContracts, fetchHolderCount } from './api';
-import type { ContractInfo, VerifiedAddress } from './api';
+import { fetchContracts, fetchTokenMetadata } from './api';
+import type { ContractInfo, VerifiedAddress, TokenMetadata } from './api';
 import AddressSidebar from './AddressSidebar';
 import ContractCard from './ContractCard';
 import ContractDetail from './ContractDetail';
@@ -26,13 +26,13 @@ function ContractsGrid({
   selectedAddress,
   contracts,
   contractsLoading,
-  holderCounts,
+  tokenMetadataMap,
   hasAddresses,
 }: {
   selectedAddress: VerifiedAddress | null;
   contracts: ContractInfo[];
   contractsLoading: boolean;
-  holderCounts: Map<string, number>;
+  tokenMetadataMap: Map<string, TokenMetadata>;
   hasAddresses: boolean;
 }) {
   // No addresses at all
@@ -94,7 +94,7 @@ function ContractsGrid({
                 key={id}
                 contract={c}
                 network={selectedAddress?.network ?? 'mainnet'}
-                holderCount={holderCounts.get(id)}
+                tokenMetadata={tokenMetadataMap.get(id)}
                 hasCD={false}
               />
             );
@@ -130,9 +130,7 @@ export default function DeployDashboard() {
   const [selectedAddress, setSelectedAddress] =
     useState<VerifiedAddress | null>(null);
   const [contracts, setContracts] = useState<ContractInfo[]>([]);
-  const [holderCounts, setHolderCounts] = useState<Map<string, number>>(
-    new Map(),
-  );
+  const [tokenMetadataMap, setTokenMetadataMap] = useState<Map<string, TokenMetadata>>(new Map());
   const [contractsLoading, setContractsLoading] = useState(false);
 
   // Auto-select first address when addresses load
@@ -153,7 +151,7 @@ export default function DeployDashboard() {
   useEffect(() => {
     if (!selectedAddress) {
       setContracts([]);
-      setHolderCounts(new Map());
+      setTokenMetadataMap(new Map());
       return;
     }
 
@@ -169,23 +167,23 @@ export default function DeployDashboard() {
         if (cancelled) return;
         setContracts(result);
 
-        // Fetch holder counts for FT/NFT contracts in parallel
+        // Fetch token metadata for FT/NFT contracts in parallel
         const ftNft = result.filter(
           (c) => c.kind === 'FT' || c.kind === 'NFT',
         );
         if (ftNft.length > 0) {
-          const counts = new Map<string, number>();
+          const metaMap = new Map<string, TokenMetadata>();
           const promises = ftNft.map(async (c) => {
             const id = `A.${c.address}.${c.name}`;
-            const count = await fetchHolderCount(
+            const meta = await fetchTokenMetadata(
               id,
               c.kind!,
               selectedAddress!.network,
             );
-            counts.set(id, count);
+            if (meta) metaMap.set(id, meta);
           });
           await Promise.allSettled(promises);
-          if (!cancelled) setHolderCounts(counts);
+          if (!cancelled) setTokenMetadataMap(metaMap);
         }
       } catch {
         if (!cancelled) setContracts([]);
@@ -273,7 +271,7 @@ export default function DeployDashboard() {
                 selectedAddress={selectedAddress}
                 contracts={contracts}
                 contractsLoading={contractsLoading}
-                holderCounts={holderCounts}
+                tokenMetadataMap={tokenMetadataMap}
                 hasAddresses={addresses.length > 0}
               />
             }

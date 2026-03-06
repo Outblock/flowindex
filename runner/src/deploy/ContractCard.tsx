@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ContractCard — card component for a single contract in the grid
+// ContractCard — Vercel-style project card for a single contract
 // ---------------------------------------------------------------------------
 
 import { Link } from 'react-router-dom';
@@ -10,9 +10,11 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  AlertTriangle,
+  BadgeCheck,
+  GitBranch,
+  Package,
 } from 'lucide-react';
-import type { ContractInfo } from './api';
+import type { ContractInfo, TokenMetadata } from './api';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -21,7 +23,7 @@ import type { ContractInfo } from './api';
 interface Props {
   contract: ContractInfo;
   network: string;
-  holderCount?: number;
+  tokenMetadata?: TokenMetadata;
   lastDeployStatus?: 'success' | 'failed' | 'running' | null;
   lastDeployTime?: string;
   hasCD: boolean;
@@ -34,26 +36,15 @@ interface Props {
 function kindIcon(kind?: string) {
   switch (kind) {
     case 'FT':
-      return <Coins className="w-5 h-5 text-amber-400" />;
+      return <Coins className="w-8 h-8 text-amber-400" />;
     case 'NFT':
-      return <Image className="w-5 h-5 text-purple-400" />;
+      return <Image className="w-8 h-8 text-purple-400" />;
     default:
-      return <Box className="w-5 h-5 text-zinc-400" />;
+      return <Box className="w-8 h-8 text-zinc-500" />;
   }
 }
 
-function kindBorderColor(kind?: string) {
-  switch (kind) {
-    case 'FT':
-      return 'border-l-amber-500/40';
-    case 'NFT':
-      return 'border-l-purple-500/40';
-    default:
-      return 'border-l-zinc-600/40';
-  }
-}
-
-function statusIcon(status?: 'success' | 'failed' | 'running' | null) {
+function statusDot(status?: 'success' | 'failed' | 'running' | null) {
   switch (status) {
     case 'success':
       return <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />;
@@ -66,15 +57,10 @@ function statusIcon(status?: 'success' | 'failed' | 'running' | null) {
   }
 }
 
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
 }
 
 // ---------------------------------------------------------------------------
@@ -84,93 +70,118 @@ function formatTimeAgo(dateStr: string): string {
 export default function ContractCard({
   contract,
   network,
-  holderCount,
+  tokenMetadata,
   lastDeployStatus,
   lastDeployTime,
   hasCD,
 }: Props) {
   const identifier = `A.${contract.address}.${contract.name}`;
+  const displayName = tokenMetadata?.name || contract.token_name || contract.name;
+  const logo = tokenMetadata?.logo || contract.token_logo;
+  const isVerified = tokenMetadata?.is_verified || contract.is_verified;
+
+  // Collect inline stats
+  const stats: { label: string; value: string }[] = [];
+  if (tokenMetadata && tokenMetadata.holder_count > 0) {
+    stats.push({ label: 'Holders', value: formatNumber(tokenMetadata.holder_count) });
+  }
+  if (tokenMetadata?.total_supply != null && tokenMetadata.total_supply > 0) {
+    stats.push({
+      label: contract.kind === 'NFT' ? 'Minted' : 'Supply',
+      value: formatNumber(tokenMetadata.total_supply),
+    });
+  }
+  if (contract.dependent_count > 0) {
+    stats.push({ label: 'Imports', value: formatNumber(contract.dependent_count) });
+  }
 
   return (
     <Link
       to={`/deploy/${identifier}`}
-      className={`block border border-zinc-800 ${kindBorderColor(contract.kind)} border-l-2 rounded-lg bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors p-4`}
+      className="flex flex-col border border-zinc-800 rounded-lg bg-zinc-900/50 hover:border-zinc-700 transition-colors"
     >
-      {/* Header: icon + name + status */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {kindIcon(contract.kind)}
-          <h3 className="text-sm font-medium text-zinc-100 truncate">
-            {contract.name}
-          </h3>
-        </div>
-        {statusIcon(lastDeployStatus)}
-      </div>
-
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3">
-        <div>
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
-            Kind
-          </span>
-          <p className="text-xs text-zinc-300">
-            {contract.kind || 'Contract'}
-            {contract.version > 1 && (
-              <span className="text-zinc-500 ml-1">v{contract.version}</span>
+      {/* Top section */}
+      <div className="p-4 flex-1">
+        {/* Row 1: Logo + name */}
+        <div className="flex items-center gap-3">
+          {logo ? (
+            <img
+              src={logo}
+              alt=""
+              className="w-9 h-9 rounded-lg shrink-0 object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          ) : (
+            kindIcon(contract.kind)
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold text-zinc-100 truncate">
+                {displayName}
+              </h3>
+              {isVerified && (
+                <BadgeCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              )}
+              {statusDot(lastDeployStatus)}
+            </div>
+            {displayName !== contract.name && (
+              <p className="text-[11px] text-zinc-500 font-mono truncate mt-0.5">
+                {contract.name}
+              </p>
             )}
-          </p>
+          </div>
         </div>
 
-        {(holderCount ?? 0) > 0 && (
-          <div>
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
-              Holders
-            </span>
-            <p className="text-xs text-zinc-300">
-              {(holderCount ?? 0).toLocaleString()}
-            </p>
-          </div>
-        )}
-
-        {contract.dependent_count > 0 && (
-          <div>
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
-              Dependents
-            </span>
-            <p className="text-xs text-zinc-300">
-              {contract.dependent_count.toLocaleString()}
-            </p>
-          </div>
-        )}
-
-        {lastDeployTime && (
-          <div>
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
-              Last Deploy
-            </span>
-            <p className="text-xs text-zinc-300">
-              {formatTimeAgo(lastDeployTime)}
-            </p>
+        {/* Row 2: Inline stats */}
+        {stats.length > 0 && (
+          <div className="flex items-center gap-4 mt-3">
+            {stats.map((s) => (
+              <div key={s.label} className="flex items-center gap-1.5">
+                <span className="text-[10px] text-zinc-500">{s.label}</span>
+                <span className="text-xs font-medium text-zinc-300">{s.value}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* CD warning */}
-      {!hasCD && (
-        <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-zinc-800/50">
-          <AlertTriangle className="w-3 h-3 text-amber-500/70 shrink-0" />
-          <span className="text-[10px] text-zinc-500">No CD pipeline</span>
-        </div>
-      )}
+      {/* Bottom section — separated by border */}
+      <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-zinc-800/60 text-[11px]">
+        <div className="flex items-center gap-3">
+          {/* Kind badge */}
+          <span className={`px-1.5 py-0.5 rounded font-medium ${
+            contract.kind === 'FT'
+              ? 'bg-amber-500/15 text-amber-400'
+              : contract.kind === 'NFT'
+                ? 'bg-purple-500/15 text-purple-400'
+                : 'text-zinc-400'
+          }`}>
+            {contract.kind || 'Contract'}
+          </span>
 
-      {/* Network badge */}
-      <div className="flex items-center gap-1.5 mt-2">
-        <span
-          className={`inline-block w-1.5 h-1.5 rounded-full ${
-            network === 'mainnet' ? 'bg-emerald-500' : 'bg-amber-500'
-          }`}
-        />
-        <span className="text-[10px] text-zinc-500">{network}</span>
+          {/* CD status */}
+          {hasCD ? (
+            <span className="flex items-center gap-1 text-zinc-500">
+              <GitBranch className="w-3 h-3" />
+              {lastDeployTime || 'Connected'}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-zinc-600">
+              <Package className="w-3 h-3" />
+              No CD
+            </span>
+          )}
+        </div>
+
+        {/* Network dot */}
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`inline-block w-1.5 h-1.5 rounded-full ${
+              network === 'mainnet' ? 'bg-emerald-500' : 'bg-amber-500'
+            }`}
+          />
+          <span className="text-zinc-500">{network}</span>
+        </div>
       </div>
     </Link>
   );

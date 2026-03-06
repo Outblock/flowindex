@@ -44,6 +44,34 @@ export interface ContractDependency {
   identifier?: string;
 }
 
+export interface DependencyGraphNode {
+  identifier: string;
+  address: string;
+  name: string;
+  is_verified?: boolean;
+  kind?: string;
+  token_logo?: string;
+  token_name?: string;
+  token_symbol?: string;
+}
+
+export interface DependencyGraphEdge {
+  source: string;
+  target: string;
+}
+
+export interface DependencyGraph {
+  root: string;
+  nodes: DependencyGraphNode[];
+  edges: DependencyGraphEdge[];
+}
+
+export interface DependencyData {
+  imports: ContractDependency[];
+  dependents: ContractDependency[];
+  graph?: DependencyGraph;
+}
+
 export interface TokenMetadata {
   name: string;
   description?: string;
@@ -227,6 +255,28 @@ export async function fetchContractVersions(
   }
 }
 
+/** Fetch source code for a specific contract version */
+export async function fetchVersionCode(
+  identifier: string,
+  version: number,
+  network: string,
+): Promise<string> {
+  try {
+    const res = await fetchWithTimeout(
+      `${flowIndexBase(network)}/flow/contract/${encodeURIComponent(identifier)}/version/${version}`,
+    );
+    if (!res.ok) return '';
+    const json = await res.json();
+    const items = json?.data;
+    if (Array.isArray(items) && items.length > 0) {
+      return items[0].code || '';
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
 export async function fetchContractEvents(
   identifier: string,
   network: string,
@@ -246,23 +296,30 @@ export async function fetchContractEvents(
 export async function fetchContractDependencies(
   identifier: string,
   network: string,
-): Promise<ContractDependency[]> {
+): Promise<DependencyData> {
+  const empty: DependencyData = { imports: [], dependents: [] };
   try {
     const res = await fetchWithTimeout(
-      `${flowIndexBase(network)}/flow/contract/${identifier}/dependencies`,
+      `${flowIndexBase(network)}/flow/contract/${identifier}/dependencies?depth=3`,
     );
-    if (!res.ok) return [];
+    if (!res.ok) return empty;
     const json = await res.json();
     // API returns { data: [{ imports: [...], dependents: [...], graph: {...} }] }
     const d = Array.isArray(json.data) ? json.data[0] : json.data ?? json;
-    const imports = (d?.imports ?? []) as Array<Record<string, unknown>>;
-    return imports.map((i) => ({
+    const imports = ((d?.imports ?? []) as Array<Record<string, unknown>>).map((i) => ({
       address: (i.address as string) || '',
       name: (i.name as string) || '',
       identifier: (i.identifier as string) || undefined,
     }));
+    const dependents = ((d?.dependents ?? []) as Array<Record<string, unknown>>).map((i) => ({
+      address: (i.address as string) || '',
+      name: (i.name as string) || '',
+      identifier: (i.identifier as string) || undefined,
+    }));
+    const graph = d?.graph as DependencyGraph | undefined;
+    return { imports, dependents, graph };
   } catch {
-    return [];
+    return empty;
   }
 }
 
