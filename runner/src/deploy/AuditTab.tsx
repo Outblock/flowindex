@@ -1,12 +1,11 @@
 // ---------------------------------------------------------------------------
 // AuditTab — AI-powered contract security audit with inline annotations
 // Uses streaming AI (Opus 4.6 + thinking) via /api/runner-audit endpoint
+// Raw SSE parsing (not useChat) for reliable stream completion handling
 // Google Docs-style comment sidebar + highlighted code lines
 // ---------------------------------------------------------------------------
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
+import { useState, useMemo, useCallback, useRef, memo } from 'react';
 import {
   Shield,
   ShieldAlert,
@@ -45,6 +44,13 @@ interface Props {
   code: string;
   contractName: string;
   network: string;
+}
+
+type AuditStatus = 'idle' | 'connecting' | 'streaming' | 'done' | 'error';
+
+interface ToolCallInfo {
+  name: string;
+  done: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,108 +186,31 @@ function formatToolName(name: string): string {
   return labels[name] || name;
 }
 
+function stripLineWrapper(html: string): string {
+  return html.replace(/^<span class="line">/, '').replace(/<\/span>$/, '');
+}
+
 // ---------------------------------------------------------------------------
-// AuditTab
+// CodePanel — memoized so it ONLY re-renders when findings/selection change
 // ---------------------------------------------------------------------------
 
-export default function AuditTab({ code, contractName, network }: Props) {
-  const highlighter = useShikiHighlighter();
+const CodePanel = memo(function CodePanel({
+  code,
+  highlightedLines,
+  findings,
+  selectedId,
+  onSelectFinding,
+  lineRefs,
+}: {
+  code: string;
+  highlightedLines: string[] | null;
+  findings: AuditFinding[];
+  selectedId: string | null;
+  onSelectFinding: (findingId: string) => void;
+  lineRefs: React.RefObject<Map<number, HTMLDivElement>>;
+}) {
+  const codeLines = useMemo(() => code.split('\n'), [code]);
 
-  const [findings, setFindings] = useState<AuditFinding[]>([]);
-  const [summary, setSummary] = useState('');
-  const [score, setScore] = useState('');
-  const [scanned, setScanned] = useState(false);
-  const [thinkingExpanded, setThinkingExpanded] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const lineRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-
-  // Custom fetch to inject code/contractName/network into the request body
-  const safeFetch = useCallback(async (url: string | URL | Request, init?: RequestInit) => {
-    if (init?.body) {
-      try {
-        const parsed = JSON.parse(init.body as string);
-        parsed.code = code;
-        parsed.contractName = contractName;
-        parsed.network = network;
-        init = { ...init, body: JSON.stringify(parsed) };
-      } catch { /* not JSON */ }
-    }
-    return globalThis.fetch(url, init);
-  }, [code, contractName, network]);
-
-  const transport = useMemo(
-    () => new DefaultChatTransport({
-      api: `${AI_CHAT_URL}/api/runner-audit`,
-      credentials: 'omit',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetch: safeFetch as any,
-    }),
-    [safeFetch],
-  );
-
-  const { messages, sendMessage, status, setMessages } = useChat({
-    transport,
-  });
-
-  const isStreaming = status === 'streaming' || status === 'submitted';
-
-  // Extract reasoning, tool calls, and text from the last assistant message
-  const { reasoningText, toolCalls, assistantText } = useMemo(() => {
-    const assistantMsgs = messages.filter(m => m.role === 'assistant');
-    const lastMsg = assistantMsgs[assistantMsgs.length - 1];
-    if (!lastMsg?.parts) return { reasoningText: '', toolCalls: [] as { name: string; done: boolean }[], assistantText: '' };
-
-    let reasoning = '';
-    let text = '';
-    const tools: { name: string; done: boolean }[] = [];
-
-    for (const part of lastMsg.parts) {
-      if (part.type === 'reasoning' || (part.type as string) === 'thinking') {
-        reasoning += (part as any).reasoning || (part as any).text || '';
-      } else if (part.type === 'text') {
-        text += (part as any).text || '';
-      } else if (part.type === 'tool-invocation' || (part.type as string) === 'dynamic-tool' || (part.type as string).startsWith('tool-')) {
-        const tp = part as any;
-        const name = tp.toolName ?? '';
-        const done = tp.state === 'result' || tp.state === 'output-available';
-        tools.push({ name, done });
-      }
-    }
-
-    return { reasoningText: reasoning, toolCalls: tools, assistantText: text };
-  }, [messages]);
-
-  // Parse findings from assistant text when streaming finishes
-  useEffect(() => {
-    if (isStreaming || !assistantText) return;
-    const result = parseAuditResponse(assistantText);
-    if (result) {
-      setFindings(result.findings);
-      setSummary(result.summary || '');
-      setScore(result.score || '');
-      setScanned(true);
-    }
-  }, [isStreaming, assistantText]);
-
-  // Run audit
-  const runAudit = useCallback(() => {
-    if (!code) return;
-    setFindings([]);
-    setSummary('');
-    setScore('');
-    setScanned(false);
-    setSelectedId(null);
-    setThinkingExpanded(false);
-    setMessages([]);
-
-    sendMessage({
-      text: 'Audit this Cadence contract for security vulnerabilities, type errors, and best practice violations. Run all available MCP tools first, then provide your comprehensive analysis.',
-    });
-  }, [code, sendMessage, setMessages]);
-
-  // Build line -> findings map
   const lineFindings = useMemo(() => {
     const map = new Map<number, AuditFinding[]>();
     for (const f of findings) {
@@ -292,9 +221,257 @@ export default function AuditTab({ code, contractName, network }: Props) {
     return map;
   }, [findings]);
 
-  const codeLines = useMemo(() => code.split('\n'), [code]);
+  return (
+    <div className="flex-1 min-w-0 overflow-auto">
+      <div className="font-mono text-xs leading-[1.65]">
+        {codeLines.map((line, i) => {
+          const lineNum = i + 1;
+          const lf = lineFindings.get(lineNum);
+          const has = !!lf;
+          const isSel = lf?.some(f => f.id === selectedId);
+          const sevOrder: Severity[] = ['high', 'error', 'medium', 'warning', 'low', 'info'];
+          const topSev = lf ? sevOrder.find(s => lf.some(f => f.severity === s)) || 'info' : null;
+          const cfg = topSev ? SEVERITY_CONFIG[topSev] : null;
 
-  // Per-line Shiki HTML
+          return (
+            <div key={lineNum}>
+              <div
+                ref={el => { if (el) lineRefs.current.set(lineNum, el); }}
+                className={`flex group cursor-default transition-colors ${
+                  isSel ? `${cfg?.lineBg || ''} ring-1 ring-inset ${cfg?.border || 'ring-zinc-700'}`
+                    : has ? `${cfg?.lineBg || ''} hover:brightness-125`
+                      : 'hover:bg-zinc-800/30'
+                }`}
+                onClick={() => { if (lf?.[0]) onSelectFinding(lf[0].id); }}
+              >
+                <div className={`w-1 shrink-0 ${has ? cfg?.gutterBg || '' : ''}`} />
+                <span className={`inline-block w-10 text-right pr-3 select-none shrink-0 ${
+                  has ? cfg?.color || 'text-zinc-600' : 'text-zinc-600'
+                }`}>{lineNum}</span>
+                <span className="w-5 shrink-0 flex items-center justify-center">
+                  {has && cfg && <MessageSquare className={`w-3 h-3 ${cfg.color} opacity-60`} />}
+                </span>
+                <span className="flex-1 whitespace-pre pl-1 pr-4">
+                  {highlightedLines?.[i]
+                    ? <span dangerouslySetInnerHTML={{ __html: stripLineWrapper(highlightedLines[i]) }} />
+                    : <span className="text-zinc-300">{line}</span>}
+                </span>
+              </div>
+
+              {has && lf && (
+                <div className={`flex border-b ${cfg?.border || 'border-zinc-800'} ${cfg?.bg || ''}`}>
+                  <div className="w-1 shrink-0" /><div className="w-10 shrink-0" /><div className="w-5 shrink-0" />
+                  <div className="flex-1 px-2 py-1.5 space-y-1">
+                    {lf.map(f => {
+                      const fc = SEVERITY_CONFIG[f.severity];
+                      const Icon = fc.icon;
+                      return (
+                        <div key={f.id} className={`flex items-start gap-1.5 text-[11px] leading-snug ${fc.color} ${f.id === selectedId ? 'font-medium' : 'opacity-80'}`}>
+                          <Icon className="w-3 h-3 shrink-0 mt-0.5" />
+                          <span>{f.message}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// AuditTab
+// ---------------------------------------------------------------------------
+
+export default function AuditTab({ code, contractName, network }: Props) {
+  const highlighter = useShikiHighlighter();
+
+  const [status, setStatus] = useState<AuditStatus>('idle');
+  const [findings, setFindings] = useState<AuditFinding[]>([]);
+  const [summary, setSummary] = useState('');
+  const [score, setScore] = useState('');
+  const [thinkingExpanded, setThinkingExpanded] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Streaming state — use refs for accumulation + state for rendering
+  const [reasoningText, setReasoningText] = useState('');
+  const [toolCalls, setToolCalls] = useState<ToolCallInfo[]>([]);
+  const [assistantText, setAssistantText] = useState('');
+
+  const reasoningRef = useRef('');
+  const textRef = useRef('');
+  const toolMapRef = useRef(new Map<string, ToolCallInfo>());
+  const abortRef = useRef<AbortController | null>(null);
+
+  const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const lineRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  // Run audit — raw SSE fetch for reliable stream completion
+  const runAudit = useCallback(async () => {
+    if (!code) return;
+
+    // Reset all state
+    setFindings([]);
+    setSummary('');
+    setScore('');
+    setSelectedId(null);
+    setThinkingExpanded(false);
+    setReasoningText('');
+    setToolCalls([]);
+    setAssistantText('');
+    reasoningRef.current = '';
+    textRef.current = '';
+    toolMapRef.current = new Map();
+
+    // Abort previous request
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setStatus('connecting');
+
+    try {
+      const res = await fetch(`${AI_CHAT_URL}/api/runner-audit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{
+            id: crypto.randomUUID(),
+            role: 'user' as const,
+            parts: [{
+              type: 'text' as const,
+              text: 'Audit this Cadence contract for security vulnerabilities, type errors, and best practice violations. Run all available MCP tools first, then provide your comprehensive analysis.',
+            }],
+          }],
+          code,
+          contractName,
+          network,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        console.error('[audit] HTTP error:', res.status);
+        setStatus('error');
+        return;
+      }
+
+      setStatus('streaming');
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      // Throttle UI updates via requestAnimationFrame
+      let rafId: number | null = null;
+      const scheduleUpdate = () => {
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          setReasoningText(reasoningRef.current);
+          setAssistantText(textRef.current);
+          setToolCalls(Array.from(toolMapRef.current.values()));
+        });
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') continue;
+
+          try {
+            const evt = JSON.parse(data);
+            switch (evt.type) {
+              // Thinking / reasoning
+              case 'reasoning-delta':
+                reasoningRef.current += evt.textDelta || '';
+                scheduleUpdate();
+                break;
+
+              // Response text
+              case 'text-delta':
+                textRef.current += evt.textDelta || '';
+                scheduleUpdate();
+                break;
+
+              // Tool call started (streaming input)
+              case 'tool-input-start':
+                toolMapRef.current.set(evt.toolCallId, {
+                  name: evt.toolName,
+                  done: false,
+                });
+                scheduleUpdate();
+                break;
+
+              // Tool call complete (full args available, about to execute)
+              case 'tool-call':
+                if (!toolMapRef.current.has(evt.toolCallId)) {
+                  toolMapRef.current.set(evt.toolCallId, {
+                    name: evt.toolName,
+                    done: false,
+                  });
+                  scheduleUpdate();
+                }
+                break;
+
+              // Tool result received
+              case 'tool-result': {
+                const existing = toolMapRef.current.get(evt.toolCallId);
+                if (existing) {
+                  toolMapRef.current.set(evt.toolCallId, { ...existing, done: true });
+                } else {
+                  toolMapRef.current.set(evt.toolCallId, {
+                    name: evt.toolName || 'unknown',
+                    done: true,
+                  });
+                }
+                scheduleUpdate();
+                break;
+              }
+            }
+          } catch { /* ignore parse errors for non-JSON lines */ }
+        }
+      }
+
+      // Final flush
+      if (rafId) cancelAnimationFrame(rafId);
+      setReasoningText(reasoningRef.current);
+      setAssistantText(textRef.current);
+      setToolCalls(Array.from(toolMapRef.current.values()));
+
+      // Parse findings from the complete response text
+      const result = parseAuditResponse(textRef.current);
+      if (result) {
+        setFindings(result.findings);
+        setSummary(result.summary || '');
+        setScore(result.score || '');
+      }
+
+      setStatus('done');
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      console.error('[audit] Stream error:', err);
+      setStatus('error');
+    }
+  }, [code, contractName, network]);
+
+  const isStreaming = status === 'streaming' || status === 'connecting';
+  const hasStarted = status !== 'idle';
+
+  // Per-line Shiki HTML (expensive — only depends on code)
   const highlightedLines = useMemo(() => {
     if (!highlighter || !code) return null;
     const html = highlightCode(highlighter, code, 'cadence', 'cadence-editor');
@@ -327,8 +504,6 @@ export default function AuditTab({ code, contractName, network }: Props) {
   const criticalCount = stats.high + stats.error;
   const warningCount = stats.medium + stats.warning;
 
-  const hasStarted = messages.length > 0;
-
   if (!code) {
     return (
       <div className="flex items-center justify-center py-16 text-zinc-500">
@@ -360,7 +535,7 @@ export default function AuditTab({ code, contractName, network }: Props) {
             </span>
           )}
 
-          {scanned && !isStreaming && (
+          {status === 'done' && (
             <div className="flex items-center gap-2 text-[10px]">
               {criticalCount > 0 && (
                 <span className="flex items-center gap-1 text-red-400">
@@ -383,6 +558,10 @@ export default function AuditTab({ code, contractName, network }: Props) {
                 </span>
               )}
             </div>
+          )}
+
+          {status === 'error' && (
+            <span className="text-[10px] text-red-400">Audit failed — try again</span>
           )}
         </div>
 
@@ -407,48 +586,91 @@ export default function AuditTab({ code, contractName, network }: Props) {
         </button>
       </div>
 
-      {/* Streaming progress */}
+      {/* Streaming progress — shown INSTEAD of code during streaming */}
       {isStreaming && (
-        <div className="border-b border-zinc-800 bg-zinc-950/30">
-          <div className="px-4 py-2 flex items-center gap-3 text-[11px]">
-            <Loader2 className="w-3 h-3 text-emerald-400 animate-spin shrink-0" />
-            <span className="text-zinc-400">
+        <div className="flex-1 flex flex-col overflow-auto">
+          {/* Status bar */}
+          <div className="px-4 py-2.5 border-b border-zinc-800 bg-zinc-950/30 flex items-center gap-3">
+            <Loader2 className="w-4 h-4 text-emerald-400 animate-spin shrink-0" />
+            <span className="text-xs text-zinc-300 font-medium">
               {toolCalls.length > 0
                 ? toolCalls.some(t => !t.done)
                   ? `Running ${formatToolName(toolCalls.filter(t => !t.done)[0]?.name || '')}...`
-                  : 'Generating report...'
+                  : assistantText
+                    ? 'Generating report...'
+                    : 'Processing results...'
                 : reasoningText
                   ? 'Thinking...'
-                  : 'Connecting...'}
+                  : 'Connecting to AI...'}
             </span>
-            {toolCalls.length > 0 && (
-              <div className="flex items-center gap-1.5 ml-auto flex-wrap">
-                {toolCalls.map((tc, i) => (
-                  <span key={i} className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                    tc.done ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
-                  }`}>
-                    <Wrench className="w-2.5 h-2.5" />
-                    {formatToolName(tc.name)}
-                    {tc.done ? ' ✓' : '...'}
-                  </span>
-                ))}
-              </div>
-            )}
+            <span className="text-[10px] text-zinc-600 ml-auto">
+              {toolCalls.length > 0 && `${toolCalls.filter(t => t.done).length}/${toolCalls.length} checks`}
+            </span>
           </div>
+
+          {/* Tool calls — each as a card */}
+          {toolCalls.length > 0 && (
+            <div className="px-4 py-3 border-b border-zinc-800/50 space-y-2">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium mb-2">Tool Calls</div>
+              {toolCalls.map((tc, i) => (
+                <div key={i} className={`flex items-center gap-2.5 px-3 py-2 rounded-md border ${
+                  tc.done
+                    ? 'border-emerald-500/20 bg-emerald-500/5'
+                    : 'border-amber-500/20 bg-amber-500/5'
+                }`}>
+                  {tc.done
+                    ? <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                    : <Loader2 className="w-4 h-4 text-amber-400 animate-spin shrink-0" />}
+                  <span className={`text-xs font-medium ${tc.done ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {formatToolName(tc.name)}
+                  </span>
+                  <span className={`text-[10px] ml-auto ${tc.done ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    {tc.done ? 'Complete' : 'Running...'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Thinking — auto-shown live during streaming */}
+          {reasoningText && (
+            <div className="px-4 py-3 flex-1">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Sparkles className="w-3 h-3 text-amber-500/60" />
+                <span className="text-[10px] text-amber-500/60 uppercase tracking-widest font-bold">
+                  Thinking
+                </span>
+                <span className="text-[10px] text-zinc-600">
+                  ({reasoningText.length.toLocaleString()} chars)
+                </span>
+              </div>
+              <div className="max-h-80 overflow-y-auto rounded-md border border-zinc-800/50 bg-zinc-950/50 p-3">
+                <p className="text-[11px] text-zinc-400 leading-relaxed whitespace-pre-wrap font-mono">
+                  {reasoningText}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Placeholder when no thinking yet */}
+          {!reasoningText && toolCalls.length === 0 && (
+            <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="w-8 h-8 text-emerald-400/40 animate-spin" />
+              <p className="text-xs text-zinc-500">Connecting to AI auditor...</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Thinking accordion — shown during and after streaming */}
-      {reasoningText && (
+      {/* Thinking accordion — shown after streaming completes */}
+      {!isStreaming && reasoningText && (
         <div className="border-b border-zinc-800/50">
           <button
             onClick={() => setThinkingExpanded(!thinkingExpanded)}
             className="w-full px-4 py-1.5 flex items-center gap-1.5 text-[10px] text-amber-500/60 hover:text-amber-500 transition-colors"
           >
             <Sparkles className="w-3 h-3" />
-            <span className="uppercase tracking-widest font-bold">
-              {isStreaming ? 'Thinking' : 'Thinking Process'}
-            </span>
+            <span className="uppercase tracking-widest font-bold">Thinking Process</span>
             <span className="text-zinc-600 ml-1 normal-case tracking-normal font-normal">
               ({reasoningText.length.toLocaleString()} chars)
             </span>
@@ -466,15 +688,27 @@ export default function AuditTab({ code, contractName, network }: Props) {
         </div>
       )}
 
+      {/* Tool calls summary — shown after streaming completes */}
+      {!isStreaming && toolCalls.length > 0 && (
+        <div className="px-4 py-1.5 border-b border-zinc-800/50 flex items-center gap-1.5 flex-wrap">
+          {toolCalls.map((tc, i) => (
+            <span key={i} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-500/10 text-emerald-400">
+              <Wrench className="w-2.5 h-2.5" />
+              {formatToolName(tc.name)} {'\u2713'}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Summary */}
-      {scanned && !isStreaming && summary && (
+      {status === 'done' && summary && (
         <div className="px-4 py-2.5 border-b border-zinc-800 bg-zinc-950/30">
           <p className="text-[11px] text-zinc-400 leading-snug">{summary}</p>
         </div>
       )}
 
-      {/* Main content */}
-      {!hasStarted ? (
+      {/* Main content — code panel only rendered after streaming completes */}
+      {status === 'idle' ? (
         <div className="flex-1 flex flex-col items-center justify-center py-20 gap-4">
           <div className="w-16 h-16 rounded-2xl bg-zinc-800/50 flex items-center justify-center">
             <Shield className="w-8 h-8 text-zinc-600" />
@@ -494,67 +728,16 @@ export default function AuditTab({ code, contractName, network }: Props) {
             Run Audit
           </button>
         </div>
-      ) : (
+      ) : (status === 'done' || status === 'error') && (
         <div className="flex flex-1 min-h-0" style={{ minHeight: 400 }}>
-          {/* Code panel */}
-          <div className="flex-1 min-w-0 overflow-auto">
-            <div className="font-mono text-xs leading-[1.65]">
-              {codeLines.map((line, i) => {
-                const lineNum = i + 1;
-                const lf = lineFindings.get(lineNum);
-                const has = !!lf;
-                const isSel = lf?.some(f => f.id === selectedId);
-                const sevOrder: Severity[] = ['high', 'error', 'medium', 'warning', 'low', 'info'];
-                const topSev = lf ? sevOrder.find(s => lf.some(f => f.severity === s)) || 'info' : null;
-                const cfg = topSev ? SEVERITY_CONFIG[topSev] : null;
-
-                return (
-                  <div key={lineNum}>
-                    <div
-                      ref={el => { if (el) lineRefs.current.set(lineNum, el); }}
-                      className={`flex group cursor-default transition-colors ${
-                        isSel ? `${cfg?.lineBg || ''} ring-1 ring-inset ${cfg?.border || 'ring-zinc-700'}`
-                          : has ? `${cfg?.lineBg || ''} hover:brightness-125`
-                            : 'hover:bg-zinc-800/30'
-                      }`}
-                      onClick={() => { if (lf?.[0]) scrollToComment(lf[0].id); }}
-                    >
-                      <div className={`w-1 shrink-0 ${has ? cfg?.gutterBg || '' : ''}`} />
-                      <span className={`inline-block w-10 text-right pr-3 select-none shrink-0 ${
-                        has ? cfg?.color || 'text-zinc-600' : 'text-zinc-600'
-                      }`}>{lineNum}</span>
-                      <span className="w-5 shrink-0 flex items-center justify-center">
-                        {has && cfg && <MessageSquare className={`w-3 h-3 ${cfg.color} opacity-60`} />}
-                      </span>
-                      <span className="flex-1 whitespace-pre pl-1 pr-4">
-                        {highlightedLines?.[i]
-                          ? <span dangerouslySetInnerHTML={{ __html: stripLineWrapper(highlightedLines[i]) }} />
-                          : <span className="text-zinc-300">{line}</span>}
-                      </span>
-                    </div>
-
-                    {has && lf && (
-                      <div className={`flex border-b ${cfg?.border || 'border-zinc-800'} ${cfg?.bg || ''}`}>
-                        <div className="w-1 shrink-0" /><div className="w-10 shrink-0" /><div className="w-5 shrink-0" />
-                        <div className="flex-1 px-2 py-1.5 space-y-1">
-                          {lf.map(f => {
-                            const fc = SEVERITY_CONFIG[f.severity];
-                            const Icon = fc.icon;
-                            return (
-                              <div key={f.id} className={`flex items-start gap-1.5 text-[11px] leading-snug ${fc.color} ${f.id === selectedId ? 'font-medium' : 'opacity-80'}`}>
-                                <Icon className="w-3 h-3 shrink-0 mt-0.5" />
-                                <span>{f.message}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <CodePanel
+            code={code}
+            highlightedLines={highlightedLines}
+            findings={findings}
+            selectedId={selectedId}
+            onSelectFinding={scrollToComment}
+            lineRefs={lineRefs}
+          />
 
           {/* Comment sidebar */}
           <div className="w-96 shrink-0 border-l border-zinc-800 bg-zinc-950/50 overflow-y-auto">
@@ -565,14 +748,7 @@ export default function AuditTab({ code, contractName, network }: Props) {
               </div>
             </div>
 
-            {isStreaming && findings.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 gap-2">
-                <Loader2 className="w-4 h-4 text-zinc-500 animate-spin" />
-                <p className="text-[10px] text-zinc-600">Analyzing...</p>
-              </div>
-            )}
-
-            {!isStreaming && findings.length === 0 && scanned && (
+            {findings.length === 0 && status === 'done' && (
               <div className="flex flex-col items-center justify-center py-12 gap-2 text-zinc-500">
                 <ShieldCheck className="w-6 h-6 text-emerald-500/50" />
                 <p className="text-[11px]">No issues found</p>
@@ -624,12 +800,4 @@ export default function AuditTab({ code, contractName, network }: Props) {
       )}
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function stripLineWrapper(html: string): string {
-  return html.replace(/^<span class="line">/, '').replace(/<\/span>$/, '');
 }
