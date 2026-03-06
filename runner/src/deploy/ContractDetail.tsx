@@ -4,7 +4,7 @@
 // Source, Events, NFT Items, Transactions, Deployment
 // ---------------------------------------------------------------------------
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -27,6 +27,8 @@ import {
   Image,
   ChevronLeft,
   ChevronRight,
+  FileCode,
+  Play,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -38,6 +40,8 @@ import {
   fetchContractTransactions,
   fetchTokenHolders,
   fetchNFTItems,
+  fetchContractScripts,
+  fetchScriptText,
 } from './api';
 import type {
   ContractInfo,
@@ -48,8 +52,10 @@ import type {
   NFTItem,
   TokenMetadata,
   DependencyData,
+  ContractScript,
 } from './api';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { motion, AnimatePresence } from 'framer-motion';
 import ContractStats from './ContractStats';
 import ContractCharts from './ContractCharts';
 import DependencyGraph from './DependencyGraph';
@@ -97,7 +103,9 @@ function formatNumber(n: number): string {
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -118,7 +126,7 @@ const socialMeta: Record<string, { icon: LucideIcon; label: string }> = {
 // Tab config
 // ---------------------------------------------------------------------------
 
-type TabId = 'overview' | 'source' | 'events' | 'holders' | 'nfts' | 'transactions' | 'deployment';
+type TabId = 'overview' | 'source' | 'events' | 'holders' | 'nfts' | 'scripts' | 'transactions' | 'deployment';
 
 interface TabDef {
   id: TabId;
@@ -133,6 +141,7 @@ const ALL_TABS: TabDef[] = [
   { id: 'events', label: 'Events', icon: Zap },
   { id: 'holders', label: 'Holders', icon: Users, condition: (c) => c?.kind === 'FT' || c?.kind === 'NFT' },
   { id: 'nfts', label: 'NFT Items', icon: Image, condition: (c) => c?.kind === 'NFT' },
+  { id: 'scripts', label: 'Scripts', icon: FileCode },
   { id: 'transactions', label: 'Transactions', icon: Activity },
   { id: 'deployment', label: 'Deployment', icon: Rocket },
 ];
@@ -171,6 +180,11 @@ export default function ContractDetail() {
   // Lazy-loaded tab data
   const [transactions, setTransactions] = useState<ContractTransaction[]>([]);
   const [txLoading, setTxLoading] = useState(false);
+  const [liveTx, setLiveTx] = useState(false);
+  // Track which tx IDs are "new" (arrived via live polling) for highlight animation
+  const knownTxIdsRef = useRef<Set<string>>(new Set());
+  const newTxExpiryRef = useRef<Map<string, number>>(new Map());
+  const [highlightTick, setHighlightTick] = useState(0);
   const [holders, setHolders] = useState<ContractHolder[]>([]);
   const [holdersLoading, setHoldersLoading] = useState(false);
   const [holdersHasMore, setHoldersHasMore] = useState(false);
@@ -184,6 +198,13 @@ export default function ContractDetail() {
   const [nftsHasMore, setNftsHasMore] = useState(false);
   const [nftsPage, setNftsPage] = useState(0);
   const [eventsLoading, setEventsLoading] = useState(false);
+  // Scripts tab
+  const [scripts, setScripts] = useState<ContractScript[]>([]);
+  const [scriptsLoading, setScriptsLoading] = useState(false);
+  const [scriptsHasMore, setScriptsHasMore] = useState(false);
+  const [selectedScriptHash, setSelectedScriptHash] = useState<string | null>(null);
+  const [selectedScriptText, setSelectedScriptText] = useState('');
+  const [scriptTextLoading, setScriptTextLoading] = useState(false);
 
   const network: string = 'mainnet';
 
@@ -294,7 +315,60 @@ export default function ContractDetail() {
     if (activeTab === 'nfts' && nftItems.length === 0 && !nftsLoading) {
       loadNfts(0);
     }
+    if (activeTab === 'scripts' && scripts.length === 0 && !scriptsLoading) {
+      setScriptsLoading(true);
+      fetchContractScripts(contractId, network).then(({ scripts: items, hasMore }) => {
+        setScripts(items);
+        setScriptsHasMore(hasMore);
+        // Auto-select first script
+        if (items.length > 0) {
+          setSelectedScriptHash(items[0].script_hash);
+          setScriptTextLoading(true);
+          fetchScriptText(items[0].script_hash, network)
+            .then(setSelectedScriptText)
+            .finally(() => setScriptTextLoading(false));
+        }
+      }).finally(() => setScriptsLoading(false));
+    }
   }, [activeTab, contractId, loading]);
+
+  // Highlight tick — cleans up expired "new" highlights every second
+  useEffect(() => {
+    if (!liveTx) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      for (const [id, expiry] of newTxExpiryRef.current.entries()) {
+        if (expiry < now) newTxExpiryRef.current.delete(id);
+      }
+      setHighlightTick((t) => t + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [liveTx]);
+
+  // Seed known IDs from initial (non-live) load so they don't flash on first poll
+  useEffect(() => {
+    if (transactions.length > 0 && knownTxIdsRef.current.size === 0) {
+      for (const tx of transactions) knownTxIdsRef.current.add(tx.id);
+    }
+  }, [transactions]);
+
+  // Live polling for transactions
+  useEffect(() => {
+    if (!liveTx || !contractId || activeTab !== 'transactions') return;
+    const interval = setInterval(() => {
+      fetchContractTransactions(contractId, network, 25).then((fresh) => {
+        // Mark truly new tx IDs for highlight
+        for (const tx of fresh) {
+          if (!knownTxIdsRef.current.has(tx.id)) {
+            knownTxIdsRef.current.add(tx.id);
+            newTxExpiryRef.current.set(tx.id, Date.now() + 3000);
+          }
+        }
+        setTransactions(fresh);
+      });
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [liveTx, contractId, activeTab]);
 
   const parts = contractId?.split('.') ?? [];
   const contractName = parts.length >= 3 ? parts.slice(2).join('.') : contractId;
@@ -814,6 +888,124 @@ export default function ContractDetail() {
             </div>
           )}
 
+          {/* ---- SCRIPTS (Common Transactions) ---- */}
+          {activeTab === 'scripts' && (
+            <div className="flex-1 flex overflow-hidden" style={{ minHeight: 400 }}>
+              {scriptsLoading && scripts.length === 0 ? (
+                <div className="flex items-center justify-center flex-1 py-16">
+                  <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
+                </div>
+              ) : scripts.length > 0 ? (
+                <>
+                  {/* Left sidebar — script list */}
+                  <div className="w-[260px] shrink-0 border-r border-zinc-800 overflow-y-auto">
+                    <div className="divide-y divide-zinc-800/50">
+                      {scripts.map((sc) => (
+                        <button
+                          key={sc.script_hash}
+                          onClick={() => {
+                            setSelectedScriptHash(sc.script_hash);
+                            setScriptTextLoading(true);
+                            fetchScriptText(sc.script_hash, network)
+                              .then(setSelectedScriptText)
+                              .finally(() => setScriptTextLoading(false));
+                          }}
+                          className={`w-full text-left px-3 py-2.5 transition-colors ${
+                            selectedScriptHash === sc.script_hash
+                              ? 'bg-emerald-500/10 border-l-2 border-emerald-500'
+                              : 'hover:bg-zinc-800/50 border-l-2 border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className={`text-[11px] font-mono truncate ${
+                              selectedScriptHash === sc.script_hash
+                                ? 'text-white font-semibold'
+                                : 'text-zinc-300'
+                            }`}>
+                              {sc.label || sc.script_hash.substring(0, 12) + '...'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {sc.category && (
+                              <span className="text-[8px] px-1 py-0.5 rounded-sm bg-zinc-800 text-zinc-500 uppercase tracking-wider">
+                                {sc.category}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-zinc-500 font-mono ml-auto">
+                              {sc.tx_count?.toLocaleString()} txs
+                            </span>
+                          </div>
+                          {sc.description && (
+                            <p className="text-[9px] text-zinc-500 mt-0.5 truncate">{sc.description}</p>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    {scriptsHasMore && (
+                      <div className="text-center py-2 border-t border-zinc-800">
+                        <button
+                          onClick={() => {
+                            setScriptsLoading(true);
+                            fetchContractScripts(contractId!, network, 20, scripts.length).then(({ scripts: more, hasMore }) => {
+                              setScripts((prev) => [...prev, ...more]);
+                              setScriptsHasMore(hasMore);
+                            }).finally(() => setScriptsLoading(false));
+                          }}
+                          disabled={scriptsLoading}
+                          className="px-3 py-1.5 text-[10px] border border-zinc-700 rounded hover:bg-zinc-800 disabled:opacity-50 text-zinc-400 uppercase tracking-wider"
+                        >
+                          {scriptsLoading ? 'Loading...' : 'Load More'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right panel — script code */}
+                  <div className="flex-1 flex flex-col overflow-hidden bg-[#1e1e1e]">
+                    {scriptTextLoading ? (
+                      <div className="flex items-center justify-center h-full">
+                        <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
+                      </div>
+                    ) : selectedScriptText ? (
+                      <>
+                        {/* Toolbar */}
+                        <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-700 bg-[#252526] shrink-0">
+                          <span className="text-[11px] text-zinc-400 font-medium truncate">
+                            {scripts.find((s) => s.script_hash === selectedScriptHash)?.label || `${selectedScriptHash?.slice(0, 16)}...`}
+                          </span>
+                          <a
+                            href={`/?code=${btoa(selectedScriptText)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium text-emerald-400 hover:bg-emerald-400/10 transition-colors"
+                          >
+                            <Play className="w-3 h-3" />
+                            Open in Editor
+                          </a>
+                        </div>
+                        {/* Code */}
+                        <div className="flex-1 overflow-auto">
+                          <pre className="p-4 text-[11px] leading-relaxed font-mono text-zinc-300 whitespace-pre-wrap">
+                            {selectedScriptText}
+                          </pre>
+                        </div>
+                      </>
+                    ) : selectedScriptHash ? (
+                      <div className="flex items-center justify-center h-full text-zinc-500 text-xs">
+                        Select a script to view
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center flex-1 py-16 text-zinc-500">
+                  <FileCode className="w-8 h-8 mb-3 opacity-30" />
+                  <p className="text-xs">No common scripts found</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ---- TRANSACTIONS ---- */}
           {activeTab === 'transactions' && (
             <div className="p-6">
@@ -823,15 +1015,50 @@ export default function ContractDetail() {
                 </div>
               ) : transactions.length > 0 ? (
                 <div>
-                  <div className="text-xs text-zinc-500 mb-4">Recent transactions</div>
-                  <div className="space-y-1">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-zinc-500">Recent transactions</span>
+                      <button
+                        onClick={() => setLiveTx(!liveTx)}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium transition-colors ${
+                          liveTx
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-zinc-800 text-zinc-500 border border-zinc-700 hover:text-zinc-300'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${liveTx ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+                        Live
+                      </button>
+                    </div>
+                    <a
+                      href={`${network === 'testnet' ? 'https://testnet.flowindex.io' : 'https://flowindex.io'}/contracts/${contractId?.replace(/\.0x/i, '.')}?tab=transactions`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-zinc-500 hover:text-blue-400 transition-colors flex items-center gap-1"
+                    >
+                      View on FlowIndex <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <AnimatePresence initial={false} mode="popLayout">
                     {transactions.map((tx) => {
                       const isSuccess = !tx.error && tx.status === 'SEALED';
-                      // Extract contract names from imports (A.addr.Name → Name)
-                      const tags = (tx.contract_imports || []).map((imp) => {
-                        const parts = imp.split('.');
-                        return parts.length >= 3 ? parts.slice(2).join('.') : imp;
-                      });
+                      const _ = highlightTick; // keep in render dependency
+                      const isNew = (newTxExpiryRef.current.get(tx.id) ?? 0) > Date.now();
+                      // Current contract name from identifier (A.addr.Name → Name)
+                      const currentContractName = contractId ? contractId.split('.').slice(2).join('.') : '';
+                      // Well-known standard interfaces to filter out
+                      const STANDARD_CONTRACTS = new Set([
+                        'NonFungibleToken', 'FungibleToken', 'MetadataViews', 'ViewResolver',
+                        'NFTStorefrontV2', 'NFTStorefront', 'TokenForwarding', 'FungibleTokenMetadataViews',
+                        'Burner', 'FlowToken', 'FungibleTokenSwitchboard',
+                      ]);
+                      // Extract contract names, filter out current contract and standards
+                      const tags = (tx.contract_imports || [])
+                        .map((imp) => {
+                          const parts = imp.split('.');
+                          return parts.length >= 3 ? parts.slice(2).join('.') : imp;
+                        })
+                        .filter((name) => name !== currentContractName && !STANDARD_CONTRACTS.has(name));
                       // Color palette for tags
                       const TAG_COLORS = [
                         'bg-blue-500/15 text-blue-400',
@@ -844,7 +1071,19 @@ export default function ContractDetail() {
                         'bg-indigo-500/15 text-indigo-400',
                       ];
                       return (
-                        <div key={tx.id} className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-zinc-800/50 transition-colors">
+                        <motion.div
+                          key={tx.id}
+                          layout="position"
+                          initial={liveTx ? { opacity: 0, x: 20 } : false}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                          className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                            isNew
+                              ? 'bg-emerald-500/10 ring-1 ring-emerald-500/20'
+                              : 'hover:bg-zinc-800/50'
+                          }`}
+                        >
                           {/* Status dot */}
                           <div className={`w-2 h-2 rounded-full shrink-0 ${isSuccess ? 'bg-emerald-400' : 'bg-red-400'}`} />
 
@@ -882,6 +1121,20 @@ export default function ContractDetail() {
                             )}
                           </div>
 
+                          {/* Block height */}
+                          {tx.block_height > 0 && (
+                            <span className="text-[10px] text-zinc-600 font-mono shrink-0">
+                              #{tx.block_height.toLocaleString()}
+                            </span>
+                          )}
+
+                          {/* Gas */}
+                          {tx.gas_used > 0 && (
+                            <span className="text-[10px] text-zinc-500 shrink-0">
+                              {tx.gas_used.toLocaleString()} gas
+                            </span>
+                          )}
+
                           {/* Events count */}
                           <div className="flex items-center gap-1 shrink-0">
                             <Zap className="w-3 h-3 text-amber-500/60" />
@@ -892,10 +1145,10 @@ export default function ContractDetail() {
                           <span className="text-[10px] text-zinc-600 shrink-0 w-14 text-right">
                             {tx.timestamp ? timeAgo(tx.timestamp) : '—'}
                           </span>
-                        </div>
+                        </motion.div>
                       );
                     })}
-                  </div>
+                  </AnimatePresence>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-16 text-zinc-500">

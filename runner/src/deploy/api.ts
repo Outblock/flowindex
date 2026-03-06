@@ -116,6 +116,15 @@ export interface ContractTransaction {
   block_height: number;
 }
 
+export interface ContractScript {
+  script_hash: string;
+  tx_count: number;
+  category: string;
+  label: string;
+  description: string;
+  script_preview: string;
+}
+
 export type AddressSource = 'manual' | 'fcl' | 'local-key';
 
 export interface VerifiedAddress {
@@ -500,6 +509,46 @@ export async function fetchContractTransactions(
     }));
   } catch {
     return [];
+  }
+}
+
+export async function fetchContractScripts(
+  identifier: string,
+  network: string,
+  limit = 20,
+  offset = 0,
+): Promise<{ scripts: ContractScript[]; hasMore: boolean }> {
+  try {
+    const id = normalizeIdentifier(identifier);
+    const res = await fetchWithTimeout(
+      `${flowIndexBase(network)}/flow/contract/${id}/scripts?limit=${limit}&offset=${offset}`,
+    );
+    if (!res.ok) return { scripts: [], hasMore: false };
+    const json = await res.json();
+    const items = (json.data ?? []) as ContractScript[];
+    return { scripts: items, hasMore: items.length >= limit };
+  } catch {
+    return { scripts: [], hasMore: false };
+  }
+}
+
+export async function fetchScriptText(
+  scriptHash: string,
+  network: string,
+): Promise<string> {
+  try {
+    const res = await fetchWithTimeout(
+      `${flowIndexBase(network)}/flow/script/${encodeURIComponent(scriptHash)}`,
+    );
+    if (!res.ok) return '';
+    const json = await res.json();
+    const items = json.data;
+    if (Array.isArray(items) && items.length > 0) {
+      return items[0].script_text || '';
+    }
+    return '';
+  } catch {
+    return '';
   }
 }
 
