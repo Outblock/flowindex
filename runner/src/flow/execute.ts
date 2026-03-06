@@ -90,7 +90,7 @@ export async function executeCustodialTransaction(
   paramValues: Record<string, string>,
   signerAddress: string,
   keyIndex: number,
-  signFn: (message: string) => Promise<string>,
+  signFn: (message: string) => Promise<string | { signature: string; extensionData?: string }>,
   onResult: (result: ExecutionResult) => void,
   sigAlgo?: 'ECDSA_P256' | 'ECDSA_secp256k1',
   hashAlgo?: 'SHA2_256' | 'SHA3_256',
@@ -111,11 +111,14 @@ export async function executeCustodialTransaction(
         addr: fcl.sansPrefix(signerAddress),
         keyId: keyIndex,
         signingFunction: async (signable: { message: string }) => {
-          const sig = await signFn(signable.message);
+          const result = await signFn(signable.message);
+          const sig = typeof result === 'string' ? result : result.signature;
+          const ext = typeof result === 'string' ? undefined : result.extensionData;
           return {
             addr: fcl.withPrefix(signerAddress),
             keyId: keyIndex,
             signature: sig,
+            ...(ext ? { extensionData: ext } : {}),
           };
         },
         hashAlgorithm,
@@ -163,7 +166,7 @@ export async function deployContract(
   code: string,
   signerAddress: string,
   keyIndex: number,
-  signFn: (message: string) => Promise<string>,
+  signFn: (message: string) => Promise<string | { signature: string; extensionData?: string }>,
   onResult: (result: ExecutionResult) => void,
   sigAlgo?: 'ECDSA_P256' | 'ECDSA_secp256k1',
   hashAlgo?: 'SHA2_256' | 'SHA3_256',
@@ -209,11 +212,17 @@ transaction(name: String, code: String) {
       tempId: `${signerAddress}-${keyIndex}`,
       addr: fcl.sansPrefix(signerAddress),
       keyId: keyIndex,
-      signingFunction: async (signable: { message: string }) => ({
-        addr: fcl.withPrefix(signerAddress),
-        keyId: keyIndex,
-        signature: await signFn(signable.message),
-      }),
+      signingFunction: async (signable: { message: string }) => {
+        const result = await signFn(signable.message);
+        const sig = typeof result === 'string' ? result : result.signature;
+        const ext = typeof result === 'string' ? undefined : result.extensionData;
+        return {
+          addr: fcl.withPrefix(signerAddress),
+          keyId: keyIndex,
+          signature: sig,
+          ...(ext ? { extensionData: ext } : {}),
+        };
+      },
       hashAlgorithm,
       signatureAlgorithm,
     });
