@@ -481,13 +481,23 @@ export async function findAccountsForKey(
   publicKey: string,
   network: 'mainnet' | 'testnet' = 'testnet',
 ): Promise<KeyAccount[]> {
-  // Try FlowIndex first with 5s timeout, fall back to Flow key-indexer
-  try {
-    const result = await findAccountsViaFlowIndex(publicKey, network);
-    if (result.length > 0) return result;
-  } catch { /* timeout or error — fall through */ }
+  // Query both sources in parallel and merge results
+  const [flowIndexResults, keyIndexerResults] = await Promise.all([
+    findAccountsViaFlowIndex(publicKey, network).catch(() => [] as KeyAccount[]),
+    findAccountsViaKeyIndexer(publicKey, network).catch(() => [] as KeyAccount[]),
+  ]);
 
-  return findAccountsViaKeyIndexer(publicKey, network);
+  // Deduplicate by address + keyIndex
+  const seen = new Set<string>();
+  const merged: KeyAccount[] = [];
+  for (const acc of [...flowIndexResults, ...keyIndexerResults]) {
+    const key = `${acc.flowAddress}-${acc.keyIndex}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(acc);
+    }
+  }
+  return merged;
 }
 
 /** Fetch with a timeout (AbortController). */

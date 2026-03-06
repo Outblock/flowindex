@@ -1216,6 +1216,11 @@ function LocalKeyCard({
           <span className="text-[10px] text-zinc-400 font-mono">{truncateKey(localKey.publicKeyP256)}</span>
           <CopyButton text={localKey.publicKeyP256} />
         </div>
+        <div className="flex items-center gap-1 mt-0.5 ml-5">
+          <span className="text-[10px] text-zinc-500">secp256k1:</span>
+          <span className="text-[10px] text-zinc-400 font-mono">{truncateKey(localKey.publicKeySecp256k1)}</span>
+          <CopyButton text={localKey.publicKeySecp256k1} />
+        </div>
         <div className="flex items-center gap-2 mt-0.5 ml-5">
           <span className="text-[10px] text-zinc-500">{formatDate(localKey.createdAt)}</span>
           {localKey.hasPassword && (
@@ -1394,13 +1399,6 @@ function LocalKeyCard({
               </div>
             </div>
           )}
-
-          {/* secp256k1 public key */}
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-zinc-500">secp256k1:</span>
-            <span className="text-[10px] text-zinc-400 font-mono">{truncateKey(localKey.publicKeySecp256k1)}</span>
-            <CopyButton text={localKey.publicKeySecp256k1} />
-          </div>
 
           {/* Create Account */}
           {!showCreateAccount ? (
