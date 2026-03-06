@@ -823,53 +823,79 @@ export default function ContractDetail() {
                 </div>
               ) : transactions.length > 0 ? (
                 <div>
-                  <div className="text-xs text-zinc-500 mb-3">Recent transactions</div>
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-zinc-800 text-zinc-500">
-                        <th className="pb-2 font-normal">Transaction</th>
-                        <th className="pb-2 font-normal">Status</th>
-                        <th className="pb-2 font-normal">Payer</th>
-                        <th className="pb-2 font-normal text-right">Events</th>
-                        <th className="pb-2 font-normal text-right">Time</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800/50">
-                      {transactions.map((tx) => (
-                        <tr key={tx.id} className="hover:bg-zinc-800/30 transition-colors">
-                          <td className="py-2">
-                            <a
-                              href={flowIndexTxUrl(tx.id, network)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-zinc-300 hover:text-blue-400 font-mono transition-colors"
-                            >
-                              {tx.id.slice(0, 10)}...
-                            </a>
-                          </td>
-                          <td className="py-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              tx.status === 'Sealed' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-700 text-zinc-400'
-                            }`}>{tx.status}</span>
-                          </td>
-                          <td className="py-2">
-                            <a
-                              href={flowIndexAddressUrl(tx.payer, network)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-zinc-400 hover:text-blue-400 font-mono transition-colors"
-                            >
-                              {truncAddr(tx.payer)}
-                            </a>
-                          </td>
-                          <td className="py-2 text-right text-zinc-400">{tx.event_count}</td>
-                          <td className="py-2 text-right text-zinc-500">
+                  <div className="text-xs text-zinc-500 mb-4">Recent transactions</div>
+                  <div className="space-y-1">
+                    {transactions.map((tx) => {
+                      const isSuccess = !tx.error && tx.status === 'SEALED';
+                      // Extract contract names from imports (A.addr.Name → Name)
+                      const tags = (tx.contract_imports || []).map((imp) => {
+                        const parts = imp.split('.');
+                        return parts.length >= 3 ? parts.slice(2).join('.') : imp;
+                      });
+                      // Color palette for tags
+                      const TAG_COLORS = [
+                        'bg-blue-500/15 text-blue-400',
+                        'bg-purple-500/15 text-purple-400',
+                        'bg-cyan-500/15 text-cyan-400',
+                        'bg-amber-500/15 text-amber-400',
+                        'bg-pink-500/15 text-pink-400',
+                        'bg-teal-500/15 text-teal-400',
+                        'bg-orange-500/15 text-orange-400',
+                        'bg-indigo-500/15 text-indigo-400',
+                      ];
+                      return (
+                        <div key={tx.id} className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-zinc-800/50 transition-colors">
+                          {/* Status dot */}
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${isSuccess ? 'bg-emerald-400' : 'bg-red-400'}`} />
+
+                          {/* Tx ID */}
+                          <a
+                            href={flowIndexTxUrl(tx.id, network)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-zinc-300 hover:text-blue-400 font-mono transition-colors shrink-0"
+                          >
+                            {tx.id.slice(0, 6)}...{tx.id.slice(-4)}
+                          </a>
+
+                          {/* Status badge */}
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium shrink-0 ${
+                            isSuccess
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : 'bg-red-500/15 text-red-400'
+                          }`}>
+                            {isSuccess ? 'Success' : 'Error'}
+                          </span>
+
+                          {/* Tags */}
+                          <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
+                            {tags.slice(0, 4).map((tag, i) => (
+                              <span
+                                key={tag}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${TAG_COLORS[i % TAG_COLORS.length]}`}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            {tags.length > 4 && (
+                              <span className="text-[9px] text-zinc-600">+{tags.length - 4}</span>
+                            )}
+                          </div>
+
+                          {/* Events count */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Zap className="w-3 h-3 text-amber-500/60" />
+                            <span className="text-[10px] text-zinc-400">{tx.event_count}</span>
+                          </div>
+
+                          {/* Time */}
+                          <span className="text-[10px] text-zinc-600 shrink-0 w-14 text-right">
                             {tx.timestamp ? timeAgo(tx.timestamp) : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-16 text-zinc-500">

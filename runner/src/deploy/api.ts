@@ -105,11 +105,15 @@ export interface ContractTransaction {
   id: string;
   timestamp: string;
   status: string;
+  error: string;
   payer: string;
   proposer: string;
   authorizers: string[];
   event_count: number;
   fee: number;
+  contract_imports: string[];
+  gas_used: number;
+  block_height: number;
 }
 
 export type AddressSource = 'manual' | 'fcl' | 'local-key';
@@ -484,11 +488,15 @@ export async function fetchContractTransactions(
       id: (t.id as string) || '',
       timestamp: (t.timestamp as string) || '',
       status: (t.status as string) || '',
+      error: (t.error as string) || '',
       payer: (t.payer as string) || '',
       proposer: (t.proposer as string) || '',
       authorizers: (t.authorizers as string[]) || [],
       event_count: (t.event_count as number) || 0,
       fee: (t.fee as number) || 0,
+      contract_imports: (t.contract_imports as string[]) || [],
+      gas_used: (t.gas_used as number) || 0,
+      block_height: (t.block_height as number) || 0,
     }));
   } catch {
     return [];
