@@ -557,7 +557,7 @@ export default function AuditTab({ code, contractName, network }: Props) {
           </div>
 
           {/* Comment sidebar */}
-          <div className="w-72 shrink-0 border-l border-zinc-800 bg-zinc-950/50 overflow-y-auto">
+          <div className="w-96 shrink-0 border-l border-zinc-800 bg-zinc-950/50 overflow-y-auto">
             <div className="px-3 py-2.5 border-b border-zinc-800 sticky top-0 bg-zinc-950/90 backdrop-blur-sm z-10">
               <div className="flex items-center gap-1.5 text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
                 <MessageSquare className="w-3 h-3" />
