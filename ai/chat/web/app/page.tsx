@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
+import { persistTokens, clearTokens } from "@flowindex/auth-core";
 import { Chat } from "@/components/chat";
 import { Sidebar } from "@/components/sidebar";
 import { ArtifactPanelProvider, ArtifactPanel } from "@/components/artifact-panel";
@@ -27,13 +28,9 @@ export default function Home() {
       // Sync shared cross-subdomain cookie for flowindex.io SSO
       try {
         if (session?.access_token && session?.refresh_token) {
-          const value = JSON.stringify({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-          });
-          document.cookie = `fi_auth=${encodeURIComponent(value)}; domain=.flowindex.io; path=/; max-age=${60 * 60 * 24 * 30}; secure; samesite=lax`;
+          persistTokens(session.access_token, session.refresh_token);
         } else {
-          document.cookie = "fi_auth=; domain=.flowindex.io; path=/; max-age=0; secure; samesite=lax";
+          clearTokens();
         }
       } catch { /* ignore */ }
     });
