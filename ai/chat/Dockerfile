@@ -34,12 +34,14 @@ ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 RUN npx next build
 
 # Standalone install: strip workspace:* deps then npm install for portable node_modules
+# (bun's node_modules symlinks break when copied between Docker stages)
 RUN node -e "\
 const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));\
-for(const k of Object.keys(p.dependencies||{})){if(String(p.dependencies[k]).startsWith('workspace:'))delete p.dependencies[k];}\
-for(const k of Object.keys(p.devDependencies||{})){if(String(p.devDependencies[k]).startsWith('workspace:'))delete p.devDependencies[k];}\
+for(const t of ['dependencies','devDependencies','peerDependencies'])\
+  for(const k of Object.keys(p[t]||{})){if(String(p[t][k]).startsWith('workspace:'))delete p[t][k];}\
 require('fs').writeFileSync('package.json',JSON.stringify(p,null,2));" \
- && npm install --omit=dev
+ && rm -f bun.lock bun.lockb package-lock.json \
+ && npm install --omit=dev --legacy-peer-deps
 
 # Stage 2: Python backend + MCP server + serve frontend
 FROM python:3.12-slim
