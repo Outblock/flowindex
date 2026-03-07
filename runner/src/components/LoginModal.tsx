@@ -55,30 +55,36 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
   const [showPasskeySetup, setShowPasskeySetup] = useState(false);
   const [walletName, setWalletName] = useState(() => randomWalletName());
   const conditionalAbortRef = useRef<AbortController | null>(null);
+  const conditionalStartedRef = useRef(false);
+  // Stable refs for callbacks to avoid useEffect re-triggers
+  const onStartConditionalLoginRef = useRef(onStartConditionalLogin);
+  onStartConditionalLoginRef.current = onStartConditionalLogin;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
-  // Start conditional UI passkey login when modal opens
+  // Start conditional UI passkey login when modal opens (once)
   useEffect(() => {
-    if (!open || !hasPasskeySupport || !onStartConditionalLogin) return;
+    if (!open || !hasPasskeySupport) return;
+    if (conditionalStartedRef.current) return;
 
-    // Check if conditional mediation is available
     const pkcProto = window.PublicKeyCredential as typeof PublicKeyCredential & {
       isConditionalMediationAvailable?: () => Promise<boolean>;
     };
     if (!pkcProto.isConditionalMediationAvailable) return;
 
-    let abortController: AbortController | null = null;
+    conditionalStartedRef.current = true;
     pkcProto.isConditionalMediationAvailable().then((available) => {
-      if (!available) return;
-      abortController = onStartConditionalLogin(onClose);
-      conditionalAbortRef.current = abortController;
+      if (!available || !onStartConditionalLoginRef.current) return;
+      const controller = onStartConditionalLoginRef.current(() => onCloseRef.current());
+      conditionalAbortRef.current = controller;
     });
 
     return () => {
-      // Abort conditional UI when modal closes
-      abortController?.abort();
+      conditionalAbortRef.current?.abort();
       conditionalAbortRef.current = null;
+      conditionalStartedRef.current = false;
     };
-  }, [open, hasPasskeySupport, onStartConditionalLogin, onClose]);
+  }, [open, hasPasskeySupport]);
 
   const redirectTo = typeof window !== 'undefined' ? window.location.href : '/';
 
