@@ -105,14 +105,8 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
         return;
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      // User cancelled the WebAuthn dialog — don't auto-show register
-      if (msg.includes('cancelled') || msg.includes('canceled') || msg.includes('AbortError') || msg.includes('NotAllowedError') || (err instanceof DOMException && err.name === 'NotAllowedError')) {
-        setPasskeyLoading(false);
-        return;
-      }
-      // Actual server error (credential not found, etc.) — show register
-      console.warn('[passkey] login failed, showing register:', msg);
+      // Login failed or user cancelled — show register form
+      console.log('[passkey] login failed, showing register:', err instanceof Error ? err.message : err);
     }
     setPasskeyLoading(false);
     setShowPasskeySetup(true);
@@ -337,15 +331,15 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
                     transition={{ duration: 0.15 }}
                     className="space-y-2"
                   >
-                    {/* Passkey — highlighted as recommended */}
+                    {/* Passkey — highlighted like GitHub */}
                     {hasPasskeySupport && (
                       <button
                         type="button"
                         onClick={handlePasskey}
                         disabled={passkeyLoading}
-                        className="w-full flex items-center gap-3 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/50 text-white font-semibold transition-all text-xs group active:scale-[0.98] disabled:opacity-50"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 bg-white hover:bg-zinc-100 text-zinc-900 font-medium transition-all text-xs group active:scale-[0.98] disabled:opacity-50"
                       >
-                        <svg className="w-4 h-4 shrink-0 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg className="w-4 h-4 shrink-0 text-zinc-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z" />
                           <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
                         </svg>
@@ -353,7 +347,7 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
                           {passkeyLoading ? 'Authenticating...' : 'Continue with Passkey'}
                         </span>
                         {!passkeyLoading && (
-                          <ArrowRight className="w-3.5 h-3.5 text-white/50 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                          <ArrowRight className="w-3.5 h-3.5 text-zinc-400 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                         )}
                       </button>
                     )}
