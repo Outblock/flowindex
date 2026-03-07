@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Loader2, ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -37,10 +37,11 @@ interface LoginModalProps {
   onClose: () => void;
   onPasskeyLogin?: () => Promise<void>;
   onPasskeyRegister?: (walletName?: string) => Promise<void>;
+  onStartConditionalLogin?: (onSuccess?: () => void) => AbortController;
   hasPasskeySupport?: boolean;
 }
 
-export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyRegister, hasPasskeySupport }: LoginModalProps) {
+export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyRegister, onStartConditionalLogin, hasPasskeySupport }: LoginModalProps) {
   const { signInWithProvider, sendMagicLink, verifyOtp } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -53,6 +54,31 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [showPasskeySetup, setShowPasskeySetup] = useState(false);
   const [walletName, setWalletName] = useState(() => randomWalletName());
+  const conditionalAbortRef = useRef<AbortController | null>(null);
+
+  // Start conditional UI passkey login when modal opens
+  useEffect(() => {
+    if (!open || !hasPasskeySupport || !onStartConditionalLogin) return;
+
+    // Check if conditional mediation is available
+    const pkcProto = window.PublicKeyCredential as typeof PublicKeyCredential & {
+      isConditionalMediationAvailable?: () => Promise<boolean>;
+    };
+    if (!pkcProto.isConditionalMediationAvailable) return;
+
+    let abortController: AbortController | null = null;
+    pkcProto.isConditionalMediationAvailable().then((available) => {
+      if (!available) return;
+      abortController = onStartConditionalLogin(onClose);
+      conditionalAbortRef.current = abortController;
+    });
+
+    return () => {
+      // Abort conditional UI when modal closes
+      abortController?.abort();
+      conditionalAbortRef.current = null;
+    };
+  }, [open, hasPasskeySupport, onStartConditionalLogin, onClose]);
 
   const redirectTo = typeof window !== 'undefined' ? window.location.href : '/';
 
@@ -96,7 +122,11 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
   }
 
   async function handlePasskey() {
-    // Always try login first — works even on new devices if passkey is synced (iCloud, Chrome)
+    // Abort conditional UI first — only one WebAuthn request can be active
+    conditionalAbortRef.current?.abort();
+    conditionalAbortRef.current = null;
+
+    // Try modal login — works even on new devices if passkey is synced (iCloud, Chrome)
     setError(null);
     setPasskeyLoading(true);
     try {
@@ -115,6 +145,8 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
 
   async function handlePasskeyCreate(e: React.FormEvent) {
     e.preventDefault();
+    conditionalAbortRef.current?.abort();
+    conditionalAbortRef.current = null;
     setError(null);
     setPasskeyLoading(true);
     try {
@@ -252,6 +284,16 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
               <p className="text-[11px] text-zinc-500 mt-1 font-mono">
                 Save projects, sync across devices
               </p>
+              {/* Hidden input triggers browser passkey autofill (conditional UI) */}
+              {hasPasskeySupport && (
+                <input
+                  type="text"
+                  autoComplete="webauthn"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+              )}
             </div>
 
             {/* Error */}

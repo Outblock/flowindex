@@ -195,7 +195,7 @@ export function usePasskeyWallet() {
     }
   }, [accessToken, applyTokenData]);
 
-  const loginOnly = useCallback(async () => {
+  const loginOnly = useCallback(async (opts?: { signal?: AbortSignal; mediation?: CredentialMediationRequirement }) => {
     // 1. Start authentication
     const startData = await passkeyApi('/login/start', {
       rpId: RP_ID,
@@ -214,9 +214,13 @@ export function usePasskeyWallet() {
       rpId: RP_ID,
     };
 
-    const assertion = await navigator.credentials.get({
+    const credentialRequest: CredentialRequestOptions = {
       publicKey: publicKeyOptions,
-    }) as PublicKeyCredential;
+      ...(opts?.signal && { signal: opts.signal }),
+      ...(opts?.mediation && { mediation: opts.mediation }),
+    };
+
+    const assertion = await navigator.credentials.get(credentialRequest) as PublicKeyCredential;
 
     if (!assertion) throw new Error('Passkey authentication cancelled');
 
@@ -271,11 +275,25 @@ export function usePasskeyWallet() {
     setLoading(true);
     try {
       await loginOnly();
-      // If login succeeds, remember for future
       try { localStorage.setItem('passkey_registered', '1'); } catch {}
     } finally {
       setLoading(false);
     }
+  }, [loginOnly]);
+
+  /** Start conditional UI login — browser shows passkey in autofill.
+   *  Returns an AbortController so callers can cancel when the modal closes. */
+  const startConditionalLogin = useCallback((onSuccess?: () => void): AbortController => {
+    const controller = new AbortController();
+    loginOnly({ signal: controller.signal, mediation: 'conditional' as CredentialMediationRequirement })
+      .then(() => {
+        try { localStorage.setItem('passkey_registered', '1'); } catch {}
+        onSuccess?.();
+      })
+      .catch(() => {
+        // Aborted or no passkey selected — that's fine
+      });
+    return controller;
   }, [loginOnly]);
 
   const sign = useCallback(async (messageHex: string): Promise<PasskeySignResult> => {
@@ -352,6 +370,7 @@ export function usePasskeyWallet() {
   return {
     register,
     login,
+    startConditionalLogin,
     sign,
     provisionAccount,
     accounts,
