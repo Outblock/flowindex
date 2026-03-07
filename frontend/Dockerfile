@@ -13,6 +13,9 @@ COPY packages/ ./packages/
 COPY frontend/package.json ./frontend/
 COPY frontend/packages/ ./frontend/packages/
 
+# Scope workspaces to only what's present (bun requires all listed members to exist)
+RUN bun -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));p.workspaces=['packages/*','frontend'];require('fs').writeFileSync('package.json',JSON.stringify(p,null,2))"
+
 # Install all workspace deps
 RUN cd frontend && bun install
 

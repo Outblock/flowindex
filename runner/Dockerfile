@@ -10,6 +10,9 @@ COPY packages/ ./packages/
 # Runner package.json
 COPY runner/package.json ./runner/
 
+# Scope workspaces to only what's present (bun requires all listed members to exist)
+RUN bun -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));p.workspaces=['packages/*','runner'];require('fs').writeFileSync('package.json',JSON.stringify(p,null,2))"
+
 # Install all workspace deps
 RUN cd runner && bun install
 

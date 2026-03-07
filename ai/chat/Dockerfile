@@ -12,6 +12,9 @@ COPY packages/ ./packages/
 # AI chat web package.json
 COPY ai/chat/web/package.json ./ai/chat/web/
 
+# Scope workspaces to only what's present (bun requires all listed members to exist)
+RUN node -e "const p=require('./package.json');p.workspaces=['packages/*','ai/chat/web'];require('fs').writeFileSync('package.json',JSON.stringify(p,null,2))"
+
 # Install all workspace deps
 RUN cd ai/chat/web && bun install
 
