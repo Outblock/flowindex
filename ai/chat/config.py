@@ -42,3 +42,9 @@ MCP_PORT = int(os.environ.get("MCP_PORT", "8085"))
 # --- Security ---
 # Optional bearer token for API auth
 API_TOKEN = os.environ.get("API_TOKEN", "")
+
+# --- MCP Auth ---
+MCP_ADMIN_KEY = os.environ.get("MCP_ADMIN_KEY", "")
+MCP_AUTH_ENABLED = os.environ.get("MCP_AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
+MCP_RATE_LIMIT = int(os.environ.get("MCP_RATE_LIMIT", "60"))  # requests per minute per key
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8080")  # Go backend for key validation

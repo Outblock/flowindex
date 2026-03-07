@@ -24,6 +24,114 @@ from fastmcp import FastMCP
 import config
 from db import run_flowindex_query, run_blockscout_query
 
+import time
+import hashlib
+from collections import defaultdict, deque
+
+# ---------------------------------------------------------------------------
+# In-memory sliding-window rate limiter (per API key)
+# ---------------------------------------------------------------------------
+class RateLimiter:
+    """Sliding window rate limiter. Tracks timestamps per key."""
+
+    def __init__(self, max_requests: int = 60, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._windows: dict[str, deque] = defaultdict(deque)
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        window = self._windows[key]
+        cutoff = now - self.window_seconds
+        while window and window[0] < cutoff:
+            window.popleft()
+        if len(window) >= self.max_requests:
+            return False
+        window.append(now)
+        return True
+
+
+_rate_limiter = RateLimiter(
+    max_requests=config.MCP_RATE_LIMIT,
+    window_seconds=60,
+)
+
+# Cache validated developer keys for 5 min to avoid hitting Go backend on every request.
+_key_cache: dict[str, float] = {}  # {key_hash: expiry_timestamp}
+_KEY_CACHE_TTL = 300  # seconds
+
+
+async def _validate_developer_key(api_key: str) -> bool:
+    """Validate a developer API key against the Go backend."""
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+
+    cached_expiry = _key_cache.get(key_hash)
+    if cached_expiry and time.time() < cached_expiry:
+        return True
+
+    try:
+        resp = httpx.post(
+            f"{config.BACKEND_URL}/flow/v1/auth/verify-key",
+            headers={"X-API-Key": api_key},
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            return False
+        data = resp.json()
+        if data.get("valid"):
+            _key_cache[key_hash] = time.time() + _KEY_CACHE_TTL
+            return True
+        return False
+    except Exception:
+        return False
+
+
+from starlette.middleware import Middleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+
+async def auth_middleware(request: Request, call_next):
+    """ASGI middleware that checks API key auth before forwarding to FastMCP."""
+
+    # Skip auth if disabled
+    if not config.MCP_AUTH_ENABLED:
+        return await call_next(request)
+
+    # Extract key from Authorization header or x-api-key
+    auth_header = request.headers.get("authorization", "")
+    api_key = ""
+    if auth_header.lower().startswith("bearer "):
+        api_key = auth_header[7:].strip()
+    if not api_key:
+        api_key = request.headers.get("x-api-key", "").strip()
+
+    if not api_key:
+        return JSONResponse(
+            {"error": "unauthorized", "message": "API key required. Pass via Authorization: Bearer <key> header."},
+            status_code=401,
+        )
+
+    # Admin key — allow with no rate limit
+    if config.MCP_ADMIN_KEY and api_key == config.MCP_ADMIN_KEY:
+        return await call_next(request)
+
+    # Developer key — validate against Go backend
+    if not await _validate_developer_key(api_key):
+        return JSONResponse(
+            {"error": "unauthorized", "message": "Invalid or inactive API key."},
+            status_code=401,
+        )
+
+    # Rate limit check
+    if not _rate_limiter.allow(api_key):
+        return JSONResponse(
+            {"error": "rate_limited", "message": f"Rate limit exceeded ({config.MCP_RATE_LIMIT} req/min)."},
+            status_code=429,
+        )
+
+    return await call_next(request)
+
 TRAINING_DATA = Path(__file__).parent / "training_data"
 
 FLOW_ACCESS_API = config.__dict__.get(
@@ -151,5 +259,17 @@ def get_cadence_docs() -> str:
 
 if __name__ == "__main__":
     port = config.MCP_PORT
-    print(f"Starting FlowIndex AI MCP server on http://0.0.0.0:{port}/mcp")
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+
+    if config.MCP_AUTH_ENABLED:
+        print(f"Starting FlowIndex AI MCP server on http://0.0.0.0:{port}/mcp (auth enabled)")
+    else:
+        print(f"Starting FlowIndex AI MCP server on http://0.0.0.0:{port}/mcp (auth DISABLED)")
+
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    mcp.run(
+        transport="streamable-http",
+        host="0.0.0.0",
+        port=port,
+        middleware=[Middleware(BaseHTTPMiddleware, dispatch=auth_middleware)],
+    )
