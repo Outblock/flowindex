@@ -1,0 +1,37 @@
+{
+  "name": "@flowindex/flow-passkey",
+  "version": "0.1.0",
+  "description": "Flow blockchain passkey wallet SDK — WebAuthn + FLIP-264 transaction signing",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@onflow/rlp": "^1.2.2",
+    "sha3": "^2.1.4"
+  },
+  "peerDependencies": {
+    "@onflow/fcl": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@onflow/fcl": { "optional": true }
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3"
+  },
+  "nx": {
+    "tags": ["package"]
+  }
+}

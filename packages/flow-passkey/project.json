@@ -1,0 +1,15 @@
+{
+  "name": "flow-passkey",
+  "sourceRoot": "packages/flow-passkey/src",
+  "tags": ["package"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": { "command": "tsup", "cwd": "packages/flow-passkey" }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": { "command": "tsc --noEmit", "cwd": "packages/flow-passkey" }
+    }
+  }
+}
