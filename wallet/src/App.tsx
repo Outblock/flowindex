@@ -23,6 +23,7 @@ export default function App() {
           <Route path="/nfts" element={<Placeholder name="NFTs" />} />
           <Route path="/activity" element={<Placeholder name="Activity" />} />
           <Route path="/settings" element={<Placeholder name="Settings" />} />
+          <Route path="/test" element={<TestHost />} />
         </Routes>
       </WalletProvider>
     </WalletAuthProvider>
