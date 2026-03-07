@@ -70,76 +70,72 @@ function hexToUint8Array(hex: string): Uint8Array {
 }
 
 /**
- * Minimal CBOR decoder — read one integer or length value at offset.
- * Returns [value, newOffset].
+ * Full CBOR decoder (based on github.com/Outblock/Passkey CborSimpleDecoder).
+ * Decodes CBOR bytes into JS objects: numbers, Uint8Array, strings, arrays, maps.
  */
-function cborReadUint(bytes: Uint8Array, offset: number): [number, number] {
-  const additional = bytes[offset] & 0x1f;
-  offset++;
-  if (additional < 24) return [additional, offset];
-  if (additional === 24) return [bytes[offset], offset + 1];
-  if (additional === 25) return [(bytes[offset] << 8) | bytes[offset + 1], offset + 2];
-  return [0, offset]; // 26/27 not needed for COSE keys
-}
-
-/**
- * Skip one CBOR value at offset, returning new offset.
- */
-function cborSkipValue(bytes: Uint8Array, offset: number): number {
-  const major = bytes[offset] >> 5;
-  const [val, off] = cborReadUint(bytes, offset);
-  if (major <= 1) return off; // unsigned/negative int
-  if (major === 2 || major === 3) return off + val; // byte/text string
-  if (major === 4) { // array
-    let o = off;
-    for (let i = 0; i < val; i++) o = cborSkipValue(bytes, o);
-    return o;
+class CborReader {
+  private view: DataView;
+  private offset = 0;
+  constructor(bytes: Uint8Array) {
+    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   }
-  if (major === 5) { // map
-    let o = off;
-    for (let i = 0; i < val; i++) { o = cborSkipValue(bytes, o); o = cborSkipValue(bytes, o); }
-    return o;
+  private readUInt8() { const v = this.view.getUint8(this.offset); this.offset += 1; return v; }
+  private readUInt16() { const v = this.view.getUint16(this.offset); this.offset += 2; return v; }
+  private readUInt32() { const v = this.view.getUint32(this.offset); this.offset += 4; return v; }
+  private readBytes(len: number) {
+    const v = new Uint8Array(this.view.buffer, this.view.byteOffset + this.offset, len);
+    this.offset += len;
+    return v;
   }
-  return off; // tag, simple
-}
-
-/**
- * Extracts P-256 x,y coordinates from COSE public key bytes.
- * COSE_Key for P-256: Map { 1: 2, 3: -7, -1: 1, -2: <x 32 bytes>, -3: <y 32 bytes> }
- */
-function decodeCoseP256Key(bytes: Uint8Array): { x: Uint8Array; y: Uint8Array } | null {
-  const major = bytes[0] >> 5;
-  if (major !== 5) return null; // not a map
-  const [mapSize, startOffset] = cborReadUint(bytes, 0);
-
-  let x: Uint8Array | null = null;
-  let y: Uint8Array | null = null;
-  let offset = startOffset;
-
-  for (let i = 0; i < mapSize; i++) {
-    // Read key (integer)
-    const keyMajor = bytes[offset] >> 5;
-    const [keyRaw, keyOff] = cborReadUint(bytes, offset);
-    offset = keyOff;
-    const keyValue = keyMajor === 0 ? keyRaw : keyMajor === 1 ? -1 - keyRaw : -999;
-
-    // Read value
-    const valMajor = bytes[offset] >> 5;
-    if (valMajor === 2 && (keyValue === -2 || keyValue === -3)) {
-      // byte string — this is x or y
-      const [len, dataOff] = cborReadUint(bytes, offset);
-      const value = bytes.slice(dataOff, dataOff + len);
-      offset = dataOff + len;
-      if (keyValue === -2) x = value;
-      else if (keyValue === -3) y = value;
-    } else {
-      // Skip any other value
-      offset = cborSkipValue(bytes, offset);
+  private readHeader(): { major: number; length: number } {
+    const h = this.readUInt8();
+    const major = (h >> 5) & 0x7;
+    const info = h & 0x1f;
+    let length = info;
+    if (info === 24) length = this.readUInt8();
+    else if (info === 25) length = this.readUInt16();
+    else if (info === 26) length = this.readUInt32();
+    return { major, length };
+  }
+  readObject(): unknown {
+    const { major, length } = this.readHeader();
+    switch (major) {
+      case 0: return length;                              // positive int
+      case 1: return -1 - length;                         // negative int
+      case 2: return this.readBytes(length);              // byte string → Uint8Array
+      case 3: return new TextDecoder().decode(this.readBytes(length)); // text string
+      case 4: {                                           // array
+        const arr: unknown[] = [];
+        for (let i = 0; i < length; i++) arr.push(this.readObject());
+        return arr;
+      }
+      case 5: {                                           // map
+        const map: Record<number | string, unknown> = {};
+        for (let i = 0; i < length; i++) {
+          const key = this.readObject();
+          map[key as number | string] = this.readObject();
+        }
+        return map;
+      }
+      default: throw new Error(`CBOR: unsupported major=${major}`);
     }
   }
+}
 
-  if (!x || !y) return null;
-  return { x, y };
+/**
+ * Extract P-256 x,y from COSE public key bytes → uncompressed SEC1 hex.
+ * COSE EC2 key map: { 1: 2(EC), 3: -7(ES256), -1: 1(P-256), -2: x, -3: y }
+ */
+function decodeCoseP256Key(bytes: Uint8Array): { x: Uint8Array; y: Uint8Array } | null {
+  try {
+    const cose = new CborReader(bytes).readObject() as Record<number, unknown>;
+    const x = cose[-2];
+    const y = cose[-3];
+    if (!(x instanceof Uint8Array) || !(y instanceof Uint8Array)) return null;
+    return { x, y };
+  } catch {
+    return null;
+  }
 }
 
 /**
