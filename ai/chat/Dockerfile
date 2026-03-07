@@ -33,13 +33,6 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 RUN npx next build
 
-# Standalone install: strip workspace:* deps then npm install for portable node_modules
-# (bun's node_modules symlinks break when copied between Docker stages)
-RUN node -e 'var p=JSON.parse(require("fs").readFileSync("package.json","utf8"));["dependencies","devDependencies","peerDependencies"].forEach(function(t){Object.keys(p[t]||{}).forEach(function(k){if(String(p[t][k]).startsWith("workspace:"))delete p[t][k]})});require("fs").writeFileSync("package.json",JSON.stringify(p,null,2))' \
- && cat package.json \
- && rm -f bun.lock bun.lockb package-lock.json \
- && npm install --omit=dev --legacy-peer-deps
-
 # Stage 2: Python backend + MCP server + serve frontend
 FROM python:3.12-slim
 WORKDIR /app
@@ -52,10 +45,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ai/chat/ .
 
-# Copy built frontend assets + portable node_modules from stage 1
-COPY --from=frontend /app/ai/chat/web/.next ./web/.next
-COPY --from=frontend /app/ai/chat/web/node_modules ./web/node_modules
-COPY --from=frontend /app/ai/chat/web/package.json ./web/package.json
+# Copy full standalone tree so bun-style symlinks (../../../../node_modules/.bun/*)
+# resolve correctly from ai/chat/web/node_modules into standalone/node_modules.
+RUN rm -rf ./web ./standalone
+COPY --from=frontend /app/ai/chat/web/.next/standalone ./standalone
+COPY --from=frontend /app/ai/chat/web/.next/static ./standalone/ai/chat/web/.next/static
+COPY --from=frontend /app/ai/chat/web/public ./standalone/ai/chat/web/public
 
 # Skills for runtime loadSkill tool (Next.js SSR reads these on request)
 COPY --from=frontend /app/skills ./skills
