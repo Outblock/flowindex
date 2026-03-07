@@ -227,6 +227,9 @@
       "version": "0.0.1",
       "dependencies": {
         "@ai-sdk/react": "^3.0.103",
+        "@flowindex/auth-core": "workspace:*",
+        "@flowindex/auth-ui": "workspace:*",
+        "@flowindex/flow-passkey": "workspace:*",
         "@monaco-editor/react": "^4.7.0",
         "@onflow/fcl": "^1.21.9",
         "@outblock/cadence-language-server": "^2.0.0",
@@ -252,7 +255,6 @@
         "reactflow": "^11.11.4",
         "recharts": "^3.7.0",
         "remark-gfm": "^4.0.1",
-        "sha3": "^2.1.4",
         "shiki": "^4.0.1",
         "tailwind-merge": "^2.2.0",
         "vscode-jsonrpc": "8.2.1",

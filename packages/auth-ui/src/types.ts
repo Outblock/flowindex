@@ -11,7 +11,8 @@ export interface AuthConfig {
   enableRoles?: boolean;
   rpId?: string;
   rpName?: string;
-  /** Override the OAuth callback path. Default: `/developer/callback` */
+  /** Override the OAuth callback path or full URL. Default: `/developer/callback`.
+   *  If starts with `http`, used as-is (cross-origin). Otherwise prepended with window.location.origin. */
   callbackPath?: string;
 }
 

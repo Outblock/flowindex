@@ -317,6 +317,7 @@ export default function App() {
     login: passkeyLogin,
     sign: passkeySign,
     accounts: passkeyAccounts,
+    passkeys: passkeyList,
     refreshPasskeyState,
     hasPasskeySupport,
   } = usePasskeyWallet();
@@ -421,9 +422,9 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const state = await refreshPasskeyState();
+        await refreshPasskeyState();
         if (cancelled) return;
-        const hasExistingPasskey = (state.passkeys?.length ?? 0) > 0;
+        const hasExistingPasskey = passkeyList.length > 0;
         const dismissed = localStorage.getItem(`runner:passkey-onboarding-dismissed:${user.id}`) === '1';
         setShowPasskeyOnboarding(!hasExistingPasskey && !dismissed);
       } catch {
@@ -432,7 +433,7 @@ export default function App() {
     })();
 
     return () => { cancelled = true; };
-  }, [authLoading, user, hasPasskeySupport, refreshPasskeyState]);
+  }, [authLoading, user, hasPasskeySupport, refreshPasskeyState, passkeyList]);
 
   // Handle wallet selected from ConnectModal — persist and auto-retry pending run
   const handleModalSelect = useCallback((signer: SignerOption) => {

@@ -248,9 +248,12 @@ export function AuthProvider({ children, config }: { children: React.ReactNode; 
 
   const signInWithProvider = useCallback((provider: 'github' | 'google', redirectTo?: string) => {
     const callbackPath = config.callbackPath || '/developer/callback';
-    const callbackUrl = typeof window !== 'undefined'
-      ? `${window.location.origin}${callbackPath}${redirectTo ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`
-      : callbackPath;
+    const base = callbackPath.startsWith('http')
+      ? callbackPath
+      : typeof window !== 'undefined'
+        ? `${window.location.origin}${callbackPath}`
+        : callbackPath;
+    const callbackUrl = redirectTo ? `${base}?redirect=${encodeURIComponent(redirectTo)}` : base;
     window.location.href = buildOAuthRedirectUrl(config.gotrueUrl, provider, callbackUrl);
   }, [config.gotrueUrl, config.callbackPath]);
 

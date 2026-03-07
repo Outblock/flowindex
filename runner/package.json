@@ -15,6 +15,9 @@
     "@onflow/fcl": "^1.21.9",
     "@outblock/cadence-language-server": "^2.0.0",
     "@outblock/flowtoken": "^1.0.0",
+    "@flowindex/auth-core": "workspace:*",
+    "@flowindex/auth-ui": "workspace:*",
+    "@flowindex/flow-passkey": "workspace:*",
     "@supabase/supabase-js": "^2.98.0",
     "@trustwallet/wallet-core": "^4.6.0",
     "ai": "^6.0.101",
@@ -36,7 +39,7 @@
     "reactflow": "^11.11.4",
     "recharts": "^3.7.0",
     "remark-gfm": "^4.0.1",
-    "sha3": "^2.1.4",
+
     "shiki": "^4.0.1",
     "tailwind-merge": "^2.2.0",
     "vscode-jsonrpc": "8.2.1",
