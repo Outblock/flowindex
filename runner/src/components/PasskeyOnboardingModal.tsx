@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Loader2, ShieldCheck, Wallet, KeyRound } from 'lucide-react';
 
 interface PasskeyOnboardingModalProps {
@@ -7,6 +8,7 @@ interface PasskeyOnboardingModalProps {
   error?: string | null;
   onCreate: () => void;
   onSkip: () => void;
+  onDontShowAgain: () => void;
 }
 
 export default function PasskeyOnboardingModal({
@@ -16,12 +18,23 @@ export default function PasskeyOnboardingModal({
   error,
   onCreate,
   onSkip,
+  onDontShowAgain,
 }: PasskeyOnboardingModalProps) {
+  const [dontShow, setDontShow] = useState(false);
+
   if (!open) return null;
+
+  function handleSkip() {
+    if (dontShow) {
+      onDontShowAgain();
+    } else {
+      onSkip();
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={onSkip} />
+      <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={handleSkip} />
 
       <div className="relative z-10 w-full max-w-[460px] mx-4 border border-zinc-700 bg-zinc-900 rounded-lg shadow-2xl">
         <div className="px-6 pt-6 pb-5 border-b border-zinc-800">
@@ -64,9 +77,9 @@ export default function PasskeyOnboardingModal({
           </div>
         )}
 
-        <div className="px-6 pb-6 flex items-center gap-2">
+        <div className="px-6 pb-4 flex items-center gap-2">
           <button
-            onClick={onSkip}
+            onClick={handleSkip}
             disabled={loading}
             className="flex-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700 rounded-lg transition-colors disabled:opacity-50"
           >
@@ -80,6 +93,20 @@ export default function PasskeyOnboardingModal({
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
             {loading ? 'Creating...' : 'Create Passkey Wallet'}
           </button>
+        </div>
+
+        <div className="px-6 pb-5">
+          <label className="flex items-center gap-2 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={dontShow}
+              onChange={(e) => setDontShow(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500/20 focus:ring-offset-0 cursor-pointer"
+            />
+            <span className="text-[11px] text-zinc-500 group-hover:text-zinc-400 transition-colors select-none">
+              Don't show this again
+            </span>
+          </label>
         </div>
       </div>
     </div>

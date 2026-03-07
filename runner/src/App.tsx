@@ -400,13 +400,16 @@ export default function App() {
     } catch {}
   }, []);
 
-  const dismissPasskeyOnboarding = useCallback(() => {
+  const skipPasskeyOnboarding = useCallback(() => {
+    setShowPasskeyOnboarding(false);
+    setPasskeyOnboardingError(null);
+  }, []);
+
+  const permanentlyDismissPasskey = useCallback(() => {
     if (user) {
       try {
         localStorage.setItem(`runner:passkey-onboarding-dismissed:${user.id}`, '1');
-      } catch {
-        // ignore localStorage errors
-      }
+      } catch {}
     }
     setShowPasskeyOnboarding(false);
     setPasskeyOnboardingError(null);
@@ -2064,7 +2067,8 @@ export default function App() {
           loading={passkeyOnboardingBusy}
           error={passkeyOnboardingError}
           onCreate={handleCreatePasskeyWallet}
-          onSkip={dismissPasskeyOnboarding}
+          onSkip={skipPasskeyOnboarding}
+          onDontShowAgain={permanentlyDismissPasskey}
         />
       </Suspense>
     </div>
