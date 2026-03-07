@@ -308,12 +308,14 @@ export default function App() {
     signWithLocalKey, refreshAccounts, createAccount, getPrivateKey, revealSecret,
   } = useLocalKeys();
   const {
+    register: passkeyRegister,
     login: passkeyLogin,
     sign: passkeySign,
     accounts: passkeyAccounts,
     selectedAccount: selectedPasskeyAccount,
     loading: passkeyLoading,
     hasPasskeySupport,
+    hasRegistered: hasPasskeyRegistered,
   } = usePasskeyWallet();
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [keyManagerInitialMode, setKeyManagerInitialMode] = useState<'create' | 'import' | undefined>();
@@ -1974,7 +1976,7 @@ export default function App() {
         onRefreshAccounts={refreshAccounts}
       />
       <Suspense fallback={null}>
-        <LoginModal open={showLoginModal} onClose={() => setShowLoginModal(false)} onPasskeyLogin={passkeyLogin} hasPasskeySupport={hasPasskeySupport} />
+        <LoginModal open={showLoginModal} onClose={() => setShowLoginModal(false)} onPasskeyLogin={passkeyLogin} onPasskeyRegister={passkeyRegister} hasPasskeySupport={hasPasskeySupport} hasPasskeyRegistered={hasPasskeyRegistered} />
       </Suspense>
     </div>
   );

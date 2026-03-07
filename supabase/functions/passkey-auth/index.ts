@@ -146,7 +146,7 @@ serve(async (req: Request) => {
 
   try {
     const { endpoint, data }: RequestBody = await req.json();
-    const { rpId, rpName, email, challengeId, response: authResponse } = data as Record<string, unknown>;
+    const { rpId, rpName, email, walletName, challengeId, response: authResponse } = data as Record<string, unknown>;
 
     let result: ApiResponse;
 
@@ -160,8 +160,10 @@ serve(async (req: Request) => {
           break;
         }
 
-        // Generate anonymous email if none provided
+        // Generate anonymous email for Supabase user (internal only)
         const userEmail = (email as string) || `passkey-${crypto.randomUUID().slice(0, 8)}@flowindex.io`;
+        // Display name shown in browser passkey dialog
+        const displayName = (walletName as string) || userEmail;
 
         const webauthnUserId = generateWebAuthnUserId();
         const { data: existingUser } = await supabaseAdmin.from('passkey_credentials')
@@ -174,8 +176,8 @@ serve(async (req: Request) => {
         const options = await generateRegistrationOptions({
           rpName: rpName as string,
           rpID: rpId as string,
-          userName: userEmail,
-          userDisplayName: userEmail,
+          userName: displayName,
+          userDisplayName: displayName,
           userID: new TextEncoder().encode(webauthnUserId),
           attestationType: 'none',
           excludeCredentials,

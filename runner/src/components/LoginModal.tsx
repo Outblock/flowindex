@@ -4,6 +4,15 @@ import { Mail, Loader2, ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from './InputOTP';
 
+const ADJECTIVES = ['Swift', 'Bright', 'Coral', 'Jade', 'Amber', 'Frost', 'Lunar', 'Solar', 'Neon', 'Azure', 'Crimson', 'Golden', 'Silver', 'Violet', 'Copper'];
+const NOUNS = ['Fox', 'Owl', 'Wolf', 'Bear', 'Hawk', 'Lynx', 'Puma', 'Orca', 'Crab', 'Dove', 'Frog', 'Hare', 'Seal', 'Wren', 'Elk'];
+
+function randomWalletName(): string {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  return `${adj} ${noun}`;
+}
+
 function GitHubIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -27,10 +36,12 @@ interface LoginModalProps {
   open: boolean;
   onClose: () => void;
   onPasskeyLogin?: () => Promise<void>;
+  onPasskeyRegister?: (walletName?: string) => Promise<void>;
   hasPasskeySupport?: boolean;
+  hasPasskeyRegistered?: boolean;
 }
 
-export default function LoginModal({ open, onClose, onPasskeyLogin, hasPasskeySupport }: LoginModalProps) {
+export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyRegister, hasPasskeySupport, hasPasskeyRegistered }: LoginModalProps) {
   const { signInWithProvider, sendMagicLink, verifyOtp } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -41,6 +52,8 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, hasPasskeySu
   const [verifying, setVerifying] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [showPasskeySetup, setShowPasskeySetup] = useState(false);
+  const [walletName, setWalletName] = useState(() => randomWalletName());
 
   const redirectTo = typeof window !== 'undefined' ? window.location.href : '/';
 
@@ -84,16 +97,37 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, hasPasskeySu
   }
 
   async function handlePasskey() {
+    if (hasPasskeyRegistered) {
+      // Returning user — login directly with existing passkey
+      setError(null);
+      setPasskeyLoading(true);
+      try {
+        if (onPasskeyLogin) {
+          await onPasskeyLogin();
+          onClose();
+        }
+      } catch (err) {
+        // Login failed — maybe passkey was deleted? Show create form
+        setPasskeyLoading(false);
+        setShowPasskeySetup(true);
+      }
+    } else {
+      // New user — show wallet name input
+      setShowPasskeySetup(true);
+    }
+  }
+
+  async function handlePasskeyCreate(e: React.FormEvent) {
+    e.preventDefault();
     setError(null);
     setPasskeyLoading(true);
     try {
-      if (onPasskeyLogin) {
-        // login() tries existing passkey first, auto-registers if none found
-        await onPasskeyLogin();
+      if (onPasskeyRegister) {
+        await onPasskeyRegister(walletName || undefined);
         onClose();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Passkey authentication failed');
+      setError(err instanceof Error ? err.message : 'Passkey creation failed');
     } finally {
       setPasskeyLoading(false);
     }
@@ -106,6 +140,8 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, hasPasskeySu
     setOtpValue('');
     setShowEmailForm(false);
     setPasskeyLoading(false);
+    setShowPasskeySetup(false);
+    setWalletName('My Wallet');
     onClose();
   }
 
@@ -240,7 +276,57 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, hasPasskeySu
 
             <div className="px-6 pb-6">
               <AnimatePresence mode="wait">
-                {!showEmailForm ? (
+                {showPasskeySetup ? (
+                  /* Passkey wallet name input */
+                  <motion.div
+                    key="passkey-setup"
+                    initial={{ opacity: 0, x: 16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 16 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <button
+                      onClick={() => { setShowPasskeySetup(false); setError(null); }}
+                      className="flex items-center gap-1.5 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors mb-4 group font-mono uppercase tracking-wider"
+                    >
+                      <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                      All sign-in options
+                    </button>
+
+                    <form onSubmit={handlePasskeyCreate} className="space-y-3">
+                      <div>
+                        <label htmlFor="wallet-name" className="block text-[10px] font-medium text-zinc-400 mb-1.5 uppercase tracking-wider font-mono">
+                          Wallet name
+                        </label>
+                        <input
+                          id="wallet-name"
+                          type="text"
+                          autoFocus
+                          value={walletName}
+                          onChange={(e) => setWalletName(e.target.value)}
+                          placeholder="My Wallet"
+                          className="w-full px-3 py-2.5 bg-zinc-950 border border-zinc-700 text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10 transition-all text-xs font-mono"
+                        />
+                        <p className="mt-1.5 text-[10px] text-zinc-600 font-mono">This name appears in your passkey manager</p>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={passkeyLoading}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs active:scale-[0.98]"
+                      >
+                        {passkeyLoading ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            Create Passkey Wallet
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  </motion.div>
+                ) : !showEmailForm ? (
                   /* Provider buttons */
                   <motion.div
                     key="providers"

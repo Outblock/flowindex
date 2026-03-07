@@ -109,14 +109,14 @@ export function usePasskeyWallet() {
     }
   }, [user]);
 
-  const register = useCallback(async (email?: string) => {
+  const register = useCallback(async (walletName?: string) => {
     setLoading(true);
     try {
-      // 1. Start registration (email optional — server generates anonymous if omitted)
+      // 1. Start registration (walletName shown in browser dialog, email generated server-side)
       const startData = await passkeyApi('/register/start', {
         rpId: RP_ID,
         rpName: RP_NAME,
-        ...(email ? { email } : {}),
+        walletName: walletName || 'My Wallet',
       });
 
       const { options, challengeId } = startData;
@@ -191,6 +191,9 @@ export function usePasskeyWallet() {
 
       setAccounts(prev => [...prev, newAccount]);
       setSelectedAccount(newAccount);
+
+      // Remember that this device has a passkey — next time skip straight to login
+      try { localStorage.setItem('passkey_registered', '1'); } catch {}
     } finally {
       setLoading(false);
     }
@@ -271,15 +274,13 @@ export function usePasskeyWallet() {
   const login = useCallback(async () => {
     setLoading(true);
     try {
-      // Try login first — if user has existing passkey, this works
       await loginOnly();
-    } catch {
-      // No existing passkey or user cancelled — register a new one (no email needed)
-      await register();
+      // If login succeeds, remember for future
+      try { localStorage.setItem('passkey_registered', '1'); } catch {}
     } finally {
       setLoading(false);
     }
-  }, [loginOnly, register]);
+  }, [loginOnly]);
 
   const sign = useCallback(async (messageHex: string): Promise<PasskeySignResult> => {
     if (!selectedAccount) throw new Error('No passkey account selected');
@@ -327,6 +328,7 @@ export function usePasskeyWallet() {
   }, [accounts]);
 
   const hasPasskeySupport = typeof window !== 'undefined' && !!window.PublicKeyCredential;
+  const hasRegistered = typeof window !== 'undefined' && !!localStorage.getItem('passkey_registered');
 
   return {
     register,
@@ -337,5 +339,6 @@ export function usePasskeyWallet() {
     selectAccount,
     loading,
     hasPasskeySupport,
+    hasRegistered,
   };
 }
