@@ -8,6 +8,28 @@ import {
   sha256, hexToBytes, bytesToHex, derToP256Raw, buildExtensionData,
 } from './passkeyEncode';
 
+class PasskeyError extends Error {
+  code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = 'PasskeyError';
+    this.code = code;
+  }
+}
+
+function asPasskeyError(err: unknown, fallbackMessage: string): PasskeyError {
+  if (err instanceof PasskeyError) return err;
+  if (err instanceof DOMException) {
+    if (err.name === 'AbortError') return new PasskeyError('Passkey request aborted', 'REQUEST_ABORTED');
+    if (err.name === 'NotAllowedError') return new PasskeyError('Passkey request was cancelled', 'USER_CANCELLED');
+    if (err.name === 'InvalidStateError') return new PasskeyError('Passkey already exists on this authenticator', 'CREDENTIAL_ALREADY_EXISTS');
+    if (err.name === 'NotSupportedError') return new PasskeyError('Passkey is not supported in this browser', 'NOT_SUPPORTED');
+  }
+  if (err instanceof Error) return new PasskeyError(err.message);
+  return new PasskeyError(fallbackMessage, 'UNKNOWN_ERROR');
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -51,8 +73,11 @@ async function passkeyApi(endpoint: string, data: Record<string, unknown>, acces
   });
 
   const json = await res.json();
-  if (!json.success) {
-    throw new Error(json.error?.message || 'Passkey API error');
+  if (!res.ok || !json.success) {
+    throw new PasskeyError(
+      json?.error?.message || `Passkey API error (${res.status})`,
+      json?.error?.code || `HTTP_${res.status}`
+    );
   }
   return json.data;
 }
@@ -136,11 +161,16 @@ export function usePasskeyWallet() {
         rp: { id: RP_ID, name: RP_NAME },
       };
 
-      const credential = await navigator.credentials.create({
-        publicKey: publicKeyOptions,
-      }) as PublicKeyCredential;
+      let credential: PublicKeyCredential;
+      try {
+        credential = await navigator.credentials.create({
+          publicKey: publicKeyOptions,
+        }) as PublicKeyCredential;
+      } catch (err) {
+        throw asPasskeyError(err, 'Passkey creation failed');
+      }
 
-      if (!credential) throw new Error('Passkey creation cancelled');
+      if (!credential) throw new PasskeyError('Passkey creation cancelled', 'USER_CANCELLED');
 
       const attestation = credential.response as AuthenticatorAttestationResponse;
 
@@ -171,11 +201,12 @@ export function usePasskeyWallet() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'magiclink', token_hash: tokenHash }),
         });
-        if (verifyRes.ok) {
-          const tokenData = await verifyRes.json();
-          applyTokenData(tokenData);
-          authToken = tokenData.access_token;
+        if (!verifyRes.ok) {
+          throw new PasskeyError('Failed to create authenticated session', 'SESSION_EXCHANGE_FAILED');
         }
+        const tokenData = await verifyRes.json();
+        applyTokenData(tokenData);
+        authToken = tokenData.access_token;
       }
 
       // Passkey registered — no Flow account yet (provision separately)
@@ -187,9 +218,8 @@ export function usePasskeyWallet() {
 
       setAccounts(prev => [...prev, newAccount]);
       setSelectedAccount(newAccount);
-
-      // Remember that this device has a passkey — next time skip straight to login
-      try { localStorage.setItem('passkey_registered', '1'); } catch {}
+    } catch (err) {
+      throw asPasskeyError(err, 'Passkey registration failed');
     } finally {
       setLoading(false);
     }
@@ -223,9 +253,14 @@ export function usePasskeyWallet() {
     };
 
     console.log('[passkey] calling navigator.credentials.get, mediation:', opts?.mediation || 'modal');
-    const assertion = await navigator.credentials.get(credentialRequest) as PublicKeyCredential;
+    let assertion: PublicKeyCredential;
+    try {
+      assertion = await navigator.credentials.get(credentialRequest) as PublicKeyCredential;
+    } catch (err) {
+      throw asPasskeyError(err, 'Passkey authentication failed');
+    }
 
-    if (!assertion) throw new Error('Passkey authentication cancelled');
+    if (!assertion) throw new PasskeyError('Passkey authentication cancelled', 'USER_CANCELLED');
     console.log('[passkey] got assertion, credentialId:', assertion.id);
 
     const assertionResponse = assertion.response as AuthenticatorAssertionResponse;
@@ -260,17 +295,18 @@ export function usePasskeyWallet() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'magiclink', token_hash: tokenHash }),
       });
-      if (verifyRes.ok) {
-        const tokenData = await verifyRes.json();
-        applyTokenData(tokenData);
+      if (!verifyRes.ok) {
+        throw new PasskeyError('Failed to create authenticated session', 'SESSION_EXCHANGE_FAILED');
+      }
+      const tokenData = await verifyRes.json();
+      applyTokenData(tokenData);
 
-        // 5. Load wallet accounts
-        const accts = await passkeyApi('/wallet/accounts', {}, tokenData.access_token);
-        const accountList: PasskeyAccount[] = accts.accounts || [];
-        setAccounts(accountList);
-        if (accountList.length > 0) {
-          setSelectedAccount(accountList[0]);
-        }
+      // 5. Load wallet accounts
+      const accts = await passkeyApi('/wallet/accounts', {}, tokenData.access_token);
+      const accountList: PasskeyAccount[] = accts.accounts || [];
+      setAccounts(accountList);
+      if (accountList.length > 0) {
+        setSelectedAccount(accountList[0]);
       }
     }
   }, [applyTokenData]);
@@ -279,7 +315,8 @@ export function usePasskeyWallet() {
     setLoading(true);
     try {
       await loginOnly();
-      try { localStorage.setItem('passkey_registered', '1'); } catch {}
+    } catch (err) {
+      throw asPasskeyError(err, 'Passkey authentication failed');
     } finally {
       setLoading(false);
     }
@@ -293,7 +330,6 @@ export function usePasskeyWallet() {
     loginOnly({ signal: controller.signal, mediation: 'conditional' as CredentialMediationRequirement })
       .then(() => {
         console.log('[passkey] conditional login SUCCESS');
-        try { localStorage.setItem('passkey_registered', '1'); } catch {}
         onSuccess?.();
       })
       .catch((err) => {
@@ -371,7 +407,6 @@ export function usePasskeyWallet() {
   }, [accounts]);
 
   const hasPasskeySupport = typeof window !== 'undefined' && !!window.PublicKeyCredential;
-  const hasRegistered = typeof window !== 'undefined' && !!localStorage.getItem('passkey_registered');
 
   return {
     register,
@@ -384,6 +419,5 @@ export function usePasskeyWallet() {
     selectAccount,
     loading,
     hasPasskeySupport,
-    hasRegistered,
   };
 }

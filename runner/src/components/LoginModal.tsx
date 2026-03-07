@@ -40,6 +40,14 @@ interface LoginModalProps {
   hasPasskeySupport?: boolean;
 }
 
+function getPasskeyErrorCode(err: unknown): string | null {
+  if (!err || typeof err !== 'object') return null;
+  if ('code' in err && typeof (err as { code?: unknown }).code === 'string') {
+    return (err as { code: string }).code;
+  }
+  return null;
+}
+
 export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyRegister, hasPasskeySupport }: LoginModalProps) {
   const { signInWithProvider, sendMagicLink, verifyOtp } = useAuth();
 
@@ -105,11 +113,21 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
         return;
       }
     } catch (err) {
-      // Login failed or user cancelled — show register form
-      console.log('[passkey] login failed, showing register:', err instanceof Error ? err.message : err);
+      const code = getPasskeyErrorCode(err);
+      if (code === 'CREDENTIAL_NOT_FOUND') {
+        // Only switch to registration when server explicitly confirms no credential.
+        setShowPasskeySetup(true);
+        return;
+      }
+      if (code === 'USER_CANCELLED' || code === 'REQUEST_ABORTED') {
+        // User dismissed the passkey sheet — keep current screen.
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Passkey authentication failed');
+      console.log('[passkey] login failed:', code || '(no-code)', err instanceof Error ? err.message : err);
+    } finally {
+      setPasskeyLoading(false);
     }
-    setPasskeyLoading(false);
-    setShowPasskeySetup(true);
   }
 
   async function handlePasskeyCreate(e: React.FormEvent) {
