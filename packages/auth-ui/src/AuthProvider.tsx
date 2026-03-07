@@ -260,10 +260,21 @@ export function AuthProvider({ children, config }: { children: React.ReactNode; 
   const sendMagicLink = useCallback(async (email: string, redirectTo?: string) => {
     const payload: Record<string, unknown> = { email };
     if (redirectTo) {
-      payload.redirect_to = redirectTo;
+      // Route through callbackPath if configured (e.g. cross-origin OAuth callback)
+      const callbackPath = config.callbackPath;
+      if (callbackPath) {
+        const base = callbackPath.startsWith('http')
+          ? callbackPath
+          : typeof window !== 'undefined'
+            ? `${window.location.origin}${callbackPath}`
+            : callbackPath;
+        payload.redirect_to = `${base}?redirect=${encodeURIComponent(redirectTo)}`;
+      } else {
+        payload.redirect_to = redirectTo;
+      }
     }
     await gotruePost(config.gotrueUrl, '/magiclink', payload);
-  }, [config.gotrueUrl]);
+  }, [config.gotrueUrl, config.callbackPath]);
 
   const verifyOtp = useCallback(async (email: string, token: string) => {
     const data = await gotruePost(config.gotrueUrl, '/verify', { type: 'email', token, email });
