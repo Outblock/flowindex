@@ -175,9 +175,24 @@ serve(async (req: Request) => {
     const { rpId, rpName, email, walletName, challengeId, response: authResponse } = data as Record<string, unknown>;
 
     let result: ApiResponse;
+    const getAuthenticatedUser = async () => {
+      const authHeader = req.headers.get('Authorization');
+      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader || '' } },
+      });
+      const { data: { user } } = await userClient.auth.getUser();
+      return user;
+    };
 
     switch (endpoint) {
       case '/register/start': {
+        const user = await getAuthenticatedUser();
+        if (!user) {
+          result = error('UNAUTHORIZED', 'Sign in first, then bind a passkey');
+          break;
+        }
+
         const ipBlocked = await supabaseAdmin.rpc('check_passkey_rate_limit', {
           p_identifier: clientIP, p_identifier_type: 'ip', p_endpoint: endpoint, p_max_attempts: RATE_LIMITS.ip.maxAttempts
         });
@@ -186,16 +201,15 @@ serve(async (req: Request) => {
           break;
         }
 
-        // Generate anonymous email for Supabase user (internal only)
-        const userEmail = (email as string) || `passkey-${crypto.randomUUID().slice(0, 8)}@flowindex.io`;
+        const userEmail = user.email || `user-${user.id}@flowindex.io`;
         // Display name shown in browser passkey dialog
         const displayName = (walletName as string) || userEmail;
 
         const webauthnUserId = generateWebAuthnUserId();
-        const { data: existingUser } = await supabaseAdmin.from('passkey_credentials')
-          .select('id').eq('webauthn_user_id', webauthnUserId).limit(1);
+        const { data: existingUserCreds } = await supabaseAdmin.from('passkey_credentials')
+          .select('id').eq('user_id', user.id).limit(50);
 
-        const excludeCredentials = existingUser?.map((c: { id: string }) => ({
+        const excludeCredentials = existingUserCreds?.map((c: { id: string }) => ({
           id: c.id, type: 'public-key' as const
         })) || [];
 
@@ -213,11 +227,11 @@ serve(async (req: Request) => {
 
         const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MINUTES * 60 * 1000);
         const { data: challenge } = await supabaseAdmin.from('passkey_challenges').insert({
-          challenge: options.challenge, email: userEmail, type: 'registration', expires_at: expiresAt.toISOString(), webauthn_user_id: webauthnUserId
+          challenge: options.challenge, user_id: user.id, email: userEmail, type: 'registration', expires_at: expiresAt.toISOString(), webauthn_user_id: webauthnUserId
         }).select().single();
 
         await supabaseAdmin.rpc('log_passkey_audit_event', {
-          p_event_type: 'registration_started', p_email: userEmail, p_ip_address: clientIP, p_origin: origin
+          p_event_type: 'registration_started', p_user_id: user.id, p_email: userEmail, p_ip_address: clientIP, p_origin: origin
         });
 
         result = success({ options, challengeId: challenge.id });
@@ -225,8 +239,14 @@ serve(async (req: Request) => {
       }
 
       case '/register/finish': {
+        const user = await getAuthenticatedUser();
+        if (!user) {
+          result = error('UNAUTHORIZED', 'Sign in first, then bind a passkey');
+          break;
+        }
+
         const { data: challenge } = await supabaseAdmin.from('passkey_challenges')
-          .select('*').eq('id', challengeId).eq('type', 'registration').single();
+          .select('*').eq('id', challengeId).eq('type', 'registration').eq('user_id', user.id).single();
 
         await supabaseAdmin.from('passkey_challenges').delete().eq('id', challengeId);
 
@@ -271,24 +291,11 @@ serve(async (req: Request) => {
           const sec1Hex = coseToSec1Hex(publicKeyBytes);
           console.log('[passkey-auth] COSE key hex:', uint8ArrayToHex(publicKeyBytes), 'SEC1:', sec1Hex ? sec1Hex.slice(0, 20) + '...' : 'NULL');
 
-          let userId: string;
-          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-          const existingUser = existingUsers?.users?.find((u) => u.email === challenge.email);
-
-          if (existingUser) {
-            userId = existingUser.id;
-          } else {
-            const { data: newUser } = await supabaseAdmin.auth.admin.createUser({
-              email: challenge.email, email_confirm: true
-            });
-            userId = newUser.user!.id;
-          }
-
           const authenticatorName = (data as { authenticatorName?: string }).authenticatorName || null;
 
           const { data: insertedCred, error: insertError } = await supabaseAdmin.from('passkey_credentials').insert({
             id: credential.id,
-            user_id: userId,
+            user_id: user.id,
             webauthn_user_id: challenge.webauthn_user_id,
             public_key: publicKeyHex,
             public_key_sec1_hex: sec1Hex,
@@ -303,17 +310,12 @@ serve(async (req: Request) => {
             throw new Error(`Credential insert failed: ${insertError.message}`);
           }
 
-          const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
-            type: 'magiclink', email: challenge.email
-          });
-
           await supabaseAdmin.rpc('log_passkey_audit_event', {
-            p_event_type: 'registration_completed', p_user_id: userId, p_credential_id: credential.id, p_email: challenge.email, p_ip_address: clientIP
+            p_event_type: 'registration_completed', p_user_id: user.id, p_credential_id: credential.id, p_email: challenge.email, p_ip_address: clientIP
           });
 
           result = success({
             verified: true,
-            tokenHash: linkData.properties?.hashed_token,
             publicKeySec1Hex: sec1Hex,
             passkey: insertedCred ? {
               id: insertedCred.id,

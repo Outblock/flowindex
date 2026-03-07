@@ -43,6 +43,7 @@ const AIPanel = lazy(() => import('./components/AIPanel'));
 const KeyManager = lazy(() => import('./components/KeyManager'));
 const AccountPanel = lazy(() => import('./components/AccountPanel'));
 const LoginModal = lazy(() => import('./components/LoginModal'));
+const PasskeyOnboardingModal = lazy(() => import('./components/PasskeyOnboardingModal'));
 
 /* ── Detect if we're in an iframe ── */
 let isIframe = false;
@@ -58,6 +59,14 @@ function useIsMobile(breakpoint = 768) {
     return () => mq.removeEventListener('change', handler);
   }, [breakpoint]);
   return isMobile;
+}
+
+function getPasskeyErrorCode(err: unknown): string | null {
+  if (!err || typeof err !== 'object') return null;
+  if ('code' in err && typeof (err as { code?: unknown }).code === 'string') {
+    return (err as { code: string }).code;
+  }
+  return null;
 }
 
 /* ── Draggable resize handle (horizontal) ── */
@@ -312,14 +321,16 @@ export default function App() {
     login: passkeyLogin,
     sign: passkeySign,
     accounts: passkeyAccounts,
-    selectedAccount: selectedPasskeyAccount,
-    loading: passkeyLoading,
+    refreshPasskeyState,
     hasPasskeySupport,
   } = usePasskeyWallet();
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [keyManagerInitialMode, setKeyManagerInitialMode] = useState<'create' | 'import' | undefined>();
   const [showNetworkMenu, setShowNetworkMenu] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showPasskeyOnboarding, setShowPasskeyOnboarding] = useState(false);
+  const [passkeyOnboardingBusy, setPasskeyOnboardingBusy] = useState(false);
+  const [passkeyOnboardingError, setPasskeyOnboardingError] = useState<string | null>(null);
   const networkMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     try {
@@ -388,6 +399,75 @@ export default function App() {
       }
     } catch {}
   }, []);
+
+  const dismissPasskeyOnboarding = useCallback(() => {
+    if (user) {
+      try {
+        localStorage.setItem(`runner:passkey-onboarding-dismissed:${user.id}`, '1');
+      } catch {
+        // ignore localStorage errors
+      }
+    }
+    setShowPasskeyOnboarding(false);
+    setPasskeyOnboardingError(null);
+  }, [user]);
+
+  const handleCreatePasskeyWallet = useCallback(async () => {
+    if (!user) return;
+    setPasskeyOnboardingError(null);
+    setPasskeyOnboardingBusy(true);
+    try {
+      const account = await passkeyRegister(user.email || 'FlowIndex Wallet');
+      if (account?.flowAddress) {
+        persistSigner({
+          type: 'passkey',
+          credentialId: account.credentialId,
+          flowAddress: account.flowAddress,
+          publicKeySec1Hex: account.publicKeySec1Hex,
+        });
+      }
+      try {
+        localStorage.removeItem(`runner:passkey-onboarding-dismissed:${user.id}`);
+      } catch {
+        // ignore localStorage errors
+      }
+      setShowPasskeyOnboarding(false);
+    } catch (err) {
+      const code = getPasskeyErrorCode(err);
+      if (code === 'USER_CANCELLED' || code === 'REQUEST_ABORTED') return;
+      if (code === 'CREDENTIAL_ALREADY_EXISTS') {
+        await refreshPasskeyState().catch(() => {});
+        setShowPasskeyOnboarding(false);
+        return;
+      }
+      setPasskeyOnboardingError(err instanceof Error ? err.message : 'Failed to create passkey wallet');
+    } finally {
+      setPasskeyOnboardingBusy(false);
+    }
+  }, [user, passkeyRegister, persistSigner, refreshPasskeyState]);
+
+  useEffect(() => {
+    if (authLoading || !user || !hasPasskeySupport) {
+      setShowPasskeyOnboarding(false);
+      setPasskeyOnboardingError(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const state = await refreshPasskeyState();
+        if (cancelled) return;
+        const hasExistingPasskey = (state.passkeys?.length ?? 0) > 0;
+        const dismissed = localStorage.getItem(`runner:passkey-onboarding-dismissed:${user.id}`) === '1';
+        setShowPasskeyOnboarding(!hasExistingPasskey && !dismissed);
+      } catch {
+        if (!cancelled) setShowPasskeyOnboarding(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [authLoading, user, hasPasskeySupport, refreshPasskeyState]);
 
   // Handle wallet selected from ConnectModal — persist and auto-retry pending run
   const handleModalSelect = useCallback((signer: SignerOption) => {
@@ -1975,7 +2055,17 @@ export default function App() {
         onRefreshAccounts={refreshAccounts}
       />
       <Suspense fallback={null}>
-        <LoginModal open={showLoginModal} onClose={() => setShowLoginModal(false)} onPasskeyLogin={passkeyLogin} onPasskeyRegister={passkeyRegister} hasPasskeySupport={hasPasskeySupport} />
+        <LoginModal open={showLoginModal} onClose={() => setShowLoginModal(false)} onPasskeyLogin={passkeyLogin} hasPasskeySupport={hasPasskeySupport} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <PasskeyOnboardingModal
+          open={showPasskeyOnboarding}
+          email={user?.email}
+          loading={passkeyOnboardingBusy}
+          error={passkeyOnboardingError}
+          onCreate={handleCreatePasskeyWallet}
+          onSkip={dismissPasskeyOnboarding}
+        />
       </Suspense>
     </div>
   );

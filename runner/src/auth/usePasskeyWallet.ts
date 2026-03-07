@@ -103,31 +103,57 @@ function bytesToBase64Url(bytes: Uint8Array): string {
 export function usePasskeyWallet() {
   const { user, accessToken, applyTokenData } = useAuth();
   const [accounts, setAccounts] = useState<PasskeyAccount[]>([]);
+  const [passkeys, setPasskeys] = useState<Array<{ id: string; authenticatorName?: string }>>([]);
   const [selectedAccount, setSelectedAccount] = useState<PasskeyAccount | null>(null);
   const [loading, setLoading] = useState(false);
   const loadedRef = useRef(false);
 
-  // Load accounts when user is authenticated
+  const refreshPasskeyState = useCallback(async (tokenOverride?: string | null) => {
+    const token = tokenOverride ?? accessToken;
+    if (!token) {
+      setPasskeys([]);
+      setAccounts([]);
+      setSelectedAccount(null);
+      return { passkeys: [], accounts: [] as PasskeyAccount[] };
+    }
+
+    const [passkeyData, accountData] = await Promise.all([
+      passkeyApi('/passkeys/list', {}, token),
+      passkeyApi('/wallet/accounts', {}, token),
+    ]);
+
+    const passkeyList = Array.isArray(passkeyData.passkeys) ? passkeyData.passkeys : [];
+    const accountList: PasskeyAccount[] = Array.isArray(accountData.accounts) ? accountData.accounts : [];
+
+    setPasskeys(passkeyList);
+    setAccounts(accountList);
+    setSelectedAccount((prev) => {
+      if (!accountList.length) return null;
+      if (prev) {
+        const matched = accountList.find((a) => a.credentialId === prev.credentialId);
+        if (matched) return matched;
+      }
+      return accountList[0];
+    });
+
+    return { passkeys: passkeyList, accounts: accountList };
+  }, [accessToken]);
+
+  // Load passkey state when user is authenticated
   useEffect(() => {
     if (!user || !accessToken || loadedRef.current) return;
     loadedRef.current = true;
-
-    passkeyApi('/wallet/accounts', {}, accessToken)
-      .then((data) => {
-        const accts: PasskeyAccount[] = data.accounts || [];
-        setAccounts(accts);
-        if (accts.length > 0 && !selectedAccount) {
-          setSelectedAccount(accts[0]);
-        }
-      })
-      .catch(() => {
-        // No passkey accounts — that's fine
-      });
-  }, [user, accessToken, selectedAccount]);
+    refreshPasskeyState(accessToken).catch(() => {
+      setPasskeys([]);
+      setAccounts([]);
+      setSelectedAccount(null);
+    });
+  }, [user, accessToken, refreshPasskeyState]);
 
   // Reset on logout
   useEffect(() => {
     if (!user) {
+      setPasskeys([]);
       setAccounts([]);
       setSelectedAccount(null);
       loadedRef.current = false;
@@ -135,14 +161,18 @@ export function usePasskeyWallet() {
   }, [user]);
 
   const register = useCallback(async (walletName?: string) => {
+    if (!user || !accessToken) {
+      throw new PasskeyError('Please sign in first, then bind a passkey', 'UNAUTHORIZED');
+    }
+
     setLoading(true);
     try {
-      // 1. Start registration (walletName shown in browser dialog, email generated server-side)
+      // 1. Start registration for current authenticated user
       const startData = await passkeyApi('/register/start', {
         rpId: RP_ID,
         rpName: RP_NAME,
-        walletName: walletName || 'My Wallet',
-      });
+        walletName: walletName || user.email || 'FlowIndex Wallet',
+      }, accessToken);
 
       const { options, challengeId } = startData;
 
@@ -189,41 +219,35 @@ export function usePasskeyWallet() {
           clientExtensionResults: credential.getClientExtensionResults(),
           authenticatorAttachment: (credential as any).authenticatorAttachment,
         },
-      });
+      }, accessToken);
 
-      const { tokenHash, publicKeySec1Hex } = finishData;
+      const { publicKeySec1Hex } = finishData;
 
-      // 4. Exchange tokenHash for Supabase session
-      let authToken = accessToken;
-      if (tokenHash) {
-        const verifyRes = await fetch(`${GOTRUE_URL}/verify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'magiclink', token_hash: tokenHash }),
-        });
-        if (!verifyRes.ok) {
-          throw new PasskeyError('Failed to create authenticated session', 'SESSION_EXCHANGE_FAILED');
-        }
-        const tokenData = await verifyRes.json();
-        applyTokenData(tokenData);
-        authToken = tokenData.access_token;
-      }
+      // 4. Provision Flow wallet immediately so passkey is self-custody + usable signer.
+      const provisionData = await passkeyApi('/wallet/provision', {
+        credentialId: credential.id,
+      }, accessToken);
 
-      // Passkey registered — no Flow account yet (provision separately)
       const newAccount: PasskeyAccount = {
         credentialId: credential.id,
-        flowAddress: '',
+        flowAddress: provisionData.address || '',
         publicKeySec1Hex: publicKeySec1Hex || '',
       };
 
-      setAccounts(prev => [...prev, newAccount]);
+      setAccounts(prev => {
+        const next = prev.filter((a) => a.credentialId !== credential.id);
+        next.unshift(newAccount);
+        return next;
+      });
       setSelectedAccount(newAccount);
+      await refreshPasskeyState(accessToken).catch(() => {});
+      return newAccount;
     } catch (err) {
       throw asPasskeyError(err, 'Passkey registration failed');
     } finally {
       setLoading(false);
     }
-  }, [accessToken, applyTokenData]);
+  }, [user, accessToken, refreshPasskeyState]);
 
   const loginOnly = useCallback(async (opts?: { signal?: AbortSignal; mediation?: CredentialMediationRequirement }) => {
     console.log('[passkey] loginOnly start, mediation:', opts?.mediation || 'modal');
@@ -302,14 +326,9 @@ export function usePasskeyWallet() {
       applyTokenData(tokenData);
 
       // 5. Load wallet accounts
-      const accts = await passkeyApi('/wallet/accounts', {}, tokenData.access_token);
-      const accountList: PasskeyAccount[] = accts.accounts || [];
-      setAccounts(accountList);
-      if (accountList.length > 0) {
-        setSelectedAccount(accountList[0]);
-      }
+      await refreshPasskeyState(tokenData.access_token);
     }
-  }, [applyTokenData]);
+  }, [applyTokenData, refreshPasskeyState]);
 
   const login = useCallback(async () => {
     setLoading(true);
@@ -407,6 +426,7 @@ export function usePasskeyWallet() {
   }, [accounts]);
 
   const hasPasskeySupport = typeof window !== 'undefined' && !!window.PublicKeyCredential;
+  const hasBoundPasskey = passkeys.length > 0;
 
   return {
     register,
@@ -415,6 +435,9 @@ export function usePasskeyWallet() {
     sign,
     provisionAccount,
     accounts,
+    passkeys,
+    hasBoundPasskey,
+    refreshPasskeyState,
     selectedAccount,
     selectAccount,
     loading,
