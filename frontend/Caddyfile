@@ -38,6 +38,10 @@ studio.flowindex.io {
 	}
 }
 
+wallet.flowindex.io {
+	reverse_proxy localhost:5174
+}
+
 analytics.flowindex.io {
 	reverse_proxy localhost:3001
 }

@@ -74,6 +74,21 @@ services:
       - backend
       - supabase-gateway
 
+  wallet:
+    build:
+      context: .
+      dockerfile: wallet/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://flowindex.io}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-http://localhost:54321}
+        VITE_RP_ID: ${VITE_RP_ID:-localhost}
+    ports:
+      - "5174:5174"
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - supabase-gateway
+
   # --- Supabase Auth Stack ---
   supabase-db:
     image: supabase/postgres:15.8.1.060

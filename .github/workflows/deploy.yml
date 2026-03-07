@@ -42,6 +42,10 @@ on:
         description: "Sim Studio"
         type: boolean
         default: false
+      wallet:
+        description: "Wallet"
+        type: boolean
+        default: false
 
 env:
   PROJECT_ID: flowindex-mainnet
@@ -63,6 +67,7 @@ jobs:
       sim-studio: ${{ steps.result.outputs.sim-studio }}
       sim-studio-images: ${{ steps.result.outputs.sim-studio-images }}
       sim-studio-seed: ${{ steps.result.outputs.sim-studio-seed }}
+      wallet: ${{ steps.result.outputs.wallet }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -105,6 +110,10 @@ jobs:
               - 'sim-workflow/**'
             sim-studio-seed:
               - 'studio/seed/simstudio_seed.sql'
+            wallet:
+              - 'wallet/**'
+              - 'packages/**'
+              - '.github/workflows/deploy.yml'
       - name: Resolve outputs
         id: result
         run: |
@@ -117,6 +126,7 @@ jobs:
             echo "docs=${{ inputs.all == true || inputs.docs == true }}" >> $GITHUB_OUTPUT
             echo "ai-chat=${{ inputs.all == true || inputs.ai-chat == true }}" >> $GITHUB_OUTPUT
             echo "studio=${{ inputs.all == true || inputs.studio == true }}" >> $GITHUB_OUTPUT
+            echo "wallet=${{ inputs.all == true || inputs.wallet == true }}" >> $GITHUB_OUTPUT
             SIM=${{ inputs.all == true || inputs.sim-studio == true }}
             echo "sim-studio=${SIM}" >> $GITHUB_OUTPUT
             echo "sim-studio-images=${SIM}" >> $GITHUB_OUTPUT
@@ -129,6 +139,7 @@ jobs:
             echo "docs=${{ steps.filter.outputs.docs }}" >> $GITHUB_OUTPUT
             echo "ai-chat=${{ steps.filter.outputs.ai-chat }}" >> $GITHUB_OUTPUT
             echo "studio=${{ steps.filter.outputs.studio }}" >> $GITHUB_OUTPUT
+            echo "wallet=${{ steps.filter.outputs.wallet }}" >> $GITHUB_OUTPUT
             echo "sim-studio=${{ steps.filter.outputs.sim-studio }}" >> $GITHUB_OUTPUT
             echo "sim-studio-images=${{ steps.filter.outputs.sim-studio-images }}" >> $GITHUB_OUTPUT
             echo "sim-studio-seed=${{ steps.filter.outputs.sim-studio-seed }}" >> $GITHUB_OUTPUT
@@ -681,6 +692,71 @@ jobs:
               -e BACKEND_URL=http://localhost:8080 \
               ${{ env.REGISTRY }}/ai-chat:${{ github.sha }}
           '
+
+  build-wallet:
+    needs: changes
+    if: needs.changes.outputs.wallet == 'true'
+    concurrency:
+      group: deploy-wallet-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push wallet
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: wallet/Dockerfile
+          push: true
+          provenance: false
+          build-args: |
+            VITE_API_URL=https://flowindex.io
+            VITE_SUPABASE_URL=https://run.flowindex.io
+            VITE_RP_ID=flowindex.io
+          tags: |
+            ${{ env.REGISTRY }}/wallet:latest
+            ${{ env.REGISTRY }}/wallet:${{ github.sha }}
+          cache-from: type=gha,scope=wallet
+          cache-to: type=gha,scope=wallet,mode=max
+
+      - name: Deploy wallet (pull & restart on GCE)
+        run: |
+          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
+            docker image prune -af --filter "until=1h" 2>/dev/null || true; \
+            docker pull ${{ env.REGISTRY }}/wallet:${{ github.sha }} && \
+            docker stop wallet 2>/dev/null; docker rm wallet 2>/dev/null; \
+            docker run -d --restart=always --name wallet \
+              --network=host \
+              ${{ env.REGISTRY }}/wallet:${{ github.sha }}
+          '
+
+      - name: Update Caddy config for TLS
+        run: |
+          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
+            sudo tee /tmp/Caddyfile > /dev/null <<'CADDYEOF'
+          $(cat frontend/Caddyfile)
+          CADDYEOF
+            docker cp /tmp/Caddyfile caddy:/etc/caddy/Caddyfile
+            docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+          "
 
   build-studio:
     needs: changes
