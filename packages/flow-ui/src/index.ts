@@ -1,6 +1,21 @@
 // Utilities
 export { cn } from "./lib/utils"
 
+// Address utilities
+export { normalizeAddress, formatShort } from "./utils/address"
+
+// Token utilities
+export { getTokenLogoURL, type FTVaultInfoLike } from "./utils/tokens"
+
+// NFT utilities
+export { resolveIPFS, getNFTThumbnail, getNFTMedia, getCollectionPreviewVideo, type NFTMedia } from "./utils/nft"
+
+// Formatting utilities
+export { formatStorageBytes, formatNumber } from "./utils/format"
+
+// Cadence utilities
+export { decodeCadenceValue, getStoragePathId, storagePathStr } from "./utils/cadence"
+
 // UI Components
 export { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar"
 export { Badge, badgeVariants, type BadgeProps } from "./ui/badge"
