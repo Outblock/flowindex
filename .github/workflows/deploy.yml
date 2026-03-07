@@ -536,6 +536,7 @@ jobs:
               -e SUPABASE_ANON_KEY="$ANON_KEY" \
               -e SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY" \
               -e SUPABASE_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
+              -e LILICO_API_KEY="${LILICO_API_KEY:-}" \
               "$REGISTRY/edge-passkey-auth:$SHA"
 
             # Edge function: flow-keys (port 8102)

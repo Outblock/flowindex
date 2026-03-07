@@ -2055,7 +2055,7 @@ export default function App() {
         onRefreshAccounts={refreshAccounts}
       />
       <Suspense fallback={null}>
-        <LoginModal open={showLoginModal} onClose={() => setShowLoginModal(false)} onPasskeyLogin={passkeyLogin} hasPasskeySupport={hasPasskeySupport} />
+        <LoginModal open={showLoginModal} onClose={() => setShowLoginModal(false)} />
       </Suspense>
       <Suspense fallback={null}>
         <PasskeyOnboardingModal
