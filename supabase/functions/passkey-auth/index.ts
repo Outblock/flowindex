@@ -31,8 +31,16 @@ function error(code: string, message: string): ApiResponse {
 }
 
 function getOrigin(request: Request): string {
+  // Prefer the browser's Origin header (passed through proxy chain)
   const origin = request.headers.get('origin');
   if (origin) return origin;
+  // Reconstruct from X-Forwarded-Proto + Host (set by reverse proxies)
+  const proto = request.headers.get('x-forwarded-proto') || 'https';
+  const host = request.headers.get('host');
+  if (host && !host.startsWith('localhost') && !host.startsWith('127.')) {
+    return `${proto}://${host}`;
+  }
+  // Last resort: parse from request URL
   const url = new URL(request.url);
   return `${url.protocol}//${url.host}`;
 }
@@ -218,10 +226,18 @@ serve(async (req: Request) => {
         }
 
         try {
+          // Allow requests from any *.flowindex.io subdomain
+          const allowedOrigins = [
+            origin,
+            'https://flowindex.io',
+            'https://run.flowindex.io',
+            'https://ai.flowindex.io',
+          ];
+          console.log('[passkey-auth] register/finish origin:', origin, 'rpId:', rpId);
           const verification = await verifyRegistrationResponse({
             response: authResponse as Parameters<typeof verifyRegistrationResponse>[0]['response'],
             expectedChallenge: challenge.challenge,
-            expectedOrigin: origin,
+            expectedOrigin: allowedOrigins,
             expectedRPID: rpId as string,
             supportedAlgorithmIDs: SUPPORTED_ALGORITHMS,
           });
@@ -285,10 +301,11 @@ serve(async (req: Request) => {
             } : null
           });
         } catch (e) {
+          console.error('[passkey-auth] register/finish error:', e);
           await supabaseAdmin.rpc('log_passkey_audit_event', {
             p_event_type: 'registration_failed', p_email: challenge.email, p_ip_address: clientIP, p_error_message: e instanceof Error ? e.message : 'Unknown'
           });
-          result = error('VERIFICATION_FAILED', 'Registration verification failed');
+          result = error('VERIFICATION_FAILED', e instanceof Error ? e.message : 'Registration verification failed');
         }
         break;
       }
@@ -372,10 +389,16 @@ serve(async (req: Request) => {
           const publicKeyHex = credential.public_key.replace('\\x', '');
           const publicKeyBytes = hexToUint8Array(publicKeyHex);
 
+          const allowedOrigins = [
+            origin,
+            'https://flowindex.io',
+            'https://run.flowindex.io',
+            'https://ai.flowindex.io',
+          ];
           const verification = await verifyAuthenticationResponse({
             response: authResponse as Parameters<typeof verifyAuthenticationResponse>[0]['response'],
             expectedChallenge: challenge.challenge,
-            expectedOrigin: origin,
+            expectedOrigin: allowedOrigins,
             expectedRPID: rpId as string,
             credential: {
               id: credential.id,
