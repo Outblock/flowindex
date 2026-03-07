@@ -71,7 +71,7 @@ async def _validate_developer_key(api_key: str) -> bool:
 
     try:
         resp = httpx.post(
-            f"{config.BACKEND_URL}/flow/v1/auth/verify-key",
+            f"{config.BACKEND_URL}/auth/verify-key",
             headers={"X-API-Key": api_key},
             timeout=5,
         )

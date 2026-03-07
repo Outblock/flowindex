@@ -304,3 +304,27 @@ func clientIP(r *http.Request) string {
 	}
 	return strings.TrimSpace(r.RemoteAddr)
 }
+
+// handleVerifyAPIKey validates an API key without performing any other action.
+// Used by the MCP server to verify developer keys.
+func (s *Server) handleVerifyAPIKey(w http.ResponseWriter, r *http.Request) {
+	apiKey := strings.TrimSpace(r.Header.Get("X-API-Key"))
+	if apiKey == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"valid":false,"error":"missing X-API-Key header"}`))
+		return
+	}
+	if s.apiKeyResolver == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"valid":false,"error":"API key auth not configured"}`))
+		return
+	}
+	hash := sha256Hash(apiKey)
+	userID, err := s.apiKeyResolver(r.Context(), hash)
+	if err != nil || userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"valid":false}`))
+		return
+	}
+	w.Write([]byte(`{"valid":true}`))
+}

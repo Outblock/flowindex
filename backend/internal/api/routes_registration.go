@@ -66,6 +66,11 @@ func registerAPIRoutes(r *mux.Router, s *Server) {
 	registerAIRoutes(r, s)
 	registerCadenceRoutes(r, s)
 	registerWebhookRoutes(r, s)
+	registerAuthRoutes(r, s)
+}
+
+func registerAuthRoutes(r *mux.Router, s *Server) {
+	r.HandleFunc("/auth/verify-key", s.handleVerifyAPIKey).Methods("POST", "OPTIONS")
 }
 
 func registerCadenceRoutes(r *mux.Router, s *Server) {
