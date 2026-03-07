@@ -47,11 +47,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ai/chat/ .
 
-# Copy built frontend assets + node_modules from stage 1
+# Copy built frontend assets from stage 1
 COPY --from=frontend /app/ai/chat/web/.next ./web/.next
 COPY --from=frontend /app/ai/chat/web/package.json ./web/package.json
-# Workspace hoists deps to root node_modules; copy both for resolution
-COPY --from=frontend /app/node_modules ./web/node_modules
+# Reinstall production deps (bun symlinks break across Docker COPY stages)
+RUN cd web && /root/.bun/bin/bun install --production
 
 # Skills for runtime loadSkill tool (Next.js SSR reads these on request)
 COPY --from=frontend /app/skills ./skills
