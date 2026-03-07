@@ -76,12 +76,45 @@ export interface FtHolding {
 
 /** NFT collection owned by an account */
 export interface NftCollection {
-  banner?: string;
-  logo?: string;
+  id?: string;
+  address?: string;
+  contract_name?: string;
   name?: string;
-  nft_count?: number;
+  display_name?: string;
+  description?: string;
+  external_url?: string;
+  square_image?: string;
+  banner_image?: string;
+  number_of_tokens?: number;
+  holder_count?: number;
+  transfer_count?: number;
   nft_type?: string;
   owner?: string;
+  /** @deprecated use square_image */
+  logo?: string;
+  /** @deprecated use banner_image */
+  banner?: string;
+  /** @deprecated use number_of_tokens */
+  nft_count?: number;
+}
+
+/** A single NFT item */
+export interface NftItem {
+  id?: string;
+  nft_id?: string;
+  nft_type?: string;
+  name?: string;
+  description?: string;
+  thumbnail?: string;
+  external_url?: string;
+  serial_number?: number;
+  edition_name?: string;
+  edition_number?: number;
+  edition_max?: number;
+  rarity_score?: string;
+  owner?: string;
+  block_height?: number;
+  timestamp?: string;
 }
 
 /** A single transaction in the account's history */
@@ -158,6 +191,22 @@ export async function getAccountFtHoldings(address: string): Promise<FtHolding[]
 /** Fetch NFT collections owned by an account. */
 export async function getNftCollections(address: string): Promise<NftCollection[]> {
   const res = await apiFetch<ApiResponse<NftCollection[]>>(`/flow/account/${address}/nft`);
+  return res.data ?? [];
+}
+
+/** Fetch NFT items for a specific collection owned by an account. */
+export async function getNftCollectionItems(
+  address: string,
+  nftType: string,
+  params?: { limit?: number; offset?: number },
+): Promise<NftItem[]> {
+  const qs = new URLSearchParams();
+  if (params?.limit != null) qs.set('limit', String(params.limit));
+  if (params?.offset != null) qs.set('offset', String(params.offset));
+  const query = qs.toString() ? `?${qs.toString()}` : '';
+  const res = await apiFetch<ApiResponse<NftItem[]>>(
+    `/flow/account/${address}/nft/${nftType}${query}`,
+  );
   return res.data ?? [];
 }
 
