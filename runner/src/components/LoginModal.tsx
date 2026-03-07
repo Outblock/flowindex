@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Loader2, ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -37,11 +37,10 @@ interface LoginModalProps {
   onClose: () => void;
   onPasskeyLogin?: () => Promise<void>;
   onPasskeyRegister?: (walletName?: string) => Promise<void>;
-  onStartConditionalLogin?: (onSuccess?: () => void) => AbortController;
   hasPasskeySupport?: boolean;
 }
 
-export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyRegister, onStartConditionalLogin, hasPasskeySupport }: LoginModalProps) {
+export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyRegister, hasPasskeySupport }: LoginModalProps) {
   const { signInWithProvider, sendMagicLink, verifyOtp } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -54,37 +53,6 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [showPasskeySetup, setShowPasskeySetup] = useState(false);
   const [walletName, setWalletName] = useState(() => randomWalletName());
-  const conditionalAbortRef = useRef<AbortController | null>(null);
-  const conditionalStartedRef = useRef(false);
-  // Stable refs for callbacks to avoid useEffect re-triggers
-  const onStartConditionalLoginRef = useRef(onStartConditionalLogin);
-  onStartConditionalLoginRef.current = onStartConditionalLogin;
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  // Start conditional UI passkey login when modal opens (once)
-  useEffect(() => {
-    if (!open || !hasPasskeySupport) return;
-    if (conditionalStartedRef.current) return;
-
-    const pkcProto = window.PublicKeyCredential as typeof PublicKeyCredential & {
-      isConditionalMediationAvailable?: () => Promise<boolean>;
-    };
-    if (!pkcProto.isConditionalMediationAvailable) return;
-
-    conditionalStartedRef.current = true;
-    pkcProto.isConditionalMediationAvailable().then((available) => {
-      if (!available || !onStartConditionalLoginRef.current) return;
-      const controller = onStartConditionalLoginRef.current(() => onCloseRef.current());
-      conditionalAbortRef.current = controller;
-    });
-
-    return () => {
-      conditionalAbortRef.current?.abort();
-      conditionalAbortRef.current = null;
-      conditionalStartedRef.current = false;
-    };
-  }, [open, hasPasskeySupport]);
 
   const redirectTo = typeof window !== 'undefined' ? window.location.href : '/';
 
@@ -128,10 +96,6 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
   }
 
   async function handlePasskey() {
-    // Abort conditional UI first — only one WebAuthn request can be active
-    conditionalAbortRef.current?.abort();
-    conditionalAbortRef.current = null;
-
     setError(null);
     setPasskeyLoading(true);
     try {
@@ -156,8 +120,6 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
 
   async function handlePasskeyCreate(e: React.FormEvent) {
     e.preventDefault();
-    conditionalAbortRef.current?.abort();
-    conditionalAbortRef.current = null;
     setError(null);
     setPasskeyLoading(true);
     try {
@@ -295,23 +257,6 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, onPasskeyReg
               <p className="text-[11px] text-zinc-500 mt-1 font-mono">
                 Save projects, sync across devices
               </p>
-              {/* Passkey conditional UI — input triggers browser autofill on focus */}
-              {hasPasskeySupport && (
-                <div className="relative mt-3">
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z" />
-                    <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
-                  </svg>
-                  <input
-                    type="text"
-                    autoComplete="webauthn"
-                    autoFocus
-                    placeholder="Use a passkey…"
-                    className="w-full pl-9 pr-3 py-2.5 bg-zinc-950 border border-zinc-700 text-zinc-300 placeholder:text-zinc-500 text-xs font-mono focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/10 cursor-default caret-transparent"
-                    onKeyDown={(e) => { if (e.key === 'Enter') handlePasskey(); }}
-                  />
-                </div>
-              )}
             </div>
 
             {/* Error */}

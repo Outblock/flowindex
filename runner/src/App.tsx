@@ -310,7 +310,6 @@ export default function App() {
   const {
     register: passkeyRegister,
     login: passkeyLogin,
-    startConditionalLogin: passkeyConditionalLogin,
     sign: passkeySign,
     accounts: passkeyAccounts,
     selectedAccount: selectedPasskeyAccount,
@@ -1976,7 +1975,7 @@ export default function App() {
         onRefreshAccounts={refreshAccounts}
       />
       <Suspense fallback={null}>
-        <LoginModal open={showLoginModal} onClose={() => setShowLoginModal(false)} onPasskeyLogin={passkeyLogin} onPasskeyRegister={passkeyRegister} onStartConditionalLogin={passkeyConditionalLogin} hasPasskeySupport={hasPasskeySupport} />
+        <LoginModal open={showLoginModal} onClose={() => setShowLoginModal(false)} onPasskeyLogin={passkeyLogin} onPasskeyRegister={passkeyRegister} hasPasskeySupport={hasPasskeySupport} />
       </Suspense>
     </div>
   );
