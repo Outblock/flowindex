@@ -286,7 +286,7 @@ serve(async (req: Request) => {
 
           const authenticatorName = (data as { authenticatorName?: string }).authenticatorName || null;
 
-          const { data: insertedCred } = await supabaseAdmin.from('passkey_credentials').insert({
+          const { data: insertedCred, error: insertError } = await supabaseAdmin.from('passkey_credentials').insert({
             id: credential.id,
             user_id: userId,
             webauthn_user_id: challenge.webauthn_user_id,
@@ -298,6 +298,10 @@ serve(async (req: Request) => {
             transports: credential.transports,
             authenticator_name: authenticatorName,
           }).select().single();
+          if (insertError) {
+            console.error('[passkey-auth] credential INSERT failed:', insertError.message, insertError.details, insertError.hint);
+            throw new Error(`Credential insert failed: ${insertError.message}`);
+          }
 
           const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
             type: 'magiclink', email: challenge.email

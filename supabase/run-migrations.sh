@@ -60,4 +60,8 @@ for f in "$MIGRATION_DIR"/*.sql; do
   fi
 done
 
+# Notify PostgREST to reload schema cache (picks up new columns/tables from migrations)
+echo "Reloading PostgREST schema cache..."
+run_psql -c "NOTIFY pgrst, 'reload schema';" 2>/dev/null || true
+
 echo "All migrations complete"
