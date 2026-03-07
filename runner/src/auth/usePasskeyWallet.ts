@@ -109,14 +109,14 @@ export function usePasskeyWallet() {
     }
   }, [user]);
 
-  const register = useCallback(async (email: string) => {
+  const register = useCallback(async (email?: string) => {
     setLoading(true);
     try {
-      // 1. Start registration
+      // 1. Start registration (email optional — server generates anonymous if omitted)
       const startData = await passkeyApi('/register/start', {
         rpId: RP_ID,
         rpName: RP_NAME,
-        email,
+        ...(email ? { email } : {}),
       });
 
       const { options, challengeId } = startData;
@@ -196,82 +196,90 @@ export function usePasskeyWallet() {
     }
   }, [accessToken, applyTokenData]);
 
+  const loginOnly = useCallback(async () => {
+    // 1. Start authentication
+    const startData = await passkeyApi('/login/start', {
+      rpId: RP_ID,
+    });
+
+    const { options, challengeId } = startData;
+
+    // 2. Get assertion via WebAuthn
+    const publicKeyOptions: PublicKeyCredentialRequestOptions = {
+      ...options,
+      challenge: base64UrlToBytes(options.challenge),
+      allowCredentials: (options.allowCredentials || []).map((c: any) => ({
+        ...c,
+        id: base64UrlToBytes(c.id),
+      })),
+      rpId: RP_ID,
+    };
+
+    const assertion = await navigator.credentials.get({
+      publicKey: publicKeyOptions,
+    }) as PublicKeyCredential;
+
+    if (!assertion) throw new Error('Passkey authentication cancelled');
+
+    const assertionResponse = assertion.response as AuthenticatorAssertionResponse;
+
+    // 3. Finish authentication
+    const finishData = await passkeyApi('/login/finish', {
+      rpId: RP_ID,
+      challengeId,
+      response: {
+        id: assertion.id,
+        rawId: bytesToBase64Url(new Uint8Array(assertion.rawId)),
+        response: {
+          authenticatorData: bytesToBase64Url(new Uint8Array(assertionResponse.authenticatorData)),
+          clientDataJSON: bytesToBase64Url(new Uint8Array(assertionResponse.clientDataJSON)),
+          signature: bytesToBase64Url(new Uint8Array(assertionResponse.signature)),
+          userHandle: assertionResponse.userHandle
+            ? bytesToBase64Url(new Uint8Array(assertionResponse.userHandle))
+            : undefined,
+        },
+        type: assertion.type,
+        clientExtensionResults: assertion.getClientExtensionResults(),
+        authenticatorAttachment: (assertion as any).authenticatorAttachment,
+      },
+    });
+
+    const { tokenHash } = finishData;
+
+    // 4. Exchange tokenHash for Supabase session
+    if (tokenHash) {
+      const verifyRes = await fetch(`${GOTRUE_URL}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'magiclink', token_hash: tokenHash }),
+      });
+      if (verifyRes.ok) {
+        const tokenData = await verifyRes.json();
+        applyTokenData(tokenData);
+
+        // 5. Load wallet accounts
+        const accts = await passkeyApi('/wallet/accounts', {}, tokenData.access_token);
+        const accountList: PasskeyAccount[] = accts.accounts || [];
+        setAccounts(accountList);
+        if (accountList.length > 0) {
+          setSelectedAccount(accountList[0]);
+        }
+      }
+    }
+  }, [applyTokenData]);
+
   const login = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Start authentication
-      const startData = await passkeyApi('/login/start', {
-        rpId: RP_ID,
-      });
-
-      const { options, challengeId } = startData;
-
-      // 2. Get assertion via WebAuthn
-      const publicKeyOptions: PublicKeyCredentialRequestOptions = {
-        ...options,
-        challenge: base64UrlToBytes(options.challenge),
-        allowCredentials: (options.allowCredentials || []).map((c: any) => ({
-          ...c,
-          id: base64UrlToBytes(c.id),
-        })),
-        rpId: RP_ID,
-      };
-
-      const assertion = await navigator.credentials.get({
-        publicKey: publicKeyOptions,
-      }) as PublicKeyCredential;
-
-      if (!assertion) throw new Error('Passkey authentication cancelled');
-
-      const assertionResponse = assertion.response as AuthenticatorAssertionResponse;
-
-      // 3. Finish authentication
-      const finishData = await passkeyApi('/login/finish', {
-        rpId: RP_ID,
-        challengeId,
-        response: {
-          id: assertion.id,
-          rawId: bytesToBase64Url(new Uint8Array(assertion.rawId)),
-          response: {
-            authenticatorData: bytesToBase64Url(new Uint8Array(assertionResponse.authenticatorData)),
-            clientDataJSON: bytesToBase64Url(new Uint8Array(assertionResponse.clientDataJSON)),
-            signature: bytesToBase64Url(new Uint8Array(assertionResponse.signature)),
-            userHandle: assertionResponse.userHandle
-              ? bytesToBase64Url(new Uint8Array(assertionResponse.userHandle))
-              : undefined,
-          },
-          type: assertion.type,
-          clientExtensionResults: assertion.getClientExtensionResults(),
-          authenticatorAttachment: (assertion as any).authenticatorAttachment,
-        },
-      });
-
-      const { tokenHash } = finishData;
-
-      // 4. Exchange tokenHash for Supabase session
-      if (tokenHash) {
-        const verifyRes = await fetch(`${GOTRUE_URL}/verify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'magiclink', token_hash: tokenHash }),
-        });
-        if (verifyRes.ok) {
-          const tokenData = await verifyRes.json();
-          applyTokenData(tokenData);
-
-          // 5. Load wallet accounts
-          const accts = await passkeyApi('/wallet/accounts', {}, tokenData.access_token);
-          const accountList: PasskeyAccount[] = accts.accounts || [];
-          setAccounts(accountList);
-          if (accountList.length > 0) {
-            setSelectedAccount(accountList[0]);
-          }
-        }
-      }
+      // Try login first — if user has existing passkey, this works
+      await loginOnly();
+    } catch {
+      // No existing passkey or user cancelled — register a new one (no email needed)
+      await register();
     } finally {
       setLoading(false);
     }
-  }, [applyTokenData]);
+  }, [loginOnly, register]);
 
   const sign = useCallback(async (messageHex: string): Promise<PasskeySignResult> => {
     if (!selectedAccount) throw new Error('No passkey account selected');

@@ -160,6 +160,9 @@ serve(async (req: Request) => {
           break;
         }
 
+        // Generate anonymous email if none provided
+        const userEmail = (email as string) || `passkey-${crypto.randomUUID().slice(0, 8)}@flowindex.io`;
+
         const webauthnUserId = generateWebAuthnUserId();
         const { data: existingUser } = await supabaseAdmin.from('passkey_credentials')
           .select('id').eq('webauthn_user_id', webauthnUserId).limit(1);
@@ -171,8 +174,8 @@ serve(async (req: Request) => {
         const options = await generateRegistrationOptions({
           rpName: rpName as string,
           rpID: rpId as string,
-          userName: email as string,
-          userDisplayName: email as string,
+          userName: userEmail,
+          userDisplayName: userEmail,
           userID: new TextEncoder().encode(webauthnUserId),
           attestationType: 'none',
           excludeCredentials,
@@ -182,11 +185,11 @@ serve(async (req: Request) => {
 
         const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MINUTES * 60 * 1000);
         const { data: challenge } = await supabaseAdmin.from('passkey_challenges').insert({
-          challenge: options.challenge, email, type: 'registration', expires_at: expiresAt.toISOString(), webauthn_user_id: webauthnUserId
+          challenge: options.challenge, email: userEmail, type: 'registration', expires_at: expiresAt.toISOString(), webauthn_user_id: webauthnUserId
         }).select().single();
 
         await supabaseAdmin.rpc('log_passkey_audit_event', {
-          p_event_type: 'registration_started', p_email: email, p_ip_address: clientIP, p_origin: origin
+          p_event_type: 'registration_started', p_email: userEmail, p_ip_address: clientIP, p_origin: origin
         });
 
         result = success({ options, challengeId: challenge.id });

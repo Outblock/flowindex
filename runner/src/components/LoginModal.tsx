@@ -88,6 +88,7 @@ export default function LoginModal({ open, onClose, onPasskeyLogin, hasPasskeySu
     setPasskeyLoading(true);
     try {
       if (onPasskeyLogin) {
+        // login() tries existing passkey first, auto-registers if none found
         await onPasskeyLogin();
         onClose();
       }
