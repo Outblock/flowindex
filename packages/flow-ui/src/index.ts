@@ -121,3 +121,38 @@ export {
   EVMBridgeBadge,
   type EVMBridgeBadgeProps,
 } from "./components/EVMBridgeBadge"
+export {
+  ActivityRow,
+  type ActivityRowProps,
+  type ActivityRowLinkProps,
+} from "./components/ActivityRow"
+
+// Transaction types
+export type {
+  FTSummaryItem,
+  NFTSummaryItem,
+  TransferSummary,
+  TokenMetaEntry,
+  ActivityBadge,
+  TransferPreviewItem,
+} from "./types/transaction"
+
+// Activity utilities
+export {
+  deriveActivityType,
+  deriveAllActivityBadges,
+  mapTemplateCategoryToActivity,
+  formatTokenName,
+  formatTagLabel,
+  extractLogoUrl,
+  buildSummaryLine,
+  deriveTransferPreview,
+  findNftBannerImage,
+  dedup,
+  TAG_STYLES,
+  DEFAULT_TAG_STYLE,
+  TAG_ICON_NAMES,
+} from "./utils/activity"
+
+// Time utilities
+export { formatRelativeTime, formatAbsoluteTime } from "./utils/time"
