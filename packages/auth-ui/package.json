@@ -1,0 +1,50 @@
+{
+  "name": "@flowindex/auth-ui",
+  "version": "0.1.0",
+  "description": "FlowIndex auth React components — AuthProvider, useAuth, LoginModal",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@flowindex/auth-core": "workspace:*",
+    "@flowindex/flow-passkey": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
+    "framer-motion": ">=11.0.0",
+    "lucide-react": ">=0.300.0",
+    "input-otp": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "framer-motion": { "optional": true },
+    "lucide-react": { "optional": true },
+    "input-otp": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "framer-motion": "^12.34.3",
+    "lucide-react": "^0.563.0",
+    "input-otp": "^1.4.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3"
+  },
+  "nx": {
+    "tags": ["package"]
+  }
+}
