@@ -178,14 +178,10 @@ export function usePasskeyWallet() {
         }
       }
 
-      // 5. Provision Flow account
-      const provisionData = await passkeyApi('/wallet/provision', {
-        credentialId: credential.id,
-      }, authToken);
-
+      // Passkey registered — no Flow account yet (provision separately)
       const newAccount: PasskeyAccount = {
         credentialId: credential.id,
-        flowAddress: provisionData.address,
+        flowAddress: '',
         publicKeySec1Hex: publicKeySec1Hex || '',
       };
 
@@ -322,6 +318,29 @@ export function usePasskeyWallet() {
     return { signature: sigHex, extensionData };
   }, [selectedAccount]);
 
+  const provisionAccount = useCallback(async (credentialId?: string) => {
+    const credId = credentialId || selectedAccount?.credentialId;
+    if (!credId) throw new Error('No credential to provision');
+
+    setLoading(true);
+    try {
+      const data = await passkeyApi('/wallet/provision', { credentialId: credId }, accessToken);
+      const address = data.address;
+
+      // Update the account in state
+      setAccounts(prev => prev.map(a =>
+        a.credentialId === credId ? { ...a, flowAddress: address } : a
+      ));
+      setSelectedAccount(prev =>
+        prev?.credentialId === credId ? { ...prev, flowAddress: address } : prev
+      );
+
+      return address as string;
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedAccount, accessToken]);
+
   const selectAccount = useCallback((credentialId: string) => {
     const acct = accounts.find(a => a.credentialId === credentialId);
     if (acct) setSelectedAccount(acct);
@@ -334,6 +353,7 @@ export function usePasskeyWallet() {
     register,
     login,
     sign,
+    provisionAccount,
     accounts,
     selectedAccount,
     selectAccount,
