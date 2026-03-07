@@ -70,50 +70,72 @@ function hexToUint8Array(hex: string): Uint8Array {
 }
 
 /**
- * Minimal CBOR decoder for COSE EC2 key maps.
+ * Minimal CBOR decoder — read one integer or length value at offset.
+ * Returns [value, newOffset].
+ */
+function cborReadUint(bytes: Uint8Array, offset: number): [number, number] {
+  const additional = bytes[offset] & 0x1f;
+  offset++;
+  if (additional < 24) return [additional, offset];
+  if (additional === 24) return [bytes[offset], offset + 1];
+  if (additional === 25) return [(bytes[offset] << 8) | bytes[offset + 1], offset + 2];
+  return [0, offset]; // 26/27 not needed for COSE keys
+}
+
+/**
+ * Skip one CBOR value at offset, returning new offset.
+ */
+function cborSkipValue(bytes: Uint8Array, offset: number): number {
+  const major = bytes[offset] >> 5;
+  const [val, off] = cborReadUint(bytes, offset);
+  if (major <= 1) return off; // unsigned/negative int
+  if (major === 2 || major === 3) return off + val; // byte/text string
+  if (major === 4) { // array
+    let o = off;
+    for (let i = 0; i < val; i++) o = cborSkipValue(bytes, o);
+    return o;
+  }
+  if (major === 5) { // map
+    let o = off;
+    for (let i = 0; i < val; i++) { o = cborSkipValue(bytes, o); o = cborSkipValue(bytes, o); }
+    return o;
+  }
+  return off; // tag, simple
+}
+
+/**
  * Extracts P-256 x,y coordinates from COSE public key bytes.
  * COSE_Key for P-256: Map { 1: 2, 3: -7, -1: 1, -2: <x 32 bytes>, -3: <y 32 bytes> }
  */
 function decodeCoseP256Key(bytes: Uint8Array): { x: Uint8Array; y: Uint8Array } | null {
-  let offset = 0;
-  const major = bytes[offset] >> 5;
-  const additional = bytes[offset] & 0x1f;
+  const major = bytes[0] >> 5;
   if (major !== 5) return null; // not a map
-  offset++;
-  let mapSize = additional;
-  if (additional === 24) { mapSize = bytes[offset++]; }
+  const [mapSize, startOffset] = cborReadUint(bytes, 0);
 
   let x: Uint8Array | null = null;
   let y: Uint8Array | null = null;
+  let offset = startOffset;
 
   for (let i = 0; i < mapSize; i++) {
-    const keyByte = bytes[offset++];
-    const keyMajor = keyByte >> 5;
-    const keyAdditional = keyByte & 0x1f;
+    // Read key (integer)
+    const keyMajor = bytes[offset] >> 5;
+    const [keyRaw, keyOff] = cborReadUint(bytes, offset);
+    offset = keyOff;
+    const keyValue = keyMajor === 0 ? keyRaw : keyMajor === 1 ? -1 - keyRaw : -999;
 
-    let keyValue: number;
-    if (keyMajor === 0) {
-      keyValue = keyAdditional;
-    } else if (keyMajor === 1) {
-      keyValue = -1 - keyAdditional;
-    } else {
-      return null;
-    }
-
-    const valByte = bytes[offset];
-    const valMajor = valByte >> 5;
-    const valAdditional = valByte & 0x1f;
-    offset++;
-
-    if (valMajor === 2) {
-      let len = valAdditional;
-      if (valAdditional === 24) { len = bytes[offset++]; }
-      const value = bytes.slice(offset, offset + len);
-      offset += len;
+    // Read value
+    const valMajor = bytes[offset] >> 5;
+    if (valMajor === 2 && (keyValue === -2 || keyValue === -3)) {
+      // byte string — this is x or y
+      const [len, dataOff] = cborReadUint(bytes, offset);
+      const value = bytes.slice(dataOff, dataOff + len);
+      offset = dataOff + len;
       if (keyValue === -2) x = value;
       else if (keyValue === -3) y = value;
+    } else {
+      // Skip any other value
+      offset = cborSkipValue(bytes, offset);
     }
-    // Skip integer values (kty, alg, crv) — already consumed the byte
   }
 
   if (!x || !y) return null;
@@ -251,6 +273,7 @@ serve(async (req: Request) => {
           const publicKeyBytes = credential.publicKey;
           const publicKeyHex = '\\x' + uint8ArrayToHex(publicKeyBytes);
           const sec1Hex = coseToSec1Hex(publicKeyBytes);
+          console.log('[passkey-auth] COSE key hex:', uint8ArrayToHex(publicKeyBytes), 'SEC1:', sec1Hex ? sec1Hex.slice(0, 20) + '...' : 'NULL');
 
           let userId: string;
           const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
