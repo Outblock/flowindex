@@ -49,8 +49,9 @@ COPY ai/chat/ .
 
 # Copy built frontend assets + node_modules from stage 1
 COPY --from=frontend /app/ai/chat/web/.next ./web/.next
-COPY --from=frontend /app/ai/chat/web/node_modules ./web/node_modules
 COPY --from=frontend /app/ai/chat/web/package.json ./web/package.json
+# Workspace hoists deps to root node_modules; copy both for resolution
+COPY --from=frontend /app/node_modules ./web/node_modules
 
 # Skills for runtime loadSkill tool (Next.js SSR reads these on request)
 COPY --from=frontend /app/skills ./skills
