@@ -5,7 +5,8 @@
     "packages/*",
     "frontend",
     "runner",
-    "ai/chat/web"
+    "ai/chat/web",
+    "wallet"
   ],
   "devDependencies": {
     "nx": "^21.3.0",
