@@ -9,6 +9,7 @@ import TestHost from './pages/TestHost';
 import Dashboard from './pages/Dashboard';
 import NFTs from './pages/NFTs';
 import Activity from './pages/Activity';
+import Settings from './pages/Settings';
 
 function Placeholder({ name }: { name: string }) {
   return (
@@ -35,7 +36,7 @@ export default function App() {
             <Route path="/nfts" element={<NFTs />} />
             <Route path="/send" element={<Placeholder name="Send" />} />
             <Route path="/activity" element={<Activity />} />
-            <Route path="/settings" element={<Placeholder name="Settings" />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>
       </WalletProvider>
