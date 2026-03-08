@@ -1,0 +1,52 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { loadConfig, type AgentWalletConfig } from '../config/env.js';
+import { LocalSigner } from '../signer/local.js';
+import { CloudSigner } from '../signer/cloud.js';
+import type { FlowSigner } from '../signer/interface.js';
+
+export interface ServerContext {
+  config: AgentWalletConfig;
+  signer: FlowSigner;
+  cloudSigner: CloudSigner;
+}
+
+export async function createServer(): Promise<McpServer> {
+  const config = loadConfig();
+
+  let signer: FlowSigner;
+  const cloudSigner = new CloudSigner(config);
+
+  if (config.signerType === 'local-mnemonic' || config.signerType === 'local-key') {
+    const local = new LocalSigner(config);
+    await local.init();
+    signer = local;
+  } else {
+    await cloudSigner.init();
+    signer = cloudSigner;
+  }
+
+  const ctx: ServerContext = { config, signer, cloudSigner };
+
+  const server = new McpServer(
+    { name: "flow-agent-wallet", version: "0.1.0" },
+    {
+      capabilities: {
+        tools: { listChanged: true },
+        resources: { subscribe: false, listChanged: true },
+        logging: {},
+      },
+    }
+  );
+
+  // Import and register tools
+  const { registerWalletTools } = await import('../tools/wallet.js');
+  registerWalletTools(server, ctx);
+
+  const info = signer.info();
+  console.error(`Flow Agent Wallet MCP Server v0.1.0`);
+  console.error(`Network: ${config.network}`);
+  console.error(`Signer: ${info.type} | Flow: ${info.flowAddress || 'none'} | EVM: ${info.evmAddress || 'none'}`);
+  console.error(`Approval: ${config.approvalRequired ? 'required' : 'headless'}`);
+
+  return server;
+}
