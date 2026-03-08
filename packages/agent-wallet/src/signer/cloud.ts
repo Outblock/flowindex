@@ -5,12 +5,23 @@ import type { AgentWalletConfig } from '../config/env.js';
 // CloudSigner — delegates signing to FlowIndex custodial wallet API
 // ---------------------------------------------------------------------------
 
-interface WalletMeResponse {
-  address: string;
-  keyIndex: number;
-  sigAlgo: string;
-  hashAlgo: string;
-  evmAddress?: string;
+/** Shape of a single key entry from GET /api/v1/wallet/me */
+interface WalletMeKey {
+  id: string;
+  flow_address: string;
+  public_key: string;
+  key_index: number;
+  label: string;
+  sig_algo: string;
+  hash_algo: string;
+  source: string;
+  created_at: string;
+}
+
+/** Envelope returned by the Go API: { data: {...}, error: {...} } */
+interface ApiEnvelope<T> {
+  data?: T;
+  error?: { message: string };
 }
 
 export class CloudSigner implements FlowSigner {
@@ -19,9 +30,11 @@ export class CloudSigner implements FlowSigner {
 
   private flowAddress?: string;
   private evmAddress?: string;
+  private keyId?: string;
   private keyIndex = 0;
   private sigAlgo = 'ECDSA_secp256k1';
   private hashAlgo = 'SHA2_256';
+  private ready = false;
 
   constructor(config: AgentWalletConfig) {
     this.config = config;
@@ -47,12 +60,28 @@ export class CloudSigner implements FlowSigner {
       throw new Error(`CloudSigner init failed (${resp.status}): ${body}`);
     }
 
-    const data = (await resp.json()) as WalletMeResponse;
-    this.flowAddress = data.address;
-    this.keyIndex = data.keyIndex;
-    this.sigAlgo = data.sigAlgo;
-    this.hashAlgo = data.hashAlgo;
-    this.evmAddress = data.evmAddress;
+    const envelope = (await resp.json()) as ApiEnvelope<{
+      keys: WalletMeKey[];
+      accounts: unknown[];
+    }>;
+
+    if (envelope.error) {
+      throw new Error(`CloudSigner init error: ${envelope.error.message}`);
+    }
+
+    const keys = envelope.data?.keys;
+    if (!keys || keys.length === 0) {
+      throw new Error('CloudSigner: no keys found for this wallet');
+    }
+
+    // Use the first key
+    const key = keys[0];
+    this.flowAddress = key.flow_address;
+    this.keyId = key.id;
+    this.keyIndex = key.key_index;
+    this.sigAlgo = key.sig_algo;
+    this.hashAlgo = key.hash_algo;
+    this.ready = true;
   }
 
   info(): SignerInfo {
@@ -68,6 +97,7 @@ export class CloudSigner implements FlowSigner {
 
   async signFlowTransaction(messageHex: string): Promise<SignResult> {
     if (!this.token) throw new Error('CloudSigner: no token set');
+    if (!this.keyId) throw new Error('CloudSigner: not initialized (no key_id). Call init() first.');
 
     const resp = await fetch(`${this.config.flowindexUrl}/api/v1/wallet/sign`, {
       method: 'POST',
@@ -75,7 +105,7 @@ export class CloudSigner implements FlowSigner {
         Authorization: `Bearer ${this.token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ message: messageHex }),
+      body: JSON.stringify({ key_id: this.keyId, message: messageHex }),
     });
 
     if (!resp.ok) {
@@ -83,12 +113,26 @@ export class CloudSigner implements FlowSigner {
       throw new Error(`CloudSigner sign failed (${resp.status}): ${body}`);
     }
 
-    const data = (await resp.json()) as { signature: string };
-    return { signature: data.signature };
+    // The sign endpoint proxies to the flow-keys edge function.
+    // The response may be the edge function's raw JSON or wrapped in the API envelope.
+    const json = (await resp.json()) as Record<string, unknown>;
+
+    // Try envelope format first: { data: { signature: "..." } }
+    const dataObj = json?.data as Record<string, unknown> | undefined;
+    const sig = (dataObj?.signature as string) ?? (json?.signature as string);
+    if (!sig) {
+      throw new Error(`CloudSigner: no signature in response: ${JSON.stringify(json)}`);
+    }
+
+    return { signature: sig };
   }
 
   isHeadless(): boolean {
     return !!this.token;
+  }
+
+  isReady(): boolean {
+    return this.ready;
   }
 
   // ---- Getters ------------------------------------------------------------
@@ -99,5 +143,9 @@ export class CloudSigner implements FlowSigner {
 
   getKeyIndex(): number {
     return this.keyIndex;
+  }
+
+  getKeyId(): string | undefined {
+    return this.keyId;
   }
 }

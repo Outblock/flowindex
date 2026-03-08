@@ -2,6 +2,12 @@ import { z } from 'zod';
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ServerContext } from '../server/server.js';
 
+/** Go API envelope: { data: {...}, error: {...} } */
+interface ApiEnvelope<T> {
+  data?: T;
+  error?: { message: string };
+}
+
 export function registerWalletTools(server: McpServer, ctx: ServerContext): void {
   // --------------------------------------------------------------------------
   // wallet_status — read-only, returns signer info
@@ -93,18 +99,36 @@ export function registerWalletTools(server: McpServer, ctx: ServerContext): void
           };
         }
 
-        const data = (await resp.json()) as {
-          login_url: string;
+        const envelope = (await resp.json()) as ApiEnvelope<{
           session_id: string;
-        };
+          login_url: string;
+          expires_in: number;
+        }>;
 
+        if (envelope.error) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  { error: envelope.error.message },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const data = envelope.data!;
         const result = {
           status: "pending",
           login_url: data.login_url,
           session_id: data.session_id,
           message:
             "Please open the login URL in a browser to authenticate. Then call wallet_login_status with the session_id to complete login.",
-          expires_in: 300,
+          expires_in: data.expires_in,
         };
 
         return {
@@ -146,7 +170,7 @@ export function registerWalletTools(server: McpServer, ctx: ServerContext): void
     async ({ session_id }: { session_id: string }) => {
       try {
         const resp = await fetch(
-          `${ctx.config.flowindexUrl}/api/v1/wallet/agent/status/${encodeURIComponent(session_id)}`
+          `${ctx.config.flowindexUrl}/api/v1/wallet/agent/login/${encodeURIComponent(session_id)}`
         );
 
         if (!resp.ok) {
@@ -168,15 +192,30 @@ export function registerWalletTools(server: McpServer, ctx: ServerContext): void
           };
         }
 
-        const data = (await resp.json()) as {
-          authenticated?: boolean;
+        const envelope = (await resp.json()) as ApiEnvelope<{
+          status: string;
           token?: string;
-          address?: string;
-          evm_address?: string;
-          status?: string;
-        };
+        }>;
 
-        if (data.authenticated && data.token) {
+        if (envelope.error) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  { error: envelope.error.message },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const data = envelope.data!;
+
+        if (data.status === 'completed' && data.token) {
           // Activate the cloud signer with the received token
           ctx.cloudSigner.setToken(data.token);
           await ctx.cloudSigner.init();
