@@ -1,0 +1,47 @@
+{
+  "name": "@flowindex/agent-wallet",
+  "version": "0.1.0",
+  "description": "MCP server for Flow blockchain wallet — local keys, cloud wallet, passkey signing for AI agents",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "flow-agent-wallet": "./bin/cli.ts"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "bin", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "bun run src/index.ts",
+    "lint": "tsc --noEmit",
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "@onflow/fcl": "^1.21.9",
+    "@onflow/rlp": "^1.2.2",
+    "sha3": "^2.1.4",
+    "viem": "^2.39.3",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3"
+  },
+  "nx": {
+    "tags": ["package"]
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
