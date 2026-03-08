@@ -1,0 +1,152 @@
+---
+title: Getting Started
+description: Run FlowIndex locally using Docker Compose.
+---
+
+This guide walks you through running a local FlowIndex instance with Docker Compose. By the end you will have the backend indexer, frontend UI, and PostgreSQL database running on your machine.
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) (v20.10+)
+- [Docker Compose](https://docs.docker.com/compose/install/) (v2.0+)
+- At least 4 GB of free RAM (8 GB recommended)
+
+## Quick Start
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Outblock/flowindex.git
+cd flowindex
+```
+
+### 2. Start all services
+
+```bash
+docker compose up -d --build
+```
+
+This starts the following core services:
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `frontend` | [localhost:5173](http://localhost:5173) | Web UI (TanStack Start SSR) |
+| `backend` | [localhost:8080](http://localhost:8080) | Go API server + indexer |
+| `db` | localhost:5432 | PostgreSQL database |
+
+Additional services (Supabase auth stack, developer portal, etc.) are also started automatically.
+
+### 3. Verify the backend is running
+
+```bash
+curl http://localhost:8080/health
+```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+### 4. Check indexing status
+
+```bash
+curl http://localhost:8080/status
+```
+
+This returns a JSON object with indexing progress, including:
+
+```json
+{
+  "chain_id": "flow",
+  "latest_height": 142610500,
+  "indexed_height": 142610498,
+  "progress": "99.98%",
+  "behind": 2,
+  "total_blocks": 1500000,
+  "total_transactions": 3200000,
+  "status": "ok"
+}
+```
+
+### 5. Open the frontend
+
+Navigate to [http://localhost:5173](http://localhost:5173) in your browser. You should see the FlowIndex explorer with blocks appearing in real time.
+
+## Viewing Logs
+
+```bash
+# Backend logs (indexer + API)
+docker compose logs -f backend
+
+# Frontend logs
+docker compose logs -f frontend
+
+# Database logs
+docker compose logs -f db
+```
+
+## Stopping Services
+
+```bash
+docker compose down
+```
+
+To also remove stored data (database volumes):
+
+```bash
+docker compose down -v
+```
+
+## Local Development (Without Docker)
+
+### Backend
+
+```bash
+cd backend
+go mod download && go mod tidy
+
+# Build
+CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o indexer main.go
+
+# Run (requires a running PostgreSQL instance)
+DB_URL=postgres://flowscan:secretpassword@localhost:5432/flowscan \
+FLOW_ACCESS_NODE=access-001.mainnet28.nodes.onflow.org:9000 \
+PORT=8080 \
+./indexer
+```
+
+### Frontend
+
+```bash
+cd frontend
+
+# Install dependencies
+bun install
+
+# Start dev server
+bun run dev
+```
+
+The frontend dev server starts at [http://localhost:3000](http://localhost:3000) and connects to the backend at `http://localhost:8080` by default.
+
+### Database
+
+If running outside Docker, create the database and apply the schema:
+
+```bash
+createdb flowscan
+psql postgres://flowscan:secretpassword@localhost:5432/flowscan < backend/schema_v2.sql
+```
+
+Or use the built-in migration command:
+
+```bash
+./indexer migrate
+```
+
+## Next Steps
+
+- [Architecture](/docs/flowindex/architecture) -- Understand how the ingestion pipeline works
+- [Configuration](/docs/flowindex/guides/configuration) -- Tune environment variables for your setup
+- [API Reference](/docs/flowindex/api-reference) -- Explore the REST API
