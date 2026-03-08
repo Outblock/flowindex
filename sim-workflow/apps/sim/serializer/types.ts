@@ -7,6 +7,11 @@ export interface SerializedWorkflow {
   connections: SerializedConnection[]
   loops: Record<string, SerializedLoop>
   parallels?: Record<string, SerializedParallel>
+  /** Workflow-level metadata carried through serialization for executor access */
+  workflowMetadata?: {
+    /** Default signer option ID for Flow blocks */
+    defaultSigner?: string
+  }
 }
 
 export interface SerializedConnection {

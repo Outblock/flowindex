@@ -146,7 +146,8 @@ export class Serializer {
     edges: Edge[],
     loops?: Record<string, Loop>,
     parallels?: Record<string, Parallel>,
-    validateRequired = false
+    validateRequired = false,
+    workflowMetadata?: { defaultSigner?: string }
   ): SerializedWorkflow {
     const canonicalLoops = generateLoopBlocks(blocks)
     const canonicalParallels = generateParallelBlocks(blocks)
@@ -157,7 +158,7 @@ export class Serializer {
       this.validateSubflowsBeforeExecution(blocks, safeLoops, safeParallels)
     }
 
-    return {
+    const result: SerializedWorkflow = {
       version: '1.0',
       blocks: Object.values(blocks).map((block) =>
         this.serializeBlock(block, {
@@ -174,6 +175,12 @@ export class Serializer {
       loops: safeLoops,
       parallels: safeParallels,
     }
+
+    if (workflowMetadata?.defaultSigner) {
+      result.workflowMetadata = { defaultSigner: workflowMetadata.defaultSigner }
+    }
+
+    return result
   }
 
   /**

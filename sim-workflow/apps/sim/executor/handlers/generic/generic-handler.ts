@@ -30,12 +30,20 @@ export class GenericBlockHandler implements BlockHandler {
 
     let finalInputs = { ...inputs }
 
+    // Resolve "default" signer from workflow-level defaultSigner setting for Flow blocks
+    if (
+      finalInputs.signer === 'default' &&
+      ctx.workflow?.workflowMetadata?.defaultSigner
+    ) {
+      finalInputs.signer = ctx.workflow.workflowMetadata.defaultSigner
+    }
+
     const blockType = block.metadata?.id
     if (blockType) {
       const blockConfig = getBlock(blockType)
       if (blockConfig?.tools?.config?.params) {
-        const transformedParams = blockConfig.tools.config.params(inputs)
-        finalInputs = { ...inputs, ...transformedParams }
+        const transformedParams = blockConfig.tools.config.params(finalInputs)
+        finalInputs = { ...finalInputs, ...transformedParams }
       }
 
       if (blockConfig?.inputs) {

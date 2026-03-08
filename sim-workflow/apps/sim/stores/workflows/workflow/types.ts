@@ -170,6 +170,8 @@ export interface WorkflowState {
     name?: string
     description?: string
     exportedAt?: string
+    /** Default signer option ID for Flow blocks (e.g. "cloud:uuid-123", "passkey:cred-456", "manual") */
+    defaultSigner?: string
   }
   variables?: Record<string, Variable>
   deploymentStatuses?: Record<string, DeploymentStatus>
@@ -238,6 +240,7 @@ export interface WorkflowActions {
   ) => void
   setBlockLocked: (id: string, locked: boolean) => void
   batchToggleLocked: (ids: string[]) => void
+  setDefaultSigner: (signerId: string | undefined) => void
 }
 
 export type WorkflowStore = WorkflowState & WorkflowActions

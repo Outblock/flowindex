@@ -27,6 +27,7 @@ export function useSignerOptions() {
   const signerOptions = useMemo(() => {
     const walletOptions = getSignerOptions()
     return [
+      { label: 'Use Default', id: 'default' },
       { label: 'Manual Key', id: 'manual' },
       ...walletOptions.map((opt) => ({ label: opt.label, id: opt.id })),
     ]

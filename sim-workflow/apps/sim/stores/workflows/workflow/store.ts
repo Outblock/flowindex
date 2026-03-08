@@ -1301,6 +1301,17 @@ export const useWorkflowStore = create<WorkflowStore>()(
         set({ blocks: newBlocks, edges: [...get().edges] })
         get().updateLastSaved()
       },
+
+      setDefaultSigner: (signerId: string | undefined) => {
+        const currentMetadata = get().metadata || {}
+        set({
+          metadata: {
+            ...currentMetadata,
+            defaultSigner: signerId,
+          },
+        })
+        get().updateLastSaved()
+      },
     }),
     { name: 'workflow-store' }
   )

@@ -28,10 +28,11 @@ export const FlowTransferFlowBlock: BlockConfig = {
       title: 'Signer',
       type: 'dropdown',
       options: [
+        { label: 'Use Default', id: 'default' },
         { label: 'Manual Key', id: 'manual' },
       ],
       placeholder: 'Select a signer...',
-      defaultValue: 'manual',
+      defaultValue: 'default',
     },
     {
       id: 'signerAddress',

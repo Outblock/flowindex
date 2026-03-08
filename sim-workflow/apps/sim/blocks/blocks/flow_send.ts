@@ -14,9 +14,11 @@ export const FlowSendBlock: BlockConfig = {
       title: 'Signer',
       type: 'dropdown',
       options: [
+        { label: 'Use Default', id: 'default' },
         { label: 'Manual Key', id: 'manual' },
       ],
       placeholder: 'Select a signer...',
+      defaultValue: 'default',
       required: true,
     },
     {
