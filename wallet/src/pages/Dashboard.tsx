@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { GlassCard, TokenIcon, UsdValue, Badge, cn, formatShort } from '@flowindex/flow-ui';
+import { TokenIcon, cn, formatShort } from '@flowindex/flow-ui';
 import { deriveActivityType, buildSummaryLine } from '@flowindex/flow-ui';
 import {
   Copy,
@@ -32,7 +32,6 @@ import type { AccountData, FtHolding, AccountTransaction } from '@/api/flow';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Map activity type string to a Lucide icon component */
 function activityIcon(type: string) {
   const iconMap: Record<string, React.ElementType> = {
     ft: ArrowRightLeft,
@@ -51,7 +50,6 @@ function activityIcon(type: string) {
   return iconMap[type] ?? ArrowRightLeft;
 }
 
-/** Simple relative time formatter */
 function timeAgo(iso?: string): string {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
@@ -66,15 +64,9 @@ function timeAgo(iso?: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-/** Skeleton line placeholder */
 function Skeleton({ className }: { className?: string }) {
   return (
-    <div
-      className={cn(
-        'animate-pulse rounded bg-white/10',
-        className,
-      )}
-    />
+    <div className={cn('animate-pulse rounded-2xl bg-wallet-surface', className)} />
   );
 }
 
@@ -91,220 +83,93 @@ interface VaultWithMeta {
   usdValue: number;
 }
 
-function FlowBalanceCard({
-  flowBalance,
-  flowPrice,
-  loading,
-}: {
-  flowBalance: number;
-  flowPrice: number;
-  loading: boolean;
-}) {
+type DashTab = 'crypto' | 'activity';
+
+function TabBar({ active, onChange }: { active: DashTab; onChange: (t: DashTab) => void }) {
+  const tabs: { key: DashTab; label: string }[] = [
+    { key: 'crypto', label: 'Crypto' },
+    { key: 'activity', label: 'Transactions' },
+  ];
+
   return (
-    <GlassCard className="rounded-2xl p-6 col-span-full">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-nothing-green/20 to-nothing-green/5 flex items-center justify-center">
-          <Wallet className="w-6 h-6 text-nothing-green" />
-        </div>
-        <div>
-          <p className="text-sm text-zinc-400">FLOW Balance</p>
-          {loading ? (
-            <Skeleton className="h-8 w-40 mt-1" />
-          ) : (
-            <p className="text-3xl font-bold text-white tracking-tight">
-              {flowBalance.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 4,
-              })}{' '}
-              <span className="text-lg text-zinc-400 font-normal">FLOW</span>
-            </p>
+    <div className="flex gap-6 border-b border-wallet-border">
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          onClick={() => onChange(tab.key)}
+          className={cn(
+            'pb-3 text-sm font-semibold transition-colors relative',
+            active === tab.key
+              ? 'text-wallet-accent'
+              : 'text-wallet-muted hover:text-white',
           )}
-        </div>
-      </div>
-      {!loading && flowPrice > 0 && (
-        <UsdValue
-          price={flowPrice}
-          amount={flowBalance}
-          className="text-base"
-        />
-      )}
-    </GlassCard>
-  );
-}
-
-function FtHoldingsList({
-  holdings,
-  loading,
-}: {
-  holdings: VaultWithMeta[];
-  loading: boolean;
-}) {
-  if (loading) {
-    return (
-      <GlassCard className="rounded-2xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Token Holdings</h2>
-        <div className="space-y-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <Skeleton className="w-10 h-10 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-3 w-16" />
-              </div>
-              <div className="text-right space-y-2">
-                <Skeleton className="h-4 w-20 ml-auto" />
-                <Skeleton className="h-3 w-14 ml-auto" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </GlassCard>
-    );
-  }
-
-  if (holdings.length === 0) {
-    return (
-      <GlassCard className="rounded-2xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Token Holdings</h2>
-        <p className="text-zinc-500 text-sm">No token holdings found.</p>
-      </GlassCard>
-    );
-  }
-
-  return (
-    <GlassCard className="rounded-2xl p-6">
-      <h2 className="text-lg font-semibold text-white mb-4">Token Holdings</h2>
-      <div className="space-y-3">
-        {holdings.map((h) => (
-          <div
-            key={h.token}
-            className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0"
-          >
-            <TokenIcon
-              logoUrl={h.logo}
-              name={h.name}
-              symbol={h.symbol}
-              size={36}
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">
-                {h.name || h.symbol}
-              </p>
-              <p className="text-xs text-zinc-500">{h.symbol}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-mono text-white">
-                {h.balance.toLocaleString(undefined, {
-                  maximumFractionDigits: 4,
-                })}
-              </p>
-              {h.usdValue > 0 && (
-                <UsdValue value={h.usdValue} className="text-xs" />
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </GlassCard>
-  );
-}
-
-function RecentTransactions({
-  transactions,
-  loading,
-}: {
-  transactions: AccountTransaction[];
-  loading: boolean;
-}) {
-  if (loading) {
-    return (
-      <GlassCard className="rounded-2xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Recent Activity</h2>
-        <div className="space-y-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <Skeleton className="w-9 h-9 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-20" />
-              </div>
-              <Skeleton className="h-4 w-14" />
-            </div>
-          ))}
-        </div>
-      </GlassCard>
-    );
-  }
-
-  if (transactions.length === 0) {
-    return (
-      <GlassCard className="rounded-2xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Recent Activity</h2>
-        <p className="text-zinc-500 text-sm">No transactions yet.</p>
-      </GlassCard>
-    );
-  }
-
-  return (
-    <GlassCard className="rounded-2xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
-        <Link
-          to="/activity"
-          className="text-xs text-nothing-green hover:text-nothing-green/80 flex items-center gap-1 transition-colors"
         >
-          View All <ChevronRight className="w-3 h-3" />
-        </Link>
-      </div>
-      <div className="space-y-2">
-        {transactions.map((tx) => {
-          const activity = deriveActivityType(tx);
-          const Icon = activityIcon(activity.type);
-          const summary = buildSummaryLine(tx);
+          {tab.label}
+          {active === tab.key && (
+            <span className="absolute bottom-0 inset-x-0 h-0.5 bg-wallet-accent rounded-full" />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
 
-          return (
-            <div
-              key={tx.id}
-              className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0"
-            >
-              <div
-                className={cn(
-                  'w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0',
-                  activity.bgColor,
-                )}
-              >
-                <Icon className={cn('w-4 h-4', activity.color)} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'text-[10px] px-1.5 py-0 h-4 font-medium',
-                      activity.bgColor,
-                      activity.color,
-                    )}
-                  >
-                    {activity.label}
-                  </Badge>
-                  {tx.status === 'SEALED' && tx.error && (
-                    <span className="text-[10px] text-red-400">Failed</span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-400 truncate mt-0.5">
-                  {summary || formatShort(tx.id ?? '')}
-                </p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-[11px] text-zinc-500">
-                  {timeAgo(tx.timestamp)}
-                </p>
-              </div>
-            </div>
-          );
-        })}
+function TokenRow({ vault }: { vault: VaultWithMeta }) {
+  return (
+    <div className="flex items-center gap-3 py-3.5 cursor-pointer hover:bg-wallet-surface-hover rounded-2xl px-3 -mx-3 transition-colors">
+      <TokenIcon
+        logoUrl={vault.logo}
+        name={vault.name}
+        symbol={vault.symbol}
+        size={40}
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-white">{vault.name || vault.symbol}</p>
+        <p className="text-xs text-wallet-muted mt-0.5">
+          {vault.balance.toLocaleString(undefined, { maximumFractionDigits: 4 })} {vault.symbol}
+        </p>
       </div>
-    </GlassCard>
+      <div className="text-right">
+        {vault.usdValue > 0 ? (
+          <p className="text-sm font-semibold text-white">
+            ${vault.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+        ) : (
+          <p className="text-sm text-wallet-muted">--</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TxRow({ tx }: { tx: AccountTransaction }) {
+  const activity = deriveActivityType(tx);
+  const Icon = activityIcon(activity.type);
+  const summary = buildSummaryLine(tx);
+
+  return (
+    <a
+      href={`https://flowindex.io/tx/${tx.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-3 py-3.5 hover:bg-wallet-surface-hover rounded-2xl px-3 -mx-3 transition-colors group"
+    >
+      <div
+        className={cn(
+          'w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0',
+          activity.bgColor,
+        )}
+      >
+        <Icon className={cn('w-[18px] h-[18px]', activity.color)} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-white">{activity.label}</p>
+        <p className="text-xs text-wallet-muted truncate mt-0.5">
+          {summary || formatShort(tx.id ?? '')}
+        </p>
+      </div>
+      <span className="text-xs text-wallet-muted flex-shrink-0">{timeAgo(tx.timestamp)}</span>
+    </a>
   );
 }
 
@@ -321,6 +186,7 @@ export default function Dashboard() {
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [dataLoading, setDataLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState<DashTab>('crypto');
 
   const address =
     network === 'testnet'
@@ -334,7 +200,7 @@ export default function Dashboard() {
       const [acct, ftHoldings, txPage, tokenPrices] = await Promise.allSettled([
         getAccount(address),
         getAccountFtHoldings(address),
-        getAccountTransactions(address, { limit: 5 }),
+        getAccountTransactions(address, { limit: 10 }),
         getTokenPrices(),
       ]);
 
@@ -359,16 +225,27 @@ export default function Dashboard() {
     });
   }, [address]);
 
-  // Build enriched vault list from account data and holdings
+  // Build enriched vault list
   const flowBalance = account?.flowBalance ?? 0;
   const flowPrice = prices['FLOW'] ?? prices['flow'] ?? 0;
 
   const enrichedHoldings: VaultWithMeta[] = (() => {
-    // Prefer vaults from account data (has metadata), fall back to FT holdings
+    const result: VaultWithMeta[] = [];
+
+    // FLOW always first
+    result.push({
+      token: 'FLOW',
+      name: 'Flow',
+      symbol: 'FLOW',
+      logo: undefined,
+      balance: flowBalance,
+      usdValue: flowBalance * flowPrice,
+    });
+
     const vaults = account?.vaults;
     if (vaults && Object.keys(vaults).length > 0) {
-      return Object.entries(vaults)
-        .filter(([, v]) => v.symbol !== 'FLOW') // FLOW shown separately
+      const others = Object.entries(vaults)
+        .filter(([, v]) => v.symbol !== 'FLOW')
         .map(([, v]) => {
           const balance = v.balance ?? 0;
           const symbol = v.symbol ?? '';
@@ -384,41 +261,42 @@ export default function Dashboard() {
         })
         .filter((v) => v.balance > 0)
         .sort((a, b) => b.usdValue - a.usdValue || b.balance - a.balance);
+      result.push(...others);
+    } else {
+      const others = holdings
+        .filter((h) => !h.token?.includes('FlowToken'))
+        .map((h) => {
+          const balance = Number(h.balance ?? 0);
+          const tokenName = h.token?.split('.').pop() ?? '';
+          return {
+            token: h.token ?? '',
+            name: tokenName,
+            symbol: tokenName,
+            logo: undefined,
+            balance,
+            usdValue: 0,
+          };
+        })
+        .filter((v) => v.balance > 0)
+        .sort((a, b) => b.balance - a.balance);
+      result.push(...others);
     }
 
-    // Fall back to raw FT holdings
-    return holdings
-      .filter((h) => !h.token?.includes('FlowToken'))
-      .map((h) => {
-        const balance = Number(h.balance ?? 0);
-        const tokenName = h.token?.split('.').pop() ?? '';
-        return {
-          token: h.token ?? '',
-          name: tokenName,
-          symbol: tokenName,
-          logo: undefined,
-          balance,
-          usdValue: 0,
-        };
-      })
-      .filter((v) => v.balance > 0)
-      .sort((a, b) => b.balance - a.balance);
+    return result;
   })();
 
-  const totalUsd =
-    flowBalance * flowPrice +
-    enrichedHoldings.reduce((sum, h) => sum + h.usdValue, 0);
+  const totalUsd = enrichedHoldings.reduce((sum, h) => sum + h.usdValue, 0);
 
   // No account state
   if (!walletLoading && !address) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-          <Wallet className="w-8 h-8 text-zinc-500" />
+        <div className="w-16 h-16 rounded-2xl bg-wallet-surface flex items-center justify-center mb-5">
+          <Wallet className="w-8 h-8 text-wallet-muted" />
         </div>
         <h2 className="text-xl font-semibold text-white mb-2">No Account Found</h2>
-        <p className="text-sm text-zinc-400 max-w-xs">
-          Create or connect a Flow account to view your dashboard.
+        <p className="text-sm text-wallet-muted max-w-xs">
+          Create or connect a Flow account to view your wallet.
         </p>
       </div>
     );
@@ -428,69 +306,147 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* ---- Balance Header (Coinbase style) ---- */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-sm text-wallet-muted font-medium">Balance</p>
+          {address && (
+            <button
+              onClick={copyAddress}
+              className="flex items-center gap-1.5 text-xs text-wallet-muted hover:text-white transition-colors rounded-xl px-2 py-1 hover:bg-wallet-surface"
+            >
+              <span className="font-mono">0x{formatShort(address, 4, 4)}</span>
+              {copied ? (
+                <Check className="w-3 h-3 text-wallet-accent" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
+            </button>
+          )}
+        </div>
+
+        {loading ? (
+          <Skeleton className="h-12 w-48" />
+        ) : (
+          <h1 className="text-4xl font-extrabold text-white tracking-tight">
+            US${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </h1>
+        )}
+
+        {/* Quick Actions */}
+        <div className="flex gap-2 mt-4">
+          <Link
+            to="/send"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-wallet-surface hover:bg-wallet-surface-hover border border-wallet-border text-sm font-medium text-white transition-colors"
+          >
+            <ArrowUpRight className="w-4 h-4" />
+            Send
+          </Link>
+          <button
+            onClick={copyAddress}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-wallet-surface hover:bg-wallet-surface-hover border border-wallet-border text-sm font-medium text-white transition-colors"
+          >
+            <ArrowDownLeft className="w-4 h-4" />
+            Receive
+          </button>
+          {address && (
+            <a
+              href={`https://flowindex.io/account/0x${address}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-wallet-surface hover:bg-wallet-surface-hover border border-wallet-border text-sm font-medium text-white transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Explorer
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* ---- Tabs (Crypto / Transactions) ---- */}
+      <TabBar active={tab} onChange={setTab} />
+
+      {/* ---- Tab Content ---- */}
+      {tab === 'crypto' && (
         <div>
-          <p className="text-sm text-zinc-400 mb-1">Account</p>
-          {address ? (
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-mono text-white">
-                0x{formatShort(address, 6, 4)}
-              </h1>
-              <button
-                onClick={copyAddress}
-                className="text-zinc-500 hover:text-nothing-green transition-colors"
-                title="Copy full address"
-              >
-                {copied ? (
-                  <Check className="w-4 h-4 text-nothing-green" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-              </button>
-              <a
-                href={`https://flowindex.io/account/0x${address}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-zinc-500 hover:text-nothing-green transition-colors"
-                title="View on explorer"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </a>
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 py-3">
+                  <Skeleton className="w-10 h-10 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-24 rounded-xl" />
+                    <Skeleton className="h-3 w-16 rounded-xl" />
+                  </div>
+                  <Skeleton className="h-4 w-16 rounded-xl" />
+                </div>
+              ))}
+            </div>
+          ) : enrichedHoldings.filter(h => h.balance > 0).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-wallet-surface flex items-center justify-center mb-4">
+                <Wallet className="w-7 h-7 text-wallet-muted" />
+              </div>
+              <p className="text-base font-semibold text-white mb-1">Add crypto to get started</p>
+              <p className="text-sm text-wallet-muted">
+                Send some crypto to your wallet to get started
+              </p>
             </div>
           ) : (
-            <Skeleton className="h-6 w-48" />
+            <div className="divide-y divide-wallet-border/50">
+              {enrichedHoldings
+                .filter(h => h.balance > 0)
+                .map((vault) => (
+                  <TokenRow key={vault.token} vault={vault} />
+                ))}
+            </div>
           )}
         </div>
-        <div className="text-right">
-          <p className="text-sm text-zinc-400 mb-1">Portfolio Value</p>
+      )}
+
+      {tab === 'activity' && (
+        <div>
           {loading ? (
-            <Skeleton className="h-7 w-28 ml-auto" />
-          ) : totalUsd > 0 ? (
-            <p className="text-xl font-semibold text-white">
-              ${totalUsd.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </p>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 py-3">
+                  <Skeleton className="w-10 h-10 rounded-2xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-28 rounded-xl" />
+                    <Skeleton className="h-3 w-40 rounded-xl" />
+                  </div>
+                  <Skeleton className="h-3 w-14 rounded-xl" />
+                </div>
+              ))}
+            </div>
+          ) : transactions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-wallet-surface flex items-center justify-center mb-4">
+                <Clock className="w-7 h-7 text-wallet-muted" />
+              </div>
+              <p className="text-base font-semibold text-white mb-1">No transactions yet</p>
+              <p className="text-sm text-wallet-muted">
+                Transactions for this account will appear here
+              </p>
+            </div>
           ) : (
-            <p className="text-xl font-semibold text-zinc-500">--</p>
+            <>
+              <div className="divide-y divide-wallet-border/50">
+                {transactions.map((tx) => (
+                  <TxRow key={tx.id} tx={tx} />
+                ))}
+              </div>
+              <Link
+                to="/activity"
+                className="flex items-center justify-center gap-1.5 mt-4 py-3 rounded-2xl bg-wallet-surface hover:bg-wallet-surface-hover border border-wallet-border text-sm font-medium text-wallet-muted hover:text-white transition-colors"
+              >
+                View all transactions
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </>
           )}
         </div>
-      </div>
-
-      {/* FLOW balance */}
-      <FlowBalanceCard
-        flowBalance={flowBalance}
-        flowPrice={flowPrice}
-        loading={loading}
-      />
-
-      {/* 2-column grid: holdings + transactions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <FtHoldingsList holdings={enrichedHoldings} loading={loading} />
-        <RecentTransactions transactions={transactions} loading={loading} />
-      </div>
+      )}
     </div>
   );
 }

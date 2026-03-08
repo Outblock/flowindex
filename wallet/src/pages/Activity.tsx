@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  GlassCard,
-  Badge,
   Button,
   cn,
   formatShort,
@@ -43,7 +41,6 @@ type FilterTab = 'all' | 'ft' | 'nft';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Map activity type string to a Lucide icon component */
 function activityIcon(type: string) {
   const iconMap: Record<string, React.ElementType> = {
     ft: ArrowRightLeft,
@@ -64,7 +61,7 @@ function activityIcon(type: string) {
 
 function Skeleton({ className }: { className?: string }) {
   return (
-    <div className={cn('animate-pulse rounded bg-white/10', className)} />
+    <div className={cn('animate-pulse rounded-2xl bg-wallet-surface', className)} />
   );
 }
 
@@ -74,13 +71,13 @@ function Skeleton({ className }: { className?: string }) {
 
 function TransactionSkeleton() {
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-white/5">
-      <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+    <div className="flex items-center gap-3 py-3.5 border-b border-wallet-border/50">
+      <Skeleton className="w-10 h-10 rounded-2xl shrink-0" />
       <div className="flex-1 space-y-2">
-        <Skeleton className="h-4 w-28" />
-        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-4 w-28 rounded-xl" />
+        <Skeleton className="h-3 w-40 rounded-xl" />
       </div>
-      <Skeleton className="h-3 w-14 shrink-0" />
+      <Skeleton className="h-3 w-14 shrink-0 rounded-xl" />
     </div>
   );
 }
@@ -100,39 +97,25 @@ function TransactionRow({ tx }: { tx: AccountTransaction }) {
       href={`https://flowindex.io/tx/${tx.id}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-3 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.03] rounded-lg px-2 -mx-2 transition-colors group"
+      className="flex items-center gap-3 py-3.5 border-b border-wallet-border/50 last:border-0 hover:bg-wallet-surface-hover rounded-2xl px-3 -mx-3 transition-colors group"
     >
       <div
         className={cn(
-          'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
+          'w-10 h-10 rounded-2xl flex items-center justify-center shrink-0',
           activity.bgColor,
         )}
       >
-        <Icon className={cn('w-4.5 h-4.5', activity.color)} />
+        <Icon className={cn('w-[18px] h-[18px]', activity.color)} />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <Badge
-            variant="outline"
-            className={cn(
-              'text-[10px] px-1.5 py-0 h-4 font-medium',
-              activity.bgColor,
-              activity.color,
-            )}
-          >
-            {activity.label}
-          </Badge>
-          {tx.status === 'SEALED' && tx.error && (
-            <span className="text-[10px] text-red-400">Failed</span>
-          )}
-        </div>
-        <p className="text-xs text-zinc-400 truncate mt-0.5">
+        <p className="text-sm font-semibold text-white">{activity.label}</p>
+        <p className="text-xs text-wallet-muted truncate mt-0.5">
           {summary || formatShort(tx.id ?? '')}
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-[11px] text-zinc-500">{time}</span>
-        <ExternalLink className="w-3.5 h-3.5 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <span className="text-xs text-wallet-muted">{time}</span>
+        <ExternalLink className="w-3.5 h-3.5 text-wallet-muted/50 opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
     </a>
   );
@@ -154,38 +137,30 @@ function FtTransferRow({ transfer }: { transfer: FtTransfer }) {
       href={`https://flowindex.io/tx/${transfer.transaction_hash}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-3 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.03] rounded-lg px-2 -mx-2 transition-colors group"
+      className="flex items-center gap-3 py-3.5 border-b border-wallet-border/50 last:border-0 hover:bg-wallet-surface-hover rounded-2xl px-3 -mx-3 transition-colors group"
     >
       <div
         className={cn(
-          'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
+          'w-10 h-10 rounded-2xl flex items-center justify-center shrink-0',
           isSend ? 'bg-red-500/10' : 'bg-emerald-500/10',
         )}
       >
         {isSend ? (
-          <ArrowRightLeft className="w-4.5 h-4.5 text-red-400" />
+          <ArrowRightLeft className="w-[18px] h-[18px] text-red-400" />
         ) : (
-          <ArrowDownLeft className="w-4.5 h-4.5 text-emerald-400" />
+          <ArrowDownLeft className="w-[18px] h-[18px] text-emerald-400" />
         )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <Badge
-            variant="outline"
-            className={cn(
-              'text-[10px] px-1.5 py-0 h-4 font-medium',
-              isSend
-                ? 'bg-red-500/10 text-red-400'
-                : 'bg-emerald-500/10 text-emerald-400',
-            )}
-          >
+          <p className="text-sm font-semibold text-white">
             {isSend ? 'Sent' : 'Received'}
-          </Badge>
+          </p>
           {symbol && (
-            <span className="text-[10px] text-zinc-500">{symbol}</span>
+            <span className="text-xs text-wallet-muted">{symbol}</span>
           )}
         </div>
-        <p className="text-xs text-zinc-400 truncate mt-0.5">
+        <p className="text-xs text-wallet-muted truncate mt-0.5">
           {counterparty
             ? `${isSend ? 'To' : 'From'} 0x${formatShort(counterparty, 6, 4)}`
             : formatShort(transfer.transaction_hash ?? '')}
@@ -194,7 +169,7 @@ function FtTransferRow({ transfer }: { transfer: FtTransfer }) {
       <div className="flex flex-col items-end shrink-0 gap-0.5">
         <span
           className={cn(
-            'text-sm font-mono',
+            'text-sm font-mono font-medium',
             isSend ? 'text-red-400' : 'text-emerald-400',
           )}
         >
@@ -202,8 +177,8 @@ function FtTransferRow({ transfer }: { transfer: FtTransfer }) {
           {amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
         </span>
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-zinc-500">{time}</span>
-          <ExternalLink className="w-3.5 h-3.5 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <span className="text-xs text-wallet-muted">{time}</span>
+          <ExternalLink className="w-3.5 h-3.5 text-wallet-muted/50 opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
       </div>
     </a>
@@ -228,16 +203,16 @@ function FilterTabs({
   onChange: (tab: FilterTab) => void;
 }) {
   return (
-    <div className="flex gap-1 bg-white/5 rounded-lg p-1">
+    <div className="flex gap-1.5 bg-wallet-surface rounded-2xl p-1">
       {TABS.map((tab) => (
         <button
           key={tab.key}
           onClick={() => onChange(tab.key)}
           className={cn(
-            'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+            'px-3.5 py-2 rounded-xl text-sm font-medium transition-colors',
             active === tab.key
-              ? 'bg-white/10 text-white'
-              : 'text-zinc-500 hover:text-zinc-300',
+              ? 'bg-wallet-surface-hover text-white'
+              : 'text-wallet-muted hover:text-white',
           )}
         >
           {tab.label}
@@ -267,7 +242,6 @@ export default function Activity() {
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset when tab or address changes
   const fetchInitial = useCallback(async () => {
     if (!address) {
       setTransactions([]);
@@ -327,7 +301,6 @@ export default function Activity() {
     }
   }, [address, tab, transactions.length, ftTransfers.length, loadingMore]);
 
-  // Handle tab change — reset data
   const handleTabChange = useCallback((newTab: FilterTab) => {
     setTab(newTab);
     setTransactions([]);
@@ -335,19 +308,17 @@ export default function Activity() {
     setHasMore(false);
   }, []);
 
-  // -------------------------------------------------------------------------
-  // Render
-  // -------------------------------------------------------------------------
-
   // No account
   if (!walletLoading && !address) {
     return (
-      <div className="space-y-4 p-4">
+      <div className="space-y-4">
         <h1 className="text-xl font-semibold text-white">Activity</h1>
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-500 gap-3">
-          <History className="w-12 h-12" />
-          <span className="text-lg">No Account</span>
-          <span className="text-sm text-zinc-600">
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-wallet-surface flex items-center justify-center">
+            <History className="w-7 h-7 text-wallet-muted" />
+          </div>
+          <span className="text-base font-semibold text-white">No Account</span>
+          <span className="text-sm text-wallet-muted">
             Connect a Flow account to view transaction history
           </span>
         </div>
@@ -356,7 +327,7 @@ export default function Activity() {
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-5">
       {/* Header + tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-xl font-semibold text-white">Activity</h1>
@@ -365,13 +336,11 @@ export default function Activity() {
 
       {/* Loading skeleton */}
       {loading && (
-        <GlassCard className="rounded-xl p-4">
-          <div className="space-y-1">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <TransactionSkeleton key={i} />
-            ))}
-          </div>
-        </GlassCard>
+        <div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <TransactionSkeleton key={i} />
+          ))}
+        </div>
       )}
 
       {/* Error */}
@@ -384,10 +353,12 @@ export default function Activity() {
         !error &&
         transactions.length === 0 &&
         ftTransfers.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-zinc-500 gap-3">
-            <History className="w-12 h-12" />
-            <span className="text-lg">No activity yet</span>
-            <span className="text-sm text-zinc-600">
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-wallet-surface flex items-center justify-center">
+              <History className="w-7 h-7 text-wallet-muted" />
+            </div>
+            <span className="text-base font-semibold text-white">No activity yet</span>
+            <span className="text-sm text-wallet-muted">
               {tab === 'ft'
                 ? 'No token transfers found for this account'
                 : tab === 'nft'
@@ -399,27 +370,23 @@ export default function Activity() {
 
       {/* Transaction list (All / NFT tabs) */}
       {!loading && !error && transactions.length > 0 && (
-        <GlassCard className="rounded-xl p-4">
-          <div className="space-y-0">
-            {transactions.map((tx) => (
-              <TransactionRow key={tx.id} tx={tx} />
-            ))}
-          </div>
-        </GlassCard>
+        <div>
+          {transactions.map((tx) => (
+            <TransactionRow key={tx.id} tx={tx} />
+          ))}
+        </div>
       )}
 
       {/* FT Transfer list */}
       {!loading && !error && ftTransfers.length > 0 && (
-        <GlassCard className="rounded-xl p-4">
-          <div className="space-y-0">
-            {ftTransfers.map((t, i) => (
-              <FtTransferRow
-                key={`${t.transaction_hash}-${t.address}-${i}`}
-                transfer={t}
-              />
-            ))}
-          </div>
-        </GlassCard>
+        <div>
+          {ftTransfers.map((t, i) => (
+            <FtTransferRow
+              key={`${t.transaction_hash}-${t.address}-${i}`}
+              transfer={t}
+            />
+          ))}
+        </div>
       )}
 
       {/* Load More */}
@@ -430,7 +397,7 @@ export default function Activity() {
             size="sm"
             onClick={loadMore}
             disabled={loadingMore}
-            className="gap-2"
+            className="gap-2 rounded-2xl border-wallet-border hover:bg-wallet-surface"
           >
             {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
             {loadingMore ? 'Loading...' : 'Load More'}

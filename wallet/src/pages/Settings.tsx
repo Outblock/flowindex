@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAuth } from '@flowindex/auth-ui';
 import {
-  GlassCard,
   Button,
   Badge,
   Switch,
@@ -53,7 +52,7 @@ function deviceIcon(deviceType?: string) {
 
 function Skeleton({ className }: { className?: string }) {
   return (
-    <div className={cn('animate-pulse rounded bg-white/10', className)} />
+    <div className={cn('animate-pulse rounded-2xl bg-wallet-surface', className)} />
   );
 }
 
@@ -100,9 +99,9 @@ function PasskeyRow({
   };
 
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-white/5 last:border-0">
-      <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <DeviceIcon className="w-5 h-5 text-zinc-400" />
+    <div className="flex items-start gap-3 py-3.5 border-b border-wallet-border/50 last:border-0">
+      <div className="w-10 h-10 rounded-2xl bg-wallet-surface flex items-center justify-center flex-shrink-0 mt-0.5">
+        <DeviceIcon className="w-5 h-5 text-wallet-muted" />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -111,7 +110,7 @@ function PasskeyRow({
             <Input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              className="h-7 text-sm bg-white/5 border-white/10 text-white"
+              className="h-7 text-sm bg-wallet-surface border-wallet-border text-white rounded-xl"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleSave();
@@ -124,7 +123,7 @@ function PasskeyRow({
             <button
               onClick={handleSave}
               disabled={saving}
-              className="text-nothing-green hover:text-nothing-green/80 disabled:opacity-50"
+              className="text-wallet-accent hover:text-wallet-accent/80 disabled:opacity-50"
             >
               {saving ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -137,14 +136,14 @@ function PasskeyRow({
                 setEditing(false);
                 setEditName(passkey.authenticatorName ?? '');
               }}
-              className="text-zinc-500 hover:text-zinc-300"
+              className="text-wallet-muted hover:text-white"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-white truncate">
+            <p className="text-sm font-semibold text-white truncate">
               {passkey.authenticatorName || 'Unnamed Passkey'}
             </p>
             <button
@@ -152,7 +151,7 @@ function PasskeyRow({
                 setEditName(passkey.authenticatorName ?? '');
                 setEditing(true);
               }}
-              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="text-wallet-muted hover:text-white transition-colors"
               title="Rename"
             >
               <Pencil className="w-3.5 h-3.5" />
@@ -162,12 +161,12 @@ function PasskeyRow({
 
         <div className="flex items-center gap-3 mt-1">
           {passkey.deviceType && (
-            <span className="text-xs text-zinc-500">{passkey.deviceType}</span>
+            <span className="text-xs text-wallet-muted">{passkey.deviceType}</span>
           )}
           {passkey.backedUp && (
             <Badge
               variant="outline"
-              className="text-[10px] px-1.5 py-0 h-4 text-sky-400 border-sky-400/30 bg-sky-400/10"
+              className="text-[10px] px-1.5 py-0 h-4 text-sky-400 border-sky-400/30 bg-sky-400/10 rounded-lg"
             >
               <Cloud className="w-2.5 h-2.5 mr-0.5" />
               Synced
@@ -175,7 +174,7 @@ function PasskeyRow({
           )}
         </div>
 
-        <div className="flex items-center gap-4 mt-1.5 text-[11px] text-zinc-500">
+        <div className="flex items-center gap-4 mt-1.5 text-[11px] text-wallet-muted">
           <span>Created {formatDate(passkey.createdAt)}</span>
           {passkey.lastUsedAt && (
             <span>Last used {formatDate(passkey.lastUsedAt)}</span>
@@ -189,7 +188,7 @@ function PasskeyRow({
             <Button
               size="sm"
               variant="destructive"
-              className="h-7 text-xs px-2"
+              className="h-7 text-xs px-2 rounded-xl"
               onClick={handleRemove}
               disabled={removing}
             >
@@ -202,7 +201,7 @@ function PasskeyRow({
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 text-xs px-2 text-zinc-400"
+              className="h-7 text-xs px-2 text-wallet-muted rounded-xl"
               onClick={() => setConfirmRemove(false)}
             >
               Cancel
@@ -211,7 +210,7 @@ function PasskeyRow({
         ) : (
           <button
             onClick={() => setConfirmRemove(true)}
-            className="text-zinc-500 hover:text-red-400 transition-colors p-1"
+            className="text-wallet-muted hover:text-red-400 transition-colors p-1"
             title="Remove passkey"
           >
             <Trash2 className="w-4 h-4" />
@@ -237,9 +236,9 @@ function AccountRow({
     network === 'testnet' ? account.flowAddressTestnet : account.flowAddress;
 
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-white/5 last:border-0">
-      <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0">
-        <User className="w-5 h-5 text-zinc-400" />
+    <div className="flex items-center gap-3 py-3.5 border-b border-wallet-border/50 last:border-0">
+      <div className="w-10 h-10 rounded-2xl bg-wallet-surface flex items-center justify-center flex-shrink-0">
+        <User className="w-5 h-5 text-wallet-muted" />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -249,12 +248,12 @@ function AccountRow({
               0x{formatShort(address, 6, 4)}
             </p>
           ) : (
-            <p className="text-sm text-zinc-500 italic">Not provisioned</p>
+            <p className="text-sm text-wallet-muted italic">Not provisioned</p>
           )}
           <Badge
             variant="outline"
             className={cn(
-              'text-[10px] px-1.5 py-0 h-4',
+              'text-[10px] px-1.5 py-0 h-4 rounded-lg',
               network === 'mainnet'
                 ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10'
                 : 'text-amber-400 border-amber-400/30 bg-amber-400/10',
@@ -263,7 +262,7 @@ function AccountRow({
             {network}
           </Badge>
         </div>
-        <p className="text-[11px] text-zinc-500 mt-1 font-mono truncate">
+        <p className="text-[11px] text-wallet-muted mt-1 font-mono truncate">
           Key: {formatShort(account.publicKeySec1Hex, 8, 6)}
         </p>
       </div>
@@ -283,8 +282,6 @@ export default function Settings() {
   const [provisionLoading, setProvisionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ---- Passkey actions ----
-
   const handleRegister = useCallback(async () => {
     if (!passkey) return;
     setRegisterLoading(true);
@@ -303,22 +300,6 @@ export default function Settings() {
       if (!passkey) return;
       setError(null);
       try {
-        // passkey state has no direct rename — we use refreshState after the client call
-        // The AuthProvider exposes the passkey client methods through the state object
-        // We need to use the accessToken-based client; for now trigger via refreshState
-        // Actually, the passkey state doesn't expose updatePasskey directly.
-        // We'll rely on the fact that AuthProvider's passkeyClient is internal.
-        // Instead, we can get the access token from auth context and call the API ourselves.
-        // But the simplest approach: the passkey-client updatePasskey is called via
-        // the passkey state's internal client. Let's check if there's an exposed method...
-        // There isn't one on PasskeyState. We'll need to work around this.
-        // For now, we use a fetch call to the passkey auth URL directly.
-        // Actually, looking more carefully, AuthProvider doesn't expose updatePasskey/removePasskey
-        // on the PasskeyState interface. We need to add thin wrappers or call the API directly.
-        // For this implementation, we'll use the auth context's accessToken.
-        // Since we can't easily get the passkey client config here, let's just
-        // call refreshState after a no-op. In practice, the rename/remove would need
-        // to be added to PasskeyState. For now, simulate success and refresh.
         void credentialId;
         void name;
         // TODO: Add updatePasskey/removePasskey to PasskeyState interface
@@ -354,7 +335,6 @@ export default function Settings() {
         passkey.selectedAccount.credentialId,
       );
 
-      // Poll for each network's tx
       for (const [net, info] of Object.entries(result.networks)) {
         if (info.txId && !info.address) {
           try {
@@ -388,10 +368,10 @@ export default function Settings() {
   const passkeyLoading = passkey?.loading ?? false;
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-5 max-w-2xl">
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           <p>{error}</p>
           <button
@@ -403,16 +383,18 @@ export default function Settings() {
         </div>
       )}
 
-      {/* ---- Passkeys Section ---- */}
-      <GlassCard className="rounded-2xl p-6">
+      {/* Passkeys Section */}
+      <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-5">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Fingerprint className="w-5 h-5 text-nothing-green" />
-            <h2 className="text-lg font-semibold text-white">Passkeys</h2>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-wallet-accent/12 flex items-center justify-center">
+              <Fingerprint className="w-4 h-4 text-wallet-accent" />
+            </div>
+            <h2 className="text-base font-semibold text-white">Passkeys</h2>
           </div>
           <Button
             size="sm"
-            className="h-8 text-xs gap-1.5"
+            className="h-8 text-xs gap-1.5 rounded-xl bg-wallet-accent hover:bg-wallet-accent/90 text-black font-semibold"
             onClick={handleRegister}
             disabled={registerLoading || passkeyLoading || !passkey}
           >
@@ -429,19 +411,19 @@ export default function Settings() {
           <div className="space-y-3">
             {Array.from({ length: 2 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 py-3">
-                <Skeleton className="w-10 h-10 rounded-full" />
+                <Skeleton className="w-10 h-10 rounded-2xl" />
                 <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-48" />
+                  <Skeleton className="h-4 w-32 rounded-xl" />
+                  <Skeleton className="h-3 w-48 rounded-xl" />
                 </div>
               </div>
             ))}
           </div>
         ) : passkeys.length === 0 ? (
           <div className="text-center py-8">
-            <Fingerprint className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-            <p className="text-sm text-zinc-400">No passkeys registered yet.</p>
-            <p className="text-xs text-zinc-500 mt-1">
+            <Fingerprint className="w-10 h-10 text-wallet-muted mx-auto mb-3" />
+            <p className="text-sm text-wallet-muted">No passkeys registered yet.</p>
+            <p className="text-xs text-wallet-muted/70 mt-1">
               Add a passkey to enable passwordless authentication.
             </p>
           </div>
@@ -457,18 +439,20 @@ export default function Settings() {
             ))}
           </div>
         )}
-      </GlassCard>
+      </div>
 
-      {/* ---- Flow Accounts Section ---- */}
-      <GlassCard className="rounded-2xl p-6">
+      {/* Flow Accounts Section */}
+      <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-5">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <User className="w-5 h-5 text-nothing-green" />
-            <h2 className="text-lg font-semibold text-white">Flow Accounts</h2>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-wallet-accent/12 flex items-center justify-center">
+              <User className="w-4 h-4 text-wallet-accent" />
+            </div>
+            <h2 className="text-base font-semibold text-white">Flow Accounts</h2>
           </div>
           <Button
             size="sm"
-            className="h-8 text-xs gap-1.5"
+            className="h-8 text-xs gap-1.5 rounded-xl bg-wallet-accent hover:bg-wallet-accent/90 text-black font-semibold"
             onClick={handleProvision}
             disabled={provisionLoading || !passkey?.selectedAccount}
           >
@@ -483,9 +467,9 @@ export default function Settings() {
 
         {accounts.length === 0 ? (
           <div className="text-center py-8">
-            <User className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-            <p className="text-sm text-zinc-400">No accounts found.</p>
-            <p className="text-xs text-zinc-500 mt-1">
+            <User className="w-10 h-10 text-wallet-muted mx-auto mb-3" />
+            <p className="text-sm text-wallet-muted">No accounts found.</p>
+            <p className="text-xs text-wallet-muted/70 mt-1">
               Register a passkey first, then create a Flow account.
             </p>
           </div>
@@ -500,13 +484,15 @@ export default function Settings() {
             ))}
           </div>
         )}
-      </GlassCard>
+      </div>
 
-      {/* ---- Network Section ---- */}
-      <GlassCard className="rounded-2xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Globe className="w-5 h-5 text-nothing-green" />
-          <h2 className="text-lg font-semibold text-white">Network</h2>
+      {/* Network Section */}
+      <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-5">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-8 h-8 rounded-xl bg-wallet-accent/12 flex items-center justify-center">
+            <Globe className="w-4 h-4 text-wallet-accent" />
+          </div>
+          <h2 className="text-base font-semibold text-white">Network</h2>
         </div>
 
         <div className="flex items-center justify-between">
@@ -521,7 +507,7 @@ export default function Settings() {
               <p className="text-sm font-medium text-white">
                 {network === 'mainnet' ? 'Mainnet' : 'Testnet'}
               </p>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-wallet-muted">
                 {network === 'mainnet'
                   ? 'Production network'
                   : 'Test network for development'}
@@ -533,7 +519,7 @@ export default function Settings() {
             <span
               className={cn(
                 'text-xs font-medium',
-                network === 'mainnet' ? 'text-zinc-500' : 'text-amber-400',
+                network === 'mainnet' ? 'text-wallet-muted' : 'text-amber-400',
               )}
             >
               Testnet
@@ -547,45 +533,47 @@ export default function Settings() {
             <span
               className={cn(
                 'text-xs font-medium',
-                network === 'mainnet' ? 'text-emerald-400' : 'text-zinc-500',
+                network === 'mainnet' ? 'text-emerald-400' : 'text-wallet-muted',
               )}
             >
               Mainnet
             </span>
           </div>
         </div>
-      </GlassCard>
+      </div>
 
-      {/* ---- Security Section ---- */}
-      <GlassCard className="rounded-2xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Shield className="w-5 h-5 text-nothing-green" />
-          <h2 className="text-lg font-semibold text-white">Security</h2>
+      {/* Security Section */}
+      <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-5">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-8 h-8 rounded-xl bg-wallet-accent/12 flex items-center justify-center">
+            <Shield className="w-4 h-4 text-wallet-accent" />
+          </div>
+          <h2 className="text-base font-semibold text-white">Security</h2>
         </div>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-zinc-400">Email</p>
+              <p className="text-sm text-wallet-muted">Email</p>
               <p className="text-sm font-medium text-white">
                 {user?.email ?? '--'}
               </p>
             </div>
           </div>
 
-          <Separator className="bg-white/5" />
+          <Separator className="bg-wallet-border" />
 
           <Button
             variant="destructive"
             size="sm"
-            className="gap-2"
+            className="gap-2 rounded-xl"
             onClick={signOut}
           >
             <LogOut className="w-4 h-4" />
             Sign Out
           </Button>
         </div>
-      </GlassCard>
+      </div>
     </div>
   );
 }

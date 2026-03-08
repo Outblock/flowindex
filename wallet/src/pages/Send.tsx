@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  GlassCard,
   TokenIcon,
   UsdValue,
   Button,
@@ -36,10 +35,7 @@ import { FLOW_TRANSFER_TX, MAINNET_ALIASES, TESTNET_ALIASES } from '@/cadence/sc
 // ---------------------------------------------------------------------------
 
 const RP_ID = import.meta.env.VITE_RP_ID || 'flowindex.io';
-
-/** Minimum FLOW to keep for storage (0.001 FLOW) */
 const MIN_STORAGE_RESERVE = 0.001;
-
 const FLOW_ADDRESS_RE = /^0x[0-9a-fA-F]{16}$/;
 
 type Step = 'form' | 'review' | 'signing' | 'success' | 'error';
@@ -61,19 +57,18 @@ function isValidFlowAddress(addr: string): boolean {
   return FLOW_ADDRESS_RE.test(addr);
 }
 
-/** Format a UFix64 amount (8 decimal places, no trailing zeros beyond 2). */
 function formatUFix64(n: number): string {
   return n.toFixed(8).replace(/0+$/, '').replace(/\.$/, '.0');
 }
 
 function Skeleton({ className }: { className?: string }) {
   return (
-    <div className={cn('animate-pulse rounded bg-white/10', className)} />
+    <div className={cn('animate-pulse rounded-2xl bg-wallet-surface', className)} />
   );
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Token Selector
 // ---------------------------------------------------------------------------
 
 function TokenSelector({
@@ -94,7 +89,7 @@ function TokenSelector({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-3 w-full px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:border-zinc-700 transition-colors text-left"
+        className="flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl border border-wallet-border bg-wallet-surface hover:bg-wallet-surface-hover transition-colors text-left"
       >
         <TokenIcon
           logoUrl={selected.logo}
@@ -103,8 +98,8 @@ function TokenSelector({
           size={32}
         />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white">{selected.name}</p>
-          <p className="text-xs text-zinc-500">{selected.symbol}</p>
+          <p className="text-sm font-semibold text-white">{selected.name}</p>
+          <p className="text-xs text-wallet-muted">{selected.symbol}</p>
         </div>
         <div className="text-right mr-2">
           <p className="text-sm font-mono text-zinc-300">
@@ -113,14 +108,14 @@ function TokenSelector({
         </div>
         <ChevronDown
           className={cn(
-            'w-4 h-4 text-zinc-500 transition-transform',
+            'w-4 h-4 text-wallet-muted transition-transform',
             open && 'rotate-180',
           )}
         />
       </button>
 
       {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-900 shadow-lg">
+        <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-2xl border border-wallet-border bg-wallet-surface shadow-lg">
           {tokens.map((t) => (
             <button
               key={t.id}
@@ -130,8 +125,8 @@ function TokenSelector({
                 setOpen(false);
               }}
               className={cn(
-                'flex items-center gap-3 w-full px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left',
-                t.id === selected.id && 'bg-zinc-800/30',
+                'flex items-center gap-3 w-full px-4 py-3 hover:bg-wallet-surface-hover transition-colors text-left',
+                t.id === selected.id && 'bg-wallet-accent/5',
               )}
             >
               <TokenIcon
@@ -143,11 +138,11 @@ function TokenSelector({
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white">{t.name}</p>
               </div>
-              <p className="text-sm font-mono text-zinc-400">
+              <p className="text-sm font-mono text-wallet-muted">
                 {t.balance.toLocaleString(undefined, { maximumFractionDigits: 4 })}
               </p>
               {t.id === selected.id && (
-                <Check className="w-4 h-4 text-nothing-green flex-shrink-0" />
+                <Check className="w-4 h-4 text-wallet-accent flex-shrink-0" />
               )}
             </button>
           ))}
@@ -164,12 +159,10 @@ function TokenSelector({
 export default function Send() {
   const { activeAccount, network, loading: walletLoading } = useWallet();
 
-  // Data
   const [account, setAccount] = useState<AccountData | null>(null);
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [dataLoading, setDataLoading] = useState(false);
 
-  // Form state
   const [selectedToken, setSelectedToken] = useState<TokenOption | null>(null);
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
@@ -181,10 +174,6 @@ export default function Send() {
     network === 'testnet'
       ? activeAccount?.flowAddressTestnet
       : activeAccount?.flowAddress;
-
-  // -------------------------------------------------------------------------
-  // Fetch account data + prices
-  // -------------------------------------------------------------------------
 
   const fetchData = useCallback(async () => {
     if (!address) return;
@@ -205,14 +194,8 @@ export default function Send() {
     fetchData();
   }, [fetchData]);
 
-  // -------------------------------------------------------------------------
-  // Build token list from account vaults
-  // -------------------------------------------------------------------------
-
   const tokens: TokenOption[] = useMemo(() => {
     const result: TokenOption[] = [];
-
-    // Always include FLOW
     const flowBalance = account?.flowBalance ?? 0;
     result.push({
       id: 'FLOW',
@@ -222,7 +205,6 @@ export default function Send() {
       balance: flowBalance,
     });
 
-    // Add other vaults
     const vaults = account?.vaults;
     if (vaults) {
       for (const [, v] of Object.entries(vaults) as [string, VaultInfo][]) {
@@ -243,16 +225,11 @@ export default function Send() {
     return result;
   }, [account]);
 
-  // Auto-select FLOW when tokens change
   useEffect(() => {
     if (tokens.length > 0 && !selectedToken) {
       setSelectedToken(tokens[0]);
     }
   }, [tokens, selectedToken]);
-
-  // -------------------------------------------------------------------------
-  // Validation
-  // -------------------------------------------------------------------------
 
   const parsedAmount = parseFloat(amount);
   const isFlowToken = selectedToken?.id === 'FLOW';
@@ -297,14 +274,9 @@ export default function Send() {
     parsedAmount > 0 &&
     !!selectedToken;
 
-  // -------------------------------------------------------------------------
-  // Transaction submission
-  // -------------------------------------------------------------------------
-
   const handleSend = useCallback(async () => {
     if (!activeAccount || !address || !selectedToken) return;
 
-    // Currently only FLOW transfers are supported
     if (!isFlowToken) {
       setError('Only FLOW transfers are supported in this version.');
       setStep('error');
@@ -315,7 +287,6 @@ export default function Send() {
     setError(null);
 
     try {
-      // Configure FCL for this transaction
       const accessNode =
         network === 'testnet'
           ? 'https://rest-testnet.onflow.org'
@@ -328,7 +299,6 @@ export default function Send() {
         fcl.config().put(alias, addr);
       }
 
-      // Create the passkey authz function
       const authz = createPasskeyAuthz({
         address: `0x${address}`,
         keyIndex: 0,
@@ -336,7 +306,6 @@ export default function Send() {
         rpId: RP_ID,
       });
 
-      // Submit the transaction
       const txResult = await fcl.mutate({
         cadence: FLOW_TRANSFER_TX,
         args: (arg: typeof fcl.arg, t: typeof fcl.t) => [
@@ -352,13 +321,9 @@ export default function Send() {
       setTxId(txResult);
       setStep('success');
 
-      // Optionally wait for sealing (non-blocking)
-      fcl.tx(txResult).onceSealed().catch(() => {
-        // Ignore — the tx was already submitted successfully
-      });
+      fcl.tx(txResult).onceSealed().catch(() => {});
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Transaction failed';
-      // Don't show error for user cancellation
       if (message.includes('cancelled') || message.includes('canceled')) {
         setStep('review');
         return;
@@ -376,10 +341,6 @@ export default function Send() {
     setStep('form');
   }, []);
 
-  // -------------------------------------------------------------------------
-  // Render helpers
-  // -------------------------------------------------------------------------
-
   const explorerBase =
     network === 'testnet'
       ? 'https://testnet.flowindex.io'
@@ -389,11 +350,11 @@ export default function Send() {
   if (!walletLoading && !address) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-          <Wallet className="w-8 h-8 text-zinc-500" />
+        <div className="w-16 h-16 rounded-2xl bg-wallet-surface flex items-center justify-center mb-5">
+          <Wallet className="w-8 h-8 text-wallet-muted" />
         </div>
         <h2 className="text-xl font-semibold text-white mb-2">No Account Found</h2>
-        <p className="text-sm text-zinc-400 max-w-xs">
+        <p className="text-sm text-wallet-muted max-w-xs">
           Create or connect a Flow account to send tokens.
         </p>
       </div>
@@ -402,19 +363,16 @@ export default function Send() {
 
   const loading = walletLoading || dataLoading;
 
-  // -------------------------------------------------------------------------
   // Success view
-  // -------------------------------------------------------------------------
-
   if (step === 'success') {
     return (
       <div className="space-y-6">
-        <GlassCard className="rounded-2xl p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-nothing-green/10 flex items-center justify-center mx-auto mb-4">
-            <Check className="w-8 h-8 text-nothing-green" />
+        <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-8 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-wallet-accent/10 flex items-center justify-center mx-auto mb-4">
+            <Check className="w-8 h-8 text-wallet-accent" />
           </div>
           <h2 className="text-xl font-semibold text-white mb-2">Transaction Submitted</h2>
-          <p className="text-sm text-zinc-400 mb-6">
+          <p className="text-sm text-wallet-muted mb-6">
             Your transfer of{' '}
             <span className="font-mono text-white">
               {parsedAmount.toLocaleString(undefined, { maximumFractionDigits: 8 })}{' '}
@@ -432,7 +390,7 @@ export default function Send() {
               href={`${explorerBase}/tx/${txId}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm text-nothing-green hover:text-nothing-green/80 transition-colors font-mono mb-6"
+              className="inline-flex items-center gap-2 text-sm text-wallet-accent hover:text-wallet-accent/80 transition-colors font-mono mb-6"
             >
               {formatShort(txId, 8, 6)}
               <ExternalLink className="w-3.5 h-3.5" />
@@ -443,14 +401,14 @@ export default function Send() {
             <Button
               variant="outline"
               onClick={reset}
-              className="border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600"
+              className="rounded-2xl border-wallet-border text-wallet-muted hover:text-white hover:bg-wallet-surface-hover"
             >
               Send Another
             </Button>
             {txId && (
               <Button
                 asChild
-                className="bg-nothing-green hover:bg-nothing-green/90 text-black font-semibold"
+                className="rounded-2xl bg-wallet-accent hover:bg-wallet-accent/90 text-black font-semibold"
               >
                 <a
                   href={`${explorerBase}/tx/${txId}`}
@@ -463,20 +421,17 @@ export default function Send() {
               </Button>
             )}
           </div>
-        </GlassCard>
+        </div>
       </div>
     );
   }
 
-  // -------------------------------------------------------------------------
   // Error view
-  // -------------------------------------------------------------------------
-
   if (step === 'error') {
     return (
       <div className="space-y-6">
-        <GlassCard className="rounded-2xl p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+        <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-8 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-4">
             <X className="w-8 h-8 text-red-400" />
           </div>
           <h2 className="text-xl font-semibold text-white mb-2">Transaction Failed</h2>
@@ -487,41 +442,37 @@ export default function Send() {
             <Button
               variant="outline"
               onClick={reset}
-              className="border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600"
+              className="rounded-2xl border-wallet-border text-wallet-muted hover:text-white hover:bg-wallet-surface-hover"
             >
               Start Over
             </Button>
             <Button
               onClick={() => setStep('review')}
-              className="bg-nothing-green hover:bg-nothing-green/90 text-black font-semibold"
+              className="rounded-2xl bg-wallet-accent hover:bg-wallet-accent/90 text-black font-semibold"
             >
               Try Again
             </Button>
           </div>
-        </GlassCard>
+        </div>
       </div>
     );
   }
 
-  // -------------------------------------------------------------------------
   // Review view
-  // -------------------------------------------------------------------------
-
   if (step === 'review') {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setStep('form')}
-            className="text-zinc-400 hover:text-white transition-colors"
+            className="text-wallet-muted hover:text-white transition-colors w-10 h-10 rounded-2xl hover:bg-wallet-surface flex items-center justify-center"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="text-lg font-semibold text-white">Review Transaction</h1>
         </div>
 
-        <GlassCard className="rounded-2xl p-6 space-y-4">
-          {/* Token + Amount */}
+        <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-6 space-y-4">
           <div className="text-center py-4">
             <div className="flex items-center justify-center gap-3 mb-3">
               <TokenIcon
@@ -533,7 +484,7 @@ export default function Send() {
             </div>
             <p className="text-3xl font-bold text-white font-mono">
               {parsedAmount.toLocaleString(undefined, { maximumFractionDigits: 8 })}{' '}
-              <span className="text-lg text-zinc-400 font-normal">
+              <span className="text-lg text-wallet-muted font-normal">
                 {selectedToken?.symbol}
               </span>
             </p>
@@ -542,96 +493,80 @@ export default function Send() {
             )}
           </div>
 
-          {/* Details */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between py-2 border-b border-white/5">
-              <span className="text-sm text-zinc-400">From</span>
+            <div className="flex items-center justify-between py-2.5 border-b border-wallet-border/50">
+              <span className="text-sm text-wallet-muted">From</span>
               <span className="text-sm font-mono text-white">
                 0x{formatShort(address ?? '', 6, 4)}
               </span>
             </div>
-            <div className="flex items-center justify-between py-2 border-b border-white/5">
-              <span className="text-sm text-zinc-400">To</span>
+            <div className="flex items-center justify-between py-2.5 border-b border-wallet-border/50">
+              <span className="text-sm text-wallet-muted">To</span>
               <span className="text-sm font-mono text-white">
                 {formatShort(recipient, 6, 4)}
               </span>
             </div>
-            <div className="flex items-center justify-between py-2 border-b border-white/5">
-              <span className="text-sm text-zinc-400">Network</span>
+            <div className="flex items-center justify-between py-2.5 border-b border-wallet-border/50">
+              <span className="text-sm text-wallet-muted">Network</span>
               <span className="text-sm text-white capitalize">{network}</span>
             </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-sm text-zinc-400">Estimated Fee</span>
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-sm text-wallet-muted">Estimated Fee</span>
               <span className="text-sm font-mono text-zinc-300">&lt; 0.001 FLOW</span>
             </div>
           </div>
-        </GlassCard>
+        </div>
 
-        {/* Sign button */}
         <Button
           onClick={handleSend}
-          disabled={step === 'signing'}
-          className="w-full h-12 bg-nothing-green hover:bg-nothing-green/90 text-black font-semibold text-base"
+          className="w-full h-12 rounded-2xl bg-wallet-accent hover:bg-wallet-accent/90 text-black font-semibold text-base"
         >
-          {step === 'signing' ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              Awaiting Passkey...
-            </>
-          ) : (
-            <>
-              <Fingerprint className="w-5 h-5 mr-2" />
-              Sign &amp; Send
-            </>
-          )}
+          <Fingerprint className="w-5 h-5 mr-2" />
+          Sign &amp; Send
         </Button>
       </div>
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Signing overlay (shown during signing state)
-  // -------------------------------------------------------------------------
-
+  // Signing overlay
   if (step === 'signing') {
     return (
       <div className="space-y-6">
-        <GlassCard className="rounded-2xl p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-nothing-green/10 flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <Fingerprint className="w-8 h-8 text-nothing-green" />
+        <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-8 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-wallet-accent/10 flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <Fingerprint className="w-8 h-8 text-wallet-accent" />
           </div>
           <h2 className="text-xl font-semibold text-white mb-2">Confirm with Passkey</h2>
-          <p className="text-sm text-zinc-400 mb-4">
+          <p className="text-sm text-wallet-muted mb-4">
             Use your passkey to sign this transaction.
           </p>
-          <Loader2 className="w-6 h-6 animate-spin text-nothing-green mx-auto" />
-        </GlassCard>
+          <Loader2 className="w-6 h-6 animate-spin text-wallet-accent mx-auto" />
+        </div>
       </div>
     );
   }
 
-  // -------------------------------------------------------------------------
   // Form view (default)
-  // -------------------------------------------------------------------------
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <SendIcon className="w-5 h-5 text-nothing-green" />
+        <div className="w-8 h-8 rounded-xl bg-wallet-accent/12 flex items-center justify-center">
+          <SendIcon className="w-4 h-4 text-wallet-accent" />
+        </div>
         <h1 className="text-lg font-semibold text-white">Send Tokens</h1>
       </div>
 
       {loading ? (
-        <GlassCard className="rounded-2xl p-6 space-y-4">
-          <Skeleton className="h-14 w-full rounded-xl" />
-          <Skeleton className="h-12 w-full rounded-xl" />
-          <Skeleton className="h-12 w-full rounded-xl" />
-        </GlassCard>
+        <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-6 space-y-4">
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
       ) : (
-        <GlassCard className="rounded-2xl p-6 space-y-5">
+        <div className="rounded-3xl bg-wallet-surface border border-wallet-border p-6 space-y-5">
           {/* Token selector */}
           <div>
-            <label className="block text-sm text-zinc-400 mb-2">Token</label>
+            <label className="block text-sm text-wallet-muted mb-2 font-medium">Token</label>
             <TokenSelector
               tokens={tokens}
               selected={selectedToken}
@@ -641,13 +576,13 @@ export default function Send() {
 
           {/* Recipient */}
           <div>
-            <label className="block text-sm text-zinc-400 mb-2">Recipient</label>
+            <label className="block text-sm text-wallet-muted mb-2 font-medium">Recipient</label>
             <Input
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
               placeholder="0x0000000000000000"
               className={cn(
-                'bg-zinc-900/50 border-zinc-800 text-white font-mono placeholder:text-zinc-600 h-12',
+                'bg-wallet-bg border-wallet-border text-white font-mono placeholder:text-wallet-muted/50 h-12 rounded-2xl',
                 recipientError && recipient && 'border-red-500/50',
               )}
               spellCheck={false}
@@ -661,11 +596,11 @@ export default function Send() {
           {/* Amount */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm text-zinc-400">Amount</label>
+              <label className="text-sm text-wallet-muted font-medium">Amount</label>
               <button
                 type="button"
                 onClick={() => setAmount(String(maxSendable))}
-                className="text-xs text-nothing-green hover:text-nothing-green/80 transition-colors font-mono"
+                className="text-xs text-wallet-accent hover:text-wallet-accent/80 transition-colors font-mono"
               >
                 Max: {maxSendable.toLocaleString(undefined, { maximumFractionDigits: 4 })}
               </button>
@@ -679,11 +614,11 @@ export default function Send() {
                 min="0"
                 step="any"
                 className={cn(
-                  'bg-zinc-900/50 border-zinc-800 text-white font-mono placeholder:text-zinc-600 h-12 pr-20',
+                  'bg-wallet-bg border-wallet-border text-white font-mono placeholder:text-wallet-muted/50 h-12 rounded-2xl pr-20',
                   amountError && amount && 'border-red-500/50',
                 )}
               />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-zinc-500 font-mono">
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-wallet-muted font-mono">
                 {selectedToken?.symbol}
               </span>
             </div>
@@ -695,22 +630,22 @@ export default function Send() {
             )}
           </div>
 
-          {/* Only FLOW is supported notice */}
+          {/* Only FLOW supported notice */}
           {selectedToken && !isFlowToken && (
-            <div className="px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
               <p className="text-xs text-amber-400">
                 Only FLOW transfers are currently supported. Support for other tokens is coming soon.
               </p>
             </div>
           )}
-        </GlassCard>
+        </div>
       )}
 
       {/* Review button */}
       <Button
         onClick={() => setStep('review')}
         disabled={!canReview || !isFlowToken || loading}
-        className="w-full h-12 bg-nothing-green hover:bg-nothing-green/90 text-black font-semibold text-base disabled:opacity-40"
+        className="w-full h-12 rounded-2xl bg-wallet-accent hover:bg-wallet-accent/90 text-black font-semibold text-base disabled:opacity-40"
       >
         <ArrowUpRight className="w-5 h-5 mr-2" />
         Review Transaction

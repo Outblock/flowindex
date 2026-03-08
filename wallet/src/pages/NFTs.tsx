@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Image as ImageIcon, Layers } from 'lucide-react';
 import {
-  GlassCard,
   ImageWithFallback,
   Dialog,
   DialogContent,
@@ -24,25 +23,25 @@ import {
 
 function CollectionSkeleton() {
   return (
-    <GlassCard className="rounded-xl p-4 animate-pulse">
+    <div className="rounded-2xl p-4 animate-pulse bg-wallet-surface">
       <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-lg bg-white/10" />
+        <div className="w-14 h-14 rounded-2xl bg-wallet-surface-hover" />
         <div className="flex-1 space-y-2">
-          <div className="h-4 w-32 rounded bg-white/10" />
-          <div className="h-3 w-20 rounded bg-white/10" />
+          <div className="h-4 w-32 rounded-xl bg-wallet-surface-hover" />
+          <div className="h-3 w-20 rounded-xl bg-wallet-surface-hover" />
         </div>
       </div>
-    </GlassCard>
+    </div>
   );
 }
 
 function ItemSkeleton() {
   return (
-    <div className="rounded-xl overflow-hidden bg-white/5 animate-pulse">
-      <div className="aspect-square bg-white/10" />
+    <div className="rounded-2xl overflow-hidden bg-wallet-surface animate-pulse">
+      <div className="aspect-square bg-wallet-surface-hover" />
       <div className="p-3 space-y-2">
-        <div className="h-3.5 w-24 rounded bg-white/10" />
-        <div className="h-3 w-16 rounded bg-white/10" />
+        <div className="h-3.5 w-24 rounded-xl bg-wallet-surface-hover" />
+        <div className="h-3 w-16 rounded-xl bg-wallet-surface-hover" />
       </div>
     </div>
   );
@@ -69,33 +68,30 @@ function NFTDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg bg-black/90 border-white/10 text-white overflow-y-auto max-h-[90vh]">
+      <DialogContent className="max-w-lg bg-wallet-bg border-wallet-border text-white overflow-y-auto max-h-[90vh] rounded-3xl">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold truncate">
             {item.name || `#${item.nft_id ?? item.id}`}
           </DialogTitle>
           {collection && (
-            <DialogDescription className="text-sm text-zinc-400 truncate">
+            <DialogDescription className="text-sm text-wallet-muted truncate">
               {collection.display_name || collection.name || collection.contract_name}
             </DialogDescription>
           )}
         </DialogHeader>
 
-        {/* Image */}
         <ImageWithFallback
           src={thumbnail}
           alt={item.name ?? 'NFT'}
-          className="w-full aspect-square rounded-lg"
+          className="w-full aspect-square rounded-2xl"
         />
 
-        {/* Description */}
         {item.description && (
           <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
             {item.description}
           </p>
         )}
 
-        {/* Metadata grid */}
         <div className="grid grid-cols-2 gap-2 text-sm">
           {item.nft_id != null && (
             <MetaField label="Token ID" value={String(item.nft_id)} />
@@ -129,7 +125,7 @@ function NFTDetailModal({
             href={item.external_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-emerald-400 hover:underline"
+            className="text-sm text-wallet-accent hover:underline"
           >
             View on external site
           </a>
@@ -141,8 +137,8 @@ function NFTDetailModal({
 
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white/5 rounded-lg px-3 py-2">
-      <div className="text-[11px] text-zinc-500 uppercase tracking-wider">{label}</div>
+    <div className="bg-wallet-surface rounded-2xl px-3 py-2">
+      <div className="text-[11px] text-wallet-muted uppercase tracking-wider">{label}</div>
       <div className="text-zinc-200 truncate">{value}</div>
     </div>
   );
@@ -172,7 +168,7 @@ function CollectionRow({ collection, address }: { collection: NftCollection; add
         const fetched = await getNftCollectionItems(address, nftType, { limit: 50 });
         setItems(fetched);
       } catch {
-        // silently fail — items will remain empty
+        // silently fail
       } finally {
         setLoadingItems(false);
       }
@@ -181,42 +177,40 @@ function CollectionRow({ collection, address }: { collection: NftCollection; add
 
   return (
     <div>
-      <GlassCard
-        className="rounded-xl cursor-pointer hover:border-white/20 transition-colors"
+      <button
         onClick={toggle}
+        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-wallet-surface hover:bg-wallet-surface-hover border border-wallet-border transition-colors text-left"
       >
-        <div className="flex items-center gap-4 p-4">
-          <ImageWithFallback
-            src={squareImage}
-            alt={collectionName}
-            className="w-14 h-14 rounded-lg shrink-0"
-          />
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-white truncate">{collectionName}</div>
-            <div className="text-sm text-zinc-400">{count} item{count !== 1 ? 's' : ''}</div>
-          </div>
-          {expanded ? (
-            <ChevronDown className="w-5 h-5 text-zinc-500 shrink-0" />
-          ) : (
-            <ChevronRight className="w-5 h-5 text-zinc-500 shrink-0" />
-          )}
+        <ImageWithFallback
+          src={squareImage}
+          alt={collectionName}
+          className="w-14 h-14 rounded-2xl shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-white truncate">{collectionName}</div>
+          <div className="text-sm text-wallet-muted">{count} item{count !== 1 ? 's' : ''}</div>
         </div>
-      </GlassCard>
+        {expanded ? (
+          <ChevronDown className="w-5 h-5 text-wallet-muted shrink-0" />
+        ) : (
+          <ChevronRight className="w-5 h-5 text-wallet-muted shrink-0" />
+        )}
+      </button>
 
       {expanded && (
         <div className="mt-3 mb-2">
           {loadingItems ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {Array.from({ length: 4 }).map((_, i) => (
                 <ItemSkeleton key={i} />
               ))}
             </div>
           ) : items.length === 0 ? (
-            <div className="text-sm text-zinc-500 text-center py-6">
+            <div className="text-sm text-wallet-muted text-center py-6">
               No items found in this collection
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {items.map((item) => (
                 <NFTItemCard
                   key={item.id ?? item.nft_id}
@@ -265,24 +259,24 @@ function NFTItemCard({
   return (
     <button
       onClick={onClick}
-      className="rounded-xl overflow-hidden bg-white/5 border border-transparent hover:border-white/15 transition-all text-left group"
+      className="rounded-2xl overflow-hidden bg-wallet-surface border border-wallet-border hover:border-wallet-border-light transition-all text-left group cursor-pointer"
     >
       <ImageWithFallback
         src={thumbnail}
         alt={name}
         className="w-full aspect-square"
         fallback={
-          <div className="flex flex-col items-center gap-1 text-zinc-600">
+          <div className="flex flex-col items-center gap-1 text-wallet-muted">
             <ImageIcon className="w-8 h-8" />
             <span className="text-[10px]">{nftType.split('.').pop()}</span>
           </div>
         }
       />
       <div className="p-3">
-        <div className="text-sm text-white font-medium truncate group-hover:text-emerald-300 transition-colors">
+        <div className="text-sm text-white font-medium truncate group-hover:text-wallet-accent transition-colors">
           {name}
         </div>
-        {edition && <div className="text-xs text-zinc-500 mt-0.5">{edition}</div>}
+        {edition && <div className="text-xs text-wallet-muted mt-0.5">{edition}</div>}
       </div>
     </button>
   );
@@ -293,13 +287,18 @@ function NFTItemCard({
 // ---------------------------------------------------------------------------
 
 export default function NFTs() {
-  const { activeAccount } = useWallet();
+  const { activeAccount, network } = useWallet();
   const [collections, setCollections] = useState<NftCollection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const address =
+    network === 'testnet'
+      ? activeAccount?.flowAddressTestnet
+      : activeAccount?.flowAddress;
+
   useEffect(() => {
-    if (!activeAccount?.address) {
+    if (!address) {
       setCollections([]);
       setLoading(false);
       return;
@@ -308,7 +307,7 @@ export default function NFTs() {
     setLoading(true);
     setError(null);
 
-    getNftCollections(activeAccount.address)
+    getNftCollections(address)
       .then((data) => {
         if (!cancelled) setCollections(data);
       })
@@ -322,12 +321,11 @@ export default function NFTs() {
     return () => {
       cancelled = true;
     };
-  }, [activeAccount?.address]);
+  }, [address]);
 
-  // Loading state
   if (loading) {
     return (
-      <div className="space-y-4 p-4">
+      <div className="space-y-4">
         <h1 className="text-xl font-semibold text-white">NFTs</h1>
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -338,25 +336,25 @@ export default function NFTs() {
     );
   }
 
-  // Error state
   if (error) {
     return (
-      <div className="space-y-4 p-4">
+      <div className="space-y-4">
         <h1 className="text-xl font-semibold text-white">NFTs</h1>
         <div className="text-center py-16 text-red-400 text-sm">{error}</div>
       </div>
     );
   }
 
-  // Empty state
   if (collections.length === 0) {
     return (
-      <div className="space-y-4 p-4">
+      <div className="space-y-4">
         <h1 className="text-xl font-semibold text-white">NFTs</h1>
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-500 gap-3">
-          <Layers className="w-12 h-12" />
-          <span className="text-lg">No NFTs found</span>
-          <span className="text-sm text-zinc-600">
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-wallet-surface flex items-center justify-center">
+            <Layers className="w-7 h-7 text-wallet-muted" />
+          </div>
+          <span className="text-base font-semibold text-white">No NFTs found</span>
+          <span className="text-sm text-wallet-muted">
             NFTs owned by this account will appear here
           </span>
         </div>
@@ -365,10 +363,10 @@ export default function NFTs() {
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-white">NFTs</h1>
-        <span className="text-sm text-zinc-500">
+        <span className="text-sm text-wallet-muted">
           {collections.length} collection{collections.length !== 1 ? 's' : ''}
         </span>
       </div>
@@ -377,7 +375,7 @@ export default function NFTs() {
           <CollectionRow
             key={c.id || c.nft_type || c.name}
             collection={c}
-            address={activeAccount!.address}
+            address={address!}
           />
         ))}
       </div>
