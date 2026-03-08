@@ -42,6 +42,9 @@ export async function createServer(): Promise<McpServer> {
   const { registerWalletTools } = await import('../tools/wallet.js');
   registerWalletTools(server, ctx);
 
+  const { registerTemplateTools } = await import('../tools/templates.js');
+  registerTemplateTools(server, ctx);
+
   const info = signer.info();
   console.error(`Flow Agent Wallet MCP Server v0.1.0`);
   console.error(`Network: ${config.network}`);
