@@ -584,14 +584,18 @@ func (r *Repository) UpdateAddressStatsBatch(ctx context.Context, deltas []Addre
 	return nil
 }
 
-// CountAddressTransactions returns the number of indexed transactions for an address.
+// CountAddressTransactions checks whether any indexed transactions exist for an address.
+// Uses EXISTS instead of COUNT(*) to avoid full-table scans on high-activity addresses.
 func (r *Repository) CountAddressTransactions(ctx context.Context, address string) (int64, error) {
-	var count int64
+	var exists bool
 	err := r.db.QueryRow(ctx,
-		`SELECT COUNT(*) FROM app.address_transactions WHERE address = $1 LIMIT 1`,
+		`SELECT EXISTS(SELECT 1 FROM app.address_transactions WHERE address = $1 LIMIT 1)`,
 		hexToBytes(address),
-	).Scan(&count)
-	return count, err
+	).Scan(&exists)
+	if exists {
+		return 1, err
+	}
+	return 0, err
 }
 
 // GetAccountKeysByAddress returns all account keys for an address from the DB.

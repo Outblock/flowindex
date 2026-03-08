@@ -207,7 +207,8 @@ func (s *Server) handleFlowGetAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildAccountFallback returns a degraded account response from DB when RPC fails.
-// Returns nil if we have no data at all for this address.
+// Always returns a response (never nil) so accounts with RPC errors (e.g. storage
+// limit exceeded) still render instead of showing 404.
 func (s *Server) buildAccountFallback(ctx context.Context, addr flowsdk.Address) map[string]interface{} {
 	if s.repo == nil {
 		return nil
@@ -234,10 +235,6 @@ func (s *Server) buildAccountFallback(ctx context.Context, addr flowsdk.Address)
 		})
 	}
 
-	if !hasTxs && len(keys) == 0 {
-		return nil // no data at all
-	}
-
 	// Build degraded response
 	storageUsed := uint64(0)
 	storageCapacity := uint64(0)
@@ -249,12 +246,23 @@ func (s *Server) buildAccountFallback(ctx context.Context, addr flowsdk.Address)
 	}
 	const bytesPerMB = 1024 * 1024
 
-	log.Printf("[INFO] Serving fallback account data for %s (RPC unavailable)", addr.Hex())
+	// Also try to fetch contracts from DB
+	var contractNames []string
+	if contracts, err := s.repo.GetContractsByAddress(ctx, addressNorm); err == nil {
+		for _, c := range contracts {
+			contractNames = append(contractNames, c.Name)
+		}
+	}
+	if contractNames == nil {
+		contractNames = []string{}
+	}
+
+	log.Printf("[INFO] Serving fallback account data for %s (RPC unavailable, hasTxs=%v, keys=%d)", addr.Hex(), hasTxs, len(keys))
 
 	return map[string]interface{}{
 		"address":          formatAddressV1(addr.Hex()),
 		"flowBalance":      float64(-1), // -1 signals "unavailable" to frontend
-		"contracts":        []string{},
+		"contracts":        contractNames,
 		"keys":             keys,
 		"flowStorage":      float64(storageCapacity) / bytesPerMB,
 		"storageUsed":      float64(storageUsed) / bytesPerMB,
