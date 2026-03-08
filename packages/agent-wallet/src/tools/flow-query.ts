@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ServerContext } from '../server/server.js';
-import { FlowIndexClient } from '../flowindex/client.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -56,7 +55,7 @@ export function registerFlowQueryTools(server: McpServer, ctx: ServerContext): v
     },
     async ({ address }: { address: string }) => {
       try {
-        const client = new FlowIndexClient(ctx.config.flowindexUrl);
+        const client = ctx.flowIndexClient;
         const data = await client.getAccount(address);
         return jsonText(data);
       } catch (error) {
@@ -86,7 +85,7 @@ export function registerFlowQueryTools(server: McpServer, ctx: ServerContext): v
     },
     async ({ address }: { address: string }) => {
       try {
-        const client = new FlowIndexClient(ctx.config.flowindexUrl);
+        const client = ctx.flowIndexClient;
         const data = await client.getFlowBalance(address);
         return jsonText(data);
       } catch (error) {
@@ -116,7 +115,7 @@ export function registerFlowQueryTools(server: McpServer, ctx: ServerContext): v
     },
     async ({ address }: { address: string }) => {
       try {
-        const client = new FlowIndexClient(ctx.config.flowindexUrl);
+        const client = ctx.flowIndexClient;
         const data = await client.getFtBalances(address);
         return jsonText(data);
       } catch (error) {
@@ -146,7 +145,7 @@ export function registerFlowQueryTools(server: McpServer, ctx: ServerContext): v
     },
     async ({ address }: { address: string }) => {
       try {
-        const client = new FlowIndexClient(ctx.config.flowindexUrl);
+        const client = ctx.flowIndexClient;
         const data = await client.getNftCollections(address);
         return jsonText(data);
       } catch (error) {
@@ -176,7 +175,7 @@ export function registerFlowQueryTools(server: McpServer, ctx: ServerContext): v
     },
     async ({ tx_id }: { tx_id: string }) => {
       try {
-        const client = new FlowIndexClient(ctx.config.flowindexUrl);
+        const client = ctx.flowIndexClient;
         const data = await client.getTransaction(tx_id);
         return jsonText(data);
       } catch (error) {

@@ -4,11 +4,13 @@ import { configureFcl } from '../config/fcl.js';
 import { LocalSigner } from '../signer/local.js';
 import { CloudSigner } from '../signer/cloud.js';
 import type { FlowSigner } from '../signer/interface.js';
+import { FlowIndexClient } from '../flowindex/client.js';
 
 export interface ServerContext {
   config: AgentWalletConfig;
   signer: FlowSigner;
   cloudSigner: CloudSigner;
+  flowIndexClient: FlowIndexClient;
 }
 
 export async function createServer(): Promise<McpServer> {
@@ -29,7 +31,8 @@ export async function createServer(): Promise<McpServer> {
     signer = cloudSigner;
   }
 
-  const ctx: ServerContext = { config, signer, cloudSigner };
+  const flowIndexClient = new FlowIndexClient(config.flowindexUrl);
+  const ctx: ServerContext = { config, signer, cloudSigner, flowIndexClient };
 
   const server = new McpServer(
     { name: "flow-agent-wallet", version: "0.1.0" },

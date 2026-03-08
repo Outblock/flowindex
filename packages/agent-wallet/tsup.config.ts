@@ -9,6 +9,6 @@ export default defineConfig({
   sourcemap: true,
   onSuccess: async () => {
     // Copy cadence templates to dist so they're available at runtime
-    cpSync('src/templates/cadence', 'dist/templates/cadence', { recursive: true });
+    cpSync('src/templates/cadence', 'dist/cadence', { recursive: true });
   },
 });

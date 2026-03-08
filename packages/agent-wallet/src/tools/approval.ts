@@ -10,6 +10,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServerContext } from '../server/server.js';
 import { getPendingTx, removePendingTx, listPendingTxs } from '../approval/manager.js';
 import { executeFlowTransaction } from './templates.js';
+import { getTemplate } from '../templates/registry.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -56,11 +57,11 @@ export function registerApprovalTools(server: McpServer, ctx: ServerContext): vo
         // Remove from the queue before executing so it cannot be double-confirmed
         removePendingTx(tx_id);
 
-        // Build FCL args array from the stored named args + template arg order
-        // The pending tx stores raw arg values; executeFlowTransaction expects an
-        // array. We pass the values in Object.values order which matches how
-        // execute_template originally built them.
-        const fclArgs: unknown[] = Object.values(pending.args);
+        // Re-resolve the template to get the correct arg ordering
+        const template = getTemplate(pending.template_name);
+        const fclArgs: unknown[] = template
+          ? template.args.map((a) => pending.args[a.name])
+          : Object.values(pending.args);
 
         const result = await executeFlowTransaction(ctx, pending.cadence, fclArgs);
         return jsonContent(result);

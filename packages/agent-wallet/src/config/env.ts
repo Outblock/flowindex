@@ -17,6 +17,10 @@ export interface AgentWalletConfig {
   signerType: SignerType;
 }
 
+const VALID_NETWORKS = ['mainnet', 'testnet'] as const;
+const VALID_SIG_ALGOS = ['ECDSA_P256', 'ECDSA_secp256k1'] as const;
+const VALID_HASH_ALGOS = ['SHA2_256', 'SHA3_256'] as const;
+
 export function loadConfig(): AgentWalletConfig {
   const mnemonic = process.env.FLOW_MNEMONIC?.trim();
   const privateKey = process.env.FLOW_PRIVATE_KEY?.trim();
@@ -34,7 +38,21 @@ export function loadConfig(): AgentWalletConfig {
     signerType = 'cloud-interactive';
   }
 
-  const network = (process.env.FLOW_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
+  const networkRaw = process.env.FLOW_NETWORK || 'mainnet';
+  if (!(VALID_NETWORKS as readonly string[]).includes(networkRaw)) {
+    throw new Error(`Invalid FLOW_NETWORK: ${networkRaw}. Must be mainnet or testnet.`);
+  }
+  const network = networkRaw as 'mainnet' | 'testnet';
+
+  const sigAlgoRaw = process.env.FLOW_SIG_ALGO || 'ECDSA_secp256k1';
+  if (!(VALID_SIG_ALGOS as readonly string[]).includes(sigAlgoRaw)) {
+    throw new Error(`Invalid FLOW_SIG_ALGO: ${sigAlgoRaw}. Must be one of: ${VALID_SIG_ALGOS.join(', ')}`);
+  }
+
+  const hashAlgoRaw = process.env.FLOW_HASH_ALGO || 'SHA2_256';
+  if (!(VALID_HASH_ALGOS as readonly string[]).includes(hashAlgoRaw)) {
+    throw new Error(`Invalid FLOW_HASH_ALGO: ${hashAlgoRaw}. Must be one of: ${VALID_HASH_ALGOS.join(', ')}`);
+  }
 
   return {
     network,
@@ -42,8 +60,8 @@ export function loadConfig(): AgentWalletConfig {
     privateKey,
     flowAddress: process.env.FLOW_ADDRESS?.trim(),
     flowKeyIndex: parseInt(process.env.FLOW_KEY_INDEX || '0', 10),
-    sigAlgo: (process.env.FLOW_SIG_ALGO || 'ECDSA_secp256k1') as AgentWalletConfig['sigAlgo'],
-    hashAlgo: (process.env.FLOW_HASH_ALGO || 'SHA2_256') as AgentWalletConfig['hashAlgo'],
+    sigAlgo: sigAlgoRaw as AgentWalletConfig['sigAlgo'],
+    hashAlgo: hashAlgoRaw as AgentWalletConfig['hashAlgo'],
     evmPrivateKey,
     evmAccountIndex: parseInt(process.env.EVM_ACCOUNT_INDEX || '0', 10),
     flowindexToken,
