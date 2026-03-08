@@ -332,3 +332,15 @@ export interface FlowMultiSignParams {
   signers: string
   network?: string
 }
+
+/** Parameters for flow_send tool */
+export interface FlowSendParams {
+  signer: string
+  sendType: string
+  sender: string
+  receiver: string
+  flowIdentifier: string
+  amount?: string
+  nftIds?: string
+  network?: string
+}
