@@ -1,0 +1,680 @@
+---
+title: API Reference
+description: REST API endpoints and WebSocket events for FlowIndex.
+---
+
+The FlowIndex API is served by the backend on port 8080 by default. All endpoints return JSON and support CORS.
+
+API routes are available under the `/flow/v1/` prefix (also accessible at `/api/v1/flow/v1/` for compatibility).
+
+## Base Endpoints
+
+### Health Check
+
+```
+GET /health
+```
+
+Returns the service health status.
+
+```json
+{"status": "ok"}
+```
+
+### Indexing Status
+
+```
+GET /status
+```
+
+Returns comprehensive indexing status including block heights, worker progress, and configuration.
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `include_ranges` | boolean | Include indexed block ranges (heavier query) |
+
+**Response:**
+
+```json
+{
+  "chain_id": "flow",
+  "latest_height": 142610500,
+  "indexed_height": 142610498,
+  "history_height": 85000000,
+  "min_height": 85000000,
+  "max_height": 142610498,
+  "total_blocks": 57610498,
+  "total_transactions": 450000000,
+  "total_events": 2100000000,
+  "total_addresses": 35000000,
+  "total_contracts": 12000,
+  "progress": "99.98%",
+  "behind": 2,
+  "status": "ok"
+}
+```
+
+### OpenAPI Specification
+
+```
+GET /openapi.yaml
+GET /openapi.json
+```
+
+Returns the OpenAPI specification in YAML or JSON format.
+
+---
+
+## Blocks
+
+### List Blocks
+
+```
+GET /flow/block
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | integer | Number of blocks to return (default: 20, max: 100) |
+| `cursor` | string | Pagination cursor (block height) |
+
+**Example response:**
+
+```json
+{
+  "data": [
+    {
+      "height": 142610500,
+      "id": "abc123...",
+      "parent_id": "def456...",
+      "timestamp": "2025-01-15T12:00:00Z",
+      "tx_count": 15,
+      "event_count": 120
+    }
+  ],
+  "has_more": true,
+  "cursor": "142610480"
+}
+```
+
+### Get Block
+
+```
+GET /flow/block/{height}
+```
+
+Returns a single block by height, including collections and transaction summaries.
+
+### Block Transactions
+
+```
+GET /flow/block/{height}/transaction
+```
+
+Returns all transactions in a block.
+
+### Block Service Events
+
+```
+GET /flow/block/{height}/service-event
+```
+
+Returns system service events for a block (epoch transitions, protocol state changes).
+
+---
+
+## Transactions
+
+### List Transactions
+
+```
+GET /flow/transaction
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | integer | Number of results (default: 20) |
+| `cursor` | string | Pagination cursor (`block_height:tx_index:tx_id`) |
+
+### Get Transaction
+
+```
+GET /flow/transaction/{id}
+```
+
+Returns a single transaction by its Flow transaction ID. Also resolves EVM transaction hashes.
+
+---
+
+## Accounts
+
+### List Accounts
+
+```
+GET /flow/account
+```
+
+### Get Account
+
+```
+GET /flow/account/{address}
+```
+
+Returns account details including balance, key count, contract count, and labels.
+
+### Account Transactions
+
+```
+GET /flow/account/{address}/transaction
+```
+
+Returns transactions involving the given address (as payer, proposer, or authorizer).
+
+### Account FT Vaults
+
+```
+GET /flow/account/{address}/ft
+```
+
+Returns all fungible token vaults (balances) for an account.
+
+### Account FT Transfers
+
+```
+GET /flow/account/{address}/ft/transfer
+```
+
+### Account NFT Collections
+
+```
+GET /flow/account/{address}/nft
+```
+
+### Account NFT Transfers
+
+```
+GET /flow/account/{address}/nft/transfer
+```
+
+### Account Balance History
+
+```
+GET /flow/account/{address}/balance/history
+```
+
+### Account Storage
+
+```
+GET /flow/account/{address}/storage
+```
+
+Returns the account's on-chain storage contents.
+
+### Account Contract Code
+
+```
+GET /flow/account/{address}/contract/{name}
+```
+
+Returns the source code of a specific contract deployed to the account.
+
+### Account Labels
+
+```
+GET /flow/account/{address}/labels
+```
+
+Returns known labels/tags for the account (e.g., exchange, service, etc.).
+
+### Tax Report
+
+```
+GET /flow/account/{address}/tax-report
+```
+
+Generates a tax report for the account's token activity.
+
+---
+
+## Fungible Tokens
+
+### List FT Tokens
+
+```
+GET /flow/ft
+```
+
+Returns all known fungible tokens with metadata (name, symbol, decimals, icon).
+
+### Get FT Token
+
+```
+GET /flow/ft/{token}
+```
+
+### FT Transfers
+
+```
+GET /flow/ft/transfer
+```
+
+Global fungible token transfer feed.
+
+### FT Token Stats
+
+```
+GET /flow/ft/stats
+```
+
+### FT Token Prices
+
+```
+GET /flow/ft/prices
+```
+
+### FT Holdings by Token
+
+```
+GET /flow/ft/{token}/holding
+```
+
+### Top FT Accounts
+
+```
+GET /flow/ft/{token}/top-account
+```
+
+---
+
+## NFTs
+
+### List NFT Collections
+
+```
+GET /flow/nft
+```
+
+### Get NFT Collection
+
+```
+GET /flow/nft/{nft_type}
+```
+
+### NFT Transfers
+
+```
+GET /flow/nft/transfer
+```
+
+Global NFT transfer feed.
+
+### NFT Collection Items
+
+```
+GET /flow/nft/{nft_type}/item
+```
+
+### NFT Item Detail
+
+```
+GET /flow/nft/{nft_type}/item/{id}
+```
+
+### NFT Item Transfers
+
+```
+GET /flow/nft/{nft_type}/item/{id}/transfer
+```
+
+### NFT Search
+
+```
+GET /flow/nft/search
+```
+
+---
+
+## Contracts
+
+### List Contracts
+
+```
+GET /flow/contract
+```
+
+### Get Contract
+
+```
+GET /flow/contract/{identifier}
+```
+
+The `identifier` format is `A.{address}.{name}` (e.g., `A.1654653399040a61.FlowToken`).
+
+### Contract Transactions
+
+```
+GET /flow/contract/{identifier}/transaction
+```
+
+### Contract Event Types
+
+```
+GET /flow/contract/{identifier}/events
+```
+
+### Contract Versions
+
+```
+GET /flow/contract/{identifier}/version
+```
+
+### Contract Dependencies
+
+```
+GET /flow/contract/{identifier}/dependencies
+```
+
+---
+
+## EVM
+
+### List EVM Transactions
+
+```
+GET /flow/evm/transaction
+```
+
+### Get EVM Transaction
+
+```
+GET /flow/evm/transaction/{hash}
+```
+
+Look up an EVM transaction by its EVM hash. Returns both the EVM details and the parent Cadence transaction.
+
+### List EVM Tokens
+
+```
+GET /flow/evm/token
+```
+
+### Get EVM Token
+
+```
+GET /flow/evm/token/{address}
+```
+
+### EVM Address Tokens
+
+```
+GET /flow/evm/address/{address}/token
+```
+
+---
+
+## Staking
+
+### List Nodes
+
+```
+GET /flow/node
+```
+
+### Get Node
+
+```
+GET /flow/node/{node_id}
+```
+
+### Staking Delegators
+
+```
+GET /staking/delegator
+```
+
+### Epoch Stats
+
+```
+GET /staking/epoch/stats
+```
+
+### Epoch Nodes
+
+```
+GET /staking/epoch/{epoch}/nodes
+```
+
+### Staking Rewards
+
+```
+GET /staking/rewards/paid
+GET /staking/rewards/staking
+```
+
+### Staking Tokenomics
+
+```
+GET /staking/tokenomics
+```
+
+---
+
+## DeFi
+
+### List DeFi Assets
+
+```
+GET /defi/asset
+```
+
+### List DeFi Pairs
+
+```
+GET /defi/pair
+```
+
+### DeFi Events
+
+```
+GET /defi/events
+```
+
+### Latest DeFi Swap
+
+```
+GET /defi/latest-swap
+```
+
+---
+
+## Analytics
+
+### Daily Metrics
+
+```
+GET /insights/daily
+```
+
+Returns daily aggregate metrics (transactions, accounts, events).
+
+### Daily Module Metrics
+
+```
+GET /insights/daily/module/{module}
+```
+
+### Transfer Analytics
+
+```
+GET /insights/transfers/daily
+```
+
+### Big Transfers
+
+```
+GET /insights/big-transfers
+```
+
+### Top Contracts
+
+```
+GET /insights/top-contracts
+```
+
+### Token Volume
+
+```
+GET /insights/token-volume
+```
+
+---
+
+## Network Status
+
+### Network Statistics
+
+```
+GET /status/stat
+GET /status/stat/{timescale}/trend
+```
+
+### Flow Statistics
+
+```
+GET /status/flow/stat
+```
+
+### Epoch Status
+
+```
+GET /status/epoch/status
+GET /status/epoch/stat
+```
+
+### Price Data
+
+```
+GET /status/price
+GET /status/price/at
+GET /status/price/history
+GET /status/prices
+```
+
+### Node Count
+
+```
+GET /status/nodes
+```
+
+---
+
+## Events
+
+### Search Events
+
+```
+GET /flow/events/search
+```
+
+Search for events by type across all indexed blocks.
+
+---
+
+## Public Key Lookup
+
+```
+GET /flow/key/{publicKey}
+```
+
+Find accounts associated with a given public key.
+
+---
+
+## COA (Cadence-Owned Account) Mapping
+
+```
+GET /flow/coa/{address}
+```
+
+Look up the COA mapping for a Flow-EVM address.
+
+---
+
+## WebSocket
+
+### Live Updates
+
+```
+ws://localhost:8080/ws
+```
+
+Connect to receive real-time broadcasts of new blocks and transactions. Messages are JSON-encoded with a `type` field:
+
+#### `new_block`
+
+Broadcast when a new block is indexed.
+
+```json
+{
+  "type": "new_block",
+  "payload": {
+    "height": 142610500,
+    "id": "abc123...",
+    "timestamp": "2025-01-15T12:00:00Z",
+    "tx_count": 15,
+    "event_count": 120
+  }
+}
+```
+
+#### `new_transaction`
+
+Broadcast for each transaction in a new block.
+
+```json
+{
+  "type": "new_transaction",
+  "payload": {
+    "id": "def456...",
+    "block_height": 142610500,
+    "status": "SEALED",
+    "payer_address": "e467b9dd11fa00df",
+    "proposer_address": "e467b9dd11fa00df",
+    "timestamp": "2025-01-15T12:00:00Z",
+    "execution_status": "SUCCESS",
+    "is_evm": false,
+    "script_hash": "a1b2c3...",
+    "template_category": "token_transfer",
+    "template_label": "Transfer FLOW",
+    "tags": ["FT_TRANSFER"]
+  }
+}
+```
+
+### Status WebSocket
+
+```
+ws://localhost:8080/ws/status
+```
+
+Streams the indexing status payload every 3 seconds (same format as `GET /status`).
+
+---
+
+## Pagination
+
+All list endpoints use **cursor-based pagination**. The response includes:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data` | array | Result items |
+| `has_more` | boolean | Whether more results exist |
+| `cursor` | string | Pass as `?cursor=` to get the next page |
+
+Cursor formats vary by endpoint:
+- Blocks: `height`
+- Transactions: `block_height:tx_index:tx_id`
+- Account transactions: `block_height:tx_id`
+- Token transfers: `block_height:tx_id:event_index`

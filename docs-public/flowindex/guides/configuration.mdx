@@ -1,0 +1,145 @@
+---
+title: Configuration
+description: Environment variables reference for FlowIndex backend.
+---
+
+The FlowIndex backend is configured entirely through environment variables. This page documents the key variables organized by function.
+
+## Core
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_URL` | *(required)* | PostgreSQL connection string (e.g., `postgres://user:pass@host:5432/flowscan`) |
+| `PORT` | `8080` | HTTP port for the API server |
+| `START_BLOCK` | `0` | Block height to begin forward ingestion from |
+| `RAW_ONLY` | `false` | When `true`, disables all workers and derivers -- only raw ingestion runs |
+
+## Flow Access Nodes
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FLOW_ACCESS_NODE` | mainnet28 | Primary Flow gRPC endpoint |
+| `FLOW_ACCESS_NODES` | -- | Comma-separated gRPC endpoints for live ingestion (node pool) |
+| `FLOW_HISTORIC_ACCESS_NODES` | -- | Comma-separated gRPC endpoints for history backfill (supports per-spork nodes) |
+| `FLOW_ARCHIVE_NODE` | -- | Archive node endpoint for pre-spork data |
+
+## Forward Ingester
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_FORWARD_INGESTER` | `true` | Enable or disable the forward (live) ingester |
+| `LATEST_WORKER_COUNT` | `2` | Number of concurrent workers fetching blocks |
+| `LATEST_BATCH_SIZE` | `1` | Number of blocks per batch |
+
+## Backward Ingester
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_HISTORY_INGESTER` | `true` | Enable or disable the backward (history) ingester |
+| `HISTORY_WORKER_COUNT` | `5` | Number of concurrent workers for backfill |
+| `HISTORY_BATCH_SIZE` | `20` | Number of blocks per backfill batch |
+| `HISTORY_STOP_HEIGHT` | `0` (disabled) | Stop the backward ingester at this height |
+
+## Derivers
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_LIVE_DERIVERS` | `true` | Enable the forward and history Live Derivers |
+| `LIVE_DERIVERS_CHUNK` | `10` | Number of blocks processed per Live Deriver chunk |
+| `LIVE_DERIVERS_HEAD_BACKFILL_BLOCKS` | `100` | Blocks to seed on startup for immediate UI data |
+| `ENABLE_HISTORY_DERIVERS` | `true` | Enable the History Deriver safety-net scanner |
+| `HISTORY_DERIVERS_CHUNK` | `1000` | Blocks per History Deriver chunk |
+| `HISTORY_DERIVERS_SLEEP_MS` | `0` | Throttle delay (ms) between History Deriver chunks |
+
+## Worker Toggles
+
+Each worker can be individually enabled or disabled:
+
+| Variable | Default | Worker |
+|----------|---------|--------|
+| `ENABLE_TOKEN_WORKER` | `true` | FT/NFT token transfers |
+| `ENABLE_EVM_WORKER` | `true` | EVM transaction mapping |
+| `ENABLE_META_WORKER` | `true` | Address transactions, account keys, contracts |
+| `ENABLE_ACCOUNTS_WORKER` | `true` | Account catalog |
+| `ENABLE_FT_HOLDINGS_WORKER` | `true` | FT balance tracking |
+| `ENABLE_NFT_OWNERSHIP_WORKER` | `true` | NFT ownership tracking |
+| `ENABLE_TOKEN_METADATA_WORKER` | `true` | On-chain FT/NFT metadata |
+| `ENABLE_TX_CONTRACTS_WORKER` | `true` | Transaction contract tagging |
+| `ENABLE_TX_METRICS_WORKER` | `true` | Per-transaction metrics |
+| `ENABLE_STAKING_WORKER` | `true` | Staking and epoch events |
+| `ENABLE_DEFI_WORKER` | `true` | DEX swap events |
+| `ENABLE_DAILY_STATS_WORKER` | `true` | Daily aggregate statistics |
+| `ENABLE_DAILY_BALANCE_WORKER` | `true` | Daily balance aggregation |
+| `ENABLE_NFT_ITEM_METADATA_WORKER` | `true` | Per-NFT metadata fetching |
+| `ENABLE_NFT_OWNERSHIP_RECONCILER` | `true` | NFT ownership verification |
+| `ENABLE_ANALYTICS_DERIVER_WORKER` | `true` | Analytics derivation |
+
+## Worker Concurrency
+
+Each worker has configurable concurrency and range size:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TOKEN_WORKER_CONCURRENCY` | `1` | Parallel token worker instances |
+| `TOKEN_WORKER_RANGE` | `1000` | Block range per processing unit |
+| `EVM_WORKER_CONCURRENCY` | `1` | Parallel EVM worker instances |
+| `EVM_WORKER_RANGE` | `1000` | Block range per processing unit |
+| `META_WORKER_CONCURRENCY` | `1` | Parallel meta worker instances |
+| `META_WORKER_RANGE` | `1000` | Block range per processing unit |
+| `ACCOUNTS_WORKER_CONCURRENCY` | `1` | Parallel accounts worker instances |
+| `STAKING_WORKER_CONCURRENCY` | `1` | Parallel staking worker instances |
+| `DEFI_WORKER_CONCURRENCY` | `1` | Parallel DeFi worker instances |
+
+The pattern `{WORKER_NAME}_CONCURRENCY` and `{WORKER_NAME}_RANGE` applies to all workers.
+
+## Rate Limiting
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FLOW_RPC_RPS` | -- | Requests per second to Flow Access Nodes |
+| `FLOW_RPC_BURST` | -- | Burst allowance for RPC rate limiter |
+| `API_RATE_LIMIT_*` | -- | API rate limiting configuration |
+
+## Database Pool
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_MAX_OPEN_CONNS` | -- | Maximum open database connections |
+| `DB_MAX_IDLE_CONNS` | -- | Maximum idle database connections |
+
+## Reorg Protection
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_REORG_DEPTH` | `1000` | Maximum rollback depth for chain reorganization handling |
+
+## Market Data
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_PRICE_FEED` | `false` | Enable CoinGecko price feed |
+| `PRICE_REFRESH_MIN` | -- | Price refresh interval in minutes |
+
+## Authentication
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SUPABASE_DB_URL` | -- | Supabase PostgreSQL connection string |
+| `SUPABASE_JWT_SECRET` | -- | JWT secret for Supabase auth verification |
+| `ADMIN_TOKEN` | -- | Static admin API token |
+| `ADMIN_JWT_SECRET` | -- | JWT secret for admin authentication |
+| `ADMIN_ALLOWED_ROLES` | -- | Comma-separated list of allowed admin roles |
+
+## Webhooks
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SVIX_AUTH_TOKEN` | -- | Svix authentication token for webhook delivery |
+| `SVIX_SERVER_URL` | -- | Svix server URL |
+
+## Frontend
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_URL` | `http://localhost:8080` | Backend API URL used by the frontend |
+| `VITE_SUPABASE_URL` | -- | Supabase gateway URL for authentication |

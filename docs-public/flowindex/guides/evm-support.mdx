@@ -1,0 +1,129 @@
+---
+title: EVM Support
+description: How FlowIndex detects, indexes, and serves Flow-EVM transactions.
+---
+
+Flow supports running EVM transactions natively through its Cadence smart contract layer. FlowIndex automatically detects and indexes these EVM transactions, making them searchable by both their Flow transaction ID and their EVM hash.
+
+## How EVM Transactions Work on Flow
+
+On Flow, EVM transactions are executed through Cadence transactions that import the `EVM` contract. When a Cadence transaction calls into the EVM environment, it emits an `EVM.TransactionExecuted` event containing the full EVM transaction details.
+
+This means every EVM transaction on Flow has two identities:
+1. A **Flow transaction ID** (the Cadence transaction that wrapped the EVM call)
+2. An **EVM transaction hash** (the standard Ethereum-style hash)
+
+## Detection
+
+FlowIndex detects EVM transactions during ingestion by checking for `import EVM` in the transaction script content. When detected:
+
+- The transaction's `is_evm` flag is set to `true` in `raw.transactions`
+- The `evm_worker` processes the block to extract detailed EVM data
+
+## EVM Worker Pipeline
+
+The `evm_worker` runs as a Phase 1 processor in the deriver pipeline, processing blocks in parallel with other workers.
+
+For each block, it:
+
+1. Scans events for `EVM.TransactionExecuted` event types
+2. Decodes the event payload to extract:
+   - **EVM transaction hash**
+   - **From address** (EVM sender)
+   - **To address** (EVM recipient)
+   - **Value** (amount transferred)
+   - **Gas used**
+   - **EVM transaction status** (success/failure)
+3. Maps the EVM hash back to the parent Cadence transaction ID
+4. Stores the mapping in `app.evm_tx_hashes`
+
+A single Cadence transaction can contain **multiple EVM transactions**, so the mapping is one-to-many (one Flow tx ID to many EVM hashes).
+
+## Database Schema
+
+### `app.evm_tx_hashes`
+
+Maps Cadence transaction IDs to EVM transaction hashes.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `block_height` | bigint | Block height |
+| `tx_id` | text | Flow (Cadence) transaction ID |
+| `evm_hash` | text | EVM transaction hash (lowercase, no `0x` prefix) |
+| `evm_from` | text | EVM sender address |
+| `evm_to` | text | EVM recipient address |
+| `evm_value` | numeric | Transfer value |
+| `evm_gas_used` | bigint | Gas consumed |
+| `evm_status` | smallint | Execution status |
+
+### Storage Conventions
+
+- EVM hashes are stored **lowercase without the `0x` prefix**
+- EVM addresses follow the same convention (lowercase, no `0x`)
+- The `raw.tx_lookup` table stores EVM hashes in the `evm_hash` column for fast lookups
+
+## API Endpoints
+
+### List EVM Transactions
+
+```
+GET /flow/evm/transaction
+```
+
+Returns a paginated list of EVM transactions with their Flow and EVM identifiers.
+
+### Get EVM Transaction by Hash
+
+```
+GET /flow/evm/transaction/{hash}
+```
+
+Look up an EVM transaction by its EVM hash. Returns the EVM details along with the parent Cadence transaction.
+
+The `hash` parameter accepts EVM hashes both with and without the `0x` prefix.
+
+### Get Transaction by ID
+
+```
+GET /flow/transaction/{id}
+```
+
+This endpoint also resolves EVM hashes. If you pass an EVM hash as the `{id}`, it will find the corresponding Cadence transaction.
+
+### EVM Tokens
+
+```
+GET /flow/evm/token
+GET /flow/evm/token/{address}
+GET /flow/evm/address/{address}/token
+```
+
+Query EVM token contracts and address token holdings.
+
+## WebSocket
+
+EVM transactions are included in the real-time WebSocket feed. The `new_transaction` message includes an `is_evm` field and an `EVM` tag:
+
+```json
+{
+  "type": "new_transaction",
+  "payload": {
+    "id": "abc123...",
+    "block_height": 142610500,
+    "is_evm": true,
+    "tags": ["EVM"],
+    "status": "SEALED",
+    "execution_status": "SUCCESS"
+  }
+}
+```
+
+## COA (Cadence-Owned Account) Mapping
+
+Flow-EVM uses Cadence-Owned Accounts (COAs) to bridge between the Cadence and EVM environments. FlowIndex tracks COA creation events and provides a lookup endpoint:
+
+```
+GET /flow/coa/{address}
+```
+
+Returns the mapping between a Flow address and its associated EVM COA address.
