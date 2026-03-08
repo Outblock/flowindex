@@ -1,0 +1,284 @@
+---
+title: Getting Started
+description: Set up passkey-based wallet authentication in your application.
+---
+
+This guide walks through integrating the FlowIndex passkey wallet into a React application. By the end, your users will be able to register passkeys, provision Flow accounts, and sign transactions with biometric authentication.
+
+## Prerequisites
+
+- **Node.js 18+** or **Bun**
+- **React 18+** application
+- A running Supabase instance with GoTrue (for auth tokens) and the `passkey-auth` edge function deployed
+- A domain served over HTTPS (WebAuthn requires a secure context)
+
+## Install Packages
+
+```bash
+# Using bun
+bun add @flowindex/auth-core @flowindex/auth-ui @flowindex/flow-passkey
+
+# Using npm
+npm install @flowindex/auth-core @flowindex/auth-ui @flowindex/flow-passkey
+```
+
+Peer dependencies for `@flowindex/auth-ui` (install if not already present):
+
+```bash
+bun add react react-dom framer-motion lucide-react input-otp
+```
+
+## Set Up the AuthProvider
+
+Wrap your application with `AuthProvider` from `@flowindex/auth-ui`. This provides authentication state, passkey operations, and token management to all child components.
+
+```tsx
+import { AuthProvider } from '@flowindex/auth-ui';
+
+function App() {
+  return (
+    <AuthProvider
+      config={{
+        gotrueUrl: 'https://your-supabase-domain/auth/v1',
+        passkeyAuthUrl: 'https://your-supabase-domain/functions/v1/passkey-auth',
+        rpId: 'yourdomain.com',
+        rpName: 'Your App Name',
+        cookieDomain: '.yourdomain.com',
+        enableLogoutDetection: true,
+      }}
+    >
+      <YourApp />
+    </AuthProvider>
+  );
+}
+```
+
+### Configuration Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `gotrueUrl` | `string` | Base URL of your GoTrue auth endpoint |
+| `passkeyAuthUrl` | `string` | URL of the `passkey-auth` edge function |
+| `rpId` | `string` | WebAuthn relying party ID (your domain, without protocol) |
+| `rpName` | `string` | Human-readable name shown in passkey prompts |
+| `cookieDomain` | `string` | Cookie domain for cross-subdomain session sharing (e.g., `.yourdomain.com`) |
+| `enableLogoutDetection` | `boolean` | Detect logout from other tabs/subdomains via cookie polling |
+| `enableRoles` | `boolean` | Parse role/team claims from JWT tokens (default: `true`) |
+| `callbackPath` | `string` | OAuth callback path or full URL (default: `/developer/callback`) |
+
+## Add the Login Modal
+
+The `LoginModal` component provides a complete sign-in UI with support for GitHub, Google, email magic links, and passkey login.
+
+```tsx
+import { useState } from 'react';
+import { LoginModal, useAuth } from '@flowindex/auth-ui';
+
+function Header() {
+  const { user, signOut } = useAuth();
+  const [showLogin, setShowLogin] = useState(false);
+
+  return (
+    <header>
+      {user ? (
+        <div>
+          <span>{user.email}</span>
+          <button onClick={signOut}>Sign out</button>
+        </div>
+      ) : (
+        <button onClick={() => setShowLogin(true)}>Sign in</button>
+      )}
+      <LoginModal open={showLogin} onClose={() => setShowLogin(false)} />
+    </header>
+  );
+}
+```
+
+## Register a Passkey
+
+After the user signs in (via any method), they can register a passkey. This creates a WebAuthn credential and stores the public key server-side.
+
+```tsx
+import { usePasskeyAuth } from '@flowindex/auth-ui';
+
+function RegisterPasskey() {
+  const passkey = usePasskeyAuth();
+
+  async function handleRegister() {
+    const { credentialId, publicKeySec1Hex } = await passkey.register('My Wallet');
+    console.log('Passkey registered:', credentialId);
+    console.log('Public key (SEC1):', publicKeySec1Hex);
+  }
+
+  if (!passkey.hasSupport) {
+    return <p>Passkeys are not supported on this device.</p>;
+  }
+
+  return <button onClick={handleRegister}>Register Passkey</button>;
+}
+```
+
+## Provision a Flow Account
+
+Once a passkey is registered, provision an on-chain Flow account. This submits the passkey's P-256 public key to Flow's account creation service, which creates a new account with that key as its sole signer.
+
+```tsx
+import { usePasskeyAuth } from '@flowindex/auth-ui';
+
+function ProvisionAccount() {
+  const passkey = usePasskeyAuth();
+  const account = passkey.selectedAccount;
+
+  async function handleProvision() {
+    if (!account) return;
+
+    // Start provisioning on both mainnet and testnet
+    const result = await passkey.provisionAccounts(account.credentialId);
+
+    // Poll for each network's transaction to seal
+    for (const [network, info] of Object.entries(result.networks)) {
+      if (info.txId) {
+        const address = await passkey.pollProvisionTx(
+          info.txId,
+          network as 'mainnet' | 'testnet',
+        );
+        await passkey.saveProvisionedAddress(account.credentialId, network, address);
+        console.log(`${network} account created: 0x${address}`);
+      }
+    }
+
+    // Refresh state to pick up new addresses
+    await passkey.refreshState();
+  }
+
+  return (
+    <div>
+      {account?.flowAddress ? (
+        <p>Flow address: 0x{account.flowAddress}</p>
+      ) : (
+        <button onClick={handleProvision}>Create Flow Account</button>
+      )}
+    </div>
+  );
+}
+```
+
+## Sign Flow Transactions
+
+Use `getFlowAuthz` to create an FCL-compatible authorization function, then pass it to `fcl.mutate` or `fcl.send`.
+
+```tsx
+import * as fcl from '@onflow/fcl';
+import { usePasskeyAuth } from '@flowindex/auth-ui';
+
+function SendTransaction() {
+  const passkey = usePasskeyAuth();
+
+  async function handleSend() {
+    const account = passkey.selectedAccount;
+    if (!account?.flowAddress) return;
+
+    const authz = passkey.getFlowAuthz(account.flowAddress, 0);
+
+    const txId = await fcl.mutate({
+      cadence: `
+        transaction {
+          prepare(signer: &Account) {
+            log(signer.address)
+          }
+        }
+      `,
+      proposer: authz,
+      payer: authz,
+      authorizations: [authz],
+    });
+
+    console.log('Transaction submitted:', txId);
+    const result = await fcl.tx(txId).onceSealed();
+    console.log('Transaction sealed:', result.status);
+  }
+
+  return <button onClick={handleSend}>Send Transaction</button>;
+}
+```
+
+## Sign Without FCL
+
+If you are not using FCL, you can sign raw messages directly using the `sign` method on the passkey state:
+
+```tsx
+import { usePasskeyAuth } from '@flowindex/auth-ui';
+
+function SignMessage() {
+  const passkey = usePasskeyAuth();
+
+  async function handleSign() {
+    const messageHex = '48656c6c6f'; // "Hello" in hex
+    const { signature, extensionData } = await passkey.sign(messageHex);
+    console.log('Signature:', signature);
+    console.log('Extension data:', extensionData);
+  }
+
+  return <button onClick={handleSign}>Sign Message</button>;
+}
+```
+
+## Using the Low-Level SDK Directly
+
+For non-React applications or custom integrations, use `@flowindex/flow-passkey` and `@flowindex/auth-core` directly.
+
+### Create a Passkey Client
+
+```ts
+import { createPasskeyAuthClient } from '@flowindex/auth-core';
+
+const passkeyClient = createPasskeyAuthClient({
+  passkeyAuthUrl: 'https://your-supabase-domain/functions/v1/passkey-auth',
+  rpId: 'yourdomain.com',
+  rpName: 'Your App Name',
+});
+```
+
+### Register and Login
+
+```ts
+// Register a new passkey (requires an authenticated session token)
+const { credentialId, publicKeySec1Hex } = await passkeyClient.register(accessToken);
+
+// Login with a passkey (no session required -- returns a token hash)
+const { tokenHash, email } = await passkeyClient.login();
+```
+
+### Sign a Transaction
+
+```ts
+import { signFlowTransaction, createPasskeyAuthz } from '@flowindex/flow-passkey';
+
+// Direct signing
+const { signature, extensionData } = await signFlowTransaction({
+  messageHex: '...', // RLP-encoded transaction with domain tag
+  credentialId: 'base64url-credential-id',
+  rpId: 'yourdomain.com',
+});
+
+// FCL authorization function
+const authz = createPasskeyAuthz({
+  address: '0x1234abcd',
+  keyIndex: 0,
+  credentialId: 'base64url-credential-id',
+  rpId: 'yourdomain.com',
+});
+```
+
+## Browser Support
+
+Passkeys require WebAuthn support. The wallet checks for `window.PublicKeyCredential` at runtime and exposes `passkey.hasSupport` so you can show appropriate fallback UI.
+
+| Browser | Minimum Version |
+|---------|----------------|
+| Chrome | 67+ |
+| Safari | 14+ |
+| Firefox | 60+ |
+| Edge | 18+ |
+
+Discoverable credentials (resident keys) and cross-device passkey sync require more recent versions (Chrome 108+, Safari 16+, etc.).

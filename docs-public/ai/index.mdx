@@ -1,0 +1,50 @@
+---
+title: FlowIndex AI
+description: AI chat assistant for querying and analyzing data on the Flow blockchain.
+---
+
+# FlowIndex AI
+
+FlowIndex AI is an intelligent chat assistant that lets you query, analyze, and visualize data from the Flow blockchain using natural language. It combines text-to-SQL generation, live Cadence script execution, and EVM RPC calls into a single conversational interface.
+
+## Core Features
+
+- **Natural Language to SQL** -- Ask questions in plain English (or Chinese) and get back structured results from the FlowIndex and Blockscout databases.
+- **Dual Database Access** -- Queries both the FlowIndex database (native Flow/Cadence data) and the Blockscout database (Flow EVM data).
+- **Live Cadence Execution** -- Runs read-only Cadence scripts on Flow mainnet to fetch live on-chain state such as balances, vault contents, and NFT ownership.
+- **EVM RPC Integration** -- Calls Flow EVM JSON-RPC methods (`eth_getBalance`, `eth_call`, `eth_getLogs`, etc.) for live EVM state.
+- **Data Visualization** -- Generates bar, line, pie, doughnut, and horizontal bar charts from query results.
+- **Web Search** -- Falls back to web search for real-time information not stored in databases (prices, news, protocol updates).
+- **API Fetch** -- Fetches data from a curated whitelist of public APIs including the Flow Access API, Blockscout REST API, CoinGecko, and Increment Finance.
+- **Skills System** -- Loads specialized knowledge on demand (e.g., Cadence syntax, Flow staking) to provide deeper answers.
+- **MCP Server** -- Exposes tools via the Model Context Protocol, allowing external AI agents to query Flow data.
+- **Multi-Model Support** -- Three chat modes: Fast (Haiku), Balanced (Sonnet), and Deep (Opus with extended thinking).
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Chat Backend (Python) | FastAPI, Vanna v2, Anthropic SDK, psycopg |
+| MCP Server | FastMCP (streamable HTTP transport) |
+| Web Frontend | Next.js 16, React 19, Vercel AI SDK, Shadcn/UI, TailwindCSS |
+| LLM | Anthropic Claude (configurable model) |
+| Databases | PostgreSQL (FlowIndex + Blockscout, read-only) |
+| Vector Store | ChromaDB (optional, for agent memory) |
+| Deployment | Docker (multi-stage), Supervisor, nginx |
+
+## How It Works
+
+1. A user types a natural language question in the web chat interface.
+2. The Next.js frontend streams the request to the Anthropic API with a system prompt containing database schemas, documentation, and example queries.
+3. The LLM decides which tools to call -- SQL queries, Cadence scripts, EVM RPC, API fetches, or web search.
+4. Tool results flow back through the conversation, and the LLM synthesizes a human-readable answer.
+5. If the data is suitable for visualization, the LLM calls the `createChart` tool to render an interactive chart.
+
+## Service Ports
+
+| Service | Default Port |
+|---------|-------------|
+| Python backend (Vanna UI + REST API) | 8084 |
+| MCP server | 8085 |
+| Next.js web frontend | 3001 |
+| nginx reverse proxy (Docker) | 80 |

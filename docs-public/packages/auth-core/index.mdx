@@ -1,0 +1,168 @@
+---
+title: "@flowindex/auth-core"
+description: Framework-agnostic auth primitives for JWT parsing, GoTrue integration, cookie management, and passkey authentication
+---
+
+# @flowindex/auth-core
+
+Framework-agnostic authentication primitives for applications that use GoTrue (Supabase Auth) with passkey support. Provides JWT parsing, token refresh, cookie-based session management, and a passkey auth client.
+
+```bash
+bun add @flowindex/auth-core
+```
+
+## Features
+
+- **JWT Helpers** -- Parse, validate, and extract user data from JWT tokens
+- **Token Refresh** -- Automatic token refresh via GoTrue's refresh_token grant
+- **Cookie Management** -- Cross-subdomain session persistence using the `fi_auth` cookie with localStorage fallback
+- **GoTrue Integration** -- HTTP helpers for GoTrue endpoints (magic link, OTP, OAuth)
+- **Passkey Auth Client** -- WebAuthn registration, login, and Flow account provisioning
+
+## Exports
+
+### JWT Helpers
+
+```ts
+import { parseJwt, isExpired, secondsUntilExpiry, userFromToken } from '@flowindex/auth-core';
+
+// Decode a JWT payload
+const payload = parseJwt(token);
+
+// Check if a token is expired (or within 5 seconds of expiry)
+if (isExpired(token)) {
+  // refresh needed
+}
+
+// Get seconds until expiry
+const ttl = secondsUntilExpiry(token);
+
+// Extract an AuthUser from a JWT
+const user = userFromToken(token);
+// { id: "uuid", email: "user@example.com", roles: ["admin"], teams: ["eng"] }
+
+// Disable role/team parsing for simpler user objects
+const simpleUser = userFromToken(token, { enableRoles: false });
+// { id: "uuid", email: "user@example.com" }
+```
+
+The `userFromToken` function extracts roles and teams from multiple JWT claim locations: root-level `role`/`roles` fields, `app_metadata`, and `user_metadata`.
+
+### Cookie / Token Storage
+
+```ts
+import { loadStoredTokens, persistTokens, clearTokens } from '@flowindex/auth-core';
+
+// Load tokens from cookie (primary) with localStorage fallback
+const tokens = loadStoredTokens();
+// { accessToken: "...", refreshToken: "..." } | null
+
+// Save tokens to both cookie and localStorage
+persistTokens(accessToken, refreshToken, {
+  cookieDomain: '.yourdomain.com',  // optional, defaults to '.flowindex.io'
+  storageKey: 'your_auth_key',      // optional, defaults to 'flowindex_dev_auth'
+});
+
+// Clear all stored tokens
+clearTokens();
+```
+
+The cookie (`fi_auth`) is set as a cross-subdomain cookie with `secure` and `samesite=lax` attributes. This enables session sharing across subdomains.
+
+### GoTrue Helpers
+
+```ts
+import { gotruePost, refreshAccessToken, buildOAuthRedirectUrl } from '@flowindex/auth-core';
+
+// Generic GoTrue POST
+const data = await gotruePost(gotrueUrl, '/magiclink', { email: 'user@example.com' });
+
+// Refresh an expired access token
+const tokens = await refreshAccessToken(gotrueUrl, refreshToken);
+// { access_token: "...", refresh_token: "..." }
+
+// Build an OAuth redirect URL
+const url = buildOAuthRedirectUrl(gotrueUrl, 'github', 'https://app.example.com/callback');
+```
+
+### Passkey Auth Client
+
+```ts
+import { createPasskeyAuthClient } from '@flowindex/auth-core';
+
+const client = createPasskeyAuthClient({
+  passkeyAuthUrl: 'https://your-api.com/functions/v1/passkey-auth',
+  rpId: 'yourdomain.com',
+  rpName: 'Your App',
+});
+
+// Register a new passkey for the authenticated user
+const { credentialId, publicKeySec1Hex } = await client.register(accessToken, 'My Wallet');
+
+// Login with a passkey
+const { tokenHash, email } = await client.login();
+
+// List passkeys for the authenticated user
+const passkeys = await client.listPasskeys(accessToken);
+
+// List wallet accounts (passkey-linked Flow addresses)
+const accounts = await client.listAccounts(accessToken);
+
+// Provision Flow accounts for a passkey credential
+const result = await client.provisionAccounts(accessToken, credentialId);
+// { networks: { mainnet: { txId: "..." }, testnet: { txId: "..." } }, publicKeySec1Hex: "04..." }
+
+// Poll for a provision transaction to seal
+const address = await client.pollProvisionTx(txId, 'mainnet');
+
+// Save a provisioned address
+await client.saveProvisionedAddress(accessToken, credentialId, 'mainnet', address);
+```
+
+## Types
+
+```ts
+interface AuthUser {
+  id: string;
+  email: string;
+  role?: string;
+  roles?: string[];
+  team?: string;
+  teams?: string[];
+}
+
+interface StoredTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+interface TokenData {
+  access_token: string;
+  refresh_token: string;
+}
+
+type OAuthProvider = 'github' | 'google';
+
+interface PasskeyAccount {
+  credentialId: string;
+  flowAddress: string;
+  flowAddressTestnet?: string;
+  publicKeySec1Hex: string;
+  authenticatorName?: string;
+}
+
+interface PasskeyInfo {
+  id: string;
+  authenticatorName?: string;
+  deviceType?: string;
+  backedUp?: boolean;
+  createdAt?: string;
+  lastUsedAt?: string;
+}
+
+interface PasskeyClientConfig {
+  passkeyAuthUrl: string;
+  rpId: string;
+  rpName: string;
+}
+```

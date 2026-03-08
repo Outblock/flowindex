@@ -1,0 +1,64 @@
+---
+title: Packages
+description: Overview of all published packages in the FlowIndex monorepo
+---
+
+# Packages
+
+FlowIndex publishes a set of TypeScript packages that provide authentication, wallet, and UI functionality for Flow blockchain applications.
+
+All packages are published under the `@flowindex` scope on npm.
+
+## Package Overview
+
+| Package | Description | Install |
+|---------|-------------|---------|
+| [`@flowindex/agent-wallet`](/docs/packages/agent-wallet) | MCP server for AI agent wallets on Flow | `bun add @flowindex/agent-wallet` |
+| [`@flowindex/auth-core`](/docs/packages/auth-core) | JWT, cookie, token refresh, and passkey auth primitives | `bun add @flowindex/auth-core` |
+| [`@flowindex/auth-ui`](/docs/packages/auth-ui) | React components for authentication (AuthProvider, useAuth, LoginModal) | `bun add @flowindex/auth-ui` |
+| [`@flowindex/flow-passkey`](/docs/packages/flow-passkey) | WebAuthn passkey SDK for Flow transaction signing (FLIP-264) | `bun add @flowindex/flow-passkey` |
+| [`@flowindex/flow-ui`](/docs/packages/flow-ui) | Shared React UI components, Radix primitives, and Flow utilities | `bun add @flowindex/flow-ui` |
+
+## Dependency Graph
+
+The packages have the following dependency relationships:
+
+```
+@flowindex/auth-ui
+  -> @flowindex/auth-core
+  -> @flowindex/flow-passkey
+
+@flowindex/auth-core
+  -> @flowindex/flow-passkey
+
+@flowindex/agent-wallet  (standalone MCP server)
+
+@flowindex/flow-ui       (standalone UI library)
+```
+
+- **`flow-passkey`** is the lowest-level package, providing WebAuthn primitives and Flow transaction signing.
+- **`auth-core`** builds on `flow-passkey` to add JWT parsing, GoTrue integration, and cookie management.
+- **`auth-ui`** is the highest-level auth package, providing React components that use both `auth-core` and `flow-passkey`.
+- **`agent-wallet`** and **`flow-ui`** are standalone packages with no internal dependencies.
+
+## Quick Start
+
+For a typical React application that needs authentication with passkey support:
+
+```bash
+bun add @flowindex/auth-ui
+```
+
+This transitively installs `@flowindex/auth-core` and `@flowindex/flow-passkey`.
+
+For an AI agent that needs to interact with the Flow blockchain:
+
+```bash
+bun add @flowindex/agent-wallet
+```
+
+For shared UI components in a Flow-based application:
+
+```bash
+bun add @flowindex/flow-ui
+```

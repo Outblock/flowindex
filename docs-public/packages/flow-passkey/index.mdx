@@ -1,0 +1,184 @@
+---
+title: "@flowindex/flow-passkey"
+description: WebAuthn passkey SDK for Flow blockchain transaction signing with FLIP-264 support
+---
+
+# @flowindex/flow-passkey
+
+Low-level SDK for signing Flow blockchain transactions with WebAuthn passkeys. Implements [FLIP-264](https://github.com/onflow/flips/blob/main/protocol/20230609-webauthn-support.md) for passkey-based transaction authorization on Flow.
+
+```bash
+bun add @flowindex/flow-passkey
+```
+
+**Optional peer dependency:** `@onflow/fcl >= 1.0.0` (required for `createPasskeyAuthz`)
+
+## Features
+
+- **WebAuthn Credential Management** -- Create and get passkey credentials using the Web Authentication API
+- **Flow Transaction Signing** -- Sign Flow transactions with passkeys (FLIP-264 compatible)
+- **FCL Authorization** -- Create FCL-compatible authorization functions for passkey signing
+- **Transaction Encoding** -- RLP encoding of Flow transaction payloads and envelopes
+- **DER to Raw Conversion** -- Convert WebAuthn DER-encoded signatures to raw P-256 (r || s) format
+- **FLIP-264 Extension Data** -- Build the authenticator/client data extension payload required by Flow
+
+## Transaction Signing
+
+The primary use case is signing Flow transactions with a passkey:
+
+```ts
+import { signFlowTransaction } from '@flowindex/flow-passkey';
+
+const { signature, extensionData } = await signFlowTransaction({
+  messageHex: '...', // Hex-encoded transaction message
+  credentialId: 'base64url-credential-id',
+  rpId: 'yourdomain.com',
+});
+```
+
+The signing flow:
+
+1. SHA-256 hashes the message bytes (per FLIP-264 requirements)
+2. Gets a WebAuthn assertion using the hash as the challenge
+3. Converts the DER-encoded ECDSA signature to raw P-256 format (r || s, 64 bytes)
+4. Builds FLIP-264 extension data from the authenticator and client data
+
+## FCL Authorization
+
+Create an FCL-compatible authorization function for passkey signing:
+
+```ts
+import { createPasskeyAuthz } from '@flowindex/flow-passkey';
+import * as fcl from '@onflow/fcl';
+
+const authz = createPasskeyAuthz({
+  address: '0x1234567890abcdef',
+  keyIndex: 0,
+  credentialId: 'base64url-credential-id',
+  rpId: 'yourdomain.com',
+});
+
+const txId = await fcl.mutate({
+  cadence: `
+    transaction {
+      execute {
+        log("Signed with passkey!")
+      }
+    }
+  `,
+  proposer: authz,
+  payer: authz,
+  authorizations: [authz],
+});
+```
+
+The authorization function handles message encoding, passkey assertion, signature conversion, and extension data construction automatically.
+
+## WebAuthn Primitives
+
+Lower-level functions for direct WebAuthn operations:
+
+### Create a Passkey Credential
+
+```ts
+import { createPasskeyCredential } from '@flowindex/flow-passkey';
+
+const credential = await createPasskeyCredential({
+  rpId: 'yourdomain.com',
+  rpName: 'Your App',
+  challenge: challengeBytes,    // Uint8Array
+  userId: userIdBytes,          // Uint8Array
+  userName: 'user@example.com',
+  excludeCredentials: [],       // optional
+});
+
+// credential.credentialId     - base64url credential ID
+// credential.publicKeySec1Hex - SEC1 uncompressed public key (04 || x || y)
+// credential.attestationResponse - raw AuthenticatorAttestationResponse
+// credential.rawId            - Uint8Array
+```
+
+Uses ES256 (P-256) key algorithm and requests resident key with user verification.
+
+### Get a Passkey Assertion
+
+```ts
+import { getPasskeyAssertion } from '@flowindex/flow-passkey';
+
+const assertion = await getPasskeyAssertion({
+  rpId: 'yourdomain.com',
+  challenge: challengeBytes,     // Uint8Array
+  allowCredentials: [{           // optional
+    id: 'base64url-credential-id',
+    type: 'public-key',
+  }],
+  mediation: 'conditional',      // optional, for conditional UI
+  signal: abortController.signal, // optional
+});
+
+// assertion.credentialId      - string
+// assertion.authenticatorData - Uint8Array
+// assertion.clientDataJSON    - Uint8Array
+// assertion.signature         - Uint8Array (DER-encoded)
+// assertion.rawId             - Uint8Array
+```
+
+## Encoding Utilities
+
+```ts
+import {
+  encodeTransactionPayload,
+  encodeTransactionEnvelope,
+  encodeMessageFromSignable,
+  derToP256Raw,
+  buildExtensionData,
+  sha256,
+  sha3_256,
+  TRANSACTION_DOMAIN_TAG,
+} from '@flowindex/flow-passkey';
+
+// Convert DER ECDSA signature to raw r||s (64 bytes)
+const rawSig = derToP256Raw(derSignatureBytes);
+
+// Build FLIP-264 extension data for a passkey assertion
+const extData = buildExtensionData(authenticatorData, clientDataJSON);
+
+// Hash with SHA-256
+const digest = await sha256(messageBytes);
+```
+
+## Byte Utilities
+
+```ts
+import { bytesToHex, hexToBytes, base64UrlToBytes, bytesToBase64Url } from '@flowindex/flow-passkey';
+
+const hex = bytesToHex(new Uint8Array([0xab, 0xcd]));  // "abcd"
+const bytes = hexToBytes("abcd");                       // Uint8Array([0xab, 0xcd])
+const b64 = bytesToBase64Url(bytes);                    // base64url string
+const back = base64UrlToBytes(b64);                     // Uint8Array
+```
+
+## Types
+
+```ts
+interface PasskeySignResult {
+  signature: string;      // Hex-encoded r||s (128 hex chars)
+  extensionData: string;  // Hex-encoded FLIP-264 extension data
+}
+
+interface PasskeyCredentialResult {
+  credentialId: string;
+  attestationResponse: AuthenticatorAttestationResponse;
+  rawId: Uint8Array;
+  type: string;
+  publicKeySec1Hex: string;
+}
+
+interface PasskeyAssertionResult {
+  credentialId: string;
+  authenticatorData: Uint8Array;
+  clientDataJSON: Uint8Array;
+  signature: Uint8Array;
+  rawId: Uint8Array;
+}
+```

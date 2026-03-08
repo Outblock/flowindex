@@ -1,0 +1,44 @@
+---
+title: Run
+description: An interactive Cadence smart contract runner and playground for the Flow blockchain.
+---
+
+Run is an interactive Cadence development environment that lets you write, execute, and deploy smart contracts on the Flow blockchain directly from your browser. It combines a full-featured code editor with wallet integration, AI assistance, and GitHub-based deployment workflows.
+
+## Core Features
+
+- **Monaco code editor** -- A rich editing experience with syntax highlighting, inline diagnostics, and auto-completion powered by the Cadence Language Server.
+- **Script and transaction execution** -- Execute Cadence scripts (read-only queries) and transactions (state-changing operations) against Flow mainnet or testnet.
+- **Contract deployment** -- Deploy or update Cadence smart contracts on any Flow account you control, with automatic add-vs-update detection.
+- **Cadence Language Server (LSP)** -- Real-time type checking, hover documentation, go-to-definition, and auto-complete powered by a server-side LSP instance of the Flow CLI.
+- **Wallet integration** -- Connect any FCL-compatible wallet (Lilico, Blocto, etc.) to sign transactions, or use custodial keys managed through the built-in key manager.
+- **Passkey-based signing** -- Create and manage Flow account keys backed by WebAuthn passkeys for passwordless transaction signing.
+- **Cloud projects** -- Save, load, and share multi-file Cadence projects with unique shareable URLs. Projects are stored via Supabase and support public/private visibility.
+- **AI assistant** -- An integrated AI chat panel that understands Cadence and can help write, debug, and explain smart contract code.
+- **GitHub integration** -- Connect projects to GitHub repositories for version-controlled contract deployment with environment management.
+- **Dependency resolution** -- Automatically fetches and caches imported contract dependencies from mainnet or testnet so the LSP can provide full type checking.
+- **Multi-file projects** -- Organize code into files and folders with a file explorer, tabbed editing, and project templates.
+- **Deploy dashboard** -- A dedicated view for managing contract deployments across multiple addresses, with dependency graphs, audit information, and deployment history.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, Vite, TypeScript, TailwindCSS |
+| Editor | Monaco Editor with Cadence TextMate grammar |
+| LSP | Flow CLI `cadence language-server` (server-side process) |
+| Flow | `@onflow/fcl` (Flow Client Library) |
+| Auth | Supabase (GoTrue) with passkey support |
+| AI | Vercel AI SDK (`ai` + `@ai-sdk/react`) |
+| Server | Node.js (Express + WebSocket) |
+| Production | nginx (static files) + supervisord (process management) |
+
+## How It Works
+
+Run consists of two main components:
+
+1. **Frontend** -- A Vite-built React SPA that provides the Monaco editor, file explorer, wallet UI, and execution controls. It communicates with Flow Access Nodes via FCL for script/transaction execution.
+
+2. **Backend server** -- A Node.js process that hosts the Cadence Language Server via WebSocket and provides HTTP endpoints for GitHub integration. The LSP manages per-network dependency workspaces and translates between the browser editor and the Flow CLI language server.
+
+In production, nginx serves the static frontend files and proxies `/lsp` WebSocket connections to the Node.js server and `/functions` requests to the Supabase edge function gateway for project persistence.

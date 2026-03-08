@@ -1,0 +1,75 @@
+---
+title: "@flowindex/agent-wallet"
+description: MCP server for AI agent wallets on the Flow blockchain with local keys, cloud wallet, and passkey signing
+---
+
+# @flowindex/agent-wallet
+
+An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that gives AI agents a full Flow blockchain wallet. Supports local key signing, cloud-custodied wallets, and passkey-based approval flows. Includes native Flow EVM support.
+
+```bash
+bun add @flowindex/agent-wallet
+```
+
+**Requirements:** Node.js 20+
+
+## Features
+
+- **MCP Protocol** -- Exposes wallet operations as MCP tools that any MCP-compatible AI client (Claude, etc.) can call
+- **Multiple Signer Types** -- Local mnemonic, local private key, cloud wallet (JWT-authenticated), and interactive cloud login
+- **Flow + Flow EVM** -- Full support for both Cadence transactions and EVM operations (transfers, ERC-20, contract calls)
+- **Cadence Template Library** -- Built-in library of Cadence transaction and script templates (token transfers, NFT operations, EVM bridging, etc.)
+- **Transaction Approval** -- Optional approval queue that lets agents propose transactions for human review before execution
+- **Account Discovery** -- Automatically discovers Flow accounts associated with a public key
+
+## Architecture
+
+The server registers five groups of MCP tools:
+
+| Tool Group | Tools | Description |
+|------------|-------|-------------|
+| **Wallet** | `wallet_status`, `wallet_login`, `wallet_login_status` | Wallet configuration, status, and interactive login |
+| **Templates** | `list_templates`, `get_template`, `execute_script`, `execute_template` | Cadence template browsing and execution |
+| **Approval** | `confirm_transaction`, `cancel_transaction`, `list_pending` | Transaction approval queue management |
+| **Flow Query** | `get_account`, `get_flow_balance`, `get_ft_balance`, `get_nft_collection`, `get_transaction` | Read-only Flow blockchain queries |
+| **EVM** | `evm_wallet_address`, `evm_get_balance`, `evm_get_token_balance`, `evm_transfer`, `evm_transfer_erc20`, `evm_read_contract`, `evm_write_contract`, `evm_get_transaction` | Flow EVM operations |
+
+## Signer Types
+
+The signer type is determined automatically from environment variables:
+
+| Priority | Signer Type | Trigger | Behavior |
+|----------|-------------|---------|----------|
+| 1 | `local-mnemonic` | `FLOW_MNEMONIC` is set | Derives Flow key via BIP-44 (`m/44'/539'/0'/0/0`), EVM key via standard path |
+| 2 | `local-key` | `FLOW_PRIVATE_KEY` is set | Uses the raw private key directly |
+| 3 | `cloud` | `FLOWINDEX_TOKEN` is set | Delegates signing to the FlowIndex custodial API |
+| 4 | `cloud-interactive` | None of the above | Requires user to authenticate via `wallet_login` before signing |
+
+## Quick Example
+
+Run the server with a local key:
+
+```bash
+FLOW_PRIVATE_KEY=abc123... \
+FLOW_ADDRESS=0x1234567890abcdef \
+FLOW_NETWORK=mainnet \
+npx @flowindex/agent-wallet
+```
+
+Or add it to your Claude Desktop MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "flow-wallet": {
+      "command": "npx",
+      "args": ["@flowindex/agent-wallet"],
+      "env": {
+        "FLOW_PRIVATE_KEY": "your-private-key",
+        "FLOW_ADDRESS": "0x1234567890abcdef",
+        "FLOW_NETWORK": "mainnet"
+      }
+    }
+  }
+}
+```

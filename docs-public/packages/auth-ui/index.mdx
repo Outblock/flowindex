@@ -1,0 +1,196 @@
+---
+title: "@flowindex/auth-ui"
+description: React components for authentication with OAuth, magic links, OTP, and passkey support
+---
+
+# @flowindex/auth-ui
+
+React components and hooks for authentication. Provides `AuthProvider`, `useAuth`, and `LoginModal` with support for OAuth (GitHub, Google), magic links, OTP verification, and passkey-based login and signing.
+
+```bash
+bun add @flowindex/auth-ui
+```
+
+**Peer dependencies:** `react >= 18.0.0`, `react-dom >= 18.0.0`
+
+**Optional peer dependencies:** `framer-motion >= 11.0.0`, `lucide-react >= 0.300.0`, `input-otp >= 1.0.0` (required for `LoginModal`)
+
+## Quick Start
+
+Wrap your application with `AuthProvider` and configure it with your GoTrue URL:
+
+```tsx
+import { AuthProvider } from '@flowindex/auth-ui';
+
+function App() {
+  return (
+    <AuthProvider config={{
+      gotrueUrl: 'https://your-supabase-url/auth/v1',
+      passkeyAuthUrl: 'https://your-api/functions/v1/passkey-auth', // optional
+      cookieDomain: '.yourdomain.com',
+      enableLogoutDetection: true,
+    }}>
+      <YourApp />
+    </AuthProvider>
+  );
+}
+```
+
+Use the `useAuth` hook in any child component:
+
+```tsx
+import { useAuth } from '@flowindex/auth-ui';
+
+function Profile() {
+  const { user, loading, signOut, passkey } = useAuth();
+
+  if (loading) return <div>Loading...</div>;
+  if (!user) return <div>Not logged in</div>;
+
+  return (
+    <div>
+      <p>Welcome, {user.email}</p>
+      {passkey?.selectedAccount && (
+        <p>Flow Address: {passkey.selectedAccount.flowAddress}</p>
+      )}
+      <button onClick={signOut}>Sign Out</button>
+    </div>
+  );
+}
+```
+
+## AuthProvider
+
+The `AuthProvider` component manages the full auth lifecycle: session restoration from cookies, automatic token refresh, logout detection, and passkey state management.
+
+### Configuration
+
+```ts
+interface AuthConfig {
+  gotrueUrl: string;              // GoTrue auth endpoint URL (required)
+  passkeyAuthUrl?: string;        // Passkey auth edge function URL (enables passkey features)
+  cookieDomain?: string;          // Cross-subdomain cookie domain (e.g., '.yourdomain.com')
+  enableLogoutDetection?: boolean; // Detect logout from other tabs/windows
+  enableRoles?: boolean;          // Parse roles/teams from JWT claims (default: true)
+  rpId?: string;                  // WebAuthn Relying Party ID (default: 'flowindex.io')
+  rpName?: string;                // WebAuthn Relying Party name (default: 'FlowIndex')
+  callbackPath?: string;          // OAuth callback path (default: '/developer/callback')
+}
+```
+
+### Session Behavior
+
+1. On mount, loads tokens from the `fi_auth` cookie (with localStorage fallback)
+2. If the access token is valid, restores the session immediately
+3. If the access token is expired, attempts a silent refresh using the refresh token
+4. Schedules automatic token refresh 60 seconds before expiry
+5. When `enableLogoutDetection` is true, periodically checks the cookie and clears the session if it was removed (e.g., logout from another tab)
+
+## useAuth Hook
+
+```ts
+const {
+  user,              // AuthUser | null
+  accessToken,       // string | null
+  loading,           // boolean
+  signInWithProvider, // (provider: 'github' | 'google', redirectTo?: string) => void
+  sendMagicLink,     // (email: string, redirectTo?: string) => Promise<void>
+  verifyOtp,         // (email: string, token: string) => Promise<void>
+  signOut,           // () => void
+  handleCallback,    // (hash: string) => void
+  applyTokenData,    // (data: { access_token, refresh_token }) => void
+  passkey,           // PasskeyState | undefined
+} = useAuth();
+```
+
+### Passkey State
+
+When `passkeyAuthUrl` is configured, the `passkey` object is available with:
+
+```ts
+interface PasskeyState {
+  hasSupport: boolean;                // WebAuthn is available in this browser
+  hasBoundPasskey: boolean;           // User has at least one registered passkey
+  accounts: PasskeyAccount[];         // All passkey-linked wallet accounts
+  passkeys: PasskeyInfo[];            // Registered passkey metadata
+  selectedAccount: PasskeyAccount | null;
+  loading: boolean;
+
+  selectAccount(credentialId: string): void;
+  register(walletName?: string): Promise<{ credentialId: string; publicKeySec1Hex: string }>;
+  login(): Promise<void>;
+  startConditionalLogin(onSuccess?: () => void): AbortController;
+  sign(messageHex: string): Promise<PasskeySignResult>;
+  getFlowAuthz(address: string, keyIndex: number): (account: any) => any;
+  provisionAccounts(credentialId: string): Promise<ProvisionResult>;
+  pollProvisionTx(txId: string, network: 'mainnet' | 'testnet'): Promise<string>;
+  saveProvisionedAddress(credentialId: string, network: string, address: string): Promise<void>;
+  refreshState(): Promise<void>;
+}
+```
+
+The `getFlowAuthz` method returns an FCL-compatible authorization function, allowing passkey-signed Flow transactions:
+
+```ts
+import * as fcl from '@onflow/fcl';
+
+const { passkey } = useAuth();
+const account = passkey.selectedAccount;
+
+const authz = passkey.getFlowAuthz(account.flowAddress, 0);
+const txId = await fcl.mutate({
+  cadence: `transaction { execute { log("Hello") } }`,
+  proposer: authz,
+  payer: authz,
+  authorizations: [authz],
+});
+```
+
+## LoginModal
+
+A pre-built, animated login modal with support for OAuth, magic links, OTP, and passkey login.
+
+```tsx
+import { LoginModal } from '@flowindex/auth-ui';
+
+function Header() {
+  const [showLogin, setShowLogin] = useState(false);
+
+  return (
+    <>
+      <button onClick={() => setShowLogin(true)}>Sign In</button>
+      <LoginModal
+        open={showLogin}
+        onClose={() => setShowLogin(false)}
+        redirectTo="/dashboard"
+      />
+    </>
+  );
+}
+```
+
+**Props:**
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `open` | boolean | Whether the modal is visible |
+| `onClose` | () => void | Called when the modal should close |
+| `redirectTo` | string (optional) | URL to redirect to after login |
+| `className` | string (optional) | Additional CSS classes |
+
+The modal automatically detects available auth methods based on the `AuthProvider` configuration and renders the appropriate UI (passkey button, OAuth buttons, email input, OTP entry).
+
+## Re-exported Types
+
+For convenience, `@flowindex/auth-ui` re-exports all types from `@flowindex/auth-core`:
+
+```ts
+export type {
+  AuthUser,
+  StoredTokens,
+  TokenData,
+  PasskeyAccount,
+  PasskeyInfo,
+  ProvisionResult,
+} from '@flowindex/auth-core';
+```

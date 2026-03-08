@@ -1,0 +1,176 @@
+---
+title: Architecture
+description: Internal architecture of the FlowIndex AI chat assistant.
+---
+
+# Architecture
+
+FlowIndex AI runs as a set of cooperating processes inside a single Docker container, managed by Supervisor and fronted by nginx.
+
+## System Overview
+
+```
+                        ┌──────────────────────────────────────────────┐
+                        │              Docker Container                │
+                        │                                              │
+  User ──► nginx:80 ───┤──► Next.js frontend :3001                    │
+                        │       │                                      │
+                        │       ├──► Anthropic API (LLM)               │
+                        │       ├──► MCP Server :8085                  │
+                        │       ├──► Cadence MCP (external)            │
+                        │       └──► EVM MCP (external)                │
+                        │                                              │
+                        │   Python backend :8084 (Vanna v2 + REST)     │
+                        │       └──► PostgreSQL (read-only)            │
+                        │                                              │
+                        │   MCP Server :8085 (FastMCP)                 │
+                        │       ├──► PostgreSQL (FlowIndex, read-only) │
+                        │       ├──► PostgreSQL (Blockscout, read-only)│
+                        │       └──► Flow Access API (Cadence scripts) │
+                        └──────────────────────────────────────────────┘
+```
+
+## Components
+
+### Next.js Web Frontend
+
+The chat interface is a Next.js 16 app using the Vercel AI SDK (`ai` package) for streaming LLM responses. It runs on port 3001.
+
+**Chat flow:**
+
+1. The user sends a message from the browser.
+2. The Next.js API route (`/api/chat`) creates MCP client connections to the local MCP server and two external MCP servers (Cadence MCP, EVM MCP).
+3. It calls `streamText()` from the Vercel AI SDK with the Anthropic model, system prompt, and all available tools.
+4. The LLM streams its response, invoking tools as needed. Tool results are fed back into the conversation for up to 15 steps.
+5. The streamed response is sent to the browser in real time.
+
+**Chat modes:**
+
+| Mode | Model | Extended Thinking |
+|------|-------|-------------------|
+| Fast | Claude Haiku | No |
+| Balanced | Claude Sonnet | No |
+| Deep | Claude Opus | Yes (10k token budget) |
+
+### Python Backend (Vanna v2)
+
+A FastAPI server on port 8084 that provides:
+
+- **Vanna v2 Agent** -- An AI agent built on the Vanna framework with Anthropic Claude as the LLM. It uses a system prompt constructed from database DDL, documentation, and example query pairs.
+- **REST API** -- Endpoints for programmatic access (`/api/v1/ask`, `/api/v1/generate_sql`, `/api/v1/run_sql`, `/api/v1/history`).
+- **Query history** -- An in-memory store of recent queries (up to 200 items) for the server's lifetime.
+
+The backend connects to PostgreSQL using psycopg (v3 for FlowIndex, v2 for Blockscout) and enforces read-only access by rejecting any non-SELECT SQL.
+
+### MCP Server
+
+A FastMCP server on port 8085 that exposes Flow blockchain tools via the Model Context Protocol (streamable HTTP transport). This allows any MCP-compatible AI agent to query Flow data.
+
+**Tools:**
+
+| Tool | Description |
+|------|-------------|
+| `run_flowindex_sql` | Execute read-only SQL against the FlowIndex database (blocks, transactions, events, tokens, accounts, staking, stats) |
+| `run_evm_sql` | Execute read-only SQL against the Blockscout database (EVM blocks, transactions, tokens, smart contracts, logs) |
+| `run_cadence` | Execute a read-only Cadence script on Flow mainnet via the Flow Access API |
+
+**Resources (schema context):**
+
+| URI | Content |
+|-----|---------|
+| `schema://flowindex-ddl` | FlowIndex database table definitions |
+| `schema://blockscout-ddl` | Blockscout database table definitions |
+| `schema://docs` | Flow EVM database documentation |
+| `schema://cadence` | Cadence script reference |
+
+**Authentication:**
+
+The MCP server supports API key authentication with two tiers:
+- **Admin keys** -- bypass rate limits entirely.
+- **Developer keys** -- validated against the FlowIndex Go backend (`/auth/verify-key`), subject to a sliding-window rate limit (default: 60 requests/minute per key).
+
+Local requests (from `127.0.0.1`) bypass authentication, allowing the Next.js frontend to call the MCP server without a key inside the Docker container.
+
+## LLM Integration
+
+### System Prompt Construction
+
+The system prompt is built at startup by `train.py`, which assembles:
+
+1. **DDL** -- `CREATE TABLE` statements from `training_data/ddl/` (FlowIndex and Blockscout schemas).
+2. **Documentation** -- Markdown files from `training_data/docs/` covering Flow EVM specifics, Cadence syntax, and core contract addresses.
+3. **Example queries** -- Question-to-SQL pairs from `training_data/queries/` that serve as few-shot examples.
+
+This prompt is cached in memory and shared across all requests.
+
+### Tool Selection
+
+The Next.js frontend provides the LLM with tools from three MCP servers plus built-in tools:
+
+| Source | Tools |
+|--------|-------|
+| Local MCP (`localhost:8085`) | `run_flowindex_sql`, `run_evm_sql`, `run_cadence` |
+| Cadence MCP (external) | `cadence_check`, `search_docs`, `get_doc`, `browse_docs`, `cadence_hover`, `cadence_definition`, `cadence_symbols` |
+| EVM MCP (external) | `evm_rpc`, `evm_getBalance`, `evm_call`, `evm_getLogs` |
+| Built-in | `fetch_api`, `web_search`, `createChart`, `loadSkill` |
+
+The LLM chooses which tools to call based on the user's question. The system prompt includes a decision matrix mapping question types to the appropriate tool.
+
+### Skills System
+
+Skills are specialized knowledge modules stored as `SKILL.md` files in the `skills/` directory. Each skill has YAML frontmatter with a name and description.
+
+When a user's question matches a skill topic, the LLM calls the `loadSkill` tool to inject that skill's content into the conversation context. This keeps the base system prompt lean while allowing deep expertise on specific topics.
+
+## Data Sources
+
+### FlowIndex Database
+
+The primary data source, containing indexed native Flow blockchain data:
+
+- **Raw data** (`raw.*`) -- Blocks, transactions, events, scripts, lookup tables
+- **Derived data** (`app.*`) -- FT/NFT transfers, token holdings, smart contracts, accounts, staking nodes, DeFi events, daily stats, market prices
+- **Analytics** (`analytics.*`) -- Aggregated daily metrics
+
+Addresses are stored as lowercase text strings (e.g., `0x1654653399040a61`).
+
+### Blockscout Database
+
+Contains indexed Flow EVM data from the Blockscout explorer:
+
+- EVM blocks, transactions, and internal transactions
+- Token transfers and balances
+- Smart contract source code and verification data
+- Logs and event decoding
+
+Addresses are stored as `bytea`. Displayed as hex using `'0x' || encode(col, 'hex')`.
+
+### Flow Access API
+
+Used by the `run_cadence` tool for live on-chain queries. Cadence scripts are base64-encoded and sent to the Flow REST API (`/v1/scripts`). Results come back as JSON-Cadence values.
+
+## Security
+
+- **Read-only SQL** -- All SQL queries are validated against a regex that rejects `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`, `TRUNCATE`, `GRANT`, `REVOKE`, `EXEC`, and `EXECUTE` statements.
+- **Statement timeout** -- SQL queries are limited to a configurable timeout (default 30 seconds).
+- **Row limit** -- Query results are capped at a configurable maximum (default 500 rows).
+- **API fetch whitelist** -- The `fetch_api` tool only allows HTTPS requests to a curated list of domains.
+- **MCP authentication** -- External MCP access requires a valid API key, with per-key rate limiting.
+- **Cadence scripts are read-only** -- They cannot modify on-chain state.
+
+## Deployment
+
+In production, all four processes run inside a single Docker container:
+
+| Process | Manager | Command |
+|---------|---------|---------|
+| Python backend | Supervisor | `python server.py` |
+| MCP server | Supervisor | `python mcp_server.py` |
+| Next.js frontend | Supervisor | `node server.js` (standalone output) |
+| nginx | Supervisor | `nginx -g "daemon off;"` |
+
+The Docker image is a multi-stage build:
+1. **Stage 1** (Node) -- Installs dependencies, builds shared packages, builds the Next.js app into a standalone output.
+2. **Stage 2** (Python) -- Installs Python dependencies, copies the backend code and the built frontend, runs `train.py` to validate the system prompt, and configures nginx + Supervisor.
+
+Exposed ports: 80 (nginx), 8084 (Python backend), 8085 (MCP), 3001 (Next.js).

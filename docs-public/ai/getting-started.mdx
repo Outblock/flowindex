@@ -1,0 +1,172 @@
+---
+title: Getting Started
+description: How to set up and run the FlowIndex AI chat assistant locally.
+---
+
+# Getting Started
+
+This guide walks through setting up the FlowIndex AI service for local development.
+
+## Prerequisites
+
+- **Python 3.12+** -- for the backend server and MCP server
+- **Node.js 22+** and **Bun** -- for the Next.js web frontend
+- **PostgreSQL** -- a running FlowIndex database (the AI service connects read-only)
+- **Anthropic API key** -- required for LLM-powered SQL generation and chat
+
+Optional:
+- **Blockscout database** -- for Flow EVM queries (the service works without it, but EVM SQL tools will be unavailable)
+
+## Project Structure
+
+```
+ai/
+└── chat/
+    ├── server.py           # FastAPI backend (Vanna v2 agent + REST API)
+    ├── mcp_server.py       # MCP server (tool exposure for external agents)
+    ├── client.py           # Python client library
+    ├── config.py           # Environment variable configuration
+    ├── db.py               # Database query execution layer
+    ├── train.py            # System prompt builder (DDL + docs + examples)
+    ├── training_data/      # Schema DDL, documentation, example queries
+    │   ├── ddl/            # SQL table definitions
+    │   ├── docs/           # Flow and EVM documentation
+    │   └── queries/        # Example question-to-SQL pairs
+    ├── web/                # Next.js chat frontend
+    ├── requirements.txt    # Python dependencies
+    ├── Dockerfile          # Multi-stage Docker build
+    ├── nginx.conf          # Reverse proxy config
+    └── supervisord.conf    # Process manager config
+```
+
+## Environment Variables
+
+Copy the example file and fill in your values:
+
+```bash
+cd ai/chat
+cp .env.example .env
+```
+
+### Required Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key | (none) |
+| `FLOWINDEX_DATABASE_URL` | PostgreSQL connection string for the FlowIndex database | `postgresql://flowscan:secretpassword@localhost:5432/flowscan` |
+
+### Optional Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BLOCKSCOUT_DATABASE_URL` | PostgreSQL connection string for the Blockscout (Flow EVM) database | (empty -- EVM SQL disabled) |
+| `LLM_PROVIDER` | LLM provider (`anthropic` or `openai`) | `anthropic` |
+| `LLM_MODEL` | Model identifier | `claude-sonnet-4-5-20250929` |
+| `QUERY_TIMEOUT_S` | SQL statement timeout in seconds | `30` |
+| `MAX_RESULT_ROWS` | Maximum rows returned per query | `500` |
+| `HOST` | Server bind address | `0.0.0.0` |
+| `PORT` | Python backend port | `8084` |
+| `MCP_PORT` | MCP server port | `8085` |
+| `API_TOKEN` | Bearer token for REST API authentication | (empty -- no auth) |
+| `MCP_AUTH_ENABLED` | Enable API key auth on the MCP server | `true` |
+| `MCP_ADMIN_KEY` | Admin API key for MCP (bypasses rate limits) | (empty) |
+| `MCP_RATE_LIMIT` | MCP requests per minute per key | `60` |
+| `BACKEND_URL` | FlowIndex Go backend URL (for developer key validation) | `http://localhost:8080` |
+| `CHROMA_PERSIST_DIR` | ChromaDB persistence directory | `./chroma_data` |
+
+### Web Frontend Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_SERVER_URL` | URL of the MCP server | `http://localhost:8085/mcp` |
+| `CADENCE_MCP_URL` | Cadence MCP server URL | `https://cadence-mcp.up.railway.app/mcp` |
+| `EVM_MCP_URL` | EVM MCP server URL | `https://flow-evm-mcp.up.railway.app/mcp` |
+
+## Running Locally
+
+### 1. Start the Python Backend
+
+```bash
+cd ai/chat
+pip install -r requirements.txt
+python server.py
+```
+
+This starts the Vanna v2 agent server on port 8084 with:
+- A web UI at `http://localhost:8084`
+- REST API endpoints at `http://localhost:8084/api/v1/`
+- Auto-generated API docs at `http://localhost:8084/docs`
+
+### 2. Start the MCP Server
+
+In a separate terminal:
+
+```bash
+cd ai/chat
+python mcp_server.py
+```
+
+This starts the MCP server on port 8085, exposing tools (`run_flowindex_sql`, `run_evm_sql`, `run_cadence`) and resources (database schemas, documentation).
+
+### 3. Start the Web Frontend
+
+```bash
+cd ai/chat/web
+bun install
+bun run dev
+```
+
+The Next.js chat interface starts on `http://localhost:3001`. It connects to the MCP server and external MCP services (Cadence MCP, EVM MCP) to provide the full tool suite.
+
+## Running with Docker
+
+The service ships as a single Docker image that runs all four processes (Python backend, MCP server, Next.js frontend, nginx) via Supervisor:
+
+```bash
+# From the repository root
+docker build -f ai/chat/Dockerfile -t flowindex-ai .
+
+docker run -p 80:80 \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e FLOWINDEX_DATABASE_URL=postgresql://... \
+  flowindex-ai
+```
+
+The nginx reverse proxy on port 80 routes traffic to the appropriate backend service.
+
+## Using the REST API
+
+The Python backend exposes a REST API for programmatic access:
+
+```bash
+# Ask a question (generates SQL, executes it, returns results)
+curl -X POST http://localhost:8084/api/v1/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What are the 10 most recent blocks?"}'
+
+# Generate SQL only (no execution)
+curl -X POST http://localhost:8084/api/v1/generate_sql \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How many transactions happened today?"}'
+
+# Execute raw SQL (SELECT only)
+curl -X POST http://localhost:8084/api/v1/run_sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "SELECT height, timestamp FROM raw.blocks ORDER BY height DESC LIMIT 5"}'
+
+# View query history
+curl http://localhost:8084/api/v1/history
+```
+
+## Using the Python Client
+
+```python
+from client import FlowEVMQuery
+
+q = FlowEVMQuery(base_url="http://localhost:8084")
+result = q.ask("What are the top 10 FLOW holders?")
+
+print(result["sql"])
+for row in result["results"]:
+    print(row)
+```

@@ -1,0 +1,60 @@
+---
+title: Wallet
+description: Passkey-based, self-custody Flow wallet with no seed phrases or browser extensions required.
+---
+
+The FlowIndex Wallet is a passkey-based, self-custody wallet for the [Flow blockchain](https://flow.com). It uses WebAuthn (passkeys) to derive cryptographic keys directly from your device's biometric sensor or security key, eliminating the need for seed phrases, private key management, or browser extensions.
+
+## Core Features
+
+- **No seed phrases** -- Your private key material never leaves the authenticator hardware. There is nothing to write down, store, or lose.
+- **WebAuthn / passkey authentication** -- Leverages the W3C Web Authentication standard (FIDO2) supported by all major browsers and operating systems.
+- **Cross-device support** -- Passkeys synced via iCloud Keychain, Google Password Manager, or Windows Hello work seamlessly across your devices.
+- **FLIP-264 compatible signing** -- Transaction signatures include WebAuthn authenticator data and client data JSON as extension data, following the [FLIP-264](https://github.com/onflow/flips/pull/264) specification for passkey-based signing on Flow.
+- **Self-custody** -- The wallet creates a real Flow account on-chain. You hold the only signing key; no custodian or intermediary can move your funds.
+- **Dual-network provisioning** -- A single passkey can provision Flow accounts on both mainnet and testnet.
+- **FCL integration** -- A drop-in authorization function (`createPasskeyAuthz`) lets you sign Flow transactions with your passkey using the Flow Client Library.
+
+## How It Works
+
+The wallet system spans three packages and a server-side edge function:
+
+| Component | Package | Role |
+|-----------|---------|------|
+| WebAuthn + signing primitives | `@flowindex/flow-passkey` | Pure browser-side WebAuthn credential creation, assertion, FLIP-264 encoding, and FCL-compatible signing |
+| Auth core library | `@flowindex/auth-core` | JWT handling, token storage, GoTrue integration, and passkey auth client that orchestrates registration/login flows |
+| React UI components | `@flowindex/auth-ui` | `AuthProvider`, `useAuth`, `usePasskeyAuth` hooks, and `LoginModal` component |
+| Passkey auth edge function | `passkey-auth` (Supabase edge function) | Server-side WebAuthn verification using `@simplewebauthn/server`, challenge management, credential storage, and Flow account provisioning |
+
+### Authentication Flow
+
+1. **Sign in** with GitHub, Google, email magic link, or an existing passkey.
+2. **Register a passkey** -- The browser's WebAuthn API creates an ES256 (P-256) credential. The public key is stored server-side in COSE and SEC1 formats.
+3. **Provision a Flow account** -- The SEC1 public key is submitted to Flow's account creation API. A new on-chain account is created with your passkey's public key as its sole signing key (weight 1000, ECDSA_P256 + SHA2_256).
+4. **Sign transactions** -- When you send a Flow transaction, the browser prompts for biometric/PIN verification. The WebAuthn assertion signature is converted from DER to raw P-256 (r || s) format and wrapped with FLIP-264 extension data.
+
+### Signing Details
+
+Flow transactions are encoded using RLP with a domain tag (`FLOW-V0.0-transaction`). The encoded message is SHA-256 hashed and used as the WebAuthn challenge. The resulting signature includes:
+
+- **signature** -- 64-byte raw P-256 signature (r || s), hex-encoded
+- **extensionData** -- FLIP-264 format: `0x01 || RLP([authenticatorData, clientDataJSON])`, hex-encoded
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Cryptography | WebAuthn (FIDO2), ES256 / ECDSA P-256, SHA-256 |
+| Standards | W3C Web Authentication, FLIP-264 |
+| Client | TypeScript, `@simplewebauthn/browser` (via `@flowindex/flow-passkey`) |
+| Server | Deno, `@simplewebauthn/server` v11, Supabase (GoTrue + PostgREST) |
+| Flow integration | `@onflow/fcl`, `@onflow/rlp`, Lilico/FRW OpenAPI for account creation |
+| UI | React 18+, Framer Motion, Lucide icons |
+
+## Security Model
+
+- **Hardware-bound keys** -- The passkey private key is generated and stored inside the platform authenticator (Secure Enclave, TPM, or security key). It is never exposed to JavaScript.
+- **Challenge-response** -- Every registration and login uses a unique server-generated challenge with a 5-minute TTL. Challenges are single-use and deleted after verification.
+- **Rate limiting** -- The edge function enforces per-IP rate limits on registration and login attempts.
+- **Audit logging** -- All passkey operations (registration, authentication, removal) are recorded in an audit log with timestamps, IP addresses, and credential identifiers.
+- **Multi-origin support** -- WebAuthn verification accepts requests from any authorized subdomain under the relying party ID.

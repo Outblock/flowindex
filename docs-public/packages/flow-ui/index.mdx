@@ -1,0 +1,240 @@
+---
+title: "@flowindex/flow-ui"
+description: Shared React UI components, Radix primitives, and Flow blockchain utilities
+---
+
+# @flowindex/flow-ui
+
+A shared UI component library built on Radix UI primitives with TailwindCSS styling, plus Flow blockchain utility functions for address formatting, token display, NFT media resolution, and transaction activity parsing.
+
+```bash
+bun add @flowindex/flow-ui
+```
+
+**Peer dependencies:** `react >= 18.0.0`, `react-dom >= 18.0.0`, `lucide-react >= 0.300.0`
+
+**Optional peer dependency:** `react-day-picker >= 9.0.0` (for `Calendar` component)
+
+## TailwindCSS Setup
+
+The package includes a TailwindCSS preset for consistent styling:
+
+```js
+// tailwind.config.js
+module.exports = {
+  presets: [require('@flowindex/flow-ui/tailwind-preset')],
+  // your config...
+};
+```
+
+## UI Components
+
+All UI components are built on [Radix UI](https://www.radix-ui.com/) primitives and styled with TailwindCSS using `class-variance-authority` for variant management.
+
+### Base Components
+
+| Component | Description |
+|-----------|-------------|
+| `Button` | Button with variants: `default`, `destructive`, `outline`, `secondary`, `ghost`, `link` and sizes: `default`, `sm`, `lg`, `icon` |
+| `Input` | Styled text input |
+| `Textarea` | Styled textarea |
+| `Label` | Form label |
+| `Badge` | Status badge with variants |
+| `Separator` | Visual separator |
+| `Switch` | Toggle switch |
+
+### Layout Components
+
+| Component | Description |
+|-----------|-------------|
+| `Card`, `CardHeader`, `CardContent`, `CardFooter`, `CardTitle`, `CardDescription` | Card container with header/content/footer sections |
+| `Table`, `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell`, `TableCaption`, `TableFooter` | Data table |
+| `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` | Tab navigation |
+
+### Overlay Components
+
+| Component | Description |
+|-----------|-------------|
+| `Dialog`, `DialogTrigger`, `DialogContent`, `DialogHeader`, `DialogFooter`, `DialogTitle`, `DialogDescription` | Modal dialog |
+| `DropdownMenu`, `DropdownMenuTrigger`, `DropdownMenuContent`, `DropdownMenuItem`, ... | Dropdown menu |
+| `Popover`, `PopoverTrigger`, `PopoverContent` | Popover |
+| `Select`, `SelectTrigger`, `SelectContent`, `SelectItem`, ... | Select dropdown |
+| `Command`, `CommandInput`, `CommandList`, `CommandItem`, ... | Command palette (cmdk) |
+
+### Specialized Components
+
+| Component | Description |
+|-----------|-------------|
+| `Avatar`, `AvatarImage`, `AvatarFallback` | User/entity avatar |
+| `Calendar` | Date picker calendar (requires `react-day-picker`) |
+| `InputOTP`, `InputOTPGroup`, `InputOTPSlot` | OTP code input |
+
+## Flow Display Components
+
+Custom components for displaying Flow blockchain data:
+
+### GlassCard
+
+A card with a frosted glass visual effect.
+
+```tsx
+import { GlassCard } from '@flowindex/flow-ui';
+
+<GlassCard className="p-6">
+  <h2>Account Balance</h2>
+  <p>1,234.56 FLOW</p>
+</GlassCard>
+```
+
+### TokenIcon
+
+Displays a token logo with fallback.
+
+```tsx
+import { TokenIcon } from '@flowindex/flow-ui';
+
+<TokenIcon
+  symbol="FLOW"
+  logoUrl="https://..."
+  size={32}
+/>
+```
+
+### UsdValue
+
+Formatted USD value display.
+
+```tsx
+import { UsdValue } from '@flowindex/flow-ui';
+
+<UsdValue amount={1234.56} />
+```
+
+### VerifiedBadge
+
+Verification indicator for tokens and contracts.
+
+```tsx
+import { VerifiedBadge } from '@flowindex/flow-ui';
+
+<VerifiedBadge verified={true} />
+```
+
+### EVMBridgeBadge
+
+Indicator for EVM-bridged assets.
+
+```tsx
+import { EVMBridgeBadge } from '@flowindex/flow-ui';
+
+<EVMBridgeBadge />
+```
+
+### ImageWithFallback
+
+Image component that gracefully handles loading failures.
+
+```tsx
+import { ImageWithFallback } from '@flowindex/flow-ui';
+
+<ImageWithFallback
+  src="https://..."
+  fallbackSrc="/placeholder.png"
+  alt="NFT"
+/>
+```
+
+### ActivityRow
+
+Transaction activity row with transfer previews and badges.
+
+```tsx
+import { ActivityRow } from '@flowindex/flow-ui';
+
+<ActivityRow
+  txId="abc123..."
+  timestamp="2024-01-01T00:00:00Z"
+  badges={[{ label: 'Transfer', color: 'blue' }]}
+  preview={transferPreview}
+/>
+```
+
+## Utility Functions
+
+### Address Utilities
+
+```ts
+import { normalizeAddress, formatShort } from '@flowindex/flow-ui';
+
+normalizeAddress('0x1234567890abcdef');  // "1234567890abcdef"
+formatShort('1234567890abcdef');          // "0x1234...cdef"
+```
+
+### Token Utilities
+
+```ts
+import { getTokenLogoURL } from '@flowindex/flow-ui';
+
+const url = getTokenLogoURL({ symbol: 'FLOW', logo_url: null });
+```
+
+### NFT Utilities
+
+```ts
+import { resolveIPFS, getNFTThumbnail, getNFTMedia, getCollectionPreviewVideo } from '@flowindex/flow-ui';
+
+resolveIPFS('ipfs://Qm...');  // "https://ipfs.io/ipfs/Qm..."
+```
+
+### Formatting
+
+```ts
+import { formatStorageBytes, formatNumber } from '@flowindex/flow-ui';
+
+formatStorageBytes(1048576);  // "1.00 MB"
+formatNumber(1234567);        // "1,234,567"
+```
+
+### Cadence Utilities
+
+```ts
+import { decodeCadenceValue, getStoragePathId, storagePathStr } from '@flowindex/flow-ui';
+
+// Decode a Cadence JSON-CDC value to a readable format
+const decoded = decodeCadenceValue(cadenceJsonValue);
+```
+
+### Activity Utilities
+
+```ts
+import {
+  deriveActivityType,
+  deriveAllActivityBadges,
+  buildSummaryLine,
+  deriveTransferPreview,
+  formatRelativeTime,
+  formatAbsoluteTime,
+} from '@flowindex/flow-ui';
+```
+
+Functions for parsing transaction events into human-readable activity summaries, transfer previews, and badge lists. Used by the `ActivityRow` component.
+
+### Time Utilities
+
+```ts
+import { formatRelativeTime, formatAbsoluteTime } from '@flowindex/flow-ui';
+
+formatRelativeTime('2024-01-01T00:00:00Z');  // "3 months ago"
+formatAbsoluteTime('2024-01-01T00:00:00Z');  // "Jan 1, 2024 12:00 AM"
+```
+
+## CSS Utility
+
+```ts
+import { cn } from '@flowindex/flow-ui';
+
+// Merge TailwindCSS classes with conflict resolution
+cn('px-4 py-2', 'px-6');  // "px-6 py-2"
+```
+
+The `cn` function combines `clsx` and `tailwind-merge` for safe class name composition.

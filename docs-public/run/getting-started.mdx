@@ -1,0 +1,112 @@
+---
+title: Getting Started
+description: Set up and run the Cadence Runner service locally.
+---
+
+This guide walks you through running the Cadence Runner locally for development. By the end you will have the editor, LSP server, and all supporting services running on your machine.
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) (v20.10+) and [Docker Compose](https://docs.docker.com/compose/install/) (v2.0+)
+- [Bun](https://bun.sh/) (v1.0+) -- for local frontend development outside Docker
+- [Node.js](https://nodejs.org/) (v22+) -- for the LSP backend server
+- [Flow CLI](https://docs.onflow.org/flow-cli/) (v2.x) -- required by the LSP server to run the Cadence language server
+
+## Quick Start with Docker Compose
+
+The simplest way to run everything is via Docker Compose from the repository root:
+
+```bash
+docker compose up -d --build runner
+```
+
+This starts the Runner service along with its dependencies (Supabase auth stack, edge functions).
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `runner` | [localhost:8081](http://localhost:8081) | Runner UI + LSP server |
+| `supabase-gateway` | localhost:54321 | Auth and project persistence |
+| `runner-projects` | (internal) | Project management edge function |
+
+Open [http://localhost:8081](http://localhost:8081) in your browser. You should see the Cadence editor with a default script template.
+
+### Verify the LSP is working
+
+1. Type some Cadence code in the editor (e.g., `import FungibleToken from 0xf233dcee88fe0abe`)
+2. After a moment, you should see syntax highlighting and no red error underlines for valid code
+3. Try hovering over a type name to see documentation
+
+If diagnostics appear and hover works, the Language Server is connected.
+
+## Local Development (Without Docker)
+
+For faster iteration during development, you can run the frontend and server separately.
+
+### 1. Install dependencies
+
+From the repository root:
+
+```bash
+cd runner
+bun install
+```
+
+The `postinstall` script automatically copies the Cadence Language Server WASM files and worker scripts into the `public/` directory.
+
+### 2. Start the LSP backend server
+
+In a separate terminal:
+
+```bash
+cd runner/server
+bun install
+bun run build
+node dist/index.js
+```
+
+The server starts two listeners:
+- **Port 3002** -- WebSocket endpoint for Cadence LSP communication
+- **Port 3003** -- HTTP server for GitHub integration API
+
+### 3. Start the frontend dev server
+
+```bash
+cd runner
+bun run dev
+```
+
+The Vite dev server starts on [http://localhost:5173](http://localhost:5173) and proxies LSP WebSocket connections to the backend server automatically.
+
+### 4. Build for production
+
+```bash
+cd runner
+bun run build
+```
+
+The production build outputs static files to `runner/dist/`.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_AI_CHAT_URL` | `http://localhost:3004` | AI chat service endpoint |
+| `VITE_SUPABASE_URL` | `http://localhost:54321` | Supabase gateway URL for auth and project storage |
+| `VITE_SUPABASE_ANON_KEY` | (none) | Supabase anonymous key |
+| `VITE_GOTRUE_URL` | `http://localhost:9999` | GoTrue auth endpoint |
+| `LSP_PORT` | `3002` | WebSocket port for the LSP server |
+| `HTTP_PORT` | `3003` | HTTP port for GitHub integration API |
+| `FLOW_COMMAND` | `flow` | Path to the Flow CLI binary |
+| `GITHUB_APP_ID` | (none) | GitHub App ID for repository integration |
+| `GITHUB_APP_PRIVATE_KEY` | (none) | GitHub App private key |
+
+## Project Templates
+
+When you first open the editor, you can choose from built-in templates:
+
+- **Hello World** -- A simple script that returns a greeting
+- **FT Transfer** -- Transfer fungible tokens between accounts
+- **NFT Minting** -- Mint an NFT from a collection
+- **Custom** -- Start with a blank file
+
+You can also load shared projects by their slug URL or fork public projects from other users.

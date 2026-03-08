@@ -1,0 +1,322 @@
+---
+title: API Reference
+description: Complete reference for all MCP tools exposed by @flowindex/agent-wallet
+---
+
+# API Reference
+
+The `@flowindex/agent-wallet` MCP server exposes the following tools. Each tool is callable by any MCP-compatible client.
+
+## Wallet Tools
+
+### `wallet_status`
+
+Returns the current wallet configuration and status.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "signer_type": "local",
+  "flow_address": "1234567890abcdef",
+  "evm_address": "0x...",
+  "key_index": 0,
+  "sig_algo": "ECDSA_secp256k1",
+  "hash_algo": "SHA2_256",
+  "network": "mainnet",
+  "approval_required": true,
+  "headless": true
+}
+```
+
+### `wallet_login`
+
+Initiates an interactive login flow for the cloud wallet. Returns a login URL the user must visit.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "status": "pending",
+  "login_url": "https://flowindex.io/wallet/login?session=...",
+  "session_id": "abc-123",
+  "expires_in": 300
+}
+```
+
+### `wallet_login_status`
+
+Checks the status of an interactive login session. If authenticated, activates the cloud signer.
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `session_id` | string | The session ID returned by `wallet_login` |
+
+**Returns (authenticated):**
+```json
+{
+  "status": "authenticated",
+  "flow_address": "1234567890abcdef",
+  "key_index": 0
+}
+```
+
+## Template Tools
+
+### `list_templates`
+
+Lists available Cadence transaction and script templates.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `category` | string | No | Filter by category (e.g., `token`, `collection`, `evm`, `bridge`) |
+
+**Returns:** Array of template summaries with `name`, `category`, `type`, `description`, and `arg_count`.
+
+### `get_template`
+
+Retrieves the full Cadence source code and argument schema for a named template.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `name` | string | Yes | Template name (e.g., `transfer_tokens_v3`) |
+
+**Returns:** Template object with `name`, `category`, `type`, `description`, `cadence` (source code), and `args` (array of `{ name, type, description }`).
+
+### `execute_script`
+
+Executes a read-only Cadence script on the Flow network. Provide either a template name or raw Cadence code.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `template_name` | string | No | Name of a script template |
+| `code` | string | No | Raw Cadence script code |
+| `args` | array | No | Script arguments in FCL arg format |
+
+At least one of `template_name` or `code` must be provided.
+
+### `execute_template`
+
+Executes a Cadence transaction template. If approval is required and the signer is headless, the transaction is queued for manual approval.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `template_name` | string | Yes | Name of the transaction template |
+| `args` | object | Yes | Named arguments matching the template's arg schema |
+
+**Returns (immediate execution):**
+```json
+{
+  "status": "sealed",
+  "tx_id": "abc123...",
+  "block_height": 12345678,
+  "events": [{ "type": "A.xxx.FlowToken.TokensWithdrawn", "data": {} }]
+}
+```
+
+**Returns (approval required):**
+```json
+{
+  "status": "pending_approval",
+  "tx_id": "uuid",
+  "summary": "transfer_tokens_v3(recipient=0x..., amount=1.0)"
+}
+```
+
+## Approval Tools
+
+### `confirm_transaction`
+
+Approves and executes a pending transaction.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `tx_id` | string | Yes | The pending transaction ID |
+
+**Returns:** Same as `execute_template` immediate execution result.
+
+### `cancel_transaction`
+
+Cancels and discards a pending transaction.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `tx_id` | string | Yes | The pending transaction ID |
+
+### `list_pending`
+
+Lists all transactions currently queued and awaiting approval.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "count": 1,
+  "transactions": [
+    {
+      "id": "uuid",
+      "summary": "transfer_tokens_v3(...)",
+      "createdAt": 1700000000000
+    }
+  ]
+}
+```
+
+## Flow Query Tools
+
+### `get_account`
+
+Returns detailed information about a Flow account including keys, contracts, and storage usage.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `address` | string | Yes | Flow address (hex, with or without `0x` prefix) |
+
+### `get_flow_balance`
+
+Returns the native FLOW token balance for a Flow account.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `address` | string | Yes | Flow address |
+
+### `get_ft_balance`
+
+Returns all fungible token vault balances for a Flow account (FLOW, USDC, stFlow, etc.).
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `address` | string | Yes | Flow address |
+
+### `get_nft_collection`
+
+Returns all NFT collections and items held by a Flow account.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `address` | string | Yes | Flow address |
+
+### `get_transaction`
+
+Returns full details for a Flow transaction by its ID, including events, status, and error messages.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `tx_id` | string | Yes | Flow transaction ID (64-character hex) |
+
+## EVM Tools
+
+### `evm_wallet_address`
+
+Returns the current EVM EOA address derived from the configured signer.
+
+**Parameters:** None
+
+### `evm_get_balance`
+
+Returns the native FLOW balance of an EVM address on Flow EVM.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `address` | string | Yes | EVM address (`0x...`) |
+
+### `evm_get_token_balance`
+
+Returns the ERC-20 token balance for an address, including symbol and decimals.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `token_address` | string | Yes | ERC-20 token contract address |
+| `owner` | string | Yes | Address to check balance for |
+
+### `evm_transfer`
+
+Sends native FLOW on Flow EVM from the agent wallet to a recipient address.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `to` | string | Yes | Recipient EVM address |
+| `amount` | string | Yes | Amount in FLOW (e.g., `"1.5"`) |
+
+### `evm_transfer_erc20`
+
+Transfers an ERC-20 token on Flow EVM from the agent wallet to a recipient.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `token_address` | string | Yes | ERC-20 token contract address |
+| `to` | string | Yes | Recipient EVM address |
+| `amount` | string | Yes | Amount in human-readable units (e.g., `"100.0"`) |
+| `decimals` | number | No | Token decimals (default: 18) |
+
+### `evm_read_contract`
+
+Calls a read-only (view/pure) function on an EVM smart contract.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `contract_address` | string | Yes | Contract address |
+| `abi` | string | Yes | ABI as a JSON array string |
+| `function_name` | string | Yes | Function name to call |
+| `args` | string | No | Arguments as a JSON array string |
+
+### `evm_write_contract`
+
+Calls a state-changing function on an EVM smart contract.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `contract_address` | string | Yes | Contract address |
+| `abi` | string | Yes | ABI as a JSON array string |
+| `function_name` | string | Yes | Function name to call |
+| `args` | string | No | Arguments as a JSON array string |
+| `value` | string | No | Native FLOW to send (e.g., `"0.5"`) |
+
+### `evm_get_transaction`
+
+Returns details of an EVM transaction by its hash, including status, block number, gas used, and receipt.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `tx_hash` | string | Yes | Transaction hash (`0x...`) |
