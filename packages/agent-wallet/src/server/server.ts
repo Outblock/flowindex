@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { loadConfig, type AgentWalletConfig } from '../config/env.js';
+import { configureFcl } from '../config/fcl.js';
 import { LocalSigner } from '../signer/local.js';
 import { CloudSigner } from '../signer/cloud.js';
 import type { FlowSigner } from '../signer/interface.js';
@@ -12,6 +13,9 @@ export interface ServerContext {
 
 export async function createServer(): Promise<McpServer> {
   const config = loadConfig();
+
+  // Configure FCL before creating signers
+  await configureFcl(config.network);
 
   let signer: FlowSigner;
   const cloudSigner = new CloudSigner(config);
