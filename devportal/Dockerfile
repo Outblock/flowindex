@@ -6,7 +6,7 @@ WORKDIR /app/devportal
 # NOTE: fumadocs-mdx runs on postinstall and requires source.config.ts + docs content.
 # Copy just enough for dependency install to succeed (before we copy the whole app).
 COPY devportal/package.json devportal/bun.lock devportal/source.config.ts devportal/tsconfig.json devportal/mdx-components.tsx ./
-COPY docs /app/docs
+COPY docs-public /app/docs-public
 
 RUN bun install --frozen-lockfile
 
@@ -17,7 +17,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/devportal/node_modules ./node_modules
 COPY devportal/ ./
-COPY docs /app/docs
+COPY docs-public /app/docs-public
 
 # Some setups omit `public/`, but our runtime image expects it.
 RUN mkdir -p public
@@ -44,8 +44,8 @@ COPY --from=builder /app/devportal/.next/standalone/devportal ./devportal
 COPY --from=builder /app/devportal/.next/static ./devportal/.next/static
 COPY --from=builder /app/devportal/public ./devportal/public
 
-# Fumadocs sources markdown from `../docs`, so ensure the docs directory exists at runtime.
-COPY --from=builder /app/docs ./docs
+# Fumadocs sources markdown from `../docs-public`, so ensure the directory exists at runtime.
+COPY --from=builder /app/docs-public ./docs-public
 
 EXPOSE 8080
 
