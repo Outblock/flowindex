@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.103",
@@ -48,6 +50,7 @@
     "vscode-textmate": "^9.3.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/dagre": "^0.7.54",
     "@types/diff": "^8.0.0",
     "@types/react": "^19.2.13",
