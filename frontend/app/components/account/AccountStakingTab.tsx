@@ -26,7 +26,7 @@ const ROLE_COLORS: Record<number, string> = {
     5: 'text-cyan-500 bg-cyan-50 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/30',
 };
 
-const EVENT_LABELS: Record<string, string> = {
+export const EVENT_LABELS: Record<string, string> = {
     // Staking
     TokensCommitted: 'Staked',
     DelegatorTokensCommitted: 'Staked',
@@ -53,7 +53,7 @@ const EVENT_LABELS: Record<string, string> = {
     NodeRemovedAndRefunded: 'Node Removed',
 };
 
-const EVENT_COLORS: Record<string, string> = {
+export const EVENT_COLORS: Record<string, string> = {
     Staked: 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30',
     Restaked: 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30',
     Unstaking: 'text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30',
@@ -207,7 +207,7 @@ const FILTER_MATCH: Record<string, string[]> = {
     withdrawn: ['Withdrawn'],
 };
 
-function StakingActivitySection({ address }: { address: string }) {
+export function StakingActivitySection({ address }: { address: string }) {
     const [events, setEvents] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [offset, setOffset] = useState(0);

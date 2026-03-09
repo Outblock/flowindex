@@ -7,8 +7,9 @@ import {
     getFlowV1AccountByAddressFtTransfer,
     getFlowV1NftTransfer,
 } from '../../api/gen/find';
-import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, Clock, List, CalendarDays } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, Clock, List, CalendarDays, Landmark } from 'lucide-react';
 import { normalizeAddress, formatShort } from './accountUtils';
+import { EVENT_LABELS, EVENT_COLORS } from './AccountStakingTab';
 import { AddressLink } from '../AddressLink';
 import { formatRelativeTime } from '../../lib/time';
 import {
@@ -22,7 +23,7 @@ import {
     type TokenMetaEntry,
 } from '../TransactionRow';
 
-type FilterMode = 'all' | 'ft' | 'nft' | 'scheduled';
+type FilterMode = 'all' | 'ft' | 'nft' | 'staking' | 'scheduled';
 type ViewMode = 'pages' | 'timeline';
 
 function getTimeSection(timestamp: string, now: Date): string {
@@ -144,6 +145,19 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
     const [scheduledHasMore, setScheduledHasMore] = useState(false);
     const [scheduledLoading, setScheduledLoading] = useState(false);
 
+    // Staking activity state (lazy-loaded)
+    const [stakingEvents, setStakingEvents] = useState<any[]>([]);
+    const [stakingPage, setStakingPage] = useState(1);
+    const [stakingHasMore, setStakingHasMore] = useState(false);
+    const [stakingLoading, setStakingLoading] = useState(false);
+    // Staking timeline state
+    const [stakingTimelineEvents, setStakingTimelineEvents] = useState<any[]>([]);
+    const [stakingTimelineOffset, setStakingTimelineOffset] = useState(0);
+    const [stakingTimelineHasMore, setStakingTimelineHasMore] = useState(true);
+    const [stakingTimelineLoading, setStakingTimelineLoading] = useState(false);
+    const stakingSentinelRef = useRef<HTMLDivElement | null>(null);
+    const [stakingFilter, setStakingFilter] = useState('');
+
     // Token metadata — incrementally populated from transfer_summary in API responses
     const [tokenMeta, setTokenMeta] = useState<Map<string, TokenMetaEntry>>(() => new Map(tokenMetaCache));
 
@@ -188,6 +202,13 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             setScheduledTxs([]);
             setScheduledCursor('');
             setScheduledHasMore(false);
+            setStakingEvents([]);
+            setStakingPage(1);
+            setStakingHasMore(false);
+            setStakingTimelineEvents([]);
+            setStakingTimelineOffset(0);
+            setStakingTimelineHasMore(true);
+            setStakingFilter('');
             // Also reset timeline fully on address change
             setTimelineTxs([]);
             setTimelineOffset(0);
@@ -410,6 +431,48 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         }
     };
 
+    // --- Staking Activity (lazy) ---
+    const loadStakingEvents = async (page: number) => {
+        setStakingLoading(true);
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const offset = (page - 1) * 20;
+            const res = await fetch(`${baseUrl}/flow/account/${encodeURIComponent(normalizedAddress)}/staking/activity?limit=20&offset=${offset}`);
+            if (!res.ok) throw new Error('Failed to load staking activity');
+            const json = await res.json();
+            const items: any[] = json?.data ?? [];
+            setStakingEvents(items);
+            setStakingHasMore(items.length >= 20);
+        } catch (err) {
+            console.error('Failed to load staking activity', err);
+        } finally {
+            setStakingLoading(false);
+        }
+    };
+
+    // --- Staking Timeline ---
+    const stakingTimelineLoadingRef = useRef(false);
+    const loadMoreStakingTimeline = useCallback(async () => {
+        if (stakingTimelineLoadingRef.current || !stakingTimelineHasMore) return;
+        stakingTimelineLoadingRef.current = true;
+        setStakingTimelineLoading(true);
+        try {
+            const baseUrl = await resolveApiBaseUrl();
+            const res = await fetch(`${baseUrl}/flow/account/${encodeURIComponent(normalizedAddress)}/staking/activity?limit=20&offset=${stakingTimelineOffset}`);
+            if (!res.ok) throw new Error('Failed to load staking timeline');
+            const json = await res.json();
+            const items: any[] = json?.data ?? [];
+            setStakingTimelineEvents(prev => [...prev, ...items]);
+            setStakingTimelineOffset(prev => prev + items.length);
+            setStakingTimelineHasMore(items.length >= 20);
+        } catch (err) {
+            console.error('Failed to load staking timeline', err);
+        } finally {
+            stakingTimelineLoadingRef.current = false;
+            setStakingTimelineLoading(false);
+        }
+    }, [stakingTimelineHasMore, stakingTimelineOffset, normalizedAddress]);
+
     // Auto-load dedicated transfer lists when filter switches
     useEffect(() => {
         if (filterMode === 'ft') {
@@ -421,6 +484,10 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             else if (viewMode === 'pages' && nftTransfers.length === 0 && !nftLoading) loadNftTransfers(1);
         }
         if (filterMode === 'scheduled' && scheduledTxs.length === 0 && !scheduledLoading) loadScheduledTransactions('', false);
+        if (filterMode === 'staking') {
+            if (viewMode === 'timeline' && stakingTimelineEvents.length === 0 && !stakingTimelineLoading) loadMoreStakingTimeline();
+            else if (viewMode === 'pages' && stakingEvents.length === 0 && !stakingLoading) loadStakingEvents(1);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filterMode, address, viewMode]);
 
@@ -435,6 +502,12 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         if (filterMode === 'nft' && nftPage > 1) loadNftTransfers(nftPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [nftPage]);
+
+    // Staking page changes
+    useEffect(() => {
+        if (filterMode === 'staking' && stakingPage > 1) loadStakingEvents(stakingPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stakingPage]);
 
     // IntersectionObserver for FT timeline
     useEffect(() => {
@@ -462,6 +535,19 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         return () => observer.disconnect();
     }, [filterMode, viewMode, nftTimelineHasMore, loadMoreNftTimeline]);
 
+    // IntersectionObserver for staking timeline
+    useEffect(() => {
+        if (filterMode !== 'staking' || viewMode !== 'timeline' || !stakingTimelineHasMore) return;
+        const sentinel = stakingSentinelRef.current;
+        if (!sentinel) return;
+        const observer = new IntersectionObserver(
+            (entries) => { if (entries[0]?.isIntersecting) loadMoreStakingTimeline(); },
+            { rootMargin: '200px' }
+        );
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [filterMode, viewMode, stakingTimelineHasMore, loadMoreStakingTimeline]);
+
     // Filter the unified feed
     const filteredTransactions = useMemo(() => {
         if (filterMode === 'all') return transactions;
@@ -477,10 +563,11 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         { id: 'all' as const, label: 'All Activity', icon: Activity },
         { id: 'ft' as const, label: 'FT Transfers', icon: ArrowRightLeft },
         { id: 'nft' as const, label: 'NFT Transfers', icon: Repeat },
+        { id: 'staking' as const, label: 'Staking', icon: Landmark },
         { id: 'scheduled' as const, label: 'Scheduled', icon: Clock },
     ];
 
-    const isLoading = filterMode === 'all' ? txLoading : filterMode === 'ft' ? ftLoading : filterMode === 'nft' ? nftLoading : scheduledLoading;
+    const isLoading = filterMode === 'all' ? txLoading : filterMode === 'ft' ? ftLoading : filterMode === 'nft' ? nftLoading : filterMode === 'staking' ? stakingLoading : scheduledLoading;
 
     const renderFtRow = (tx: any, i: number, addr: string) => {
         const dir = tx.direction || (tx.from_address?.toLowerCase().includes(addr.replace('0x', '')) ? 'withdraw' : 'deposit');
@@ -579,6 +666,88 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         );
     };
 
+    const STAKING_FILTERS = [
+        { label: 'All', value: '' },
+        { label: 'Staked', value: 'staked' },
+        { label: 'Unstake', value: 'unstake' },
+        { label: 'Rewards', value: 'rewards' },
+        { label: 'Withdrawn', value: 'withdrawn' },
+    ];
+    const STAKING_FILTER_MATCH: Record<string, string[]> = {
+        staked: ['Staked', 'Restaked'],
+        unstake: ['Unstaking', 'Unstaked', 'Unstake Requested'],
+        rewards: ['Reward', 'Reward Claimed'],
+        withdrawn: ['Withdrawn'],
+    };
+
+    const resolveStakingLabel = (eventType: string) =>
+        EVENT_LABELS[eventType] || eventType?.replace(/([A-Z])/g, ' $1').trim() || eventType;
+
+    const filterStakingEvents = (events: any[]) => {
+        if (!stakingFilter) return events;
+        return events.filter(evt => {
+            const label = resolveStakingLabel(evt.event_type);
+            return STAKING_FILTER_MATCH[stakingFilter]?.some(m => label === m) ?? false;
+        });
+    };
+
+    const renderStakingRow = (evt: any, i: number) => {
+        const label = resolveStakingLabel(evt.event_type);
+        const colorClass = EVENT_COLORS[label] || EVENT_COLORS['Node Created'];
+        const amount = parseFloat(evt.amount) || 0;
+        const timeStr = evt.timestamp ? formatRelativeTime(evt.timestamp, Date.now()) : '';
+        return (
+            <div key={`stk-${evt.block_height}-${evt.event_index}-${i}`}
+                className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
+            >
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 flex items-center justify-center">
+                    <Landmark className="h-3.5 w-3.5 text-purple-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm border shrink-0 ${colorClass}`}>
+                            {label}
+                        </span>
+                        {amount > 0 && (
+                            <span className="font-mono text-xs font-medium text-zinc-900 dark:text-zinc-100 tabular-nums">
+                                {amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                                <span className="text-[10px] font-normal text-zinc-500 ml-1">FLOW</span>
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                        {evt.epoch != null && (
+                            <span className="font-mono text-zinc-400">Epoch #{evt.epoch}</span>
+                        )}
+                        {evt.node_id && (
+                            <>
+                                <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                                <span className="font-mono text-zinc-400 truncate max-w-[120px]" title={evt.node_id}>Node {evt.node_id.slice(0, 12)}...</span>
+                            </>
+                        )}
+                        {evt.delegator_id > 0 && (
+                            <>
+                                <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                                <span className="text-zinc-400">Delegator #{evt.delegator_id}</span>
+                            </>
+                        )}
+                        {evt.transaction_id && (
+                            <>
+                                <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
+                                <span className="text-zinc-400">tx:</span>
+                                <Link to={`/txs/${evt.transaction_id}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(evt.transaction_id, 8, 6)}</Link>
+                            </>
+                        )}
+                    </div>
+                </div>
+                <div className="flex-shrink-0 text-right">
+                    <div className="text-[10px] text-zinc-400">{timeStr}</div>
+                    {evt.block_height && <div className="text-[10px] text-zinc-400 font-mono">#{evt.block_height}</div>}
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div>
             {/* Filter toggles */}
@@ -601,7 +770,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             </div>
 
             {/* View mode toggle + Pagination */}
-            {(filterMode === 'all' || filterMode === 'ft' || filterMode === 'nft') && (
+            {(filterMode === 'all' || filterMode === 'ft' || filterMode === 'nft' || filterMode === 'staking') && (
                 <div className="flex items-center justify-between mb-3">
                     {/* View mode toggle */}
                     <div className="flex items-center gap-0.5 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
@@ -640,12 +809,19 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                             <button disabled={!nftHasMore || nftLoading} onClick={() => setNftPage(prev => prev + 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Next</button>
                         </div>
                     )}
+                    {viewMode === 'pages' && filterMode === 'staking' && (
+                        <div className="flex items-center gap-2">
+                            <button disabled={stakingPage <= 1 || stakingLoading} onClick={() => setStakingPage(prev => prev - 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Prev</button>
+                            <span className="text-[10px] text-zinc-500 tabular-nums min-w-[4rem] text-center">Page {stakingPage}</span>
+                            <button disabled={!stakingHasMore || stakingLoading} onClick={() => setStakingPage(prev => prev + 1)} className="px-2.5 py-1 text-[10px] border border-zinc-200 dark:border-white/10 rounded-sm disabled:opacity-30 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors">Next</button>
+                        </div>
+                    )}
                 </div>
             )}
 
             {/* === Unified Activity Feed === */}
             <div className="overflow-x-auto min-h-[200px] relative">
-                {isLoading && (filterMode === 'all' ? transactions.length === 0 : (filterMode === 'ft' ? ftTransfers.length === 0 : filterMode === 'nft' ? nftTransfers.length === 0 : scheduledTxs.length === 0)) && (
+                {isLoading && (filterMode === 'all' ? transactions.length === 0 : filterMode === 'ft' ? ftTransfers.length === 0 : filterMode === 'nft' ? nftTransfers.length === 0 : filterMode === 'staking' ? stakingEvents.length === 0 && stakingTimelineEvents.length === 0 : scheduledTxs.length === 0) && (
                     <div className="space-y-0">
                         {Array.from({ length: 6 }).map((_, i) => (
                             <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-zinc-100 dark:border-white/5 animate-pulse">
@@ -659,7 +835,7 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                         ))}
                     </div>
                 )}
-                {isLoading && (filterMode === 'all' ? transactions.length > 0 : true) && (filterMode === 'ft' ? ftTransfers.length > 0 : filterMode === 'nft' ? nftTransfers.length > 0 : filterMode === 'scheduled' ? scheduledTxs.length > 0 : true) && (
+                {isLoading && (filterMode === 'all' ? transactions.length > 0 : true) && (filterMode === 'ft' ? ftTransfers.length > 0 : filterMode === 'nft' ? nftTransfers.length > 0 : filterMode === 'staking' ? (stakingEvents.length > 0 || stakingTimelineEvents.length > 0) : filterMode === 'scheduled' ? scheduledTxs.length > 0 : true) && (
                     <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
                         <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin" />
                     </div>
@@ -786,6 +962,72 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                 )}
                 {filterMode === 'scheduled' && scheduledTxs.length === 0 && !scheduledLoading && (
                     <div className="text-center text-zinc-500 italic py-8">No scheduled transactions found</div>
+                )}
+                {filterMode === 'staking' && viewMode === 'pages' && stakingEvents.length === 0 && !stakingLoading && (
+                    <div className="text-center text-zinc-500 italic py-8">No staking activity found</div>
+                )}
+
+                {/* Staking activity — sub-filter bar */}
+                {filterMode === 'staking' && (
+                    <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-100 dark:border-white/5">
+                        {STAKING_FILTERS.map(f => (
+                            <button
+                                key={f.value}
+                                onClick={() => setStakingFilter(f.value)}
+                                className={`text-[10px] px-2 py-0.5 rounded-sm border transition-colors ${
+                                    stakingFilter === f.value
+                                        ? 'bg-zinc-800 text-white border-zinc-700 dark:bg-white dark:text-black dark:border-white/80'
+                                        : 'text-zinc-500 border-zinc-200 dark:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5'
+                                }`}
+                            >
+                                {f.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* Staking activity — Pages mode */}
+                {filterMode === 'staking' && viewMode === 'pages' && filterStakingEvents(stakingEvents).length > 0 && (
+                    <div className="space-y-0">
+                        {filterStakingEvents(stakingEvents).map((evt: any, i: number) => renderStakingRow(evt, i))}
+                    </div>
+                )}
+                {/* Staking activity — Timeline mode */}
+                {filterMode === 'staking' && viewMode === 'timeline' && (
+                    <div className="space-y-0">
+                        {(() => {
+                            const now = new Date();
+                            let lastSection = '';
+                            return filterStakingEvents(stakingTimelineEvents).map((evt, i) => {
+                                const ts = evt.timestamp;
+                                const section = ts ? getTimeSection(ts, now) : 'Unknown';
+                                const showHeader = section !== lastSection;
+                                lastSection = section;
+                                return (
+                                    <Fragment key={`stk-tl-${i}`}>
+                                        {showHeader && (
+                                            <div className="sticky top-0 z-10 bg-zinc-50/90 dark:bg-zinc-900/90 backdrop-blur-sm text-[10px] uppercase tracking-widest text-zinc-500 font-bold px-4 py-2 border-b border-zinc-200 dark:border-white/10">
+                                                {section}
+                                            </div>
+                                        )}
+                                        {renderStakingRow(evt, i)}
+                                    </Fragment>
+                                );
+                            });
+                        })()}
+                        <div ref={stakingSentinelRef} className="h-1" />
+                        {stakingTimelineLoading && (
+                            <div className="flex items-center justify-center py-4">
+                                <div className="w-5 h-5 border-2 border-dashed border-zinc-400 dark:border-zinc-500 rounded-full animate-spin" />
+                            </div>
+                        )}
+                        {!stakingTimelineHasMore && stakingTimelineEvents.length > 0 && (
+                            <div className="text-center text-[10px] text-zinc-400 py-4 uppercase tracking-widest">End of staking activity</div>
+                        )}
+                        {stakingTimelineEvents.length === 0 && !stakingTimelineLoading && (
+                            <div className="text-center text-zinc-500 italic py-8">No staking activity found</div>
+                        )}
+                    </div>
                 )}
 
                 {/* Unified activity feed — Pages mode */}
