@@ -547,6 +547,17 @@ FROM (
     CASE
       WHEN ft.contract_name LIKE 'EVMVMBridgedToken_%%' THEN 'bridge'
       WHEN length(ft.from_address) = 20 OR length(ft.to_address) = 20 THEN 'bridge'
+      WHEN (ft.from_address IS NULL OR ft.to_address IS NULL)
+           AND ft.contract_name = 'FlowToken'
+           AND EXISTS (
+             SELECT 1 FROM raw.events e
+             WHERE e.transaction_id = ft.transaction_id
+               AND e.block_height = ft.block_height
+               AND (e.type LIKE '%%FlowIDTableStaking%%'
+                 OR e.type LIKE '%%FlowStakingCollection%%'
+                 OR e.type LIKE '%%LockedTokens%%')
+             LIMIT 1
+           ) THEN 'staking'
       WHEN ft.from_address IS NULL THEN 'mint'
       WHEN ft.to_address IS NULL THEN 'burn'
       ELSE 'transfer'
