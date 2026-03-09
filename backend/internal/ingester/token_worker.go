@@ -63,6 +63,9 @@ type processTokenEventsResult struct {
 	ftTokens       map[string]models.FTToken
 	nftCollections map[string]models.NFTCollection
 	contracts      map[string]models.SmartContract
+	// evmCallsByTx holds EVM call data per Flow tx for Blockscout fallback enrichment.
+	// Only populated for transactions with unknown selectors that need external resolution.
+	evmCallsByTx map[string][]evmCallInfo
 }
 
 // processTokenEvents is the pure logic extracted from ProcessRange.
@@ -89,10 +92,24 @@ func processTokenEvents(events []models.Event) processTokenEventsResult {
 	evmWithdrawalsByTx := make(map[string][]evmBridgeInfo) // FLOW left EVM → Cadence deposit
 	evmDepositsByTx := make(map[string][]evmBridgeInfo)    // FLOW entered EVM → Cadence withdrawal
 
+	// EVM TransactionExecuted events contain from/to/data that let us decode
+	// ERC-20/721/1155 transfer recipients for bridge transactions.
+	evmCallsByTx := make(map[string][]evmCallInfo)
+
 	w := &TokenWorker{} // parseTokenLeg only uses fields, no repo needed
 
 	// 2. Parse Events
 	for _, evt := range events {
+		// Collect EVM TransactionExecuted events for call data decoding.
+		if isEVMTransactionExecutedEvent(evt.Type) {
+			payload := parseEVMEventPayload(evt.Payload)
+			if payload.data != "" {
+				payload.txID = evt.TransactionID
+				payload.blockHeight = evt.BlockHeight
+				evmCallsByTx[evt.TransactionID] = append(evmCallsByTx[evt.TransactionID], payload)
+			}
+		}
+
 		// Collect EVM bridge events for cross-VM transfer enrichment
 		if isEVMBridgeEvent(evt.Type) {
 			fields, ok := parseCadenceEventFields(evt.Payload)
@@ -349,13 +366,189 @@ func processTokenEvents(events []models.Event) processTokenEventsResult {
 		}
 	}
 
+	// Enrich bridge transfers (EVMVMBridgedToken) with EVM call data.
+	// For transfers with missing to_address, decode the ERC-20/721/1155 recipient
+	// from the EVM transaction's call data.
+	needsBlockscout := enrichBridgeTransfersFromCallData(ftTransfers, evmCallsByTx)
+	enrichBridgeTransfersFromCallData(nftTransfers, evmCallsByTx)
+
+	// Track which transactions need Blockscout fallback (unknown selectors).
+	var unresolvedCalls map[string][]evmCallInfo
+	if needsBlockscout {
+		unresolvedCalls = make(map[string][]evmCallInfo)
+		for _, t := range ftTransfers {
+			if isBridgedTokenContract(t.ContractName) && t.ToAddress == "" {
+				if calls, ok := evmCallsByTx[t.TransactionID]; ok {
+					unresolvedCalls[t.TransactionID] = calls
+				}
+			}
+		}
+	}
+
 	return processTokenEventsResult{
 		ftTransfers:    ftTransfers,
 		nftTransfers:   nftTransfers,
 		ftTokens:       ftTokens,
 		nftCollections: nftCollections,
 		contracts:      contracts,
+		evmCallsByTx:   unresolvedCalls,
 	}
+}
+
+// enrichBridgeTransfersFromCallData decodes EVM call data to fill missing
+// to_address on bridge token transfers. Returns true if any transfer still
+// needs Blockscout fallback (unknown selector).
+func enrichBridgeTransfersFromCallData(transfers []models.TokenTransfer, evmCalls map[string][]evmCallInfo) bool {
+	needsBlockscout := false
+	for i := range transfers {
+		t := &transfers[i]
+		if !isBridgedTokenContract(t.ContractName) {
+			continue
+		}
+		// Only enrich transfers missing the destination (burns going to EVM).
+		if t.ToAddress != "" {
+			continue
+		}
+		calls, ok := evmCalls[t.TransactionID]
+		if !ok || len(calls) == 0 {
+			continue
+		}
+		// Try to find an EVM call whose contract matches the bridged token's EVM address.
+		evmContract := extractEVMContractFromBridgedName(t.ContractName)
+		for _, call := range calls {
+			if evmContract != "" && call.to != evmContract {
+				continue
+			}
+			decoded := decodeEVMCallData(call.data)
+			if decoded.CallType != "unknown" && decoded.Recipient != "" {
+				t.ToAddress = decoded.Recipient
+				break
+			}
+			if decoded.CallType == "unknown" {
+				needsBlockscout = true
+			}
+		}
+	}
+	return needsBlockscout
+}
+
+// isBridgedTokenContract returns true for EVMVMBridgedToken_* and EVMVMBridgedNFT_* contracts.
+func isBridgedTokenContract(name string) bool {
+	return strings.HasPrefix(name, "EVMVMBridgedToken_") || strings.HasPrefix(name, "EVMVMBridgedNFT_")
+}
+
+// enrichBridgeTransfersFromBlockscout queries the Blockscout API for EVM transactions
+// that have unresolved call data, and fills in missing to_address from the token transfer data.
+func enrichBridgeTransfersFromBlockscout(ctx context.Context, ftTransfers, nftTransfers []models.TokenTransfer, evmCalls map[string][]evmCallInfo) {
+	client := newBlockscoutClient()
+
+	// Collect EVM hashes we need to query (deduplicate).
+	type txLookup struct {
+		evmHash     string
+		evmContract string // the bridged token's EVM contract address
+	}
+	needed := make(map[string]txLookup) // Flow txID → lookup info
+	allTransfers := append(ftTransfers, nftTransfers...)
+	for _, t := range allTransfers {
+		if !isBridgedTokenContract(t.ContractName) || t.ToAddress != "" {
+			continue
+		}
+		if _, ok := needed[t.TransactionID]; ok {
+			continue
+		}
+		calls := evmCalls[t.TransactionID]
+		for _, call := range calls {
+			// We need the EVM hash to query Blockscout. Try to find it from the event payload.
+			// The call.from is the COA, we'll look up by flow txID → evm hash mapping.
+			// For now, skip if we don't have enough info.
+			if call.to == "" {
+				continue
+			}
+			evmContract := extractEVMContractFromBridgedName(t.ContractName)
+			needed[t.TransactionID] = txLookup{
+				evmContract: evmContract,
+			}
+			break
+		}
+	}
+
+	if len(needed) == 0 {
+		return
+	}
+
+	// For each unresolved transaction, query Blockscout by the EVM hash.
+	// We need to get the EVM hash from the EVM call info. The EVM worker stores
+	// the hash in evm_transactions, but we don't have it here. Instead, Blockscout
+	// has a tx search by address endpoint. For simplicity, we'll use the
+	// from+to to look up token transfers.
+	//
+	// Actually, we can extract the EVM hash from the same EVM.TransactionExecuted
+	// event payload. Let's enhance the collection to include it.
+	//
+	// For now, this is best-effort — we log but don't fail if Blockscout is unavailable.
+	for txID, calls := range evmCalls {
+		if _, ok := needed[txID]; !ok {
+			continue
+		}
+		// Find an EVM hash from the calls.
+		var evmHash string
+		for _, call := range calls {
+			if call.evmHash != "" {
+				evmHash = call.evmHash
+				break
+			}
+		}
+		if evmHash == "" {
+			continue
+		}
+
+		bsTransfers := client.FetchTokenTransfers(ctx, evmHash)
+		if len(bsTransfers) == 0 {
+			continue
+		}
+
+		// Match Blockscout token transfers back to our FT/NFT transfers.
+		for i := range ftTransfers {
+			t := &ftTransfers[i]
+			if t.TransactionID != txID || t.ToAddress != "" || !isBridgedTokenContract(t.ContractName) {
+				continue
+			}
+			evmContract := extractEVMContractFromBridgedName(t.ContractName)
+			for _, bt := range bsTransfers {
+				tokenAddr := normalizeEVMAddress(bt.Token.Address)
+				if tokenAddr == evmContract && bt.To.Hash != "" {
+					t.ToAddress = normalizeEVMAddress(bt.To.Hash)
+					break
+				}
+			}
+		}
+		for i := range nftTransfers {
+			t := &nftTransfers[i]
+			if t.TransactionID != txID || t.ToAddress != "" || !isBridgedTokenContract(t.ContractName) {
+				continue
+			}
+			evmContract := extractEVMContractFromBridgedName(t.ContractName)
+			for _, bt := range bsTransfers {
+				tokenAddr := normalizeEVMAddress(bt.Token.Address)
+				if tokenAddr == evmContract && bt.To.Hash != "" {
+					t.ToAddress = normalizeEVMAddress(bt.To.Hash)
+					break
+				}
+			}
+		}
+	}
+}
+
+// extractEVMContractFromBridgedName extracts the EVM contract address from
+// an EVMVMBridgedToken_{address} contract name. Returns 40-char lowercase hex or "".
+func extractEVMContractFromBridgedName(name string) string {
+	for _, prefix := range []string{"EVMVMBridgedToken_", "EVMVMBridgedNFT_"} {
+		if strings.HasPrefix(name, prefix) {
+			addr := strings.TrimPrefix(name, prefix)
+			return normalizeEVMAddress(addr)
+		}
+	}
+	return ""
 }
 
 func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uint64) error {
@@ -371,6 +564,12 @@ func (w *TokenWorker) ProcessRange(ctx context.Context, fromHeight, toHeight uin
 	ftTokens := result.ftTokens
 	nftCollections := result.nftCollections
 	contracts := result.contracts
+
+	// Blockscout fallback: for bridge transfers with unknown EVM selectors,
+	// query Blockscout API to resolve token transfer recipients.
+	if len(result.evmCallsByTx) > 0 {
+		enrichBridgeTransfersFromBlockscout(ctx, ftTransfers, nftTransfers, result.evmCallsByTx)
+	}
 
 	// 3. Upsert to App DB
 	if len(ftTransfers) > 0 || len(nftTransfers) > 0 {
@@ -1010,5 +1209,32 @@ func isWrapperContractName(name string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// parseEVMEventPayload extracts hash/from/to/data from an EVM.TransactionExecuted event payload.
+func parseEVMEventPayload(payload []byte) evmCallInfo {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return evmCallInfo{}
+	}
+	evmHash := extractEVMHashFromPayload(raw)
+	// Try decoding the raw transaction payload first (most reliable).
+	if txPayload := extractEVMPayloadBytes(raw); len(txPayload) > 0 {
+		if decoded, ok := decodeEVMTransactionPayload(txPayload); ok {
+			return evmCallInfo{
+				evmHash: evmHash,
+				from:    decoded.From,
+				to:      decoded.To,
+				data:    decoded.Data,
+			}
+		}
+	}
+	// Fallback: extract fields directly from the JSON.
+	return evmCallInfo{
+		evmHash: evmHash,
+		from:    extractEVMHexField(raw, "from", "fromAddress", "sender"),
+		to:      extractEVMHexField(raw, "to", "toAddress", "recipient"),
+		data:    extractEVMHexField(raw, "data", "input"),
 	}
 }
