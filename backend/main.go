@@ -198,14 +198,6 @@ func main() {
 		}()
 	}
 
-	if strings.ToLower(os.Getenv("RUN_EVM_BRIDGE_BACKFILL")) == "true" {
-		go func() {
-			if err := repo.BackfillEVMBridgeTransfers(context.Background()); err != nil {
-				log.Printf("[backfill_evm_bridge] error: %v", err)
-			}
-		}()
-	}
-
 	// History stop height (for parallel indexing — each instance indexes a spork range)
 	historyStopHeight := getEnvUint("HISTORY_STOP_HEIGHT", 0)
 
