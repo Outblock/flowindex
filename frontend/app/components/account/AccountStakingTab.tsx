@@ -191,12 +191,29 @@ function DelegatorInfoCard({ delegator, index }: { delegator: DelegatorInfo; ind
     );
 }
 
+const ACTIVITY_FILTERS = [
+    { label: 'All', value: '' },
+    { label: 'Staked', value: 'staked' },
+    { label: 'Unstake', value: 'unstake' },
+    { label: 'Rewards', value: 'rewards' },
+    { label: 'Withdrawn', value: 'withdrawn' },
+];
+
+/** Map filter values to matching resolved label prefixes */
+const FILTER_MATCH: Record<string, string[]> = {
+    staked: ['Staked', 'Restaked'],
+    unstake: ['Unstaking', 'Unstaked', 'Unstake Requested'],
+    rewards: ['Reward', 'Reward Claimed'],
+    withdrawn: ['Withdrawn'],
+};
+
 function StakingActivitySection({ address }: { address: string }) {
     const [events, setEvents] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const loadingRef = useRef(false);
+    const [filter, setFilter] = useState('');
 
     const loadMore = useCallback(async () => {
         if (loadingRef.current || !hasMore) return;
@@ -225,9 +242,21 @@ function StakingActivitySection({ address }: { address: string }) {
 
     if (events.length === 0 && !loading) return null;
 
-    // Group events by epoch
+    // Resolve labels for all events (needed for filtering)
+    const resolveLabel = (eventType: string) =>
+        EVENT_LABELS[eventType] || eventType?.replace(/([A-Z])/g, ' $1').trim() || eventType;
+
+    // Filter events
+    const filteredEvents = filter
+        ? events.filter(evt => {
+            const label = resolveLabel(evt.event_type);
+            return FILTER_MATCH[filter]?.some(m => label === m) ?? false;
+        })
+        : events;
+
+    // Group filtered events by epoch
     const grouped = new Map<number | string, { epoch: number | null; epochStart?: string; epochEnd?: string; events: any[] }>();
-    for (const evt of events) {
+    for (const evt of filteredEvents) {
         const epoch = evt.epoch ?? null;
         const key = epoch ?? 'unknown';
         if (!grouped.has(key)) {
@@ -238,10 +267,27 @@ function StakingActivitySection({ address }: { address: string }) {
 
     return (
         <div className="space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-                <History className="w-3.5 h-3.5" />
-                Staking Activity
-            </h4>
+            <div className="flex items-center gap-3 flex-wrap">
+                <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                    <History className="w-3.5 h-3.5" />
+                    Staking Activity
+                </h4>
+                <div className="flex items-center gap-1">
+                    {ACTIVITY_FILTERS.map(f => (
+                        <button
+                            key={f.value}
+                            onClick={() => setFilter(f.value)}
+                            className={`text-[10px] px-2 py-0.5 rounded-sm border transition-colors ${
+                                filter === f.value
+                                    ? 'bg-zinc-800 text-white border-zinc-700 dark:bg-white dark:text-black dark:border-white/80'
+                                    : 'text-zinc-500 border-zinc-200 dark:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5'
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
 
             {[...grouped.entries()].map(([key, group]) => (
                 <div key={String(key)}>
@@ -260,21 +306,15 @@ function StakingActivitySection({ address }: { address: string }) {
 
                     <div className="space-y-1">
                         {group.events.map((evt: any, i: number) => {
-                            const label = EVENT_LABELS[evt.event_type] || evt.event_type
-                                ?.replace(/([A-Z])/g, ' $1').trim() // CamelCase → spaced
-                                || evt.event_type;
+                            const label = resolveLabel(evt.event_type);
                             const colorClass = EVENT_COLORS[label] || EVENT_COLORS['Node Created'];
                             const amount = parseFloat(evt.amount) || 0;
                             return (
                                 <div key={`${evt.block_height}-${evt.event_index}-${i}`}
                                     className="flex items-center gap-3 px-3 py-2 bg-white dark:bg-black/20 border border-zinc-100 dark:border-white/5 rounded-sm hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
                                 >
-                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm border shrink-0 ${colorClass}`}>
-                                        {label}
-                                    </span>
-
                                     {amount > 0 && (
-                                        <span className="text-sm font-mono font-bold text-zinc-900 dark:text-white shrink-0">
+                                        <span className="text-sm font-mono font-bold text-zinc-900 dark:text-white shrink-0 w-32 text-right tabular-nums">
                                             {amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                                             <span className="text-[10px] font-normal text-zinc-500 ml-1">FLOW</span>
                                         </span>
@@ -287,7 +327,11 @@ function StakingActivitySection({ address }: { address: string }) {
 
                                     <div className="flex-1" />
 
-                                    <span className="text-[10px] text-zinc-400 shrink-0">
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm border shrink-0 ${colorClass}`}>
+                                        {label}
+                                    </span>
+
+                                    <span className="text-[10px] text-zinc-400 shrink-0 tabular-nums">
                                         {new Date(evt.timestamp).toLocaleString()}
                                     </span>
                                     <a href={`/txs/${evt.transaction_id}`}
@@ -302,6 +346,10 @@ function StakingActivitySection({ address }: { address: string }) {
                     </div>
                 </div>
             ))}
+
+            {filteredEvents.length === 0 && !loading && (
+                <p className="text-xs text-zinc-400 text-center py-4">No matching events</p>
+            )}
 
             {loading && (
                 <div className="flex justify-center py-4">
