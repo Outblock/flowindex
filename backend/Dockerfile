@@ -29,9 +29,8 @@ COPY --from=builder /app/indexer .
 COPY --from=builder /app/backfill_token_transfers .
 # Copy schema for potential migration on startup (optional, user does it manually now)
 COPY --from=builder /app/schema_v2.sql .
-COPY --from=builder /app/openapi-v1.json .
-COPY --from=builder /app/openapi-v2.json .
-COPY --from=builder /app/docs ./docs
+# Serve the v2 spec as the default openapi.json (matches specPaths() lookup)
+COPY --from=builder /app/openapi-v2.json ./openapi.json
 
 EXPOSE 8080
 

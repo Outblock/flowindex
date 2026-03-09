@@ -19,8 +19,10 @@ COPY --from=deps /app/devportal/node_modules ./node_modules
 COPY devportal/ ./
 COPY docs-public /app/docs-public
 
-# Some setups omit `public/`, but our runtime image expects it.
+# Single-source OpenAPI specs from repo root
 RUN mkdir -p public
+COPY openapi-v1.json ./public/openapi-v1.json
+COPY openapi-v2.json ./public/openapi-v2.json
 
 RUN bun run build
 
