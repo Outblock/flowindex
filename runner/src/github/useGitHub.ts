@@ -6,6 +6,7 @@ import {
   type CommitResult,
   type DeployEnvironment,
   type Deployment,
+  type GitHubCommit,
   type WorkflowRun,
 } from './api';
 
@@ -62,6 +63,7 @@ export function useGitHub(projectId: string | undefined) {
   const [latestRuns, setLatestRuns] = useState<WorkflowRun[]>([]);
   const [environments, setEnvironments] = useState<DeployEnvironment[]>([]);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [commits, setCommits] = useState<GitHubCommit[]>([]);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -283,6 +285,24 @@ export function useGitHub(projectId: string | undefined) {
     }
   }, [connection]);
 
+  // ---- fetch commits ------------------------------------------------------
+
+  const fetchCommits = useCallback(async () => {
+    if (!connection) return;
+    try {
+      const { commits } = await githubApi.listCommits(
+        connection.installation_id,
+        connection.repo_owner,
+        connection.repo_name,
+        connection.branch,
+        connection.repo_path || undefined,
+      );
+      setCommits(commits);
+    } catch {
+      setCommits([]);
+    }
+  }, [connection]);
+
   // ---- environments -------------------------------------------------------
 
   const fetchEnvironments = useCallback(async () => {
@@ -412,6 +432,7 @@ export function useGitHub(projectId: string | undefined) {
     if (connection) {
       fetchEnvironments();
       fetchDeployments();
+      fetchCommits();
     }
   }, [connection?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -443,6 +464,7 @@ export function useGitHub(projectId: string | undefined) {
     pullFiles, commitAndPush,
     setupWorkflow,
     latestRuns, fetchRuns, fetchConnection,
+    commits, fetchCommits,
     // Deploy environments & secrets
     environments, fetchEnvironments, upsertEnvironment, deleteEnvironment,
     deployments, fetchDeployments,

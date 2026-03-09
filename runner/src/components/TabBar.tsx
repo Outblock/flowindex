@@ -1,5 +1,16 @@
-import { X, Lock } from 'lucide-react';
+import { X, Lock, File } from 'lucide-react';
 import type { ProjectState } from '../fs/fileSystem';
+
+function CadenceIcon({ className }: { className?: string }) {
+  return (
+    <img
+      src="https://cadence.flowindex.io/favicon.ico"
+      alt="cdc"
+      className={className}
+      style={{ imageRendering: 'auto' }}
+    />
+  );
+}
 
 interface TabBarProps {
   project: ProjectState;
@@ -33,7 +44,13 @@ export default function TabBar({ project, onSelectFile, onCloseFile, pendingDiff
             }`}
             onClick={() => onSelectFile(path)}
           >
-            {isReadOnly && <Lock className="w-2.5 h-2.5 text-zinc-600" />}
+            {fileName(path).endsWith('.cdc') ? (
+              <CadenceIcon className="w-3 h-3 shrink-0" />
+            ) : isReadOnly ? (
+              <Lock className="w-2.5 h-2.5 text-zinc-600 shrink-0" />
+            ) : (
+              <File className="w-3 h-3 shrink-0 text-zinc-500" />
+            )}
             {hasDiff && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
             <span className="truncate max-w-[120px]" title={path}>
               {fileName(path)}

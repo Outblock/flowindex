@@ -606,4 +606,38 @@ router.post('/dispatch', async (req: Request, res: Response) => {
   }
 });
 
+// GET /commits/:owner/:repo — Get recent commits
+router.get('/commits/:owner/:repo', async (req: Request, res: Response) => {
+  try {
+    const installationId = Number(req.query.installation_id);
+    if (!installationId) {
+      res.status(400).json({ error: 'installation_id is required' });
+      return;
+    }
+    const owner = req.params.owner as string;
+    const repo = req.params.repo as string;
+    const branch = (req.query.branch as string) || undefined;
+    const path = (req.query.path as string) || undefined;
+    const perPage = Math.min(Number(req.query.per_page) || 30, 100);
+
+    const octokit = await getInstallationOctokit(installationId);
+    const { data } = await octokit.request('GET /repos/{owner}/{repo}/commits', {
+      owner, repo, sha: branch, path, per_page: perPage,
+    });
+
+    const commits = data.map((c: any) => ({
+      sha: c.sha,
+      message: c.commit.message,
+      author_name: c.commit.author?.name || c.author?.login || 'Unknown',
+      author_avatar: c.author?.avatar_url || null,
+      date: c.commit.author?.date || c.commit.committer?.date || '',
+      url: c.html_url,
+    }));
+    res.json({ commits });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: message });
+  }
+});
+
 export { router as githubRouter };

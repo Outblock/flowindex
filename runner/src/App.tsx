@@ -34,9 +34,12 @@ import ProjectSelector from './components/ProjectSelector';
 import ShareModal from './components/ShareModal';
 import { useGitHub } from './github/useGitHub';
 import GitHubConnect from './components/GitHubConnect';
-import GitCommitPanel from './components/GitCommitPanel';
+import ActivityBar, { type SidebarTab } from './components/ActivityBar';
+import GitHubPanel from './components/GitHubPanel';
+import SettingsPanel from './components/SettingsPanel';
+import { githubApi } from './github/api';
 import { useDeployEvents } from './github/useDeployEvents';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, Settings, Cpu, Server, ChevronDown, Globe, Sparkles, Github, ExternalLink } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, ChevronDown, Globe } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
 const AIPanel = lazy(() => import('./components/AIPanel'));
@@ -237,7 +240,6 @@ export default function App() {
   const [lspMode, setLspMode] = useState<LspMode>(() => {
     try { return (localStorage.getItem('runner-lsp-mode') as LspMode) || 'auto'; } catch { return 'auto'; }
   });
-  const [showLspMenu, setShowLspMenu] = useState(false);
   useEffect(() => {
     try { localStorage.setItem('runner-lsp-mode', lspMode); } catch { /* noop */ }
   }, [lspMode]);
@@ -287,6 +289,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
   const [showExplorer, setShowExplorer] = useState(!isIframe);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('files');
+  const [gitDiffFile, setGitDiffFile] = useState<string | null>(null);
   const [showAI, setShowAI] = useState(() => {
     try {
       const stored = localStorage.getItem('runner:show-ai');
@@ -396,6 +400,7 @@ export default function App() {
   }, []);
 
   const skipPasskeyOnboarding = useCallback(() => {
+    try { sessionStorage.setItem('runner:passkey-onboarding-skipped', '1'); } catch {}
     setShowPasskeyOnboarding(false);
   }, []);
 
@@ -426,7 +431,8 @@ export default function App() {
         if (cancelled) return;
         const hasExistingPasskey = passkeyList.length > 0;
         const dismissed = localStorage.getItem(`runner:passkey-onboarding-dismissed:${user.id}`) === '1';
-        setShowPasskeyOnboarding(!hasExistingPasskey && !dismissed);
+        const skippedThisSession = sessionStorage.getItem('runner:passkey-onboarding-skipped') === '1';
+        setShowPasskeyOnboarding(!hasExistingPasskey && !dismissed && !skippedThisSession);
       } catch {
         if (!cancelled) setShowPasskeyOnboarding(false);
       }
@@ -1278,6 +1284,32 @@ export default function App() {
     }
   };
 
+  const handleGitDiffFile = useCallback(async (path: string) => {
+    if (!github.connection) return;
+    setGitDiffFile(path);
+    const localContent = getFileContent(project, path) || '';
+
+    try {
+      const { installation_id, repo_owner, repo_name, repo_path, branch } = github.connection;
+      const prefix = (!repo_path || repo_path === '/') ? '' : repo_path;
+      const fullPath = prefix ? `${prefix}/${path}` : path;
+      const { content: remoteContent } = await githubApi.getFile(
+        installation_id, repo_owner, repo_name, fullPath, branch,
+      );
+      setPendingDiffs(prev => ({
+        ...prev,
+        [path]: { original: remoteContent, modified: localContent },
+      }));
+      setProject(prev => openFile(prev, path));
+    } catch {
+      setPendingDiffs(prev => ({
+        ...prev,
+        [path]: { original: '', modified: localContent },
+      }));
+      setProject(prev => openFile(prev, path));
+    }
+  }, [github.connection, project]);
+
   const hasBottomPanel = scriptParams.length > 0 || results.length > 0 || loading;
 
   return (
@@ -1308,7 +1340,7 @@ export default function App() {
           <div className="relative group/lsp">
             <button
               onClick={() => {
-                if (lspError) { setShowExplorer(true); setShowLspMenu(true); }
+                if (lspError) { setShowExplorer(true); setSidebarTab('settings'); }
               }}
               className={`flex items-center gap-1 px-1.5 py-1 rounded transition-colors ${
                 lspError ? 'hover:bg-zinc-700 cursor-pointer' : 'cursor-default'
@@ -1476,235 +1508,133 @@ export default function App() {
 
       {/* Main layout */}
       <div className="flex flex-1 min-h-0">
-        {/* File Explorer (hidden on mobile) */}
+        {/* Sidebar (hidden on mobile) */}
         {showExplorer && !isMobile && (
           <>
+            <ActivityBar
+              activeTab={sidebarTab}
+              onTabChange={setSidebarTab}
+              hasGitHub={!!github.connection}
+              gitChangesCount={gitChangedFiles.length}
+            />
             <div className="shrink-0 overflow-hidden bg-zinc-900 flex flex-col" style={{ width: explorer.width }}>
-              {/* Cloud project selector */}
-              {user && (
-                <div className="shrink-0 border-b border-zinc-700">
-                  <ProjectSelector
-                    projects={cloudProjects}
-                    currentProject={cloudMeta.id ? cloudMeta : null}
-                    onSelectProject={async (slug) => {
-                      const full = await getProject(slug);
-                      if (!full) return;
-                      const files = full.files.map((f: { path: string; content: string }) => ({ path: f.path, content: f.content }));
-                      setProject({
-                        files: files.length > 0 ? files : [{ path: 'main.cdc', content: '' }],
-                        activeFile: full.active_file || files[0]?.path || 'main.cdc',
-                        openFiles: full.open_files || [files[0]?.path || 'main.cdc'],
-                        folders: full.folders || [],
-                      });
-                      setCloudMeta({
-                        id: full.id, name: full.name, slug: full.slug, is_public: full.is_public,
-                      });
-                      setNetwork(full.network as FlowNetwork);
-                    }}
-                    onNewProject={async () => {
-                      const defaultFiles = [{ path: 'main.cdc', content: DEFAULT_CODE }];
-                      const defaultState = { files: defaultFiles, activeFile: 'main.cdc', openFiles: ['main.cdc'], folders: [] as string[] };
-                      const result = await cloudSave(defaultState, { name: 'Untitled', network });
-                      setProject(defaultState);
-                      setCloudMeta({ id: result.id, name: 'Untitled', slug: result.slug });
-                      await fetchProjects();
-                    }}
-                    onRename={async (id, name) => {
-                      setCloudMeta(prev => ({ ...prev, name }));
-                      await cloudSave(project, { ...cloudMeta, id, name });
-                      await fetchProjects();
-                    }}
-                    onShare={() => setShowShareModal(true)}
-                    onDelete={async (id) => {
-                      await cloudDelete(id);
-                      setCloudMeta({ name: 'Untitled' });
-                      setProject(loadProject());
-                    }}
-                    saving={projectSaving}
-                    lastSaved={lastSaved}
-                    onExport={handleExportZip}
-                  />
-                </div>
-              )}
-              <div className="flex-1 overflow-y-auto">
-                <FileExplorer
-                  project={project}
-                  onOpenFile={handleOpenFile}
-                  onCreateFile={handleCreateFile}
-                  onCreateFolder={handleCreateFolder}
-                  onDeleteFile={handleDeleteFile}
-                  activeFile={project.activeFile}
-                />
-              </div>
-              {/* Git panel */}
-              {github.connection && (
-                <div className="shrink-0 border-t border-zinc-700">
-                  <GitCommitPanel
-                    changedFiles={gitChangedFiles}
-                    onCommit={handleGitCommit}
-                    lastCommitSha={github.connection.last_commit_sha}
-                    pushing={gitPushing}
-                  />
-                </div>
-              )}
-              {/* Sign in / user info at sidebar bottom */}
-              {!authLoading && (
-                <div className="shrink-0 border-t border-zinc-700">
-                  {user ? (
-                    <div className="flex items-center justify-between px-3 py-2">
-                      <span className="text-[10px] text-zinc-500 truncate">{user.email}</span>
-                      <button
-                        onClick={() => signOut()}
-                        className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                      >
-                        Sign out
-                      </button>
+              {/* Files tab */}
+              {sidebarTab === 'files' && (
+                <>
+                  {user && (
+                    <div className="shrink-0 border-b border-zinc-700">
+                      <ProjectSelector
+                        projects={cloudProjects}
+                        currentProject={cloudMeta.id ? cloudMeta : null}
+                        onSelectProject={async (slug) => {
+                          const full = await getProject(slug);
+                          if (!full) return;
+                          const files = full.files.map((f: { path: string; content: string }) => ({ path: f.path, content: f.content }));
+                          setProject({
+                            files: files.length > 0 ? files : [{ path: 'main.cdc', content: '' }],
+                            activeFile: full.active_file || files[0]?.path || 'main.cdc',
+                            openFiles: full.open_files || [files[0]?.path || 'main.cdc'],
+                            folders: full.folders || [],
+                          });
+                          setCloudMeta({
+                            id: full.id, name: full.name, slug: full.slug, is_public: full.is_public,
+                          });
+                          setNetwork(full.network as FlowNetwork);
+                        }}
+                        onNewProject={async () => {
+                          const defaultFiles = [{ path: 'main.cdc', content: DEFAULT_CODE }];
+                          const defaultState = { files: defaultFiles, activeFile: 'main.cdc', openFiles: ['main.cdc'], folders: [] as string[] };
+                          const result = await cloudSave(defaultState, { name: 'Untitled', network });
+                          setProject(defaultState);
+                          setCloudMeta({ id: result.id, name: 'Untitled', slug: result.slug });
+                          await fetchProjects();
+                        }}
+                        onRename={async (id, name) => {
+                          setCloudMeta(prev => ({ ...prev, name }));
+                          await cloudSave(project, { ...cloudMeta, id, name });
+                          await fetchProjects();
+                        }}
+                        onShare={() => setShowShareModal(true)}
+                        onDelete={async (id) => {
+                          await cloudDelete(id);
+                          setCloudMeta({ name: 'Untitled' });
+                          setProject(loadProject());
+                        }}
+                        saving={projectSaving}
+                        lastSaved={lastSaved}
+                        onExport={handleExportZip}
+                      />
                     </div>
-                  ) : (
-                    <button
-                      onClick={openLogin}
-                      className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors px-3 py-2 w-full text-left"
-                    >
-                      <LogIn className="w-3 h-3" />
-                      <span>Sign in</span>
-                    </button>
                   )}
-                </div>
-              )}
-              {/* GitHub integration */}
-              <div className="shrink-0 border-t border-zinc-700">
-                {github.connection ? (
-                  <a
-                    href={`https://github.com/${github.connection.repo_owner}/${github.connection.repo_name}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-                  >
-                    <Github className="w-3 h-3" />
-                    <span className="truncate">{github.connection.repo_owner}/{github.connection.repo_name}</span>
-                    <ExternalLink className="w-2.5 h-2.5 ml-auto shrink-0 opacity-50" />
-                  </a>
-                ) : user && cloudMeta.id ? (
-                  <button
-                    onClick={() => setShowGitHubConnect(true)}
-                    className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-                  >
-                    <Github className="w-3 h-3" />
-                    <span>GitHub</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={openLogin}
-                    className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors text-left"
-                  >
-                    <Github className="w-3 h-3" />
-                    <span>GitHub</span>
-                  </button>
-                )}
-              </div>
-              {/* Settings */}
-              <div className="shrink-0 border-t border-zinc-700">
-                <button
-                  onClick={() => setShowLspMenu((v) => !v)}
-                  className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-                >
-                  <Settings className="w-3 h-3" />
-                  <span>Settings</span>
-                </button>
-                {showLspMenu && (
-                  <div className="px-3 pb-2 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">LSP Mode</span>
-                      {!activeMode && <Loader2 className="w-3 h-3 animate-spin text-zinc-500" />}
-                      {activeMode && lspMode === 'auto' && (
-                        <span className="text-[10px] text-zinc-500">→ {activeMode}</span>
+                  <div className="flex-1 overflow-y-auto">
+                    <FileExplorer
+                      project={project}
+                      onOpenFile={handleOpenFile}
+                      onCreateFile={handleCreateFile}
+                      onCreateFolder={handleCreateFolder}
+                      onDeleteFile={handleDeleteFile}
+                      activeFile={project.activeFile}
+                    />
+                  </div>
+                  {!authLoading && (
+                    <div className="shrink-0 border-t border-zinc-700">
+                      {user ? (
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <span className="text-[10px] text-zinc-500 truncate">{user.email}</span>
+                          <button
+                            onClick={() => signOut()}
+                            className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                          >
+                            Sign out
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={openLogin}
+                          className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors px-3 py-2 w-full text-left"
+                        >
+                          <LogIn className="w-3 h-3" />
+                          <span>Sign in</span>
+                        </button>
                       )}
                     </div>
-                    <div className="flex rounded-md overflow-hidden border border-zinc-700 bg-zinc-900">
-                      <div className="relative flex-1 group/auto">
-                        <button
-                          onClick={() => setLspMode('auto')}
-                          className={`flex items-center justify-center gap-1 w-full px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                            lspMode === 'auto'
-                              ? 'bg-violet-500/15 text-violet-400 border-r border-violet-500/30'
-                              : 'text-zinc-500 hover:text-zinc-300 border-r border-zinc-700'
-                          }`}
-                        >
-                          <Sparkles className="w-3 h-3" />
-                          Auto
-                        </button>
-                        <div className="absolute bottom-full left-0 mb-2 w-52 p-2.5 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl text-[10px] leading-relaxed opacity-0 pointer-events-none group-hover/auto:opacity-100 transition-opacity z-50">
-                          <div className="text-violet-400 font-semibold mb-1">Auto (Recommended)</div>
-                          <div className="text-zinc-400 mb-1.5">Best of both worlds</div>
-                          <div className="text-zinc-500 space-y-0.5">
-                            <div>+ Uses WASM if cached</div>
-                            <div>+ Falls back to Server</div>
-                            <div>+ Background downloads WASM</div>
-                            <div>+ No waiting on first visit</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="relative flex-1 group/wasm">
-                        <button
-                          onClick={() => setLspMode('wasm')}
-                          className={`flex items-center justify-center gap-1 w-full px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                            lspMode === 'wasm'
-                              ? 'bg-emerald-500/15 text-emerald-400 border-r border-emerald-500/30'
-                              : 'text-zinc-500 hover:text-zinc-300 border-r border-zinc-700'
-                          }`}
-                        >
-                          <Cpu className="w-3 h-3" />
-                          WASM
-                        </button>
-                        <div className="absolute bottom-full left-0 mb-2 w-52 p-2.5 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl text-[10px] leading-relaxed opacity-0 pointer-events-none group-hover/wasm:opacity-100 transition-opacity z-50">
-                          <div className="text-emerald-400 font-semibold mb-1">WASM (Local)</div>
-                          <div className="text-zinc-400 mb-1.5">Runs in browser Web Worker</div>
-                          <div className="text-zinc-500 space-y-0.5">
-                            <div>+ Zero latency</div>
-                            <div>+ Works offline</div>
-                            <div>+ No server needed</div>
-                            <div className="text-amber-500/80">- 47MB initial download</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="relative flex-1 group/server">
-                        <button
-                          onClick={() => setLspMode('server')}
-                          className={`flex items-center justify-center gap-1 w-full px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                            lspMode === 'server'
-                              ? 'bg-blue-500/15 text-blue-400'
-                              : 'text-zinc-500 hover:text-zinc-300'
-                          }`}
-                        >
-                          <Server className="w-3 h-3" />
-                          Server
-                        </button>
-                        <div className="absolute bottom-full right-0 mb-2 w-52 p-2.5 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl text-[10px] leading-relaxed opacity-0 pointer-events-none group-hover/server:opacity-100 transition-opacity z-50">
-                          <div className="text-blue-400 font-semibold mb-1">Server (WebSocket)</div>
-                          <div className="text-zinc-400 mb-1.5">Remote LSP via WebSocket</div>
-                          <div className="text-zinc-500 space-y-0.5">
-                            <div>+ Full Go runtime</div>
-                            <div>+ Faster import resolution</div>
-                            <div>+ No WASM download</div>
-                            <div className="text-amber-500/80">- Requires server</div>
-                            <div className="text-amber-500/80">- Network latency</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Manage Keys */}
-                    <button
-                      onClick={() => { setShowKeyManager(true); setShowLspMenu(false); }}
-                      className={`flex items-center gap-1.5 w-full px-0 py-1.5 text-[11px] transition-colors ${
-                        showKeyManager ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
-                      }`}
-                    >
-                      <KeyIcon className="w-3 h-3" />
-                      <span>Manage Keys</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+                  )}
+                </>
+              )}
+
+              {/* GitHub tab */}
+              {sidebarTab === 'github' && (
+                <GitHubPanel
+                  connected={!!github.connection}
+                  repoOwner={github.connection?.repo_owner}
+                  repoName={github.connection?.repo_name}
+                  branch={github.connection?.branch}
+                  onConnect={() => setShowGitHubConnect(true)}
+                  onLogin={openLogin}
+                  isLoggedIn={!!user}
+                  hasProject={!!cloudMeta.id}
+                  changedFiles={gitChangedFiles}
+                  onFileClick={handleGitDiffFile}
+                  selectedFile={gitDiffFile ?? undefined}
+                  onCommit={handleGitCommit}
+                  pushing={gitPushing}
+                  lastCommitSha={github.connection?.last_commit_sha}
+                  commits={github.commits}
+                  loadingCommits={github.loading}
+                  onRefreshCommits={github.fetchCommits}
+                />
+              )}
+
+              {/* Settings tab */}
+              {sidebarTab === 'settings' && (
+                <SettingsPanel
+                  lspMode={lspMode}
+                  onLspModeChange={setLspMode}
+                  activeMode={activeMode}
+                  onOpenKeyManager={() => setShowKeyManager(true)}
+                  showKeyManager={showKeyManager}
+                />
+              )}
             </div>
             <DragBar direction="horizontal" onMouseDown={explorer.onMouseDown} />
           </>

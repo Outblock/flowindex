@@ -6,6 +6,17 @@ import {
 import type { TreeNode, ProjectState } from '../fs/fileSystem';
 import { buildTree, getUserFiles, getDependencyFiles } from '../fs/fileSystem';
 
+function CadenceIcon({ className }: { className?: string }) {
+  return (
+    <img
+      src="https://cadence.flowindex.io/favicon.ico"
+      alt="cdc"
+      className={className}
+      style={{ imageRendering: 'auto' }}
+    />
+  );
+}
+
 interface FileExplorerProps {
   project: ProjectState;
   onOpenFile: (path: string) => void;
@@ -72,7 +83,11 @@ function TreeItem({
       }`}
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
     >
-      <File className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+      {node.name.endsWith('.cdc') ? (
+        <CadenceIcon className="w-3.5 h-3.5 shrink-0" />
+      ) : (
+        <File className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+      )}
       <span className="truncate flex-1">{node.name}</span>
       {node.readOnly && <Lock className="w-2.5 h-2.5 text-zinc-600 shrink-0" />}
       {!node.readOnly && (

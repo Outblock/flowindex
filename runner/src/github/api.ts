@@ -77,6 +77,15 @@ export interface Deployment {
   created_at: string;
 }
 
+export interface GitHubCommit {
+  sha: string;
+  message: string;
+  author_name: string;
+  author_avatar: string | null;
+  date: string;
+  url: string;
+}
+
 export const githubApi = {
   listRepos: (installationId: number) =>
     fetchApi<{ repos: GitHubRepo[] }>(
@@ -180,4 +189,15 @@ export const githubApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+
+  listCommits: (
+    installationId: number,
+    owner: string,
+    repo: string,
+    branch?: string,
+    path?: string,
+  ) =>
+    fetchApi<{ commits: GitHubCommit[] }>(
+      `/github/commits/${owner}/${repo}?installation_id=${installationId}${branch ? `&branch=${branch}` : ''}${path ? `&path=${encodeURIComponent(path)}` : ''}`,
+    ),
 };
