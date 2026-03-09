@@ -581,7 +581,7 @@ const SEL_ERC721_SAFE_TRANSFER_4 = 'b88d4fde'; // safeTransferFrom(address,addre
 const SEL_ERC1155_SAFE_TRANSFER = 'f242432a';  // safeTransferFrom(address,address,uint256,uint256,bytes)
 const SEL_ERC1155_BATCH_TRANSFER = '2eb2c2d6'; // safeBatchTransferFrom(...)
 
-interface DecodedEVMCall {
+export interface DecodedEVMCall {
   recipient: string;  // 40 hex chars, no 0x
   tokenID: string;    // decimal string, empty for FT
   callType: string;   // "erc20_transfer", "erc20_transferFrom", etc.
@@ -607,7 +607,7 @@ function extractABIUint256(paramsHex: string, wordIndex: number): string {
   return val.toString();
 }
 
-function decodeEVMCallData(dataHex: string): DecodedEVMCall {
+export function decodeEVMCallData(dataHex: string): DecodedEVMCall {
   const data = dataHex.toLowerCase().replace(/^0x/, '');
   if (data.length < 8) return { recipient: '', tokenID: '', callType: 'unknown' };
 

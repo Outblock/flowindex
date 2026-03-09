@@ -3,7 +3,7 @@ import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
 import { buildMeta } from '../../lib/og/meta';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown, Sparkles, Play } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown, Sparkles, Play, WrapText } from 'lucide-react';
 import { openAIChat } from '../../components/chat/openAIChat';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -19,7 +19,7 @@ import { formatShort } from '../../components/account/accountUtils';
 import AISummary from '../../components/tx/AISummary';
 import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
-import { deriveEnrichments } from '../../lib/deriveFromEvents';
+import { deriveEnrichments, decodeEVMCallData } from '../../lib/deriveFromEvents';
 import { NFTDetailModal } from '../../components/NFTDetailModal';
 import { UsdValue } from '../../components/UsdValue';
 import { parseCadenceError } from '../../lib/parseCadenceError';
@@ -213,6 +213,31 @@ function NFTDetailRow({ nt, onClick, isAdmin }: { nt: any; onClick?: () => void;
     );
 }
 
+/** Simple Cadence code formatter — normalizes indentation based on brace nesting. */
+function formatCadenceScript(script: string): string {
+    const lines = script.split('\n');
+    let indent = 0;
+    const TAB = '    '; // 4 spaces
+    const result: string[] = [];
+    for (const rawLine of lines) {
+        const trimmed = rawLine.trim();
+        if (!trimmed) { result.push(''); continue; }
+        // Decrease indent for closing braces/parens at start of line
+        const leadingClose = trimmed.match(/^[}\])]+/);
+        if (leadingClose) indent = Math.max(0, indent - leadingClose[0].length);
+        result.push(TAB.repeat(indent) + trimmed);
+        // Count net brace change for next line
+        let net = 0;
+        for (const ch of trimmed) {
+            if (ch === '{' || ch === '(') net++;
+            else if (ch === '}' || ch === ')') net--;
+        }
+        // If line ends with opening brace, the closing on same line was already counted
+        indent = Math.max(0, indent + net);
+    }
+    return result.join('\n');
+}
+
 export const Route = createFileRoute('/txs/$txId')({
     component: TransactionDetail,
     validateSearch: (search: Record<string, unknown>) => ({
@@ -404,7 +429,7 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
 
             {/* Transfer flow diagram (auto-synthesized) */}
             <div className="mb-4">
-                <TransferFlowDiagram detail={transaction} />
+                <TransferFlowDiagram detail={fullTx} />
             </div>
 
             {/* FT transfer flow rows — aggregated by (from, to, token) */}
@@ -775,6 +800,7 @@ function TransactionDetail() {
     const [activeTab, setActiveTab] = useState(() =>
         urlTab && validTabs.includes(urlTab) ? urlTab : defaultTab
     );
+    const [scriptFormatted, setScriptFormatted] = useState(false);
     const nowTick = useTimeTicker(20000);
     const { theme } = useTheme();
     const syntaxTheme = theme === 'dark' ? vscDarkPlus : oneLight;
@@ -1826,6 +1852,19 @@ function TransactionDetail() {
                                         </h3>
                                         <div className="flex items-center gap-2">
                                         {transaction.script && (
+                                            <button
+                                                onClick={() => setScriptFormatted(prev => !prev)}
+                                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold border transition-colors ${
+                                                    scriptFormatted
+                                                        ? 'border-blue-500/30 text-blue-500 bg-blue-500/10'
+                                                        : 'border-zinc-300 dark:border-white/10 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-white/5'
+                                                }`}
+                                            >
+                                                <WrapText size={10} />
+                                                {scriptFormatted ? 'Original' : 'Format'}
+                                            </button>
+                                        )}
+                                        {transaction.script && (
                                             <Link
                                                 to="/playground"
                                                 search={{ tx: transaction.id }}
@@ -1881,7 +1920,7 @@ function TransactionDetail() {
                                                     return { style: { display: 'block' } };
                                                 }}
                                             >
-                                                {transaction.script}
+                                                {scriptFormatted ? formatCadenceScript(transaction.script) : transaction.script}
                                             </SyntaxHighlighter>
                                             {/* Inject error annotation below the error line via DOM effect */}
                                             {parsedError?.scriptErrorLine && parsedError?.summary && (
@@ -2090,6 +2129,51 @@ function TransactionDetail() {
                                                         </p>
                                                     </div>
                                                 </div>
+
+                                                {/* Decoded ERC call data */}
+                                                {exec.data && (() => {
+                                                    const decoded = decodeEVMCallData(exec.data);
+                                                    if (decoded.callType === 'unknown') return null;
+                                                    const CALL_LABELS: Record<string, { label: string; tag: string; color: string }> = {
+                                                        erc20_transfer: { label: 'ERC-20 Transfer', tag: 'ERC-20', color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30' },
+                                                        erc20_transferFrom: { label: 'ERC-20 TransferFrom', tag: 'ERC-20', color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30' },
+                                                        erc721_safeTransferFrom: { label: 'ERC-721 SafeTransferFrom', tag: 'ERC-721', color: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30' },
+                                                        erc1155_safeTransferFrom: { label: 'ERC-1155 SafeTransferFrom', tag: 'ERC-1155', color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30' },
+                                                        erc1155_safeBatchTransferFrom: { label: 'ERC-1155 BatchTransfer', tag: 'ERC-1155', color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30' },
+                                                    };
+                                                    const info = CALL_LABELS[decoded.callType] || { label: decoded.callType, tag: 'EVM', color: 'text-zinc-500 bg-zinc-50 dark:bg-white/5 border-zinc-200 dark:border-white/10' };
+                                                    return (
+                                                        <div className="border border-zinc-200 dark:border-white/5 rounded-sm p-4 space-y-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm border ${info.color}`}>
+                                                                    {info.tag}
+                                                                </span>
+                                                                <span className="text-xs text-zinc-700 dark:text-zinc-300 font-mono">{info.label}</span>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                {decoded.recipient && (
+                                                                    <div>
+                                                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Recipient</p>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <code className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">0x{decoded.recipient}</code>
+                                                                            <a href={`https://evm.flowindex.io/address/0x${decoded.recipient}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0">
+                                                                                <ExternalLink className="h-3 w-3" />
+                                                                            </a>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {decoded.tokenID && (
+                                                                    <div>
+                                                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">
+                                                                            {decoded.callType.startsWith('erc20') ? 'Amount (raw)' : 'Token ID'}
+                                                                        </p>
+                                                                        <code className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">{decoded.tokenID}</code>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 {/* Decoded EVM Payload + Raw TX Payload tabs */}
                                                 {(() => {
