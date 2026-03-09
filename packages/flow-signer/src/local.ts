@@ -1,6 +1,6 @@
 import { secp256k1 } from '@noble/curves/secp256k1.js';
-import { p256 } from '@noble/curves/p256.js';
-import { sha256 } from '@noble/hashes/sha256.js';
+import { p256 } from '@noble/curves/nist.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { sha3_256 } from '@noble/hashes/sha3.js';
 import { HDKey } from '@scure/bip32';
 import { mnemonicToSeedSync } from '@scure/bip39';
