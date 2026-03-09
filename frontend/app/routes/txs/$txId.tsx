@@ -366,10 +366,7 @@ function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, fromTag, toT
             {/* FROM */}
             <div className="flex items-center gap-1.5 px-3 py-2.5 min-w-0 flex-shrink-0">
                 {from ? (
-                    <>
-                        <AddressLink address={from} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" />
-                        {fromTag && <span className="text-[8px] text-purple-400 uppercase">{fromTag}</span>}
-                    </>
+                    <AddressLink address={from} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" showTag={!!fromTag} />
                 ) : (
                     <span className="text-[11px] text-zinc-400 italic">Mint</span>
                 )}
@@ -389,10 +386,7 @@ function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, fromTag, toT
             {/* TO */}
             <div className="flex items-center gap-1.5 px-3 py-2.5 min-w-0 flex-shrink-0">
                 {to ? (
-                    <>
-                        <AddressLink address={to} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" />
-                        {toTag && <span className="text-[8px] text-purple-400 uppercase">{toTag}</span>}
-                    </>
+                    <AddressLink address={to} prefixLen={8} suffixLen={4} size={14} className="text-[11px]" showTag={!!toTag} />
                 ) : (
                     <span className="text-[11px] text-zinc-400 italic">Burn</span>
                 )}
@@ -1532,7 +1526,7 @@ function TransactionDetail() {
                                                 from: ft.from_address, to: ft.to_address,
                                                 amount, symbol: sym, logo: ft.token_logo,
                                                 usdValue: ft.usd_value || 0, transferType: ft.transfer_type,
-                                                badge: <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" />Cadence</span>,
+                                                badge: <span className="inline-flex items-center gap-1 text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" />Cadence</span>,
                                             });
                                             // Leg 2: EVM side
                                             if (evmTo) {
