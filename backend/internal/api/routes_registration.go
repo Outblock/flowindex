@@ -67,6 +67,14 @@ func registerAPIRoutes(r *mux.Router, s *Server) {
 	registerCadenceRoutes(r, s)
 	registerWebhookRoutes(r, s)
 	registerAuthRoutes(r, s)
+	registerSimulateRoutes(r, s)
+}
+
+func registerSimulateRoutes(r *mux.Router, s *Server) {
+	if s.simulatorHandler == nil {
+		return
+	}
+	r.HandleFunc("/flow/v1/simulate", s.simulatorHandler.HandleSimulate).Methods("POST", "OPTIONS")
 }
 
 func registerAuthRoutes(r *mux.Router, s *Server) {

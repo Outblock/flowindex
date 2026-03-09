@@ -12,6 +12,7 @@ import (
 	"flowscan-clone/internal/ingester"
 	"flowscan-clone/internal/market"
 	"flowscan-clone/internal/repository"
+	"flowscan-clone/internal/simulator"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/sync/singleflight"
@@ -132,6 +133,7 @@ type Server struct {
 	webhookAdminHandlers WebhookAdminRegistrar
 	apiKeyResolver       APIKeyResolver
 	tierRPSResolver      TierRPSResolver
+	simulatorHandler     *simulator.Handler
 	statusCache      struct {
 		mu        sync.Mutex
 		payload   []byte
@@ -170,6 +172,12 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 	}
 	if s.backfillProgress == nil {
 		s.backfillProgress = NewBackfillProgress()
+	}
+
+	if simURL := os.Getenv("SIMULATOR_URL"); simURL != "" {
+		simClient := simulator.NewClient(simURL)
+		s.simulatorHandler = simulator.NewHandler(simClient)
+		log.Printf("[api] simulator enabled, URL=%s", simURL)
 	}
 
 	r.Use(commonMiddleware)
