@@ -1,4 +1,4 @@
-export type FlowNetwork = 'mainnet' | 'testnet';
+export type FlowNetwork = 'mainnet' | 'testnet' | 'emulator';
 
 export const NETWORK_CONFIG: Record<FlowNetwork, Record<string, string>> = {
   mainnet: {
@@ -65,5 +65,20 @@ export const NETWORK_CONFIG: Record<FlowNetwork, Record<string, string>> = {
     '0xTransactionGeneration': '0x830c495357676f8b',
     '0xStringUtils': '0x31ad40c07a2a9788',
     '0xFlowviewAccountBookmark': '0xdc34f5a7b807bcfb',
+  },
+  emulator: {
+    'accessNode.api': 'http://localhost:8888',
+    'discovery.wallet': '',
+    'flow.network': 'emulator',
+    '0xFungibleToken': '0xee82856bf20e2aa6',
+    '0xFungibleTokenSwitchboard': '0xee82856bf20e2aa6',
+    '0xFungibleTokenMetadataViews': '0xee82856bf20e2aa6',
+    '0xBurner': '0xf8d6e0586b0a20c7',
+    '0xFlowToken': '0x0ae53cb6e3f42a79',
+    '0xFlowFees': '0xe5a8b7f23e8b548f',
+    '0xNonFungibleToken': '0xf8d6e0586b0a20c7',
+    '0xMetadataViews': '0xf8d6e0586b0a20c7',
+    '0xViewResolver': '0xf8d6e0586b0a20c7',
+    '0xEVM': '0xf8d6e0586b0a20c7',
   },
 };
