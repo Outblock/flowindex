@@ -627,12 +627,17 @@ jobs:
           cache-from: type=gha,scope=docs
           cache-to: type=gha,scope=docs,mode=max
 
-      - name: Deploy docs to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: flowindex-docs
-          region: us-central1
-          image: ${{ env.REGISTRY }}/docs:${{ github.sha }}
+      - name: Deploy docs (pull & restart on GCE)
+        run: |
+          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
+            docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
+            docker pull ${{ env.REGISTRY }}/docs:${{ github.sha }} && \
+            docker stop docs 2>/dev/null; docker rm docs 2>/dev/null; \
+            docker run -d --restart=always --name docs \
+              -p 3004:8080 \
+              -e BACKEND_API_URL=http://10.128.0.4:8080 \
+              ${{ env.REGISTRY }}/docs:${{ github.sha }}
+          '
 
   build-ai-chat:
     needs: changes

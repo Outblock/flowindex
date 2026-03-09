@@ -47,7 +47,5 @@ analytics.flowindex.io {
 }
 
 docs.flowindex.io {
-	reverse_proxy https://flowindex-docs-rvki56idua-uc.a.run.app {
-		header_up Host {upstream_hostport}
-	}
+	reverse_proxy localhost:3004
 }
