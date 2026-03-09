@@ -139,7 +139,7 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
         cursor: 'grab',
     };
 
-    const isSynthetic = (addr: string) => addr.startsWith('MINT:') || addr.startsWith('BURN:') || addr.startsWith('DEX:');
+    const isSynthetic = (addr: string) => addr.startsWith('MINT:') || addr.startsWith('BURN:') || addr.startsWith('DEX:') || addr.startsWith('STAKE:');
 
     const placeColumn = (addrs: string[], col: number): Node[] =>
         addrs.map((addr, row) => {
@@ -150,7 +150,7 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
                 data: {
                     label: synthetic ? (
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontWeight: 700, fontSize: '11px', color: addr.startsWith('MINT:') ? (isDark ? '#4ade80' : '#16a34a') : addr.startsWith('BURN:') ? (isDark ? '#f87171' : '#dc2626') : (isDark ? '#e4e4e7' : '#27272a') }}>
+                            <div style={{ fontWeight: 700, fontSize: '11px', color: addr.startsWith('MINT:') ? (isDark ? '#4ade80' : '#16a34a') : addr.startsWith('BURN:') ? (isDark ? '#f87171' : '#dc2626') : addr.startsWith('STAKE:') ? (isDark ? '#60a5fa' : '#2563eb') : (isDark ? '#e4e4e7' : '#27272a') }}>
                                 {info.label}
                             </div>
                         </div>
@@ -175,7 +175,9 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
                         ? (isDark ? '1px solid rgba(74,222,128,0.3)' : '1px solid rgba(22,163,74,0.3)')
                         : addr.startsWith('BURN:')
                             ? (isDark ? '1px solid rgba(248,113,113,0.3)' : '1px solid rgba(220,38,38,0.3)')
-                            : nodeStyle.border,
+                            : addr.startsWith('STAKE:')
+                                ? (isDark ? '1px solid rgba(96,165,250,0.3)' : '1px solid rgba(37,99,235,0.3)')
+                                : nodeStyle.border,
                     minWidth: 100,
                 } : nodeStyle,
             };
@@ -207,9 +209,11 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
         const hasNft = group.some(f => !f.usdValue && (f.token.includes('#') || f.token.includes('x')));
         const hasBurn = to.startsWith('BURN:');
         const hasMint = from.startsWith('MINT:');
+        const hasStake = to.startsWith('STAKE:');
         const burnColor = isDark ? '#f87171' : '#dc2626';
         const mintColor = isDark ? '#4ade80' : '#16a34a';
-        const color = hasBurn ? burnColor : hasMint ? mintColor : hasNft && group.length === 1 ? nftColor : accentColor;
+        const stakeColor = isDark ? '#60a5fa' : '#2563eb';
+        const color = hasBurn ? burnColor : hasMint ? mintColor : hasStake ? stakeColor : hasNft && group.length === 1 ? nftColor : accentColor;
 
         // Build label lines — each flow becomes one line with optional icon
         const labelLines = group.map(f => {
@@ -305,50 +309,74 @@ function transfersToFlows(detail: any): Flow[] {
     const nftTransfers: any[] = detail?.nft_transfers || [];
     const defiEvents: any[] = detail?.defi_events || [];
 
+    // Pre-process cross-VM transfers: merge Cadence leg (sender→COA) with
+    // unmatched deposit leg (""→recipient) into a single sender→recipient flow.
+    // The backend marks cross-VM legs with is_cross_vm + to_coa_flow_address/from_coa_flow_address.
+    const crossVmSenders = new Map<string, { from: string; amount: number; usdValue: number }>();
+    const mergedMints = new Set<number>(); // indices of "mint" transfers absorbed by cross-VM merge
+    for (let i = 0; i < ftTransfers.length; i++) {
+        const ft = ftTransfers[i];
+        if (!ft.is_cross_vm) continue;
+        const sym = ft.token_symbol || ft.token?.split('.').pop() || 'FT';
+        const amount = parseFloat(ft.amount) || 0;
+        if (ft.from_address && ft.to_coa_flow_address) {
+            // Cadence leg: sender → COA — record the sender for matching
+            const key = `${sym}|${amount}`;
+            crossVmSenders.set(key, { from: ft.from_address, amount, usdValue: parseFloat(ft.usd_value) || 0 });
+        }
+    }
+    // Match unmatched deposits (would-be "mints") with cross-VM senders
+    if (crossVmSenders.size > 0) {
+        for (let i = 0; i < ftTransfers.length; i++) {
+            const ft = ftTransfers[i];
+            if (ft.from_address || !ft.to_address) continue; // only match mints (no from_address)
+            const sym = ft.token_symbol || ft.token?.split('.').pop() || 'FT';
+            const amount = parseFloat(ft.amount) || 0;
+            const key = `${sym}|${amount}`;
+            const sender = crossVmSenders.get(key);
+            if (sender) {
+                // Rewrite: turn this "mint" into a proper transfer from the original sender
+                ft.from_address = sender.from;
+                if (!ft.usd_value && sender.usdValue) ft.usd_value = sender.usdValue;
+                crossVmSenders.delete(key); // consume the match
+            }
+        }
+        // Remove the now-redundant Cadence→COA legs (they've been merged into the direct transfer)
+        for (let i = 0; i < ftTransfers.length; i++) {
+            const ft = ftTransfers[i];
+            if (ft.is_cross_vm && ft.from_address && (ft.to_coa_flow_address || ft.from_coa_flow_address)) {
+                const sym = ft.token_symbol || ft.token?.split('.').pop() || 'FT';
+                const amount = parseFloat(ft.amount) || 0;
+                const key = `${sym}|${amount}`;
+                // If this sender was consumed (not in map anymore), skip the COA leg
+                if (!crossVmSenders.has(key)) {
+                    mergedMints.add(i);
+                }
+            }
+        }
+    }
+
+    // Detect staking transactions: if events include FlowIDTableStaking, relabel burns as "Stake"
+    const isStakingTx = (detail?.events || []).some((evt: any) =>
+        typeof evt?.type === 'string' && evt.type.includes('FlowIDTableStaking')
+    );
+
     // Aggregate FT transfers by (from, to, symbol)
-    // Cross-VM transfers with evm_to/from are split into two legs (Cadence + EVM)
     const ftAgg = new Map<string, { from: string; to: string; amount: number; symbol: string; usdValue: number }>();
     const directFlows: Flow[] = [];
-    for (const ft of ftTransfers) {
+    for (let i = 0; i < ftTransfers.length; i++) {
+        if (mergedMints.has(i)) continue; // skip COA legs already merged
+        const ft = ftTransfers[i];
         const rawFrom = ft.from_address || '';
         const rawTo = ft.to_address || '';
         if (!rawFrom && !rawTo) continue;
         const sym = ft.token_symbol || ft.token?.split('.').pop() || 'FT';
         const amount = parseFloat(ft.amount) || 0;
         const usdValue = parseFloat(ft.usd_value) || 0;
-        const evmTo = ft.evm_to_address;
-        const evmFrom = ft.evm_from_address;
 
         // Use synthetic nodes for mint (no from) and burn (no to)
         const from = rawFrom || `MINT:${sym}`;
-        const to = rawTo || `BURN:${sym}`;
-        const fromLabel = rawFrom ? formatShort(rawFrom, 8, 4) : 'Mint';
-        const toLabel = rawTo ? formatShort(rawTo, 8, 4) : 'Burn';
-
-        if (evmTo || evmFrom) {
-            // Leg 1: Cadence transfer (from → COA)
-            directFlows.push({
-                from, fromLabel,
-                to, toLabel: evmTo ? 'COA' : toLabel,
-                token: sym, amount: amount.toString(), usdValue,
-            });
-            // Leg 2: EVM execution (COA → EVM dest)
-            if (evmTo) {
-                directFlows.push({
-                    from: to, fromLabel: 'COA',
-                    to: evmTo, toLabel: formatShort(evmTo, 8, 4),
-                    token: sym, amount: amount.toString(), usdValue,
-                });
-            }
-            if (evmFrom) {
-                directFlows.push({
-                    from: evmFrom, fromLabel: formatShort(evmFrom, 8, 4),
-                    to: from, toLabel: fromLabel,
-                    token: sym, amount: amount.toString(), usdValue,
-                });
-            }
-            continue;
-        }
+        const to = rawTo || (isStakingTx ? `STAKE:${sym}` : `BURN:${sym}`);
 
         const key = `${from}|${to}|${sym}`;
         const existing = ftAgg.get(key);
@@ -363,11 +391,12 @@ function transfersToFlows(detail: any): Flow[] {
     for (const agg of ftAgg.values()) {
         const isMint = agg.from.startsWith('MINT:');
         const isBurn = agg.to.startsWith('BURN:');
+        const isStake = agg.to.startsWith('STAKE:');
         flows.push({
             from: agg.from,
             fromLabel: isMint ? 'Mint' : formatShort(agg.from, 8, 4),
             to: agg.to,
-            toLabel: isBurn ? 'Burn' : formatShort(agg.to, 8, 4),
+            toLabel: isBurn ? 'Burn' : isStake ? 'Stake' : formatShort(agg.to, 8, 4),
             token: agg.symbol,
             amount: agg.amount.toString(),
             usdValue: agg.usdValue,
