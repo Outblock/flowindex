@@ -14,7 +14,7 @@
     "version": "1.0"
   },
   "paths": {
-    "/accounting/v1/account/{address}": {
+    "/accounting/account/{address}": {
       "get": {
         "description": "Retrieves detailed information about an account based on the provided address.",
         "tags": [
@@ -46,7 +46,7 @@
         }
       }
     },
-    "/accounting/v1/account/{address}/ft": {
+    "/accounting/account/{address}/ft": {
       "get": {
         "description": "Provides a list of fungible tokens with basic vault information including token IDs, paths, and vault details. Use this endpoint when you need vault-specific information like storage paths.",
         "tags": [
@@ -94,7 +94,7 @@
         }
       }
     },
-    "/accounting/v1/account/{address}/ft/transfer": {
+    "/accounting/account/{address}/ft/transfer": {
       "get": {
         "description": "Fetches all fungible token transfers for a specific account address",
         "tags": [
@@ -150,7 +150,7 @@
         }
       }
     },
-    "/accounting/v1/account/{address}/nft": {
+    "/accounting/account/{address}/nft": {
       "get": {
         "tags": [
           "Accounting"
@@ -197,7 +197,7 @@
         }
       }
     },
-    "/accounting/v1/account/{address}/tax-report": {
+    "/accounting/account/{address}/tax-report": {
       "get": {
         "description": "Retrieve a tax report for the specified address, including transaction details such as amount, type, direction, and associated fees.",
         "tags": [
@@ -253,7 +253,7 @@
         }
       }
     },
-    "/accounting/v1/account/{address}/transaction": {
+    "/accounting/account/{address}/transaction": {
       "get": {
         "tags": [
           "Accounting"
@@ -340,7 +340,7 @@
         }
       }
     },
-    "/accounting/v1/nft/transfer": {
+    "/accounting/nft/transfer": {
       "get": {
         "description": "Fetches a list of NFT transfer events including details like sender, receiver, NFT type, direction, and transaction information.",
         "tags": [
@@ -413,7 +413,7 @@
         }
       }
     },
-    "/accounting/v1/transaction": {
+    "/accounting/transaction": {
       "get": {
         "description": "Retrieves a paginated list of transactions, including details like gas used, fees, status, and more.",
         "tags": [
@@ -565,7 +565,7 @@
         }
       }
     },
-    "/accounting/v1/transaction/{id}": {
+    "/accounting/transaction/{id}": {
       "get": {
         "description": "Fetches detailed information about a transaction, including its payer, authorizers, gas used, fee, status, block height, and associated events and imports.",
         "tags": [
@@ -597,7 +597,7 @@
         }
       }
     },
-    "/defi/v1/asset": {
+    "/defi/asset": {
       "get": {
         "description": "Retrieve information about a specific asset.",
         "tags": [
@@ -632,7 +632,7 @@
         }
       }
     },
-    "/defi/v1/events": {
+    "/defi/events": {
       "get": {
         "description": "Retrieve information about events within a specified block range.",
         "tags": [
@@ -676,7 +676,7 @@
         }
       }
     },
-    "/defi/v1/latest-block": {
+    "/defi/latest-block": {
       "get": {
         "description": "Retrieve information about the latest block.",
         "tags": [
@@ -700,7 +700,7 @@
         }
       }
     },
-    "/defi/v1/latest-swap": {
+    "/defi/latest-swap": {
       "get": {
         "description": "Retrieve information about the latest swap for a given pair and direction.",
         "tags": [
@@ -744,7 +744,7 @@
         }
       }
     },
-    "/defi/v1/pair": {
+    "/defi/pair": {
       "get": {
         "description": "Retrieve information about a specific swap pair",
         "tags": [
@@ -776,7 +776,7 @@
         }
       }
     },
-    "/flow/v1/account": {
+    "/flow/account": {
       "get": {
         "description": "Retrieves a list of accounts with optional pagination parameters.",
         "tags": [
@@ -832,7 +832,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}": {
+    "/flow/account/{address}": {
       "get": {
         "description": "Retrieves detailed information about an account based on the provided address.",
         "tags": [
@@ -864,7 +864,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}/ft": {
+    "/flow/account/{address}/ft": {
       "get": {
         "description": "Provides a list of fungible tokens with basic vault information including token IDs, paths, and vault details. Use this endpoint when you need vault-specific information like storage paths.",
         "tags": [
@@ -912,7 +912,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}/ft/holding": {
+    "/flow/account/{address}/ft/holding": {
       "get": {
         "description": "Retrieves token holdings with additional statistics like percentage of total supply. Use this endpoint when you need analytical information about token holdings and their relative sizes.",
         "tags": [
@@ -960,7 +960,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}/ft/transfer": {
+    "/flow/account/{address}/ft/transfer": {
       "get": {
         "description": "Fetches all fungible token transfers for a specific account address",
         "tags": [
@@ -1016,7 +1016,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}/ft/{token}": {
+    "/flow/account/{address}/ft/{token}": {
       "get": {
         "description": "Retrieve fungible token holdings for a specific account and token",
         "tags": [
@@ -1078,7 +1078,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}/ft/{token}/transfer": {
+    "/flow/account/{address}/ft/{token}/transfer": {
       "get": {
         "description": "Fetches fungible token transfers for a specific token and account",
         "tags": [
@@ -1143,7 +1143,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}/nft": {
+    "/flow/account/{address}/nft": {
       "get": {
         "tags": [
           "Flow"
@@ -1190,7 +1190,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}/nft/{nft_type}": {
+    "/flow/account/{address}/nft/{nft_type}": {
       "get": {
         "description": "Retrieve NFTs owned by an account for a specific NFT collection",
         "tags": [
@@ -1274,7 +1274,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}/tax-report": {
+    "/flow/account/{address}/tax-report": {
       "get": {
         "description": "Retrieve a tax report for the specified address, including transaction details such as amount, type, direction, and associated fees.",
         "tags": [
@@ -1330,7 +1330,7 @@
         }
       }
     },
-    "/flow/v1/account/{address}/transaction": {
+    "/flow/account/{address}/transaction": {
       "get": {
         "tags": [
           "Flow"
@@ -1417,7 +1417,7 @@
         }
       }
     },
-    "/flow/v1/block": {
+    "/flow/block": {
       "get": {
         "description": "Retrieves blocks with pagination support based on the provided parameters.",
         "tags": [
@@ -1480,7 +1480,7 @@
         }
       }
     },
-    "/flow/v1/block/{height}": {
+    "/flow/block/{height}": {
       "get": {
         "description": "Retrieves block based on block height",
         "tags": [
@@ -1512,7 +1512,7 @@
         }
       }
     },
-    "/flow/v1/block/{height}/service-event": {
+    "/flow/block/{height}/service-event": {
       "get": {
         "description": "Retrieves a list of block-related events from the database.",
         "tags": [
@@ -1562,7 +1562,7 @@
         }
       }
     },
-    "/flow/v1/block/{height}/transaction": {
+    "/flow/block/{height}/transaction": {
       "get": {
         "description": "Retrieves all transactions associated with a block height, including EVM transaction counts",
         "tags": [
@@ -1602,7 +1602,7 @@
         }
       }
     },
-    "/flow/v1/contract": {
+    "/flow/contract": {
       "get": {
         "description": "Fetches a list of contracts with optional filtering and pagination.",
         "tags": [
@@ -1723,7 +1723,7 @@
         }
       }
     },
-    "/flow/v1/contract/{identifier}": {
+    "/flow/contract/{identifier}": {
       "get": {
         "description": "Fetches a list of contracts for a specific identifier with optional pagination",
         "tags": [
@@ -1784,7 +1784,7 @@
         }
       }
     },
-    "/flow/v1/contract/{identifier}/{id}": {
+    "/flow/contract/{identifier}/{id}": {
       "get": {
         "description": "Fetches a single contract by its identifier and ID",
         "tags": [
@@ -1825,7 +1825,7 @@
         }
       }
     },
-    "/flow/v1/evm/token": {
+    "/flow/evm/token": {
       "get": {
         "description": "Retrieve a list of flow evm tokens",
         "tags": [
@@ -1880,7 +1880,7 @@
         }
       }
     },
-    "/flow/v1/evm/token/{address}": {
+    "/flow/evm/token/{address}": {
       "get": {
         "description": "Retrieve a flow evm token",
         "tags": [
@@ -1928,7 +1928,7 @@
         }
       }
     },
-    "/flow/v1/evm/transaction": {
+    "/flow/evm/transaction": {
       "get": {
         "description": "Retrieve a list of flow evm transactions",
         "tags": [
@@ -1975,7 +1975,7 @@
         }
       }
     },
-    "/flow/v1/evm/transaction/{hash}": {
+    "/flow/evm/transaction/{hash}": {
       "get": {
         "description": "Retrieve a single evm transaction by its hash",
         "tags": [
@@ -2007,7 +2007,7 @@
         }
       }
     },
-    "/flow/v1/ft": {
+    "/flow/ft": {
       "get": {
         "description": "Retrieve a list of fungible tokens",
         "tags": [
@@ -2055,7 +2055,7 @@
         }
       }
     },
-    "/flow/v1/ft/transfer": {
+    "/flow/ft/transfer": {
       "get": {
         "description": "Fetches fungible token transfers with optional filtering by token or transaction hash",
         "tags": [
@@ -2118,7 +2118,7 @@
         }
       }
     },
-    "/flow/v1/ft/{token}": {
+    "/flow/ft/{token}": {
       "get": {
         "description": "Retrieve detailed information about a specific fungible token, including statistics on deposits, withdrawals, and owners.",
         "tags": [
@@ -2150,7 +2150,7 @@
         }
       }
     },
-    "/flow/v1/ft/{token}/account/{address}": {
+    "/flow/ft/{token}/account/{address}": {
       "get": {
         "description": "Retrieve accounts holding a specific fungible token",
         "tags": [
@@ -2212,7 +2212,7 @@
         }
       }
     },
-    "/flow/v1/ft/{token}/holding": {
+    "/flow/ft/{token}/holding": {
       "get": {
         "description": "Retrieve a list of fungible token holdings for a specific token.",
         "tags": [
@@ -2260,7 +2260,7 @@
         }
       }
     },
-    "/flow/v1/nft": {
+    "/flow/nft": {
       "get": {
         "description": "Retrieve a list of non-fungible token (NFT) collections",
         "tags": [
@@ -2300,7 +2300,7 @@
         }
       }
     },
-    "/flow/v1/nft/transfer": {
+    "/flow/nft/transfer": {
       "get": {
         "description": "Fetches a list of NFT transfer events including details like sender, receiver, NFT type, direction, and transaction information.",
         "tags": [
@@ -2373,7 +2373,7 @@
         }
       }
     },
-    "/flow/v1/nft/{nft_type}": {
+    "/flow/nft/{nft_type}": {
       "get": {
         "description": "Retrieve detailed information about a specific non-fungible token (NFT) collection",
         "tags": [
@@ -2405,7 +2405,7 @@
         }
       }
     },
-    "/flow/v1/nft/{nft_type}/holding": {
+    "/flow/nft/{nft_type}/holding": {
       "get": {
         "description": "Retrieve a list of NFT holdings for a specific NFT type.",
         "tags": [
@@ -2453,7 +2453,7 @@
         }
       }
     },
-    "/flow/v1/nft/{nft_type}/item/{id}": {
+    "/flow/nft/{nft_type}/item/{id}": {
       "get": {
         "description": "Retrieve NFTs",
         "tags": [
@@ -2502,7 +2502,7 @@
         }
       }
     },
-    "/flow/v1/node": {
+    "/flow/node": {
       "get": {
         "description": "Retrieves a list of nodes from the database based on the parameters provided.",
         "tags": [
@@ -2574,7 +2574,7 @@
         }
       }
     },
-    "/flow/v1/node/{node_id}": {
+    "/flow/node/{node_id}": {
       "get": {
         "description": "Retrieves a node",
         "tags": [
@@ -2606,7 +2606,7 @@
         }
       }
     },
-    "/flow/v1/node/{node_id}/reward/delegation": {
+    "/flow/node/{node_id}/reward/delegation": {
       "get": {
         "description": "Retrieves a list of delegation rewards based on the provided parameters.",
         "tags": [
@@ -2687,7 +2687,7 @@
         }
       }
     },
-    "/flow/v1/scheduled-transaction": {
+    "/flow/scheduled-transaction": {
       "get": {
         "description": "Retrieves a paginated list of scheduled transactions, including details like gas used, fees, status, and more.",
         "tags": [
@@ -2842,7 +2842,7 @@
         }
       }
     },
-    "/flow/v1/transaction": {
+    "/flow/transaction": {
       "get": {
         "description": "Retrieves a paginated list of transactions, including details like gas used, fees, status, and more.",
         "tags": [
@@ -2994,7 +2994,7 @@
         }
       }
     },
-    "/flow/v1/transaction/{id}": {
+    "/flow/transaction/{id}": {
       "get": {
         "description": "Fetches detailed information about a transaction, including its payer, authorizers, gas used, fee, status, block height, and associated events and imports.",
         "tags": [
@@ -3026,7 +3026,7 @@
         }
       }
     },
-    "/staking/v1/account/{address}/ft/transfer": {
+    "/staking/account/{address}/ft/transfer": {
       "get": {
         "description": "Fetches all fungible token transfers for a specific account address",
         "tags": [
@@ -3082,7 +3082,7 @@
         }
       }
     },
-    "/staking/v1/account/{address}/transaction": {
+    "/staking/account/{address}/transaction": {
       "get": {
         "tags": [
           "Staking"
@@ -3145,7 +3145,7 @@
         }
       }
     },
-    "/staking/v1/delegator": {
+    "/staking/delegator": {
       "get": {
         "description": "The query will return results that match either the node_id or the delegator_ids.",
         "tags": [
@@ -3200,7 +3200,7 @@
         }
       }
     },
-    "/staking/v1/epoch/stats": {
+    "/staking/epoch/stats": {
       "get": {
         "description": "This endpoint provides statistical information for each epoch, including APY rates, staking totals, and validator counts.",
         "tags": [
@@ -3221,7 +3221,7 @@
         }
       }
     },
-    "/staking/v1/epoch/{epoch}/nodes": {
+    "/staking/epoch/{epoch}/nodes": {
       "get": {
         "description": "This endpoint retrieves detailed information on nodes active within a specified epoch, including staking details and node metadata.",
         "tags": [
@@ -3269,7 +3269,7 @@
         }
       }
     },
-    "/staking/v1/epoch/{epoch}/role/{role}/nodes/aggregate": {
+    "/staking/epoch/{epoch}/role/{role}/nodes/aggregate": {
       "get": {
         "description": "Retrieves aggregated node counts grouped by epoch and role, with optional filters.",
         "tags": [
@@ -3310,7 +3310,7 @@
         }
       }
     },
-    "/staking/v1/epoch/{epoch}/role/{role}/nodes/count": {
+    "/staking/epoch/{epoch}/role/{role}/nodes/count": {
       "get": {
         "description": "Retrieves the count of nodes in the specified epoch and role, optionally filtered by address part.",
         "tags": [
@@ -3359,7 +3359,7 @@
         }
       }
     },
-    "/staking/v1/epoch/{epoch}/role/{role}/nodes/grouped": {
+    "/staking/epoch/{epoch}/role/{role}/nodes/grouped": {
       "get": {
         "description": "Retrieves node counts grouped by organization for the specified epoch and role.",
         "tags": [
@@ -3400,7 +3400,7 @@
         }
       }
     },
-    "/staking/v1/ft_transfer/{address}": {
+    "/staking/ft_transfer/{address}": {
       "get": {
         "description": "Retrieve fungible token transfers within a specified date range, filtered by address.",
         "tags": [
@@ -3466,7 +3466,7 @@
         }
       }
     },
-    "/staking/v1/node/{node_id}/event": {
+    "/staking/node/{node_id}/event": {
       "get": {
         "description": "Retrieve events within a specified date range, filtered by node ID and event types. The event types are passed as a comma-separated string.",
         "tags": [
@@ -3541,7 +3541,7 @@
         }
       }
     },
-    "/staking/v1/rewards/paid": {
+    "/staking/rewards/paid": {
       "get": {
         "description": "This endpoint retrieves information on rewards that have already been paid out.",
         "tags": [
@@ -3562,7 +3562,7 @@
         }
       }
     },
-    "/staking/v1/rewards/staking": {
+    "/staking/rewards/staking": {
       "get": {
         "description": "This endpoint retrieves information on staking rewards, providing details such as amounts, associated nodes, and timestamps.",
         "tags": [
@@ -3601,7 +3601,7 @@
         }
       }
     },
-    "/staking/v1/tokenomics": {
+    "/staking/tokenomics": {
       "get": {
         "description": "This endpoint retrieves detailed tokenomics metrics.",
         "tags": [
@@ -3622,7 +3622,7 @@
         }
       }
     },
-    "/staking/v1/transaction/address/{address}": {
+    "/staking/transaction/address/{address}": {
       "get": {
         "description": "Retrieve transactions within a specified date range, filtered by address.",
         "tags": [
@@ -3688,7 +3688,7 @@
         }
       }
     },
-    "/staking/v1/transaction/{transaction_id}": {
+    "/staking/transaction/{transaction_id}": {
       "get": {
         "description": "Retrieve transaction events for a given transaction ID.",
         "tags": [
@@ -3720,7 +3720,7 @@
         }
       }
     },
-    "/status/v1/count": {
+    "/status/count": {
       "get": {
         "description": "Fetches the count of blocks and transactions.",
         "tags": [
@@ -3752,7 +3752,7 @@
         }
       }
     },
-    "/status/v1/epoch/stat": {
+    "/status/epoch/stat": {
       "get": {
         "description": "Retrieves statistics for a specific epoch, including APY, payout, staked amounts, and more.",
         "tags": [
@@ -3773,7 +3773,7 @@
         }
       }
     },
-    "/status/v1/epoch/status": {
+    "/status/epoch/status": {
       "get": {
         "description": "Retrieves the current epoch status from the Flow blockchain.",
         "tags": [
@@ -3794,7 +3794,7 @@
         }
       }
     },
-    "/status/v1/flow/stat": {
+    "/status/flow/stat": {
       "get": {
         "description": "Retrieves statistics including the count of transactions, blocks, and the maximum block height.",
         "tags": [
@@ -3815,7 +3815,7 @@
         }
       }
     },
-    "/status/v1/stat": {
+    "/status/stat": {
       "get": {
         "description": "Fetches flow statistics filtered by metric, timescale, and optionally a date range.",
         "tags": [
@@ -3871,7 +3871,7 @@
         }
       }
     },
-    "/status/v1/stat/{timescale}/trend": {
+    "/status/stat/{timescale}/trend": {
       "get": {
         "description": "Fetches a list of statistics trends for the specified timescale (daily, weekly, monthly, biannually, yearly or all time).",
         "tags": [
@@ -3911,7 +3911,7 @@
         }
       }
     },
-    "/status/v1/tokenomics": {
+    "/status/tokenomics": {
       "get": {
         "description": "Retrieves various tokenomics statistics related to accounts, supply, rewards, and staking.",
         "tags": [
