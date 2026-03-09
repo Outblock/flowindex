@@ -439,11 +439,16 @@ export default function App() {
     refreshPasskeyState().catch(() => {});
   }, [refreshPasskeyState]);
 
+  const passkeyOnboardingCheckedRef = useRef<string | null>(null);
   useEffect(() => {
     if (authLoading || !user || !hasPasskeySupport) {
+      passkeyOnboardingCheckedRef.current = null;
       setShowPasskeyOnboarding(false);
       return;
     }
+    // Only check once per user session
+    if (passkeyOnboardingCheckedRef.current === user.id) return;
+    passkeyOnboardingCheckedRef.current = user.id;
 
     let cancelled = false;
     (async () => {

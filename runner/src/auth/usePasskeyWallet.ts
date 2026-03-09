@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useAuth } from '@flowindex/auth-ui';
 import type { PasskeyAccount, ProvisionResult } from '@flowindex/auth-ui';
 import type { PasskeySignResult } from '@flowindex/flow-passkey';
@@ -23,12 +24,14 @@ function notConfigured(name: string): never {
 export function usePasskeyWallet() {
   const { passkey } = useAuth();
 
+  const passkeys = useMemo(
+    () => passkey?.passkeys?.map(p => ({ id: p.id, authenticatorName: p.authenticatorName })) ?? [],
+    [passkey?.passkeys],
+  );
+
   return {
     accounts: passkey?.accounts ?? [],
-    passkeys: passkey?.passkeys?.map(p => ({
-      id: p.id,
-      authenticatorName: p.authenticatorName,
-    })) ?? [],
+    passkeys,
     selectedAccount: passkey?.selectedAccount ?? null,
     selectAccount: passkey?.selectAccount ?? (() => {}),
     loading: passkey?.loading ?? false,
