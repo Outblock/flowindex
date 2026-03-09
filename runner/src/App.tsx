@@ -18,6 +18,7 @@ import { parseExecutionError, setErrorDecorations, type ParsedArgError } from '.
 import type { FlowNetwork } from './flow/networks';
 import { useEmulatorStatus } from './flow/useEmulatorStatus';
 import { EMULATOR_SERVICE_ADDRESS, EMULATOR_SERVICE_KEY } from './flow/emulatorSigner';
+import { bootstrapEmulatorContracts } from './flow/emulatorBootstrap';
 import { useAuth } from './auth/AuthContext';
 import { useKeys } from './auth/useKeys';
 import { useLocalKeys } from './auth/useLocalKeys';
@@ -289,6 +290,22 @@ export default function App() {
   const { status: emulatorStatus, recheck: recheckEmulator } = useEmulatorStatus(network);
 
   const [results, setResults] = useState<ExecutionResult[]>([]);
+
+  // Auto-deploy standard contracts when emulator connects
+  const emulatorBootstrapped = useRef(false);
+  useEffect(() => {
+    if (network !== 'emulator' || emulatorStatus !== 'connected') {
+      emulatorBootstrapped.current = false;
+      return;
+    }
+    if (emulatorBootstrapped.current) return;
+    emulatorBootstrapped.current = true;
+
+    bootstrapEmulatorContracts((result) => {
+      setResults((prev) => [...prev, result]);
+    });
+  }, [network, emulatorStatus]);
+
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
