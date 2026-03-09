@@ -1642,7 +1642,7 @@ function TransactionDetail() {
 
                                                 const renderArgValue = (decoded: any): React.ReactNode => {
                                                     if (typeof decoded === 'string' && ADDRESS_RE.test(decoded)) {
-                                                        return <AddressLink address={decoded.replace(/^0x/, '')} prefixLen={20} suffixLen={0} className="text-xs" />;
+                                                        return <AddressLink address={decoded.replace(/^0x/, '')} prefixLen={10} suffixLen={6} className="text-xs" />;
                                                     }
                                                     if (typeof decoded === 'string' && CONTRACT_ID_RE.test(decoded)) {
                                                         const parts = decoded.split('.');

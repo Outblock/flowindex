@@ -29,6 +29,7 @@ interface Props {
     size?: number;
     className?: string;
     showAvatar?: boolean;
+    showTag?: boolean;
     neutral?: boolean;
     onClick?: (e: React.MouseEvent) => void;
 }
@@ -41,6 +42,19 @@ function avatarVariant(addr: string): 'beam' | 'bauhaus' | 'pixel' {
     return 'pixel';                               // EVM
 }
 
+/** Detect address type: 'flow', 'coa', or 'eoa'. */
+export function addressType(addr: string): 'flow' | 'coa' | 'eoa' {
+    const hex = addr.replace(/^0x/, '');
+    if (hex.length <= 16) return 'flow';
+    if (/^0{10,}/.test(hex)) return 'coa';
+    return 'eoa';
+}
+
+const TAG_CLASSES: Record<string, string> = {
+    coa: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+    eoa: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+};
+
 export function AddressLink({
     address,
     prefixLen = 8,
@@ -48,11 +62,13 @@ export function AddressLink({
     size = 16,
     className = '',
     showAvatar = true,
+    showTag = true,
     neutral = false,
     onClick,
 }: Props) {
     const normalized = normalizeAddress(address);
     const colors = colorsFromAddress(normalized);
+    const addrType = addressType(normalized);
     const colorCls = neutral
         ? 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
         : 'text-nothing-green-dark dark:text-nothing-green';
@@ -71,6 +87,11 @@ export function AddressLink({
                 />
             )}
             {formatShort(address, prefixLen, suffixLen)}
+            {showTag && addrType !== 'flow' && (
+                <span className={`text-[9px] font-bold uppercase px-1 py-px rounded-sm leading-none ${TAG_CLASSES[addrType]}`}>
+                    {addrType}
+                </span>
+            )}
         </Link>
     );
 }

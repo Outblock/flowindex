@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import Avatar from 'boring-avatars';
 import { Fish, ArrowRight, List, CalendarDays } from 'lucide-react';
 import { fetchBigTransfers, type BigTransfer } from '../api/heyapi';
-import { colorsFromAddress } from './AddressLink';
+import { colorsFromAddress, addressType } from './AddressLink';
 
 type ViewMode = 'pages' | 'timeline';
 
@@ -91,10 +91,16 @@ const TYPE_TAG_CLASSES: Record<string, string> = {
   transfer: 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-gray-400',
 };
 
+const ADDR_TAG_CLASSES: Record<string, string> = {
+  coa: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+  eoa: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+};
+
 function AddressWithAvatar({ address, large = false }: { address: string; large?: boolean }) {
   if (!address) return <span className="text-zinc-400 dark:text-gray-500">—</span>;
   const normalized = address.startsWith('0x') ? address : `0x${address}`;
   const colors = colorsFromAddress(normalized);
+  const addrType = addressType(normalized);
   return (
     <Link
       to={`/accounts/${address}` as any}
@@ -103,6 +109,11 @@ function AddressWithAvatar({ address, large = false }: { address: string; large?
     >
       <Avatar size={large ? 18 : 10} name={normalized} variant={avatarVariant(normalized)} colors={colors} />
       <span>{formatAddr(address)}</span>
+      {addrType !== 'flow' && (
+        <span className={`text-[8px] font-bold uppercase px-0.5 py-px rounded-sm leading-none ${ADDR_TAG_CLASSES[addrType]}`}>
+          {addrType}
+        </span>
+      )}
     </Link>
   );
 }

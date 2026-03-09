@@ -545,6 +545,10 @@ FROM (
     ft.block_height,
     ft.timestamp,
     CASE
+      WHEN coa_f.coa_address IS NOT NULL OR coa_t.coa_address IS NOT NULL THEN 'bridge'
+      WHEN ft.contract_name LIKE 'EVMVMBridgedToken_%%' AND (ft.from_address IS NULL OR ft.to_address IS NULL) THEN 'bridge'
+      WHEN ft.contract_name = 'FlowToken' AND ft.to_address IS NULL AND length(ft.from_address) = 8 AND rtx.is_evm THEN 'bridge'
+      WHEN ft.contract_name = 'FlowToken' AND ft.from_address IS NULL AND length(ft.to_address) = 8 AND rtx.is_evm THEN 'bridge'
       WHEN ft.from_address IS NULL THEN 'mint'
       WHEN ft.to_address IS NULL THEN 'burn'
       ELSE 'transfer'
@@ -562,6 +566,14 @@ FROM (
     ON tk.contract_address = ft.token_contract_address
    AND tk.contract_name = ft.contract_name
   JOIN prices p ON p.symbol = tk.market_symbol
+  LEFT JOIN app.coa_accounts coa_f ON coa_f.coa_address = ft.from_address
+  LEFT JOIN app.coa_accounts coa_t ON coa_t.coa_address = ft.to_address
+  LEFT JOIN LATERAL (
+    SELECT t.is_evm FROM raw.transactions t
+    WHERE t.transaction_id = ft.transaction_id
+      AND t.block_height = ft.block_height
+    LIMIT 1
+  ) rtx ON true
   WHERE ft.block_height >= $%d
     AND ft.block_height < $%d
     AND ft.amount >= p.min_amount
