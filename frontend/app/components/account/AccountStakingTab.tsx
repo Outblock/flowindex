@@ -27,18 +27,30 @@ const ROLE_COLORS: Record<number, string> = {
 };
 
 const EVENT_LABELS: Record<string, string> = {
+    // Staking
     TokensCommitted: 'Staked',
     DelegatorTokensCommitted: 'Staked',
     TokensStaked: 'Restaked',
     DelegatorTokensStaked: 'Restaked',
+    // Unstaking
     TokensUnstaking: 'Unstaking',
     DelegatorTokensUnstaking: 'Unstaking',
     TokensUnstaked: 'Unstaked',
     DelegatorTokensUnstaked: 'Unstaked',
+    NodeTokensRequestedToUnstake: 'Unstake Requested',
+    DelegatorTokensRequestedToUnstake: 'Unstake Requested',
+    // Withdrawals
+    UnstakedTokensWithdrawn: 'Withdrawn',
+    DelegatorUnstakedTokensWithdrawn: 'Withdrawn',
+    RewardTokensWithdrawn: 'Reward Claimed',
+    DelegatorRewardTokensWithdrawn: 'Reward Claimed',
+    // Rewards
     RewardsPaid: 'Reward',
     DelegatorRewardsPaid: 'Reward',
+    // Node/Delegator lifecycle
     NewNodeCreated: 'Node Created',
     NewDelegatorCreated: 'Delegator Created',
+    NodeRemovedAndRefunded: 'Node Removed',
 };
 
 const EVENT_COLORS: Record<string, string> = {
@@ -46,9 +58,13 @@ const EVENT_COLORS: Record<string, string> = {
     Restaked: 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30',
     Unstaking: 'text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30',
     Unstaked: 'text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-500/10 border-red-200 dark:border-red-500/30',
+    'Unstake Requested': 'text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30',
+    Withdrawn: 'text-sky-600 bg-sky-50 dark:text-sky-400 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/30',
+    'Reward Claimed': 'text-violet-600 bg-violet-50 dark:text-violet-400 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30',
     Reward: 'text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30',
     'Node Created': 'text-zinc-500 bg-zinc-50 dark:text-zinc-400 dark:bg-white/5 border-zinc-200 dark:border-white/10',
     'Delegator Created': 'text-zinc-500 bg-zinc-50 dark:text-zinc-400 dark:bg-white/5 border-zinc-200 dark:border-white/10',
+    'Node Removed': 'text-red-500 bg-red-50 dark:text-red-400 dark:bg-red-500/10 border-red-200 dark:border-red-500/30',
 };
 
 function formatFlow(value: string | number | undefined): string {
@@ -233,7 +249,9 @@ function StakingActivitySection({ address }: { address: string }) {
                         <div className="h-px flex-1 bg-zinc-200 dark:bg-white/10" />
                         <span className="text-[10px] font-mono text-zinc-400 whitespace-nowrap">
                             {group.epoch != null ? `Epoch #${group.epoch}` : 'Unknown Epoch'}
-                            {group.epochStart && group.epochEnd && (
+                            {group.epochStart && group.epochEnd &&
+                              new Date(group.epochStart).getFullYear() > 1970 &&
+                              new Date(group.epochEnd).getFullYear() > 1970 && (
                                 <> &middot; {new Date(group.epochStart).toLocaleDateString()} – {new Date(group.epochEnd).toLocaleDateString()}</>
                             )}
                         </span>
@@ -242,7 +260,9 @@ function StakingActivitySection({ address }: { address: string }) {
 
                     <div className="space-y-1">
                         {group.events.map((evt: any, i: number) => {
-                            const label = EVENT_LABELS[evt.event_type] || evt.event_type;
+                            const label = EVENT_LABELS[evt.event_type] || evt.event_type
+                                ?.replace(/([A-Z])/g, ' $1').trim() // CamelCase → spaced
+                                || evt.event_type;
                             const colorClass = EVENT_COLORS[label] || EVENT_COLORS['Node Created'];
                             const amount = parseFloat(evt.amount) || 0;
                             return (
