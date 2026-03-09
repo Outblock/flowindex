@@ -271,10 +271,9 @@ jobs:
       - name: Update Caddy config for TLS
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
-            sudo tee /tmp/Caddyfile > /dev/null <<'CADDYEOF'
+            cat > /home/hao/Caddyfile <<'CADDYEOF'
           $(cat frontend/Caddyfile)
           CADDYEOF
-            docker cp /tmp/Caddyfile caddy:/etc/caddy/Caddyfile
             docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
           "
 
@@ -756,10 +755,9 @@ jobs:
       - name: Update Caddy config for TLS
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
-            sudo tee /tmp/Caddyfile > /dev/null <<'CADDYEOF'
+            cat > /home/hao/Caddyfile <<'CADDYEOF'
           $(cat frontend/Caddyfile)
           CADDYEOF
-            docker cp /tmp/Caddyfile caddy:/etc/caddy/Caddyfile
             docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
           "
 
@@ -1238,9 +1236,8 @@ jobs:
       - name: Update Caddy config for studio.flowindex.io TLS
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
-            sudo tee /tmp/Caddyfile > /dev/null <<'CADDYEOF'
+            cat > /home/hao/Caddyfile <<'CADDYEOF'
           $(cat frontend/Caddyfile)
           CADDYEOF
-            docker cp /tmp/Caddyfile caddy:/etc/caddy/Caddyfile
             docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
           "
