@@ -4,7 +4,7 @@ import { BookOpen, Play, Bot, Wallet, Package } from 'lucide-react';
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
-      title: 'Outblock',
+      title: 'FlowIndex',
       url: '/',
     },
     githubUrl: 'https://github.com/Outblock',

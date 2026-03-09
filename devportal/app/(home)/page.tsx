@@ -42,7 +42,7 @@ export default function HomePage() {
           Open Source
         </p>
         <h1 className="mt-4 text-3xl md:text-5xl font-bold tracking-tight text-fd-foreground">
-          Outblock Documentation
+          FlowIndex Documentation
         </h1>
         <p className="mt-4 text-sm md:text-base text-fd-muted-foreground leading-relaxed">
           Open-source tools for the Flow blockchain. Explore, build, and transact.
