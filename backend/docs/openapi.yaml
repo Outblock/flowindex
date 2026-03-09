@@ -1,19 +1,78 @@
 openapi: 3.0.3
 info:
-  title: FlowScan API
+  title: FlowIndex API
   version: "0.2.0"
   description: |
-    FlowScan is a Flow blockchain explorer. This OpenAPI document describes the public HTTP API
-    consumed by the frontend.
+    FlowIndex is a high-performance Flow blockchain explorer and indexer API.
 
-    Notes:
-    - The hosted frontend proxies the backend under `/api` (nginx rewrites `/api/*` -> `/*`).
-    - Pagination:
-      - Most list endpoints support cursor pagination (preferred) via `cursor` + `limit`.
-      - Some endpoints also accept `page`/`offset` for legacy compatibility.
+    ## Authentication
+
+    All endpoints can be used without authentication, but unauthenticated requests are subject to
+    stricter rate limits (5 requests/second per IP).
+
+    To get higher rate limits, include your API key in the `X-API-Key` header:
+
+    ```
+    curl -H "X-API-Key: fi_live_abc123..." https://flowindex.io/api/blocks
+    ```
+
+    ### Obtaining an API Key
+
+    1. Sign up at [flowindex.io/developer](https://flowindex.io/developer)
+    2. Navigate to **API Keys** in your developer dashboard
+    3. Click **Create API Key**, give it a name, and copy the key
+
+    > **Important:** The full key is only shown once at creation time. Store it securely.
+    > Keys are stored as SHA-256 hashes — we cannot recover a lost key.
+
+    ### Rate Limit Tiers
+
+    | Tier        | Requests/sec | Burst |
+    |-------------|-------------|-------|
+    | Free        | 20          | 40    |
+    | Pro         | 50          | 100   |
+    | Enterprise  | 200         | 400   |
+
+    Unauthenticated requests are limited to **5 req/s** per IP address.
+
+    ### Rate Limit Headers
+
+    When rate-limited, the API returns HTTP `429 Too Many Requests` with:
+
+    - `X-RateLimit-Limit` — your tier's requests-per-second allowance
+
+    ```json
+    {
+      "error": "rate_limited",
+      "message": "too many requests"
+    }
+    ```
+
+    ### Invalid API Key
+
+    If the provided key is invalid or deactivated, the API returns HTTP `401 Unauthorized`:
+
+    ```json
+    {
+      "error": "invalid_api_key",
+      "message": "the provided API key is invalid or inactive"
+    }
+    ```
+
+    ## Pagination
+
+    - Most list endpoints support cursor pagination (preferred) via `cursor` + `limit`.
+    - Some endpoints also accept `page`/`offset` for legacy compatibility.
+
+    ## Base URL
+
+    The hosted frontend proxies the backend under `/api` (nginx rewrites `/api/*` → `/*`).
+
 servers:
   - url: /api
     description: Frontend proxy (nginx)
+  - url: https://flowindex.io/api
+    description: Production
 
 tags:
   - name: System
@@ -23,7 +82,20 @@ tags:
   - name: Stats
   - name: Storage
 
+security:
+  - ApiKeyAuth: []
+  - {}
+
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Your FlowIndex API key (e.g. `fi_live_abc123...`). Include this header to authenticate
+        and receive higher rate limits. All endpoints work without authentication at reduced
+        rate limits.
   parameters:
     LimitParam:
       name: limit

@@ -1,11 +1,10 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "description": "Flow blockchain explorer API.",
-    "title": "Flow Explorer API",
-    "termsOfService": "http://swagger.io/terms/",
+    "description": "FlowIndex is a high-performance Flow blockchain explorer and indexer API.\n\n## Authentication\n\nAll endpoints can be used without authentication, but unauthenticated requests are subject to stricter rate limits (5 req/s per IP).\n\nTo get higher rate limits, include your API key in the `X-API-Key` header:\n\n```\ncurl -H \"X-API-Key: fi_live_abc123...\" https://flowindex.io/api/blocks\n```\n\n### Obtaining an API Key\n\n1. Sign up at [flowindex.io/developer](https://flowindex.io/developer)\n2. Navigate to **API Keys** in your developer dashboard\n3. Click **Create API Key**, give it a name, and copy the key\n\n> **Important:** The full key is only shown once at creation time. Store it securely. Keys are stored as SHA-256 hashes — we cannot recover a lost key.\n\n### Rate Limit Tiers\n\n| Tier | Requests/sec | Burst |\n|---|---|---|\n| Unauthenticated | 5 | 10 |\n| Free | 20 | 40 |\n| Pro | 50 | 100 |\n| Enterprise | 200 | 400 |\n\n### Rate Limit Response\n\nWhen rate-limited, the API returns HTTP `429` with header `X-RateLimit-Limit` and body:\n\n```json\n{\"error\": \"rate_limited\", \"message\": \"too many requests\"}\n```\n\nInvalid API keys return HTTP `401`:\n\n```json\n{\"error\": \"invalid_api_key\", \"message\": \"the provided API key is invalid or inactive\"}\n```",
+    "title": "FlowIndex API",
     "contact": {
-      "name": "API Support"
+      "name": "FlowIndex Support"
     },
     "license": {
       "name": "Apache 2.0",
@@ -13,6 +12,10 @@
     },
     "version": "1.0"
   },
+  "security": [
+    {"ApiKeyAuth": []},
+    {}
+  ],
   "paths": {
     "/accounting/v1/account/{address}": {
       "get": {
@@ -3961,6 +3964,14 @@
     }
   ],
   "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Your FlowIndex API key (e.g. fi_live_abc123...). Include this header for higher rate limits. All endpoints work without authentication at reduced rate limits."
+      }
+    },
     "schemas": {
       "accounting.AccountDetailsResponse": {
         "type": "object",
