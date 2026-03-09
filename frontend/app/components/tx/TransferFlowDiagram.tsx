@@ -177,26 +177,45 @@ export function layoutGraph(flows: Flow[], isDark: boolean, tokenIcons: Map<stri
                                 {info.label}
                             </div>
                         </div>
-                    ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ flexShrink: 0 }}>
-                                <Avatar
-                                    size={24}
-                                    name={normalized}
-                                    variant={avatarVariant(normalized)}
-                                    colors={colorsFromAddress(normalized)}
-                                />
-                            </div>
-                            <div>
-                                <div style={{ fontWeight: 700, fontSize: '11px', color: isDark ? '#e4e4e7' : '#27272a' }}>
-                                    {info.label}
+                    ) : (() => {
+                        const addrType = addressType(normalized);
+                        const tagColors: Record<string, { bg: string; text: string }> = {
+                            coa: { bg: isDark ? 'rgba(139,92,246,0.15)' : 'rgba(139,92,246,0.1)', text: isDark ? '#a78bfa' : '#7c3aed' },
+                            eoa: { bg: isDark ? 'rgba(245,158,11,0.15)' : 'rgba(245,158,11,0.1)', text: isDark ? '#fbbf24' : '#d97706' },
+                        };
+                        const tag = tagColors[addrType];
+                        return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ width: 24, height: 24, flexShrink: 0, borderRadius: '50%', overflow: 'hidden' }}>
+                                    <Avatar
+                                        size={24}
+                                        name={normalized}
+                                        variant={avatarVariant(normalized)}
+                                        colors={colorsFromAddress(normalized)}
+                                    />
                                 </div>
-                                <div style={{ fontSize: '9px', color: isDark ? '#71717a' : '#a1a1aa', fontFamily: 'ui-monospace, monospace', marginTop: '2px' }}>
-                                    {formatShort(addr, 8, 4)}
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '11px', color: isDark ? '#e4e4e7' : '#27272a' }}>
+                                            {info.label}
+                                        </span>
+                                        {tag && (
+                                            <span style={{
+                                                fontSize: '8px', fontWeight: 700, textTransform: 'uppercase',
+                                                padding: '1px 4px', borderRadius: '2px', lineHeight: '14px',
+                                                background: tag.bg, color: tag.text,
+                                            }}>
+                                                {addrType}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: '9px', color: isDark ? '#71717a' : '#a1a1aa', fontFamily: 'ui-monospace, monospace', marginTop: '2px' }}>
+                                        {formatShort(addr, 8, 4)}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ),
+                        );
+                    })(),
                 },
                 position: { x: col * colWidth, y: row * rowHeight },
                 sourcePosition: Position.Right,
