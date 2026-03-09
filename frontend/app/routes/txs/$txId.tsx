@@ -694,6 +694,9 @@ function TransactionDetail() {
                     transfer_type: ft.transfer_type || derived.transfer_type,
                     evm_to_address: ft.evm_to_address || derived.evm_to_address,
                     evm_from_address: ft.evm_from_address || derived.evm_from_address,
+                    // Fill in to/from from derived when API has empty addresses (e.g. bridge burns resolved by EVM call data)
+                    to_address: ft.to_address || derived.to_address,
+                    from_address: ft.from_address || derived.from_address,
                 };
             });
         }

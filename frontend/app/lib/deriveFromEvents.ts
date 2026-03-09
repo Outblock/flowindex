@@ -52,6 +52,8 @@ export interface EVMExecution {
   type?: number;
   nonce?: number;
   position?: number;
+  /** Raw EVM call data hex (no 0x prefix) for decoding ERC-20/721/1155 transfers */
+  data?: string;
 }
 
 export interface DerivedEnrichments {
@@ -412,7 +414,7 @@ function buildTokenTransfers(legs: TokenLeg[]): RawTransfer[] {
 /** Decode a Flow EVM "direct call" raw_tx_payload (0xff-prefixed RLP).
  *  Format: 0xff || RLP([nonce, subType, from(20B), to(20B), data, value, gasLimit, ...])
  */
-function decodeDirectCallPayload(hexPayload: string): { from: string; to: string; value: string } | null {
+function decodeDirectCallPayload(hexPayload: string): { from: string; to: string; value: string; data: string } | null {
   try {
     let hex = hexPayload.replace(/^0x/, '').toLowerCase();
     if (!hex.startsWith('ff') || hex.length < 10) return null;
@@ -438,18 +440,19 @@ function decodeDirectCallPayload(hexPayload: string): { from: string; to: string
     readItem(); // subType
     const fromBytes = readItem(); // from (20 bytes)
     const toBytes = readItem(); // to (20 bytes)
-    readItem(); // data
+    const dataBytes = readItem(); // data (EVM call data)
     const valueBytes = readItem(); // value
     const from = fromBytes.length === 20 ? '0x' + toHex(fromBytes) : '';
     const toH = toHex(toBytes);
     const to = toBytes.length === 20 && !/^0{40}$/.test(toH) ? '0x' + toH : '';
+    const data = toHex(dataBytes);
     let value = '0';
     if (valueBytes.length > 0) {
       let n = BigInt(0);
       for (const byte of valueBytes) n = (n << BigInt(8)) | BigInt(byte);
       value = n.toString();
     }
-    return { from, to, value };
+    return { from, to, value, data };
   } catch { return null; }
 }
 
@@ -534,9 +537,12 @@ function parseEVMExecution(event: any): EVMExecution | null {
   let to = formatAddr(extractHexField(fields, 'to', 'toAddress', 'recipient'));
   let value = extractStringField(fields, 'value') || '0';
 
-  // For Flow direct calls (0xff prefix), from/to aren't in top-level event fields —
+  // Extract raw call data for ERC-20/721/1155 decoding
+  let callData = extractHexField(fields, 'data', 'callData', 'input');
+
+  // For Flow direct calls (0xff prefix), from/to/data aren't in top-level event fields —
   // they're only in the raw transaction payload bytes. Decode from there.
-  if (!from || !to) {
+  if (!from || !to || !callData) {
     const payloadHex = extractPayloadHex(fields);
     if (payloadHex) {
       const decoded = decodeDirectCallPayload(payloadHex);
@@ -544,6 +550,7 @@ function parseEVMExecution(event: any): EVMExecution | null {
         if (!from && decoded.from) from = decoded.from;
         if (!to && decoded.to) to = decoded.to;
         if (value === '0' && decoded.value !== '0') value = decoded.value;
+        if (!callData && decoded.data) callData = decoded.data;
       }
     }
   }
@@ -561,7 +568,100 @@ function parseEVMExecution(event: any): EVMExecution | null {
     block_number: event.block_height,
     type: Number(extractStringField(fields, 'transactionType', 'txType') || '0'),
     position: Number(extractStringField(fields, 'index', 'position') || '0'),
+    data: callData || undefined,
   };
+}
+
+// ── EVM call data decoding (mirrors backend evm_calldata.go) ──
+
+const SEL_ERC20_TRANSFER = 'a9059cbb';       // transfer(address,uint256)
+const SEL_ERC20_TRANSFER_FROM = '23b872dd';   // transferFrom(address,address,uint256)
+const SEL_ERC721_SAFE_TRANSFER_3 = '42842e0e'; // safeTransferFrom(address,address,uint256)
+const SEL_ERC721_SAFE_TRANSFER_4 = 'b88d4fde'; // safeTransferFrom(address,address,uint256,bytes)
+const SEL_ERC1155_SAFE_TRANSFER = 'f242432a';  // safeTransferFrom(address,address,uint256,uint256,bytes)
+const SEL_ERC1155_BATCH_TRANSFER = '2eb2c2d6'; // safeBatchTransferFrom(...)
+
+interface DecodedEVMCall {
+  recipient: string;  // 40 hex chars, no 0x
+  tokenID: string;    // decimal string, empty for FT
+  callType: string;   // "erc20_transfer", "erc20_transferFrom", etc.
+}
+
+function extractABIAddress(paramsHex: string, wordIndex: number): string {
+  const start = wordIndex * 64;
+  const end = start + 64;
+  if (paramsHex.length < end) return '';
+  const word = paramsHex.slice(start, end);
+  const addrHex = word.slice(24, 64);
+  if (/^0{40}$/.test(addrHex)) return '';
+  return addrHex;
+}
+
+function extractABIUint256(paramsHex: string, wordIndex: number): string {
+  const start = wordIndex * 64;
+  const end = start + 64;
+  if (paramsHex.length < end) return '';
+  const word = paramsHex.slice(start, end);
+  // Convert hex to decimal string
+  const val = BigInt('0x' + word);
+  return val.toString();
+}
+
+function decodeEVMCallData(dataHex: string): DecodedEVMCall {
+  const data = dataHex.toLowerCase().replace(/^0x/, '');
+  if (data.length < 8) return { recipient: '', tokenID: '', callType: 'unknown' };
+
+  const selector = data.slice(0, 8);
+  const params = data.slice(8);
+
+  switch (selector) {
+    case SEL_ERC20_TRANSFER: {
+      const addr = extractABIAddress(params, 0);
+      if (addr) return { recipient: addr, tokenID: '', callType: 'erc20_transfer' };
+      break;
+    }
+    case SEL_ERC20_TRANSFER_FROM: {
+      const addr = extractABIAddress(params, 1);
+      if (addr) {
+        const tid = extractABIUint256(params, 2);
+        return { recipient: addr, tokenID: tid, callType: 'erc20_transferFrom' };
+      }
+      break;
+    }
+    case SEL_ERC721_SAFE_TRANSFER_3:
+    case SEL_ERC721_SAFE_TRANSFER_4: {
+      const addr = extractABIAddress(params, 1);
+      if (addr) {
+        const tid = extractABIUint256(params, 2);
+        return { recipient: addr, tokenID: tid, callType: 'erc721_safeTransferFrom' };
+      }
+      break;
+    }
+    case SEL_ERC1155_SAFE_TRANSFER: {
+      const addr = extractABIAddress(params, 1);
+      if (addr) {
+        const tid = extractABIUint256(params, 2);
+        return { recipient: addr, tokenID: tid, callType: 'erc1155_safeTransferFrom' };
+      }
+      break;
+    }
+    case SEL_ERC1155_BATCH_TRANSFER: {
+      const addr = extractABIAddress(params, 1);
+      if (addr) return { recipient: addr, tokenID: '', callType: 'erc1155_safeBatchTransferFrom' };
+      break;
+    }
+  }
+
+  return { recipient: '', tokenID: '', callType: 'unknown' };
+}
+
+/** Extract EVM contract address from bridged token name like "EVMVMBridgedToken_99af3eea..." */
+function extractEVMContractFromBridgedName(name: string): string {
+  const match = name.match(/^EVMVMBridged(?:Token|NFT)_([0-9a-fA-F]+)$/);
+  if (!match || !match[1]) return '';
+  const addr = match[1].toLowerCase();
+  // Normalize to 40 hex chars (left-pad if needed)
+  return addr.length >= 40 ? addr : addr.padStart(40, '0');
 }
 
 // ── Fee extraction ──
@@ -799,6 +899,63 @@ export function deriveEnrichments(events: any[], script?: string | null): Derive
         if (exec) {
           ft.evm_from_address = exec.from;
         }
+      }
+    }
+  }
+
+  // Enrich EVMVMBridgedToken/NFT transfers with actual EVM recipient from call data.
+  // When Cadence burns a bridged token, the EVM side does an ERC-20/721/1155 transfer
+  // to the actual recipient. Decode that from the EVM.TransactionExecuted event's data field.
+  if (evmExecutions.length > 0) {
+    for (const ft of ftTransfers) {
+      // Only process bridged token burns (Cadence → EVM) with no to_address
+      const contractName = ft.token.split('.').pop() || '';
+      if (!contractName.startsWith('EVMVMBridgedToken') && !contractName.startsWith('EVMVMBridgedNFT')) continue;
+      if (ft.to_address && ft.transfer_type !== 'burn') continue;
+
+      const evmContract = extractEVMContractFromBridgedName(contractName);
+      if (!evmContract) continue;
+
+      // Find EVM execution targeting this bridged contract
+      const exec = evmExecutions.find(e => {
+        const execTo = normalizeFlowAddress(e.to);
+        return execTo === evmContract;
+      });
+      if (!exec?.data) continue;
+
+      const decoded = decodeEVMCallData(exec.data);
+      if (decoded.callType !== 'unknown' && decoded.recipient) {
+        // The COA is the EVM execution's `from` — set it as the to_address
+        // so the transfer shows: flow_user → COA → EVM_recipient
+        if (!ft.to_address && exec.from) {
+          ft.to_address = exec.from;
+        }
+        ft.evm_to_address = '0x' + decoded.recipient;
+        ft.transfer_type = 'transfer';
+      }
+    }
+
+    // Same for NFT transfers
+    for (const nft of nftTransfers) {
+      const contractName = nft.token.split('.').pop() || '';
+      if (!contractName.startsWith('EVMVMBridgedNFT')) continue;
+      if (nft.to_address && nft.transfer_type !== 'burn') continue;
+
+      const evmContract = extractEVMContractFromBridgedName(contractName);
+      if (!evmContract) continue;
+
+      const exec = evmExecutions.find(e => {
+        const execTo = normalizeFlowAddress(e.to);
+        return execTo === evmContract;
+      });
+      if (!exec?.data) continue;
+
+      const decoded = decodeEVMCallData(exec.data);
+      if (decoded.callType !== 'unknown' && decoded.recipient) {
+        if (!nft.to_address && exec.from) {
+          nft.to_address = exec.from;
+        }
+        nft.transfer_type = 'transfer';
       }
     }
   }

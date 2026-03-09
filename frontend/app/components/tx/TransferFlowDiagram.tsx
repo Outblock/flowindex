@@ -378,6 +378,23 @@ function transfersToFlows(detail: any): Flow[] {
         const from = rawFrom || `MINT:${sym}`;
         const to = rawTo || (isStakingTx ? `STAKE:${sym}` : `BURN:${sym}`);
 
+        // If this transfer has an EVM destination (decoded from call data), add an extra COA→EOA leg
+        const evmTo = (ft as any).evm_to_address;
+        if (evmTo && rawTo) {
+            // Leg 1: from → COA (to_address)
+            const k1 = `${from}|${to}|${sym}`;
+            const e1 = ftAgg.get(k1);
+            if (e1) { e1.amount += amount; e1.usdValue += usdValue; }
+            else { ftAgg.set(k1, { from, to, amount, symbol: sym, usdValue }); }
+            // Leg 2: COA → EVM recipient
+            const evmToNorm = evmTo.toLowerCase().replace(/^0x/, '');
+            const k2 = `${to}|${evmToNorm}|${sym}`;
+            const e2 = ftAgg.get(k2);
+            if (e2) { e2.amount += amount; e2.usdValue += usdValue; }
+            else { ftAgg.set(k2, { from: to, to: evmToNorm, amount, symbol: sym, usdValue }); }
+            continue;
+        }
+
         const key = `${from}|${to}|${sym}`;
         const existing = ftAgg.get(key);
         if (existing) {
