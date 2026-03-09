@@ -485,7 +485,7 @@ func (r *Repository) ListStakingEventsByAddress(ctx context.Context, address str
 			COALESCE(se.delegator_id, 0), COALESCE(se.amount, 0)::TEXT, se.timestamp
 		FROM app.staking_events se
 		JOIN account_roles ar ON se.node_id = ar.node_id
-			AND (ar.delegator_id = 0 OR se.delegator_id = ar.delegator_id)
+			AND COALESCE(se.delegator_id, 0) = ar.delegator_id
 		ORDER BY se.block_height DESC, se.event_index DESC
 		LIMIT $2 OFFSET $3`
 
