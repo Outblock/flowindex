@@ -17,7 +17,7 @@ var reContractIdentifier = regexp.MustCompile(`^A\.[0-9a-fA-F]{16}\.\w+$`)
 // ---------------------------------------------------------------------------
 
 func TestAudit_ContractList(t *testing.T) {
-	contracts := fetchEnvelopeList(t, "/flow/v1/contract?limit=10")
+	contracts := fetchEnvelopeList(t, "/flow/contract?limit=10")
 
 	if len(contracts) == 0 {
 		t.Fatal("contract list is empty")
@@ -52,15 +52,15 @@ func TestAudit_ContractDetail(t *testing.T) {
 		t.Skip("no contractID available")
 	}
 
-	obj := fetchEnvelopeObject(t, "/flow/v1/contract/"+ctx.contractID)
+	obj := fetchEnvelopeObject(t, "/flow/contract/"+ctx.contractID)
 
 	// Required fields
 	assertFieldsExist(t, obj, "id", "address", "name")
 
 	// Code should be non-empty (>10 chars)
-	code := toString(obj["code"])
+	code := toString(obj["body"])
 	if code == "" {
-		code = toString(obj["source"])
+		code = toString(obj["code"])
 	}
 	if len(code) <= 10 {
 		t.Errorf("contract code too short: got %d chars, want > 10", len(code))
@@ -72,7 +72,7 @@ func TestAudit_ContractVersions(t *testing.T) {
 		t.Skip("no contractID available")
 	}
 
-	versions := fetchEnvelopeList(t, "/flow/v1/contract/"+ctx.contractID+"/version?limit=10")
+	versions := fetchEnvelopeList(t, "/flow/contract/"+ctx.contractID+"/version?limit=10")
 
 	if len(versions) == 0 {
 		t.Skip("no versions found for contract " + ctx.contractID)
@@ -95,7 +95,7 @@ func TestAudit_ContractVersions(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAudit_EVMTransactionList(t *testing.T) {
-	txList := fetchEnvelopeList(t, "/flow/v1/evm/transaction?limit=10")
+	txList := fetchItemsList(t, "/flow/evm/transaction?limit=10")
 
 	if len(txList) == 0 {
 		t.Skip("no EVM transactions found")
@@ -124,7 +124,7 @@ func TestAudit_EVMTransactionDetail(t *testing.T) {
 		t.Skip("no evmTxHash available")
 	}
 
-	obj := fetchEnvelopeObject(t, "/flow/v1/evm/transaction/"+ctx.evmTxHash)
+	obj := fetchBareObject(t, "/flow/evm/transaction/"+ctx.evmTxHash)
 
 	// Hash should match what we requested
 	hash := toString(obj["hash"])

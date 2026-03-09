@@ -14,6 +14,8 @@ import (
 	"time"
 
 	flowgrpc "github.com/onflow/flow-go-sdk/access/grpc"
+	grpclib "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // testContext holds bootstrap data for parameterized tests.
@@ -49,7 +51,7 @@ var ctx testContext
 func TestMain(m *testing.M) {
 	base := os.Getenv("FLOWSCAN_API_URL")
 	if base == "" {
-		base = "https://backend-production-df6e.up.railway.app"
+		base = "http://34.170.76.156:8080"
 	}
 	base = strings.TrimRight(base, "/")
 	ctx.baseURL = base
@@ -79,7 +81,7 @@ func TestMain(m *testing.M) {
 
 	// Fallback: get block height from block list
 	if ctx.blockHeight == "" {
-		if _, body, err := fetchJSON(base + "/flow/v1/block?limit=1"); err == nil {
+		if _, body, err := fetchJSON(base + "/flow/block?limit=1"); err == nil {
 			ctx.blockHeight = extractFieldFromList(body, "height")
 		}
 	}
@@ -88,7 +90,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Bootstrap: get a valid transaction ID
-	if _, body, err := fetchJSON(base + "/flow/v1/transaction?limit=1"); err == nil {
+	if _, body, err := fetchJSON(base + "/flow/transaction?limit=1"); err == nil {
 		ctx.txID = extractFieldFromList(body, "id")
 		if ctx.txID == "" {
 			ctx.txID = extractFieldFromList(body, "transaction_id")
@@ -101,7 +103,7 @@ func TestMain(m *testing.M) {
 	// Bootstrap: get a known address
 	ctx.address = "0xe467b9dd11fa00df" // FlowFees, always exists
 	if ctx.txID != "unknown" {
-		if _, body, err := fetchJSON(base + "/flow/v1/transaction/" + ctx.txID); err == nil {
+		if _, body, err := fetchJSON(base + "/flow/transaction/" + ctx.txID); err == nil {
 			addr := extractFieldFromObject(body, "proposer")
 			if addr != "" {
 				ctx.address = addr
@@ -111,14 +113,14 @@ func TestMain(m *testing.M) {
 
 	// Initialize Flow SDK client for cross-referencing
 	var flowErr error
-	flowClient, flowErr = flowgrpc.NewBaseClient(mainnetAccessNode)
+	flowClient, flowErr = flowgrpc.NewBaseClient(mainnetAccessNode, grpclib.WithTransportCredentials(insecure.NewCredentials()))
 	if flowErr != nil {
 		fmt.Fprintf(os.Stderr, "WARN: Flow client init failed: %v (cross-ref tests will skip)\n", flowErr)
 	}
 
 	// Bootstrap: FT token
 	ctx.ftToken = "A.1654653399040a61.FlowToken"
-	if _, body, err := fetchJSON(base + "/flow/v1/ft?limit=1"); err == nil {
+	if _, body, err := fetchJSON(base + "/flow/ft?limit=1"); err == nil {
 		if id := extractFieldFromList(body, "id"); id != "" {
 			ctx.ftToken = id
 		}
@@ -126,21 +128,32 @@ func TestMain(m *testing.M) {
 
 	// Bootstrap: NFT collection
 	ctx.nftCollection = "A.0b2a3299cc857e29.TopShot"
-	if _, body, err := fetchJSON(base + "/flow/v1/nft?limit=1"); err == nil {
+	if _, body, err := fetchJSON(base + "/flow/nft?limit=1"); err == nil {
 		if id := extractFieldFromList(body, "id"); id != "" {
 			ctx.nftCollection = id
 		}
 	}
 
-	// Bootstrap: EVM tx hash
+	// Bootstrap: EVM tx hash (response uses {items:[...]} format)
 	ctx.evmTxHash = ""
-	if _, body, err := fetchJSON(base + "/flow/v1/evm/transaction?limit=1"); err == nil {
+	if _, body, err := fetchJSON(base + "/flow/evm/transaction?limit=1"); err == nil {
 		ctx.evmTxHash = extractFieldFromList(body, "hash")
+		if ctx.evmTxHash == "" {
+			// Try {items:[...]} wrapper
+			var wrapper struct {
+				Items []map[string]interface{} `json:"items"`
+			}
+			if json.Unmarshal(body, &wrapper) == nil && len(wrapper.Items) > 0 {
+				if h, ok := wrapper.Items[0]["hash"].(string); ok {
+					ctx.evmTxHash = h
+				}
+			}
+		}
 	}
 
 	// Bootstrap: contract identifier
 	ctx.contractID = "A.1654653399040a61.FlowToken"
-	if _, body, err := fetchJSON(base + "/flow/v1/contract?limit=1"); err == nil {
+	if _, body, err := fetchJSON(base + "/flow/contract?limit=1"); err == nil {
 		if id := extractFieldFromList(body, "id"); id != "" {
 			ctx.contractID = id
 		}

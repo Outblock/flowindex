@@ -9,7 +9,7 @@ import (
 )
 
 func TestAudit_NFTList(t *testing.T) {
-	items := fetchEnvelopeList(t, "/flow/v1/nft?limit=10")
+	items := fetchEnvelopeList(t, "/flow/nft?limit=10")
 	if len(items) == 0 {
 		t.Skip("no NFT collections returned")
 	}
@@ -35,7 +35,7 @@ func TestAudit_NFTList(t *testing.T) {
 }
 
 func TestAudit_NFTDetailMatchesList(t *testing.T) {
-	items := fetchEnvelopeList(t, "/flow/v1/nft?limit=1")
+	items := fetchEnvelopeList(t, "/flow/nft?limit=1")
 	if len(items) == 0 {
 		t.Skip("no NFT collections returned")
 	}
@@ -45,7 +45,7 @@ func TestAudit_NFTDetailMatchesList(t *testing.T) {
 	assertNonEmpty(t, "first.id", id)
 
 	// Fetch detail by identifier
-	detailItems := fetchEnvelopeList(t, "/flow/v1/nft/"+id)
+	detailItems := fetchEnvelopeList(t, "/flow/nft/"+id)
 	if len(detailItems) == 0 {
 		t.Fatalf("NFT detail for %s returned empty array", id)
 	}
@@ -66,7 +66,7 @@ func TestAudit_NFTDetailMatchesList(t *testing.T) {
 }
 
 func TestAudit_NFTTransfers(t *testing.T) {
-	items := fetchEnvelopeList(t, "/flow/v1/nft/transfer?limit=10")
+	items := fetchEnvelopeList(t, "/flow/nft/transfer?limit=10")
 	if len(items) == 0 {
 		t.Skip("no NFT transfers returned")
 	}
@@ -104,7 +104,7 @@ func TestAudit_NFTTransfers(t *testing.T) {
 }
 
 func TestAudit_NFTHoldings(t *testing.T) {
-	items := fetchEnvelopeList(t, "/flow/v1/nft/"+ctx.nftCollection+"/holding?limit=10")
+	items := fetchEnvelopeList(t, "/flow/nft/"+ctx.nftCollection+"/holding?limit=10")
 	if len(items) == 0 {
 		t.Skip("no NFT holdings returned for " + ctx.nftCollection)
 	}
@@ -139,7 +139,7 @@ func TestAudit_NFTHoldings(t *testing.T) {
 }
 
 func TestAudit_NFTItems(t *testing.T) {
-	items := fetchEnvelopeList(t, "/flow/v1/nft/"+ctx.nftCollection+"/item?limit=10")
+	items := fetchEnvelopeList(t, "/flow/nft/"+ctx.nftCollection+"/item?limit=10")
 	if len(items) == 0 {
 		t.Skip("no NFT items returned for " + ctx.nftCollection)
 	}
@@ -166,7 +166,7 @@ func TestAudit_NFTItems(t *testing.T) {
 		t.Skip("first item has no nft_id or id to fetch detail")
 	}
 
-	detailItems := fetchEnvelopeList(t, "/flow/v1/nft/"+ctx.nftCollection+"/item/"+firstID)
+	detailItems := fetchEnvelopeList(t, "/flow/nft/"+ctx.nftCollection+"/item/"+firstID)
 	if len(detailItems) == 0 {
 		t.Fatalf("NFT item detail for %s/%s returned empty", ctx.nftCollection, firstID)
 	}
@@ -182,13 +182,13 @@ func TestAudit_NFTItems(t *testing.T) {
 
 func TestAudit_NFTStats(t *testing.T) {
 	// NFT stats might be returned as an envelope or bare object — try both
-	url := ctx.baseURL + "/flow/v1/nft/stats"
+	url := ctx.baseURL + "/flow/nft/stats"
 	status, body, err := fetchJSON(url)
 	if err != nil {
-		t.Fatalf("GET /flow/v1/nft/stats error: %v", err)
+		t.Fatalf("GET /flow/nft/stats error: %v", err)
 	}
 	if status != 200 {
-		t.Fatalf("GET /flow/v1/nft/stats status=%d, want 200 (body: %.300s)", status, body)
+		t.Fatalf("GET /flow/nft/stats status=%d, want 200 (body: %.300s)", status, body)
 	}
 
 	var stats map[string]interface{}
@@ -224,7 +224,7 @@ func TestAudit_NFTStats(t *testing.T) {
 }
 
 func TestAudit_AccountNFTCollections(t *testing.T) {
-	items := fetchEnvelopeList(t, "/flow/v1/account/"+ctx.address+"/nft")
+	items := fetchEnvelopeList(t, "/flow/account/"+ctx.address+"/nft")
 	if len(items) == 0 {
 		t.Skip("no NFT collections found for account " + ctx.address)
 	}

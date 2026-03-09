@@ -5,6 +5,7 @@ package api_test
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func TestAudit_TransactionCrossRef(t *testing.T) {
 	}
 
 	// Fetch transaction from our API
-	apiTx := fetchEnvelopeObject(t, "/flow/v1/transaction/"+ctx.txID)
+	apiTx := fetchEnvelopeObject(t, "/flow/transaction/"+ctx.txID)
 
 	// Fetch same transaction from Flow Access Node
 	c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -53,7 +54,7 @@ func TestAudit_TransactionCrossRef(t *testing.T) {
 	// Cross-reference: status (if sealed on chain, API should say "Sealed")
 	if flowResult.Status == flow.TransactionStatusSealed {
 		apiStatus := toString(apiTx["status"])
-		if apiStatus != "Sealed" {
+		if !strings.EqualFold(apiStatus, "Sealed") {
 			t.Errorf("status mismatch: api=%q expected=Sealed (flow status=%v)", apiStatus, flowResult.Status)
 		}
 	}
@@ -90,7 +91,7 @@ func TestAudit_TransactionCrossRef(t *testing.T) {
 }
 
 func TestAudit_TransactionListConsistency(t *testing.T) {
-	txList := fetchEnvelopeList(t, "/flow/v1/transaction?limit=10")
+	txList := fetchEnvelopeList(t, "/flow/transaction?limit=10")
 
 	if len(txList) == 0 {
 		t.Fatal("transaction list is empty")

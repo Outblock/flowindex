@@ -12,6 +12,8 @@ import (
 	"time"
 
 	flowgrpc "github.com/onflow/flow-go-sdk/access/grpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // ---------------------------------------------------------------------------
@@ -25,7 +27,7 @@ var flowClient *flowgrpc.BaseClient
 func initFlowClient(t *testing.T) {
 	t.Helper()
 	var err error
-	flowClient, err = flowgrpc.NewBaseClient(mainnetAccessNode)
+	flowClient, err = flowgrpc.NewBaseClient(mainnetAccessNode, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to create Flow gRPC client: %v", err)
 	}
@@ -182,7 +184,12 @@ func fetchEnvelopeObject(t *testing.T, path string) map[string]interface{} {
 	}
 	var obj map[string]interface{}
 	if err := json.Unmarshal(dataRaw, &obj); err != nil {
-		t.Fatalf("GET %s: data is not an object: %v (data: %.300s)", path, err, dataRaw)
+		// Many detail endpoints return single-element arrays: {data: [{...}]}
+		var items []map[string]interface{}
+		if err2 := json.Unmarshal(dataRaw, &items); err2 == nil && len(items) > 0 {
+			return items[0]
+		}
+		t.Fatalf("GET %s: data is not an object or single-element array: %v (data: %.300s)", path, err, dataRaw)
 	}
 	return obj
 }
@@ -203,6 +210,26 @@ func fetchBareObject(t *testing.T, path string) map[string]interface{} {
 		t.Fatalf("GET %s: response is not a JSON object: %v (body: %.300s)", path, err, body)
 	}
 	return obj
+}
+
+// fetchItemsList fetches a URL and parses data from {items: [...]} format (used by EVM endpoints).
+func fetchItemsList(t *testing.T, path string) []map[string]interface{} {
+	t.Helper()
+	url := ctx.baseURL + path
+	status, body, err := fetchJSON(url)
+	if err != nil {
+		t.Fatalf("GET %s error: %v", path, err)
+	}
+	if status != 200 {
+		t.Fatalf("GET %s status=%d, want 200 (body: %.300s)", path, status, body)
+	}
+	var wrapper struct {
+		Items []map[string]interface{} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &wrapper); err != nil {
+		t.Fatalf("GET %s: cannot parse {items:[...]}: %v (body: %.300s)", path, err, body)
+	}
+	return wrapper.Items
 }
 
 // ---------------------------------------------------------------------------

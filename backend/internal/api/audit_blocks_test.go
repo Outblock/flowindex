@@ -21,7 +21,7 @@ func TestAudit_BlockCrossRef(t *testing.T) {
 	}
 
 	// Fetch block from our API
-	apiBlock := fetchEnvelopeObject(t, "/flow/v1/block/"+ctx.blockHeight)
+	apiBlock := fetchEnvelopeObject(t, "/flow/block/"+ctx.blockHeight)
 
 	// Fetch same block from Flow Access Node
 	c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -70,11 +70,11 @@ func TestAudit_BlockCrossRef(t *testing.T) {
 
 func TestAudit_BlockTransactionCount(t *testing.T) {
 	// Fetch block from API
-	apiBlock := fetchEnvelopeObject(t, "/flow/v1/block/"+ctx.blockHeight)
+	apiBlock := fetchEnvelopeObject(t, "/flow/block/"+ctx.blockHeight)
 	txCount := int(toFloat64(apiBlock["tx_count"]))
 
 	// Fetch transactions for this block
-	txList := fetchEnvelopeList(t, "/flow/v1/block/"+ctx.blockHeight+"/transaction?limit=200")
+	txList := fetchEnvelopeList(t, "/flow/block/"+ctx.blockHeight+"/transaction?limit=200")
 
 	// List length should not exceed tx_count
 	if len(txList) > txCount {
@@ -88,7 +88,7 @@ func TestAudit_BlockTransactionCount(t *testing.T) {
 }
 
 func TestAudit_BlockListPagination(t *testing.T) {
-	blocks := fetchEnvelopeList(t, "/flow/v1/block?limit=5")
+	blocks := fetchEnvelopeList(t, "/flow/block?limit=5")
 
 	if len(blocks) == 0 {
 		t.Fatal("block list is empty")

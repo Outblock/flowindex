@@ -21,7 +21,7 @@ func TestAudit_AccountCrossRef(t *testing.T) {
 	const addrWith0x = "0x" + addrHex
 
 	// Fetch from our API
-	apiAccount := fetchEnvelopeObject(t, "/flow/v1/account/"+addrWith0x)
+	apiAccount := fetchEnvelopeObject(t, "/flow/account/"+addrWith0x)
 
 	// Fetch from Flow Access Node
 	c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -44,7 +44,7 @@ func TestAudit_AccountCrossRef(t *testing.T) {
 	}
 
 	// Cross-reference: FLOW balance — both should be > 0 and within 2x ratio
-	apiBalance := toFloat64(apiAccount["balance"])
+	apiBalance := toFloat64(apiAccount["flowBalance"])
 	// Flow SDK returns balance in UFix64 (uint64, value / 1e8 = FLOW)
 	flowBalanceFLOW := float64(flowAccount.Balance) / 1e8
 
@@ -99,7 +99,7 @@ func TestAudit_AccountCrossRef(t *testing.T) {
 }
 
 func TestAudit_AccountTransactions(t *testing.T) {
-	txList := fetchEnvelopeList(t, "/flow/v1/account/"+ctx.address+"/transaction?limit=10")
+	txList := fetchEnvelopeList(t, "/flow/account/"+ctx.address+"/transaction?limit=10")
 
 	if len(txList) == 0 {
 		t.Skip("no transactions found for account " + ctx.address)
@@ -123,7 +123,7 @@ func TestAudit_AccountTransactions(t *testing.T) {
 }
 
 func TestAudit_AccountContractCode(t *testing.T) {
-	obj := fetchEnvelopeObject(t, "/flow/v1/account/0x1654653399040a61/contract/FlowToken")
+	obj := fetchBareObject(t, "/flow/account/0x1654653399040a61/contract/FlowToken")
 
 	// Extract the code field
 	code := toString(obj["code"])
