@@ -11,8 +11,9 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@noble/curves": "^2.0.1",
