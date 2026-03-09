@@ -74,7 +74,7 @@ interface AIPanelProps {
     keyId: string,
     network: 'mainnet' | 'testnet',
   ) => Promise<KeyAccount[]>;
-  onSwitchNetwork?: (network: 'mainnet' | 'testnet') => void;
+  onSwitchNetwork?: (network: FlowNetwork) => void;
   onViewAccount?: (address: string) => void;
   /** External message to auto-send (e.g. "Fix with AI" from codegen errors) */
   pendingMessage?: string;
@@ -1731,7 +1731,11 @@ export default function AIPanel({
             return;
           }
           try {
-            const net = (args.network || networkRef.current || 'mainnet') as 'mainnet' | 'testnet';
+            const net = (args.network || networkRef.current || 'mainnet') as FlowNetwork;
+            if (net === 'emulator') {
+              emitError('Account creation is not supported on emulator.');
+              return;
+            }
             const result = await onCreateAccountRef.current(
               args.keyId,
               'ECDSA_secp256k1',
@@ -1750,7 +1754,11 @@ export default function AIPanel({
             return;
           }
           try {
-            const net = (args.network || networkRef.current || 'mainnet') as 'mainnet' | 'testnet';
+            const net = (args.network || networkRef.current || 'mainnet') as FlowNetwork;
+            if (net === 'emulator') {
+              emitError('Account refresh is not supported on emulator.');
+              return;
+            }
             const accounts = await onRefreshAccountsRef.current(args.keyId, net);
             emit({ accounts });
           } catch (e: any) {
@@ -1807,7 +1815,7 @@ export default function AIPanel({
           const { code, args: txArgs, network: txNetwork } = args as {
             code: string;
             args?: Array<{ name: string; value: string }>;
-            network?: 'mainnet' | 'testnet';
+            network?: FlowNetwork;
           };
 
           const signer = selectedSignerRef.current;

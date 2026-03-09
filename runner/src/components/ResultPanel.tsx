@@ -3,20 +3,22 @@ import type { ExecutionResult } from '../flow/execute';
 import { Loader2, Code2, List, Copy, Check, Sparkles } from 'lucide-react';
 import { JsonView, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
+import type { FlowNetwork } from '../flow/networks';
 
 const CodegenPanel = lazy(() => import('./CodegenPanel'));
 
 interface ResultPanelProps {
   results: ExecutionResult[];
   loading: boolean;
-  network?: 'mainnet' | 'testnet';
+  network?: FlowNetwork;
   code?: string;
   filename?: string;
   codeType?: 'script' | 'transaction' | 'contract';
   onFixWithAI?: (errorMessage: string) => void;
 }
 
-function txExplorerUrl(txId: string, network?: 'mainnet' | 'testnet'): string {
+function txExplorerUrl(txId: string, network?: FlowNetwork): string | null {
+  if (network === 'emulator') return null;
   const base = network === 'testnet'
     ? 'https://testnet.flowindex.io'
     : 'https://flowindex.io';
@@ -319,16 +321,23 @@ export default function ResultPanel({ results, loading, network, code, filename,
               <Badge variant={resultVariant(lastResult.type)}>
                 {lastResult.type.replace('_', ' ')}
               </Badge>
-              {lastResult.txId && (
-                <a
-                  href={txExplorerUrl(lastResult.txId, network)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-2 text-blue-400 hover:text-blue-300 hover:underline"
-                >
-                  tx: {lastResult.txId}
-                </a>
-              )}
+              {lastResult.txId && (() => {
+                const url = txExplorerUrl(lastResult.txId, network);
+                return url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-2 text-blue-400 hover:text-blue-300 hover:underline"
+                  >
+                    tx: {lastResult.txId}
+                  </a>
+                ) : (
+                  <span className="ml-2 text-zinc-400 font-mono">
+                    tx: {lastResult.txId}
+                  </span>
+                );
+              })()}
               <div className="mt-2">
                 <DataDisplay
                   data={lastResult.data}
@@ -361,18 +370,27 @@ export default function ResultPanel({ results, loading, network, code, filename,
                 <Badge variant={resultVariant(r.type)}>
                   {r.type.replace('_', ' ')}
                 </Badge>
-                {r.txId ? (
-                  <a
-                    href={txExplorerUrl(r.txId, network)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`flex-1 break-all ${
-                      r.type === 'error' ? 'text-red-400' : 'text-blue-400 hover:text-blue-300 hover:underline'
-                    }`}
-                  >
-                    {typeof r.data === 'string' ? r.data : JSON.stringify(r.data)}
-                  </a>
-                ) : (
+                {r.txId ? (() => {
+                  const url = txExplorerUrl(r.txId, network);
+                  return url ? (
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex-1 break-all ${
+                        r.type === 'error' ? 'text-red-400' : 'text-blue-400 hover:text-blue-300 hover:underline'
+                      }`}
+                    >
+                      {typeof r.data === 'string' ? r.data : JSON.stringify(r.data)}
+                    </a>
+                  ) : (
+                    <span className={`flex-1 break-all ${
+                      r.type === 'error' ? 'text-red-400' : 'text-zinc-300'
+                    }`}>
+                      {typeof r.data === 'string' ? r.data : JSON.stringify(r.data)}
+                    </span>
+                  );
+                })() : (
                   <span
                     className={`flex-1 break-all ${
                       r.type === 'error' ? 'text-red-400' : 'text-zinc-300'

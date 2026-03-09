@@ -21,6 +21,7 @@ import {
 import Avatar from 'boring-avatars';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
 import type { RevealedSecret } from '../auth/useLocalKeys';
+import type { FlowNetwork } from '../flow/networks';
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
 function colorsFromAddress(addr: string): string[] {
@@ -41,7 +42,7 @@ function colorsFromAddress(addr: string): string[] {
 
 interface KeyManagerProps {
   onClose: () => void;
-  network: 'mainnet' | 'testnet';
+  network: FlowNetwork;
   localKeys: LocalKey[];
   accountsMap: Record<string, KeyAccount[]>;
   wasmReady: boolean;
@@ -121,7 +122,8 @@ function formatDate(ts: number): string {
   });
 }
 
-function flowIndexUrl(address: string, network: 'mainnet' | 'testnet'): string {
+function flowIndexUrl(address: string, network: FlowNetwork): string | null {
+  if (network === 'emulator') return null;
   const base = network === 'testnet' ? 'https://testnet.flowindex.io' : 'https://flowindex.io';
   const addr = address.startsWith('0x') ? address : `0x${address}`;
   return `${base}/account/${addr}`;
@@ -1084,7 +1086,7 @@ function LocalKeyCard({
 }: {
   localKey: LocalKey;
   accounts: KeyAccount[];
-  network: 'mainnet' | 'testnet';
+  network: FlowNetwork;
   onDelete: (id: string) => void;
   onExportKeystore: (id: string, password?: string) => Promise<string>;
   onRefreshAccounts: (keyId: string, network: 'mainnet' | 'testnet') => Promise<KeyAccount[]>;

@@ -1,5 +1,6 @@
 import { X, ExternalLink, LogOut } from 'lucide-react';
 import Avatar from 'boring-avatars';
+import type { FlowNetwork } from '../flow/networks';
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
 function colorsFromAddress(addr: string): string[] {
@@ -16,12 +17,13 @@ function colorsFromAddress(addr: string): string[] {
 
 interface AccountPanelProps {
   address: string;
-  network: 'mainnet' | 'testnet';
+  network: FlowNetwork;
   onClose: () => void;
   onDisconnect?: () => void;
 }
 
-function buildUrl(address: string, network: 'mainnet' | 'testnet'): string {
+function buildUrl(address: string, network: FlowNetwork): string | null {
+  if (network === 'emulator') return null;
   const base = network === 'testnet' ? 'https://testnet.flowindex.io' : 'https://flowindex.io';
   const bare = address.startsWith('0x') ? address.slice(2) : address;
   return `${base}/accounts/${bare}?tab=tokens`;
@@ -51,22 +53,26 @@ export default function AccountPanel({ address, network, onClose, onDisconnect }
           <span className="text-sm font-mono text-zinc-100 truncate">
             {formatAddress(address)}
           </span>
-          {network === 'testnet' && (
-            <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded">
-              testnet
+          {network !== 'mainnet' && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+              network === 'emulator' ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'
+            }`}>
+              {network}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-zinc-500 hover:text-zinc-300 p-1 transition-colors"
-            title="Open in new tab"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          {url && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-500 hover:text-zinc-300 p-1 transition-colors"
+              title="Open in new tab"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
           {onDisconnect && (
             <button
               onClick={() => { onDisconnect(); onClose(); }}
@@ -85,14 +91,20 @@ export default function AccountPanel({ address, network, onClose, onDisconnect }
         </div>
       </div>
 
-      {/* iframe */}
+      {/* iframe (not available for emulator) */}
       <div className="flex-1 min-h-0">
-        <iframe
-          src={url}
-          className="w-full h-full border-0"
-          title={`Account ${displayAddr}`}
-          allow="clipboard-read; clipboard-write"
-        />
+        {url ? (
+          <iframe
+            src={url}
+            className="w-full h-full border-0"
+            title={`Account ${displayAddr}`}
+            allow="clipboard-read; clipboard-write"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
+            Account details not available for {network}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import Avatar from 'boring-avatars';
 import { fcl } from '../flow/fclConfig';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
 import type { SignerOption } from './SignerSelector';
+import type { FlowNetwork } from '../flow/networks';
 
 interface ConnectModalProps {
   open: boolean;
@@ -13,7 +14,7 @@ interface ConnectModalProps {
   accountsMap: Record<string, KeyAccount[]>;
   autoSign: boolean;
   onToggleAutoSign: (value: boolean) => void;
-  network: 'mainnet' | 'testnet';
+  network: FlowNetwork;
   onOpenKeyManager?: (mode?: 'create' | 'import') => void;
   onGenerateKey?: (label: string) => Promise<{ mnemonic: string; key: LocalKey }>;
   onCreateAccount?: (
@@ -133,6 +134,7 @@ export default function ConnectModal({
   // Inline wallet creation flow
   const handleQuickCreate = useCallback(async () => {
     if (!onGenerateKey || !onCreateAccount || !onRefreshAccounts) return;
+    if (network === 'emulator') return; // Account creation not supported on emulator
 
     createAbortRef.current = false;
 
@@ -144,7 +146,7 @@ export default function ConnectModal({
 
       // Step 2: Create account on current network
       setCreateStep({ status: 'creating-account', keyId: key.id, network });
-      const { txId } = await onCreateAccount(key.id, 'ECDSA_P256', 'SHA3_256', network);
+      const { txId } = await onCreateAccount(key.id, 'ECDSA_P256', 'SHA3_256', network as 'mainnet' | 'testnet');
       if (createAbortRef.current) return;
 
       setCreateStep({ status: 'waiting-tx', keyId: key.id, network, txId });
@@ -155,7 +157,7 @@ export default function ConnectModal({
       let account: KeyAccount | null = null;
       for (let i = 0; i < 10; i++) {
         if (createAbortRef.current) return;
-        const accounts = await onRefreshAccounts(key.id, network);
+        const accounts = await onRefreshAccounts(key.id, network as 'mainnet' | 'testnet');
         if (accounts.length > 0) {
           account = accounts[0];
           break;

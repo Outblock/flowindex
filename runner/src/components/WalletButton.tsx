@@ -3,6 +3,7 @@ import { fcl } from '../flow/fclConfig';
 import { Wallet, LogOut, ChevronDown, Key as KeyIcon, ExternalLink } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
+import type { FlowNetwork } from '../flow/networks';
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
 function colorsFromAddress(addr: string): string[] {
@@ -21,7 +22,7 @@ interface WalletButtonProps {
   localKeys?: LocalKey[];
   accountsMap?: Record<string, KeyAccount[]>;
   selectedLocalAccount?: { key: LocalKey; account: KeyAccount } | null;
-  network?: 'mainnet' | 'testnet';
+  network?: FlowNetwork;
   onOpenKeyManager?: () => void;
   onSelectLocalAccount?: (key: LocalKey, account: KeyAccount) => void;
   onDisconnectLocal?: () => void;
