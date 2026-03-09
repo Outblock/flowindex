@@ -1,7 +1,7 @@
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { p256 } from '@noble/curves/p256';
-import { sha256 } from '@noble/hashes/sha256';
-import { sha3_256 } from '@noble/hashes/sha3';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { p256 } from '@noble/curves/p256.js';
+import { sha256 } from '@noble/hashes/sha256.js';
+import { sha3_256 } from '@noble/hashes/sha3.js';
 import { HDKey } from '@scure/bip32';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { mnemonicToAccount } from 'viem/accounts';
@@ -71,10 +71,11 @@ function signMessage(
   // Hash the message
   const digest = hashAlgo === 'SHA2_256' ? sha256(msgBytes) : sha3_256(msgBytes);
 
-  // ECDSA sign
+  // ECDSA sign — v2 returns raw bytes, parse via Signature class
   const privBytes = hexToBytes(privateKeyHex);
   const curve = sigAlgo === 'ECDSA_P256' ? p256 : secp256k1;
-  const sig = curve.sign(digest, privBytes);
+  const sigBytes = curve.sign(digest, privBytes, { lowS: true }) as Uint8Array;
+  const sig = curve.Signature.fromBytes(sigBytes);
 
   // Return r||s  (each 32 bytes, total 64 bytes = 128 hex chars)
   const rHex = sig.r.toString(16).padStart(64, '0');
