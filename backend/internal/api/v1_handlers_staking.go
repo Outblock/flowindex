@@ -245,13 +245,13 @@ func (s *Server) handleAccountStakingActivity(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Build epoch lookup from epoch_stats for the block height range in results
-	epochMap := make(map[uint64]models.EpochStats)
+	// Build sorted epoch list (descending by start_height) for block→epoch lookup.
+	// end_height is often 0, so we match by finding the epoch with the highest
+	// start_height that is still <= the event's block_height.
+	var epochs []models.EpochStats
 	if len(events) > 0 {
-		epochStats, _ := s.repo.ListEpochStats(r.Context(), 200, 0)
-		for _, es := range epochStats {
-			epochMap[uint64(es.Epoch)] = es
-		}
+		epochs, _ = s.repo.ListEpochStats(r.Context(), 200, 0)
+		// ListEpochStats already returns ORDER BY epoch DESC (= start_height DESC)
 	}
 
 	out := make([]interface{}, 0, len(events))
@@ -266,9 +266,9 @@ func (s *Server) handleAccountStakingActivity(w http.ResponseWriter, r *http.Req
 			"amount":         e.Amount,
 			"timestamp":      formatTime(e.Timestamp),
 		}
-		// Find epoch for this block height
-		for _, es := range epochMap {
-			if uint64(es.StartHeight) <= e.BlockHeight && (es.EndHeight == 0 || e.BlockHeight <= uint64(es.EndHeight)) {
+		// Find epoch: first epoch (highest start_height) where start_height <= block_height
+		for _, es := range epochs {
+			if uint64(es.StartHeight) <= e.BlockHeight {
 				item["epoch"] = es.Epoch
 				item["epoch_start"] = formatTime(es.StartTime)
 				item["epoch_end"] = formatTime(es.EndTime)
