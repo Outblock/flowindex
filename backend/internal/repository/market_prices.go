@@ -219,6 +219,32 @@ func (r *Repository) GetContractNameToMarketSymbolMap(ctx context.Context) (map[
 	return m, nil
 }
 
+// GetMarketSymbolToIdentifiers returns a map of UPPER(market_symbol) -> list of Flow identifiers
+// (e.g. "A.1654653399040a61.FlowToken") for all FT tokens that have a market_symbol.
+func (r *Repository) GetMarketSymbolToIdentifiers(ctx context.Context) (map[string][]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT contract_address, contract_name, market_symbol FROM app.ft_tokens
+		WHERE market_symbol IS NOT NULL AND market_symbol != ''
+		ORDER BY market_symbol, contract_name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[string][]string)
+	for rows.Next() {
+		var addr []byte
+		var cn, ms string
+		if err := rows.Scan(&addr, &cn, &ms); err != nil {
+			return nil, err
+		}
+		key := strings.ToUpper(ms)
+		identifier := "A." + bytesToHex(addr) + "." + cn
+		m[key] = append(m[key], identifier)
+	}
+	return m, nil
+}
+
 func IsNoRows(err error) bool {
 	return err == pgx.ErrNoRows
 }

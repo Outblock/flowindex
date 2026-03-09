@@ -180,6 +180,9 @@ func (s *Server) handleFlowFTTokenPrices(w http.ResponseWriter, r *http.Request)
 			days = v
 		}
 	}
+	// Build market_symbol -> []identifier mapping (e.g. "FLOW" -> ["A.1654653399040a61.FlowToken"])
+	symToIDs, _ := s.repo.GetMarketSymbolToIdentifiers(r.Context())
+
 	allPrices := s.priceCache.GetAllLatestPrices()
 	out := make(map[string]interface{}, len(allPrices))
 	for symbol := range allPrices {
@@ -194,10 +197,14 @@ func (s *Server) handleFlowFTTokenPrices(w http.ResponseWriter, r *http.Request)
 				"price": p.Price,
 			})
 		}
-		out[symbol] = map[string]interface{}{
+		entry := map[string]interface{}{
 			"current": history[len(history)-1].Price,
 			"history": points,
 		}
+		if ids, ok := symToIDs[symbol]; ok && len(ids) > 0 {
+			entry["identifiers"] = ids
+		}
+		out[symbol] = entry
 	}
 	writeAPIResponse(w, out, nil, nil)
 }
