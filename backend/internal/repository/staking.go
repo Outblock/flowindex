@@ -468,24 +468,21 @@ func (r *Repository) ListStakingEventsByTypeLike(ctx context.Context, pattern st
 }
 
 // ListStakingEventsByAddress returns staking events for an account address.
-// It joins through staking_delegators (for delegators) and staking_nodes (for operators).
+// Drives from address_transactions (small set per address) and joins to staking_events via PK.
+// This avoids scanning the entire partitioned staking_events table.
 func (r *Repository) ListStakingEventsByAddress(ctx context.Context, address string, limit, offset int) ([]models.StakingEvent, error) {
 	addrBytes := hexToBytes(address)
 	query := `
-		WITH account_roles AS (
-			SELECT DISTINCT node_id, delegator_id
-			FROM (
-				SELECT node_id, delegator_id FROM app.staking_delegators WHERE address = $1
-				UNION ALL
-				SELECT node_id, 0 AS delegator_id FROM app.staking_nodes WHERE address = $1
-			) sub
-		)
 		SELECT se.block_height, encode(se.transaction_id, 'hex') AS transaction_id,
 			se.event_index, se.event_type, COALESCE(se.node_id, ''),
 			COALESCE(se.delegator_id, 0), COALESCE(se.amount, 0)::TEXT, se.timestamp
-		FROM app.staking_events se
-		JOIN account_roles ar ON se.node_id = ar.node_id
-			AND COALESCE(se.delegator_id, 0) = ar.delegator_id
+		FROM (
+			SELECT DISTINCT transaction_id, block_height
+			FROM app.address_transactions
+			WHERE address = $1
+			ORDER BY block_height DESC
+		) at
+		JOIN app.staking_events se ON se.block_height = at.block_height AND se.transaction_id = at.transaction_id
 		ORDER BY se.block_height DESC, se.event_index DESC
 		LIMIT $2 OFFSET $3`
 
