@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "description": "FlowIndex is a high-performance Flow blockchain explorer and indexer API.\n\n## Authentication\n\nAll endpoints can be used without authentication, but unauthenticated requests are subject to stricter rate limits (5 req/s per IP).\n\nTo get higher rate limits, include your API key in the `X-API-Key` header:\n\n```\ncurl -H \"X-API-Key: fi_live_abc123...\" https://flowindex.io/api/blocks\n```\n\n### Obtaining an API Key\n\n1. Sign up at [flowindex.io/developer](https://flowindex.io/developer)\n2. Navigate to **API Keys** in your developer dashboard\n3. Click **Create API Key**, give it a name, and copy the key\n\n> **Important:** The full key is only shown once at creation time. Store it securely. Keys are stored as SHA-256 hashes — we cannot recover a lost key.\n\n### Rate Limit Tiers\n\n| Tier | Requests/sec | Burst |\n|---|---|---|\n| Unauthenticated | 5 | 10 |\n| Free | 20 | 40 |\n| Pro | 50 | 100 |\n| Enterprise | 200 | 400 |\n\n### Rate Limit Response\n\nWhen rate-limited, the API returns HTTP `429` with header `X-RateLimit-Limit` and body:\n\n```json\n{\"error\": \"rate_limited\", \"message\": \"too many requests\"}\n```\n\nInvalid API keys return HTTP `401`:\n\n```json\n{\"error\": \"invalid_api_key\", \"message\": \"the provided API key is invalid or inactive\"}\n```",
+    "description": "FlowIndex is a high-performance Flow blockchain explorer and indexer API.\n\n## Authentication\n\nAll endpoints can be used without authentication, but unauthenticated requests are subject to stricter rate limits (5 req/s per IP).\n\nTo get higher rate limits, include your API key in the `X-API-Key` header:\n\n```\ncurl -H \"X-API-Key: fi_live_abc123...\" https://flowindex.io/api/blocks\n```\n\n### Obtaining an API Key\n\n1. Sign up at [flowindex.io/developer](https://flowindex.io/developer)\n2. Navigate to **API Keys** in your developer dashboard\n3. Click **Create API Key**, give it a name, and copy the key\n\n> **Important:** The full key is only shown once at creation time. Store it securely. Keys are stored as SHA-256 hashes \u2014 we cannot recover a lost key.\n\n### Rate Limit Tiers\n\n| Tier | Requests/sec | Burst |\n|---|---|---|\n| Unauthenticated | 5 | 10 |\n| Free | 20 | 40 |\n| Pro | 50 | 100 |\n| Enterprise | 200 | 400 |\n\n### Rate Limit Response\n\nWhen rate-limited, the API returns HTTP `429` with header `X-RateLimit-Limit` and body:\n\n```json\n{\"error\": \"rate_limited\", \"message\": \"too many requests\"}\n```\n\nInvalid API keys return HTTP `401`:\n\n```json\n{\"error\": \"invalid_api_key\", \"message\": \"the provided API key is invalid or inactive\"}\n```",
     "title": "FlowIndex API",
     "contact": {
       "name": "FlowIndex Support"
@@ -13,7 +13,9 @@
     "version": "1.0"
   },
   "security": [
-    {"ApiKeyAuth": []},
+    {
+      "ApiKeyAuth": []
+    },
     {}
   ],
   "paths": {
@@ -3934,6 +3936,1803 @@
           }
         }
       }
+    },
+    "/flow/v1/account/{address}/contract/{name}": {
+      "get": {
+        "description": "Retrieves the Cadence source code for a specific contract deployed on an account.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get account contract code",
+        "parameters": [
+          {
+            "description": "Account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Contract name",
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/account/{address}/storage": {
+      "get": {
+        "description": "Retrieves storage overview for an account including used/capacity and storage paths.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get account storage overview",
+        "parameters": [
+          {
+            "description": "Account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/account/{address}/storage/links": {
+      "get": {
+        "description": "Retrieves public capability links for an account storage domain.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get account storage links",
+        "parameters": [
+          {
+            "description": "Account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage domain (currently only \"public\" is supported)",
+            "name": "domain",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/account/{address}/storage/item": {
+      "get": {
+        "description": "Retrieves type information for a specific storage item at the given path.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get account storage item",
+        "parameters": [
+          {
+            "description": "Account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage path identifier (e.g. flowTokenVault or /storage/flowTokenVault)",
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/account/{address}/nft/transfer": {
+      "get": {
+        "description": "Retrieves NFT transfers for a specific account with pagination.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get account NFT transfers",
+        "parameters": [
+          {
+            "description": "Account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by block height",
+            "name": "height",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/account/{address}/staking/activity": {
+      "get": {
+        "description": "Retrieves staking activity events for a specific account, including delegation, staking, and reward events.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get account staking activity",
+        "parameters": [
+          {
+            "description": "Account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/ft/stats": {
+      "get": {
+        "description": "Retrieves aggregate statistics for all fungible tokens.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get FT token statistics",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/ft/prices": {
+      "get": {
+        "description": "Retrieves current and historical price data for all tracked fungible tokens.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get FT token prices",
+        "parameters": [
+          {
+            "description": "Number of days of price history to return (Default = 30, Max = 365)",
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/ft/{token}/top-account": {
+      "get": {
+        "description": "Retrieves top token holders for a specific fungible token, ordered by balance.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get top FT token holders",
+        "parameters": [
+          {
+            "description": "Token identifier (e.g. A.1654653399040a61.FlowToken)",
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/nft/stats": {
+      "get": {
+        "description": "Retrieves aggregate statistics for all NFT collections.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get NFT collection statistics",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/nft/search": {
+      "get": {
+        "description": "Searches for NFT items by name or metadata across all collections.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Search NFTs",
+        "parameters": [
+          {
+            "description": "Search query string",
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by collection identifier (e.g. A.address.CollectionName)",
+            "name": "collection",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/nft/{nft_type}/top-account": {
+      "get": {
+        "description": "Retrieves top holders for a specific NFT collection, ordered by number of items owned.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get top NFT holders",
+        "parameters": [
+          {
+            "description": "NFT collection type identifier",
+            "name": "nft_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/nft/{nft_type}/item": {
+      "get": {
+        "description": "Retrieves items in a specific NFT collection with pagination.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get NFT collection items",
+        "parameters": [
+          {
+            "description": "NFT collection type identifier",
+            "name": "nft_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/nft/{nft_type}/item/{id}/transfer": {
+      "get": {
+        "description": "Retrieves transfer history for a specific NFT item.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get NFT item transfers",
+        "parameters": [
+          {
+            "description": "NFT collection type identifier",
+            "name": "nft_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "NFT item ID within the collection",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/events/search": {
+      "get": {
+        "description": "Searches for event types by name across all contracts.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Search events",
+        "parameters": [
+          {
+            "description": "Event name to search for",
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of results to return (Default = 20)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/contract/{identifier}/transaction": {
+      "get": {
+        "description": "Retrieves transactions that interact with a specific contract.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get contract transactions",
+        "parameters": [
+          {
+            "description": "Contract identifier (e.g. A.1654653399040a61.FlowToken)",
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/contract/{identifier}/events": {
+      "get": {
+        "description": "Retrieves distinct event types emitted by a specific contract with occurrence counts.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get contract event types",
+        "parameters": [
+          {
+            "description": "Contract identifier (e.g. A.1654653399040a61.FlowToken)",
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of event types to return (Default = 50)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/contract/{identifier}/version": {
+      "get": {
+        "description": "Retrieves the version history for a specific contract.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get contract version list",
+        "parameters": [
+          {
+            "description": "Contract identifier (e.g. A.1654653399040a61.FlowToken)",
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/contract/{identifier}/scripts": {
+      "get": {
+        "description": "Retrieves common transaction scripts that interact with a specific contract.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get contract scripts",
+        "parameters": [
+          {
+            "description": "Contract identifier (e.g. A.1654653399040a61.FlowToken)",
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/script/{hash}": {
+      "get": {
+        "description": "Retrieves the full script text for a transaction script by its hash.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get script text by hash",
+        "parameters": [
+          {
+            "description": "Script hash",
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/contract/{identifier}/dependencies": {
+      "get": {
+        "description": "Retrieves the import dependency graph and dependents for a specific contract. Returns both a flat imports list and a recursive graph with nodes and edges.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get contract dependencies",
+        "parameters": [
+          {
+            "description": "Contract identifier (e.g. A.1654653399040a61.FlowToken)",
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Recursion depth for import graph (Default = 1, Max = 3)",
+            "name": "depth",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/evm/address/{address}/token": {
+      "get": {
+        "description": "Retrieves EVM tokens held by a specific EVM address (proxied from Blockscout).",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get EVM address tokens",
+        "parameters": [
+          {
+            "description": "EVM address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/account/{address}/scheduled-transaction": {
+      "get": {
+        "description": "Retrieves scheduled transactions for a specific account.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get account scheduled transactions",
+        "parameters": [
+          {
+            "description": "Account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/account/{address}/balance/history": {
+      "get": {
+        "description": "Retrieves daily balance history for a specific token held by an account. Defaults to FlowToken over the last 30 days.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get account balance history",
+        "parameters": [
+          {
+            "description": "Account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Token identifier (Default = A.1654653399040a61.FlowToken)",
+            "name": "token",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of days of history (Default = 30, Max = 365)",
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/key/{publicKey}": {
+      "get": {
+        "description": "Searches for accounts that use a specific public key.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Search by public key",
+        "parameters": [
+          {
+            "description": "Public key to search for",
+            "name": "publicKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/coa/{address}": {
+      "get": {
+        "description": "Retrieves the Flow address mapping for a Cadence-Owned Account (COA) EVM address.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get COA mapping",
+        "parameters": [
+          {
+            "description": "COA EVM address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/v1/account/{address}/labels": {
+      "get": {
+        "description": "Retrieves labels/tags associated with a specific account address.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get account labels",
+        "parameters": [
+          {
+            "description": "Account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/v1/price": {
+      "get": {
+        "description": "Retrieves the current FLOW token price in USD with market data.",
+        "tags": [
+          "Status"
+        ],
+        "summary": "Get current price",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/v1/price/at": {
+      "get": {
+        "description": "Retrieves the price of a token at a specific timestamp.",
+        "tags": [
+          "Status"
+        ],
+        "summary": "Get price at timestamp",
+        "parameters": [
+          {
+            "description": "Asset symbol (Default = FLOW)",
+            "name": "asset",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Timestamp in RFC3339 or YYYY-MM-DD format",
+            "name": "ts",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/v1/price/history": {
+      "get": {
+        "description": "Retrieves historical FLOW token price data (hourly intervals).",
+        "tags": [
+          "Status"
+        ],
+        "summary": "Get price history",
+        "parameters": [
+          {
+            "description": "Number of data points to return (Default = 168, Max = 8760)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/v1/prices": {
+      "get": {
+        "description": "Retrieves current prices for all tracked tokens with a contract name to market symbol mapping.",
+        "tags": [
+          "Status"
+        ],
+        "summary": "Get all prices",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/v1/nodes": {
+      "get": {
+        "description": "Retrieves staking node information for the latest epoch with optional GeoIP metadata.",
+        "tags": [
+          "Status"
+        ],
+        "summary": "Get node status",
+        "parameters": [
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/insights/daily": {
+      "get": {
+        "description": "Retrieves daily analytics statistics including transactions, accounts, and other metrics. Defaults to last 90 days.",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Get daily analytics",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD format)",
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "End date (YYYY-MM-DD format)",
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/insights/daily/module/{module}": {
+      "get": {
+        "description": "Retrieves daily analytics for a specific module. Supported modules: accounts, evm, defi, epoch, bridge, contracts.",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Get daily module analytics",
+        "parameters": [
+          {
+            "description": "Analytics module name (accounts, evm, defi, epoch, bridge, contracts)",
+            "name": "module",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Start date (YYYY-MM-DD format)",
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "End date (YYYY-MM-DD format)",
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/insights/transfers/daily": {
+      "get": {
+        "description": "Retrieves daily transfer analytics including FT and NFT transfer counts and volumes.",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Get daily transfer analytics",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD format)",
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "End date (YYYY-MM-DD format)",
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/insights/big-transfers": {
+      "get": {
+        "description": "Retrieves recent large-value token transfers above a USD threshold.",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Get big transfers",
+        "parameters": [
+          {
+            "description": "Minimum USD value threshold (Default = 10000)",
+            "name": "min_usd",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Filter by transfer type (comma-separated, e.g. ft,nft)",
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/insights/top-contracts": {
+      "get": {
+        "description": "Retrieves the most-used contracts by transaction count within a time window.",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Get top contracts by usage",
+        "parameters": [
+          {
+            "description": "Time window in hours (Default = 24, Max = 720)",
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of contracts to return (Default = 10)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/insights/token-volume": {
+      "get": {
+        "description": "Retrieves token transfer volume ranked by USD value within a time window.",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Get token volume",
+        "parameters": [
+          {
+            "description": "Time window in hours (Default = 24, Max = 720)",
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of tokens to return (Default = 10)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flowscan/v1/stats": {
+      "get": {
+        "description": "Compatibility endpoint providing fee statistics in the find.xyz/flowscan format.",
+        "tags": [
+          "Compatibility"
+        ],
+        "summary": "Get Flowscan-compatible stats",
+        "parameters": [
+          {
+            "description": "Metric type (Default = fees)",
+            "name": "metric",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Time granularity: daily or hourly (Default = daily)",
+            "name": "timescale",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Start time (RFC3339, YYYY-MM-DD, or unix timestamp)",
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "End time (RFC3339, YYYY-MM-DD, or unix timestamp)",
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/totalSupply": {
+      "get": {
+        "description": "Returns the total supply of FLOW tokens as plain text (no decimal).",
+        "tags": [
+          "Compatibility"
+        ],
+        "summary": "Get total supply",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/totalSupplyWithDecimal": {
+      "get": {
+        "description": "Returns the total supply of FLOW tokens as plain text with 8 decimal places.",
+        "tags": [
+          "Compatibility"
+        ],
+        "summary": "Get total supply with decimal",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/v1/epoch/payout": {
+      "get": {
+        "description": "Retrieves epoch reward payout data including total rewards, fees burned, and minted amounts.",
+        "tags": [
+          "Compatibility"
+        ],
+        "summary": "Get epoch payouts",
+        "parameters": [
+          {
+            "description": "Number of records to return (Default = 25, Max = 100)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai/tx-summary": {
+      "post": {
+        "description": "Generates an AI-powered summary of a Flow blockchain transaction including risk analysis, token flows, and security tips.",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Generate transaction summary",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Transaction ID"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Transaction status"
+                  },
+                  "is_evm": {
+                    "type": "boolean",
+                    "description": "Whether this is an EVM transaction"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Transaction events"
+                  },
+                  "ft_transfers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Pre-parsed FT transfers"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Transaction tags"
+                  },
+                  "contract_imports": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Cadence contract imports"
+                  },
+                  "script": {
+                    "type": "string",
+                    "description": "Cadence transaction script"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai/workflow-generate": {
+      "post": {
+        "description": "Generates a workflow graph (nodes and edges) from a natural language description using AI.",
+        "tags": [
+          "AI"
+        ],
+        "summary": "Generate workflow",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "system_prompt",
+                  "user_message"
+                ],
+                "properties": {
+                  "system_prompt": {
+                    "type": "string",
+                    "description": "System prompt for the AI model"
+                  },
+                  "user_message": {
+                    "type": "string",
+                    "description": "User message describing the desired workflow"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "tags": [
@@ -3956,6 +5755,18 @@
     {
       "description": "Status provides endpoints for on status updates on the Flow Blockchain.",
       "name": "Status"
+    },
+    {
+      "description": "Insights provides analytics endpoints for daily metrics, transfer volumes, big transfers, and top contracts.",
+      "name": "Insights"
+    },
+    {
+      "description": "Compatibility endpoints that mirror third-party API formats (find.xyz, flowscan).",
+      "name": "Compatibility"
+    },
+    {
+      "description": "AI-powered endpoints for transaction analysis and workflow generation.",
+      "name": "AI"
     }
   ],
   "servers": [

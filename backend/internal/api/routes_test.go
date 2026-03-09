@@ -66,3 +66,90 @@ func TestRoutesFromSpec(t *testing.T) {
 	spec := loadSpec(t, specPath)
 	assertRoutesFromSpec(t, router, "", spec)
 }
+
+// routeToSpecPath converts a registered route like "/flow/block/{height}"
+// to the OpenAPI path format. Routes under /flow/, /status/, /accounting/,
+// /staking/, /defi/ get a /v1/ inserted after the prefix.
+func routeToSpecPath(route string) string {
+	versionedPrefixes := []string{"/flow/", "/status/", "/accounting/", "/staking/", "/defi/"}
+	for _, prefix := range versionedPrefixes {
+		if strings.HasPrefix(route, prefix) {
+			base := strings.TrimPrefix(route, prefix[:len(prefix)-1]) // strip e.g. "/flow"
+			return prefix[:len(prefix)-1] + "/v1" + base             // e.g. "/flow/v1/block"
+		}
+	}
+	return route
+}
+
+// Routes that are intentionally excluded from the OpenAPI spec.
+var specExcludedRoutes = map[string]bool{
+	// Internal/infra
+	"/health":            true,
+	"/openapi.yaml":      true,
+	"/openapi.json":      true,
+	"/ws":                true,
+	"/ws/status":         true,
+	"/status/gcp-vms":    true,
+	"/auth/verify-key":   true,
+	"/api/cadence/check": true,
+	// NFT/COA backfill (admin-like)
+	"/flow/nft/backfill": true,
+	"/flow/coa/backfill": true,
+	// Base routes
+	"/status": true,
+	"/admin":  true,
+	// Alias: /contract/{id}/version/{id} same as /contract/{id}/{id}
+	"/flow/contract/{identifier}/version/{id}": true,
+	// Analytics aliases (content blockers block "analytics")
+	"/analytics/daily": true,
+	"/analytics/daily/module/{module}":   true,
+	"/analytics/transfers/daily":         true,
+	"/analytics/big-transfers":           true,
+	"/analytics/top-contracts":           true,
+	"/analytics/token-volume":            true,
+}
+
+// TestAllRoutesInSpec ensures every registered public route has an OpenAPI spec entry.
+// This prevents documentation drift when new endpoints are added.
+func TestAllRoutesInSpec(t *testing.T) {
+	specPath := "../../../openapi-v2.json"
+	if _, err := os.Stat(specPath); os.IsNotExist(err) {
+		t.Skip("openapi-v2.json not found, skipping route coverage test")
+	}
+	spec := loadSpec(t, specPath)
+
+	// Build set of documented spec paths
+	specPaths := make(map[string]bool, len(spec.Paths))
+	for p := range spec.Paths {
+		specPaths[p] = true
+	}
+
+	// Walk all registered routes (excluding admin, wallet, webhook subrouters)
+	server := NewServer(nil, nil, "0", 0)
+	router := server.httpServer.Handler.(*mux.Router)
+
+	var missing []string
+	router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		tpl, err := route.GetPathTemplate()
+		if err != nil {
+			return nil
+		}
+		// Skip admin, wallet, webhook routes
+		if strings.HasPrefix(tpl, "/admin/") || strings.HasPrefix(tpl, "/api/v1/wallet") || strings.HasPrefix(tpl, "/webhook") {
+			return nil
+		}
+		if specExcludedRoutes[tpl] {
+			return nil
+		}
+		specPath := routeToSpecPath(tpl)
+		if !specPaths[specPath] {
+			missing = append(missing, tpl+" → "+specPath)
+		}
+		return nil
+	})
+
+	if len(missing) > 0 {
+		t.Errorf("Routes registered but missing from openapi-v2.json (%d):\n  %s\n\nAdd them to the spec or to specExcludedRoutes if intentionally undocumented.",
+			len(missing), strings.Join(missing, "\n  "))
+	}
+}
