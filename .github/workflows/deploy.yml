@@ -77,11 +77,11 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
-              - 'openapi-v1.json'
               - 'openapi-v2.json'
               - '.github/workflows/deploy.yml'
             frontend:
               - 'frontend/**'
+              - 'openapi-v2.json'
               - 'packages/**'
               - '.github/workflows/deploy.yml'
             runner:

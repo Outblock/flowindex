@@ -27,8 +27,7 @@ RUN cd packages/flow-ui && bun run build \
 
 # Copy frontend source and build
 COPY frontend/ ./frontend/
-# Single-source OpenAPI specs from repo root
-COPY openapi-v1.json ./frontend/public/openapi/v1.json
+# Single-source OpenAPI spec from repo root
 COPY openapi-v2.json ./frontend/public/openapi/v2.json
 WORKDIR /app/frontend
 ARG VITE_API_URL

@@ -9,8 +9,8 @@ COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 
 COPY backend/ .
-# OpenAPI specs live at the repo root but are served by the backend.
-COPY openapi-v1.json openapi-v2.json ./
+# OpenAPI spec lives at repo root, served by the backend.
+COPY openapi-v2.json ./
 RUN go mod tidy
 ARG GIT_COMMIT=unknown
 RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -ldflags="-X main.BuildCommit=${GIT_COMMIT}" -o indexer main.go
