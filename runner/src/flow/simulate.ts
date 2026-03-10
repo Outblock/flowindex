@@ -1,6 +1,6 @@
 export interface SimulateRequest {
   cadence: string;
-  arguments: Array<{ type: string; value: string }>;
+  arguments: Array<Record<string, unknown>>;
   authorizers: string[];
   payer: string;
   verbose?: boolean;

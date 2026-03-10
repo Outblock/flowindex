@@ -11,7 +11,7 @@ import WalletButton from './components/WalletButton';
 import FileExplorer from './components/FileExplorer';
 import TabBar from './components/TabBar';
 import { configureFcl } from './flow/fclConfig';
-import { parseMainParams } from './flow/cadenceParams';
+import { parseMainParams, toCadenceJsonCdc } from './flow/cadenceParams';
 import { detectCodeType, executeScript, executeTransaction, executeCustodialTransaction, deployContract } from './flow/execute';
 import type { ExecutionResult } from './flow/execute';
 import { simulateTransaction } from './flow/simulate';
@@ -920,7 +920,9 @@ export default function App() {
         try {
           const simResp = await simulateTransaction({
             cadence: activeCode,
-            arguments: Object.entries(paramValues).map(([, v]) => ({ type: 'String', value: v })),
+            arguments: scriptParams.map((p) =>
+              toCadenceJsonCdc(paramValues[p.name] || '', p.type),
+            ),
             authorizers: [signerAddr],
             payer: signerAddr,
           });
@@ -938,7 +940,7 @@ export default function App() {
     }
 
     handleRunDirect();
-  }, [activeCode, codeType, paramValues, loading, selectedSigner, autoSign, network, simulateBeforeSend, handleRunDirect]);
+  }, [activeCode, codeType, paramValues, loading, selectedSigner, autoSign, network, simulateBeforeSend, handleRunDirect, scriptParams]);
 
   // Auto-retry run after connecting wallet from the modal
   useEffect(() => {

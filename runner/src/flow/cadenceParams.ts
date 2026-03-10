@@ -93,7 +93,7 @@ function resolveType(t: any, cadenceType: string): any {
 /**
  * Coerce a raw string value into the shape FCL expects for a given Cadence type.
  */
-function coerceValue(raw: string, cadenceType: string): any {
+export function coerceValue(raw: string, cadenceType: string): any {
   const t = cadenceType.trim();
 
   // Optional: null for empty, otherwise coerce the inner type
@@ -111,6 +111,74 @@ function coerceValue(raw: string, cadenceType: string): any {
     }
   }
   return raw;
+}
+
+/**
+ * Convert a raw user-input string + Cadence type into a JSON-CDC object
+ * that the Flow emulator / simulate endpoint accepts.
+ *
+ * JSON-CDC spec: https://cadence-lang.org/docs/json-cadence-spec
+ */
+export function toCadenceJsonCdc(raw: string, cadenceType: string): Record<string, unknown> {
+  const t = cadenceType.trim();
+
+  // Optional
+  if (t.endsWith('?')) {
+    if (raw === '') return { type: 'Optional', value: null };
+    return { type: 'Optional', value: toCadenceJsonCdc(raw, t.slice(0, -1)) };
+  }
+
+  // Array: e.g. [UInt64]
+  if (t.startsWith('[') && t.endsWith(']')) {
+    const innerType = t.slice(1, -1).trim();
+    let items: string[];
+    try {
+      const parsed = JSON.parse(raw);
+      items = Array.isArray(parsed) ? parsed.map(String) : [raw];
+    } catch {
+      items = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return { type: 'Array', value: items.map((v) => toCadenceJsonCdc(v, innerType)) };
+  }
+
+  // Dictionary: e.g. {String: UInt64}
+  if (t.startsWith('{') && t.endsWith('}')) {
+    const inner = t.slice(1, -1);
+    const colonIdx = inner.indexOf(':');
+    const keyType = inner.slice(0, colonIdx).trim();
+    const valueType = inner.slice(colonIdx + 1).trim();
+    let entries: Array<{ key: string; value: string }>;
+    try {
+      const parsed = JSON.parse(raw);
+      entries = Object.entries(parsed).map(([k, v]) => ({ key: k, value: String(v) }));
+    } catch {
+      entries = [];
+    }
+    return {
+      type: 'Dictionary',
+      value: entries.map((e) => ({
+        key: toCadenceJsonCdc(e.key, keyType),
+        value: toCadenceJsonCdc(e.value, valueType),
+      })),
+    };
+  }
+
+  // Bool
+  if (t === 'Bool') return { type: 'Bool', value: raw === 'true' };
+
+  // Fixed-point: ensure decimal
+  if (t === 'UFix64' || t === 'Fix64') {
+    return { type: t, value: raw.includes('.') ? raw : `${raw}.0` };
+  }
+
+  // Address
+  if (t === 'Address') return { type: 'Address', value: raw };
+
+  // Path types
+  if (t === 'Path') return { type: 'Path', value: { domain: 'storage', identifier: raw } };
+
+  // All integer types + String + Character
+  return { type: t, value: raw };
 }
 
 export function buildFclArgs(
