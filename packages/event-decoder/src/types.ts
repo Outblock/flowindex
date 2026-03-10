@@ -43,6 +43,7 @@ export interface EVMExecution {
   type?: number;
   nonce?: number;
   position?: number;
+  data?: string;
 }
 
 export interface DefiEvent {
