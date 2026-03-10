@@ -398,6 +398,8 @@ export default function App() {
   const [simResult, setSimResult] = useState<SimulateResponse | null>(null);
   const [simLoading, setSimLoading] = useState(false);
   const [pendingExecution, setPendingExecution] = useState<(() => void) | null>(null);
+  const [txPreviewOpen, setTxPreviewOpen] = useState(false);
+  const [txPreviewSimEnabled, setTxPreviewSimEnabled] = useState(false);
 
   const [accountPanelAddress, setAccountPanelAddress] = useState<string | null>(null);
   const handleViewAccount = useCallback((address: string) => setAccountPanelAddress(address), []);
@@ -889,27 +891,32 @@ export default function App() {
       return;
     }
 
-    // If auto-sign is off and this is a transaction/contract, confirm first (skip for emulator)
+    // For transactions/contracts (non-script, non-emulator): show unified preview dialog
     if (!autoSign && codeType !== 'script' && network !== 'emulator') {
-      const action = codeType === 'contract' ? 'deploy this contract' : 'send this transaction';
-      const confirmed = await showConfirm({
-        title: codeType === 'contract' ? 'Deploy Contract' : 'Send Transaction',
-        message: `Are you sure you want to ${action}?\n\nThis will sign and submit on-chain.`,
-        confirmLabel: codeType === 'contract' ? 'Deploy' : 'Send',
-      });
-      if (!confirmed) return;
-    }
-
-    // Simulate before sending (mainnet transactions only)
-    if (codeType === 'transaction' && simulateBeforeSend && network === 'mainnet') {
-      // Determine signer address for the simulation request
+      // Determine if simulation should run
+      const shouldSimulate = codeType === 'transaction' && simulateBeforeSend && network === 'mainnet';
       let signerAddr = '';
       if (selectedSigner.type === 'local') signerAddr = selectedSigner.account.flowAddress;
       else if (selectedSigner.type === 'passkey') signerAddr = selectedSigner.flowAddress;
 
-      if (signerAddr) {
-        setSimLoading(true);
+      // Open the preview dialog
+      setSimResult(null);
+      setSimLoading(false);
+      setTxPreviewSimEnabled(shouldSimulate && !!signerAddr);
+      setTxPreviewOpen(true);
+
+      // Store execution callback
+      setPendingExecution(() => () => {
+        setTxPreviewOpen(false);
         setSimResult(null);
+        setSimLoading(false);
+        setPendingExecution(null);
+        handleRunDirect();
+      });
+
+      // Start simulation if enabled
+      if (shouldSimulate && signerAddr) {
+        setSimLoading(true);
         try {
           const simResp = await simulateTransaction({
             cadence: activeCode,
@@ -919,20 +926,15 @@ export default function App() {
           });
           setSimLoading(false);
           setSimResult(simResp);
-          // Store the actual execution as a pending callback
-          setPendingExecution(() => () => {
-            setSimResult(null);
-            setPendingExecution(null);
-            handleRunDirect();
-          });
-          return; // Wait for user to confirm or cancel via TransactionPreview
         } catch (err) {
-          // Simulation service unreachable — fall through to execute directly
-          console.warn('Simulation service unavailable, proceeding without preview:', err);
+          // Simulation service unreachable — still show dialog without sim results
+          console.warn('Simulation service unavailable:', err);
           setSimLoading(false);
-          setSimResult(null);
+          setTxPreviewSimEnabled(false);
         }
       }
+
+      return; // Wait for user to confirm or cancel via TransactionPreview
     }
 
     handleRunDirect();
@@ -1433,15 +1435,18 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-full bg-zinc-900 text-zinc-100 relative">
-      {/* Transaction simulation preview overlay */}
-      {(simLoading || simResult) && (
+      {/* Transaction confirm + simulation preview overlay */}
+      {txPreviewOpen && (
         <TransactionPreview
-          loading={simLoading}
-          result={simResult}
+          codeType={codeType as 'transaction' | 'contract'}
+          simLoading={simLoading}
+          simResult={simResult}
+          simulateEnabled={txPreviewSimEnabled}
           onConfirm={() => {
             if (pendingExecution) pendingExecution();
           }}
           onCancel={() => {
+            setTxPreviewOpen(false);
             setSimResult(null);
             setSimLoading(false);
             setPendingExecution(null);
