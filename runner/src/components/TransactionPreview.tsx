@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, XCircle, Send, Rocket } from 'lucide-react';
+import { decodeEvents, buildSummaryItems } from '@flowindex/event-decoder';
+import type { DecodedEvents, DecodedSummaryItem } from '@flowindex/event-decoder';
 import type { SimulateResponse } from '../flow/simulate';
 
 interface TransactionPreviewProps {
@@ -27,6 +29,16 @@ export default function TransactionPreview({
   const confirmRef = useRef<HTMLButtonElement>(null);
   const isContract = codeType === 'contract';
   const title = isContract ? 'Deploy Contract' : 'Send Transaction';
+
+  const decoded = useMemo(() => {
+    if (!simResult?.events?.length) return null;
+    return decodeEvents(simResult.events);
+  }, [simResult]);
+
+  const summaryItems = useMemo(() => {
+    if (!decoded) return [];
+    return buildSummaryItems(decoded);
+  }, [decoded]);
 
   // Show footer when: not simulating, or simulation done, or simulation not enabled
   const showFooter = !simLoading;
@@ -151,7 +163,100 @@ export default function TransactionPreview({
                     </div>
                   )}
 
-                  {/* Events (expandable) */}
+                  {/* Summary items */}
+                  {summaryItems.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
+                        Summary
+                      </div>
+                      <div className="space-y-1">
+                        {summaryItems.map((item, i) => (
+                          <div key={i} className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-700 rounded px-3 py-1.5">
+                            <span className="text-[10px] text-zinc-500 uppercase w-16 shrink-0">{item.icon}</span>
+                            <span className="text-xs text-zinc-200">{item.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Token Transfers */}
+                  {decoded && decoded.transfers.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
+                        Token Transfers
+                      </div>
+                      <div className="space-y-1">
+                        {decoded.transfers.map((ft, i) => {
+                          const tokenName = ft.token.split('.').pop() || ft.token;
+                          const amount = Number(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 4 });
+                          const typeLabel = ft.transfer_type === 'mint' ? 'Mint' : ft.transfer_type === 'burn' ? 'Burn' : 'Transfer';
+                          const typeColor = ft.transfer_type === 'mint' ? 'text-emerald-400' : ft.transfer_type === 'burn' ? 'text-red-400' : 'text-zinc-400';
+                          return (
+                            <div key={i} className="flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded px-3 py-1.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`text-[10px] font-medium ${typeColor}`}>{typeLabel}</span>
+                                <span className="text-xs text-zinc-200 font-mono">{amount} {tokenName}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-mono truncate ml-2">
+                                {ft.from_address && <span>{ft.from_address.slice(0, 8)}...</span>}
+                                {ft.from_address && ft.to_address && <span>&rarr;</span>}
+                                {ft.to_address && <span>{ft.to_address.slice(0, 8)}...</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* NFT Transfers */}
+                  {decoded && decoded.nftTransfers.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
+                        NFT Transfers
+                      </div>
+                      <div className="space-y-1">
+                        {decoded.nftTransfers.map((nft, i) => {
+                          const collectionName = nft.token.split('.').pop() || nft.token;
+                          const typeLabel = nft.transfer_type === 'mint' ? 'Mint' : nft.transfer_type === 'burn' ? 'Burn' : 'Transfer';
+                          const typeColor = nft.transfer_type === 'mint' ? 'text-emerald-400' : nft.transfer_type === 'burn' ? 'text-red-400' : 'text-zinc-400';
+                          return (
+                            <div key={i} className="flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded px-3 py-1.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`text-[10px] font-medium ${typeColor}`}>{typeLabel}</span>
+                                <span className="text-xs text-zinc-200 font-mono">{collectionName} #{nft.token_id}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-mono truncate ml-2">
+                                {nft.from_address && <span>{nft.from_address.slice(0, 8)}...</span>}
+                                {nft.from_address && nft.to_address && <span>&rarr;</span>}
+                                {nft.to_address && <span>{nft.to_address.slice(0, 8)}...</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Account Changes (system events) */}
+                  {decoded && decoded.systemEvents.length > 0 && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
+                        Account Changes
+                      </div>
+                      <div className="space-y-1">
+                        {decoded.systemEvents.map((evt, i) => (
+                          <div key={i} className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-700 rounded px-3 py-1.5">
+                            <span className="text-[10px] text-zinc-500 uppercase w-16 shrink-0">{evt.category}</span>
+                            <span className="text-xs text-zinc-200">{evt.detail}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Raw Events (collapsed fallback) */}
                   {simResult.events.length > 0 && (
                     <div>
                       <button
@@ -163,7 +268,7 @@ export default function TransactionPreview({
                         ) : (
                           <ChevronRight className="w-3 h-3" />
                         )}
-                        Events ({simResult.events.length})
+                        Raw Events ({simResult.events.length})
                       </button>
                       {eventsExpanded && (
                         <div className="mt-1.5 space-y-1">

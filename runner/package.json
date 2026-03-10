@@ -22,6 +22,7 @@
     "@onflow/fcl": "^1.21.9",
     "@outblock/cadence-language-server": "^2.0.0",
     "@outblock/flowtoken": "^1.0.0",
+    "@flowindex/event-decoder": "workspace:*",
     "@outblock/wallet-core-lite": "^0.1.0",
     "@supabase/supabase-js": "^2.98.0",
     "ai": "^6.0.101",

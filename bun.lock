@@ -238,6 +238,15 @@
         "lucide-react",
       ],
     },
+    "packages/event-decoder": {
+      "name": "@flowindex/event-decoder",
+      "version": "0.1.0",
+      "devDependencies": {
+        "tsup": "^8.5.0",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.18",
+      },
+    },
     "packages/flow-passkey": {
       "name": "@flowindex/flow-passkey",
       "version": "0.1.0",
@@ -313,6 +322,7 @@
         "@ai-sdk/react": "^3.0.103",
         "@flowindex/auth-core": "workspace:*",
         "@flowindex/auth-ui": "workspace:*",
+        "@flowindex/event-decoder": "workspace:*",
         "@flowindex/flow-passkey": "workspace:*",
         "@monaco-editor/react": "^4.7.0",
         "@onflow/fcl": "^1.21.9",
@@ -582,6 +592,8 @@
     "@flowindex/auth-core": ["@flowindex/auth-core@workspace:packages/auth-core"],
 
     "@flowindex/auth-ui": ["@flowindex/auth-ui@workspace:packages/auth-ui"],
+
+    "@flowindex/event-decoder": ["@flowindex/event-decoder@workspace:packages/event-decoder"],
 
     "@flowindex/flow-passkey": ["@flowindex/flow-passkey@workspace:packages/flow-passkey"],
 
