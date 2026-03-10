@@ -29,7 +29,7 @@ export function EVMBridgeBadge({
       rel="noopener noreferrer"
       title="This asset is bridged to Flow EVM. Click to view on EVM explorer."
       className={cn(
-        "inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800/40 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors cursor-pointer shrink-0",
+        "inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/30 hover:bg-purple-200 dark:hover:bg-purple-500/25 transition-colors cursor-pointer shrink-0",
         className,
       )}
       onClick={(e) => e.stopPropagation()}
