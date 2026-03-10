@@ -12,9 +12,11 @@ export function TemplatePanel({ templates, activeId, argValues, onSelectTemplate
   const active = templates.find((t) => t.id === activeId)
 
   return (
-    <div className="w-[200px] border-r border-zinc-800 flex flex-col bg-zinc-950 shrink-0">
-      <div className="px-3 py-2 border-b border-zinc-800">
-        <span className="text-[10px] text-zinc-600 tracking-wider">TEMPLATES</span>
+    <div className="w-[200px] border-r border-zinc-800/40 flex flex-col shrink-0">
+      <div className="px-3 py-2 border-b border-zinc-800/60 bg-black/40">
+        <span className="text-[10px] text-zinc-600 tracking-wider flex items-center gap-1.5">
+          <span className="text-flow-green/60">~</span> TEMPLATES
+        </span>
       </div>
       <div className="flex-1 overflow-y-auto py-1">
         {templates.map((t) => (
@@ -23,8 +25,8 @@ export function TemplatePanel({ templates, activeId, argValues, onSelectTemplate
             onClick={() => onSelectTemplate(t.id)}
             className={`w-full text-left px-3 py-2 text-[11px] transition-colors ${
               t.id === activeId
-                ? 'text-flow-green bg-flow-green-dim border-l-2 border-flow-green'
-                : 'text-zinc-500 hover:text-zinc-300 border-l-2 border-transparent'
+                ? 'text-flow-green bg-flow-green/5 border-l-2 border-flow-green'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30 border-l-2 border-transparent'
             }`}
           >
             {t.name}
@@ -32,8 +34,10 @@ export function TemplatePanel({ templates, activeId, argValues, onSelectTemplate
         ))}
       </div>
       {active && active.args.length > 0 && (
-        <div className="border-t border-zinc-800 p-3">
-          <div className="text-[10px] text-zinc-600 tracking-wider mb-3">PARAMS</div>
+        <div className="border-t border-zinc-800/60 p-3 bg-black/20">
+          <div className="text-[10px] text-zinc-600 tracking-wider mb-3 flex items-center gap-1.5">
+            <span className="text-flow-green/60">&gt;</span> PARAMS
+          </div>
           <div className="space-y-3">
             {active.args.map((arg) => (
               <div key={arg.name}>
@@ -42,7 +46,7 @@ export function TemplatePanel({ templates, activeId, argValues, onSelectTemplate
                   type="text"
                   value={argValues[arg.name] ?? arg.defaultValue}
                   onChange={(e) => onArgChange(arg.name, e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-300 focus:border-flow-green focus:outline-none transition-colors"
+                  className="w-full bg-black/40 border border-zinc-800/60 rounded px-2 py-1 text-[11px] text-zinc-300 focus:border-flow-green focus:shadow-[0_0_8px_rgba(0,239,139,0.15)] focus:outline-none transition-all"
                 />
               </div>
             ))}

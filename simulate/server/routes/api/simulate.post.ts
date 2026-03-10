@@ -11,21 +11,24 @@ export default defineEventHandler(async (event) => {
     body: JSON.stringify(body),
   })
 
-  if (!resp.ok) {
+  const text = await resp.text()
+
+  let data: Record<string, unknown>
+  try {
+    data = JSON.parse(text)
+  } catch {
     throw createError({
-      statusCode: resp.status,
-      statusMessage: await resp.text(),
+      statusCode: resp.status || 502,
+      statusMessage: text,
     })
   }
 
-  const data = await resp.json()
-
-  // Normalize snake_case → camelCase
+  // Normalize snake_case → camelCase and always return JSON
   return {
-    success: data.success,
-    error: data.error,
-    events: data.events ?? [],
-    balanceChanges: data.balance_changes ?? data.balanceChanges ?? [],
-    computationUsed: data.computation_used ?? data.computationUsed ?? 0,
+    success: data.success ?? false,
+    error: data.error ?? (data.message as string) ?? null,
+    events: (data.events as unknown[]) ?? [],
+    balanceChanges: (data.balance_changes ?? data.balanceChanges ?? []) as unknown[],
+    computationUsed: (data.computation_used ?? data.computationUsed ?? 0) as number,
   }
 })

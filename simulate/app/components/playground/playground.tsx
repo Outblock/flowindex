@@ -60,7 +60,7 @@ export function Playground() {
     setResult(null)
 
     const args = active.args.map((a) => toCadenceArg(a.type, argValues[a.name] ?? a.defaultValue))
-    const payer = '0xe03daebed8ca0615'
+    const payer = '0x1654653399040a61'
 
     try {
       const res = await simulateTransaction({
@@ -86,33 +86,41 @@ export function Playground() {
   return (
     <section id="playground" className="py-24 px-6 border-t border-zinc-800/50" ref={containerRef}>
       <div className="mx-auto max-w-6xl">
-        <div className="text-[10px] text-zinc-600 tracking-[3px] mb-4">// PLAYGROUND</div>
+        <div className="text-[10px] text-flow-green/40 tracking-[3px] mb-4 crt-glow">// PLAYGROUND</div>
         <h2 className="text-xl font-bold text-zinc-100 mb-8">Try it now</h2>
 
-        <div className="border border-zinc-800 rounded-lg overflow-hidden flex h-[500px]">
-          {visible ? (
-            <>
-              <TemplatePanel
-                templates={templates}
-                activeId={activeId}
-                argValues={argValues}
-                onSelectTemplate={handleSelectTemplate}
-                onArgChange={handleArgChange}
-              />
-              <EditorPanel
-                code={code}
-                filename={templates.find((t) => t.id === activeId)?.filename ?? 'code.cdc'}
-                loading={loading}
-                onCodeChange={setCode}
-                onSimulate={handleSimulate}
-              />
-              <ResultPanel result={result} />
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-xs text-zinc-700">
-              Loading playground...
+        <div className="crt-bezel">
+          <div className="crt-screen crt-scanlines crt-vignette bg-[#0a0a0a]">
+            <div className="flex h-[500px]">
+              {visible ? (
+                <>
+                  <TemplatePanel
+                    templates={templates}
+                    activeId={activeId}
+                    argValues={argValues}
+                    onSelectTemplate={handleSelectTemplate}
+                    onArgChange={handleArgChange}
+                  />
+                  <EditorPanel
+                    code={code}
+                    filename={templates.find((t) => t.id === activeId)?.filename ?? 'code.cdc'}
+                    loading={loading}
+                    onCodeChange={setCode}
+                    onSimulate={handleSimulate}
+                  />
+                  <ResultPanel result={result} />
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-xs text-zinc-700">
+                  <span className="crt-cursor mr-2" /> Initializing playground...
+                </div>
+              )}
             </div>
-          )}
+          </div>
+          <div className="flex items-center justify-center gap-2 pt-2 pb-0.5">
+            <div className="crt-led" />
+            <span className="text-[8px] text-zinc-700 tracking-widest uppercase">Simulator VM</span>
+          </div>
         </div>
       </div>
     </section>

@@ -9,10 +9,13 @@ export function Footer() {
   return (
     <footer className="border-t border-zinc-800/50 py-8 px-6">
       <div className="mx-auto max-w-6xl flex items-center justify-between text-xs text-zinc-600">
-        <span>© {new Date().getFullYear()} FlowIndex</span>
+        <span className="flex items-center gap-2">
+          <span className="crt-led" />
+          &copy; {new Date().getFullYear()} FlowIndex
+        </span>
         <div className="flex gap-6">
           {links.map((l) => (
-            <a key={l.label} href={l.href} target="_blank" rel="noopener" className="hover:text-zinc-400 transition-colors">
+            <a key={l.label} href={l.href} target="_blank" rel="noopener" className="hover:text-flow-green transition-colors">
               {l.label}
             </a>
           ))}
