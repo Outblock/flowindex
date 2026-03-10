@@ -67,17 +67,9 @@ func TestRoutesFromSpec(t *testing.T) {
 	assertRoutesFromSpec(t, router, "", spec)
 }
 
-// routeToSpecPath converts a registered route like "/flow/block/{height}"
-// to the OpenAPI path format. Routes under /flow/, /status/, /accounting/,
-// /staking/, /defi/ get a /v1/ inserted after the prefix.
+// routeToSpecPath converts a registered route to the OpenAPI path format.
+// The spec paths match the registered routes directly (no version prefix insertion).
 func routeToSpecPath(route string) string {
-	versionedPrefixes := []string{"/flow/", "/status/", "/accounting/", "/staking/", "/defi/"}
-	for _, prefix := range versionedPrefixes {
-		if strings.HasPrefix(route, prefix) {
-			base := strings.TrimPrefix(route, prefix[:len(prefix)-1]) // strip e.g. "/flow"
-			return prefix[:len(prefix)-1] + "/v1" + base             // e.g. "/flow/v1/block"
-		}
-	}
 	return route
 }
 
