@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import type * as Monaco from 'monaco-editor';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://api.flowindex.io';
+// Use same-origin /api/ path — nginx proxies to backend
+const API_URL = '';
 
 export function useCadenceCheck(
   editorRef: React.RefObject<Monaco.editor.IStandaloneCodeEditor | null>,

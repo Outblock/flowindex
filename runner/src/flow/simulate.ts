@@ -20,10 +20,8 @@ export interface SimulateResponse {
   computationUsed: number;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://api.flowindex.io';
-
 export async function simulateTransaction(req: SimulateRequest): Promise<SimulateResponse> {
-  const resp = await fetch(`${API_BASE}/flow/v1/simulate`, {
+  const resp = await fetch('/api/flow/v1/simulate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),

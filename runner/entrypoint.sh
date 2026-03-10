@@ -14,12 +14,16 @@ fi
 if [ -z "${SUPABASE_GATEWAY_URL:-}" ]; then
     export SUPABASE_GATEWAY_URL="http://127.0.0.1:54321"
 fi
+if [ -z "${BACKEND_API:-}" ]; then
+    export BACKEND_API="http://10.128.0.4:8080"
+fi
 
 echo "Listen port:         $LISTEN_PORT"
 echo "GoTrue URL:          $GOTRUE_URL"
 echo "Supabase Gateway:    $SUPABASE_GATEWAY_URL"
+echo "Backend API:         $BACKEND_API"
 
 # Render nginx config from template
-envsubst '$DNS_RESOLVER $LISTEN_PORT $GOTRUE_URL $SUPABASE_GATEWAY_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
+envsubst '$DNS_RESOLVER $LISTEN_PORT $GOTRUE_URL $SUPABASE_GATEWAY_URL $BACKEND_API' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
 
 exec "$@"
