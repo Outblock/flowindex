@@ -76,6 +76,7 @@
         "@floating-ui/react": "^0.27.17",
         "@flowindex/auth-core": "workspace:*",
         "@flowindex/auth-ui": "workspace:*",
+        "@flowindex/event-decoder": "workspace:*",
         "@flowindex/flow-ui": "workspace:*",
         "@number-flow/react": "^0.5.11",
         "@onflow/fcl": "^1.21.9",

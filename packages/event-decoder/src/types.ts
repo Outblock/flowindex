@@ -82,6 +82,12 @@ export interface DecodedSummaryItem {
   text: string;
 }
 
+export interface DecodedEVMCall {
+  recipient: string;  // 40 hex chars, no 0x
+  tokenID: string;    // decimal string, empty for FT
+  callType: string;   // "erc20_transfer", "erc20_transferFrom", etc.
+}
+
 export interface DecodedEvents {
   transfers: FTTransfer[];
   nftTransfers: NFTTransfer[];

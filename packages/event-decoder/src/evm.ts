@@ -1,7 +1,7 @@
 // ── EVM event decoding (ported from frontend/app/lib/deriveFromEvents.ts) ──
 
 import { parseCadenceEventFields, formatAddr } from './cadence.js';
-import type { RawEvent, EVMExecution } from './types.js';
+import type { RawEvent, EVMExecution, DecodedEVMCall } from './types.js';
 
 /**
  * Decode a Flow EVM "direct call" raw_tx_payload (0xff-prefixed RLP).
@@ -208,6 +208,83 @@ function parseEVMExecution(event: RawEvent): EVMExecution | null {
     position: Number(extractStringField(fields, 'index', 'position') || '0'),
     data: callData || undefined,
   };
+}
+
+// ── EVM call data decoding (ERC-20/721/1155 selectors) ──
+
+const SEL_ERC20_TRANSFER = 'a9059cbb';       // transfer(address,uint256)
+const SEL_ERC20_TRANSFER_FROM = '23b872dd';   // transferFrom(address,address,uint256)
+const SEL_ERC721_SAFE_TRANSFER_3 = '42842e0e'; // safeTransferFrom(address,address,uint256)
+const SEL_ERC721_SAFE_TRANSFER_4 = 'b88d4fde'; // safeTransferFrom(address,address,uint256,bytes)
+const SEL_ERC1155_SAFE_TRANSFER = 'f242432a';  // safeTransferFrom(address,address,uint256,uint256,bytes)
+const SEL_ERC1155_BATCH_TRANSFER = '2eb2c2d6'; // safeBatchTransferFrom(...)
+
+function extractABIAddress(paramsHex: string, wordIndex: number): string {
+  const start = wordIndex * 64;
+  const end = start + 64;
+  if (paramsHex.length < end) return '';
+  const word = paramsHex.slice(start, end);
+  const addrHex = word.slice(24, 64);
+  if (/^0{40}$/.test(addrHex)) return '';
+  return addrHex;
+}
+
+function extractABIUint256(paramsHex: string, wordIndex: number): string {
+  const start = wordIndex * 64;
+  const end = start + 64;
+  if (paramsHex.length < end) return '';
+  const word = paramsHex.slice(start, end);
+  const val = BigInt('0x' + word);
+  return val.toString();
+}
+
+/** Decode EVM call data to extract recipient, tokenID, and call type */
+export function decodeEVMCallData(dataHex: string): DecodedEVMCall {
+  const data = dataHex.toLowerCase().replace(/^0x/, '');
+  if (data.length < 8) return { recipient: '', tokenID: '', callType: 'unknown' };
+
+  const selector = data.slice(0, 8);
+  const params = data.slice(8);
+
+  switch (selector) {
+    case SEL_ERC20_TRANSFER: {
+      const addr = extractABIAddress(params, 0);
+      if (addr) return { recipient: addr, tokenID: '', callType: 'erc20_transfer' };
+      break;
+    }
+    case SEL_ERC20_TRANSFER_FROM: {
+      const addr = extractABIAddress(params, 1);
+      if (addr) {
+        const tid = extractABIUint256(params, 2);
+        return { recipient: addr, tokenID: tid, callType: 'erc20_transferFrom' };
+      }
+      break;
+    }
+    case SEL_ERC721_SAFE_TRANSFER_3:
+    case SEL_ERC721_SAFE_TRANSFER_4: {
+      const addr = extractABIAddress(params, 1);
+      if (addr) {
+        const tid = extractABIUint256(params, 2);
+        return { recipient: addr, tokenID: tid, callType: 'erc721_safeTransferFrom' };
+      }
+      break;
+    }
+    case SEL_ERC1155_SAFE_TRANSFER: {
+      const addr = extractABIAddress(params, 1);
+      if (addr) {
+        const tid = extractABIUint256(params, 2);
+        return { recipient: addr, tokenID: tid, callType: 'erc1155_safeTransferFrom' };
+      }
+      break;
+    }
+    case SEL_ERC1155_BATCH_TRANSFER: {
+      const addr = extractABIAddress(params, 1);
+      if (addr) return { recipient: addr, tokenID: '', callType: 'erc1155_safeBatchTransferFrom' };
+      break;
+    }
+  }
+
+  return { recipient: '', tokenID: '', callType: 'unknown' };
 }
 
 /**

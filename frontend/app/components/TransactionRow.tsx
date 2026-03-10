@@ -8,6 +8,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@flowindex/flow-ui';
 import { AvatarGroup, AvatarGroupTooltip } from '@/components/animate-ui/components/animate/avatar-group';
 import { resolveApiBaseUrl } from '../api';
 import { deriveEnrichments } from '../lib/deriveFromEvents';
+import { buildSummary, decodeEvents } from '@flowindex/event-decoder';
 import { cadenceService } from '../fclConfig';
 import { NFTDetailModal } from './NFTDetailModal';
 import { UsdValue } from './UsdValue';
@@ -312,6 +313,13 @@ export function buildSummaryLine(tx: any): string {
         const contractNames = imports.slice(0, 3).map(c => formatTokenName(c)).filter(Boolean);
         const suffix = imports.length > 3 ? ` +${imports.length - 3} more` : '';
         return `Called ${contractNames.join(', ')}${suffix}`;
+    }
+
+    // Fallback to event-decoder summary if events available
+    if (tx.events?.length > 0) {
+        const decoded = decodeEvents(tx.events, tx.script);
+        const summary = buildSummary(decoded);
+        if (summary) return summary;
     }
 
     return '';
