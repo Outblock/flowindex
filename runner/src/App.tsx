@@ -29,9 +29,11 @@ import { usePasskeyWallet } from './auth/usePasskeyWallet';
 import { PasswordPrompt } from './components/PasswordPrompt';
 import SignerSelector, { type SignerOption } from './components/SignerSelector';
 import ConnectModal from './components/ConnectModal';
+import ConfirmDialog from './components/ConfirmDialog';
 import {
   loadProject, saveProject, updateFileContent, createFile, createFolder, deleteFile,
   openFile, closeFile, getFileContent, addDependencyFile, getUserFiles,
+  renameFile, moveFile,
   TEMPLATES, DEFAULT_CODE, getTemplates, replaceContractAddresses,
   type ProjectState, type Template,
 } from './fs/fileSystem';
@@ -402,6 +404,18 @@ export default function App() {
   const [selectedSigner, setSelectedSigner] = useState<SignerOption>({ type: 'none' });
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const pendingRunRef = useRef(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'danger' | 'default';
+    resolve: (v: boolean) => void;
+  } | null>(null);
+  const showConfirm = useCallback((opts: { title: string; message: string; confirmLabel?: string; variant?: 'danger' | 'default' }) => {
+    return new Promise<boolean>((resolve) => {
+      setConfirmDialog({ ...opts, resolve });
+    });
+  }, []);
   const [passwordPrompt, setPasswordPrompt] = useState<{
     keyLabel: string;
     resolve: (password: string) => void;
@@ -878,7 +892,11 @@ export default function App() {
     // If auto-sign is off and this is a transaction/contract, confirm first (skip for emulator)
     if (!autoSign && codeType !== 'script' && network !== 'emulator') {
       const action = codeType === 'contract' ? 'deploy this contract' : 'send this transaction';
-      const confirmed = window.confirm(`Are you sure you want to ${action}?\n\nThis will sign and submit on-chain.`);
+      const confirmed = await showConfirm({
+        title: codeType === 'contract' ? 'Deploy Contract' : 'Send Transaction',
+        message: `Are you sure you want to ${action}?\n\nThis will sign and submit on-chain.`,
+        confirmLabel: codeType === 'contract' ? 'Deploy' : 'Send',
+      });
       if (!confirmed) return;
     }
 
@@ -1130,6 +1148,14 @@ export default function App() {
     if (project.files.filter((f) => !f.readOnly).length <= 1) return;
     setProject((prev) => deleteFile(prev, path));
   }, [project.files]);
+
+  const handleRenameFile = useCallback((oldPath: string, newPath: string) => {
+    setProject((prev) => renameFile(prev, oldPath, newPath));
+  }, []);
+
+  const handleMoveFile = useCallback((filePath: string, targetFolder: string) => {
+    setProject((prev) => moveFile(prev, filePath, targetFolder));
+  }, []);
 
   const handleCloseTab = useCallback((path: string) => {
     setProject((prev) => closeFile(prev, path));
@@ -1687,6 +1713,8 @@ export default function App() {
                       onCreateFile={handleCreateFile}
                       onCreateFolder={handleCreateFolder}
                       onDeleteFile={handleDeleteFile}
+                      onRenameFile={handleRenameFile}
+                      onMoveFile={handleMoveFile}
                       activeFile={project.activeFile}
                     />
                   </div>
@@ -2060,6 +2088,15 @@ export default function App() {
         />
       )}
 
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title={confirmDialog?.title || ''}
+        message={confirmDialog?.message || ''}
+        confirmLabel={confirmDialog?.confirmLabel}
+        variant={confirmDialog?.variant}
+        onConfirm={() => { confirmDialog?.resolve(true); setConfirmDialog(null); }}
+        onCancel={() => { confirmDialog?.resolve(false); setConfirmDialog(null); }}
+      />
       <ConnectModal
         open={connectModalOpen}
         onClose={() => { setConnectModalOpen(false); pendingRunRef.current = false; }}

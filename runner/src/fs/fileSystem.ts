@@ -496,13 +496,29 @@ export function deleteFile(state: ProjectState, path: string): ProjectState {
 }
 
 export function renameFile(state: ProjectState, oldPath: string, newPath: string): ProjectState {
-  if (state.files.some((f) => f.path === newPath)) return state;
+  const normalizedNew = normalizeFilePath(newPath);
+  if (!normalizedNew || normalizedNew === oldPath) return state;
+  if (state.files.some((f) => f.path === normalizedNew)) return state;
+
+  // Ensure parent folders exist for the new path
+  const folderSet = new Set(state.folders || []);
+  for (const folder of getParentFolders(normalizedNew)) {
+    folderSet.add(folder);
+  }
+
   return {
     ...state,
-    files: state.files.map((f) => (f.path === oldPath ? { ...f, path: newPath } : f)),
-    openFiles: state.openFiles.map((f) => (f === oldPath ? newPath : f)),
-    activeFile: state.activeFile === oldPath ? newPath : state.activeFile,
+    files: state.files.map((f) => (f.path === oldPath ? { ...f, path: normalizedNew } : f)),
+    openFiles: state.openFiles.map((f) => (f === oldPath ? normalizedNew : f)),
+    activeFile: state.activeFile === oldPath ? normalizedNew : state.activeFile,
+    folders: Array.from(folderSet).sort(),
   };
+}
+
+export function moveFile(state: ProjectState, filePath: string, targetFolder: string): ProjectState {
+  const fileName = filePath.split('/').pop() || filePath;
+  const newPath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
+  return renameFile(state, filePath, newPath);
 }
 
 export function openFile(state: ProjectState, path: string): ProjectState {
