@@ -1,4 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { Hero } from '@/components/hero'
+import { Features } from '@/components/features'
+import { HowItWorks } from '@/components/how-it-works'
+import { ApiSection } from '@/components/api-section'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -6,10 +10,11 @@ export const Route = createFileRoute('/')({
 
 function HomePage() {
   return (
-    <main className="pt-12">
-      <div className="min-h-screen flex items-center justify-center">
-        <h1 className="text-2xl font-bold text-zinc-100">FlowIndex Simulate</h1>
-      </div>
+    <main>
+      <Hero />
+      <Features />
+      <HowItWorks />
+      <ApiSection />
     </main>
   )
 }
