@@ -65,7 +65,7 @@ export function loadConfig(): AgentWalletConfig {
     evmPrivateKey,
     evmAccountIndex: parseInt(process.env.EVM_ACCOUNT_INDEX || '0', 10),
     flowindexToken,
-    flowindexUrl: process.env.FLOWINDEX_URL || 'https://flowindex.io',
+    flowindexUrl: process.env.FLOWINDEX_URL || 'https://flowindex.io/api',
     approvalRequired: process.env.APPROVAL_REQUIRED !== 'false',
     etherscanApiKey: process.env.ETHERSCAN_API_KEY?.trim(),
     signerType,
