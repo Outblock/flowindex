@@ -364,10 +364,10 @@ export default function App() {
       // ignore localStorage write errors
     }
   }, [showAI]);
+  // Preload wallet-core WASM on mount so key generation is instant
   useEffect(() => {
-    if (!showKeyManager) return;
     ensureWasmReady().catch(() => {});
-  }, [showKeyManager, ensureWasmReady]);
+  }, [ensureWasmReady]);
   // Close network menu on outside click
   useEffect(() => {
     if (!showNetworkMenu) return;
