@@ -1,0 +1,54 @@
+name: Publish Packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+  workflow_dispatch:
+
+concurrency:
+  group: publish-packages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build packages
+        run: bun run build:packages
+
+      - name: Publish @flowindex/flow-signer
+        working-directory: packages/flow-signer
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          npm view @flowindex/flow-signer@$VERSION version 2>/dev/null && echo "Already published" || npm publish --access public
+
+      - name: Publish @flowindex/agent-wallet
+        working-directory: packages/agent-wallet
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Replace workspace:* with actual version of flow-signer
+          SIGNER_VERSION=$(node -p "require('../flow-signer/package.json').version")
+          sed -i "s|\"workspace:\\*\"|\"^${SIGNER_VERSION}\"|g" package.json
+          VERSION=$(node -p "require('./package.json').version")
+          npm view @flowindex/agent-wallet@$VERSION version 2>/dev/null && echo "Already published" || npm publish --access public
