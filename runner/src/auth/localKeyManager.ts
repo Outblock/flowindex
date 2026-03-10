@@ -1,11 +1,11 @@
 /**
- * Local Key Manager — client-side Flow key management using @trustwallet/wallet-core WASM.
+ * Local Key Manager — client-side Flow key management using @outblock/wallet-core-lite WASM.
  *
  * Ported from Flow-Wallet-Tool patterns. All crypto operations run in the browser;
  * private keys never leave the client.
  */
 
-import type { WalletCore } from '@trustwallet/wallet-core';
+import type { WalletCore } from '@outblock/wallet-core-lite';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,7 +48,7 @@ let walletCorePromise: Promise<WalletCore> | null = null;
 export async function getWalletCore(): Promise<WalletCore> {
   if (walletCoreInstance) return walletCoreInstance;
   if (!walletCorePromise) {
-    walletCorePromise = import('@trustwallet/wallet-core').then(({ initWasm }) => initWasm()).then((core) => {
+    walletCorePromise = import('@outblock/wallet-core-lite').then(({ initWasm }) => initWasm()).then((core) => {
       walletCoreInstance = core;
       return core;
     });

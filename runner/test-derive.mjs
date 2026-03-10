@@ -1,4 +1,4 @@
-import { initWasm } from '@trustwallet/wallet-core';
+import { initWasm } from '@outblock/wallet-core-lite';
 
 const FLOW_BIP44_PATH = "m/44'/539'/0'/0/0";
 
