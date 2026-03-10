@@ -4,7 +4,6 @@ import { configureFcl } from '../config/fcl.js';
 import { LocalSigner } from '../signer/local.js';
 import { CloudSigner } from '../signer/cloud.js';
 import type { FlowSigner } from '../signer/interface.js';
-import { FlowIndexClient } from '../flowindex/client.js';
 import { createCadenceService } from '../templates/service.js';
 import type { CadenceService } from '../templates/cadence.gen.js';
 
@@ -12,7 +11,6 @@ export interface ServerContext {
   config: AgentWalletConfig;
   signer: FlowSigner;
   cloudSigner: CloudSigner;
-  flowIndexClient: FlowIndexClient;
   cadenceService: CadenceService;
 }
 
@@ -34,9 +32,8 @@ export async function createServer(): Promise<McpServer> {
     signer = cloudSigner;
   }
 
-  const flowIndexClient = new FlowIndexClient(config.flowindexUrl);
   const cadenceService = createCadenceService(config.network, signer);
-  const ctx: ServerContext = { config, signer, cloudSigner, flowIndexClient, cadenceService };
+  const ctx: ServerContext = { config, signer, cloudSigner, cadenceService };
 
   const server = new McpServer(
     { name: "flow-agent-wallet", version: "0.1.0" },

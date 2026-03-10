@@ -1,6 +1,6 @@
 {
   "name": "@flowindex/agent-wallet",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "MCP server for Flow blockchain wallet — local keys, cloud wallet, passkey signing for AI agents",
   "type": "module",
   "main": "./dist/index.js",

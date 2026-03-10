@@ -8,7 +8,6 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServerContext } from '../server/server.js';
 import type { FlowSigner, SignerInfo } from '@flowindex/flow-signer';
-import { FlowIndexClient } from '../flowindex/client.js';
 import { addPendingTx, removePendingTx, listPendingTxs } from '../approval/manager.js';
 
 // ---------------------------------------------------------------------------
@@ -45,7 +44,6 @@ function createMockContext(overrides?: Partial<ServerContext>): ServerContext {
     },
     signer: mockSigner,
     cloudSigner: {} as any,
-    flowIndexClient: new FlowIndexClient('https://test.api'),
     cadenceService: {} as any,
     ...overrides,
   };
