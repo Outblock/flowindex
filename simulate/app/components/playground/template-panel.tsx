@@ -1,0 +1,54 @@
+import type { Template } from '@/lib/templates'
+
+interface TemplatePanelProps {
+  templates: Template[]
+  activeId: string
+  argValues: Record<string, string>
+  onSelectTemplate: (id: string) => void
+  onArgChange: (name: string, value: string) => void
+}
+
+export function TemplatePanel({ templates, activeId, argValues, onSelectTemplate, onArgChange }: TemplatePanelProps) {
+  const active = templates.find((t) => t.id === activeId)
+
+  return (
+    <div className="w-[200px] border-r border-zinc-800 flex flex-col bg-zinc-950 shrink-0">
+      <div className="px-3 py-2 border-b border-zinc-800">
+        <span className="text-[10px] text-zinc-600 tracking-wider">TEMPLATES</span>
+      </div>
+      <div className="flex-1 overflow-y-auto py-1">
+        {templates.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => onSelectTemplate(t.id)}
+            className={`w-full text-left px-3 py-2 text-[11px] transition-colors ${
+              t.id === activeId
+                ? 'text-flow-green bg-flow-green-dim border-l-2 border-flow-green'
+                : 'text-zinc-500 hover:text-zinc-300 border-l-2 border-transparent'
+            }`}
+          >
+            {t.name}
+          </button>
+        ))}
+      </div>
+      {active && active.args.length > 0 && (
+        <div className="border-t border-zinc-800 p-3">
+          <div className="text-[10px] text-zinc-600 tracking-wider mb-3">PARAMS</div>
+          <div className="space-y-3">
+            {active.args.map((arg) => (
+              <div key={arg.name}>
+                <label className="text-[10px] text-zinc-600 block mb-1">{arg.name} <span className="text-zinc-700">({arg.type})</span></label>
+                <input
+                  type="text"
+                  value={argValues[arg.name] ?? arg.defaultValue}
+                  onChange={(e) => onArgChange(arg.name, e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-300 focus:border-flow-green focus:outline-none transition-colors"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
