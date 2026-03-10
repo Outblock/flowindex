@@ -51,6 +51,55 @@ function hashAlgoCode(algo: string): number {
   }
 }
 
+/**
+ * Convert a raw value + Cadence type string into an fcl.arg() call.
+ * Uses fcl.t which re-exports all @onflow/types.
+ */
+async function cadenceArg(value: unknown, cadenceType: string) {
+  const fcl = await import('@onflow/fcl');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const t = fcl.t as Record<string, any>;
+  const ty = cadenceType.trim();
+
+  // Array types like [UInt64], [UInt8], [String]
+  const arrayMatch = ty.match(/^\[(.+)\]$/);
+  if (arrayMatch) {
+    const innerType = arrayMatch[1].trim();
+    const fclInner = t[innerType];
+    if (!fclInner) throw new Error(`Unsupported array element type: ${innerType}`);
+    const arr = Array.isArray(value) ? value.map(String) : [];
+    return fcl.arg(arr, t.Array(fclInner));
+  }
+
+  // Optional types like String?
+  if (ty.endsWith('?')) {
+    const baseType = ty.slice(0, -1);
+    const fclBase = t[baseType];
+    if (!fclBase) throw new Error(`Unsupported optional base type: ${baseType}`);
+    return fcl.arg(value == null ? null : String(value), t.Optional(fclBase));
+  }
+
+  // Simple types: String, Address, UFix64, UInt64, etc.
+  const fclType = t[ty];
+  if (fclType) {
+    return fcl.arg(String(value), fclType);
+  }
+
+  throw new Error(`Unsupported Cadence type: ${ty}`);
+}
+
+/**
+ * Convert an array of raw values + TemplateArg definitions into FCL typed args.
+ */
+export async function buildFclArgs(
+  rawValues: unknown[],
+  argDefs: Array<{ name: string; type: string }>,
+): Promise<unknown[]> {
+  return Promise.all(
+    argDefs.map((def, i) => cadenceArg(rawValues[i], def.type)),
+  );
+}
+
 export interface TxResult {
   status: 'sealed';
   tx_id: string;
@@ -284,8 +333,8 @@ export function registerTemplateTools(server: McpServer, ctx: ServerContext): vo
           return jsonContent({ error: `Template "${template_name}" is a script, use execute_script instead` }, true);
         }
 
-        // Build FCL args array in template-defined order
-        const fclArgs: unknown[] = template.args.map((argDef) => {
+        // Extract raw values in template-defined order
+        const rawValues: unknown[] = template.args.map((argDef) => {
           const val = args[argDef.name];
           if (val === undefined) {
             throw new Error(`Missing required argument: ${argDef.name}`);
@@ -312,7 +361,8 @@ export function registerTemplateTools(server: McpServer, ctx: ServerContext): vo
           });
         }
 
-        // Execute immediately
+        // Convert raw values to FCL typed args and execute
+        const fclArgs = await buildFclArgs(rawValues, template.args);
         const result = await executeFlowTransaction(ctx, template.cadence, fclArgs);
         return jsonContent(result);
       } catch (error) {
