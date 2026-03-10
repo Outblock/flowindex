@@ -74,6 +74,7 @@ func registerSimulateRoutes(r *mux.Router, s *Server) {
 		return
 	}
 	r.HandleFunc("/flow/v1/simulate", s.simulatorHandler.HandleSimulate).Methods("POST", "OPTIONS")
+	r.HandleFunc("/flow/simulate", s.simulatorHandler.HandleSimulate).Methods("POST", "OPTIONS") // nginx rewrites /api/flow/v1/* → /flow/*
 }
 
 func registerAuthRoutes(r *mux.Router, s *Server) {
