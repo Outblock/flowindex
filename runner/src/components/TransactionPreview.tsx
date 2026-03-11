@@ -148,11 +148,18 @@ export default function TransactionPreview({
                                 <span className="text-xs text-zinc-400 font-mono truncate">{change.address}</span>
                                 <span className="text-[10px] text-zinc-500">{change.token}</span>
                               </div>
-                              <span className={`text-xs font-mono font-medium shrink-0 ml-2 ${
-                                isNegative ? 'text-red-400' : 'text-emerald-400'
-                              }`}>
-                                {isNegative ? change.delta : `+${change.delta}`}
-                              </span>
+                              <div className="flex flex-col items-end shrink-0 ml-2">
+                                <span className={`text-xs font-mono font-medium ${
+                                  isNegative ? 'text-red-400' : 'text-emerald-400'
+                                }`}>
+                                  {isNegative ? change.delta : `+${change.delta}`}
+                                </span>
+                                {change.before && change.after && (
+                                  <span className="text-[10px] text-zinc-500 font-mono">
+                                    {change.before} {'->'} {change.after}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           );
                         })}

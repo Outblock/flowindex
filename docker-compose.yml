@@ -315,6 +315,7 @@ services:
     environment:
       - EMULATOR_URL=http://simulator:8888
       - EMULATOR_ADMIN_URL=http://simulator:8080
+      - EMULATOR_GRPC_URL=simulator:3569
       - PORT=9090
       - EMULATOR_CONTAINER=simulator
       - STUCK_TIMEOUT=60

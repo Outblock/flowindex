@@ -153,11 +153,18 @@ export function ResultPanel({ result }: ResultPanelProps) {
                     <span className="text-zinc-400 font-mono truncate">{c.address}</span>
                     <span className="text-[10px] text-zinc-500">{c.token}</span>
                   </div>
-                  <span className={`font-mono font-medium shrink-0 ml-2 ${
-                    c.delta.startsWith('-') ? 'text-red-400' : 'text-flow-green crt-glow'
-                  }`}>
-                    {c.delta.startsWith('-') ? c.delta : `+${c.delta}`}
-                  </span>
+                  <div className="flex flex-col items-end shrink-0 ml-2">
+                    <span className={`font-mono font-medium ${
+                      c.delta.startsWith('-') ? 'text-red-400' : 'text-flow-green crt-glow'
+                    }`}>
+                      {c.delta.startsWith('-') ? c.delta : `+${c.delta}`}
+                    </span>
+                    {c.before && c.after && (
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        {c.before} {'->'} {c.after}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +27,8 @@ type SimulateRequest struct {
 type BalanceChange struct {
 	Address string `json:"address"`
 	Token   string `json:"token"`
+	Before  string `json:"before,omitempty"`
+	After   string `json:"after,omitempty"`
 	Delta   string `json:"delta"`
 }
 
@@ -43,13 +45,13 @@ type SimulateResponse struct {
 // Requests are serialized via a mutex because the Flow Emulator
 // can only execute one block at a time.
 type Handler struct {
-	client             *Client
-	mu                 sync.Mutex
-	emulatorContainer  string
-	stuckTimeout       time.Duration
-	lastBlockChange    atomic.Int64 // unix timestamp of last observed block height change
-	lastBlockHeight    atomic.Int64
-	recovering         atomic.Bool
+	client            *Client
+	mu                sync.Mutex
+	emulatorContainer string
+	stuckTimeout      time.Duration
+	lastBlockChange   atomic.Int64 // unix timestamp of last observed block height change
+	lastBlockHeight   atomic.Int64
+	recovering        atomic.Bool
 }
 
 // HealthSnapshot captures watchdog-related health signals for external monitoring.
@@ -60,6 +62,29 @@ type HealthSnapshot struct {
 	SecondsSinceProgress int64 `json:"seconds_since_progress"`
 	StuckTimeoutSeconds  int64 `json:"stuck_timeout_seconds"`
 }
+
+const tokenBalanceQueryScript = `
+import FungibleToken from 0xf233dcee88fe0abe
+
+access(all) fun main(address: Address): {String: UFix64} {
+    let account = getAuthAccount<auth(BorrowValue) &Account>(address)
+    let balances: {String: UFix64} = {}
+    let vaultType: Type = Type<@{FungibleToken.Vault}>()
+
+    account.storage.forEachStored(fun (path: StoragePath, type: Type): Bool {
+        if !type.isRecovered && (type.isInstance(vaultType) || type.isSubtype(of: vaultType)) {
+            if let vaultRef = account.storage.borrow<&{FungibleToken.Balance}>(from: path) {
+                let key = type.identifier
+                let current = balances[key] ?? 0.0
+                balances[key] = current + vaultRef.balance
+            }
+        }
+        return true
+    })
+
+    return balances
+}
+`
 
 // NewHandler creates a new simulation handler and starts background warmup.
 // Warmup runs immediately on start, then repeats every hour to keep the
@@ -466,8 +491,14 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		ComputationUsed: result.ComputationUsed,
 	}
 
-	// Parse balance changes from events
-	resp.BalanceChanges = parseBalanceChanges(result.Events)
+	parsedBalanceChanges := parseBalanceChanges(result.Events)
+	if len(parsedBalanceChanges) > 0 {
+		postBalances, err := h.fetchPostBalances(r.Context(), parsedBalanceChanges)
+		if err != nil {
+			log.Printf("[simulator] warning: failed to enrich balances with before/after: %v", err)
+		}
+		resp.BalanceChanges = buildBalanceChanges(parsedBalanceChanges, postBalances)
+	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
@@ -475,19 +506,28 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 
 // balanceKey is used to aggregate balance changes by address+token.
 type balanceKey struct {
-	Address string
-	Token   string
+	Address         string
+	Token           string
+	ContractAddress string
 }
 
-// parseBalanceChanges extracts token balance changes from transaction events.
-func parseBalanceChanges(events []TxEvent) []BalanceChange {
-	deltas := make(map[balanceKey]float64)
+type parsedBalanceChange struct {
+	Address         string
+	Token           string
+	ContractAddress string
+	DeltaScaled     *big.Int
+}
+
+// parseBalanceChanges extracts token balance deltas from transaction events.
+func parseBalanceChanges(events []TxEvent) []parsedBalanceChange {
+	deltas := make(map[balanceKey]*big.Int)
 
 	for _, ev := range events {
 		evType := ev.Type
-		var amount float64
+		var amount string
 		var address string
 		var token string
+		var contractAddress string
 
 		isWithdraw := strings.Contains(evType, "TokensWithdrawn") || strings.Contains(evType, "Withdrawn")
 		isDeposit := strings.Contains(evType, "TokensDeposited") || strings.Contains(evType, "Deposited")
@@ -496,9 +536,11 @@ func parseBalanceChanges(events []TxEvent) []BalanceChange {
 			continue
 		}
 
-		// Extract token name from event type (e.g., "A.1654653399040a61.FlowToken.TokensWithdrawn")
+		// Extract contract address + token name from event type
+		// (e.g., "A.1654653399040a61.FlowToken.TokensWithdrawn").
 		parts := strings.Split(evType, ".")
-		if len(parts) >= 3 {
+		if len(parts) >= 4 {
+			contractAddress = parts[len(parts)-3]
 			token = parts[len(parts)-2] // contract name
 		}
 
@@ -511,34 +553,102 @@ func parseBalanceChanges(events []TxEvent) []BalanceChange {
 		// Parse Cadence JSON event payload to extract amount and address
 		amount, address = parseCadenceEventPayload(ev.Payload)
 
-		if address == "" || amount == 0 {
+		if address == "" || amount == "" {
 			continue
 		}
 
-		key := balanceKey{Address: address, Token: token}
+		scaledAmount, err := parseUFix64Amount(amount)
+		if err != nil {
+			continue
+		}
+
+		key := balanceKey{Address: address, Token: token, ContractAddress: contractAddress}
+		if _, ok := deltas[key]; !ok {
+			deltas[key] = new(big.Int)
+		}
 		if isWithdraw {
-			deltas[key] -= amount
+			deltas[key].Sub(deltas[key], scaledAmount)
 		} else {
-			deltas[key] += amount
+			deltas[key].Add(deltas[key], scaledAmount)
 		}
 	}
 
-	changes := make([]BalanceChange, 0, len(deltas))
+	changes := make([]parsedBalanceChange, 0, len(deltas))
 	for key, delta := range deltas {
-		changes = append(changes, BalanceChange{
-			Address: key.Address,
-			Token:   key.Token,
-			Delta:   formatFloat(delta),
+		changes = append(changes, parsedBalanceChange{
+			Address:         key.Address,
+			Token:           key.Token,
+			ContractAddress: key.ContractAddress,
+			DeltaScaled:     new(big.Int).Set(delta),
 		})
 	}
 
 	return changes
 }
 
+func buildBalanceChanges(parsed []parsedBalanceChange, postBalances map[balanceKey]string) []BalanceChange {
+	changes := make([]BalanceChange, 0, len(parsed))
+	for _, change := range parsed {
+		apiChange := BalanceChange{
+			Address: change.Address,
+			Token:   change.Token,
+			Delta:   formatScaledAmount(change.DeltaScaled),
+		}
+
+		if postBalances != nil {
+			key := balanceKey{
+				Address:         change.Address,
+				Token:           change.Token,
+				ContractAddress: change.ContractAddress,
+			}
+			if after, ok := postBalances[key]; ok {
+				afterScaled, err := parseUFix64Amount(after)
+				if err == nil {
+					beforeScaled := new(big.Int).Sub(new(big.Int).Set(afterScaled), change.DeltaScaled)
+					apiChange.After = formatScaledAmount(afterScaled)
+					apiChange.Before = formatScaledAmount(beforeScaled)
+				}
+			}
+		}
+
+		changes = append(changes, apiChange)
+	}
+	return changes
+}
+
+func (h *Handler) fetchPostBalances(ctx context.Context, changes []parsedBalanceChange) (map[balanceKey]string, error) {
+	if len(changes) == 0 {
+		return nil, nil
+	}
+
+	byAddress := make(map[string][]parsedBalanceChange)
+	for _, change := range changes {
+		byAddress[change.Address] = append(byAddress[change.Address], change)
+	}
+
+	results := make(map[balanceKey]string, len(changes))
+	for address, addressChanges := range byAddress {
+		balances, err := h.client.GetTokenBalances(ctx, address)
+		if err != nil {
+			return nil, fmt.Errorf("querying balances for %s: %w", address, err)
+		}
+		for _, change := range addressChanges {
+			key := balanceKey{
+				Address:         change.Address,
+				Token:           change.Token,
+				ContractAddress: change.ContractAddress,
+			}
+			results[key] = lookupTokenBalance(balances, change.ContractAddress, change.Token)
+		}
+	}
+
+	return results, nil
+}
+
 // parseCadenceEventPayload tries to extract amount and address from a Cadence JSON event payload.
-func parseCadenceEventPayload(payload json.RawMessage) (amount float64, address string) {
+func parseCadenceEventPayload(payload json.RawMessage) (amount string, address string) {
 	if len(payload) == 0 {
-		return 0, ""
+		return "", ""
 	}
 
 	// Cadence JSON payload format: {"type":"Event","value":{"id":"...","fields":[{"name":"amount","value":{"type":"UFix64","value":"1.00000000"}}, ...]}}
@@ -553,7 +663,7 @@ func parseCadenceEventPayload(payload json.RawMessage) (amount float64, address 
 	}
 
 	if err := json.Unmarshal(payload, &cadenceEvent); err != nil {
-		return 0, ""
+		return "", ""
 	}
 
 	for _, field := range cadenceEvent.Value.Fields {
@@ -564,7 +674,7 @@ func parseCadenceEventPayload(payload json.RawMessage) (amount float64, address 
 				Value string `json:"value"`
 			}
 			if err := json.Unmarshal(field.Value, &val); err == nil {
-				amount, _ = strconv.ParseFloat(val.Value, 64)
+				amount = val.Value
 			}
 		case "from", "to":
 			address = extractAddress(field.Value)
@@ -616,10 +726,113 @@ func normalizeAddress(addr string) string {
 	return addr
 }
 
-// formatFloat formats a float with up to 8 decimal places, trimming trailing zeros.
-func formatFloat(f float64) string {
-	s := fmt.Sprintf("%.8f", f)
-	s = strings.TrimRight(s, "0")
-	s = strings.TrimRight(s, ".")
-	return s
+func lookupTokenBalance(balances map[string]string, contractAddress, token string) string {
+	exact := buildTokenTypeID(contractAddress, token)
+	if exact != "" {
+		if balance, ok := balances[exact]; ok {
+			return balance
+		}
+	}
+
+	suffix := "." + token + ".Vault"
+	var matched string
+	for key, balance := range balances {
+		if strings.HasSuffix(key, suffix) {
+			if matched != "" {
+				return "0.0"
+			}
+			matched = balance
+		}
+	}
+	if matched != "" {
+		return matched
+	}
+	return "0.0"
+}
+
+func buildTokenTypeID(contractAddress, token string) string {
+	if contractAddress == "" || token == "" {
+		return ""
+	}
+	return "A." + normalizeAddress(contractAddress) + "." + token + ".Vault"
+}
+
+func parseUFix64Amount(value string) (*big.Int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return big.NewInt(0), nil
+	}
+
+	sign := int64(1)
+	if strings.HasPrefix(value, "-") {
+		sign = -1
+		value = strings.TrimPrefix(value, "-")
+	} else if strings.HasPrefix(value, "+") {
+		value = strings.TrimPrefix(value, "+")
+	}
+
+	parts := strings.SplitN(value, ".", 2)
+	wholePart := parts[0]
+	if wholePart == "" {
+		wholePart = "0"
+	}
+	whole := new(big.Int)
+	if _, ok := whole.SetString(wholePart, 10); !ok {
+		return nil, fmt.Errorf("invalid UFix64 integer part %q", value)
+	}
+
+	fractionPart := ""
+	if len(parts) == 2 {
+		fractionPart = parts[1]
+	}
+	if len(fractionPart) > 8 {
+		fractionPart = fractionPart[:8]
+	}
+	fractionPart = fractionPart + strings.Repeat("0", 8-len(fractionPart))
+
+	fraction := new(big.Int)
+	if fractionPart != "" {
+		if _, ok := fraction.SetString(fractionPart, 10); !ok {
+			return nil, fmt.Errorf("invalid UFix64 fractional part %q", value)
+		}
+	}
+
+	scale := big.NewInt(100000000)
+	scaled := new(big.Int).Mul(whole, scale)
+	scaled.Add(scaled, fraction)
+	if sign < 0 {
+		scaled.Neg(scaled)
+	}
+	return scaled, nil
+}
+
+func formatScaledAmount(value *big.Int) string {
+	if value == nil {
+		return "0.0"
+	}
+
+	scale := big.NewInt(100000000)
+	sign := ""
+	scaled := new(big.Int).Set(value)
+	if scaled.Sign() < 0 {
+		sign = "-"
+		scaled.Neg(scaled)
+	}
+
+	whole := new(big.Int).Quo(scaled, scale)
+	fraction := new(big.Int).Mod(scaled, scale)
+	if fraction.Sign() == 0 {
+		return sign + whole.String() + ".0"
+	}
+
+	fractionStr := fraction.String()
+	if len(fractionStr) < 8 {
+		fractionStr = strings.Repeat("0", 8-len(fractionStr)) + fractionStr
+	}
+	fractionStr = strings.TrimRight(fractionStr, "0")
+	if fractionStr == "" {
+		fractionStr = "0"
+	}
+
+	return sign + whole.String() + "." + fractionStr
 }

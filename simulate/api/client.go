@@ -15,15 +15,20 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	flowaccess "github.com/onflow/flow/protobuf/go/flow/access"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // TxRequest describes a transaction to simulate.
 type TxRequest struct {
-	Cadence     string              `json:"cadence"`
-	Arguments   []json.RawMessage   `json:"arguments,omitempty"`
-	Authorizers []string            `json:"authorizers,omitempty"`
-	Payer       string              `json:"payer,omitempty"`
+	Cadence     string            `json:"cadence"`
+	Arguments   []json.RawMessage `json:"arguments,omitempty"`
+	Authorizers []string          `json:"authorizers,omitempty"`
+	Payer       string            `json:"payer,omitempty"`
 }
 
 // TxEvent is a single event emitted during simulation.
@@ -45,21 +50,23 @@ type TxResult struct {
 type Client struct {
 	baseURL    string // REST API (default port 8888)
 	adminURL   string // Admin API (default port 8080) — snapshots live here
+	grpcURL    string // Access API (default port 3569) — scripts and state reads
 	httpClient *http.Client
+	grpcMu     sync.Mutex
+	grpcConn   *grpc.ClientConn
+	access     flowaccess.AccessAPIClient
 }
 
 // NewClient creates a new emulator client pointed at the given REST API base URL.
 // The admin URL defaults to port 8080 on the same host.
 func NewClient(baseURL string) *Client {
 	base := strings.TrimRight(baseURL, "/")
-	// Derive admin URL: replace port with 8080
-	admin := base
-	if idx := strings.LastIndex(base, ":"); idx > 0 {
-		admin = base[:idx] + ":8080"
-	}
+	admin := derivePortURL(base, "8080")
+	grpc := derivePortURL(base, "3569")
 	return &Client{
 		baseURL:  base,
 		adminURL: admin,
+		grpcURL:  grpc,
 		httpClient: &http.Client{
 			Timeout: 90 * time.Second,
 		},
@@ -68,13 +75,121 @@ func NewClient(baseURL string) *Client {
 
 // NewClientWithAdmin creates a client with explicit REST and admin URLs.
 func NewClientWithAdmin(baseURL, adminURL string) *Client {
+	return NewClientWithAdminAndGRPC(baseURL, adminURL, derivePortURL(baseURL, "3569"))
+}
+
+// NewClientWithAdminAndGRPC creates a client with explicit REST, admin, and gRPC URLs.
+func NewClientWithAdminAndGRPC(baseURL, adminURL, grpcURL string) *Client {
 	return &Client{
 		baseURL:  strings.TrimRight(baseURL, "/"),
 		adminURL: strings.TrimRight(adminURL, "/"),
+		grpcURL:  strings.TrimRight(grpcURL, "/"),
 		httpClient: &http.Client{
 			Timeout: 90 * time.Second,
 		},
 	}
+}
+
+func derivePortURL(baseURL, port string) string {
+	base := strings.TrimRight(baseURL, "/")
+	if idx := strings.LastIndex(base, ":"); idx > 0 {
+		return base[:idx] + ":" + port
+	}
+	return base
+}
+
+func grpcTargetFromURL(raw string) string {
+	target := strings.TrimSpace(raw)
+	target = strings.TrimPrefix(target, "http://")
+	target = strings.TrimPrefix(target, "https://")
+	target = strings.TrimSuffix(target, "/")
+	return target
+}
+
+func (c *Client) accessClient(ctx context.Context) (flowaccess.AccessAPIClient, error) {
+	c.grpcMu.Lock()
+	defer c.grpcMu.Unlock()
+
+	if c.access != nil {
+		return c.access, nil
+	}
+
+	target := grpcTargetFromURL(c.grpcURL)
+	conn, err := grpc.DialContext(ctx, target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("dialing emulator gRPC %q: %w", target, err)
+	}
+
+	c.grpcConn = conn
+	c.access = flowaccess.NewAccessAPIClient(conn)
+	return c.access, nil
+}
+
+// ExecuteScriptAtLatestBlock runs a read-only script against the latest sealed block.
+// Arguments must already be encoded as Cadence JSON values.
+func (c *Client) ExecuteScriptAtLatestBlock(ctx context.Context, script string, arguments []json.RawMessage) (json.RawMessage, error) {
+	accessClient, err := c.accessClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	args := make([][]byte, 0, len(arguments))
+	for _, arg := range arguments {
+		args = append(args, []byte(arg))
+	}
+
+	resp, err := accessClient.ExecuteScriptAtLatestBlock(ctx, &flowaccess.ExecuteScriptAtLatestBlockRequest{
+		Script:    []byte(script),
+		Arguments: args,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("executing script: %w", err)
+	}
+
+	return json.RawMessage(resp.GetValue()), nil
+}
+
+// GetTokenBalances returns all fungible token vault balances for an address,
+// keyed by Cadence type identifier (e.g. A.1654653399040a61.FlowToken.Vault).
+func (c *Client) GetTokenBalances(ctx context.Context, address string) (map[string]string, error) {
+	arg := json.RawMessage(fmt.Sprintf(`{"type":"Address","value":"0x%s"}`, strings.TrimPrefix(strings.ToLower(address), "0x")))
+	value, err := c.ExecuteScriptAtLatestBlock(ctx, tokenBalanceQueryScript, []json.RawMessage{arg})
+	if err != nil {
+		return nil, err
+	}
+	return decodeCadenceStringUFix64Dictionary(value)
+}
+
+func decodeCadenceStringUFix64Dictionary(raw json.RawMessage) (map[string]string, error) {
+	var result struct {
+		Type  string `json:"type"`
+		Value []struct {
+			Key struct {
+				Type  string `json:"type"`
+				Value string `json:"value"`
+			} `json:"key"`
+			Value struct {
+				Type  string `json:"type"`
+				Value string `json:"value"`
+			} `json:"value"`
+		} `json:"value"`
+	}
+
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("decoding Cadence dictionary: %w", err)
+	}
+	if result.Type != "Dictionary" {
+		return nil, fmt.Errorf("unexpected Cadence value type %q", result.Type)
+	}
+
+	out := make(map[string]string, len(result.Value))
+	for _, entry := range result.Value {
+		if entry.Key.Type != "String" || entry.Value.Type != "UFix64" {
+			continue
+		}
+		out[entry.Key.Value] = entry.Value.Value
+	}
+	return out, nil
 }
 
 // HealthCheck returns true if the emulator is reachable and has sealed blocks.
@@ -228,11 +343,11 @@ func (c *Client) SendTransaction(ctx context.Context, tx *TxRequest) (*TxResult,
 	}
 
 	body := emulatorTxBody{
-		Script:             scriptB64,
-		Arguments:          args,
-		ReferenceBlockID:   refBlockID,
-		GasLimit:           "9999",
-		Payer:              payer,
+		Script:           scriptB64,
+		Arguments:        args,
+		ReferenceBlockID: refBlockID,
+		GasLimit:         "9999",
+		Payer:            payer,
 		ProposalKey: emulatorProposalKey{
 			Address:        payer,
 			KeyIndex:       "0",

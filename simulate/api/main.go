@@ -16,6 +16,10 @@ func main() {
 	if adminURL == "" {
 		adminURL = "http://localhost:8080"
 	}
+	grpcURL := os.Getenv("EMULATOR_GRPC_URL")
+	if grpcURL == "" {
+		grpcURL = derivePortURL(emulatorURL, "3569")
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "9090"
@@ -35,7 +39,7 @@ func main() {
 		}
 	}
 
-	client := NewClientWithAdmin(emulatorURL, adminURL)
+	client := NewClientWithAdminAndGRPC(emulatorURL, adminURL, grpcURL)
 	handler := NewHandler(client, emulatorContainer, stuckTimeout)
 
 	mux := http.NewServeMux()
@@ -64,7 +68,7 @@ func main() {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	log.Printf("[simulator-api] starting on :%s (emulator=%s, admin=%s)", port, emulatorURL, adminURL)
+	log.Printf("[simulator-api] starting on :%s (emulator=%s, admin=%s, grpc=%s)", port, emulatorURL, adminURL, grpcURL)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatal(err)
 	}

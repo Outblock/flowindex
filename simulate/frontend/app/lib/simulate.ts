@@ -10,6 +10,8 @@ export interface SimulateRequest {
 export interface BalanceChange {
   address: string
   token: string
+  before?: string
+  after?: string
   delta: string
 }
 
