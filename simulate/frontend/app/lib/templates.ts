@@ -12,6 +12,37 @@ export interface Template {
   args: TemplateArg[]
 }
 
+/**
+ * Parse transaction/script parameters from Cadence source code.
+ * Matches `transaction(amount: UFix64, to: Address)` or `fun main(...)`.
+ */
+export function parseParamsFromCode(code: string): TemplateArg[] {
+  const match =
+    code.match(/^\s*transaction\s*\(([^)]*)\)/m) ||
+    code.match(/fun\s+main\s*\(([^)]*)\)/)
+  if (!match || !match[1].trim()) return []
+  return match[1]
+    .split(',')
+    .map((param) => {
+      const trimmed = param.trim()
+      const colonIdx = trimmed.indexOf(':')
+      if (colonIdx === -1) return { name: trimmed, type: 'String', defaultValue: '' }
+      const name = trimmed.slice(0, colonIdx).trim()
+      const type = trimmed.slice(colonIdx + 1).trim() || 'String'
+      return { name, type, defaultValue: defaultForType(type) }
+    })
+    .filter((p) => p.name)
+}
+
+function defaultForType(type: string): string {
+  if (type === 'UFix64' || type === 'Fix64') return '0.0'
+  if (type === 'Address') return '0x1654653399040a61'
+  if (type === 'Bool') return 'true'
+  if (type.startsWith('UInt') || type.startsWith('Int') || type === 'UInt' || type === 'Int') return '0'
+  if (type.startsWith('[')) return '[]'
+  return ''
+}
+
 export const templates: Template[] = [
   {
     id: 'transfer-flow',
