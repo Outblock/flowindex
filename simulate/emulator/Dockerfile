@@ -1,9 +1,9 @@
-# Build emulator v1.16.3 from source (GCR :latest is outdated)
-FROM golang:1.24-bookworm AS builder
-RUN git clone --depth 1 --branch v1.16.3 https://github.com/onflow/flow-emulator.git /src
+# Build optimized emulator from Outblock fork (global cache, batch prefetch, faster retries)
+FROM golang:1.25-bookworm AS builder
+RUN git clone --depth 1 https://github.com/Outblock/flow-emulator.git /src
 WORKDIR /src
 ENV GOTOOLCHAIN=auto
-RUN go build -o /emulator ./cmd/emulator
+RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o /emulator ./cmd/emulator
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
