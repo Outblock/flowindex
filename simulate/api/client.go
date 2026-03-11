@@ -172,25 +172,40 @@ func (c *Client) SendTransaction(ctx context.Context, tx *TxRequest) (*TxResult,
 
 	dummySig := generateDummySignature()
 
+	// Build envelope signatures: one for each unique authorizer + payer
+	sigSet := make(map[string]bool)
+	var sigs []emulatorSignature
+	for _, auth := range authorizers {
+		if !sigSet[auth] {
+			sigSet[auth] = true
+			sigs = append(sigs, emulatorSignature{
+				Address:   auth,
+				KeyIndex:  "0",
+				Signature: dummySig,
+			})
+		}
+	}
+	if !sigSet[payer] {
+		sigs = append(sigs, emulatorSignature{
+			Address:   payer,
+			KeyIndex:  "0",
+			Signature: dummySig,
+		})
+	}
+
 	body := emulatorTxBody{
-		Script:           scriptB64,
-		Arguments:        args,
-		ReferenceBlockID: refBlockID,
-		GasLimit:         "9999",
-		Payer:            payer,
+		Script:             scriptB64,
+		Arguments:          args,
+		ReferenceBlockID:   refBlockID,
+		GasLimit:           "9999",
+		Payer:              payer,
 		ProposalKey: emulatorProposalKey{
 			Address:        payer,
 			KeyIndex:       "0",
 			SequenceNumber: "0",
 		},
-		Authorizers: authorizers,
-		EnvelopeSignatures: []emulatorSignature{
-			{
-				Address:   payer,
-				KeyIndex:  "0",
-				Signature: dummySig,
-			},
-		},
+		Authorizers:        authorizers,
+		EnvelopeSignatures: sigs,
 	}
 
 	bodyBytes, err := json.Marshal(body)
@@ -252,7 +267,7 @@ func (c *Client) SendTransaction(ctx context.Context, tx *TxRequest) (*TxResult,
 func (c *Client) waitForResult(ctx context.Context, txID string) (*TxResult, error) {
 	url := fmt.Sprintf("%s/v1/transaction_results/%s", c.baseURL, txID)
 
-	for i := 0; i < 120; i++ {
+	for i := 0; i < 360; i++ {
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return nil, fmt.Errorf("building result request: %w", err)
@@ -319,7 +334,7 @@ func (c *Client) waitForResult(ctx context.Context, txID string) (*TxResult, err
 		}
 	}
 
-	return nil, fmt.Errorf("transaction %s did not seal after 60s", txID)
+	return nil, fmt.Errorf("transaction %s did not seal after 180s", txID)
 }
 
 // WaitForBlockReady polls the emulator until no pending block is being executed.

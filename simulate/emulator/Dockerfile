@@ -19,6 +19,6 @@ CMD [ \
   "--chain-id", "mainnet", \
   "--rest-port", "8888", \
   "--port", "3569", \
-  "--block-time", "1s", \
+  "--block-time", "0", \
   "-v" \
 ]

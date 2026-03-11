@@ -226,12 +226,14 @@ services:
       GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       HTTP_PORT: ${HTTP_PORT:-3003}
+      SIMULATOR_API: http://simulator-api:9090
     ports:
       - "8081:80"
       - "3002:3002"
       - "3003:3003"
     depends_on:
       - supabase-gateway
+      - simulator-api
 
   supabase-gateway:
     image: nginx:alpine

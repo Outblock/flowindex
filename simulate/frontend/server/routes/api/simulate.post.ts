@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(180_000),
   })
 
   const text = await resp.text()

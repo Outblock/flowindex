@@ -183,6 +183,46 @@ transaction {
     prepare(signer: &Account) { log("misc warmup") }
 }`, nil)
 
+	// Phase 8: Pre-cache FlowToken vault storage for common signer addresses.
+	// The warmup above caches contract code, but when a user simulates a FLOW transfer
+	// using an address as signer, the emulator also fetches that account's storage registers
+	// (e.g., /storage/flowTokenVault). This forces the emulator to do slow gRPC round-trips.
+	// Pre-cache by running a FLOW transfer FROM each key address to warm the storage.
+	popularSigners := []struct {
+		name string
+		addr string
+	}{
+		{"FlowToken", "1654653399040a61"},
+		{"FungibleToken", "f233dcee88fe0abe"},
+		{"FlowFees", "f919ee77447b7497"},
+	}
+
+	for _, acc := range popularSigners {
+		h.runWarmupTx(ctx, "storage-"+acc.name, `
+import FungibleToken from 0xf233dcee88fe0abe
+import FlowToken from 0x1654653399040a61
+
+transaction(amount: UFix64, to: Address) {
+    let sentVault: @{FungibleToken.Vault}
+    prepare(signer: auth(BorrowValue) &Account) {
+        let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
+            from: /storage/flowTokenVault
+        ) ?? panic("No vault")
+        self.sentVault <- vaultRef.withdraw(amount: amount)
+    }
+    execute {
+        let receiverRef = getAccount(to)
+            .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+            ?? panic("No receiver")
+        receiverRef.deposit(from: <- self.sentVault)
+    }
+}`,
+			[]json.RawMessage{
+				json.RawMessage(`{"type":"UFix64","value":"0.001"}`),
+				json.RawMessage(`{"type":"Address","value":"0xe467b9dd11fa00df"}`),
+			}, acc.addr)
+	}
+
 	elapsed := time.Since(start)
 	log.Printf("[simulator] warmup: all phases completed in %s", elapsed)
 }
@@ -190,17 +230,22 @@ transaction {
 // runWarmupTx sends a single warmup transaction with a per-tx timeout.
 // It acquires the mutex only for the duration of this single tx, so user
 // requests can interleave between warmup phases.
-func (h *Handler) runWarmupTx(_ context.Context, name string, cadence string, args []json.RawMessage) {
+// Optional signerOverride uses a specific address as the authorizer (to pre-cache its storage).
+func (h *Handler) runWarmupTx(_ context.Context, name string, cadence string, args []json.RawMessage, signerOverride ...string) {
+	signer := "e467b9dd11fa00df"
+	if len(signerOverride) > 0 && signerOverride[0] != "" {
+		signer = signerOverride[0]
+	}
 	txReq := &TxRequest{
 		Cadence:     cadence,
 		Arguments:   args,
-		Authorizers: []string{"e467b9dd11fa00df"},
+		Authorizers: []string{signer},
 		Payer:       "e467b9dd11fa00df",
 	}
 
-	// Per-tx timeout: if a single warmup tx takes >45s it's stuck on
+	// Per-tx timeout: if a single warmup tx takes >120s it's stuck on
 	// a heavy mainnet state fetch — skip it rather than blocking everything.
-	txCtx, txCancel := context.WithTimeout(context.Background(), 45*time.Second)
+	txCtx, txCancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer txCancel()
 
 	h.mu.Lock()
@@ -250,10 +295,14 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize addresses: strip 0x prefix, lowercase
-	req.Payer = normalizeAddress(req.Payer)
 	for i, a := range req.Authorizers {
 		req.Authorizers[i] = normalizeAddress(a)
 	}
+
+	// Always use the emulator service account as payer.
+	// In simulation, the payer only pays gas fees which don't matter.
+	// Using the service account avoids slow state fetches for arbitrary payer addresses.
+	const serviceAccount = "e467b9dd11fa00df"
 
 	// Serialize: emulator can only execute one block at a time
 	h.mu.Lock()
@@ -278,7 +327,7 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		Cadence:     req.Cadence,
 		Arguments:   req.Arguments,
 		Authorizers: req.Authorizers,
-		Payer:       req.Payer,
+		Payer:       serviceAccount,
 	}
 
 	result, err := h.client.SendTransaction(r.Context(), txReq)

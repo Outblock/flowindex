@@ -391,6 +391,7 @@ jobs:
               -e SUPABASE_SERVICE_ROLE_KEY="${{ steps.supabase-keys.outputs.service_key }}" \
               -e FRONTEND_URL="https://run.flowindex.io" \
               -e HTTP_PORT=3003 \
+              -e SIMULATOR_API="http://10.128.0.5:9090" \
               ${{ env.REGISTRY }}/runner:${{ github.sha }}
           '
 
