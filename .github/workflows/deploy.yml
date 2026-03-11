@@ -59,6 +59,7 @@ env:
   PROJECT_ID: flowindex-mainnet
   REGION: us-central1
   REGISTRY: us-central1-docker.pkg.dev/flowindex-mainnet/flowindex
+  EMULATOR_REF: 23562d5e6dd5341de5bde7f5a480cf8961e71b61
 
 jobs:
   # Detect which services changed (or use manual input)
@@ -1297,6 +1298,8 @@ jobs:
           file: simulate/emulator/Dockerfile
           push: true
           provenance: false
+          build-args: |
+            EMULATOR_REF=${{ env.EMULATOR_REF }}
           tags: |
             ${{ env.REGISTRY }}/simulator:latest
             ${{ env.REGISTRY }}/simulator:${{ github.sha }}

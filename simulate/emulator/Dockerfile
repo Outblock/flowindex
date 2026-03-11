@@ -1,6 +1,12 @@
 # Build optimized emulator from Outblock fork (global cache, batch prefetch, faster retries)
 FROM golang:1.25-bookworm AS builder
-RUN git clone --depth 1 https://github.com/Outblock/flow-emulator.git /src
+
+# Pin the emulator revision so CI builds are reproducible and cache-busted when the ref changes.
+ARG EMULATOR_REF=main
+
+RUN git clone https://github.com/Outblock/flow-emulator.git /src \
+  && cd /src \
+  && git checkout "$EMULATOR_REF"
 WORKDIR /src
 ENV GOTOOLCHAIN=auto
 RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o /emulator ./cmd/emulator
