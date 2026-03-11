@@ -115,20 +115,25 @@ export function Playground() {
     setArgValues((prev) => ({ ...prev, [name]: value }))
   }, [])
 
-  // When code changes in custom mode, re-parse params
+  // Re-parse params whenever code changes (any mode)
   const handleCodeChange = useCallback((newCode: string) => {
     setCode(newCode)
-    if (activeId === CUSTOM_ID) {
-      const parsed = parseParamsFromCode(newCode)
-      setCustomArgs(parsed)
-      setArgValues((prev) => {
-        const next: Record<string, string> = {}
-        for (const arg of parsed) {
-          next[arg.name] = prev[arg.name] ?? arg.defaultValue
-        }
-        return next
-      })
+    // Switch to custom mode if code diverges from selected template
+    if (activeId !== CUSTOM_ID) {
+      const t = templates.find((t) => t.id === activeId)
+      if (t && newCode !== t.cadence) {
+        setActiveId(CUSTOM_ID)
+      }
     }
+    const parsed = parseParamsFromCode(newCode)
+    setCustomArgs(parsed)
+    setArgValues((prev) => {
+      const next: Record<string, string> = {}
+      for (const arg of parsed) {
+        next[arg.name] = prev[arg.name] ?? arg.defaultValue
+      }
+      return next
+    })
   }, [activeId])
 
   const handleSimulate = useCallback(async () => {
