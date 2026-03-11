@@ -23,7 +23,7 @@ RUN cd packages/event-decoder && bun run build
 COPY simulate/frontend/ ./simulate/frontend/
 WORKDIR /app/simulate/frontend
 
-ARG SIMULATOR_BACKEND_URL=https://flowindex.io/api
+ARG SIMULATOR_BACKEND_URL=http://10.128.0.5:9090
 ENV SIMULATOR_BACKEND_URL=$SIMULATOR_BACKEND_URL
 
 RUN bun run build

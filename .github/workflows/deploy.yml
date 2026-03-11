@@ -1385,7 +1385,10 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --port 3000 \
-            --set-env-vars "SIMULATOR_BACKEND_URL=http://34.30.191.150:9090" \
+            --set-env-vars "SIMULATOR_BACKEND_URL=http://10.128.0.5:9090" \
+            --network flowindex-vpc \
+            --subnet flowindex-vpc \
+            --vpc-egress all-traffic \
             --memory 512Mi \
             --cpu 1 \
             --min-instances 0 \
