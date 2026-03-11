@@ -68,23 +68,26 @@ func (h *Handler) warmupLoop() {
 // warmup pre-caches common mainnet contract state by running transactions that
 // import frequently-used contracts. This forces the fork-mode emulator to fetch
 // and cache account state, making the first real user request much faster.
+//
+// NOTE: Warmup acquires the mutex per-tx (not for the entire duration) so that
+// user requests are not blocked for minutes while warmup runs. Each warmup tx
+// has a 45-second timeout — if the emulator is stuck on a heavy contract import,
+// we skip it and move on.
 func (h *Handler) warmup() {
 	// Wait for emulator to be ready
 	time.Sleep(3 * time.Second)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	// Check emulator health first
-	if ok, err := h.client.HealthCheck(ctx); !ok || err != nil {
+	healthCtx, healthCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer healthCancel()
+	if ok, err := h.client.HealthCheck(healthCtx); !ok || err != nil {
 		log.Printf("[simulator] warmup: emulator not ready, skipping: %v", err)
 		return
 	}
 
 	log.Println("[simulator] warmup: pre-caching common mainnet contract state...")
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
 
 	start := time.Now()
 
@@ -184,8 +187,10 @@ transaction {
 	log.Printf("[simulator] warmup: all phases completed in %s", elapsed)
 }
 
-// runWarmupTx sends a single warmup transaction and logs the result.
-func (h *Handler) runWarmupTx(ctx context.Context, name string, cadence string, args []json.RawMessage) {
+// runWarmupTx sends a single warmup transaction with a per-tx timeout.
+// It acquires the mutex only for the duration of this single tx, so user
+// requests can interleave between warmup phases.
+func (h *Handler) runWarmupTx(_ context.Context, name string, cadence string, args []json.RawMessage) {
 	txReq := &TxRequest{
 		Cadence:     cadence,
 		Arguments:   args,
@@ -193,9 +198,23 @@ func (h *Handler) runWarmupTx(ctx context.Context, name string, cadence string, 
 		Payer:       "e467b9dd11fa00df",
 	}
 
+	// Per-tx timeout: if a single warmup tx takes >45s it's stuck on
+	// a heavy mainnet state fetch — skip it rather than blocking everything.
+	txCtx, txCancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer txCancel()
+
+	h.mu.Lock()
+
+	// Ensure emulator is ready before sending
+	h.client.WaitForBlockReady(txCtx)
+
 	start := time.Now()
-	result, err := h.client.SendTransaction(ctx, txReq)
+	result, err := h.client.SendTransaction(txCtx, txReq)
 	elapsed := time.Since(start)
+
+	// Wait for block to commit before releasing mutex
+	h.client.WaitForBlockReady(txCtx)
+	h.mu.Unlock()
 
 	if err != nil {
 		log.Printf("[simulator] warmup [%s]: failed after %s: %v", name, elapsed, err)
