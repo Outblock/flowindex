@@ -183,7 +183,11 @@ func (r *Repository) ListTransactionsByBlock(ctx context.Context, height uint64,
 		out = append(out, t)
 	}
 	if includeEvents && len(out) > 0 {
-		events, err := r.GetEventsByTransactionIDs(ctx, collectTxIDs(out))
+		refs := make([]TxRef, 0, len(out))
+		for _, t := range out {
+			refs = append(refs, TxRef{ID: t.ID, BlockHeight: t.BlockHeight})
+		}
+		events, err := r.GetEventsByTxRefs(ctx, refs)
 		if err != nil {
 			return nil, err
 		}
@@ -216,6 +220,42 @@ func (r *Repository) GetEventsByTransactionIDs(ctx context.Context, txIDs []stri
 		FROM raw.events
 		WHERE transaction_id = ANY($1)
 		ORDER BY block_height DESC, transaction_index ASC, event_index ASC`, txIDBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.Event
+	for rows.Next() {
+		var e models.Event
+		if err := rows.Scan(&e.ID, &e.TransactionID, &e.TransactionIndex, &e.Type, &e.EventIndex, &e.ContractAddress, &e.ContractName,
+			&e.EventName, &e.Payload, &e.Values, &e.BlockHeight, &e.Timestamp); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+// GetEventsByTxRefs fetches events with block_height hints for partition pruning.
+func (r *Repository) GetEventsByTxRefs(ctx context.Context, refs []TxRef) ([]models.Event, error) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	txIDBytes, heights := splitTxRefs(refs)
+	rows, err := r.db.Query(ctx, `
+		SELECT event_index AS id,
+		       encode(transaction_id, 'hex') AS transaction_id,
+		       transaction_index, type, event_index,
+		       COALESCE(encode(contract_address, 'hex'), '') AS contract_address,
+		       '' AS contract_name,
+		       COALESCE(event_name, '') AS event_name,
+		       COALESCE(payload, '{}'::jsonb) AS payload,
+		       '{}'::jsonb AS values,
+		       block_height, timestamp
+		FROM raw.events
+		WHERE transaction_id = ANY($1) AND block_height = ANY($2)
+		ORDER BY block_height DESC, transaction_index ASC, event_index ASC`, txIDBytes, heights)
 	if err != nil {
 		return nil, err
 	}

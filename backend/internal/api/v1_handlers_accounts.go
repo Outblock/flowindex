@@ -363,7 +363,7 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 	if includeEvents {
 		go func() {
 			defer wg.Done()
-			events, _ := s.repo.GetEventsByTransactionIDs(ctx, txIDs)
+			events, _ := s.repo.GetEventsByTxRefs(ctx, txRefs)
 			for _, e := range events {
 				eventsByTx[e.TransactionID] = append(eventsByTx[e.TransactionID], e)
 			}

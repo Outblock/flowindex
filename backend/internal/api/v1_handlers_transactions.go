@@ -44,16 +44,16 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), txIDs)
 	tags, _ := s.repo.GetTxTagsByTransactionIDs(r.Context(), txIDs)
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), txIDs)
+	txRefs := collectTxRefs(txs)
 	eventsByTx := make(map[string][]models.Event)
 	if includeEvents {
-		events, _ := s.repo.GetEventsByTransactionIDs(r.Context(), txIDs)
+		events, _ := s.repo.GetEventsByTxRefs(r.Context(), txRefs)
 		for _, e := range events {
 			eventsByTx[e.TransactionID] = append(eventsByTx[e.TransactionID], e)
 		}
 	}
 
 	// Fetch transfer summaries for expand preview
-	txRefs := collectTxRefs(txs)
 	transferSummaries, tsErr := s.repo.GetTransferSummariesByTxRefs(r.Context(), txRefs, "")
 	if tsErr != nil {
 		log.Printf("[WARN] GetTransferSummariesByTxRefs (list) failed refs=%d: %v", len(txRefs), tsErr)
