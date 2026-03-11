@@ -60,7 +60,7 @@ env:
   PROJECT_ID: flowindex-mainnet
   REGION: us-central1
   REGISTRY: us-central1-docker.pkg.dev/flowindex-mainnet/flowindex
-  EMULATOR_REF: 3d2f2296af2ce1edf80485da47867bf6626c504e
+  EMULATOR_REF: c254ad82945e449bde397ef80fb64feb5295a8ba
 
 jobs:
   # Detect which services changed (or use manual input)

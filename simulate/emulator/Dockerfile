@@ -1,5 +1,5 @@
 # Build optimized emulator from Outblock fork
-# Features: global LRU cache, dynamic slab prefetch via storage_index, cache-poisoning fix
+# Features: safer fork-mode register fetching, cache-poisoning fix, watchdog recovery
 FROM golang:1.25-bookworm AS builder
 
 # Pin the emulator revision so CI builds are reproducible and cache-busted when the ref changes.
