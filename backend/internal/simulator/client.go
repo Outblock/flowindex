@@ -322,6 +322,41 @@ func (c *Client) waitForResult(ctx context.Context, txID string) (*TxResult, err
 	return nil, fmt.Errorf("transaction %s did not seal after 60s", txID)
 }
 
+// WaitForBlockReady polls the emulator until no pending block is being executed.
+// This prevents the "pending block ... is currently being executed" race condition
+// when a new transaction is submitted immediately after the previous one seals.
+func (c *Client) WaitForBlockReady(ctx context.Context) error {
+	// Quick test: try a lightweight blocks query. If the emulator is still
+	// committing a block, any /v1/ endpoint may return 400 with "pending block".
+	for i := 0; i < 20; i++ {
+		req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/v1/blocks?height=sealed", nil)
+		if err != nil {
+			return err
+		}
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			return nil // emulator is ready
+		}
+		if strings.Contains(string(body), "pending block") {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(250 * time.Millisecond):
+			}
+			continue
+		}
+		// Non-pending-block error, assume ready
+		return nil
+	}
+	return fmt.Errorf("emulator still has pending block after 5s")
+}
+
 // CreateSnapshot creates a named snapshot of the emulator state.
 // Returns the snapshot block height or an error.
 func (c *Client) CreateSnapshot(ctx context.Context, name string) (string, error) {

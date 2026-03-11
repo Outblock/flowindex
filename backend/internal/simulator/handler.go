@@ -240,6 +240,9 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	// Ensure emulator has no pending block before starting
+	h.client.WaitForBlockReady(r.Context())
+
 	// Try snapshot/revert for state isolation (may not work in fork mode)
 	snapName := fmt.Sprintf("sim-%d", time.Now().UnixNano())
 	snapOK := false
@@ -261,6 +264,8 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.client.SendTransaction(r.Context(), txReq)
 	if err != nil {
+		// Still wait for block to settle before releasing mutex
+		h.client.WaitForBlockReady(r.Context())
 		w.WriteHeader(http.StatusBadGateway)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -268,6 +273,10 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	// Wait for emulator to finish committing the block before releasing mutex.
+	// Without this, the next queued request may hit "pending block" errors.
+	h.client.WaitForBlockReady(r.Context())
 
 	resp := SimulateResponse{
 		Success:         result.Success,
