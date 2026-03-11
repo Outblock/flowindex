@@ -87,6 +87,18 @@ func main() {
 	log.Printf("Flow Node: %s", flowURL)
 	log.Printf("API Port: %s", apiPort)
 
+	// Early health endpoint so Railway healthcheck passes while we migrate/connect.
+	earlyHealth := &http.Server{Addr: ":" + apiPort, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"starting"}`))
+			return
+		}
+		http.Error(w, "starting", http.StatusServiceUnavailable)
+	})}
+	go func() { _ = earlyHealth.ListenAndServe() }()
+	log.Printf("Early health endpoint listening on :%s/health", apiPort)
+
 	// 2. Dependencies
 	repo, err := repository.NewRepository(dbURL)
 	if err != nil {
@@ -735,6 +747,9 @@ func main() {
 	// Handle SIGINT/SIGTERM — will block on sigChan at end of main()
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Shut down early health endpoint before starting the real API server.
+	earlyHealth.Shutdown(context.Background())
 
 	// Start API in background
 	go func() {

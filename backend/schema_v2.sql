@@ -648,8 +648,8 @@ CREATE TABLE IF NOT EXISTS app.nft_collections (
     symbol           TEXT,
     description      TEXT,
     external_url     TEXT,
-    square_image     JSONB,
-    banner_image     JSONB,
+    square_image     TEXT,
+    banner_image     TEXT,
     socials          JSONB,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (contract_address, contract_name)
@@ -688,9 +688,12 @@ ALTER TABLE IF EXISTS app.nft_collections
 ALTER TABLE IF EXISTS app.nft_collections
   ADD COLUMN IF NOT EXISTS external_url TEXT;
 ALTER TABLE IF EXISTS app.nft_collections
-  ADD COLUMN IF NOT EXISTS square_image JSONB;
+  ADD COLUMN IF NOT EXISTS square_image TEXT;
 ALTER TABLE IF EXISTS app.nft_collections
-  ADD COLUMN IF NOT EXISTS banner_image JSONB;
+  ADD COLUMN IF NOT EXISTS banner_image TEXT;
+-- Fix type mismatch: these columns were originally JSONB but code treats them as TEXT.
+ALTER TABLE IF EXISTS app.nft_collections ALTER COLUMN square_image TYPE TEXT USING square_image::text;
+ALTER TABLE IF EXISTS app.nft_collections ALTER COLUMN banner_image TYPE TEXT USING banner_image::text;
 ALTER TABLE IF EXISTS app.nft_collections
   ADD COLUMN IF NOT EXISTS socials JSONB;
 ALTER TABLE IF EXISTS app.nft_collections
