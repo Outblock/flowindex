@@ -61,7 +61,7 @@ function Typewriter({ phase, onClickPlayground }: { phase: Phase; onClickPlaygro
           </span>
         )}
         {showCursor && (
-          <span className="crt-cursor ml-3 !w-[0.35em] !h-[0.7em]" />
+          <span className="crt-cursor ml-3 !w-[0.35em] !h-[0.7em] relative -top-[0.08em]" />
         )}
       </h1>
       <p className="mt-3 text-[10px] sm:text-xs text-emerald-500/60 font-mono tracking-[0.2em] h-5 uppercase">
