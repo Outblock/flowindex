@@ -221,6 +221,12 @@ func parseBalanceChanges(events []TxEvent) []BalanceChange {
 			token = parts[len(parts)-2] // contract name
 		}
 
+		// Skip generic FungibleToken/NonFungibleToken base events — they duplicate
+		// the specific token events (e.g., FlowToken.TokensWithdrawn)
+		if token == "FungibleToken" || token == "NonFungibleToken" {
+			continue
+		}
+
 		// Parse Cadence JSON event payload to extract amount and address
 		amount, address = parseCadenceEventPayload(ev.Payload)
 
