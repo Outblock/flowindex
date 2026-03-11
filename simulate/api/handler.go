@@ -52,6 +52,15 @@ type Handler struct {
 	recovering         atomic.Bool
 }
 
+// HealthSnapshot captures watchdog-related health signals for external monitoring.
+type HealthSnapshot struct {
+	Recovering           bool  `json:"recovering"`
+	Stalled              bool  `json:"stalled"`
+	LastSealedHeight     int64 `json:"last_sealed_height"`
+	SecondsSinceProgress int64 `json:"seconds_since_progress"`
+	StuckTimeoutSeconds  int64 `json:"stuck_timeout_seconds"`
+}
+
 // NewHandler creates a new simulation handler and starts background warmup.
 // Warmup runs immediately on start, then repeats every hour to keep the
 // emulator's fork-mode cache fresh.
@@ -65,6 +74,23 @@ func NewHandler(client *Client, emulatorContainer string, stuckTimeoutSec int) *
 	go h.warmupLoop()
 	go h.watchdog()
 	return h
+}
+
+// HealthSnapshot returns watchdog progress metrics used by /health.
+func (h *Handler) HealthStatus() HealthSnapshot {
+	last := time.Unix(h.lastBlockChange.Load(), 0)
+	since := time.Since(last)
+	if since < 0 {
+		since = 0
+	}
+
+	return HealthSnapshot{
+		Recovering:           h.recovering.Load(),
+		Stalled:              since > h.stuckTimeout,
+		LastSealedHeight:     h.lastBlockHeight.Load(),
+		SecondsSinceProgress: int64(since.Seconds()),
+		StuckTimeoutSeconds:  int64(h.stuckTimeout.Seconds()),
+	}
 }
 
 // watchdog monitors the emulator for stuck blocks and auto-recovers by
