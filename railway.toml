@@ -1,2 +1,3 @@
-[build]
-dockerfilePath = "ai/chat/Dockerfile"
+# Per-service Dockerfile paths are configured via RAILWAY_DOCKERFILE_PATH
+# environment variable in each service's settings. Do NOT set a global
+# dockerfilePath here — it overrides all services.
