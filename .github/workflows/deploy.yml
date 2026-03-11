@@ -129,6 +129,7 @@ jobs:
             simulator:
               - 'simulate/emulator/**'
               - 'simulate/api/**'
+              - '.github/workflows/deploy.yml'
             simulate-landing:
               - 'simulate/frontend/**'
       - name: Resolve outputs
