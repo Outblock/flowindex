@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -36,8 +37,11 @@ type SimulateResponse struct {
 }
 
 // Handler serves the /flow/v1/simulate endpoint.
+// Requests are serialized via a mutex because the Flow Emulator
+// can only execute one block at a time.
 type Handler struct {
 	client *Client
+	mu     sync.Mutex
 }
 
 // NewHandler creates a new simulation handler.
@@ -71,6 +75,10 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	for i, a := range req.Authorizers {
 		req.Authorizers[i] = normalizeAddress(a)
 	}
+
+	// Serialize: emulator can only execute one block at a time
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	// Create a snapshot before simulation
 	snapName := fmt.Sprintf("sim-%d", time.Now().UnixNano())

@@ -60,7 +60,7 @@ func NewClient(baseURL string) *Client {
 		baseURL:  base,
 		adminURL: admin,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 90 * time.Second,
 		},
 	}
 }
@@ -71,7 +71,7 @@ func NewClientWithAdmin(baseURL, adminURL string) *Client {
 		baseURL:  strings.TrimRight(baseURL, "/"),
 		adminURL: strings.TrimRight(adminURL, "/"),
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 90 * time.Second,
 		},
 	}
 }
@@ -234,7 +234,7 @@ func (c *Client) SendTransaction(ctx context.Context, tx *TxRequest) (*TxResult,
 func (c *Client) waitForResult(ctx context.Context, txID string) (*TxResult, error) {
 	url := fmt.Sprintf("%s/v1/transaction_results/%s", c.baseURL, txID)
 
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 120; i++ {
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return nil, fmt.Errorf("building result request: %w", err)
@@ -297,11 +297,11 @@ func (c *Client) waitForResult(ctx context.Context, txID string) (*TxResult, err
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(500 * time.Millisecond):
 		}
 	}
 
-	return nil, fmt.Errorf("transaction %s did not seal after 30 polls", txID)
+	return nil, fmt.Errorf("transaction %s did not seal after 60s", txID)
 }
 
 // CreateSnapshot creates a named snapshot of the emulator state.
