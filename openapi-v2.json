@@ -7758,11 +7758,6 @@
           "Simulate"
         ],
         "summary": "Simulate transaction (decoded)",
-        "servers": [
-          {
-            "url": "https://simulator.flowindex.io/api"
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -7814,11 +7809,6 @@
           "Simulate"
         ],
         "summary": "Simulate transaction (raw events)",
-        "servers": [
-          {
-            "url": "https://simulator.flowindex.io/api"
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -13014,6 +13004,14 @@
           "delta": {
             "type": "string",
             "description": "Signed delta (e.g. -10 or 10)"
+          },
+          "before": {
+            "type": "string",
+            "description": "Balance before the simulated transaction, when available"
+          },
+          "after": {
+            "type": "string",
+            "description": "Balance after the simulated transaction, when available"
           }
         }
       },

@@ -41,7 +41,7 @@ type SimulateResponse struct {
 	ComputationUsed int64           `json:"computation_used"`
 }
 
-// Handler serves the /flow/v1/simulate endpoint.
+// Handler serves the /api/simulate endpoint.
 // Requests are serialized via a mutex because the Flow Emulator
 // can only execute one block at a time.
 type Handler struct {
