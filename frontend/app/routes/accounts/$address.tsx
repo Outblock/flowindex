@@ -46,7 +46,7 @@ const LABEL_CATEGORY_CONFIG: Record<string, { icon: LucideIcon; className: strin
 const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'staking', 'keys', 'contracts', 'storage', 'linked'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
-const VALID_SUBTABS = ['all', 'ft', 'nft', 'scheduled', 'cadence', 'evm'] as const;
+const VALID_SUBTABS = ['all', 'ft', 'nft', 'staking', 'scheduled', 'cadence', 'evm'] as const;
 type AccountSubTab = (typeof VALID_SUBTABS)[number];
 
 export const Route = createFileRoute('/accounts/$address')({
