@@ -65,9 +65,60 @@ function CurlHighlighted() {
   return (
     <div className="relative">
       <CopyButton text={CURL_TEXT} />
-      <pre className="p-5 text-[11px] leading-relaxed overflow-x-auto text-zinc-300">
-        <code>{CURL_TEXT}</code>
-      </pre>
+    <pre className="p-5 text-[11px] leading-relaxed overflow-x-auto">
+      <code>
+        <span className="text-yellow-300">curl</span>
+        <span className="text-zinc-400"> -X </span>
+        <span className="text-cyan-400">POST</span>
+        <span className="text-zinc-400"> https://simulator.flowindex.io/api/simulate \{'\n'}</span>
+        <span className="text-zinc-400">  -H </span>
+        <span className="text-emerald-400">"Content-Type: application/json"</span>
+        <span className="text-zinc-400"> \{'\n'}</span>
+        <span className="text-zinc-400">  -d </span>
+        <span className="text-emerald-400">{"'"}</span>
+        <span className="text-zinc-400">{'{'}{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"cadence"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"transaction(amount: UFix64) {'{ ... }'}"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"arguments"</span>
+        <span className="text-zinc-400">: [{'{'}</span>
+        <span className="text-purple-400">"type"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"UFix64"</span>
+        <span className="text-zinc-400">, </span>
+        <span className="text-purple-400">"value"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"10.0"</span>
+        <span className="text-zinc-400">{'}'}],{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"authorizers"</span>
+        <span className="text-zinc-400">: [</span>
+        <span className="text-emerald-400">"0x1654653399040a61"</span>
+        <span className="text-zinc-400">],{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"payer"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"0x1654653399040a61"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"scheduled"</span>
+        <span className="text-zinc-400">: {'{'}{'\n'}</span>
+        <span className="text-zinc-400">{'      '}</span>
+        <span className="text-purple-400">"advance_seconds"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">2.5</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'      '}</span>
+        <span className="text-purple-400">"advance_blocks"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">2</span>
+        <span className="text-zinc-400">{'\n'}{'    }'}{'\n'}{'  }'}</span>
+        <span className="text-emerald-400">{"'"}</span>
+      </code>
+    </pre>
     </div>
   )
 }
@@ -76,9 +127,108 @@ function ResponseHighlighted() {
   return (
     <div className="relative">
       <CopyButton text={RESPONSE_TEXT} />
-      <pre className="p-5 text-[11px] leading-relaxed overflow-x-auto text-zinc-300">
-        <code>{RESPONSE_TEXT}</code>
-      </pre>
+    <pre className="p-5 text-[11px] leading-relaxed overflow-x-auto">
+      <code>
+        <span className="text-zinc-400">{'{'}{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"success"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-cyan-400">true</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"summary"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"Transfer 10.0 FLOW"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"transfers"</span>
+        <span className="text-zinc-400">: [{'{'}{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"token"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"A.1654653399040a61.FlowToken"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"amount"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"10.00000000"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"from_address"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"0x1654653399040a61"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"to_address"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"0xf8d6e0586b0a20c7"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"transfer_type"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"transfer"</span>
+        <span className="text-zinc-400">{'\n'}{'  '}],{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"balanceChanges"</span>
+        <span className="text-zinc-400">: [{'\n'}</span>
+        <span className="text-zinc-400">{'    {'} </span>
+        <span className="text-purple-400">"address"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"1654653399040a61"</span>
+        <span className="text-zinc-400">, </span>
+        <span className="text-purple-400">"delta"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-red-400">"-10.0"</span>
+        <span className="text-zinc-400"> {'}'},{'\n'}</span>
+        <span className="text-zinc-400">{'    {'} </span>
+        <span className="text-purple-400">"address"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"f8d6e0586b0a20c7"</span>
+        <span className="text-zinc-400">, </span>
+        <span className="text-purple-400">"delta"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-flow-green">"+10.0"</span>
+        <span className="text-zinc-400"> {'}'}{'\n'}</span>
+        <span className="text-zinc-400">{'  '}],{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"scheduledResults"</span>
+        <span className="text-zinc-400">: [{'{'}{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"tx_id"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"a9ca...e14f"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"success"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-cyan-400">true</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"computation_used"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">318</span>
+        <span className="text-zinc-400">{'\n'}{'  '}],{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"computationUsed"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">1204</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"fee"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">0.00001</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"tags"</span>
+        <span className="text-zinc-400">: [</span>
+        <span className="text-emerald-400">"ft-transfer"</span>
+        <span className="text-zinc-400">],{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"events"</span>
+        <span className="text-zinc-400">: [...]</span>
+        <span className="text-zinc-400">{'\n'}{'}'}</span>
+      </code>
+    </pre>
     </div>
   )
 }
