@@ -16,17 +16,6 @@ export type LspMode = 'auto' | 'wasm' | 'server';
 
 const LSP_WASM_URL = '/cadence-language-server.wasm';
 
-/** Check if the WASM file is in the browser's HTTP cache.
- *  Uses a HEAD request — fast and doesn't re-download. */
-async function isWasmCached(): Promise<boolean> {
-  try {
-    const resp = await fetch(LSP_WASM_URL, { method: 'HEAD', cache: 'only-if-cached', mode: 'same-origin' });
-    return resp.ok;
-  } catch {
-    return false;
-  }
-}
-
 /** Pre-fetch the LSP WASM with progress tracking.
  *  The browser caches the response so the worker's subsequent fetch is instant. */
 async function prefetchWasmWithProgress(
@@ -77,8 +66,9 @@ function buildDependencyKey(code: string): string {
 
 /** Hook that manages the Cadence LSP lifecycle.
  * Supports two modes:
- * - 'wasm': WASM v2 running in Web Worker (default, zero latency)
- * - 'server': Server-side LSP via WebSocket (more powerful)
+ * - 'wasm': WASM v2 running in a Web Worker
+ * - 'server': Server-side LSP via WebSocket
+ * Auto mode prefers server startup and warms WASM in the background.
  */
 export function useLsp(
   monacoInstance: typeof Monaco | null,
@@ -211,9 +201,10 @@ export function useLsp(
       let bridge: LSPBridge;
       let useServerLsp = false;
 
-      // Resolve 'auto' → check WASM cache, use wasm if cached, else server + background download
+      // Resolve 'auto' → prefer server for consistent behavior and faster startup.
+      // WASM stays available as an explicit mode and as an auto fallback.
       let resolvedMode: 'wasm' | 'server' = lspMode === 'auto'
-        ? (await isWasmCached() ? 'wasm' : 'server')
+        ? 'server'
         : (lspMode as 'wasm' | 'server');
 
       if (resolvedMode === 'server') {
@@ -235,7 +226,7 @@ export function useLsp(
           }
         }
 
-        // In auto mode with server: background-download WASM for next time
+        // In auto mode with server: background-download WASM so fallback stays warm.
         if (lspMode === 'auto' && useServerLsp) {
           prefetchWasmWithProgress(() => {}).catch(() => {});
         }

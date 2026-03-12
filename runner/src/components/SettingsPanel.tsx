@@ -28,9 +28,9 @@ export default function SettingsPanel({ lspMode, onLspModeChange, activeMode, on
         <div className="px-3 pb-3">
           <div className="flex rounded-md overflow-hidden border border-zinc-700 bg-zinc-900">
             {([
-              { mode: 'auto' as const, icon: Sparkles, label: 'Auto', color: 'violet', desc: 'Best of both worlds — uses WASM if cached, falls back to Server' },
-              { mode: 'wasm' as const, icon: Cpu, label: 'WASM', color: 'emerald', desc: 'Runs in browser Web Worker — zero latency, works offline, 47MB download' },
-              { mode: 'server' as const, icon: Server, label: 'Server', color: 'blue', desc: 'Remote LSP via WebSocket — full Go runtime, faster imports' },
+              { mode: 'auto' as const, icon: Sparkles, label: 'Auto', color: 'violet', desc: 'Starts on Server for fast, stable startup. Warms WASM in background for manual fallback.' },
+              { mode: 'wasm' as const, icon: Cpu, label: 'WASM', color: 'emerald', desc: 'Runs in browser Web Worker — local execution, works offline, larger initial download.' },
+              { mode: 'server' as const, icon: Server, label: 'Server', color: 'blue', desc: 'Remote LSP via WebSocket — fastest startup and the most consistent auto-mode behavior.' },
             ]).map(({ mode, icon: Icon, label, color, desc }) => (
               <div key={mode} className="relative flex-1 group">
                 <button

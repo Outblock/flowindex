@@ -28,6 +28,9 @@ interface LSPCompletionItem {
   filterText?: string;
 }
 
+const LSP_KIND_KEYWORD = 14;
+const LSP_KIND_SNIPPET = 15;
+
 interface LSPHoverResult {
   contents: string | { value: string; language?: string; kind?: string } | Array<string | { value: string; language?: string }>;
   range?: { start: { line: number; character: number }; end: { line: number; character: number } };
@@ -82,12 +85,43 @@ function sendNotification(bridge: LSPBridge, method: string, params: any) {
   bridge.sendToServer({ jsonrpc: '2.0', method, params } as any);
 }
 
+function prefetchImportsInBackground(code: string) {
+  void prefetchImports(code).catch((error) => {
+    console.warn('[LSP] Background import prefetch failed:', error);
+  });
+}
+
 // Track open documents and their versions
 const documentVersions = new Map<string, number>();
 
 function fileUri(path: string): string {
   if (path.startsWith('file://')) return path;
   return `file://${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
+function isMemberAccessContext(
+  model: Monaco.editor.ITextModel,
+  position: Monaco.Position,
+): boolean {
+  const linePrefix = model.getLineContent(position.lineNumber).slice(0, Math.max(0, position.column - 1));
+  return /(?:\.|\?\.)[A-Za-z_0-9]*$/.test(linePrefix);
+}
+
+function filterCompletionItemsForContext(
+  items: LSPCompletionItem[],
+  model: Monaco.editor.ITextModel,
+  position: Monaco.Position,
+): LSPCompletionItem[] {
+  if (!isMemberAccessContext(model, position)) {
+    return items;
+  }
+
+  return items.filter((item) => {
+    if ((item.sortText ?? '').startsWith('1')) {
+      return false;
+    }
+    return item.kind !== LSP_KIND_KEYWORD && item.kind !== LSP_KIND_SNIPPET;
+  });
 }
 
 /** Convert LSP severity (1=Error, 2=Warning, 3=Info, 4=Hint) to Monaco severity */
@@ -414,8 +448,9 @@ export class MonacoLspAdapter {
             });
             if (!result) return { suggestions: [] };
             const rawItems: LSPCompletionItem[] = Array.isArray(result) ? result : result.items || [];
+            const contextualItems = filterCompletionItemsForContext(rawItems, model, position);
             // Filter out items with empty labels (Monaco rejects them)
-            const items = rawItems.filter((item) => item.label && item.label.length > 0);
+            const items = contextualItems.filter((item) => item.label && item.label.length > 0);
             const word = model.getWordUntilPosition(position);
             const range = new m.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
             return {
@@ -530,39 +565,33 @@ export class MonacoLspAdapter {
   }
 
   /** Notify LSP that a document was opened.
-   *  Pre-fetches imported contracts asynchronously to warm the cache before
-   *  the WASM LSP tries to resolve them via synchronous XHR. */
+   *  Sync immediately so completion and hover use the latest buffer.
+   *  Dependency prefetch runs in the background. */
   openDocument(uri: string, code: string) {
     const version = 1;
     documentVersions.set(uri, version);
-    const bridge = this.bridge;
-
-    // Pre-fetch imports, then notify LSP so cached data is available
-    prefetchImports(code).finally(() => {
-      sendNotification(bridge, DID_OPEN, {
-        textDocument: {
-          uri: fileUri(uri),
-          languageId: 'cadence',
-          version,
-          text: code,
-        },
-      });
+    sendNotification(this.bridge, DID_OPEN, {
+      textDocument: {
+        uri: fileUri(uri),
+        languageId: 'cadence',
+        version,
+        text: code,
+      },
     });
+    prefetchImportsInBackground(code);
   }
 
   /** Notify LSP that a document changed.
-   *  Pre-fetches any new imported contracts before notifying the LSP. */
+   *  Sync immediately so completion does not lag behind the editor buffer.
+   *  Dependency prefetch runs in the background. */
   changeDocument(uri: string, code: string) {
     const version = (documentVersions.get(uri) || 0) + 1;
     documentVersions.set(uri, version);
-    const bridge = this.bridge;
-
-    prefetchImports(code).finally(() => {
-      sendNotification(bridge, DID_CHANGE, {
-        textDocument: { uri: fileUri(uri), version },
-        contentChanges: [{ text: code }],
-      });
+    sendNotification(this.bridge, DID_CHANGE, {
+      textDocument: { uri: fileUri(uri), version },
+      contentChanges: [{ text: code }],
     });
+    prefetchImportsInBackground(code);
   }
 
   /** Notify LSP that a document was closed */
