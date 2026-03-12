@@ -19,13 +19,24 @@ function getBackendBaseUrl() {
   return raw.replace(/\/+$/, '');
 }
 
+function getSimulatorBaseUrl() {
+  const raw = process.env.SIMULATOR_API_URL || 'https://simulator.flowindex.io';
+  return raw.replace(/\/+$/, '');
+}
+
+/** Paths that should be proxied to the simulator instead of the backend */
+const SIMULATOR_PATHS = ['/simulate', '/simulate/raw'];
+
 async function proxy(req: Request, ctx: Context): Promise<Response> {
   const { path = [] } = await ctx.params;
-  const backend = getBackendBaseUrl();
+  const joined = path.length ? `/${path.join('/')}` : '';
+
+  const isSimulator = SIMULATOR_PATHS.includes(joined);
+  const upstream = isSimulator ? getSimulatorBaseUrl() : getBackendBaseUrl();
+  const prefix = isSimulator ? '/api' : '';
 
   const url = new URL(req.url);
-  const joined = path.length ? `/${path.join('/')}` : '';
-  const target = `${backend}${joined}${url.search}`;
+  const target = `${upstream}${prefix}${joined}${url.search}`;
 
   // Forward headers (minus hop-by-hop / host).
   const headers = new Headers(req.headers);
