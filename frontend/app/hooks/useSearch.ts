@@ -150,7 +150,7 @@ export function useSearch() {
       abortRef.current = controller;
 
       try {
-        const results = await searchAll(q);
+        const results = await searchAll(q, 3, controller.signal);
 
         // Don't update state if this request was aborted
         if (controller.signal.aborted) return;

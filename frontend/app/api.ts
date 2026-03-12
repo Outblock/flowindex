@@ -77,10 +77,10 @@ export interface SearchAllResponse {
   nft_collections: SearchNFTCollectionResult[];
 }
 
-export async function searchAll(query: string, limit = 3): Promise<SearchAllResponse> {
+export async function searchAll(query: string, limit = 3, signal?: AbortSignal): Promise<SearchAllResponse> {
   const baseUrl = await resolveApiBaseUrl();
   const params = new URLSearchParams({ q: query, limit: String(limit) });
-  const res = await fetch(`${baseUrl}/flow/v1/search?${params}`);
+  const res = await fetch(`${baseUrl}/flow/v1/search?${params}`, { signal });
   if (!res.ok) throw new Error(`Search failed: ${res.status}`);
   const json = await res.json();
   return json.data ?? { contracts: [], tokens: [], nft_collections: [] };
