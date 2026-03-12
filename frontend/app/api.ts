@@ -44,3 +44,44 @@ const WS_BASE = (() => {
 export const WS_URL = import.meta.env.SSR
   ? ''
   : (WS_BASE.endsWith('/ws') ? WS_BASE : `${WS_BASE}/ws`);
+
+// ---------------------------------------------------------------------------
+// Unified search types
+// ---------------------------------------------------------------------------
+
+export interface SearchContractResult {
+  address: string;
+  name: string;
+  kind: string;
+  dependent_count: number;
+}
+
+export interface SearchTokenResult {
+  symbol: string;
+  name: string;
+  address: string;
+  contract_name: string;
+  market_symbol?: string;
+}
+
+export interface SearchNFTCollectionResult {
+  name: string;
+  address: string;
+  contract_name: string;
+  item_count: number;
+}
+
+export interface SearchAllResponse {
+  contracts: SearchContractResult[];
+  tokens: SearchTokenResult[];
+  nft_collections: SearchNFTCollectionResult[];
+}
+
+export async function searchAll(query: string, limit = 3): Promise<SearchAllResponse> {
+  const baseUrl = await resolveApiBaseUrl();
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  const res = await fetch(`${baseUrl}/flow/v1/search?${params}`);
+  if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+  const json = await res.json();
+  return json.data ?? { contracts: [], tokens: [], nft_collections: [] };
+}
