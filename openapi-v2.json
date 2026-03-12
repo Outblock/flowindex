@@ -2847,6 +2847,41 @@
         }
       }
     },
+    "/flow/scheduled-transaction/{id}": {
+      "get": {
+        "description": "Retrieves a single scheduled transaction by its scheduled ID.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Get Scheduled Transaction by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The scheduled transaction ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/flow.ScheduledTransactionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Scheduled transaction not found"
+          }
+        }
+      }
+    },
     "/flow/transaction": {
       "get": {
         "description": "Retrieves a paginated list of transactions, including details like gas used, fees, status, and more.",
