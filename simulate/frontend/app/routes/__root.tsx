@@ -23,7 +23,15 @@ function RootLayout() {
     <html lang="en" className="dark">
       <head>
         <HeadContent />
-        <script defer src="https://cloud.umami.is/script.js" data-website-id="bf956be7-611d-4c66-867c-c481209cc99c"></script>
+        <script defer src="https://cloud.umami.is/script.js" data-website-id="bf956be7-611d-4c66-867c-c481209cc99c" id="umami-script"></script>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function(){
+            var el = document.getElementById('umami-script');
+            if (el && !el.getAttribute('data-website-id')) {
+              el.setAttribute('data-website-id', 'bf956be7-611d-4c66-867c-c481209cc99c');
+            }
+          })();
+        `}} />
       </head>
       <body>
         <Navbar />
