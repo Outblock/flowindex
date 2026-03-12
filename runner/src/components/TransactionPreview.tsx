@@ -252,6 +252,45 @@ export default function TransactionPreview({
                     </div>
                   )}
 
+                  {/* Scheduled Callbacks */}
+                  {(simResult.scheduledResults?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                          Scheduled Callbacks
+                        </div>
+                        <span className="text-[10px] text-emerald-400 bg-emerald-900/30 border border-emerald-700/50 rounded px-1.5 py-0.5">
+                          {simResult.scheduledResults!.length} result{simResult.scheduledResults!.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {simResult.scheduledResults!.map((scheduled, i) => (
+                          <div key={`${scheduled.tx_id}-${i}`} className="bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-[10px] font-medium ${scheduled.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {scheduled.success ? 'Executed' : 'Failed'}
+                              </span>
+                              <span className="text-[10px] text-zinc-500 font-mono">
+                                {scheduled.computation_used.toLocaleString()} comp
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[10px] text-zinc-500 font-mono break-all">
+                              {scheduled.tx_id}
+                            </div>
+                            {(scheduled.events?.length ?? 0) > 0 && (
+                              <div className="mt-1 text-[10px] text-zinc-400">
+                                {scheduled.events!.length} event{scheduled.events!.length === 1 ? '' : 's'}
+                              </div>
+                            )}
+                            {scheduled.error && (
+                              <pre className="mt-2 text-[10px] text-red-400 whitespace-pre-wrap break-all">{scheduled.error}</pre>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Raw Events (collapsed fallback) */}
                   {simResult.events.length > 0 && (
                     <div>
