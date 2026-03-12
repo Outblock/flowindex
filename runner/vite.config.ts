@@ -19,6 +19,14 @@ export default defineConfig({
   assetsInclude: ['**/*.wasm'],
   server: {
     proxy: {
+      '/api/simulate/raw': {
+        target: 'https://simulator.flowindex.io',
+        changeOrigin: true,
+      },
+      '/api/simulate': {
+        target: 'https://simulator.flowindex.io',
+        changeOrigin: true,
+      },
       '/lsp': {
         target: 'ws://localhost:3001',
         ws: true,

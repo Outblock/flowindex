@@ -71,10 +71,25 @@ export interface SimulateResponse {
   tags: string[];
 }
 
-const SIMULATE_URL = import.meta.env.VITE_SIMULATE_URL || 'https://simulator.flowindex.io';
+function getSimulateEndpoint() {
+  const raw = import.meta.env.VITE_SIMULATE_URL?.trim();
+  if (!raw) {
+    return '/api/simulate';
+  }
+
+  const normalized = raw.replace(/\/+$/, '');
+
+  if (normalized.endsWith('/api/simulate')) {
+    return normalized;
+  }
+  if (normalized.endsWith('/api')) {
+    return `${normalized}/simulate`;
+  }
+  return `${normalized}/api/simulate`;
+}
 
 export async function simulateTransaction(req: SimulateRequest): Promise<SimulateResponse> {
-  const resp = await fetch(`${SIMULATE_URL}/api/simulate`, {
+  const resp = await fetch(getSimulateEndpoint(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),

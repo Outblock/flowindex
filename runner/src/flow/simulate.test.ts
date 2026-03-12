@@ -7,7 +7,7 @@ describe('simulateTransaction', () => {
   });
 
   it('returns simulation result on success', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({
         success: true,
@@ -20,6 +20,7 @@ describe('simulateTransaction', () => {
         tags: ['FT_TRANSFER'],
       }),
     });
+    global.fetch = fetchMock;
 
     const result = await simulateTransaction({
       cadence: 'transaction {}',
@@ -28,6 +29,10 @@ describe('simulateTransaction', () => {
       payer: '0x1234',
     });
 
+    expect(fetchMock).toHaveBeenCalledWith('/api/simulate', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }));
     expect(result.success).toBe(true);
     expect(result.balanceChanges).toHaveLength(1);
     expect(result.computationUsed).toBe(42);
