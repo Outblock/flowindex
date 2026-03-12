@@ -204,6 +204,31 @@ func (r *Repository) GetScheduledTransactionByID(ctx context.Context, id int64) 
 	return &st, nil
 }
 
+// GetScheduledHandlerStats returns status counts for a given handler owner.
+func (r *Repository) GetScheduledHandlerStats(ctx context.Context, owner string) (map[string]int, error) {
+	ownerBytes, _ := hex.DecodeString(owner)
+	rows, err := r.db.Query(ctx, `
+		SELECT status, COUNT(*) FROM app.scheduled_transactions
+		WHERE handler_owner = $1
+		GROUP BY status
+	`, ownerBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := map[string]int{}
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		stats[status] = count
+	}
+	return stats, nil
+}
+
 // GetScheduledTransactionsByOwner returns scheduled transactions for a specific handler owner.
 func (r *Repository) GetScheduledTransactionsByOwner(ctx context.Context, owner string, limit, offset int) ([]models.ScheduledTransaction, int, error) {
 	ownerBytes, _ := hex.DecodeString(owner)

@@ -716,7 +716,14 @@ func (s *Server) handleFlowScheduledTransactionByID(w http.ResponseWriter, r *ht
 		writeAPIError(w, http.StatusNotFound, "scheduled transaction not found")
 		return
 	}
-	writeAPIResponse(w, toScheduledTransactionOutput(*st), nil, nil)
+	out := toScheduledTransactionOutput(*st)
+
+	// Include handler stats (total executions by status for this owner)
+	if stats, err := s.repo.GetScheduledHandlerStats(r.Context(), st.HandlerOwner); err == nil {
+		out["handler_stats"] = stats
+	}
+
+	writeAPIResponse(w, out, nil, nil)
 }
 
 func toScheduledTransactionOutput(st models.ScheduledTransaction) map[string]interface{} {

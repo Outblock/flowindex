@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
-import { Clock, CheckCircle, Ban, Timer, Zap, ArrowLeft, Copy, Check, ExternalLink } from 'lucide-react';
+import { Clock, CheckCircle, Ban, Timer, Zap, ArrowLeft, Copy, Check, ExternalLink, BarChart3 } from 'lucide-react';
 import { AddressLink } from '../../components/AddressLink';
 import { resolveApiBaseUrl } from '../../api';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -27,6 +27,7 @@ interface ScheduledTx {
     executed_at?: string;
     fees_returned?: string;
     fees_deducted?: string;
+    handler_stats?: Record<string, number>;
 }
 
 function DetailSkeleton() {
@@ -132,9 +133,9 @@ function ScheduledTransactionDetail() {
                     const contracts = payload?.data;
                     if (Array.isArray(contracts)) {
                         const match = contracts.find((c: any) => c.name === name);
-                        if (match?.code) setContractCode(match.code);
-                    } else if (contracts?.code) {
-                        setContractCode(contracts.code);
+                        if (match) setContractCode(match.code || match.body || null);
+                    } else if (contracts) {
+                        setContractCode(contracts.code || contracts.body || null);
                     }
                 })
                 .catch(() => {})
@@ -295,6 +296,30 @@ function ScheduledTransactionDetail() {
                         </>
                     )}
                 </div>
+
+                {/* Handler Stats */}
+                {tx.handler_stats && Object.keys(tx.handler_stats).length > 0 && (
+                    <div className="mt-8">
+                        <h2 className="text-sm font-bold mb-3 text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                            <BarChart3 className="h-4 w-4" />
+                            Handler Execution Stats
+                            <span className="text-[10px] font-normal text-zinc-500">(owner: {tx.handler_owner})</span>
+                        </h2>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {[
+                                { label: 'Total', value: Object.values(tx.handler_stats).reduce((a, b) => a + b, 0), color: 'text-zinc-800 dark:text-zinc-200 bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10' },
+                                { label: 'Scheduled', value: tx.handler_stats['SCHEDULED'] || 0, color: 'text-amber-500 bg-amber-500/10 border-amber-500/20' },
+                                { label: 'Executed', value: tx.handler_stats['EXECUTED'] || 0, color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' },
+                                { label: 'Canceled', value: tx.handler_stats['CANCELED'] || 0, color: 'text-red-500 bg-red-500/10 border-red-500/20' },
+                            ].map(({ label, value, color }) => (
+                                <div key={label} className={`rounded-lg border px-4 py-3 ${color}`}>
+                                    <div className="text-[10px] uppercase tracking-widest opacity-70">{label}</div>
+                                    <div className="text-xl font-bold mt-1">{value.toLocaleString()}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Handler Contract Code */}
                 <div className="mt-8">

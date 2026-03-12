@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect, useCallback } from 'react';
-import { Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Timer, Zap, Ban } from 'lucide-react';
+import { CheckCircle, ChevronRight, Timer, Zap, Ban } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { resolveApiBaseUrl } from '../../api';
 import { Pagination } from '../../components/Pagination';
 import { formatRelativeTime } from '../../lib/time';
@@ -236,7 +237,7 @@ function ScheduledTransactions() {
     useEffect(() => {
         if (initialData?.data) {
             setTransactions(initialData.data);
-            const meta = initialData.meta;
+            const meta = initialData._meta;
             setTotal(meta?.total || 0);
             setHasNext((meta?.count || 0) >= 20);
         }
@@ -250,7 +251,7 @@ function ScheduledTransactions() {
             const res = await fetch(`${baseUrl}/flow/scheduled-transaction?limit=20&offset=${offset}`);
             const payload = await res.json();
             setTransactions(payload?.data || []);
-            const meta = payload?.meta;
+            const meta = payload?._meta;
             setTotal(meta?.total || 0);
             setHasNext((meta?.count || 0) >= 20);
         } catch (err) {
@@ -305,10 +306,13 @@ function ScheduledTransactions() {
                                 >
                                     {/* ID */}
                                     <div className="col-span-1 flex items-center gap-1.5">
-                                        {isExpanded
-                                            ? <ChevronDown className="h-3 w-3 text-zinc-400 flex-shrink-0" />
-                                            : <ChevronRight className="h-3 w-3 text-zinc-400 flex-shrink-0" />
-                                        }
+                                        <motion.div
+                                            animate={{ rotate: isExpanded ? 90 : 0 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="flex-shrink-0"
+                                        >
+                                            <ChevronRight className="h-3 w-3 text-zinc-400" />
+                                        </motion.div>
                                         <Link
                                             to={`/scheduled/${tx.scheduled_id}` as any}
                                             className="text-nothing-green-dark dark:text-nothing-green hover:underline text-xs font-medium"
@@ -369,7 +373,20 @@ function ScheduledTransactions() {
                                 </div>
 
                                 {/* Expanded details */}
-                                {isExpanded && <ExpandedRow tx={tx} />}
+                                <AnimatePresence initial={false}>
+                                    {isExpanded && (
+                                        <motion.div
+                                            key="expand"
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                                            style={{ overflow: 'hidden' }}
+                                        >
+                                            <ExpandedRow tx={tx} />
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
                         );
                     })}
