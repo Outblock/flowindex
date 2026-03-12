@@ -51,7 +51,7 @@ type SimulateResponse struct {
 }
 
 const (
-	maxScheduledAdvanceSeconds = 30.0
+	maxScheduledAdvanceSeconds = 5.0
 	maxScheduledAdvanceBlocks  = 20
 )
 

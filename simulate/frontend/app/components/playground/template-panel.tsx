@@ -86,7 +86,7 @@ export function TemplatePanel({
             <input
               type="number"
               min="0"
-              max="30"
+              max="5"
               step="0.1"
               value={scheduledAdvanceSeconds}
               onChange={(e) => onScheduledAdvanceSecondsChange(e.target.value)}
@@ -111,7 +111,7 @@ export function TemplatePanel({
         <p className="mt-3 text-[10px] leading-relaxed text-zinc-500">
           Leave both at <span className="text-zinc-400 font-mono">0</span> for a normal simulation. Increasing extra
           blocks is the main knob for simulating more scheduled callback rounds inside the same snapshot. Current
-          limits are <span className="text-zinc-400 font-mono">30s</span> and <span className="text-zinc-400 font-mono">20</span>{' '}
+          limits are <span className="text-zinc-400 font-mono">5s</span> and <span className="text-zinc-400 font-mono">20</span>{' '}
           extra blocks.
         </p>
       </div>

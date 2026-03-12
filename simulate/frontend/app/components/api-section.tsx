@@ -128,7 +128,7 @@ export function ApiSection() {
           <div className="rounded border border-zinc-800/60 bg-black/30 px-4 py-3">
             <div className="text-[10px] tracking-[2px] text-flow-green/70 mb-1">CURRENT LIMITS</div>
             <p className="text-[11px] leading-relaxed text-zinc-400">
-              The simulator currently caps waits at <span className="text-zinc-200 font-mono">30s</span> and extra
+              The simulator currently caps waits at <span className="text-zinc-200 font-mono">5s</span> and extra
               blocks at <span className="text-zinc-200 font-mono">20</span>. This prevents one request from holding the
               single emulator lane for minutes or hours.
             </p>

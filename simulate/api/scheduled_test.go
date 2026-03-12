@@ -17,7 +17,7 @@ func TestNormalizeScheduledOptions(t *testing.T) {
 		{name: "negative blocks", opts: &ScheduledOptions{AdvanceBlocks: -1}, wantErr: true},
 		{name: "too many blocks", opts: &ScheduledOptions{AdvanceBlocks: 21}, wantErr: true},
 		{name: "negative seconds", opts: &ScheduledOptions{AdvanceSeconds: -1}, wantErr: true},
-		{name: "too many seconds", opts: &ScheduledOptions{AdvanceSeconds: 31}, wantErr: true},
+		{name: "too many seconds", opts: &ScheduledOptions{AdvanceSeconds: 6}, wantErr: true},
 	}
 
 	for _, tt := range tests {
