@@ -45,3 +45,4 @@ runner/public/*.wasm
 !runner/public/codegen.wasm
 !runner/public/codegen-wasm_exec.js
 skills/.registry.json
+.superpowers/
