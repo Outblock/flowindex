@@ -12,13 +12,13 @@ export const Route = createFileRoute('/ecosystem')({
 const products = [
   { title: 'Simulator', description: 'Fork mainnet state and dry-run any Cadence transaction — catch errors before they cost real tokens.', size: 'md:col-span-8', color: '#00ef8b', logo: '/logos/simulator.png', label: 'STABLE' },
   { title: 'Passkey', description: 'Passwordless Flow wallets powered by WebAuthn. One tap to sign, no seed phrases.', size: 'md:col-span-4', color: '#3b82f6', logo: '/logos/passkey.png', label: 'NEW' },
-  { title: 'Runner', description: 'A web-based Cadence IDE with instant preview. Write, compile, and deploy — all in the browser.', size: 'md:col-span-4', color: '#8b5cf6', logo: '/logos/runner.png', label: 'BETA' },
-  { title: 'AI Assistant', description: 'Chat-driven Cadence copilot. Ask it to write, explain, audit, or optimize your smart contracts in real time.', size: 'md:col-span-8', color: '#f59e0b', logo: '/logos/ai.png', label: 'AI' },
+  { title: 'Runner', description: 'A web-based Cadence IDE with instant preview. Write, compile, and deploy — all in the browser.', size: 'md:col-span-8', color: '#8b5cf6', logo: '/logos/runner.png', label: 'BETA' },
+  { title: 'AI Assistant', description: 'Chat-driven Cadence copilot. Ask it to write, explain, audit, or optimize your smart contracts in real time.', size: 'md:col-span-4', color: '#f59e0b', logo: '/logos/ai.png', label: 'AI' },
   { title: 'Agent Wallet', description: 'Programmable custodial wallets built for AI agents — sign, send, and interact on-chain autonomously.', size: 'md:col-span-4', color: '#ef4444', logo: '/logos/agent-wallet.png', label: 'BETA' },
-  { title: 'Studio', description: 'Visual workflow builder for on-chain automation. Drag, connect, deploy — like n8n for Flow.', size: 'md:col-span-4', color: '#ec4899', logo: '/logos/studio.png', label: 'WORKFLOW' },
-  { title: 'Webhook', description: 'Real-time on-chain event delivery to your backend. Subscribe to any event, get notified instantly.', size: 'md:col-span-4', color: '#06b6d4', logo: '/logos/webhook.png', label: 'CORE' },
-  { title: 'Cadence MCP', description: 'Bridge between LLMs and Flow. Give any AI model native access to Cadence tooling via Model Context Protocol.', size: 'md:col-span-6', color: '#14b8a6', logo: '/logos/mcp.png', label: 'PROTOCOL' },
-  { title: 'Cadence LSP', description: 'Autocomplete, go-to-definition, inline diagnostics — full Language Server Protocol support for Cadence in any editor.', size: 'md:col-span-6', color: '#a78bfa', icon: Search, label: 'TOOLING' },
+  { title: 'Studio', description: 'Visual workflow builder for on-chain automation. Drag, connect, deploy — like n8n for Flow.', size: 'md:col-span-8', color: '#ec4899', logo: '/logos/studio.png', label: 'WORKFLOW' },
+  { title: 'Webhook', description: 'Real-time on-chain event delivery to your backend. Subscribe to any event, get notified instantly.', size: 'md:col-span-4', color: '#06b6d4', logo: '/logos/webhook.png', logoPosition: 'bg-right-top', label: 'CORE' },
+  { title: 'Cadence MCP', description: 'Bridge between LLMs and Flow. Give any AI model native access to Cadence tooling via Model Context Protocol.', size: 'md:col-span-8', color: '#14b8a6', logo: '/logos/mcp.png', label: 'PROTOCOL' },
+  { title: 'Cadence LSP', description: 'Autocomplete, go-to-definition, inline diagnostics — full Language Server Protocol support for Cadence in any editor.', size: 'md:col-span-4', color: '#a78bfa', icon: Search, label: 'TOOLING' },
 ]
 
 function EcosystemPage() {

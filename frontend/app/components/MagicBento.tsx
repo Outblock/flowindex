@@ -13,6 +13,7 @@ export interface BentoCardProps {
   icon?: React.ElementType;
   size?: string;
   logo?: string;
+  logoPosition?: string;
 }
 
 export interface BentoProps {
@@ -232,7 +233,7 @@ const MagicBento: React.FC<BentoProps> = ({
               {/* Logo Background */}
               {(card.logo || card.icon) && (
                 <div 
-                  className="card-logo absolute inset-0 opacity-[0.35] pointer-events-none bg-no-repeat bg-right-bottom flex items-end justify-end p-4 overflow-hidden" 
+                  className={`card-logo absolute inset-0 opacity-[0.35] pointer-events-none bg-no-repeat ${card.logoPosition || 'bg-right-bottom'} flex items-end justify-end p-4 overflow-hidden`} 
                   style={{ 
                     backgroundImage: card.logo ? `url(${card.logo})` : 'none',
                     backgroundSize: '60%',
