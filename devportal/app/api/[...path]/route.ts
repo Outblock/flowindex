@@ -32,11 +32,11 @@ async function proxy(req: Request, ctx: Context): Promise<Response> {
   const joined = path.length ? `/${path.join('/')}` : '';
 
   const isSimulator = SIMULATOR_PATHS.includes(joined);
-  const upstream = isSimulator ? getSimulatorBaseUrl() : getBackendBaseUrl();
+  const baseUrl = isSimulator ? getSimulatorBaseUrl() : getBackendBaseUrl();
   const prefix = isSimulator ? '/api' : '';
 
   const url = new URL(req.url);
-  const target = `${upstream}${prefix}${joined}${url.search}`;
+  const target = `${baseUrl}${prefix}${joined}${url.search}`;
 
   // Forward headers (minus hop-by-hop / host).
   const headers = new Headers(req.headers);

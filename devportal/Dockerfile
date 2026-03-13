@@ -1,6 +1,6 @@
 FROM oven/bun:1 AS deps
 
-# We build from the repository root context so the portal can reuse `../docs/*`.
+# We build from the repository root context so the portal can reuse `../docs-public/*`.
 WORKDIR /app/devportal
 
 # NOTE: fumadocs-mdx runs on postinstall and requires source.config.ts + docs content.
