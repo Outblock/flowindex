@@ -338,7 +338,7 @@ export function FlowDiagram({ initialNodes, initialEdges, isDark }: {
 
 function transfersToFlows(detail: any): Flow[] {
     const flows: Flow[] = [];
-    const ftTransfers: any[] = detail?.ft_transfers || [];
+    const ftTransfers: any[] = (detail?.ft_transfers || []).map((transfer: any) => ({ ...transfer }));
     const nftTransfers: any[] = detail?.nft_transfers || [];
     const defiEvents: any[] = detail?.defi_events || [];
 

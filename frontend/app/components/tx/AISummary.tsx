@@ -3,7 +3,7 @@ import { Sparkles, Loader2, Shield, ShieldAlert, ShieldCheck, AlertTriangle, Lig
 import { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { resolveApiBaseUrl } from '../../api';
-import { deriveActivityType, buildSummaryLine } from '../TransactionRow';
+import { deriveActivityType, buildSummaryLine, getPreferredTransferSummary } from '../TransactionRow';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Flow, buildTokenIconMap, layoutGraph, FlowDiagram } from './TransferFlowDiagram';
 import { ExpandableFlowContainer } from '../ExpandableFlowContainer';
@@ -150,7 +150,7 @@ export default function AISummary({ transaction }: { transaction: any }) {
                 activity_type: activity.type,
                 activity_label: activity.label,
                 preliminary_summary: summaryLine,
-                transfer_summary: transaction.transfer_summary || null,
+                transfer_summary: getPreferredTransferSummary(transaction) || null,
                 events: (transaction.events || []).slice(0, 30).map((e: any) => ({
                     type: e.type,
                     event_name: e.event_name,

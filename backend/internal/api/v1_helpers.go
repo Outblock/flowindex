@@ -754,7 +754,7 @@ func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[s
 			"amount":    f.Amount,
 			"direction": f.Direction,
 		}
-		if f.Counterparty != "" {
+		if f.Counterparty != "" && (f.Direction == "in" || f.Direction == "out") && !strings.ContainsAny(f.Counterparty, ",>") {
 			item["counterparty"] = formatAddressV1(f.Counterparty)
 		}
 		if m, ok := ftMeta[f.Token]; ok {
@@ -780,7 +780,7 @@ func toTransferSummaryOutput(s repository.TransferSummary, ftMeta, nftMeta map[s
 			"count":      n.Count,
 			"direction":  n.Direction,
 		}
-		if n.Counterparty != "" {
+		if n.Counterparty != "" && (n.Direction == "in" || n.Direction == "out") && !strings.ContainsAny(n.Counterparty, ",>") {
 			item["counterparty"] = formatAddressV1(n.Counterparty)
 		}
 		if m, ok := nftMeta[n.Collection]; ok {
@@ -972,51 +972,51 @@ func enrichWithTemplates(outputs []map[string]interface{}, templates map[string]
 
 // importCategoryMap maps well-known contract names to human-readable categories.
 var importCategoryMap = map[string]string{
-	"FlowToken":                   "token_transfer",
-	"FungibleToken":               "token_transfer",
-	"NonFungibleToken":            "nft",
-	"MetadataViews":               "nft",
-	"NFTStorefrontV2":             "marketplace",
-	"NFTStorefront":               "marketplace",
-	"TopShot":                     "nft",
-	"TopShotMarketV3":             "marketplace",
-	"FlowStakingCollection":       "staking",
-	"FlowIDTableStaking":          "staking",
-	"LockedTokens":                "staking",
-	"StakingProxy":                "staking",
-	"EVM":                         "evm",
-	"FlowClusterQC":               "system",
-	"FlowDKG":                     "system",
-	"FlowEpoch":                   "system",
-	"FlowServiceAccount":          "system",
-	"FlowFees":                    "system",
-	"IncrementSwapRouter":         "defi",
-	"IncrementSwapPair":           "defi",
-	"SwapRouter":                  "defi",
-	"SwapFactory":                 "defi",
-	"BloctoSwapPair":              "defi",
-	"HybridCustody":               "account_linking",
-	"AccountCreator":              "account_creation",
-	"Crypto":                      "crypto",
-	"FungibleTokenSwitchboard":    "token_transfer",
-	"FungibleTokenMetadataViews":  "token_transfer",
-	"ViewResolver":                "nft",
-	"Burner":                      "token_transfer",
+	"FlowToken":                  "token_transfer",
+	"FungibleToken":              "token_transfer",
+	"NonFungibleToken":           "nft",
+	"MetadataViews":              "nft",
+	"NFTStorefrontV2":            "marketplace",
+	"NFTStorefront":              "marketplace",
+	"TopShot":                    "nft",
+	"TopShotMarketV3":            "marketplace",
+	"FlowStakingCollection":      "staking",
+	"FlowIDTableStaking":         "staking",
+	"LockedTokens":               "staking",
+	"StakingProxy":               "staking",
+	"EVM":                        "evm",
+	"FlowClusterQC":              "system",
+	"FlowDKG":                    "system",
+	"FlowEpoch":                  "system",
+	"FlowServiceAccount":         "system",
+	"FlowFees":                   "system",
+	"IncrementSwapRouter":        "defi",
+	"IncrementSwapPair":          "defi",
+	"SwapRouter":                 "defi",
+	"SwapFactory":                "defi",
+	"BloctoSwapPair":             "defi",
+	"HybridCustody":              "account_linking",
+	"AccountCreator":             "account_creation",
+	"Crypto":                     "crypto",
+	"FungibleTokenSwitchboard":   "token_transfer",
+	"FungibleTokenMetadataViews": "token_transfer",
+	"ViewResolver":               "nft",
+	"Burner":                     "token_transfer",
 }
 
 // categoryPriority defines precedence when multiple imports match.
 // Lower number = higher priority.
 var categoryPriority = map[string]int{
-	"marketplace":    1,
-	"defi":           2,
-	"staking":        3,
-	"nft":            4,
-	"evm":            5,
-	"account_linking": 6,
+	"marketplace":      1,
+	"defi":             2,
+	"staking":          3,
+	"nft":              4,
+	"evm":              5,
+	"account_linking":  6,
 	"account_creation": 7,
-	"token_transfer": 8,
-	"crypto":         9,
-	"system":         10,
+	"token_transfer":   8,
+	"crypto":           9,
+	"system":           10,
 }
 
 // enrichWithScriptImports derives template_category from script imports for txs that have no category yet.

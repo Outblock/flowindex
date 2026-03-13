@@ -858,6 +858,7 @@ type FTTransferRow struct {
 	ToAddress    string `json:"to_address"`
 	Amount       string `json:"amount"`
 	EventIndex   int    `json:"event_index"`
+	TxID         string `json:"tx_id,omitempty"`
 }
 
 // GetFTTransfersByTransactionID returns all FT transfer rows for a transaction.
@@ -888,6 +889,42 @@ func (r *Repository) GetFTTransfersByTransactionID(ctx context.Context, txID str
 			return nil, err
 		}
 		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// GetFTTransfersByTxRefs returns raw FT transfer rows grouped by transaction ID.
+// Uses transaction_id = ANY + block_height = ANY for runtime partition pruning.
+func (r *Repository) GetFTTransfersByTxRefs(ctx context.Context, refs []TxRef) (map[string][]FTTransferRow, error) {
+	if len(refs) == 0 {
+		return map[string][]FTTransferRow{}, nil
+	}
+
+	txIDBytes, heights := splitTxRefs(refs)
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(transaction_id, 'hex') AS tx_id,
+		       COALESCE('A.' || encode(token_contract_address, 'hex') || '.' || NULLIF(contract_name, ''), encode(token_contract_address, 'hex')) AS token,
+		       COALESCE(contract_name, '') AS contract_name,
+		       COALESCE(encode(from_address, 'hex'), '') AS from_address,
+		       COALESCE(encode(to_address, 'hex'), '') AS to_address,
+		       COALESCE(amount::text, '0') AS amount,
+		       event_index
+		FROM app.ft_transfers
+		WHERE transaction_id = ANY($1) AND block_height = ANY($2)
+		  AND contract_name NOT IN ('FungibleToken', 'NonFungibleToken')
+		ORDER BY block_height DESC, transaction_id, event_index`, txIDBytes, heights)
+	if err != nil {
+		return nil, fmt.Errorf("get ft transfers by tx refs: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string][]FTTransferRow, len(refs))
+	for rows.Next() {
+		var row FTTransferRow
+		if err := rows.Scan(&row.TxID, &row.Token, &row.ContractName, &row.FromAddress, &row.ToAddress, &row.Amount, &row.EventIndex); err != nil {
+			return nil, err
+		}
+		out[row.TxID] = append(out[row.TxID], row)
 	}
 	return out, rows.Err()
 }

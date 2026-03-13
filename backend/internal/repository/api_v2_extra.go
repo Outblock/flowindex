@@ -84,9 +84,9 @@ func (r *Repository) CountFTTokens(ctx context.Context) (int64, error) {
 
 // FTTokenStats holds aggregate statistics about FT tokens.
 type FTTokenStats struct {
-	Total       int64 `json:"total"`
-	WithPrice   int64 `json:"with_price"`
-	EVMBridged  int64 `json:"evm_bridged"`
+	Total      int64 `json:"total"`
+	WithPrice  int64 `json:"with_price"`
+	EVMBridged int64 `json:"evm_bridged"`
 }
 
 // GetFTTokenStats returns summary counts for FT tokens.
@@ -770,6 +770,79 @@ func (r *Repository) GetEVMTransactionsByCadenceTx(ctx context.Context, txID str
 		out = append(out, row)
 	}
 	return out, nil
+}
+
+// GetEVMTransactionsByCadenceTxRefs returns EVM executions grouped by cadence tx ID.
+// Uses transaction_id = ANY + block_height = ANY for runtime partition pruning.
+func (r *Repository) GetEVMTransactionsByCadenceTxRefs(ctx context.Context, refs []TxRef) (map[string][]EVMTransactionRecord, error) {
+	if len(refs) == 0 {
+		return map[string][]EVMTransactionRecord{}, nil
+	}
+
+	txIDBytes, heights := splitTxRefs(refs)
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			encode(transaction_id, 'hex') AS tx_id,
+			block_height,
+			COALESCE(encode(evm_hash, 'hex'), ''),
+			COALESCE(encode(from_address, 'hex'), ''),
+			COALESCE(encode(to_address, 'hex'), ''),
+			COALESCE(nonce, 0),
+			COALESCE(gas_limit, 0),
+			COALESCE(gas_used, 0),
+			COALESCE(gas_price::text, ''),
+			COALESCE(gas_fee_cap::text, ''),
+			COALESCE(gas_tip_cap::text, ''),
+			COALESCE(value::text, ''),
+			COALESCE(tx_type, 0),
+			COALESCE(chain_id::text, ''),
+			COALESCE(data, ''),
+			COALESCE(logs::text, ''),
+			COALESCE(transaction_index, 0),
+			COALESCE(event_index, 0),
+			COALESCE(status_code, 0),
+			COALESCE(status, ''),
+			timestamp
+		FROM app.evm_transactions
+		WHERE transaction_id = ANY($1) AND block_height = ANY($2)
+		ORDER BY block_height DESC, transaction_id, event_index`, txIDBytes, heights)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string][]EVMTransactionRecord, len(refs))
+	for rows.Next() {
+		var txID string
+		var row EVMTransactionRecord
+		if err := rows.Scan(
+			&txID,
+			&row.BlockHeight,
+			&row.EVMHash,
+			&row.FromAddress,
+			&row.ToAddress,
+			&row.Nonce,
+			&row.GasLimit,
+			&row.GasUsed,
+			&row.GasPrice,
+			&row.GasFeeCap,
+			&row.GasTipCap,
+			&row.Value,
+			&row.TxType,
+			&row.ChainID,
+			&row.Data,
+			&row.Logs,
+			&row.Position,
+			&row.EventIndex,
+			&row.StatusCode,
+			&row.Status,
+			&row.Timestamp,
+		); err != nil {
+			return nil, err
+		}
+		out[txID] = append(out[txID], row)
+	}
+	return out, rows.Err()
 }
 
 func (r *Repository) ErrNotImplemented(msg string) error {

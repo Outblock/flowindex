@@ -20,6 +20,7 @@ import AISummary from '../../components/tx/AISummary';
 import TransferFlowDiagram from '../../components/tx/TransferFlowDiagram';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import { deriveEnrichments, decodeEVMCallData } from '../../lib/deriveFromEvents';
+import { buildTxDetailAssetView, type TxDetailDisplayTransferRow } from '../../lib/txAssetFlow';
 import { NFTDetailModal } from '../../components/NFTDetailModal';
 import { UsdValue } from '../../components/UsdValue';
 import { parseCadenceError } from '../../lib/parseCadenceError';
@@ -395,9 +396,43 @@ function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, fromTag, toT
     );
 }
 
-function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, onNftClick, isAdmin }: { transaction: any; formatAddress: (addr: string) => string; onNftClick?: (nt: any) => void; isAdmin?: boolean }) {
-    const summaryLine = buildSummaryLine(transaction);
-    const hasFT = transaction.ft_transfers?.length > 0;
+function renderTransferRowBadge(row: TxDetailDisplayTransferRow): React.ReactNode {
+    const badges: React.ReactNode[] = [];
+    if (row.layer === 'evm') {
+        badges.push(
+            <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                <Globe className="w-2.5 h-2.5" /> EVM
+            </span>
+        );
+    }
+    if (row.layer === 'cross_vm') {
+        badges.push(
+            <span className="inline-flex items-center gap-1 text-[9px] text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                <Globe className="w-2.5 h-2.5" /> Cross-VM
+            </span>
+        );
+    }
+    if (row.layer === 'cadence') {
+        badges.push(
+            <span className="inline-flex items-center gap-1 text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                <Globe className="w-2.5 h-2.5" /> Cadence
+            </span>
+        );
+    }
+    if (row.count > 1) {
+        badges.push(
+            <span className="text-[9px] text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded">
+                ×{row.count}
+            </span>
+        );
+    }
+    if (badges.length === 0) return null;
+    return <>{badges.map((badge, index) => <span key={index}>{badge}</span>)}</>;
+}
+
+function TransactionSummaryCard({ transaction, assetView, formatAddress: _formatAddress, onNftClick, isAdmin }: { transaction: any; assetView: ReturnType<typeof buildTxDetailAssetView>; formatAddress: (addr: string) => string; onNftClick?: (nt: any) => void; isAdmin?: boolean }) {
+    const summaryLine = assetView.summaryLine || buildSummaryLine(assetView.summaryTransaction);
+    const hasFT = assetView.transferListRows.length > 0;
     const hasDefi = transaction.defi_events?.length > 0;
     const hasEvm = transaction.is_evm && (transaction.evm_hash || transaction.evm_executions?.length > 0);
     const tags = (transaction.tags || []).map((t: string) => t.toLowerCase());
@@ -447,91 +482,35 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
 
             {/* Transfer flow diagram (auto-synthesized) */}
             <div className="mb-4">
-                <TransferFlowDiagram detail={transaction} />
+                <TransferFlowDiagram detail={assetView.canonicalTransaction} />
             </div>
 
-            {/* FT transfer flow rows — aggregated by (from, to, token) */}
-            {hasFT && (() => {
-                // Build display rows: for cross-VM transfers with evm_to/from, split into
-                // two rows (Cadence leg + EVM leg) so the full path is visible.
-                type FlowRowData = { from: string; to: string; symbol: string; logo: string; total: number; count: number; usdPrice: number; fromTag?: string; toTag?: string; badge?: React.ReactNode };
-                const displayRows: FlowRowData[] = [];
-                const agg = new Map<string, FlowRowData>();
-                for (const ft of transaction.ft_transfers) {
-                    const sym = ft.token_symbol || ft.token?.split('.').pop() || '';
-                    const amount = parseFloat(ft.amount) || 0;
-                    const evmTo = ft.evm_to_address;
-                    const evmFrom = ft.evm_from_address;
-                    // Cross-VM with EVM destination: split into Cadence + EVM legs
-                    if (evmTo || evmFrom) {
-                        // Leg 1: Cadence transfer (from → COA)
-                        displayRows.push({
-                            from: ft.from_address, to: ft.to_address, symbol: sym, logo: ft.token_logo,
-                            total: amount, count: 1, usdPrice: ft.approx_usd_price || 0,
-                            toTag: evmTo ? 'COA' : undefined, fromTag: evmFrom ? 'COA' : undefined,
-                        });
-                        // Leg 2: EVM execution (COA → EVM dest)
-                        if (evmTo) {
-                            displayRows.push({
-                                from: ft.to_address, to: evmTo, symbol: sym, logo: ft.token_logo,
-                                total: amount, count: 1, usdPrice: ft.approx_usd_price || 0,
-                                fromTag: 'COA', toTag: 'EVM',
-                                badge: <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" /> EVM</span>,
-                            });
-                        }
-                        if (evmFrom) {
-                            displayRows.push({
-                                from: evmFrom, to: ft.from_address, symbol: sym, logo: ft.token_logo,
-                                total: amount, count: 1, usdPrice: ft.approx_usd_price || 0,
-                                fromTag: 'EVM', toTag: 'COA',
-                                badge: <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" /> EVM</span>,
-                            });
-                        }
-                        continue;
-                    }
-                    // Normal transfer: aggregate
-                    const key = `${ft.from_address}|${ft.to_address}|${sym}`;
-                    const existing = agg.get(key);
-                    if (existing) {
-                        existing.total += amount;
-                        existing.count += 1;
-                        if (!existing.usdPrice && ft.approx_usd_price > 0) existing.usdPrice = ft.approx_usd_price;
-                    } else {
-                        agg.set(key, { from: ft.from_address, to: ft.to_address, symbol: sym, logo: ft.token_logo, total: amount, count: 1, usdPrice: ft.approx_usd_price || 0 });
-                    }
-                }
-                const rows = [...displayRows, ...Array.from(agg.values())];
-                return (
-                    <div className="space-y-2 mb-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <p className="text-[10px] text-zinc-400 uppercase tracking-widest">Token Transfers</p>
-                            <span className="text-[9px] text-zinc-400 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">{transaction.ft_transfers.length}</span>
-                        </div>
-                        {rows.slice(0, 10).map((r, idx) => (
-                            <FlowRow
-                                key={idx}
-                                from={r.from}
-                                to={r.to}
-                                fromTag={r.fromTag}
-                                toTag={r.toTag}
-                                amount={r.total}
-                                symbol={r.symbol}
-                                logo={r.logo}
-                                usdPrice={r.usdPrice}
-                                formatAddr={fmtAddr}
-                                badge={r.badge || (r.count > 1 ? (
-                                    <span className="text-[9px] text-zinc-500 bg-zinc-100 dark:bg-white/10 px-1.5 py-0.5 rounded">
-                                        ×{r.count}
-                                    </span>
-                                ) : undefined)}
-                            />
-                        ))}
-                        {rows.length > 10 && (
-                            <p className="text-[10px] text-zinc-400 uppercase tracking-wider pl-1">+{rows.length - 10} more</p>
-                        )}
+            {hasFT && (
+                <div className="space-y-2 mb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <p className="text-[10px] text-zinc-400 uppercase tracking-widest">Token Transfers</p>
+                        <span className="text-[9px] text-zinc-400 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">{assetView.transferListRows.length}</span>
                     </div>
-                );
-            })()}
+                    {assetView.transferListRows.slice(0, 10).map((row, idx) => (
+                        <FlowRow
+                            key={`${row.layer}-${row.from}-${row.to}-${row.symbol}-${idx}`}
+                            from={row.from}
+                            to={row.to}
+                            fromTag={row.layer === 'evm' ? 'COA' : undefined}
+                            toTag={row.layer === 'evm' ? 'EVM' : undefined}
+                            amount={row.amount}
+                            symbol={row.symbol}
+                            logo={row.logo}
+                            usdPrice={row.amount > 0 ? row.usdValue / row.amount : 0}
+                            formatAddr={fmtAddr}
+                            badge={renderTransferRowBadge(row)}
+                        />
+                    ))}
+                    {assetView.transferListRows.length > 10 && (
+                        <p className="text-[10px] text-zinc-400 uppercase tracking-wider pl-1">+{assetView.transferListRows.length - 10} more</p>
+                    )}
+                </div>
+            )}
 
             {/* NFT transfer summary rows */}
             {transaction.nft_transfers?.length > 0 && (
@@ -652,7 +631,7 @@ function TransactionSummaryCard({ transaction, formatAddress: _formatAddress, on
 
             {/* AI Summary */}
             <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-white/10">
-                <AISummary transaction={transaction} />
+                <AISummary transaction={assetView.summaryTransaction} />
             </div>
         </div>
     );
@@ -803,6 +782,8 @@ function TransactionDetail() {
         return {
             ...transaction,
             ft_transfers: ftTransfers,
+            canonical_transfer_summary: apiEnrichment?.canonical_transfer_summary || transaction?.canonical_transfer_summary,
+            transfer_summary: apiEnrichment?.transfer_summary || transaction?.transfer_summary,
             nft_transfers: mergedNfts.length > 0 ? mergedNfts : apiNfts,
             defi_events: apiEnrichment?.defi_events?.length > 0 ? apiEnrichment.defi_events : transaction?.defi_events,
             evm_executions: evmExecs,
@@ -812,7 +793,9 @@ function TransactionDetail() {
         };
     }, [enrichments, apiEnrichment, transaction]);
 
-    const hasTransfers = fullTx?.ft_transfers?.length > 0 || fullTx?.nft_transfers?.length > 0 || fullTx?.defi_events?.length > 0;
+    const assetView = useMemo(() => buildTxDetailAssetView(fullTx), [fullTx]);
+
+    const hasTransfers = assetView.transferListRows.length > 0 || fullTx?.nft_transfers?.length > 0 || fullTx?.defi_events?.length > 0;
     const showTransfersTab = hasTransfers;
     const validTabs = ['transfers', 'script', 'events', 'evm'];
     const defaultTab = hasTransfers ? 'transfers' : (fullTx?.script ? 'script' : 'events');
@@ -1363,7 +1346,7 @@ function TransactionDetail() {
                 })()}
 
                 {/* Transaction Summary Card */}
-                <TransactionSummaryCard transaction={fullTx} formatAddress={formatAddress} onNftClick={handleNftClick} isAdmin={isAdmin} />
+                <TransactionSummaryCard transaction={fullTx} assetView={assetView} formatAddress={formatAddress} onNftClick={handleNftClick} isAdmin={isAdmin} />
 
                 {/* Tabs Section */}
                 <div className="mt-12">
@@ -1510,59 +1493,14 @@ function TransactionDetail() {
                                     </div>
                                 )}
 
-                                {/* FT Token Transfers — split cross-VM into two rows */}
-                                {fullTx.ft_transfers?.length > 0 && (() => {
-                                    // Expand cross-VM transfers into separate Cadence + EVM legs
-                                    const ftRows: { from: string; to: string; amount: string; symbol: string; logo: string; usdValue: number; transferType?: string; badge?: React.ReactNode }[] = [];
-                                    for (const ft of fullTx.ft_transfers) {
-                                        const sym = ft.token_symbol || ft.token?.split('.').pop() || '';
-                                        const amount = ft.amount;
-                                        const evmTo = ft.evm_to_address;
-                                        const evmFrom = ft.evm_from_address;
-
-                                        if (evmTo || evmFrom) {
-                                            // Leg 1: Cadence side
-                                            ftRows.push({
-                                                from: ft.from_address, to: ft.to_address,
-                                                amount, symbol: sym, logo: ft.token_logo,
-                                                usdValue: ft.usd_value || 0, transferType: ft.transfer_type,
-                                                badge: <span className="inline-flex items-center gap-1 text-[9px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" />Cadence</span>,
-                                            });
-                                            // Leg 2: EVM side
-                                            if (evmTo) {
-                                                ftRows.push({
-                                                    from: ft.to_address, to: evmTo,
-                                                    amount, symbol: sym, logo: ft.token_logo,
-                                                    usdValue: ft.usd_value || 0,
-                                                    badge: <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" />EVM</span>,
-                                                });
-                                            }
-                                            if (evmFrom) {
-                                                ftRows.push({
-                                                    from: evmFrom, to: ft.from_address,
-                                                    amount, symbol: sym, logo: ft.token_logo,
-                                                    usdValue: ft.usd_value || 0,
-                                                    badge: <span className="inline-flex items-center gap-1 text-[9px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider"><Globe className="w-2.5 h-2.5" />EVM</span>,
-                                                });
-                                            }
-                                            continue;
-                                        }
-                                        // Normal transfer
-                                        ftRows.push({
-                                            from: ft.from_address, to: ft.to_address,
-                                            amount, symbol: sym, logo: ft.token_logo,
-                                            usdValue: ft.usd_value || 0, transferType: ft.transfer_type,
-                                        });
-                                    }
-
-                                    return (
+                                {assetView.transferListRows.length > 0 && (
                                     <div>
                                         <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <Coins className="h-4 w-4" /> Token Transfers ({ftRows.length})
+                                            <Coins className="h-4 w-4" /> Token Transfers ({assetView.transferListRows.length})
                                         </h3>
                                         <div className="divide-y divide-zinc-100 dark:divide-white/5 border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
-                                            {ftRows.map((row, idx) => (
-                                                <div key={idx} className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors">
+                                            {assetView.transferListRows.map((row, idx) => (
+                                                <div key={`${row.layer}-${row.from}-${row.to}-${row.symbol}-${idx}`} className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-black/30 hover:bg-zinc-100 dark:hover:bg-black/50 transition-colors">
                                                     <div className="flex-shrink-0">
                                                         {row.logo ? (
                                                             <img src={row.logo} alt="" className="w-7 h-7 rounded-full border border-zinc-200 dark:border-white/10" />
@@ -1600,13 +1538,13 @@ function TransactionDetail() {
                                                                 <span className="text-zinc-400 dark:text-zinc-600">To</span> <AddressLink address={row.to} prefixLen={8} suffixLen={4} size={12} className="text-[11px]" />
                                                             </span>
                                                         )}
+                                                        {renderTransferRowBadge(row)}
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                    );
-                                })()}
+                                )}
 
                                 {/* NFT Transfers */}
                                 {fullTx.nft_transfers?.length > 0 && (

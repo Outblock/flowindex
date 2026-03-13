@@ -17,6 +17,42 @@ import (
 	flowsdk "github.com/onflow/flow-go-sdk"
 )
 
+func (s *Server) buildCanonicalTransferSummariesByTxRefs(ctx context.Context, refs []repository.TxRef, address string) (map[string]repository.TransferSummary, error) {
+	if len(refs) == 0 {
+		return map[string]repository.TransferSummary{}, nil
+	}
+
+	ftTransfersByTx, err := s.repo.GetFTTransfersByTxRefs(ctx, refs)
+	if err != nil {
+		return nil, err
+	}
+	evmExecsByTx, err := s.repo.GetEVMTransactionsByCadenceTxRefs(ctx, refs)
+	if err != nil {
+		return nil, err
+	}
+
+	coaAddress := ""
+	if address != "" {
+		if coa, coaErr := s.repo.GetCOAByFlowAddress(ctx, address); coaErr == nil && coa != nil {
+			coaAddress = coa.COAAddress
+		}
+	}
+
+	out := make(map[string]repository.TransferSummary, len(refs))
+	for _, ref := range refs {
+		transfers := canonicalizeFTTransfers(ftTransfersByTx[ref.ID], evmExecsByTx[ref.ID])
+		if len(transfers) == 0 {
+			continue
+		}
+		summary := buildCanonicalTransferSummaryForContext(transfers, address, coaAddress)
+		if len(summary.FT) == 0 {
+			continue
+		}
+		out[ref.ID] = summary
+	}
+	return out, nil
+}
+
 func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parseLimitOffset(r)
 	height, err := parseHeightParam(r.URL.Query().Get("height"))
@@ -58,6 +94,10 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 	if tsErr != nil {
 		log.Printf("[WARN] GetTransferSummariesByTxRefs (list) failed refs=%d: %v", len(txRefs), tsErr)
 	}
+	canonicalTransferSummaries, ctsErr := s.buildCanonicalTransferSummariesByTxRefs(r.Context(), txRefs, "")
+	if ctsErr != nil {
+		log.Printf("[WARN] buildCanonicalTransferSummariesByTxRefs (list) failed refs=%d: %v", len(txRefs), ctsErr)
+	}
 	ftIDs, nftIDs := collectTokenIdentifiers(transferSummaries)
 	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
 	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
@@ -71,6 +111,9 @@ func (s *Server) handleFlowListTransactions(w http.ResponseWriter, r *http.Reque
 			if p, ok := s.priceCache.GetPriceAt("FLOW", t.Timestamp); ok {
 				o["fee_usd"] = fee * p
 			}
+		}
+		if canonical, ok := canonicalTransferSummaries[t.ID]; ok && len(canonical.FT) > 0 {
+			o["canonical_transfer_summary"] = toTransferSummaryOutput(canonical, ftMeta, map[string]repository.TokenMetadataInfo{}, ftPrices)
 		}
 		out = append(out, o)
 	}
@@ -148,7 +191,7 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	s.enrichTransactionOutput(r, out, tx)
+	s.enrichTransactionOutput(r, out, tx, evmExecs)
 
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
 }
@@ -276,22 +319,24 @@ func rpcTransactionToOutput(tx *flowsdk.Transaction, result *flowsdk.Transaction
 }
 
 // enrichTransactionOutput adds FT transfers, NFT transfers, and DeFi events to the output map.
-func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interface{}, tx *models.Transaction) {
+func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interface{}, tx *models.Transaction, evmExecs []repository.EVMTransactionRecord) {
 	// Enrich: FT transfers with token metadata
 	ftTransfers, _ := s.repo.GetFTTransfersByTransactionID(r.Context(), tx.ID)
-	if len(ftTransfers) > 0 {
+	canonicalFTTransfers := canonicalizeFTTransfers(ftTransfers, evmExecs)
+	ftMeta := map[string]repository.TokenMetadataInfo{}
+	if len(canonicalFTTransfers) > 0 {
 		tokenIDSet := make(map[string]bool)
-		for _, ft := range ftTransfers {
+		for _, ft := range canonicalFTTransfers {
 			tokenIDSet[ft.Token] = true
 		}
 		tokenIDs := make([]string, 0, len(tokenIDSet))
 		for id := range tokenIDSet {
 			tokenIDs = append(tokenIDs, id)
 		}
-		ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), tokenIDs)
+		ftMeta, _ = s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), tokenIDs)
 
 		addrSet := make(map[string]bool)
-		for _, ft := range ftTransfers {
+		for _, ft := range canonicalFTTransfers {
 			if ft.FromAddress != "" {
 				addrSet[ft.FromAddress] = true
 			}
@@ -305,14 +350,15 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 		}
 		coaMap, _ := s.repo.CheckAddressesAreCOA(r.Context(), addrs)
 
-		transfersOut := make([]map[string]interface{}, 0, len(ftTransfers))
-		for _, ft := range ftTransfers {
+		transfersOut := make([]map[string]interface{}, 0, len(canonicalFTTransfers))
+		for _, ft := range canonicalFTTransfers {
 			item := map[string]interface{}{
-				"token":        ft.Token,
-				"from_address": formatAddressV1(ft.FromAddress),
-				"to_address":   formatAddressV1(ft.ToAddress),
-				"amount":       ft.Amount,
-				"event_index":  ft.EventIndex,
+				"token":         ft.Token,
+				"from_address":  formatAddressV1(ft.FromAddress),
+				"to_address":    formatAddressV1(ft.ToAddress),
+				"amount":        ft.Amount,
+				"event_index":   ft.EventIndex,
+				"transfer_type": ft.TransferType,
 			}
 			var usdPrice float64
 			if meta, ok := ftMeta[ft.Token]; ok {
@@ -331,6 +377,15 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 			if usdPrice > 0 {
 				item["usd_value"] = parseFloatOrZero(ft.Amount) * usdPrice
 				item["approx_usd_price"] = usdPrice
+			}
+			if ft.EVMToAddress != "" {
+				item["evm_to_address"] = formatAddressV1(ft.EVMToAddress)
+			}
+			if ft.EVMFromAddress != "" {
+				item["evm_from_address"] = formatAddressV1(ft.EVMFromAddress)
+			}
+			if ft.IsCrossVM {
+				item["is_cross_vm"] = true
 			}
 			fromIsCOA := false
 			toIsCOA := false
@@ -352,6 +407,12 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 			transfersOut = append(transfersOut, item)
 		}
 		out["ft_transfers"] = transfersOut
+
+		ftPrices := s.buildFTPrices(ftMeta, tx.Timestamp)
+		summary := buildCanonicalTransferSummary(canonicalFTTransfers)
+		summaryOutput := toTransferSummaryOutput(summary, ftMeta, map[string]repository.TokenMetadataInfo{}, ftPrices)
+		out["transfer_summary"] = summaryOutput
+		out["canonical_transfer_summary"] = summaryOutput
 	}
 
 	// Enrich: NFT transfers (lightweight — no public path or item metadata lookups,
@@ -411,6 +472,12 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 			nftTransfersOut = append(nftTransfersOut, item)
 		}
 		out["nft_transfers"] = nftTransfersOut
+	}
+	if _, ok := out["transfer_summary"]; !ok {
+		out["transfer_summary"] = map[string]interface{}{"ft": []interface{}{}, "nft": []interface{}{}}
+	}
+	if _, ok := out["canonical_transfer_summary"]; !ok {
+		out["canonical_transfer_summary"] = map[string]interface{}{"ft": []interface{}{}, "nft": []interface{}{}}
 	}
 
 	// Enrich: DeFi swap events

@@ -329,16 +329,17 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 
 	// Phase 1: Run all independent queries in parallel
 	var (
-		tags              map[string][]string
-		feesByTx          map[string]float64
-		contracts         map[string][]string
-		eventsByTx        = make(map[string][]models.Event)
-		transferSummaries map[string]repository.TransferSummary
-		totalCount        int64
+		tags               map[string][]string
+		feesByTx           map[string]float64
+		contracts          map[string][]string
+		eventsByTx         = make(map[string][]models.Event)
+		transferSummaries  map[string]repository.TransferSummary
+		canonicalSummaries map[string]repository.TransferSummary
+		totalCount         int64
 	)
 
 	var wg sync.WaitGroup
-	wg.Add(5) // tags, fees, contracts, transferSummaries, totalCount
+	wg.Add(6) // tags, fees, contracts, transferSummaries, canonicalSummaries, totalCount
 	if includeEvents {
 		wg.Add(1)
 	}
@@ -352,6 +353,14 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 		transferSummaries, tsErr = s.repo.GetTransferSummariesByTxRefs(ctx, txRefs, address)
 		if tsErr != nil {
 			log.Printf("[WARN] GetTransferSummariesByTxRefs failed for address=%s refs=%d: %v", address, len(txRefs), tsErr)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		var canonicalErr error
+		canonicalSummaries, canonicalErr = s.buildCanonicalTransferSummariesByTxRefs(ctx, txRefs, address)
+		if canonicalErr != nil {
+			log.Printf("[WARN] buildCanonicalTransferSummariesByTxRefs failed for address=%s refs=%d: %v", address, len(txRefs), canonicalErr)
 		}
 	}()
 	go func() {
@@ -387,7 +396,11 @@ func (s *Server) handleFlowAccountTransactions(w http.ResponseWriter, r *http.Re
 	for _, t := range txs {
 		ts := transferSummaries[t.ID]
 		ftPrices := s.buildFTPrices(ftMeta, t.Timestamp)
-		out = append(out, toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta, ftPrices))
+		o := toFlowTransactionOutputWithTransfers(t, eventsByTx[t.ID], contracts[t.ID], tags[t.ID], feesByTx[t.ID], &ts, ftMeta, nftMeta, ftPrices)
+		if canonical, ok := canonicalSummaries[t.ID]; ok && len(canonical.FT) > 0 {
+			o["canonical_transfer_summary"] = toTransferSummaryOutput(canonical, ftMeta, map[string]repository.TokenMetadataInfo{}, ftPrices)
+		}
+		out = append(out, o)
 	}
 	meta := map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}
 	if totalCount > 0 {
@@ -505,13 +518,13 @@ func (s *Server) handleFlowSearchByPublicKey(w http.ResponseWriter, r *http.Requ
 	out := make([]map[string]interface{}, 0, len(keys))
 	for _, k := range keys {
 		out = append(out, map[string]interface{}{
-			"address":            formatAddressV1(k.Address),
-			"key_index":          k.KeyIndex,
-			"public_key":         k.PublicKey,
-			"signing_algorithm":  k.SigningAlgorithm,
-			"hashing_algorithm":  k.HashingAlgorithm,
-			"weight":             k.Weight,
-			"revoked":            k.Revoked,
+			"address":           formatAddressV1(k.Address),
+			"key_index":         k.KeyIndex,
+			"public_key":        k.PublicKey,
+			"signing_algorithm": k.SigningAlgorithm,
+			"hashing_algorithm": k.HashingAlgorithm,
+			"weight":            k.Weight,
+			"revoked":           k.Revoked,
 		})
 	}
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)

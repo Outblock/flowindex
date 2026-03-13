@@ -18,8 +18,8 @@ import {
     extractLogoUrl,
     formatTokenName,
     deriveActivityType,
+    getPreferredTransferSummary,
     dedup,
-    type TransferSummary,
     type TokenMetaEntry,
 } from '../TransactionRow';
 
@@ -43,14 +43,14 @@ function getTimeSection(timestamp: string, now: Date): string {
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-// Token metadata cache — populated on-demand from transfer_summary data in API responses.
-// No bulk fetch needed: the backend enriches transfer_summary with symbol/name/logo.
+// Token metadata cache — populated on-demand from transfer summary data in API responses.
+// No bulk fetch needed: the backend enriches both canonical and legacy summaries with symbol/name/logo.
 const tokenMetaCache = new Map<string, TokenMetaEntry>();
 
 /** Merge token metadata from transfer summaries into the shared cache. */
 function mergeTokenMetaFromTransactions(txs: any[]): Map<string, TokenMetaEntry> {
     for (const tx of txs) {
-        const summary = tx.transfer_summary;
+        const summary = getPreferredTransferSummary(tx);
         if (!summary) continue;
         for (const f of summary.ft || []) {
             if (f.token && !tokenMetaCache.has(f.token)) {

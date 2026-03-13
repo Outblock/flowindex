@@ -49,10 +49,21 @@ export interface TokenMetaEntry {
 
 // --- Helpers ---
 
+export function getPreferredTransferSummary(tx: any): TransferSummary | undefined {
+    const canonical = tx?.canonical_transfer_summary as TransferSummary | undefined;
+    const legacy = tx?.transfer_summary as TransferSummary | undefined;
+    if (!canonical) return legacy;
+    if (!legacy) return canonical;
+    return {
+        ft: canonical.ft?.length ? canonical.ft : (legacy.ft || []),
+        nft: canonical.nft?.length ? canonical.nft : (legacy.nft || []),
+    };
+}
+
 export function deriveActivityType(tx: any): { type: string; label: string; color: string; bgColor: string } {
     const tags: string[] = tx.tags || [];
     const imports: string[] = tx.contract_imports || [];
-    const summary: TransferSummary | undefined = tx.transfer_summary;
+    const summary = getPreferredTransferSummary(tx);
 
     const tagsLower = tags.map(t => t.toLowerCase());
 
@@ -254,7 +265,7 @@ export function TokenIcon({ logo, symbol, size = 16 }: { logo?: any; symbol?: st
 }
 
 export function buildSummaryLine(tx: any): string {
-    const summary: TransferSummary | undefined = tx.transfer_summary;
+    const summary = getPreferredTransferSummary(tx);
     const imports: string[] = tx.contract_imports || [];
     const tags: string[] = tx.tags || [];
     const tagsLower = tags.map(t => t.toLowerCase());
@@ -284,8 +295,10 @@ export function buildSummaryLine(tx: any): string {
     if (summary?.ft && summary.ft.length > 0) {
         const parts = summary.ft.map(f => {
             const displayName = f.symbol || f.name || formatTokenName(f.token);
-            const direction = f.direction === 'out' ? 'Sent' : 'Received';
-            const cp = f.counterparty ? ` ${f.direction === 'out' ? 'to' : 'from'} ${formatShort(f.counterparty)}` : '';
+            const direction = f.direction === 'out' ? 'Sent' : f.direction === 'in' ? 'Received' : 'Moved';
+            const cp = f.counterparty && (f.direction === 'out' || f.direction === 'in')
+                ? ` ${f.direction === 'out' ? 'to' : 'from'} ${formatShort(f.counterparty)}`
+                : '';
             return `${direction} ${Number(f.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${displayName}${cp}`;
         });
         return parts.join(', ');
@@ -294,8 +307,10 @@ export function buildSummaryLine(tx: any): string {
     if (summary?.nft && summary.nft.length > 0) {
         const parts = summary.nft.map(n => {
             const displayName = n.name || formatTokenName(n.collection);
-            const direction = n.direction === 'out' ? 'Sent' : 'Received';
-            const cp = n.counterparty ? ` ${n.direction === 'out' ? 'to' : 'from'} ${formatShort(n.counterparty)}` : '';
+            const direction = n.direction === 'out' ? 'Sent' : n.direction === 'in' ? 'Received' : 'Moved';
+            const cp = n.counterparty && (n.direction === 'out' || n.direction === 'in')
+                ? ` ${n.direction === 'out' ? 'to' : 'from'} ${formatShort(n.counterparty)}`
+                : '';
             return `${direction} ${n.count} ${displayName}${cp}`;
         });
         return parts.join(', ');
@@ -618,7 +633,7 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
                 if (d && !cancelled) {
                     const derived = deriveEnrichments(d.events || [], d.script);
                     // Enrich derived ft_transfers with logo/symbol/name from transfer_summary
-                    const summaryFT: any[] = tx.transfer_summary?.ft || [];
+                    const summaryFT: any[] = getPreferredTransferSummary(tx)?.ft || [];
                     if (summaryFT.length > 0 && derived.ft_transfers.length > 0) {
                         const metaByToken = new Map<string, { logo?: string; symbol?: string; name?: string; usd_price?: number }>();
                         for (const sf of summaryFT) {
@@ -656,7 +671,7 @@ export function ExpandedTransferDetails({ tx, address: currentAddress }: { tx: a
     const nftTransfers: any[] = merged.nft_transfers || [];
     const defiEvents: any[] = merged.defi_events || [];
     const evmExecs: any[] = merged.evm_executions || [];
-    const summary: TransferSummary | undefined = merged.transfer_summary || tx.transfer_summary;
+    const summary = getPreferredTransferSummary(merged) || getPreferredTransferSummary(tx);
     const tags: string[] = tx.tags || [];
     const tagsLower = tags.map((t: string) => t.toLowerCase());
     const summaryLine = buildSummaryLine(detail ? { ...tx, ft_transfers: ftTransfers, nft_transfers: nftTransfers, contract_imports: detail.contract_imports || tx.contract_imports } : tx);
@@ -1079,7 +1094,7 @@ function deriveTransferPreview(tx: any, tokenMeta?: Map<string, TokenMetaEntry>)
     if (items.length > 0) return items;
 
     // Priority 2: transfer_summary
-    const summary: TransferSummary | undefined = tx.transfer_summary;
+    const summary = getPreferredTransferSummary(tx);
     if (summary?.ft?.length) {
         for (const f of summary.ft) {
             if (items.length >= 3) break;
