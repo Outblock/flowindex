@@ -48,3 +48,21 @@ jobs:
         run: bun run build
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
+
+  ai-chat-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install AI chat dependencies
+        run: pip install -r ai/chat/requirements.txt
+
+      - name: Run AI chat unit tests
+        working-directory: ai/chat
+        run: python -m unittest discover -s tests -p 'test_*.py'

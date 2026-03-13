@@ -38,6 +38,8 @@ CHROMA_PERSIST_DIR = os.environ.get("CHROMA_PERSIST_DIR", "./chroma_data")
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8084"))
 MCP_PORT = int(os.environ.get("MCP_PORT", "8085"))
+VANNA_BASE_URL = os.environ.get("VANNA_BASE_URL", f"http://127.0.0.1:{PORT}").rstrip("/")
+VANNA_API_TOKEN = os.environ.get("VANNA_API_TOKEN", "")
 
 # --- Security ---
 # Optional bearer token for API auth

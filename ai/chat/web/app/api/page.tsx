@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 export default function ApiDocsPage() {
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar relative">
@@ -15,8 +13,8 @@ export default function ApiDocsPage() {
              </h1>
           </div>
           <p className="text-xs text-[var(--flow-text-secondary)] mono-label max-w-xl leading-relaxed border-l border-[var(--flow-green)] pl-5">
-            Internal interface documentation for Flow EVM SQL Engine. 
-            Automate blockchain data retrieval via REST and SSE protocols.
+            Internal interface documentation for the dual-target Vanna SQL service.
+            Route natural-language questions to FlowIndex or Flow EVM over REST and SSE protocols.
           </p>
         </div>
 
@@ -26,9 +24,9 @@ export default function ApiDocsPage() {
             <div>
                <h4 className="text-[9px] mono-label text-[var(--flow-text-dim)] mb-6 tracking-widest">Analytics (v1)</h4>
                <div className="flex flex-col gap-4">
-                  <ApiLink href="#ask" label="Ask" />
-                  <ApiLink href="#generate" label="Generate" />
-                  <ApiLink href="#run" label="Run" />
+                  <ApiLink href="#flowindex_ask" label="FlowIndex Ask" />
+                  <ApiLink href="#evm_ask" label="EVM Ask" />
+                  <ApiLink href="#legacy_alias" label="Legacy Alias" />
                </div>
             </div>
             <div>
@@ -42,14 +40,36 @@ export default function ApiDocsPage() {
 
           {/* Docs */}
           <div className="lg:col-span-9 space-y-24">
-            <section id="ask" className="animate-reveal">
-               <EndpointHeader method="POST" path="/api/v1/ask" title="Execute Inquiry" />
+            <section id="flowindex_ask" className="animate-reveal">
+               <EndpointHeader method="POST" path="/api/v1/flowindex/ask" title="FlowIndex Inquiry" />
                <p className="text-sm text-[var(--flow-text-secondary)] mb-8 leading-relaxed font-medium">
-                  Direct natural language to data pipeline. Generates SQL and returns execution results in one-shot.
+                  Natural language to FlowIndex SQL. Targets native Flow / Cadence indexed data and returns generated SQL plus execution results.
                </p>
                <CodeBlock 
-                  request={`{ "question": "Latest block?", "execute": true }`}
-                  response={`{ "question": "...", "sql": "...", "rows": [...], "row_count": 1 }`}
+                  request={`{ "question": "Latest 10 native Flow transactions", "execute": true }`}
+                  response={`{ "target": "flowindex", "question": "...", "sql": "...", "rows": [...], "row_count": 10 }`}
+               />
+            </section>
+
+            <section id="evm_ask" className="animate-reveal">
+               <EndpointHeader method="POST" path="/api/v1/evm/ask" title="EVM Inquiry" />
+               <p className="text-sm text-[var(--flow-text-secondary)] mb-8 leading-relaxed font-medium">
+                  Natural language to Blockscout SQL. Targets Flow EVM blocks, transactions, logs, tokens, and contracts.
+               </p>
+               <CodeBlock 
+                  request={`{ "question": "Show me top 10 WFLOW holders", "execute": true }`}
+                  response={`{ "target": "evm", "question": "...", "sql": "...", "rows": [...], "row_count": 10 }`}
+               />
+            </section>
+
+            <section id="legacy_alias" className="animate-reveal">
+               <EndpointHeader method="POST" path="/api/v1/ask" title="Legacy Alias" />
+               <p className="text-sm text-[var(--flow-text-secondary)] mb-8 leading-relaxed font-medium">
+                  Backwards-compatible alias for FlowIndex. New integrations should prefer the explicit target endpoints above.
+               </p>
+               <CodeBlock 
+                  request={`{ "question": "Latest FLOW price", "execute": true }`}
+                  response={`{ "target": "flowindex", "question": "...", "sql": "...", "rows": [...], "row_count": 1 }`}
                />
             </section>
 

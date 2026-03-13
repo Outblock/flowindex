@@ -26,6 +26,7 @@ def _run_query_psycopg3(db_url: str, sql: str, timeout_s: int, max_rows: int) ->
     validate_sql(sql)
     with psycopg.connect(db_url, autocommit=True, row_factory=dict_row) as conn:
         conn.execute(f"SET statement_timeout = '{timeout_s}s'")
+        conn.execute("SET search_path TO app, raw, public")
         cur = conn.execute(sql)
         rows = cur.fetchmany(max_rows)
         if not rows:

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useRouterState } from '@tanstack/react-router';
-import type { UIMessage } from 'ai';
+import type { LanguageModelUsage, UIMessage } from 'ai';
 import { MessageSquare, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download, Search, Bot, ChevronRight, Paperclip, ImageIcon, FileText, Code, Plus, Wrench, Zap, Scale, Brain, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -22,6 +22,130 @@ import {
 } from 'recharts';
 
 const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io';
+const CONTEXT_WINDOW = 200_000;
+
+function formatCompactTokens(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: value >= 1000 ? 1 : 0,
+  }).format(value);
+}
+
+function getUsedTokens(usage: LanguageModelUsage): number {
+  return usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0));
+}
+
+function ContextUsageIndicator({
+  usage,
+  maxTokens,
+  modelLabel,
+}: {
+  usage: LanguageModelUsage;
+  maxTokens: number;
+  modelLabel: string;
+}) {
+  const usedTokens = getUsedTokens(usage);
+  const usagePct = maxTokens > 0 ? Math.min(usedTokens / maxTokens, 1) : 0;
+  const inputTokens = usage.inputTokens ?? 0;
+  const outputTokens = usage.outputTokens ?? 0;
+  const reasoningTokens = usage.outputTokenDetails?.reasoningTokens ?? usage.reasoningTokens ?? 0;
+  const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
+  const cacheWriteTokens = usage.inputTokenDetails?.cacheWriteTokens ?? 0;
+  const renderedPercent = new Intl.NumberFormat('en-US', {
+    style: 'percent',
+    maximumFractionDigits: 1,
+  }).format(usagePct);
+  const radius = 8;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - usagePct);
+
+  return (
+    <div className="relative ml-auto group/context">
+      <button
+        type="button"
+        className="flex items-center gap-1 px-1.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10 transition-all"
+        title={`Context window usage (${modelLabel})`}
+      >
+        <span>{renderedPercent}</span>
+        <svg
+          aria-hidden="true"
+          className="shrink-0"
+          width="16"
+          height="16"
+          viewBox="0 0 20 20"
+        >
+          <circle
+            cx="10"
+            cy="10"
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            opacity="0.25"
+          />
+          <circle
+            cx="10"
+            cy="10"
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeDasharray={`${circumference} ${circumference}`}
+            strokeDashoffset={dashOffset}
+            opacity="0.7"
+            style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
+          />
+        </svg>
+      </button>
+
+      <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/context:block group-focus-within/context:block z-50">
+        <div className="w-56 rounded-sm border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 shadow-xl overflow-hidden">
+          <div className="px-3 py-2 border-b border-zinc-200 dark:border-white/10">
+            <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500 dark:text-zinc-400">
+              <span>{modelLabel}</span>
+              <span className="font-mono">{formatCompactTokens(usedTokens)} / {formatCompactTokens(maxTokens)}</span>
+            </div>
+            <div className="mt-2 h-1.5 rounded-full bg-zinc-100 dark:bg-white/10 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-nothing-green transition-all"
+                style={{ width: `${Math.min(usagePct * 100, 100)}%` }}
+              />
+            </div>
+          </div>
+          <div className="px-3 py-2 space-y-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <div className="flex items-center justify-between gap-3">
+              <span>Input</span>
+              <span className="font-mono">{formatCompactTokens(inputTokens)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>Output</span>
+              <span className="font-mono">{formatCompactTokens(outputTokens)}</span>
+            </div>
+            {reasoningTokens > 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <span>Reasoning</span>
+                <span className="font-mono">{formatCompactTokens(reasoningTokens)}</span>
+              </div>
+            )}
+            {cacheReadTokens > 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <span>Cache read</span>
+                <span className="font-mono">{formatCompactTokens(cacheReadTokens)}</span>
+              </div>
+            )}
+            {cacheWriteTokens > 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <span>Cache write</span>
+                <span className="font-mono">{formatCompactTokens(cacheWriteTokens)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ── SQL Result Table (compact, inline) ── */
 
@@ -827,6 +951,19 @@ function ChatMessage({ message, hideTools, isStreamingMsg }: { message: UIMessag
           {message.parts.map((part, i) => {
             if (part.type === 'text') {
               if (!(part as any).text?.trim()) return null;
+              const isCompaction =
+                ((part as any).providerMetadata?.anthropic as { type?: string } | undefined)?.type === 'compaction';
+              if (isCompaction) {
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 py-1.5 px-2.5 my-1 text-[11px] text-amber-500/70 bg-amber-500/5 border border-amber-500/10 rounded-sm"
+                  >
+                    <Sparkles size={10} className="shrink-0" />
+                    <span>Context compacted</span>
+                  </div>
+                );
+              }
               return (
                 <div key={i} className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
                   {isStreamingMsg ? (
@@ -1125,6 +1262,15 @@ export default function AIChatWidget() {
   });
 
   const isStreaming = status === 'streaming' || status === 'submitted';
+  const lastUsage = useMemo((): LanguageModelUsage | null => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i] as UIMessage & { metadata?: { usage?: LanguageModelUsage } };
+      if (msg.role === 'assistant' && msg.metadata?.usage) {
+        return msg.metadata.usage;
+      }
+    }
+    return null;
+  }, [messages]);
   const stoppedAtRef = useRef(0);
 
   const handleStop = useCallback(() => {
@@ -1606,12 +1752,19 @@ export default function AIChatWidget() {
                               <div className="flex items-center gap-2">
                                 <Download size={10} className="text-pink-400 shrink-0" />
                                 <span className="text-[11px] text-zinc-600 dark:text-zinc-300">Charts</span>
-                              </div>
-                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                      {lastUsage && (
+                        <ContextUsageIndicator
+                          usage={lastUsage}
+                          maxTokens={CONTEXT_WINDOW}
+                          modelLabel={CHAT_MODES.find((mode) => mode.key === chatMode)?.model || 'Claude'}
+                        />
+                      )}
+                  </div>
+                </div>
+              </div>
               </div>
             </motion.div>
           </>

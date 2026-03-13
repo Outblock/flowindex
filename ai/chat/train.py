@@ -1,43 +1,30 @@
 #!/usr/bin/env python3
 """
-Build the system prompt from DDL, docs, and example queries.
-This replaces the Vanna training step — all context is fed directly to the LLM.
+Build dual Vanna prompts for FlowIndex and Flow EVM.
 
 Usage:
-    python train.py              # Print the built prompt (for inspection)
-    python train.py --stats      # Print token estimate
+    python train.py --target flowindex
+    python train.py --target evm
+    python train.py --target flowindex --stats
 """
 
 import argparse
+import importlib
+import sys
 from pathlib import Path
 
-
-def load_ddl() -> str:
-    """Load all DDL files."""
-    ddl_dir = Path(__file__).parent / "training_data" / "ddl"
-    parts = []
-    for f in sorted(ddl_dir.glob("*.sql")):
-        parts.append(f.read_text())
-    return "\n\n".join(parts)
+TRAINING_DIR = Path(__file__).parent / "training_data"
 
 
-def load_docs() -> str:
-    """Load all documentation."""
-    docs_dir = Path(__file__).parent / "training_data" / "docs"
-    parts = []
-    for f in sorted(docs_dir.glob("*.md")):
-        parts.append(f.read_text())
-    return "\n\n".join(parts)
+def load_text(relative_path: str) -> str:
+    return (TRAINING_DIR / relative_path).read_text()
 
 
-def load_examples() -> str:
-    """Load example query pairs as formatted text."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent / "training_data" / "queries"))
-    from flow_evm_queries import TRAINING_PAIRS
-
-    lines = []
-    for i, (question, sql) in enumerate(TRAINING_PAIRS, 1):
+def load_examples(module_name: str) -> str:
+    sys.path.insert(0, str(TRAINING_DIR / "queries"))
+    module = importlib.import_module(module_name)
+    lines: list[str] = []
+    for i, (question, sql) in enumerate(module.TRAINING_PAIRS, 1):
         lines.append(f"Example {i}:")
         lines.append(f"  Q: {question}")
         lines.append(f"  SQL: {sql.strip()}")
@@ -45,11 +32,45 @@ def load_examples() -> str:
     return "\n".join(lines)
 
 
-def build_system_prompt() -> str:
-    """Build the full system prompt with DDL, docs, and examples."""
-    ddl = load_ddl()
-    docs = load_docs()
-    examples = load_examples()
+def build_flowindex_system_prompt() -> str:
+    ddl = load_text("ddl/flowindex_tables.sql")
+    cadence_docs = load_text("docs/flow_cadence.md")
+    examples = load_examples("flowindex_queries")
+
+    return f"""You are a SQL expert for the FlowIndex PostgreSQL database.
+Your job is to convert natural language questions about native Flow / Cadence indexed data into SQL queries.
+
+RULES:
+- Output ONLY the SQL query, no explanation, no markdown fences, no comments.
+- Only generate SELECT or WITH...SELECT queries. Never INSERT/UPDATE/DELETE/DROP/ALTER.
+- The main schemas are raw.* and app.*. Prefer schema-qualified table names when precision matters.
+- Transaction ids, addresses, contract addresses, and many identifiers are stored as bytea.
+- To display bytea ids or addresses: '0x' || encode(column, 'hex')
+- To filter by id/address: decode('abcdef...', 'hex') without the 0x prefix
+- For direct transaction lookup, prefer raw.tx_lookup joined with raw.transactions.
+- For token and transfer analytics, prefer app.ft_transfers, app.nft_transfers, app.ft_holdings, app.nft_ownership, and related app.* tables.
+- For market data and aggregates, prefer app.market_prices, app.daily_stats, app.tx_metrics, and app.status_snapshots.
+- Use NOW() - INTERVAL for time filters.
+- Always add a reasonable LIMIT clause unless the user explicitly asks for aggregates or a full time series.
+- If the question is ambiguous, make the most useful reasonable assumption.
+
+## DATABASE SCHEMA
+
+{ddl}
+
+## FLOW / CADENCE REFERENCE
+
+{cadence_docs}
+
+## EXAMPLE QUERIES
+
+{examples}"""
+
+
+def build_evm_system_prompt() -> str:
+    ddl = load_text("ddl/core_tables.sql")
+    docs = load_text("docs/flow_evm_blockscout.md")
+    examples = load_examples("flow_evm_queries")
 
     return f"""You are a SQL expert for the Flow EVM Blockscout database (PostgreSQL).
 Your job is to convert natural language questions into SQL queries.
@@ -79,20 +100,26 @@ RULES:
 {examples}"""
 
 
+def build_system_prompt(target: str = "flowindex") -> str:
+    if target == "evm":
+        return build_evm_system_prompt()
+    if target == "flowindex":
+        return build_flowindex_system_prompt()
+    raise ValueError(f"Unknown target: {target}")
+
+
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--target", choices=["flowindex", "evm"], default="flowindex")
     parser.add_argument("--stats", action="store_true")
     args = parser.parse_args()
 
-    prompt = build_system_prompt()
+    prompt = build_system_prompt(args.target)
 
     if args.stats:
-        # Rough token estimate: ~4 chars per token
         est_tokens = len(prompt) // 4
+        print(f"Target: {args.target}")
         print(f"System prompt length: {len(prompt):,} chars (~{est_tokens:,} tokens)")
-        print(f"DDL: {len(load_ddl()):,} chars")
-        print(f"Docs: {len(load_docs()):,} chars")
-        print(f"Examples: {len(load_examples()):,} chars")
     else:
         print(prompt)
 

@@ -3,20 +3,19 @@
 FlowIndex AI MCP Server.
 
 Exposes:
+- ask_flowindex_vanna tool: Natural language -> SQL -> execute via the Vanna server
+- generate_flowindex_sql tool: Natural language -> SQL via the Vanna server
+- ask_evm_vanna tool: Natural language -> SQL -> execute against the Flow EVM Vanna target
+- generate_evm_sql tool: Natural language -> SQL against the Flow EVM Vanna target
 - run_flowindex_sql tool: Execute read-only SQL against the Flowindex database
 - run_evm_sql tool: Execute read-only SQL against the Blockscout (Flow EVM) database
 - run_cadence tool: Execute read-only Cadence scripts on Flow mainnet
-- schema://flowindex-ddl resource: Flowindex database DDL
-- schema://blockscout-ddl resource: Blockscout database DDL
-- schema://docs resource: Flow EVM database documentation
-- schema://cadence resource: Cadence script reference
 
 Run: python mcp_server.py
 """
 
 import base64
 import json
-from pathlib import Path
 
 import httpx
 from fastmcp import FastMCP
@@ -140,8 +139,6 @@ async def auth_middleware(request: Request, call_next):
 
     return await call_next(request)
 
-TRAINING_DATA = Path(__file__).parent / "training_data"
-
 FLOW_ACCESS_API = config.__dict__.get(
     "FLOW_ACCESS_API", "https://rest-mainnet.onflow.org/v1"
 )
@@ -150,8 +147,94 @@ mcp = FastMCP(
     name="flow-ai",
     instructions="Flow blockchain AI tools — SQL queries against Flowindex PostgreSQL "
     "(Cadence/native Flow data) and Blockscout PostgreSQL (EVM data), "
-    "plus Cadence script execution on Flow mainnet.",
+    "plus Vanna-powered text-to-SQL for both FlowIndex and Flow EVM, and "
+    "Cadence script execution on Flow mainnet.",
 )
+
+
+# ---------------------------------------------------------------------------
+# Vanna proxy helpers
+# ---------------------------------------------------------------------------
+def _vanna_headers() -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    if config.VANNA_API_TOKEN:
+        headers["Authorization"] = f"Bearer {config.VANNA_API_TOKEN}"
+    return headers
+
+
+def _vanna_post(path: str, body: dict) -> dict:
+    url = f"{config.VANNA_BASE_URL}{path}"
+    try:
+        resp = httpx.post(url, json=body, headers=_vanna_headers(), timeout=90)
+    except httpx.TimeoutException:
+        return {"error": f"Vanna request timed out calling {path}"}
+    except Exception as e:
+        return {"error": f"Vanna request failed calling {path}: {e}"}
+
+    try:
+        data = resp.json()
+    except Exception:
+        data = {"raw": resp.text}
+
+    if resp.status_code >= 400:
+        detail = data.get("detail") if isinstance(data, dict) else None
+        return {
+            "error": detail or f"Vanna API error ({resp.status_code})",
+            "status_code": resp.status_code,
+            "body": data,
+        }
+
+    if isinstance(data, dict):
+        return data
+
+    return {"result": data}
+
+
+# ---------------------------------------------------------------------------
+# Vanna FlowIndex tools
+# ---------------------------------------------------------------------------
+@mcp.tool()
+def ask_flowindex_vanna(question: str) -> dict:
+    """Use the FlowIndex Vanna service to answer a natural-language question.
+
+    Vanna maintains the FlowIndex schema and examples internally. Prefer this
+    over writing SQL from scratch when the request is about native Flow /
+    Cadence indexed data. Returns generated SQL plus query results when
+    execution succeeds.
+    """
+    return _vanna_post("/api/v1/flowindex/ask", {"question": question, "execute": True})
+
+
+@mcp.tool()
+def generate_flowindex_sql(question: str) -> dict:
+    """Use the FlowIndex Vanna service to generate SQL from a natural-language question.
+
+    Prefer this when you need SQL text for inspection or to refine a query
+    before running it. Vanna maintains the FlowIndex schema internally, so you
+    do not need to memorize table layouts in the chat prompt.
+    """
+    return _vanna_post("/api/v1/flowindex/generate_sql", {"question": question})
+
+
+@mcp.tool()
+def ask_evm_vanna(question: str) -> dict:
+    """Use the Flow EVM Vanna target to answer a natural-language Blockscout question.
+
+    Prefer this over writing Blockscout SQL from scratch when the request is
+    about Flow EVM blocks, transactions, logs, tokens, smart contracts, or
+    balances. Returns generated SQL plus query results when execution succeeds.
+    """
+    return _vanna_post("/api/v1/evm/ask", {"question": question, "execute": True})
+
+
+@mcp.tool()
+def generate_evm_sql(question: str) -> dict:
+    """Use the Flow EVM Vanna target to generate SQL from a natural-language question.
+
+    Prefer this when you want to inspect or refine Blockscout SQL before
+    running it with `run_evm_sql`.
+    """
+    return _vanna_post("/api/v1/evm/generate_sql", {"question": question})
 
 
 # ---------------------------------------------------------------------------
@@ -161,9 +244,14 @@ mcp = FastMCP(
 def run_flowindex_sql(sql: str) -> dict:
     """Execute a read-only SELECT query against the Flowindex PostgreSQL database.
 
-    This database contains native Flow/Cadence blockchain data:
-    blocks, transactions, events, token transfers (FT/NFT), accounts,
-    daily stats, staking/epoch data, and more.
+    This database contains indexed native Flow / Cadence blockchain data.
+    Core relations live under the `raw.*` and `app.*` schemas.
+
+    Important notes:
+    - canonical transactions are typically in `raw.transactions`
+    - raw events are typically in `raw.events`
+    - many derived relations live in `app.*` (transfers, holdings, metrics, tags)
+    - transaction ids and addresses are generally stored as BYTEA values
 
     Returns {columns, rows, row_count} on success, or {error} on failure.
     Only SELECT queries are allowed.
@@ -233,37 +321,6 @@ def run_cadence(script: str, arguments: list[dict] | None = None) -> dict:
         return {"error": "Script execution timed out (30s)"}
     except Exception as e:
         return {"error": f"Cadence execution failed: {e}"}
-
-
-# ---------------------------------------------------------------------------
-# Resources
-# ---------------------------------------------------------------------------
-@mcp.resource("schema://flowindex-ddl")
-def get_flowindex_ddl() -> str:
-    """Database DDL (CREATE TABLE statements) for the Flowindex database."""
-    ddl_path = TRAINING_DATA / "ddl" / "flowindex_tables.sql"
-    if ddl_path.exists():
-        return ddl_path.read_text()
-    return "-- Flowindex DDL not yet configured. Check training_data/ddl/flowindex_tables.sql"
-
-
-@mcp.resource("schema://blockscout-ddl")
-def get_blockscout_ddl() -> str:
-    """Database DDL (CREATE TABLE statements) for the Flow EVM Blockscout database."""
-    return (TRAINING_DATA / "ddl" / "core_tables.sql").read_text()
-
-
-@mcp.resource("schema://docs")
-def get_docs() -> str:
-    """Flow EVM Blockscout database documentation."""
-    return (TRAINING_DATA / "docs" / "flow_evm_blockscout.md").read_text()
-
-
-@mcp.resource("schema://cadence")
-def get_cadence_docs() -> str:
-    """Cadence script reference — syntax, core contract addresses, common patterns."""
-    return (TRAINING_DATA / "docs" / "flow_cadence.md").read_text()
-
 
 if __name__ == "__main__":
     port = config.MCP_PORT
