@@ -4561,6 +4561,98 @@
         }
       }
     },
+    "/flow/search": {
+      "get": {
+        "description": "Searches across contracts, fungible tokens, and NFT collections by name or address. Returns up to `limit` results per category.",
+        "tags": [
+          "search"
+        ],
+        "summary": "Unified search across contracts, tokens, and NFT collections",
+        "parameters": [
+          {
+            "description": "Search query (2-100 characters)",
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "description": "Maximum results per category (1-5, default 3)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "default": 3
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "contracts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "address": { "type": "string" },
+                              "name": { "type": "string" },
+                              "kind": { "type": "string" },
+                              "dependent_count": { "type": "integer" }
+                            }
+                          }
+                        },
+                        "tokens": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "address": { "type": "string" },
+                              "contract_name": { "type": "string" },
+                              "name": { "type": "string" },
+                              "symbol": { "type": "string" },
+                              "market_symbol": { "type": "string" }
+                            }
+                          }
+                        },
+                        "nft_collections": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "address": { "type": "string" },
+                              "contract_name": { "type": "string" },
+                              "name": { "type": "string" },
+                              "item_count": { "type": "integer" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request (query too short/long)"
+          }
+        }
+      }
+    },
     "/flow/events/search": {
       "get": {
         "description": "Searches for event types by name across all contracts.",
