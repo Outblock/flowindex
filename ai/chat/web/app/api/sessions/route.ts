@@ -51,14 +51,15 @@ export async function POST(req: NextRequest) {
 
   const row: Record<string, unknown> = {
     user_id: user.id,
-    title,
+    title: (title || "New chat").slice(0, 80),
     source,
   };
   if (id) row.id = id;
 
+  // Use insert (not upsert) to prevent overwriting another user's session
   const { data, error } = await db
     .from("chat_sessions")
-    .upsert(row, { onConflict: "id" })
+    .insert(row)
     .select()
     .single();
 

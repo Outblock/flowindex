@@ -29,6 +29,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "messages array is required" }, { status: 400 });
   }
 
+  const VALID_ROLES = new Set(["user", "assistant", "tool", "system"]);
+  if (messages.some((m) => !VALID_ROLES.has(m.role))) {
+    return NextResponse.json({ error: "Invalid message role" }, { status: 400 });
+  }
+
   const db = createServiceClient();
 
   // Check if session exists
@@ -70,7 +75,11 @@ export async function POST(req: NextRequest, { params }: Params) {
       source,
     });
 
-    if (createErr) return NextResponse.json({ error: createErr.message }, { status: 500 });
+    // PK conflict means this ID is taken (possibly by another user) — reject
+    if (createErr) {
+      const status = createErr.code === "23505" ? 409 : 500;
+      return NextResponse.json({ error: createErr.message }, { status });
+    }
   }
 
   // Enforce 200-message limit
