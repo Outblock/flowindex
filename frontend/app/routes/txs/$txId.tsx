@@ -3,7 +3,7 @@ import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { resolveApiBaseUrl } from '../../api';
 import { buildMeta } from '../../lib/og/meta';
-import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown, Sparkles, Play, WrapText } from 'lucide-react';
+import { ArrowLeft, Activity, User, Box, Clock, CheckCircle, XCircle, Hash, ArrowRightLeft, ArrowRight, Coins, Image as ImageIcon, Zap, Database, AlertCircle, FileText, Layers, Braces, ExternalLink, Repeat, Globe, ChevronDown, Sparkles, Play, WrapText, Loader2 } from 'lucide-react';
 import { openAIChat } from '../../components/chat/openAIChat';
 import { formatAbsoluteTime, formatRelativeTime } from '../../lib/time';
 import { useTimeTicker } from '../../hooks/useTimeTicker';
@@ -482,7 +482,7 @@ function renderTransferRowBadge(row: TxDetailDisplayTransferRow): React.ReactNod
     return <>{badges.map((badge, index) => <span key={index}>{badge}</span>)}</>;
 }
 
-function TransactionSummaryCard({ transaction, assetView, formatAddress: _formatAddress, onNftClick, isAdmin }: { transaction: any; assetView: ReturnType<typeof buildTxDetailAssetView>; formatAddress: (addr: string) => string; onNftClick?: (nt: any) => void; isAdmin?: boolean }) {
+function TransactionSummaryCard({ transaction, assetView, formatAddress: _formatAddress, onNftClick, isAdmin, isRefreshing = false }: { transaction: any; assetView: ReturnType<typeof buildTxDetailAssetView>; formatAddress: (addr: string) => string; onNftClick?: (nt: any) => void; isAdmin?: boolean; isRefreshing?: boolean }) {
     const summaryLine = assetView.summaryLine || buildSummaryLine(assetView.summaryTransaction);
     const hasFT = assetView.transferListRows.length > 0;
     const hasDefi = transaction.defi_events?.length > 0;
@@ -507,6 +507,11 @@ function TransactionSummaryCard({ transaction, assetView, formatAddress: _format
 
     return (
         <div className="relative overflow-hidden border border-zinc-200 dark:border-white/10 p-6 mb-8 bg-white dark:bg-nothing-dark shadow-sm dark:shadow-none">
+            {isRefreshing && (
+                <div className="absolute inset-x-0 top-0 h-[3px] bg-zinc-100 dark:bg-white/5 overflow-hidden">
+                    <div className="h-full w-1/3 bg-gradient-to-r from-nothing-green-dark via-nothing-green to-sky-400 animate-[pulse_1.2s_ease-in-out_infinite]" />
+                </div>
+            )}
             {/* NFT collection banner gradient */}
             {nftBannerUrl && (
                 <div
@@ -526,6 +531,12 @@ function TransactionSummaryCard({ transaction, assetView, formatAddress: _format
                     Transaction Summary
                 </h2>
                 <div className="flex items-center gap-2 flex-wrap">
+                    {isRefreshing && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 border rounded-sm text-[10px] uppercase tracking-wider border-sky-200 dark:border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Updating
+                        </span>
+                    )}
                     {deriveAllActivityBadges(transaction).map((b, i) => (
                         <span key={i} className={`inline-flex items-center gap-1 px-2.5 py-1 border rounded-sm text-[10px] font-bold uppercase tracking-wider ${b.bgColor} ${b.color}`}>
                             {b.label}
@@ -728,18 +739,32 @@ function TransactionDetail() {
 
     // Client-side full fetch to get enriched data (ft_transfers with USD, nft_transfers, defi_events)
     const [apiEnrichment, setApiEnrichment] = useState<any>(null);
+    const [fullFetchSettled, setFullFetchSettled] = useState(false);
     const fullFetchDone = useRef(false);
+    useEffect(() => {
+        fullFetchDone.current = false;
+        setApiEnrichment(null);
+        setFullFetchSettled(false);
+    }, [transaction?.id]);
     useEffect(() => {
         if (!transaction?.id || fullFetchDone.current) return;
         fullFetchDone.current = true;
+        let cancelled = false;
         resolveApiBaseUrl().then(base =>
             fetch(`${base}/flow/transaction/${encodeURIComponent(transaction.id)}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(json => {
+                    if (cancelled) return;
                     const tx = json?.data?.[0];
                     if (tx) setApiEnrichment(tx);
+                    setFullFetchSettled(true);
                 })
-        ).catch(() => {});
+        ).catch(() => {
+            if (!cancelled) setFullFetchSettled(true);
+        });
+        return () => {
+            cancelled = true;
+        };
     }, [transaction?.id]);
 
     // Merge derived enrichments + API enrichment into the transaction object
@@ -899,6 +924,7 @@ function TransactionDetail() {
         ? assetView.rawTransferListRows
         : assetView.transferListRows;
     const showTransferNoiseToggle = assetView.rawTransferListRows.length > assetView.transferListRows.length;
+    const detailFlowReady = !transaction?.lite || !!apiEnrichment || fullFetchSettled;
     const hasTransfers = assetView.transferListRows.length > 0 || assetView.rawTransferListRows.length > 0 || fullTx?.nft_transfers?.length > 0 || fullTx?.defi_events?.length > 0;
     const showTransfersTab = hasTransfers;
     useEffect(() => {
@@ -1454,7 +1480,7 @@ function TransactionDetail() {
                 })()}
 
                 {/* Transaction Summary Card */}
-                <TransactionSummaryCard transaction={fullTx} assetView={assetView} formatAddress={formatAddress} onNftClick={handleNftClick} isAdmin={isAdmin} />
+                <TransactionSummaryCard transaction={fullTx} assetView={assetView} formatAddress={formatAddress} onNftClick={handleNftClick} isAdmin={isAdmin} isRefreshing={!detailFlowReady} />
 
                 {/* Tabs Section */}
                 <div className="mt-12">
@@ -1608,6 +1634,14 @@ function TransactionDetail() {
                                                 <h3 className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                                                     <Coins className="h-4 w-4" /> Token Transfers ({visibleTransferRows.length})
                                                 </h3>
+                                                {!detailFlowReady && (
+                                                    <div className="mt-2 max-w-sm">
+                                                        <div className="h-1.5 rounded-full bg-zinc-100 dark:bg-white/5 overflow-hidden">
+                                                            <div className="h-full w-1/3 bg-gradient-to-r from-nothing-green-dark via-nothing-green to-sky-400 animate-[pulse_1.2s_ease-in-out_infinite]" />
+                                                        </div>
+                                                        <p className="mt-1 text-[10px] text-zinc-500 uppercase tracking-widest">Refreshing Detailed Transfer Decode</p>
+                                                    </div>
+                                                )}
                                                 {showTransferNoiseToggle && (
                                                     <p className="mt-1 text-[10px] text-zinc-500">
                                                         {transferDisplayMode === 'meaningful'

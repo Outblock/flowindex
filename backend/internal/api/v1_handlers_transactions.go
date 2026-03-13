@@ -170,10 +170,9 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 	// Full mode (default): all queries
 	contracts, _ := s.repo.GetTxContractsByTransactionIDs(r.Context(), []string{tx.ID})
 	feesByTx, _ := s.repo.GetTransactionFeesByIDs(r.Context(), []string{tx.ID})
-	var evmExecs []repository.EVMTransactionRecord
-	if tx.IsEVM {
-		evmExecs, _ = s.repo.GetEVMTransactionsByCadenceTx(r.Context(), tx.ID, tx.BlockHeight)
-	}
+	// A Cadence transaction can emit embedded EVM executions even when tx.IsEVM is false.
+	// Always query by cadence tx id so detail pages can show enriched EVM metadata/ABI decode.
+	evmExecs, _ := s.repo.GetEVMTransactionsByCadenceTx(r.Context(), tx.ID, tx.BlockHeight)
 	out := toFlowTransactionOutput(*tx, events, contracts[tx.ID], tags[tx.ID], feesByTx[tx.ID], evmExecs)
 	if fee := feesByTx[tx.ID]; fee > 0 {
 		if p, ok := s.priceCache.GetPriceAt("FLOW", tx.Timestamp); ok {
