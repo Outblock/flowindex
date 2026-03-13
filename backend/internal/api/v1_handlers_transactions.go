@@ -320,6 +320,10 @@ func rpcTransactionToOutput(tx *flowsdk.Transaction, result *flowsdk.Transaction
 
 // enrichTransactionOutput adds FT transfers, NFT transfers, and DeFi events to the output map.
 func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interface{}, tx *models.Transaction, evmExecs []repository.EVMTransactionRecord) {
+	if len(evmExecs) > 0 {
+		out["evm_executions"] = s.buildEnrichedEVMExecutions(r.Context(), evmExecs)
+	}
+
 	// Enrich: FT transfers with token metadata
 	ftTransfers, _ := s.repo.GetFTTransfersByTransactionID(r.Context(), tx.ID)
 	canonicalFTTransfers := canonicalizeFTTransfers(ftTransfers, evmExecs)

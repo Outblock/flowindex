@@ -316,6 +316,24 @@ export function buildSummaryLine(tx: any): string {
         return parts.join(', ');
     }
 
+    if (tx.evm_executions?.length > 0) {
+        const steps = tx.evm_executions
+            .map((exec: any) => {
+                const method = exec?.decoded_call?.method;
+                const contract = exec?.to_meta?.label || exec?.decoded_call?.implementation_name || exec?.decoded_call?.contract_name || exec?.to_meta?.contract_name;
+                if (contract && method) return `${contract}.${method}()`;
+                if (method) return `${method}()`;
+                if (contract) return `Called ${contract}`;
+                return '';
+            })
+            .filter(Boolean)
+            .filter((step: string, index: number, arr: string[]) => arr.indexOf(step) === index)
+            .slice(0, 3);
+        if (steps.length > 0) {
+            return steps.length === 1 ? `Executed ${steps[0]}` : `EVM: ${steps.join(' -> ')}`;
+        }
+    }
+
     if (tagsLower.some(t => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated') || t.includes('contract_deploy'))) {
         const contractNames = imports.map(c => formatTokenName(c)).filter(Boolean);
         return contractNames.length > 0 ? `Deployed ${contractNames.join(', ')}` : 'Contract deployment';

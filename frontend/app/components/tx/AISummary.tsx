@@ -146,7 +146,7 @@ export default function AISummary({ transaction }: { transaction: any }) {
             const payload = {
                 id: transaction.id,
                 status: transaction.status,
-                is_evm: transaction.is_evm || false,
+                is_evm: Boolean(transaction.is_evm || transaction.evm_hash || transaction.evm_executions?.length > 0),
                 activity_type: activity.type,
                 activity_label: activity.label,
                 preliminary_summary: summaryLine,
@@ -190,6 +190,9 @@ export default function AISummary({ transaction }: { transaction: any }) {
                     to: e.to,
                     value: e.value,
                     status: e.status,
+                    from_meta: e.from_meta || null,
+                    to_meta: e.to_meta || null,
+                    decoded_call: e.decoded_call || null,
                 })),
             };
 

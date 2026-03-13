@@ -109,6 +109,58 @@ function cleanUrl(url: string | undefined | null): string {
     return url.replace(/^["'\s]+|["'\s]+$/g, '');
 }
 
+function stringifyDecodedValue(value: any): string {
+    if (value == null) return 'null';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return String(value);
+    }
+}
+
+function isEvmAddressLike(value: unknown): value is string {
+    return typeof value === 'string' && /^0x[a-f0-9]{40}$/i.test(value);
+}
+
+function EVMMetaBadges({ meta }: { meta?: any }) {
+    if (!meta) return null;
+    return (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+            {meta.kind && (
+                <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border border-zinc-200 dark:border-white/10 text-zinc-500">
+                    {meta.kind}
+                </span>
+            )}
+            {meta.verified && (
+                <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10">
+                    Verified
+                </span>
+            )}
+            {meta.proxy_type && (
+                <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border border-purple-200 dark:border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10">
+                    Proxy
+                </span>
+            )}
+            {Array.isArray(meta.tags) && meta.tags.slice(0, 2).map((tag: string) => (
+                <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-sm border border-zinc-200 dark:border-white/10 text-zinc-500 bg-zinc-50 dark:bg-black/20">
+                    {tag}
+                </span>
+            ))}
+        </div>
+    );
+}
+
+function describeEvmExecution(exec: any): string {
+    const method = exec?.decoded_call?.method;
+    const contract = exec?.to_meta?.label || exec?.decoded_call?.implementation_name || exec?.decoded_call?.contract_name || exec?.to_meta?.contract_name;
+    if (contract && method) return `${contract}.${method}()`;
+    if (method) return `${method}()`;
+    if (contract) return contract;
+    return '';
+}
+
 /** NFT transfer row with lazy-loaded name + thumbnail */
 function NFTSummaryRow({ nt, onClick, isAdmin, fmtAddr }: { nt: any; onClick?: () => void; isAdmin?: boolean; fmtAddr: (a: string) => string }) {
     const { thumbnailSrc, displayName, loading } = useNFTLazyDetail(nt);
@@ -434,12 +486,19 @@ function TransactionSummaryCard({ transaction, assetView, formatAddress: _format
     const summaryLine = assetView.summaryLine || buildSummaryLine(assetView.summaryTransaction);
     const hasFT = assetView.transferListRows.length > 0;
     const hasDefi = transaction.defi_events?.length > 0;
-    const hasEvm = transaction.is_evm && (transaction.evm_hash || transaction.evm_executions?.length > 0);
+    const hasEvm = Boolean(transaction.is_evm || transaction.evm_hash || transaction.evm_executions?.length > 0);
     const tags = (transaction.tags || []).map((t: string) => t.toLowerCase());
     const isDeploy = tags.some((t: string) => t.includes('deploy') || t.includes('contract_added') || t.includes('contract_updated'));
     const hasContractImports = transaction.contract_imports?.length > 0;
 
     const fmtAddr = (addr: string) => formatShort(addr, 8, 4);
+    const evmSteps = hasEvm
+        ? (transaction.evm_executions || [])
+            .map((exec: any) => describeEvmExecution(exec))
+            .filter(Boolean)
+            .filter((step: string, index: number, arr: string[]) => arr.indexOf(step) === index)
+            .slice(0, 4)
+        : [];
 
     // NFT collection banner image (gradient overlay like tx list)
     const nftBannerUrl = transaction.nft_transfers?.length > 0
@@ -569,6 +628,23 @@ function TransactionSummaryCard({ transaction, assetView, formatAddress: _format
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {evmSteps.length > 0 && (
+                <div className="space-y-2 mb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <p className="text-[10px] text-zinc-400 uppercase tracking-widest">EVM Calls</p>
+                        <span className="text-[9px] text-zinc-400 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">{evmSteps.length}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {evmSteps.map((step: string, idx: number) => (
+                            <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10 text-[10px] text-blue-700 dark:text-blue-300 font-mono">
+                                <Zap className="w-3 h-3" />
+                                {step}
+                            </span>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -797,8 +873,9 @@ function TransactionDetail() {
 
     const hasTransfers = assetView.transferListRows.length > 0 || fullTx?.nft_transfers?.length > 0 || fullTx?.defi_events?.length > 0;
     const showTransfersTab = hasTransfers;
+    const hasEvmExecutions = (fullTx?.evm_executions?.length || 0) > 0;
     const validTabs = ['transfers', 'script', 'events', 'evm'];
-    const defaultTab = hasTransfers ? 'transfers' : (fullTx?.script ? 'script' : 'events');
+    const defaultTab = hasTransfers ? 'transfers' : hasEvmExecutions ? 'evm' : (fullTx?.script ? 'script' : 'events');
     const [activeTab, setActiveTab] = useState(() =>
         urlTab && validTabs.includes(urlTab) ? urlTab : defaultTab
     );
@@ -1389,7 +1466,7 @@ function TransactionDetail() {
                                 Key Events ({transaction.events ? transaction.events.length : 0})
                             </span>
                         </button>
-                        {fullTx.is_evm && fullTx.evm_executions?.length > 0 && (
+                        {hasEvmExecutions && (
                             <button
                                 onClick={() => switchTab('evm')}
                                 className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'evm'
@@ -1983,15 +2060,22 @@ function TransactionDetail() {
                             </div>
                         )}
 
-                        {activeTab === 'evm' && fullTx.is_evm && (
+                        {activeTab === 'evm' && hasEvmExecutions && (
                             <div className="space-y-6">
                                 {fullTx.evm_executions && fullTx.evm_executions.length > 0 ? (
                                     fullTx.evm_executions.map((exec: any, idx: number) => (
                                         <div key={idx} className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
                                             <div className="bg-zinc-50 dark:bg-black/40 px-4 py-3 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between">
-                                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
-                                                    EVM Execution {fullTx.evm_executions.length > 1 ? `#${idx + 1}` : ''}
-                                                </span>
+                                                <div className="min-w-0">
+                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">
+                                                        EVM Execution {fullTx.evm_executions.length > 1 ? `#${idx + 1}` : ''}
+                                                    </span>
+                                                    {describeEvmExecution(exec) && (
+                                                        <span className="text-xs text-zinc-700 dark:text-zinc-300 font-mono block mt-1 truncate">
+                                                            {describeEvmExecution(exec)}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <span className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-sm border ${
                                                     exec.status === 'SEALED' || exec.status === 'SUCCESS'
                                                         ? 'text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10'
@@ -2039,6 +2123,12 @@ function TransactionDetail() {
                                                                 </a>
                                                             )}
                                                         </div>
+                                                        {exec.from_meta?.label && (
+                                                            <p className="mt-1.5 text-xs text-zinc-700 dark:text-zinc-300 font-medium">
+                                                                {exec.from_meta.label}
+                                                            </p>
+                                                        )}
+                                                        <EVMMetaBadges meta={exec.from_meta} />
                                                     </div>
                                                     <div>
                                                         <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">To</p>
@@ -2057,6 +2147,18 @@ function TransactionDetail() {
                                                                 </a>
                                                             )}
                                                         </div>
+                                                        {exec.to_meta?.label && (
+                                                            <p className="mt-1.5 text-xs text-zinc-700 dark:text-zinc-300 font-medium">
+                                                                {exec.to_meta.label}
+                                                            </p>
+                                                        )}
+                                                        {exec.to_meta?.implementation_address && (
+                                                            <div className="mt-1 text-[10px] text-zinc-500 flex items-center gap-1.5">
+                                                                <span>Implementation</span>
+                                                                <AddressLink address={exec.to_meta.implementation_address} prefixLen={8} suffixLen={4} size={12} className="text-[10px]" />
+                                                            </div>
+                                                        )}
+                                                        <EVMMetaBadges meta={exec.to_meta} />
                                                     </div>
                                                 </div>
 
@@ -2106,6 +2208,73 @@ function TransactionDetail() {
 
                                                 {/* Decoded ERC call data */}
                                                 {(() => {
+                                                    const abiDecoded = exec.decoded_call;
+                                                    if (abiDecoded?.method) {
+                                                        const args: any[] = Array.isArray(abiDecoded.args) ? abiDecoded.args : [];
+                                                        return (
+                                                            <div className="border border-zinc-200 dark:border-white/5 rounded-sm p-4 space-y-3">
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm border text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30">
+                                                                        ABI
+                                                                    </span>
+                                                                    <span className="text-xs text-zinc-700 dark:text-zinc-300 font-mono">
+                                                                        {abiDecoded.method}
+                                                                    </span>
+                                                                    {abiDecoded.via_proxy && (
+                                                                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/30">
+                                                                            Proxy
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                    {abiDecoded.signature && (
+                                                                        <div>
+                                                                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Signature</p>
+                                                                            <code className="text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">{abiDecoded.signature}</code>
+                                                                        </div>
+                                                                    )}
+                                                                    {abiDecoded.contract_name && (
+                                                                        <div>
+                                                                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Decoded Against</p>
+                                                                            <div className="text-xs text-zinc-700 dark:text-zinc-300 font-medium">{abiDecoded.contract_name}</div>
+                                                                            {abiDecoded.implementation_name && (
+                                                                                <div className="text-[10px] text-zinc-500 mt-1">
+                                                                                    Impl: {abiDecoded.implementation_name}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                {args.length > 0 && (
+                                                                    <div className="space-y-2">
+                                                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Arguments</p>
+                                                                        <div className="space-y-2">
+                                                                            {args.map((arg: any, argIdx: number) => (
+                                                                                <div key={argIdx} className="p-2.5 rounded-sm border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-black/20">
+                                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                                        <span className="text-[10px] font-mono text-zinc-900 dark:text-white">
+                                                                                            {arg.name || `arg${argIdx}`}
+                                                                                        </span>
+                                                                                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border border-zinc-200 dark:border-white/10 text-zinc-500">
+                                                                                            {arg.type || 'unknown'}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div className="mt-1.5 text-xs text-zinc-700 dark:text-zinc-300 font-mono break-all">
+                                                                                        {isEvmAddressLike(arg.value) ? (
+                                                                                            <AddressLink address={arg.value} prefixLen={8} suffixLen={4} size={12} className="text-xs" />
+                                                                                        ) : (
+                                                                                            <code>{stringifyDecodedValue(arg.value)}</code>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+
                                                     // Try exec.data first, then extract from raw event payload
                                                     let callData = exec.data;
                                                     if (!callData) {
@@ -2182,6 +2351,9 @@ function TransactionDetail() {
                                                         block_number: exec.block_number,
                                                         timestamp: exec.timestamp,
                                                     };
+                                                    if (exec.from_meta) decodedPayload.from_meta = exec.from_meta;
+                                                    if (exec.to_meta) decodedPayload.to_meta = exec.to_meta;
+                                                    if (exec.decoded_call) decodedPayload.decoded_call = exec.decoded_call;
                                                     // Also include raw EVM-specific fields from matched event payload if present
                                                     const matchedEvent = transaction.events?.find(
                                                         (e: any) => e.event_index === exec.event_index

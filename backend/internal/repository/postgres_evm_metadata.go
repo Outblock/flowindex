@@ -34,6 +34,33 @@ type EVMAddressLabelRow struct {
 	TokenSymbol string
 }
 
+// EVMContractMetadata is a read model for verified EVM contracts keyed by address hex.
+type EVMContractMetadata struct {
+	Address      string
+	Name         string
+	ABI          json.RawMessage
+	SourceCode   string
+	Compiler     string
+	Language     string
+	License      string
+	Optimization bool
+	ProxyType    string
+	ImplAddress  string
+	VerifiedAt   *time.Time
+}
+
+// EVMAddressLabelMetadata is a read model for Blockscout address labels keyed by address hex.
+type EVMAddressLabelMetadata struct {
+	Address     string
+	Name        string
+	Tags        []string
+	IsContract  bool
+	IsVerified  bool
+	TokenName   string
+	TokenSymbol string
+	SyncedAt    *time.Time
+}
+
 // GetLatestEVMContractVerifiedAt returns the max verified_at from evm_contracts
 // for incremental sync. Returns "" if no rows exist.
 func (r *Repository) GetLatestEVMContractVerifiedAt(ctx context.Context) (string, error) {
@@ -45,6 +72,126 @@ func (r *Repository) GetLatestEVMContractVerifiedAt(ctx context.Context) (string
 		return "", err
 	}
 	return result.Format(time.RFC3339Nano), nil
+}
+
+// GetEVMContractsByAddresses returns verified contract metadata keyed by address hex (no 0x prefix).
+func (r *Repository) GetEVMContractsByAddresses(ctx context.Context, addresses []string) (map[string]EVMContractMetadata, error) {
+	if len(addresses) == 0 {
+		return map[string]EVMContractMetadata{}, nil
+	}
+
+	seen := make(map[string]struct{}, len(addresses))
+	addrBytes := make([][]byte, 0, len(addresses))
+	for _, addr := range addresses {
+		if _, ok := seen[addr]; ok {
+			continue
+		}
+		seen[addr] = struct{}{}
+		if b := hexToBytes(addr); b != nil {
+			addrBytes = append(addrBytes, b)
+		}
+	}
+	if len(addrBytes) == 0 {
+		return map[string]EVMContractMetadata{}, nil
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(address, 'hex'),
+		       COALESCE(name, ''),
+		       COALESCE(abi, 'null'::jsonb),
+		       COALESCE(source_code, ''),
+		       COALESCE(compiler, ''),
+		       COALESCE(language, ''),
+		       COALESCE(license, ''),
+		       COALESCE(optimization, false),
+		       COALESCE(proxy_type, ''),
+		       COALESCE(encode(impl_address, 'hex'), ''),
+		       verified_at
+		FROM app.evm_contracts
+		WHERE address = ANY($1)`, addrBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]EVMContractMetadata, len(addrBytes))
+	for rows.Next() {
+		var row EVMContractMetadata
+		if err := rows.Scan(
+			&row.Address,
+			&row.Name,
+			&row.ABI,
+			&row.SourceCode,
+			&row.Compiler,
+			&row.Language,
+			&row.License,
+			&row.Optimization,
+			&row.ProxyType,
+			&row.ImplAddress,
+			&row.VerifiedAt,
+		); err != nil {
+			return nil, err
+		}
+		out[row.Address] = row
+	}
+	return out, rows.Err()
+}
+
+// GetEVMAddressLabelsByAddresses returns Blockscout address metadata keyed by address hex (no 0x prefix).
+func (r *Repository) GetEVMAddressLabelsByAddresses(ctx context.Context, addresses []string) (map[string]EVMAddressLabelMetadata, error) {
+	if len(addresses) == 0 {
+		return map[string]EVMAddressLabelMetadata{}, nil
+	}
+
+	seen := make(map[string]struct{}, len(addresses))
+	addrBytes := make([][]byte, 0, len(addresses))
+	for _, addr := range addresses {
+		if _, ok := seen[addr]; ok {
+			continue
+		}
+		seen[addr] = struct{}{}
+		if b := hexToBytes(addr); b != nil {
+			addrBytes = append(addrBytes, b)
+		}
+	}
+	if len(addrBytes) == 0 {
+		return map[string]EVMAddressLabelMetadata{}, nil
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(address, 'hex'),
+		       COALESCE(name, ''),
+		       COALESCE(tags, ARRAY[]::text[]),
+		       COALESCE(is_contract, false),
+		       COALESCE(is_verified, false),
+		       COALESCE(token_name, ''),
+		       COALESCE(token_symbol, ''),
+		       synced_at
+		FROM app.evm_address_labels
+		WHERE address = ANY($1)`, addrBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string]EVMAddressLabelMetadata, len(addrBytes))
+	for rows.Next() {
+		var row EVMAddressLabelMetadata
+		if err := rows.Scan(
+			&row.Address,
+			&row.Name,
+			&row.Tags,
+			&row.IsContract,
+			&row.IsVerified,
+			&row.TokenName,
+			&row.TokenSymbol,
+			&row.SyncedAt,
+		); err != nil {
+			return nil, err
+		}
+		out[row.Address] = row
+	}
+	return out, rows.Err()
 }
 
 // UpsertEVMContracts bulk-upserts verified contract metadata.
