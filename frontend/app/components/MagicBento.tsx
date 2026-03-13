@@ -34,6 +34,12 @@ const DEFAULT_SPOTLIGHT_RADIUS = 400;
 const DEFAULT_GLOW_COLOR = '0, 239, 139';
 const MOBILE_BREAKPOINT = 768;
 
+const hexToRgb = (hex?: string) => {
+  if (!hex) return null;
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : null;
+};
+
 const MagicBento: React.FC<BentoProps> = ({
   enableBorderGlow = true,
   disableAnimations = false,
@@ -117,12 +123,14 @@ const MagicBento: React.FC<BentoProps> = ({
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
+      const currentGlowColor = card.style.getPropertyValue('--glow-color') || glowColor;
+
       const pulse = document.createElement('div');
       pulse.style.cssText = `
         position: absolute;
         width: 40px;
         height: 40px;
-        border: 1px solid rgba(${glowColor}, 0.8);
+        border: 1px solid rgba(${currentGlowColor}, 0.8);
         left: ${x}px;
         top: ${y}px;
         pointer-events: none;
@@ -174,8 +182,8 @@ const MagicBento: React.FC<BentoProps> = ({
             inset: 0;
             padding: 1.5px;
             background: radial-gradient(var(--glow-radius) circle at var(--glow-x) var(--glow-y),
-                rgba(${glowColor}, calc(var(--glow-intensity) * 1.0)) 0%,
-                rgba(${glowColor}, calc(var(--glow-intensity) * 0.3)) 20%,
+                rgba(var(--glow-color), calc(var(--glow-intensity) * 1.0)) 0%,
+                rgba(var(--glow-color), calc(var(--glow-intensity) * 0.3)) 20%,
                 transparent 50%);
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
@@ -191,6 +199,19 @@ const MagicBento: React.FC<BentoProps> = ({
             perspective: 1000px;
             will-change: transform;
           }
+
+          .card-logo {
+            mix-blend-mode: luminosity;
+            filter: grayscale(1) brightness(0.6);
+            transition: all 0.7s ease-in-out;
+          }
+
+          .card:hover .card-logo {
+            mix-blend-mode: normal;
+            filter: grayscale(0) brightness(1);
+            opacity: 1 !important;
+            transform: scale(1.05);
+          }
         `}
       </style>
 
@@ -203,23 +224,26 @@ const MagicBento: React.FC<BentoProps> = ({
             <div
               key={index}
               ref={el => cardsRef.current[index] = el}
-              className={`card flex flex-col justify-between relative min-h-[300px] w-full p-8 rounded-none border border-neutral-900 overflow-hidden bg-[#050505] transition-colors duration-500 hover:bg-neutral-900/30 ${
+              style={{ '--glow-color': hexToRgb(card.color) || glowColor } as React.CSSProperties}
+              className={`card group flex flex-col justify-between relative min-h-[300px] w-full p-8 rounded-none border border-neutral-900 overflow-hidden bg-[#050505] transition-colors duration-500 hover:bg-neutral-900/30 ${
                 enableBorderGlow ? 'card--border-glow' : ''
               } ${card.size || ''}`}
             >
               {/* Logo Background */}
-              {card.logo && (
+              {(card.logo || card.icon) && (
                 <div 
-                  className="absolute inset-0 opacity-[0.35] pointer-events-none bg-no-repeat bg-right-bottom" 
+                  className="card-logo absolute inset-0 opacity-[0.35] pointer-events-none bg-no-repeat bg-right-bottom flex items-end justify-end p-4 overflow-hidden" 
                   style={{ 
-                    backgroundImage: `url(${card.logo})`,
+                    backgroundImage: card.logo ? `url(${card.logo})` : 'none',
                     backgroundSize: '60%',
-                    mixBlendMode: 'luminosity',
-                    filter: 'grayscale(1) brightness(0.6)',
                     maskImage: 'linear-gradient(to top left, black 20%, transparent 80%)',
                     WebkitMaskImage: 'linear-gradient(to top left, black 20%, transparent 80%)'
                   }} 
-                />
+                >
+                  {!card.logo && card.icon && (
+                    <card.icon size={200} className="opacity-20 -mr-10 -mb-10 rotate-12" />
+                  )}
+                </div>
               )}
               
               {/* Nothing Dot Grid Background */}
